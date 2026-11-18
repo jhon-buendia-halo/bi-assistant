@@ -19,7 +19,9 @@ jest.mock('../agents/answer-writer.agent', () => ({ answerWriterAgent: {} }));
 jest.mock('../agents/data-readiness.agent', () => ({}));
 
 import type { AgentExchange } from '../agent-threads';
+import { ModelTimeoutError, ReplyCutError } from './model-call';
 import { reviewTemplateWithModel } from './review-website.agents';
+import { IRIS_CALL_TIMEOUT_MS, IrisTimeoutError } from './review-website.steps';
 import { reviewTemplateRequest } from './review-website.prompts';
 import { irisReviewSchema } from './review-website.schemas';
 
@@ -212,5 +214,100 @@ describe('reviewTemplateWithModel (agents.md 5.19)', () => {
       }),
     ).resolves.toEqual(stopped);
     expect(onExchange).not.toHaveBeenCalled();
+  });
+});
+
+// Iris's one deadline (agents.md 5.19; workflows R43): two minutes per try,
+// in her own words, and the guarded call's one retry.
+describe("reviewTemplateWithModel's guarded call (workflows R43)", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    generate.mockReset();
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('aborts a call past two minutes and fails with IrisTimeoutError, not retried', async () => {
+    let seen: AbortSignal | undefined;
+    generate.mockImplementation((_messages, options) => {
+      seen = (options as { abortSignal?: AbortSignal }).abortSignal;
+      return new Promise(() => undefined);
+    });
+    const pending = reviewTemplateWithModel(INPUT, {
+      abortSignal: new AbortController().signal,
+    }).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(IRIS_CALL_TIMEOUT_MS);
+    const error = await pending;
+    expect(IRIS_CALL_TIMEOUT_MS).toBe(2 * 60_000);
+    expect(error).toBeInstanceOf(IrisTimeoutError);
+    expect(error).toBeInstanceOf(ModelTimeoutError);
+    expect((error as Error).message).toBe(
+      'Iris did not answer within two minutes while reviewing /. The model may be busy or rate limited: run again later, or untick Visual review with Iris to keep to the measured checks.',
+    );
+    expect(seen?.aborted).toBe(true);
+    await jest.advanceTimersByTimeAsync(IRIS_CALL_TIMEOUT_MS);
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('a call that resolves as stopped after the deadline is still a timeout', async () => {
+    generate.mockImplementation((_messages, options) => {
+      const { abortSignal } = options as { abortSignal: AbortSignal };
+      return new Promise((resolve) =>
+        abortSignal.addEventListener('abort', () =>
+          resolve({ object: REPLY, text: '' }),
+        ),
+      );
+    });
+    const pending = reviewTemplateWithModel(INPUT, {}).catch(
+      (error: Error) => error,
+    );
+    await jest.advanceTimersByTimeAsync(IRIS_CALL_TIMEOUT_MS);
+    expect(await pending).toBeInstanceOf(IrisTimeoutError);
+  });
+
+  it('a stopped run aborts the call and is no timeout', async () => {
+    const run = new AbortController();
+    generate.mockImplementation((_messages, options) => {
+      const { abortSignal } = options as { abortSignal: AbortSignal };
+      return new Promise((resolve) => {
+        if (abortSignal.aborted) resolve({ object: REPLY, text: '' });
+        abortSignal.addEventListener('abort', () =>
+          resolve({ object: REPLY, text: '' }),
+        );
+      });
+    });
+    const pending = reviewTemplateWithModel(INPUT, { abortSignal: run.signal });
+    await jest.advanceTimersByTimeAsync(1_000);
+    run.abort();
+    await expect(pending).resolves.toEqual({
+      review: { findings: [], summary: '' },
+      stopped: true,
+    });
+  });
+
+  it('retries a reset once, and a reply cut twice fails with ReplyCutError', async () => {
+    generate
+      .mockRejectedValueOnce(new TypeError('terminated'))
+      .mockResolvedValueOnce({ object: REPLY, text: '' });
+    const lines: string[] = [];
+    const retried = reviewTemplateWithModel(INPUT, {
+      onRetry: (line) => lines.push(line),
+    });
+    await jest.advanceTimersByTimeAsync(2_000);
+    expect((await retried).review.summary).toBe('Fine.');
+    expect(lines).toEqual([
+      'Review templates: the model call failed (terminated). Trying once more in 2 seconds.',
+    ]);
+    generate.mockReset();
+    generate.mockResolvedValue({
+      object: undefined,
+      text: '{"findings": [',
+      finishReason: 'length',
+    });
+    const cut = reviewTemplateWithModel(INPUT, {}).catch(
+      (error: Error) => error,
+    );
+    await jest.advanceTimersByTimeAsync(2_000);
+    expect(await cut).toBeInstanceOf(ReplyCutError);
+    expect(generate).toHaveBeenCalledTimes(2);
   });
 });

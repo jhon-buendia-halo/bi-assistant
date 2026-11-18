@@ -1,0 +1,451 @@
+// The data-readiness service loads the Databricks driver (ESM-only deps)
+// at import time; the turn specs never call it for real.
+jest.mock('../../data-readiness/data-readiness.service', () => ({
+  DataReadinessService: class {},
+}));
+
+// The idle deadline of a streamed agent turn (workflows R43; agents.md 1.6):
+// Analyse and the one-step Answer fail with ModelTimeoutError when the model
+// sends nothing for five minutes while no tool executes; a Stop and a
+// clarifying question are never a timeout. A retry of a step's call is a
+// reasoning line of the running step. Fake timers: no test waits for real.
+jest.mock('@mastra/core/request-context', () => ({
+  RequestContext: class {
+    private readonly values = new Map<string, unknown>();
+    set = jest.fn((key: string, value: unknown) => {
+      this.values.set(key, value);
+    });
+    get = jest.fn((key: string) => this.values.get(key));
+  },
+}));
+jest.mock('../../../mastra/mastra.service', () => ({
+  MastraService: class {},
+}));
+jest.mock('../../../mastra/model-resolver', () => ({
+  isCustomAnthropicConfig: (c: unknown) =>
+    typeof c === 'object' && c !== null && 'kind' in c,
+  AGENT_OVERRIDES_CONTEXT_KEY: 'agent-overrides',
+  resolveAgentModelConfig: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
+}));
+jest.mock('../../../mastra/tool-services', () => ({
+  setDatasetToolServices: jest.fn(),
+  getDatasetToolServices: () => ({
+    getDatasets: (names: string[]) =>
+      Promise.resolve(
+        [
+          {
+            name: 'World Cup',
+            datasourceId: 'ds-pg',
+            datasourceKind: 'postgres',
+            tables: ['wc.public.matches'],
+          },
+        ].filter((d) => names.includes(d.name)),
+      ),
+  }),
+}));
+jest.mock('@mastra/core/workflows', () =>
+  jest.requireActual<typeof import('../../../mastra/testing/workflows.stub')>(
+    '../../../mastra/testing/workflows.stub',
+  ),
+);
+jest.mock('../../../mastra/tools/dataset.tools', () => ({
+  DATASETS_CONTEXT_KEY: 'datasets',
+}));
+jest.mock('../../../mastra/tools/visual.tools', () => ({
+  ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual-id',
+  SESSION_ID_CONTEXT_KEY: 'session-id',
+  TURN_QUESTION_CONTEXT_KEY: 'turn-question',
+  TURN_RECORDS_CONTEXT_KEY: 'turn-data-records',
+}));
+jest.mock('../../../mastra/session-workspaces', () => ({
+  SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace-id',
+}));
+jest.mock('../../datasets/repositories/datasets.repository', () => ({
+  DatasetsRepository: class {},
+}));
+jest.mock('../../datasources/datasources.service', () => ({
+  DatasourcesService: class {},
+}));
+jest.mock('../../llm/llm.service', () => ({ LlmService: class {} }));
+jest.mock('../../verified-queries/verified-queries.service', () => ({
+  VerifiedQueriesService: class {},
+}));
+jest.mock('../../metrics/metrics.service', () => ({
+  MetricsService: class {},
+}));
+jest.mock('../../ontology/ontology.service', () => ({
+  OntologyService: class {},
+}));
+jest.mock('../../../mastra/agents/sql-fixer.agent', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { z } = require('zod') as typeof import('zod');
+  return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
+});
+jest.mock('../../../mastra/agents/sql-verifier.agent', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { z } = require('zod') as typeof import('zod');
+  return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
+});
+jest.mock('../repositories/sessions.repository', () => ({
+  SessionsRepository: class {},
+}));
+jest.mock('../visualization.service', () => ({
+  VisualizationService: class {},
+}));
+jest.mock('../../../common/markdown-pdf', () => ({ renderPdf: jest.fn() }));
+jest.mock('../visualization-document', () => ({
+  sourceEntities: jest.fn().mockReturnValue([]),
+}));
+
+import { SessionsService, type StreamEvent } from '../sessions.service';
+import { streamStored } from '../testing/stream-stored';
+import type { SessionDoc } from '../entities/session.entity';
+import { answerBusinessQuestionWorkflow } from '../../../mastra/workflows/answer-business-question.workflow';
+import { planOf } from '../../../mastra/workflows/answer-business-question.steps';
+import { ModelTimeoutError } from '../../../mastra/workflows/model-call';
+import { streamTurnWorkflow } from '../../../mastra/testing/turn-workflow.stub';
+
+const MINUTE = 60_000;
+
+type StubRun = {
+  stream(args: { inputData: unknown; requestContext: unknown }): unknown;
+};
+const v2Workflow = answerBusinessQuestionWorkflow as unknown as {
+  createRun(): Promise<StubRun>;
+};
+
+/** One chunk of a stream, sent after `after` ms (fake time). */
+interface Timed {
+  after: number;
+  chunk: unknown;
+}
+
+async function* timed(steps: Timed[]): AsyncGenerator<unknown> {
+  for (const step of steps) {
+    await new Promise((resolve) => setTimeout(resolve, step.after));
+    yield step.chunk;
+  }
+}
+
+const now = (chunk: unknown): Timed => ({ after: 0, chunk });
+const text = (value: string) => ({
+  type: 'text-delta',
+  payload: { text: value },
+});
+const SQL_CALL = {
+  type: 'tool-call',
+  payload: {
+    toolCallId: 't1',
+    toolName: 'run_readonly_sql',
+    args: { sql: 'SELECT 1 AS n', rationale: 'Count.' },
+  },
+};
+const SQL_RESULT = {
+  type: 'tool-result',
+  payload: {
+    toolCallId: 't1',
+    toolName: 'run_readonly_sql',
+    result: { columns: ['n'], rows: [{ n: 1 }], rowCount: 1 },
+  },
+};
+const WRITTEN = 'The written answer.';
+
+/**
+ * A turn of an Insights Analyst session (v2: Analyse streams) or of an
+ * assistant session (the one-step Answer streams); each agent stream sends
+ * `steps` (a function of the call, to give a retry its own).
+ */
+function build(kind: 'v2' | 'assistant', steps: (call: number) => Timed[]) {
+  const session: SessionDoc = {
+    id: 's-1',
+    name: 'Goals',
+    datasets: ['World Cup'],
+    messages: [],
+    visualizations: [],
+    ...(kind === 'v2'
+      ? { agentKey: 'insights-analyst', agentName: 'Insights Analyst' }
+      : {}),
+  };
+  const repository = {
+    get: jest.fn().mockResolvedValue(session),
+    update: jest.fn().mockImplementation((_id: string, patch: object) => {
+      Object.assign(session, patch);
+      return Promise.resolve(session);
+    }),
+  };
+  const signals: AbortSignal[] = [];
+  let calls = 0;
+  const agentFor = (name: string) => ({
+    id: name,
+    name,
+    getDescription: () => name,
+    getMemory: jest.fn().mockResolvedValue({
+      getThreadById: jest.fn().mockResolvedValue({ id: session.id }),
+    }),
+    stream: jest.fn((_input: unknown, opts: { abortSignal: AbortSignal }) => {
+      signals.push(opts.abortSignal);
+      return Promise.resolve({
+        fullStream: timed(steps(++calls)),
+        text: Promise.resolve(''),
+      });
+    }),
+    generate: jest.fn().mockResolvedValue({ text: 'Synthesized.' }),
+  });
+  const agent = agentFor(kind === 'v2' ? 'insights-analyst' : 'assistant');
+  const registry: Record<string, unknown> = {
+    [kind === 'v2' ? 'insights-analyst' : 'assistant']: agent,
+  };
+  const mastra = {
+    getAgent: jest.fn((key: string) => registry[key]),
+    listAgents: () => registry,
+    streamWorkflow: jest.fn(
+      async (key: string, inputData: unknown, requestContext: unknown) =>
+        key === 'agent-turn'
+          ? streamTurnWorkflow(key, inputData, requestContext)
+          : (await v2Workflow.createRun()).stream({
+              inputData,
+              requestContext,
+            }),
+    ),
+    planAnalysis: jest.fn(({ question }: { question: string }) =>
+      Promise.resolve({ plan: planOf({}, question), stopped: false }),
+    ),
+    writeAnswer: jest.fn(
+      (_input: unknown, opts: { onText?: (delta: string) => void }) => {
+        opts.onText?.(WRITTEN);
+        return Promise.resolve({
+          answer: { headline: WRITTEN, answer: WRITTEN },
+          stopped: false,
+        });
+      },
+    ),
+    ensureSessionWorkspace: jest
+      .fn()
+      .mockImplementation((id: string) =>
+        Promise.resolve({ id: `session-${id}` }),
+      ),
+  };
+  const service = new SessionsService(
+    repository as never,
+    mastra as never,
+    {
+      getByNames: jest.fn().mockResolvedValue([
+        {
+          name: 'World Cup',
+          datasourceId: 'ds-pg',
+          datasourceKind: 'postgres',
+          tables: ['wc.public.matches'],
+        },
+      ]),
+    } as never,
+    { get: jest.fn().mockResolvedValue({ id: 'ds-pg', name: 'DS' }) } as never,
+    {
+      getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+    } as never,
+    {} as never,
+    {
+      referenceBlock: jest.fn().mockResolvedValue(undefined),
+      isVerifiedSql: jest.fn().mockResolvedValue(false),
+    } as never,
+    { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+    {
+      contextFor: jest.fn().mockResolvedValue({ block: '', used: [] }),
+    } as never,
+    {
+      get: jest.fn().mockResolvedValue(null),
+      list: jest.fn().mockResolvedValue([]),
+      skillsFor: jest.fn().mockResolvedValue([]),
+      datasetNames: jest.fn().mockResolvedValue(new Set(['World Cup'])),
+    } as never,
+  );
+  return { service, session, mastra, agent, signals };
+}
+
+/** Start a turn; its outcome is the error it failed with, or 'done'. */
+function startTurn(
+  ctx: ReturnType<typeof build>,
+  events: StreamEvent[],
+  abortSignal?: AbortSignal,
+): Promise<unknown> {
+  return streamStored(
+    ctx.service,
+    's-1',
+    'How many matches?',
+    (event) => events.push(event),
+    abortSignal,
+  ).then(
+    () => 'done',
+    (error: unknown) => error,
+  );
+}
+
+/** The last `workflow` event of a turn, as `current`, `done` and `failed`. */
+function lastMove(events: StreamEvent[]) {
+  const moves = events.filter((event) => event.type === 'workflow');
+  const view = JSON.parse(moves.at(-1)?.content ?? '{}') as {
+    current: number | null;
+    done: number[];
+    failed?: number;
+  };
+  return view;
+}
+
+describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('fails Analyse with ModelTimeoutError when no chunk comes for five minutes', async () => {
+    const ctx = build('v2', () => [{ after: 6 * MINUTE, chunk: text('late') }]);
+    const events: StreamEvent[] = [];
+    const outcome = startTurn(ctx, events);
+    await jest.advanceTimersByTimeAsync(5 * MINUTE);
+    const error = await outcome;
+    expect(error).toBeInstanceOf(ModelTimeoutError);
+    expect((error as Error).message).toBe(
+      'Analyse failed: the model sent nothing for 5 minutes. The model may be busy or rate limited: run again later.',
+    );
+    expect(lastMove(events)).toMatchObject({ current: 7, failed: 7 });
+    expect(ctx.signals[0].aborted).toBe(true);
+    expect(ctx.agent.stream).toHaveBeenCalledTimes(1);
+    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
+  });
+
+  it('does not time out while chunks come every four minutes for twenty minutes', async () => {
+    const ctx = build('v2', () => [
+      now(SQL_CALL),
+      now(SQL_RESULT),
+      ...Array.from({ length: 5 }, () => ({
+        after: 4 * MINUTE,
+        chunk: text('Still working. '),
+      })),
+    ]);
+    const events: StreamEvent[] = [];
+    const outcome = startTurn(ctx, events);
+    await jest.advanceTimersByTimeAsync(21 * MINUTE);
+    expect(await outcome).toBe('done');
+    expect(ctx.mastra.writeAnswer).toHaveBeenCalledTimes(1);
+    expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
+  });
+
+  it('does not count a tool call that executes for six minutes', async () => {
+    const ctx = build('v2', () => [
+      { after: MINUTE, chunk: SQL_CALL },
+      { after: 6 * MINUTE, chunk: SQL_RESULT },
+      { after: 4 * MINUTE, chunk: text('Done.') },
+    ]);
+    const events: StreamEvent[] = [];
+    const outcome = startTurn(ctx, events);
+    await jest.advanceTimersByTimeAsync(12 * MINUTE);
+    expect(await outcome).toBe('done');
+    expect(ctx.mastra.writeAnswer).toHaveBeenCalledTimes(1);
+  });
+
+  it('a Stop during the wait is a Stop, never a timeout', async () => {
+    const ctx = build('v2', () => [{ after: 6 * MINUTE, chunk: text('late') }]);
+    const controller = new AbortController();
+    const events: StreamEvent[] = [];
+    const outcome = startTurn(ctx, events, controller.signal);
+    await jest.advanceTimersByTimeAsync(2 * MINUTE);
+    controller.abort();
+    await jest.advanceTimersByTimeAsync(10 * MINUTE);
+    expect(await outcome).toBe('done');
+    const move = lastMove(events);
+    expect(move).toMatchObject({ current: 7, done: [2, 3, 4, 5] });
+    expect(move.failed).toBeUndefined();
+    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
+  });
+
+  it('a clarifying question still stops only the attempt, and is no timeout', async () => {
+    const ctx = build('v2', () => [
+      {
+        after: MINUTE,
+        chunk: {
+          type: 'tool-call',
+          payload: {
+            toolCallId: 'c1',
+            toolName: 'ask_clarification',
+            args: {
+              question: 'Which measure?',
+              options: 'Most wins\nMost goals',
+            },
+          },
+        },
+      },
+      { after: 6 * MINUTE, chunk: text('never streamed') },
+    ]);
+    const events: StreamEvent[] = [];
+    const outcome = startTurn(ctx, events);
+    await jest.advanceTimersByTimeAsync(10 * MINUTE);
+    expect(await outcome).toBe('done');
+    expect(ctx.session.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      content: 'Which measure?',
+      clarification: { question: 'Which measure?' },
+    });
+    expect(events.some((event) => event.type === 'done')).toBe(true);
+  });
+
+  it('fails the one-step Answer with ModelTimeoutError when no chunk comes for five minutes', async () => {
+    const ctx = build('assistant', () => [
+      { after: 6 * MINUTE, chunk: text('late') },
+    ]);
+    const events: StreamEvent[] = [];
+    const outcome = startTurn(ctx, events);
+    await jest.advanceTimersByTimeAsync(5 * MINUTE);
+    const error = await outcome;
+    expect(error).toBeInstanceOf(ModelTimeoutError);
+    expect((error as Error).message).toContain(
+      'Answer failed: the model sent nothing for 5 minutes',
+    );
+    expect(ctx.signals[0].aborted).toBe(true);
+  });
+
+  it('answers the one-step Answer as before when chunks keep coming', async () => {
+    const ctx = build('assistant', () => [
+      now({
+        type: 'tool-call',
+        payload: { toolCallId: 'c0', toolName: 'list_entities', args: {} },
+      }),
+      now({
+        type: 'tool-result',
+        payload: {
+          toolCallId: 'c0',
+          toolName: 'list_entities',
+          result: { entities: [] },
+        },
+      }),
+      { after: 4 * MINUTE, chunk: text('Hello') },
+      { after: 4 * MINUTE, chunk: text(' there.') },
+    ]);
+    const events: StreamEvent[] = [];
+    const outcome = startTurn(ctx, events);
+    await jest.advanceTimersByTimeAsync(9 * MINUTE);
+    expect(await outcome).toBe('done');
+    expect(ctx.session.messages.at(-1)?.content).toBe('Hello there.');
+  });
+});
+
+describe("a retry of a step's model call (workflows R43)", () => {
+  it('is shown as a reasoning line of the running step', async () => {
+    const ctx = build('v2', () => [
+      now(SQL_CALL),
+      now(SQL_RESULT),
+      now(text('Done.')),
+    ]);
+    ctx.mastra.planAnalysis.mockImplementation(
+      ({ question }: { question: string }, opts?: unknown) => {
+        (opts as { onRetry: (line: string) => void }).onRetry(
+          'Plan: the model call failed (fetch failed). Trying once more in 2 seconds.',
+        );
+        return Promise.resolve({ plan: planOf({}, question), stopped: false });
+      },
+    );
+    const events: StreamEvent[] = [];
+    expect(await startTurn(ctx, events)).toBe('done');
+    expect(events).toContainEqual({
+      type: 'reasoning',
+      content:
+        'Plan: the model call failed (fetch failed). Trying once more in 2 seconds.\n',
+    });
+  });
+});

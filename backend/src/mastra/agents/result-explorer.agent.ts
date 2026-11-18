@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import type { ResultView } from '../../modules/datasources/connectors/paged-sql.types';
 import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from '../workflows/workflow-run';
+import { guardedCall } from '../workflows/model-call';
 import { agentInstructions } from '../agent-prompt-overrides';
 import { RESULT_EXPLORER_AGENT_KEY } from '../agent-constants';
 import { resolveAgentModel } from '../model-resolver';
@@ -48,7 +49,9 @@ export interface InterpretResultInput {
  * follow-up step): the request holds no SQL and no whole rows. A model
  * error, or a reply that is no JSON object, throws; the reply is read by
  * `specOf`. `onExchange` gets the request and the reply once the agent
- * replied (a run records it in Nathan's thread, agents.md 5.14).
+ * replied (a run records it in Nathan's thread, agents.md 5.14). The call
+ * has a five-minute deadline (`guardedCall`, workflows R43), past which it
+ * fails with `ModelTimeoutError`; it is not retried.
  */
 export async function interpretResultWithModel(
   input: InterpretResultInput,
@@ -63,16 +66,23 @@ export async function interpretResultWithModel(
     input.view,
     input.pageCount,
   );
-  const result = (await resultExplorerAgent.generate(request, {
-    maxSteps: 1,
-    toolChoice: 'none',
-    ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
-    structuredOutput: {
-      schema: RESULT_EXPLORER_REPLY_SCHEMA,
-      jsonPromptInjection: 'inline',
-      errorStrategy: 'warn',
-    },
-  })) as { object?: unknown; text?: string; error?: unknown };
+  // A deadline only (workflows R43): no retry of a failure or a cut reply.
+  const guard = { label: 'Result Explorer', canRetry: () => false };
+  const result = await guardedCall(
+    options,
+    guard,
+    async (call) =>
+      (await resultExplorerAgent.generate(request, {
+        maxSteps: 1,
+        toolChoice: 'none',
+        ...(call.abortSignal ? { abortSignal: call.abortSignal } : {}),
+        structuredOutput: {
+          schema: RESULT_EXPLORER_REPLY_SCHEMA,
+          jsonPromptInjection: 'inline',
+          errorStrategy: 'warn',
+        },
+      })) as { object?: unknown; text?: string; error?: unknown },
+  );
   if (result.error !== undefined) {
     throw result.error instanceof Error
       ? result.error

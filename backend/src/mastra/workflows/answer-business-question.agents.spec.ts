@@ -17,9 +17,11 @@ jest.mock('../agents/analysis-planner.agent', () => ({
 jest.mock('../agents/data-readiness.agent', () => ({}));
 
 import {
+  ANSWER_CUT_NOTE,
   planWithModel,
   writeAnswerWithModel,
 } from './answer-business-question.agents';
+import { ModelTimeoutError, ReplyCutError } from './model-call';
 import {
   findingStatus,
   writeAnswerRequest,
@@ -134,6 +136,162 @@ describe("the model calls with Read images' notes", () => {
       'Question: Q\n\nCAT',
       `Question: Q\n\nCAT\n\n${NOTES}`,
     ]);
+  });
+});
+
+// The guarded calls (workflows R43): a deadline, one retry of a transient
+// failure or a cut reply, and Write answer's rule once text was shown.
+describe('Plan and Write answer under the guarded call (workflows R43)', () => {
+  const INPUT = {
+    question: PLAN.question,
+    plan: PLAN,
+    queries: [QUERY],
+    findings: [],
+  };
+  const PLAN_INPUT = { messages: 'Q', question: 'Q', catalogBlock: 'CAT' };
+  const reset = () =>
+    new TypeError('fetch failed', {
+      cause: Object.assign(new Error('read ECONNRESET'), {
+        code: 'ECONNRESET',
+      }),
+    });
+  /** A reply streamed as `reply` does, its finish reason given. */
+  const finished = (answer: string, finishReason: string) => ({
+    ...reply(answer, 'Headline.'),
+    finishReason: Promise.resolve(finishReason),
+  });
+  /** A stream that shows `shown`, then fails. */
+  const failsAfter = (shown: string, error: Error) => ({
+    objectStream: (async function* () {
+      if (shown) yield await Promise.resolve({ answer: shown });
+      throw error;
+    })(),
+    object: Promise.resolve(undefined),
+    text: Promise.resolve(''),
+    error: undefined,
+  });
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    stream.mockReset();
+    generate.mockReset();
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('retries Plan once after a reset, with the same request, and reports one line', async () => {
+    generate
+      .mockRejectedValueOnce(reset())
+      .mockResolvedValueOnce({ object: PLAN, text: JSON.stringify(PLAN) });
+    const lines: string[] = [];
+    const pending = planWithModel(PLAN_INPUT, {
+      onRetry: (line) => lines.push(line),
+    });
+    await jest.advanceTimersByTimeAsync(2_000);
+    const { plan, stopped } = await pending;
+    expect(stopped).toBe(false);
+    expect(plan.question).toBe(PLAN.question);
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[1][0]).toEqual(generate.mock.calls[0][0]);
+    expect(lines).toEqual([
+      'Plan: the model call failed (fetch failed). Trying once more in 2 seconds.',
+    ]);
+  });
+
+  it('fails Plan with ReplyCutError when its reply is cut twice', async () => {
+    generate.mockResolvedValue({
+      object: undefined,
+      text: '{"question": "Which',
+      finishReason: 'length',
+    });
+    const pending = planWithModel(PLAN_INPUT, {}).catch(
+      (error: Error) => error,
+    );
+    await jest.advanceTimersByTimeAsync(2_000);
+    const error = await pending;
+    expect(error).toBeInstanceOf(ReplyCutError);
+    expect((error as Error).message).toContain('Plan failed');
+    expect(generate).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails Plan with ModelTimeoutError past five minutes, aborting the call', async () => {
+    let signal: AbortSignal | undefined;
+    generate.mockImplementation((_messages, options) => {
+      signal = (options as { abortSignal?: AbortSignal }).abortSignal;
+      return new Promise(() => undefined);
+    });
+    const run = new AbortController();
+    const pending = planWithModel(PLAN_INPUT, {
+      abortSignal: run.signal,
+    }).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+    expect(await pending).toBeInstanceOf(ModelTimeoutError);
+    expect(signal).not.toBe(run.signal);
+    expect(signal?.aborted).toBe(true);
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('a Stop of Plan is a stop, not a timeout', async () => {
+    const run = new AbortController();
+    generate.mockImplementation(() => {
+      run.abort();
+      return Promise.reject(new Error('aborted'));
+    });
+    await expect(
+      planWithModel(PLAN_INPUT, { abortSignal: run.signal }),
+    ).resolves.toMatchObject({ stopped: true });
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries Write answer while nothing was shown', async () => {
+    stream
+      .mockResolvedValueOnce(failsAfter('', reset()))
+      .mockResolvedValueOnce(reply('Lewis leads.', 'Lewis leads.'));
+    const deltas: string[] = [];
+    const pending = writeAnswerWithModel(INPUT, {
+      onText: (delta) => deltas.push(delta),
+    });
+    await jest.advanceTimersByTimeAsync(2_000);
+    const { answer } = await pending;
+    expect(answer.answer).toBe('Lewis leads.');
+    expect(deltas.join('')).toBe('Lewis leads.');
+    expect(stream).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry Write answer once text was shown', async () => {
+    stream.mockResolvedValueOnce(failsAfter('Lewis\n', reset()));
+    await expect(
+      writeAnswerWithModel(INPUT, { onText: () => undefined }),
+    ).rejects.toThrow('fetch failed');
+    expect(stream).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the text shown when the reply is cut after it, with a note, and succeeds', async () => {
+    stream.mockResolvedValueOnce(
+      finished('Lewis Hamilton leads.\nThen come', 'length'),
+    );
+    const deltas: string[] = [];
+    const { answer, stopped } = await writeAnswerWithModel(INPUT, {
+      onText: (delta) => deltas.push(delta),
+    });
+    expect(stopped).toBe(false);
+    expect(answer.answer.startsWith('Lewis Hamilton leads.\nThen')).toBe(true);
+    expect(answer.answer.endsWith(`\n\n${ANSWER_CUT_NOTE}`)).toBe(true);
+    expect(answer.headline).toBe('Headline.');
+    expect(ANSWER_CUT_NOTE).toBe('The answer was cut at the output limit.');
+    expect(deltas.join('')).toBe(answer.answer);
+    expect(stream).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a cut reply when nothing was shown, and fails when it is cut again', async () => {
+    stream.mockImplementation(() =>
+      Promise.resolve(finished('{"answer": "Lewis', 'length')),
+    );
+    const pending = writeAnswerWithModel(INPUT, {}).catch(
+      (error: Error) => error,
+    );
+    await jest.advanceTimersByTimeAsync(2_000);
+    expect(await pending).toBeInstanceOf(ReplyCutError);
+    expect(stream).toHaveBeenCalledTimes(2);
   });
 });
 

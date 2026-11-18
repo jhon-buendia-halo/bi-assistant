@@ -21550,7 +21550,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) review-website's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "a5df78788eda",
+  "contractHash": "24179181a6b3",
   "edges": [
     {
       "from": "start",
@@ -24248,12 +24248,16 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           },
           "reviewed": {
             "default": [],
-            "description": "Each template Iris reviewed, with her one-line summary; none when Review templates did not run.",
+            "description": "Each template Iris was asked to review, with her one-line summary or why it was not reviewed; none when Review templates did not run.",
             "items": {
               "additionalProperties": false,
               "properties": {
                 "findingCount": {
                   "type": "number",
+                },
+                "notReviewed": {
+                  "description": "Why Iris could not review the template (her call failed); absent when she reviewed it. A template not reviewed has no summary and no findings.",
+                  "type": "string",
                 },
                 "summary": {
                   "type": "string",
@@ -24809,11 +24813,15 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           },
           "reviewed": {
             "default": [],
-            "description": "Each template Iris reviewed, with her one-line summary; none when Review templates did not run.",
+            "description": "Each template Iris was asked to review, with her one-line summary or why it was not reviewed; none when Review templates did not run.",
             "items": {
               "properties": {
                 "findingCount": {
                   "type": "number",
+                },
+                "notReviewed": {
+                  "description": "Why Iris could not review the template (her call failed); absent when she reviewed it. A template not reviewed has no summary and no findings.",
+                  "type": "string",
                 },
                 "summary": {
                   "type": "string",

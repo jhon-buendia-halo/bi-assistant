@@ -187,9 +187,15 @@ export function reviewAnswer(site: ReviewedSite): string {
 
   if (site.reviewed.length > 0) {
     const irisCount = site.findings.filter((f) => f.source === 'iris').length;
+    // A template whose review failed is counted apart (workflows R43).
+    const done = site.reviewed.filter((r) => r.notReviewed === undefined);
+    const of =
+      done.length === site.reviewed.length
+        ? counted(done.length, 'template')
+        : `${done.length} of ${counted(site.reviewed.length, 'template')}`;
     lines.push(
       '',
-      `Iris reviewed ${counted(site.reviewed.length, 'template')} and found ${counted(irisCount, 'visual issue')}.`,
+      `Iris reviewed ${of} and found ${counted(irisCount, 'visual issue')}.`,
     );
   } else if (
     site.visualReview &&
@@ -488,6 +494,13 @@ const REPORT_RUNTIME = `
 
     var reviewedBy = {};
     (site.reviewed || []).forEach(function (r) { reviewedBy[r.template] = r; });
+    // A template whose review failed carries why, and is no review by Iris.
+    var notReviewed = (site.reviewed || []).filter(function (r) { return typeof r.notReviewed === 'string'; });
+    var irisReviewed = (site.reviewed || []).length - notReviewed.length;
+    function reviewOf(template) {
+      var r = reviewedBy[template];
+      return r && typeof r.notReviewed !== 'string' ? r : null;
+    }
 
     // --- Filters -----------------------------------------------------------
 
@@ -776,7 +789,7 @@ const REPORT_RUNTIME = `
 
     function problemsPanel() {
       if (!site.findings.length) {
-        return emptyState('No ' + (site.reviewed && site.reviewed.length ? '' : 'measured ') + 'issues found on ' + plural(site.pages.length, 'page') + '.', false);
+        return emptyState('No ' + (irisReviewed ? '' : 'measured ') + 'issues found on ' + plural(site.pages.length, 'page') + '.', false);
       }
       var groups = problemGroups(filtered());
       if (!groups.length) return emptyState('No problems match these filters', true);
@@ -785,7 +798,7 @@ const REPORT_RUNTIME = `
       if (!selected) { selected = groups[0]; state.key = selected.key; state.occ = 0; }
 
       var leftKids = [];
-      var review = state.template !== 'all' ? reviewedBy[state.template] : null;
+      var review = state.template !== 'all' ? reviewOf(state.template) : null;
       if (review) leftKids.push(h('p', { class: 'sr-quote' }, [h('span', { class: 'sr-quote-label', text: 'Iris' }), h('span', { text: review.summary })]));
       leftKids.push(problemList(groups));
       return h('div', { class: 'sr-split' }, [
@@ -834,16 +847,22 @@ const REPORT_RUNTIME = `
           if (c.url === t.representative && c.thumbnail && validImage(c.thumbnail)) thumb = validImage(c.thumbnail);
         }
         var n = site.findings.filter(function (f) { return f.group === t.id; }).length;
-        var review = reviewedBy[t.id];
+        var review = reviewOf(t.id);
+        var failed = reviewedBy[t.id] && typeof reviewedBy[t.id].notReviewed === 'string' ? reviewedBy[t.id].notReviewed : null;
         return h('li', null, [
           thumb ? h('img', { src: thumb, alt: 'Screenshot of ' + t.representative }) : h('span', { class: 'sr-tpl-ph', 'aria-hidden': 'true' }),
           h('span', { class: 'sr-tpl-txt' }, [
             h('span', null, [h('code', { text: t.id }), review ? ' ' : null, review ? sourceTag('iris') : null]),
             h('span', { class: 'sr-meta', text: plural(t.pages.length, 'page') + ' · ' + plural(n, 'finding') }),
+            failed !== null ? h('span', { class: 'sr-meta', text: 'not reviewed: ' + failed }) : null,
           ]),
         ]);
       });
-      return h('section', { class: 'sr-box', 'aria-label': 'Page templates' }, [h('h3', { class: 'sr-h', text: 'Page templates' }), h('ul', { class: 'sr-tpl' }, rows)]);
+      var kids = [h('h3', { class: 'sr-h', text: 'Page templates' })];
+      // Only when a review failed: a stored run from before renders as it did.
+      if (notReviewed.length) kids.push(h('p', { class: 'sr-meta', text: 'Iris reviewed ' + irisReviewed + ' of ' + plural(site.reviewed.length, 'template') + '.' }));
+      kids.push(h('ul', { class: 'sr-tpl' }, rows));
+      return h('section', { class: 'sr-box', 'aria-label': 'Page templates' }, kids);
     }
 
     function coverage() {

@@ -447,11 +447,17 @@ export const reviewedSiteSchema = checkedSiteSchema.extend({
         template: z.string(),
         summary: z.string(),
         findingCount: z.number(),
+        notReviewed: z
+          .string()
+          .optional()
+          .describe(
+            'Why Iris could not review the template (her call failed); absent when she reviewed it. A template not reviewed has no summary and no findings.',
+          ),
       }),
     )
     .default([])
     .describe(
-      'Each template Iris reviewed, with her one-line summary; none when Review templates did not run.',
+      'Each template Iris was asked to review, with her one-line summary or why it was not reviewed; none when Review templates did not run.',
     ),
   stopped: z
     .boolean()
