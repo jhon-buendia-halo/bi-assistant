@@ -1,4 +1,5 @@
 import type { ToolDataRecord } from './entities/session.entity';
+import { usStateCode } from './visual-runtime-map';
 
 /**
  * Deterministic chart-form heuristic.
@@ -53,6 +54,12 @@ const SCATTER_MIN_ROWS = 13;
 const COMPOSED_MIN_MEASURES = 1;
 /** …and at least this many rows, so the main chart still has something to say. */
 const COMPOSED_MIN_ROWS = 4;
+/** Share of a column's values that must name a state for a map. */
+const STATE_SHARE_MIN = 0.6;
+/** Distinct states a map needs before it beats bars. */
+const STATE_DISTINCT_MIN = 10;
+/** Result sets a dashboard lists (the spec keeps at most this many). */
+const PANEL_SETS_CAP = 8;
 
 /**
  * Column-name tokens that mark a temporal column even when the values are bare
@@ -205,7 +212,28 @@ export function recommendChartForm(
 ): ChartRecommendation | undefined {
   const record = primaryRecord(records ?? []);
   if (!record) return undefined;
+  return recommendForRecord(record);
+}
 
+/** A column "names states" when most of its values resolve and many differ. */
+function namesUsStates(record: UsableRecord, column: string): boolean {
+  const values = record.rows
+    .map((row) => row[column])
+    .filter((value) => !isBlank(value));
+  if (!values.length) return false;
+  const codes = values
+    .map((value) => usStateCode(value))
+    .filter((code): code is string => code !== null);
+  return (
+    codes.length / values.length >= STATE_SHARE_MIN &&
+    new Set(codes).size >= STATE_DISTINCT_MIN
+  );
+}
+
+/** The form recommended for one result set. */
+function recommendForRecord(
+  record: UsableRecord,
+): ChartRecommendation | undefined {
   const profiles = profileColumns(record.columns, record.rows);
   if (!profiles.length) return undefined;
 
@@ -245,6 +273,17 @@ export function recommendChartForm(
         `control to switch between the other measures (${list(
           numeric.map((p) => p.name),
         )}).`,
+    );
+  }
+
+  // 2b — a column of US states with a measure is geography. It sits before the
+  // bars rule (3) it refines: a map shows where, bars only show which is first.
+  const stateColumn = categorical.find((p) => namesUsStates(record, p.name));
+  if (stateColumn && numeric.length >= 1) {
+    return form(
+      `a us-map of ${numeric[0].name} by ${stateColumn.name}, one tile per state ` +
+        `shaded by ${numeric[0].name}. If the exact ranking matters more than ` +
+        `the geography, choose ranked bars (sorted horizontal bars by ${numeric[0].name}) instead.`,
     );
   }
 
@@ -293,7 +332,20 @@ export function recommendChartForm(
     return form(
       `a heatmap with ${categorical[0].name} on one axis and ` +
         `${categorical[1].name} on the other, cells shaded by ${numeric[0].name} ` +
-        `with a colour legend and the value readable per cell.`,
+        `with a colour legend and the value readable per cell. When the reader ` +
+        `needs the exact figures, choose a pivot (long shape) instead: ` +
+        `${categorical[0].name} on the rows, ${categorical[1].name} as the ` +
+        `columns, ${numeric[0].name} in the cells.`,
+    );
+  }
+
+  // 5b — one label with three or more measures is a crosstab of exact figures;
+  // it sits before the table fallback (6) it refines.
+  if (categorical.length === 1 && numeric.length >= 3) {
+    return form(
+      `a pivot (wide shape) — ${categorical[0].name} on the rows and one column ` +
+        `per measure (${list(numeric.map((p) => p.name))}), exact figures with ` +
+        `a Total row.`,
     );
   }
 
@@ -347,10 +399,66 @@ export function recommendComposition(
   };
 }
 
+/** A recommendation sentence without its closing full stop, for a list line. */
+function bare(text: string): string {
+  return text.replace(/\.\s*$/, '');
+}
+
+/**
+ * The dashboard block: used when two or more result sets each have two or
+ * more rows, because one chart then drops a view the answer rests on.
+ */
+function dashboardBlock(usable: UsableRecord[]): string | undefined {
+  if (usable.length < 2) return undefined;
+  if (usable.filter((record) => record.rowCount >= 2).length < 2) {
+    return undefined;
+  }
+
+  // Keep the sets a spec can draw from: the largest ones, in run order.
+  const kept = new Set(
+    [...usable]
+      .sort((a, b) => b.rows.length - a.rows.length)
+      .slice(0, PANEL_SETS_CAP),
+  );
+  const sets = usable.filter((record) => kept.has(record));
+
+  const lines = sets.map((record) => {
+    const columns = `[${record.columns.join(', ')}]`;
+    const rows = `${record.rowCount} row${record.rowCount === 1 ? '' : 's'}`;
+    const profiles = profileColumns(record.columns, record.rows);
+    const measures = profiles.filter((p) => p.role === 'numeric');
+    if (record.rowCount === 1 && measures.length >= 1) {
+      return `- ${columns}: ${rows}; the source of the kpis (one tile per measure: ${list(
+        measures.map((p) => p.name),
+      )}), not a panel`;
+    }
+    const form = recommendForRecord(record);
+    return `- ${columns}: ${rows}; panel as ${form ? bare(form.recommendation) : 'a table'}`;
+  });
+
+  return [
+    `Data shape: ${sets.length} result sets that the answer rests on.`,
+    'Recommended form: panels — a dashboard with one panel per result set below. Use this form unless the instruction or the',
+    'data itself argues for another; if you deviate, say why in the description.',
+    'Result sets in the order they ran, each named in a select by its column list:',
+    ...lines,
+  ].join('\n');
+}
+
 /** The `<recommended-form>` prompt block, or `undefined` when nothing applies. */
 export function recommendedFormBlock(
   records: ToolDataRecord[] | undefined,
 ): RecommendedForm | undefined {
+  const dashboard = dashboardBlock(usableRecords(records ?? []));
+  if (dashboard) {
+    return {
+      composed: true,
+      block: ['<recommended-form>', dashboard, '</recommended-form>'].join(
+        '\n',
+      ),
+    };
+  }
+
   const recommendation = recommendChartForm(records);
   if (!recommendation) return undefined;
   const composition = recommendComposition(records);

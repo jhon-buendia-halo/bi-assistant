@@ -73,7 +73,9 @@ export type TailorChartType =
   | 'heatmap'
   | 'metric-cards'
   | 'table'
-  | 'donut';
+  | 'donut'
+  | 'pivot'
+  | 'us-map';
 
 export type TailorSort = 'none' | 'asc' | 'desc';
 
@@ -93,6 +95,8 @@ const CHART_TYPE_PHRASES: Record<Exclude<TailorChartType, 'auto'>, string> = {
   'metric-cards': 'Change the visual to metric cards.',
   table: 'Change the visual to a compact sortable table.',
   donut: 'Change the visual to a donut chart.',
+  pivot: 'Change the visual to a pivot table.',
+  'us-map': 'Change the visual to a US state map.',
 };
 
 /** Options offered in the tailoring popover, in display order. */
@@ -105,6 +109,8 @@ export const TAILOR_CHART_TYPES: { value: TailorChartType; label: string }[] = [
   { value: 'metric-cards', label: 'Metric cards' },
   { value: 'table', label: 'Table' },
   { value: 'donut', label: 'Donut' },
+  { value: 'pivot', label: 'Pivot table' },
+  { value: 'us-map', label: 'US state map' },
 ];
 
 export const TAILOR_SORTS: { value: TailorSort; label: string }[] = [

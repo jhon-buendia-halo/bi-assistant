@@ -449,13 +449,17 @@ export const writtenAnswerSchema = z.object({
 
 /**
  * What Build visual receives (agents.md 5.11, workflows R41): Write answer's
- * answer, the question and the queries with their rows.
+ * answer, the question, the queries with their rows and Read images' notes,
+ * which the designer reads as the reference to follow. Required, as in
+ * Write answer's input: the answer path's input always carries them (Analyse
+ * passes on `''` after a resume that had none).
  */
 export const visualInputSchema = writtenAnswerSchema.extend({
   question: z.string().describe('The trimmed question.'),
   queries: z
     .array(analyseQuerySchema)
     .describe('The SQL queries of the last attempt, with their rows.'),
+  imageNotes: imageNotesSchema,
 });
 
 /** What Build visual made: the stored visual, or why there is none. */

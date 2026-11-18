@@ -13,6 +13,7 @@ import {
 import { ThemeService } from '../../../../core/theme/theme.service';
 import {
   InteractiveVisualPanel,
+  TAILOR_CHART_TYPES,
   buildTailorInstruction,
   withVisualTheme,
 } from './interactive-visual-panel';
@@ -80,6 +81,53 @@ describe('buildTailorInstruction', () => {
         topN: null,
       }),
     ).toBe('Change the visual to metric cards.');
+  });
+
+  it('offers the pivot table and the US state map after Donut', () => {
+    const values = TAILOR_CHART_TYPES.map((o) => o.value);
+    expect(values.slice(-3)).toEqual(['donut', 'pivot', 'us-map']);
+    expect(TAILOR_CHART_TYPES.slice(-2).map((o) => o.label)).toEqual([
+      'Pivot table',
+      'US state map',
+    ]);
+  });
+
+  it('writes one sentence for each of the two newer chart types', () => {
+    expect(
+      buildTailorInstruction({ chartType: 'pivot', sort: 'none', topN: null }),
+    ).toBe('Change the visual to a pivot table.');
+    expect(
+      buildTailorInstruction({
+        chartType: 'us-map',
+        sort: 'none',
+        topN: null,
+      }),
+    ).toBe('Change the visual to a US state map.');
+  });
+
+  it('combines the newer chart types with a sort and a free-text change', () => {
+    expect(
+      buildTailorInstruction({
+        chartType: 'pivot',
+        sort: 'desc',
+        topN: null,
+        freeText: 'Hide the total column',
+      }),
+    ).toBe(
+      'Change the visual to a pivot table. Sort descending by the main measure. ' +
+        'Hide the total column',
+    );
+    expect(
+      buildTailorInstruction({
+        chartType: 'us-map',
+        sort: 'asc',
+        topN: null,
+        freeText: 'Highlight Florida',
+      }),
+    ).toBe(
+      'Change the visual to a US state map. Sort ascending by the main measure. ' +
+        'Highlight Florida',
+    );
   });
 
   it('ignores a top-N outside the offered range', () => {

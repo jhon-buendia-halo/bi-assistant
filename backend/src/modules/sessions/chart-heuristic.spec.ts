@@ -442,3 +442,187 @@ describe('recommendedFormBlock', () => {
     expect(recommendedFormBlock([])).toBeUndefined();
   });
 });
+
+const STATES = [
+  'FL',
+  'TX',
+  'CA',
+  'NY',
+  'OH',
+  'PA',
+  'GA',
+  'IL',
+  'MI',
+  'NC',
+  'WA',
+  'AZ',
+];
+
+const ALL_STATES =
+  'AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY'.split(
+    ' ',
+  );
+
+function sql(rows: Record<string, unknown>[]): ToolDataRecord {
+  return {
+    tool: 'run_readonly_sql',
+    input: 'SELECT 1',
+    columns: Object.keys(rows[0]),
+    rows,
+    rowCount: rows.length,
+  };
+}
+
+const election = sql(
+  ['A', 'B', 'C'].map((plan, n) => ({
+    election: 'Yes',
+    plan_type: plan,
+    n: n + 1,
+  })),
+);
+const ageBands = sql(
+  Array.from({ length: 12 }, (_, n) => ({
+    age_band: `${20 + n * 5}-${24 + n * 5}`,
+    total: 100 + n,
+    hsa: 10 + n,
+    ppo: 20 + n,
+    na: n,
+  })),
+);
+const states = sql(
+  Array.from({ length: 45 }, (_, n) => ({
+    state: ALL_STATES[n],
+    employees: 1000 - n,
+    avg_age: 40 + (n % 7),
+    avg_income: 50000 + n,
+    avg_tenure: 3 + (n % 5),
+  })),
+);
+const totals = sql([
+  {
+    employees: 5000,
+    avg_age: 41,
+    avg_income: 61000,
+    avg_tenure: 6,
+    states: 45,
+  },
+]);
+
+describe('state, pivot and dashboard advice', () => {
+  it('recommends a map for a column of US states', () => {
+    const result = recommendChartForm([
+      sql(STATES.map((state, n) => ({ state, employees: 100 - n }))),
+    ]);
+
+    expect(result?.recommendation).toContain('us-map');
+    expect(result?.recommendation).toContain('employees');
+    expect(result?.recommendation).toContain('ranked bars');
+  });
+
+  it('keeps bars when the column holds only four states', () => {
+    const result = recommendChartForm([
+      sql(
+        ['FL', 'TX', 'CA', 'NY'].map((state, n) => ({
+          state,
+          employees: 10 + n,
+        })),
+      ),
+    ]);
+
+    expect(result?.recommendation).toContain('sorted horizontal bars');
+    expect(result?.recommendation).not.toContain('us-map');
+  });
+
+  it('keeps bars for a category that is not states', () => {
+    const result = recommendChartForm([
+      sql(
+        Array.from({ length: 12 }, (_, n) => ({
+          plan: `plan-${n}`,
+          employees: n,
+        })),
+      ),
+    ]);
+
+    expect(result?.recommendation).toContain('sorted horizontal bars');
+  });
+
+  it('recommends a wide pivot for one label with three or more measures', () => {
+    const result = recommendChartForm([ageBands]);
+
+    expect(result?.recommendation).toContain('pivot');
+    expect(result?.recommendation).toContain('age_band');
+    expect(result?.recommendation).toContain('total, hsa, ppo and na');
+    expect(result?.recommendation).not.toContain('sortable table');
+  });
+
+  it('offers a long pivot next to the heatmap for two labels', () => {
+    const result = recommendChartForm([election]);
+
+    expect(result?.recommendation).toContain('heatmap');
+    expect(result?.recommendation).toContain('pivot (long shape)');
+  });
+
+  it('recommends panels for the four-set run, in run order', () => {
+    const form = recommendedFormBlock([election, ageBands, states, totals]);
+    const block = form!.block;
+
+    expect(form!.composed).toBe(true);
+    expect(block).toContain('<recommended-form>');
+    expect(block).toContain('</recommended-form>');
+    expect(block).toContain('Recommended form: panels');
+    expect(block).toContain('if you deviate, say why in the description.');
+    const at = [
+      '[election, plan_type, n]',
+      '[age_band, total, hsa, ppo, na]',
+      '[state, employees, avg_age, avg_income, avg_tenure]',
+      '[employees, avg_age, avg_income, avg_tenure, states]',
+    ].map((columns) => block.indexOf(columns));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    const line = (columns: string) =>
+      block.split('\n').find((l) => l.includes(columns)) ?? '';
+    expect(line('[age_band,')).toContain('12 rows');
+    expect(line('[age_band,')).toContain('pivot');
+    expect(line('[state,')).toContain('45 rows');
+    expect(line('[state,')).toContain('us-map');
+    expect(line('[employees,')).toContain('kpis');
+    expect(line('[employees,')).not.toContain('panel as');
+    expect(line('[state,')).toContain('panel as');
+  });
+
+  it('keeps one form plus tiles for one chart set and a single row', () => {
+    const form = recommendedFormBlock([ageBands, totals]);
+
+    expect(form!.block).not.toContain('panels');
+    expect(form!.block).toContain('pivot');
+    expect(form!.block).toContain('Composed answer:');
+  });
+
+  it('keeps the single-set advice for one result set', () => {
+    const form = recommendedFormBlock(
+      record([
+        { payer: 'Aetna', claims: 90 },
+        { payer: 'Cigna', claims: 40 },
+      ]),
+    );
+
+    expect(form!.block).toContain('Recommended form: sorted horizontal bars');
+    expect(form!.block).not.toContain('panels');
+    expect(form!.composed).toBe(false);
+  });
+
+  it('lists at most eight sets for ten result sets', () => {
+    const sets = Array.from({ length: 10 }, (_, n) =>
+      sql([
+        { [`label_${n}`]: 'a', [`value_${n}`]: 1 },
+        { [`label_${n}`]: 'b', [`value_${n}`]: 2 },
+      ]),
+    );
+    const block = recommendedFormBlock(sets)!.block;
+
+    expect(block).toContain('Recommended form: panels');
+    expect(block.match(/\[label_\d+, value_\d+\]/g)).toHaveLength(8);
+    expect(block).toContain('[label_0, value_0]');
+    expect(block).not.toContain('[label_9, value_9]');
+  });
+});

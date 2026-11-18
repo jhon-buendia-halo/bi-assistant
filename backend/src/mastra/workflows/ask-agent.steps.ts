@@ -90,14 +90,16 @@ export interface EarlierAnswerInput {
 
 /**
  * Build visual's inputs taken from the earlier run (agents.md 5.21): its
- * question, its answer and that answer's queries with their rows. Read
- * once; the earlier answer's records are carried into this run's answer,
- * so its sources open in the query inspector and Ryan charts their rows.
+ * question, its answer, that answer's queries with their rows and Zoe's
+ * notes (`''` when it had no images). Read once; the earlier answer's
+ * records are carried into this run's answer, so its sources open in the
+ * query inspector and Ryan charts their rows.
  */
 export interface EarlierVisualInput {
   question: string;
   answer: string;
   queries: AnalyseQuery[];
+  imageNotes: string;
 }
 
 /**
@@ -146,13 +148,16 @@ export interface AskAgentRuntime {
   earlierVisual(): EarlierVisualInput;
   /**
    * Build visual's designer call: Ryan designs a new visual (v1) of the
-   * earlier answer, following `instruction`; it is stored with the run. A
-   * design that fails comes back as `error`, never as a throw.
+   * earlier answer, following `instruction` and, when the earlier run had
+   * reference images, their notes (`imageNotes`, never blank). It is
+   * stored with the run. A design that fails comes back as `error`, never
+   * as a throw.
    */
   buildVisual(input: {
     question: string;
     answer: string;
     instruction: string;
+    imageNotes?: string;
   }): Promise<{ visual: BuiltVisual; stopped: boolean }>;
   /** A code-written answer: the run's answer text. */
   deliverAnswer(answer: string): Promise<void>;

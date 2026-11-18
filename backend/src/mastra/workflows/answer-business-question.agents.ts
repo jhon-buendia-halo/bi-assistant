@@ -182,6 +182,11 @@ export async function writeAnswerWithModel(
      * not empty; absent or `''`, the request is what it was before.
      */
     imageNotes?: string;
+    /**
+     * Build visual runs after it and the request cues a visual: the
+     * request ends with the line saying so; absent, it is as before.
+     */
+    visualFollows?: boolean;
   },
   options: StepModelOptions & { onText?: (delta: string) => void },
 ): Promise<{ answer: BusinessAnswer; stopped: boolean }> {
