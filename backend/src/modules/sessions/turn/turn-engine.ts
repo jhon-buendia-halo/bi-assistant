@@ -74,9 +74,11 @@ import {
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
   ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   clarifyingQuestionOf,
+  keptQueryOrigins,
   planOf,
   turnSummaryOf,
   validateAttempt,
+  type AnalyseQuery,
   type AnsweredClarification,
   type AnswerBusinessQuestionInput,
   type AnswerBusinessQuestionRuntime,
@@ -403,6 +405,9 @@ export class TurnEngine {
     // Where v2's current analysis attempt's records start: a resumed
     // attempt keeps the queries it ran before it asked.
     let attemptStart = 0;
+    // Where each of v2's analysis attempts started, by attempt number: after
+    // a retry, Build visual takes the records of the kept queries.
+    const attemptStarts = new Map<number, number>();
     // The agent's clarifying questions this turn, each with the answer:
     // every later attempt goes on with them.
     const answers: AnsweredClarification[] = [];
@@ -901,6 +906,7 @@ export class TurnEngine {
             // one block under one cap (agents.md 5.11).
             if (answered) answers.push(answered);
             else attemptStart = data.length;
+            attemptStarts.set(attempt, attemptStart);
             const earlier = answered
               ? attemptEarlierBlock(earlierAttempt, data.slice(attemptStart))
               : earlierBlock;
@@ -1029,20 +1035,52 @@ export class TurnEngine {
           // Asked alone (agents.md 5.21), Ryan designs from the earlier
           // question and answer, the follow-up as his instruction.
           // Zoe's notes, when the run has some, are Ryan's reference.
+          // After a retry Ryan is given only the kept queries' records, in
+          // the kept set's order (keptRecords); the answer's sources stay
+          // every record of both attempts.
           buildVisual: async ({
             question,
             answer,
+            queries,
             instruction,
             imageNotes,
           }: {
             question: string;
             answer: string;
+            queries?: readonly AnalyseQuery[];
             instruction?: string;
             imageNotes?: string;
           }) => {
             const stop = () => ({ visual: {}, stopped: true });
             if (turn.signal.aborted) return stop();
             answerAt ??= new Date().toISOString();
+            // A kept query is its attempt's n-th `run_readonly_sql` record,
+            // as `analyseAttemptOf` built it from that attempt's records.
+            // No retry, or a set no merge keeps: every record, as before.
+            const keptRecords = (
+              kept: readonly AnalyseQuery[] | undefined,
+            ): ToolDataRecord[] => {
+              const first = attemptStarts.get(1);
+              const second = attemptStarts.get(2);
+              if (!kept || first === undefined || second === undefined) {
+                return data;
+              }
+              const attempts = [
+                data.slice(first, second),
+                data.slice(second),
+              ].map((records) =>
+                records.filter((record) => record.tool === 'run_readonly_sql'),
+              );
+              const origins = keptQueryOrigins(
+                attempts.map((records) => analyseQueriesOf(records)),
+                kept,
+              );
+              return origins
+                ? origins.map(
+                    ({ attempt, index }) => attempts[attempt - 1][index],
+                  )
+                : data;
+            };
             try {
               // The turn's stop reaches the designer: a call in flight is
               // aborted and no further attempt starts (the catch below).
@@ -1052,7 +1090,7 @@ export class TurnEngine {
                   question,
                   answer,
                   at: answerAt,
-                  data,
+                  data: keptRecords(queries),
                   ...(instruction !== undefined ? { instruction } : {}),
                   ...(imageNotes?.trim() ? { reference: imageNotes } : {}),
                 },

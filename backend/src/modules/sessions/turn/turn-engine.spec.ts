@@ -213,11 +213,13 @@ const AGENT_KEYS = {
  * A turn of an Insights Analyst session (v2: Analyse streams), of an
  * assistant session (the one-step Answer streams) or of an Assess Data
  * Readiness session (Explain report streams); each agent stream sends
- * `steps` (a function of the call, to give a retry its own).
+ * `steps` (a function of the call, to give a retry its own). With
+ * `visuals`, the run builds a visual (Build visual, workflows R41).
  */
 function build(
   kind: 'v2' | 'assistant' | 'readiness',
   steps: (call: number) => Timed[],
+  visuals?: { createFromAnswer: jest.Mock },
 ) {
   const session: SessionDoc = {
     id: 's-1',
@@ -225,6 +227,7 @@ function build(
     datasets: ['World Cup'],
     messages: [],
     visualizations: [],
+    ...(visuals ? { buildVisual: true as const } : {}),
     ...(kind === 'v2'
       ? { agentKey: 'insights-analyst', agentName: 'Insights Analyst' }
       : kind === 'readiness'
@@ -315,7 +318,7 @@ function build(
     {
       getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
     } as never,
-    {} as never,
+    (visuals ?? {}) as never,
     {
       referenceBlock: jest.fn().mockResolvedValue(undefined),
       isVerifiedSql: jest.fn().mockResolvedValue(false),
@@ -644,6 +647,180 @@ describe('the retry of Analyse carries attempt 1 forward (agents.md 5.11; workfl
     expect(await startTurn(ctx, [], controller.signal)).toBe('done');
     expect(ctx.agent.stream).toHaveBeenCalledTimes(2);
     expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
+  });
+
+  describe('Build visual draws from the queries the answer rests on (workflows R41)', () => {
+    type Designed = { input?: string; rowCount?: number; truncated?: boolean };
+    const designer = () => ({
+      createFromAnswer: jest.fn().mockResolvedValue({
+        metadata: {
+          id: 'v-1',
+          title: 'Matches',
+          description: 'Matches',
+          path: 'visuals/v-1',
+          sourceMessageAt: '2026-01-01T00:00:00.000Z',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          currentVersion: 1,
+          versions: [],
+        },
+        bundle: {},
+      }),
+    });
+    /** The records the designer was given. */
+    const designed = (visuals: ReturnType<typeof designer>) => {
+      expect(visuals.createFromAnswer).toHaveBeenCalledTimes(1);
+      return (
+        (visuals.createFromAnswer.mock.calls[0] as unknown[])[1] as {
+          data: Designed[];
+        }
+      ).data;
+    };
+    /** One `run_readonly_sql` call and its result, under its own call id. */
+    const sqlRun = (callId: string, sql: string, result: object) => [
+      now({
+        type: 'tool-call',
+        payload: {
+          toolCallId: callId,
+          toolName: 'run_readonly_sql',
+          args: { sql, rationale: 'Count.' },
+        },
+      }),
+      now({
+        type: 'tool-result',
+        payload: { toolCallId: callId, toolName: 'run_readonly_sql', result },
+      }),
+    ];
+    const COUNT_SQL = 'SELECT count(*) AS n FROM wc.public.matches';
+    const cut = {
+      columns: ['n'],
+      rows: [{ n: 1 }],
+      rowCount: 1,
+      truncated: true,
+    };
+    const whole = { columns: ['n'], rows: [{ n: 64 }], rowCount: 1 };
+    const failed = { error: 'column "x" does not exist' };
+
+    it('gives the designer exactly the records of a run with no retry, in run order', async () => {
+      const visuals = designer();
+      const ctx = build(
+        'v2',
+        () => [
+          ...sqlRun('a', COUNT_SQL, whole),
+          ...sqlRun('b', 'SELECT 1 AS n', SQL_RESULT.payload.result),
+          now(text('Ok.')),
+        ],
+        visuals,
+      );
+      expect(await startTurn(ctx, [])).toBe('done');
+      expect(ctx.agent.stream).toHaveBeenCalledTimes(1);
+      const data = designed(visuals);
+      expect(data.map((record) => record.input)).toEqual([
+        COUNT_SQL,
+        'SELECT 1 AS n',
+      ]);
+      expect(data).toEqual(ctx.session.messages.at(-1)?.data);
+    });
+
+    it("leaves out attempt 1's flagged query the merge dropped, while the answer's sources keep it", async () => {
+      const visuals = designer();
+      const ctx = build(
+        'v2',
+        (call) =>
+          call === 1
+            ? ATTEMPT_1
+            : [now(SQL_CALL), now(SQL_RESULT), now(text('Ok.'))],
+        visuals,
+      );
+      expect(await startTurn(ctx, [])).toBe('done');
+      expect(designed(visuals).map((record) => record.input)).toEqual([
+        'SELECT 1 AS n',
+      ]);
+      const answer = ctx.session.messages.at(-1)!;
+      expect(answer.data?.map((record) => record.input)).toEqual([
+        SAMPLE_SQL,
+        'SELECT 1 AS n',
+      ]);
+      expect(answer.evidence?.map((entry) => entry.index)).toEqual([0, 1]);
+    });
+
+    it("gives the retry's run of the same SQL, not attempt 1's cut one, in the kept set's order", async () => {
+      const visuals = designer();
+      const ctx = build(
+        'v2',
+        (call) =>
+          call === 1
+            ? [
+                ...sqlRun('a', 'SELECT 1 AS n', SQL_RESULT.payload.result),
+                ...sqlRun('b', COUNT_SQL, cut),
+                now(text('Cut.')),
+              ]
+            : [...sqlRun('c', COUNT_SQL, whole), now(text('Ok.'))],
+        visuals,
+      );
+      expect(await startTurn(ctx, [])).toBe('done');
+      // Attempt 2's query first, then attempt 1's unflagged one.
+      expect(written(ctx).queries.map((q) => q.sql)).toEqual([
+        COUNT_SQL,
+        'SELECT 1 AS n',
+      ]);
+      const data = designed(visuals);
+      expect(data.map((record) => [record.input, record.truncated])).toEqual([
+        [COUNT_SQL, undefined],
+        ['SELECT 1 AS n', undefined],
+      ]);
+      expect(ctx.session.messages.at(-1)?.data).toHaveLength(3);
+    });
+
+    it("gives attempt 1's records alone when the merged set scored worse", async () => {
+      const visuals = designer();
+      const ctx = build(
+        'v2',
+        (call) =>
+          call === 1
+            ? [...sqlRun('a', COUNT_SQL, cut), now(text('Cut.'))]
+            : [
+                ...sqlRun('b', COUNT_SQL, whole),
+                ...sqlRun('c', 'SELECT x FROM wc.public.matches', failed),
+                now(text('Ok.')),
+              ],
+        visuals,
+      );
+      expect(await startTurn(ctx, [])).toBe('done');
+      expect(written(ctx).queries).toEqual([
+        expect.objectContaining({ sql: COUNT_SQL, truncated: true }),
+      ]);
+      const data = designed(visuals);
+      expect(data.map((record) => [record.input, record.truncated])).toEqual([
+        [COUNT_SQL, true],
+      ]);
+      expect(ctx.session.messages.at(-1)?.data).toHaveLength(3);
+    });
+
+    it("gives attempt 1's records alone when the retry ended on a model error", async () => {
+      const visuals = designer();
+      const ctx = build(
+        'v2',
+        (call) =>
+          call === 1
+            ? ATTEMPT_1
+            : [
+                now(SQL_CALL),
+                now(SQL_RESULT),
+                now({
+                  type: 'error',
+                  payload: { error: new Error('Overloaded') },
+                }),
+              ],
+        visuals,
+      );
+      expect(await startTurn(ctx, [])).toBe('done');
+      expect(designed(visuals).map((record) => record.input)).toEqual([
+        SAMPLE_SQL,
+      ]);
+      expect(
+        ctx.session.messages.at(-1)?.data?.map((record) => record.input),
+      ).toEqual([SAMPLE_SQL, 'SELECT 1 AS n']);
+    });
   });
 });
 
