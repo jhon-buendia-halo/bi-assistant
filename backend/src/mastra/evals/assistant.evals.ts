@@ -114,6 +114,12 @@ export interface AssistantEvalCase {
    * not from `question` (which is then only the case's label).
    */
   input?: unknown;
+  /**
+   * `insights-analyst` workflow target (agents.md 8.1): the SQL of a query
+   * the target adds to Analyse's attempt 1 as failed by a statement timeout,
+   * so Validate fails the attempt and the case always runs a retry.
+   */
+  forceRetryWith?: string;
 }
 
 /** One tool call as the agent made it, with its parsed input and output. */
