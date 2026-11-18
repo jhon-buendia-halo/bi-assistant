@@ -286,16 +286,23 @@ export function assessmentSummary(input: ExplainedReport): AssessmentSummary {
 
 /**
  * The system block the Explain report step adds to the agent's turn: the
- * assessment has already run, so the agent reads the stored report (its
- * one tool there) and answers from it (data-readiness R4).
+ * assessment has already run, so the block carries the stored report's
+ * model-facing summary, exactly what `get_readiness_report` returns to the
+ * model for it (`readinessModelOutput`, agents.md 3.13), and the agent
+ * calls that tool only for a part the summary does not hold: one round trip
+ * less a run (data-readiness R4, agents.md 5.13).
  */
 export function explainReportBlock(input: {
   reportId: string;
   dataset: string;
+  /** The report's summary, as `readinessModelOutput` projects it. */
+  summary: unknown;
 }): string {
   return [
     `The workflow has already assessed the dataset "${input.dataset}" and stored readiness report ${input.reportId}.`,
-    `Call get_readiness_report with reportId "${input.reportId}" first, then answer the user's question from that report only.`,
+    `The summary of report ${input.reportId} is below, as get_readiness_report returns it. Answer the user's question from that report only.`,
+    `Call get_readiness_report with reportId "${input.reportId}" only for a part the summary does not hold, such as every finding of one dimension.`,
     'Do not run another assessment.',
+    JSON.stringify(input.summary),
   ].join('\n');
 }

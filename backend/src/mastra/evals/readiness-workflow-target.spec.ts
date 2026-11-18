@@ -25,6 +25,7 @@ jest.mock('../model-resolver', () => ({ resolveAgentModel: jest.fn() }));
 import type { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
 import { dataReadinessAssessmentWorkflow } from '../workflows/data-readiness-assessment.workflow';
+import { explainReportBlock } from '../workflows/data-readiness-assessment.steps';
 import { ASSESSED_REPORT_CONTEXT_KEY } from '../readiness-tool-services';
 import { evalDetailsOf } from './eval-details';
 import {
@@ -184,9 +185,16 @@ describe('readinessWorkflowTurnAgent (agents.md 8.1)', () => {
     expect(input).toBe('Is this data ready for a revenue dashboard?');
     expect(explainOptions.maxSteps).toBe(15);
     expect(explainOptions.context[0].content).toBe('Block D1.');
-    expect(explainOptions.context[1].content).toContain(
-      'stored readiness report rep-1',
+    // The same block as the turn engine's: the saved report's summary, as
+    // get_readiness_report hands it to the model (data-readiness R4).
+    expect(explainOptions.context[1].content).toBe(
+      explainReportBlock({
+        dataset: 'Edge Cases',
+        reportId: 'rep-1',
+        summary: SUMMARY,
+      }),
     );
+    expect(explainOptions.context).toHaveLength(2);
     expect(result['text']).toBe('The data scores 71 (report rep-1).');
     // The scored tool calls are Explain report's.
     expect(result['toolCalls']).toEqual([
@@ -198,6 +206,8 @@ describe('readinessWorkflowTurnAgent (agents.md 8.1)', () => {
     const { target, options } = setUp();
     const result = await target.generate('How ready is it?', options as never);
     const details = evalDetailsOf(result);
+    // The summary Explain report's prompt carried, for the checks.
+    expect(details.report).toEqual(SUMMARY);
     expect(details.report).toMatchObject({
       overallScore: 71,
       findingCount: 3,

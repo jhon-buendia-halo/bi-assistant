@@ -119,7 +119,12 @@ import {
 import { ANALYSE_VISUAL_LINE } from '../../mastra/workflows/answer-business-question.prompts';
 import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
 import { askAgentWorkflow } from '../../mastra/workflows/ask-agent.workflow';
-import { DATA_READINESS_ASSESSMENT_STEPS } from '../../mastra/workflows/data-readiness-assessment.steps';
+import {
+  DATA_READINESS_ASSESSMENT_STEPS,
+  explainReportBlock,
+} from '../../mastra/workflows/data-readiness-assessment.steps';
+import { readinessModelOutput } from '../../mastra/tools/readiness.tools';
+import { readinessSummary } from './readiness-bridge';
 import { dataReadinessAssessmentWorkflow } from '../../mastra/workflows/data-readiness-assessment.workflow';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
 import type { ReadinessReport } from '../data-readiness/engine/types';
@@ -1402,6 +1407,18 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
     ]);
     expect(call.options.context.at(-1)?.content).toContain(
       'stored readiness report r-wc',
+    );
+    // The block carries the stored report's summary, as get_readiness_report
+    // hands it to the model (data-readiness R4): no call needed to read it.
+    expect(call.options.context.at(-1)?.content).toBe(
+      explainReportBlock({
+        dataset: 'World Cup',
+        reportId: 'r-wc',
+        summary: readinessModelOutput({
+          report: READINESS_REPORT,
+          summary: readinessSummary(READINESS_REPORT),
+        }),
+      }),
     );
     expect(
       call.options.requestContext.values.get('readiness-assessed-report'),

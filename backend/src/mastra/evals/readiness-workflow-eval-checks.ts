@@ -15,10 +15,11 @@ import {
 /**
  * The custom checks of the `readiness-workflow` set (agents.md 8.1, story
  * 1.29.7): Explain report as the Assess Data Readiness workflow runs it.
- * The saved report is `details.report` (the target's own record of what the
- * engine scored), so a check compares the answer with it, not with what the
- * agent chose to read. Each answers `undefined` when it passes and the
- * reason when it fails.
+ * The saved report is `details.report`: its summary, the one Explain
+ * report's prompt carried (data-readiness R4; what `get_readiness_report`
+ * hands the model), so a check compares the answer with it, not with what
+ * the agent chose to read, and still fails with no tool call. Each answers
+ * `undefined` when it passes and the reason when it fails.
  */
 
 /** A dimension's entry of the saved report's `dimensionScores`. */
@@ -68,8 +69,9 @@ export function quotesReportScoreAndMaturity(): EvalCustomCheck {
 
 /**
  * D2-D3 inside the workflow: every score-like number of the answer is in the
- * saved report, in a readiness result Explain report read, a count of a
- * complete finding list, or a method constant.
+ * saved report's summary (the one Explain report's prompt carried,
+ * data-readiness R4), in a readiness result Explain report read, a count of
+ * a complete finding list of either, or a method constant.
  */
 export function numbersFromReport(allow: number[] = []): EvalCustomCheck {
   return drCheck(
@@ -78,10 +80,11 @@ export function numbersFromReport(allow: number[] = []): EvalCustomCheck {
       const quoted = quotedNumbers(answer);
       if (!quoted.length) return undefined;
       const outputs = readinessOutputs(toolCalls);
+      // The summary the prompt carried counts as a result read.
+      const read = details?.report ? [details.report, ...outputs] : outputs;
       const allowed = [
-        ...numbersIn(details?.report ?? {}),
-        ...numbersIn(outputs),
-        ...topFindingCounts(outputs),
+        ...numbersIn(read),
+        ...topFindingCounts(read),
         ...dimensionFindingCounts(outputs),
         ...METHOD_CONSTANTS,
         ...allow,
