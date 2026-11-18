@@ -337,6 +337,24 @@ describe('the v2 eval target runs the whole answer-business-question workflow (a
     expect(written.queries.map((query) => query.sql)).not.toContain(forced);
   });
 
+  it("reports attempt 1's catalogue block as the judge's context", async () => {
+    const { target, generate, options } = setUp(PLAN, [
+      agentResult([{ player: 'Kane', goals: 6 }]),
+    ]);
+    const result = (await target.generate(
+      'Who scored the most in 2018?',
+      options as never,
+    )) as unknown as Record<string, unknown>;
+    const sent = (
+      generate.mock.calls[0][1]['context'] as { content: string }[]
+    ).map((entry) => entry.content);
+    const reported = evalDetailsOf(result).judgeContext;
+    expect(typeof reported).toBe('string');
+    expect(reported).not.toBe('');
+    // Exactly the block the request held, not a copy built apart.
+    expect(sent).toContain(reported);
+  });
+
   it('adds nothing when the case does not ask for a retry: one attempt, no injected query', async () => {
     const { target, generate, options } = setUp(PLAN, [
       agentResult([{ player: 'Kane', goals: 6 }]),

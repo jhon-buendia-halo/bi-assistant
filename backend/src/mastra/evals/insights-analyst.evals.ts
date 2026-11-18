@@ -290,34 +290,31 @@ const INSIGHTS_ANALYST_EVAL_CASES: AssistantEvalCase[] = [
       'the group stage is missing.',
   },
   {
-    id: 'v2-retry-sample-reuses-attempt-1',
-    question:
-      'Show me five goals scored at the 2022 World Cup, with the scorer and the minute.',
+    id: 'v2-retry-reuses-attempt-1',
+    question: 'How many goals were scored at the 2022 World Cup?',
     intent:
       'Drives the retry (agents.md 5.11, 8.1): the target adds to attempt 1 a query that timed out (`forceRetryWith`), so Validate fails its "No unresolved tool error" check whatever the model wrote and a retry always runs; the retry, shown attempt 1\'s queries and the columns of each entity, runs only the queries it needs, without listing or describing the entities again.',
     scorers: [checks.noToolErrors()],
-    customChecks: [ranSuccessfulSql(), retryDoesNotRediscover()],
+    customChecks: [
+      ranSuccessfulSql(),
+      answerStatesNumbers([[{ value: 24 }]]),
+      retryDoesNotRediscover(),
+    ],
+    // The goals by type, as if that breakdown had timed out.
     forceRetryWith:
-      'SELECT goal.id, player.full_name, goal.minute FROM world_cup.goals goal ' +
-      'CROSS JOIN world_cup.goals other ' +
-      'JOIN world_cup.players player ON player.id = goal.scorer_player_id ' +
-      'ORDER BY goal.minute, goal.id',
-    expectedSql:
-      'SELECT player.full_name AS scorer, goal.minute FROM world_cup.goals goal ' +
-      'JOIN world_cup.players player ON player.id = goal.scorer_player_id ' +
+      'SELECT goal.goal_type, COUNT(*) AS goals FROM world_cup.goals goal ' +
       'JOIN world_cup.matches match ON match.id = goal.match_id ' +
       'JOIN world_cup.tournaments t ON t.id = match.tournament_id ' +
-      'WHERE t.tournament_year = 2022 ORDER BY goal.minute, goal.id LIMIT 5',
+      'WHERE t.tournament_year = 2022 GROUP BY goal.goal_type ' +
+      'ORDER BY goals DESC',
     judgeRubric:
       'The 2022 data holds 24 goals. Score pass=true only if the final ' +
-      'answer lists five goals of the 2022 World Cup, each with its scorer ' +
-      'and its minute as the queries returned them, and says how they were ' +
-      'chosen (for example the earliest five) or that they are five of the ' +
-      '24. Score pass=false if it lists goals of another tournament, fewer ' +
-      'than five, or a scorer or minute no query returned. A query of an ' +
-      'earlier attempt that timed out is not a data problem: the answer ' +
-      'need not mention it, and score pass=false if it presents that ' +
-      'failure as a limit of the data or says it could not read the goals.' +
+      'answer says 24 goals were scored at the 2022 World Cup, any ' +
+      'breakdown it gives comes from its queries, and it does not present ' +
+      'a query of an earlier attempt that timed out as a problem with the ' +
+      'data. Score pass=false if it gives another total, a figure or ' +
+      'breakdown no query returned, or says the data is incomplete or ' +
+      'unreadable because of that timeout.' +
       ANSWER_FORMAT,
   },
 ];
