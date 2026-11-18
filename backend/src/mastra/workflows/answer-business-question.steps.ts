@@ -363,6 +363,13 @@ export const ANSWER_BUSINESS_QUESTION_EDGES: readonly WorkflowEdge[] = [
 /** The most attempts of the analysis loop: the first and one retry. */
 export const ANALYSE_MAX_ATTEMPTS = 2;
 
+/**
+ * The agent's step budget on a retry of Analyse (agents.md 2.11, 5.11):
+ * the retry is shown the earlier attempt's queries and runs only the ones
+ * the failed checks need; the first attempt keeps the agent's 15.
+ */
+export const ANALYSE_RETRY_MAX_STEPS = 8;
+
 /** The run's RequestContext key holding the per-run `AnswerBusinessQuestionRuntime`. */
 export const ANSWER_BUSINESS_QUESTION_RUNTIME_KEY =
   'answer-business-question-runtime';
@@ -437,12 +444,14 @@ export interface FollowUpRequest {
 /**
  * What one analysis attempt of the agent turn gives back; `clarification`
  * when the agent asked the user a clarifying question (`ask_clarification`):
- * the Analyse step then waits for the answer (api.md 138).
+ * the Analyse step then waits for the answer (api.md 138). `retryError`
+ * when a retry ended on a model error (not a Stop): the records it made are
+ * kept, and Validate keeps the earlier attempt (agents.md 5.11).
  */
 export type AnalyseAttempt = Pick<
   AnalyseOutcome,
   'calls' | 'queries' | 'text' | 'stopped'
-> & { clarification?: ClarifyingQuestion };
+> & { clarification?: ClarifyingQuestion; retryError?: string };
 
 /**
  * What the session code (or the eval runner) hands the run, on its
@@ -465,7 +474,10 @@ export interface AnswerBusinessQuestionRuntime {
   /**
    * One attempt of the Analyse step: the agent turn with its tools. When
    * the step resumes after the agent's clarifying question, `answered`
-   * holds it with the user's answer: the agent goes on from there.
+   * holds it with the user's answer: the agent goes on from there. On a
+   * retry, `earlierBlock` lists the earlier attempt's queries; a retry runs
+   * with `ANALYSE_RETRY_MAX_STEPS`, and a model error on it comes back as
+   * `retryError` instead of failing the step.
    */
   analyse(input: {
     question: string;
@@ -474,6 +486,8 @@ export interface AnswerBusinessQuestionRuntime {
     plan: AnalysisPlan;
     attempt: number;
     planBlock: string;
+    /** On a retry: the earlier attempt's queries (`earlierQueriesBlock`). */
+    earlierBlock?: string;
     answered?: AnsweredClarification;
     /** Read images' notes (agents.md 2.15); absent or `''` without images. */
     imageNotes?: string;
@@ -901,14 +915,59 @@ function words(value: string): string[] {
   return found.map((word) => (word.endsWith('s') ? word.slice(0, -1) : word));
 }
 
-/** The check names Validate reports, in order. */
+/**
+ * The check names Validate reports, in order; `retry` only after a retry
+ * that ended on a model error (a warning: it never fails the attempt).
+ */
 export const VALIDATION_CHECKS = {
   ranQuery: 'Ran a query',
   noToolError: 'No unresolved tool error',
   rowLimit: 'No result cut at its row limit',
   sample: 'No answer from a sample',
   measures: 'Measures covered (warning only)',
+  retry: 'Retry completed (warning only)',
 } as const;
+
+/** Whether a check is a warning only: it never fails the attempt. */
+function isWarningCheck(check: string): boolean {
+  return /\(warning only\)/i.test(check);
+}
+
+/** Whether a query kept an arbitrary sample (`coverageOf`, plan 1.25.7). */
+function isSampleQuery(query: AnalyseQuery): boolean {
+  return (
+    coverageOf({
+      tool: 'run_readonly_sql',
+      sql: query.sql,
+      rowCount: query.rowCount,
+      truncated: query.truncated,
+    }) === 'sample'
+  );
+}
+
+/** Each query cut at its row limit that no later successful query re-read. */
+function unresolvedCuts(queries: readonly AnalyseQuery[]): boolean[] {
+  return queries.map(
+    (query, index) =>
+      !query.error &&
+      query.truncated &&
+      !queries
+        .slice(index + 1)
+        .some((later) => !later.error && !later.truncated),
+  );
+}
+
+/** Each sample that no later successful query read the whole data after. */
+function unresolvedSamples(queries: readonly AnalyseQuery[]): boolean[] {
+  return queries.map(
+    (query, index) =>
+      !query.error &&
+      isSampleQuery(query) &&
+      !queries
+        .slice(index + 1)
+        .some((later) => !later.error && !isSampleQuery(later)),
+  );
+}
 
 /**
  * The Validate step (agents.md 5.11): code checks over one analysis
@@ -955,14 +1014,8 @@ export function validateAttempt(input: {
         ? 'Every failed call was followed by a successful one.'
         : 'No tool call failed.',
   };
-  const cut = queries.filter(
-    (query, index) =>
-      !query.error &&
-      query.truncated &&
-      !queries
-        .slice(index + 1)
-        .some((later) => !later.error && !later.truncated),
-  );
+  const cuts = unresolvedCuts(queries);
+  const cut = queries.filter((_query, index) => cuts[index]);
   const rowLimit: ValidationFinding = {
     check: VALIDATION_CHECKS.rowLimit,
     passed: cut.length === 0,
@@ -970,21 +1023,8 @@ export function validateAttempt(input: {
       ? `${cut.length} ${cut.length === 1 ? 'result was' : 'results were'} cut at the row limit and not aggregated again.`
       : 'No result the answer reads was cut.',
   };
-  const isSample = (query: AnalyseQuery) =>
-    coverageOf({
-      tool: 'run_readonly_sql',
-      sql: query.sql,
-      rowCount: query.rowCount,
-      truncated: query.truncated,
-    }) === 'sample';
-  const sampled = queries.filter(
-    (query, index) =>
-      !query.error &&
-      isSample(query) &&
-      !queries
-        .slice(index + 1)
-        .some((later) => !later.error && !isSample(later)),
-  );
+  const samples = unresolvedSamples(queries);
+  const sampled = queries.filter((_query, index) => samples[index]);
   const sample: ValidationFinding = {
     check: VALIDATION_CHECKS.sample,
     passed: sampled.length === 0,
@@ -1019,6 +1059,123 @@ export function validateAttempt(input: {
       ranQuery.passed && noToolError.passed && rowLimit.passed && sample.passed,
     findings: [ranQuery, noToolError, rowLimit, sample, measures],
   };
+}
+
+/**
+ * The failed check that flagged each query of an attempt (agents.md 5.11),
+ * by Validate's own rules, or undefined: a failed query no later query
+ * replaced (`Ran a query` or `No unresolved tool error` failed), a result
+ * cut at its row limit (`No result cut at its row limit` failed), an
+ * arbitrary sample (`No answer from a sample` failed). A query whose check
+ * passed is never flagged.
+ */
+export function flaggedQueries(
+  queries: readonly AnalyseQuery[],
+  findings: readonly ValidationFinding[],
+): (string | undefined)[] {
+  const failed = new Set(
+    findings
+      .filter((f) => !f.passed && !isWarningCheck(f.check))
+      .map((f) => f.check),
+  );
+  const errorCheck = [
+    VALIDATION_CHECKS.ranQuery,
+    VALIDATION_CHECKS.noToolError,
+  ].find((check) => failed.has(check));
+  const cuts = unresolvedCuts(queries);
+  const samples = unresolvedSamples(queries);
+  return queries.map((query, index) => {
+    if (
+      query.error &&
+      errorCheck &&
+      !queries.slice(index + 1).some((later) => !later.error)
+    ) {
+      return errorCheck;
+    }
+    if (cuts[index] && failed.has(VALIDATION_CHECKS.rowLimit)) {
+      return VALIDATION_CHECKS.rowLimit;
+    }
+    if (samples[index] && failed.has(VALIDATION_CHECKS.sample)) {
+      return VALIDATION_CHECKS.sample;
+    }
+    return undefined;
+  });
+}
+
+/** One analysis attempt's calls, queries and Validate's findings. */
+export interface CheckedAttempt {
+  calls: readonly AnalyseCall[];
+  queries: readonly AnalyseQuery[];
+  findings: readonly ValidationFinding[];
+}
+
+/** What Validate keeps after a retry (agents.md 5.11): the set Write answer reads. */
+export interface MergedAttempts {
+  ok: boolean;
+  findings: ValidationFinding[];
+  calls: AnalyseCall[];
+  queries: AnalyseQuery[];
+  kept: 'merged' | 'first';
+}
+
+/**
+ * Validate on a retry (agents.md 5.11; workflows R27): the merged set is
+ * attempt 2's queries first, then attempt 1's that ran and that no failed
+ * check flagged (`flaggedQueries`), so Write answer's cut drops attempt 1's
+ * first; the calls follow (attempt 2's, then the kept queries' SQL calls:
+ * a data record's call and its query come in the same order). Attempt 1
+ * alone is kept (`first`) when attempt 2 ended on a model error (with the
+ * warning-only `Retry completed` check), ran nothing successfully, or the
+ * merged set fails a check attempt 1 passed: a retry never scores below
+ * attempt 1.
+ */
+export function mergeAttempts(input: {
+  plan: AnalysisPlan;
+  first: CheckedAttempt;
+  second: Pick<CheckedAttempt, 'calls' | 'queries'> & { retryError?: string };
+}): MergedAttempts {
+  const { plan, first, second } = input;
+  const keepFirst = (extra: ValidationFinding[] = []): MergedAttempts => ({
+    ok: first.findings.every((f) => f.passed || isWarningCheck(f.check)),
+    findings: [...first.findings, ...extra],
+    calls: [...first.calls],
+    queries: [...first.queries],
+    kept: 'first',
+  });
+  if (second.retryError !== undefined) {
+    return keepFirst([
+      {
+        check: VALIDATION_CHECKS.retry,
+        passed: false,
+        detail: `Attempt 2 stopped on an error (${second.retryError}); the answer rests on attempt 1's queries.`,
+      },
+    ]);
+  }
+  if (!second.queries.some((query) => !query.error)) return keepFirst();
+  const flagged = flaggedQueries(first.queries, first.findings);
+  const keeps = first.queries.map(
+    (query, index) => !query.error && flagged[index] === undefined,
+  );
+  let sqlIndex = 0;
+  const firstCalls = first.calls.filter((call) =>
+    call.tool === 'run_readonly_sql' ? keeps[sqlIndex++] === true : false,
+  );
+  const calls = [...second.calls, ...firstCalls];
+  const queries = [
+    ...second.queries,
+    ...first.queries.filter((_query, index) => keeps[index]),
+  ];
+  const checked = validateAttempt({ plan, calls, queries });
+  const worse = first.findings.some(
+    (before) =>
+      before.passed &&
+      !isWarningCheck(before.check) &&
+      checked.findings.some(
+        (after) => after.check === before.check && !after.passed,
+      ),
+  );
+  if (worse) return keepFirst();
+  return { ...checked, calls, queries, kept: 'merged' };
 }
 
 /**
@@ -1075,7 +1232,10 @@ export function analysisLoopDone(outcome: {
   );
 }
 
-/** Wrap up: the last attempt's `run_readonly_sql` calls, their rows, the answer. */
+/**
+ * Wrap up: the kept queries' `run_readonly_sql` calls (the last attempt's,
+ * or after a retry the merged set's or attempt 1's), their rows, the answer.
+ */
 export function wrapUp(
   calls: readonly AnalyseCall[],
   answer: string,

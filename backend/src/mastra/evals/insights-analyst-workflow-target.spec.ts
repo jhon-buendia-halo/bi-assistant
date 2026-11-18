@@ -41,6 +41,7 @@ import { endsOnClarifyingQuestion } from './insights-analyst-eval-checks';
 import {
   clarificationAnswer,
   lastUserText,
+  retryDoesNotRediscover,
   workflowTurnAgent,
   type WorkflowTargetParts,
 } from './insights-analyst-workflow-target';
@@ -171,7 +172,11 @@ describe('the v2 eval target runs the whole answer-business-question workflow (a
     });
     const context = analyseOptions['context'] as { content: string }[];
     expect(context[0].content).toBe('Orientation.');
-    expect(context[1].content).toMatch(/^Catalog loaded for this turn/);
+    // No columns are known here: Analyse's catalog block is the catalog
+    // alone, as it was before Analyse was given the columns.
+    expect(context[1].content).toBe(
+      'Catalog loaded for this turn: 1 entity.\n- world_cup.goals (dataset: World Cup; ? columns)',
+    );
     expect(context[2].content).toBe(
       `Analysis plan for this turn:\n${JSON.stringify(PLAN)}`,
     );
@@ -215,14 +220,101 @@ describe('the v2 eval target runs the whole answer-business-question workflow (a
       agentResult({ error: 'relation "goalz" does not exist' }),
       agentResult([{ player: 'Kane', goals: 6 }]),
     ]);
-    await target.generate('Who scored the most in 2018?', options as never);
+    const result = (await target.generate(
+      'Who scored the most in 2018?',
+      options as never,
+    )) as unknown as Record<string, unknown>;
     expect(generate).toHaveBeenCalledTimes(2);
-    const retryContext = generate.mock.calls[1][1]['context'] as {
-      content: string;
-    }[];
-    expect(retryContext.at(-1)?.content).toContain(
+    const retryOptions = generate.mock.calls[1][1];
+    const retryContext = (retryOptions['context'] as { content: string }[]).map(
+      (entry) => entry.content,
+    );
+    // The same request as the turn engine's: the catalog with its columns,
+    // the plan block with the failed checks, then attempt 1's queries.
+    const plan = retryContext.findIndex((content) =>
+      content.startsWith('Analysis plan for this turn:'),
+    );
+    expect(retryContext[plan]).toContain(
       'Attempt 1 of this analysis failed validation.',
     );
+    expect(retryContext[plan + 1]).toContain(
+      'Queries an earlier attempt of this analysis already ran',
+    );
+    expect(retryContext[plan + 1]).toContain(
+      'failed: relation "goalz" does not exist',
+    );
+    // The retry's own step budget; attempt 1 keeps the case's.
+    expect(generate.mock.calls[0][1]['maxSteps']).toBe(15);
+    expect(retryOptions['maxSteps']).toBe(8);
+    // The scorers read the tool calls and results of both attempts.
+    expect(result['toolResults'] as unknown[]).toHaveLength(2);
+    expect(evalDetailsOf(result).steps?.['analyse-attempts']).toEqual([
+      ['run_readonly_sql'],
+      ['run_readonly_sql'],
+    ]);
+  });
+
+  it("fails the retry case's check when the retry lists or describes entities again, and passes otherwise", async () => {
+    const check = retryDoesNotRediscover();
+    const run = (attempts?: string[][]) =>
+      check.run({
+        answer: '',
+        toolCalls: [],
+        datasets: [],
+        vars: {},
+        details: attempts ? { steps: { 'analyse-attempts': attempts } } : {},
+      });
+    expect(
+      await run([['describe_entity', 'run_readonly_sql'], ['describe_entity']]),
+    ).toBe('the retry called describe_entity again');
+    expect(
+      await run([
+        ['describe_entity', 'run_readonly_sql'],
+        ['run_readonly_sql'],
+      ]),
+    ).toBeUndefined();
+    // No retry: nothing to hold against it.
+    expect(await run([['run_readonly_sql']])).toBeUndefined();
+    expect(await run()).toBeUndefined();
+  });
+
+  it('keeps attempt 1 when the retry throws (agent.generate fails on a model error): the case is scored, not failed', async () => {
+    const { target, generate, parts, options } = setUp(PLAN, [
+      agentResult([
+        { player: 'Kane', goals: 6 },
+        { player: 'Lukaku', goals: 4 },
+      ]),
+    ]);
+    // Attempt 1 kept an arbitrary sample, so Validate asks for a retry.
+    const sample = agentResult([{ player: 'Kane', goals: 6 }]);
+    sample.toolResults[0].payload.args = {
+      sql: 'SELECT player, goals FROM world_cup.goals LIMIT 1',
+      rationale: 'I look at one row.',
+    };
+    generate
+      .mockImplementationOnce((_input, opts) => {
+        (opts['onStepFinish'] as (step: unknown) => void)(sample.steps[0]);
+        return Promise.resolve(sample);
+      })
+      .mockImplementationOnce(() => Promise.reject(new Error('Overloaded')));
+    const result = (await target.generate(
+      'Who scored the most in 2018?',
+      options as never,
+    )) as unknown as Record<string, unknown>;
+    expect(generate).toHaveBeenCalledTimes(2);
+    const written = (parts.writeAnswer.mock.calls[0] as unknown[])[0] as {
+      queries: { sql: string }[];
+      findings: { check: string }[];
+    };
+    expect(written.queries.map((q) => q.sql)).toEqual([
+      'SELECT player, goals FROM world_cup.goals LIMIT 1',
+    ]);
+    expect(written.findings.at(-1)?.check).toBe(
+      'Retry completed (warning only)',
+    );
+    expect(result['text']).toContain('Harry Kane');
+    // Attempt 1's result is the one scored.
+    expect(result['toolResults']).toEqual(sample.toolResults);
   });
 
   it('ends on the plan’s clarifying question: no Analyse, the question and options as the answer', async () => {

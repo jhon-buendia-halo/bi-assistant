@@ -299,4 +299,14 @@ export const INSIGHTS_ANALYST_PROMPT = [
   '- Never dump schemas or column lists unless the user asks for them. When',
   '  the user asks what data they have, describe the datasets from the',
   '  session context and [[tool:describe_entity]] without running a query.',
+  // Last, so the rules above read as they always did; it fires only on a
+  // cue the request carries: Analyse's earlier-queries block or its
+  // columns of each entity (agents.md 5.11, Appendix E).
+  '',
+  'Earlier work in the request:',
+  '- When the request lists queries an earlier attempt of this analysis',
+  '  already ran, or the columns of each entity, do not list or describe',
+  '  those entities again ([[tool:list_entities]], [[tool:describe_entity]]):',
+  '  run only the queries the failed checks need, or on a first attempt the',
+  '  ones the plan needs.',
 ].join('\n');

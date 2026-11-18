@@ -68,6 +68,7 @@ import type {
 } from '../../site-review/site-review.service';
 import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
+  ANALYSE_RETRY_MAX_STEPS,
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
   ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   clarifyingQuestionOf,
@@ -182,6 +183,7 @@ import {
   analyseOutcomeOf,
   analyseQueriesOf,
   answeredTurnInput,
+  attemptEarlierBlock,
   catalogStepId,
   clarificationOptionText,
   turnWorkflowOf,
@@ -777,21 +779,37 @@ export class TurnEngine {
           analyse: async ({
             catalogBlock,
             planBlock,
+            earlierBlock,
             attempt,
             answered,
             imageNotes,
           }) => {
-            // A resumed attempt keeps the records it made before it asked.
+            // A resumed attempt keeps the records it made before it asked,
+            // and is shown their queries, as a retry is shown the earlier
+            // attempt's (agents.md 5.11).
             if (answered) answers.push(answered);
             else attemptStart = data.length;
+            const earlier = attemptEarlierBlock(
+              earlierBlock,
+              answered ? data.slice(attemptStart) : undefined,
+            );
             // A retry, and an attempt after the user answered the agent,
             // run without the memory thread, so the question is not stored
             // twice; the plan block and the answered questions carry what
-            // they need.
+            // they need. A retry runs with its own, smaller step budget.
             const attemptOptions: typeof options = { ...options };
             if (attempt > 1 || answers.length) {
               delete (attemptOptions as { memory?: unknown }).memory;
             }
+            if (attempt > 1) attemptOptions.maxSteps = ANALYSE_RETRY_MAX_STEPS;
+            // A retry's failure that is not a Stop (a model error, the idle
+            // deadline) keeps attempt 1 (agents.md 5.11): the step ends with
+            // `retryError`, never failed. Attempt 1's still fails the step.
+            let retryFailure: unknown;
+            const failRetry = (error: unknown): void => {
+              if (attempt > 1 && !turn.signal.aborted) retryFailure ??= error;
+              else throw error;
+            };
             // A clarifying question stops this attempt's stream only.
             const stop = new AbortController();
             const stopAttempt = () => stop.abort();
@@ -812,13 +830,15 @@ export class TurnEngine {
                     {
                       ...attemptOptions,
                       abortSignal: idle.signal,
-                      // The catalog and plan blocks, then Zoe's notes only
-                      // when the run has images (agents.md 5.11).
+                      // The catalog and plan blocks, the earlier-queries
+                      // block on a retry or a resume, then Zoe's notes
+                      // only when the run has images (agents.md 5.11).
                       context: [
                         ...options.context,
                         ...analyseSystemBlocks({
                           catalogBlock,
                           planBlock,
+                          earlierBlock: earlier,
                           imageNotes,
                         }).map((content) => ({
                           role: 'system' as const,
@@ -831,7 +851,7 @@ export class TurnEngine {
               );
             } catch (error) {
               // What the timeout's abort threw is the timeout, below.
-              if (!idle.timedOut()) throw error;
+              if (!idle.timedOut()) failRetry(error);
             } finally {
               idle.dispose();
               attemptNotes = notes ?? '';
@@ -839,15 +859,37 @@ export class TurnEngine {
               attemptStop = undefined;
               turn.signal.removeEventListener('abort', stopAttempt);
             }
-            idle.check('Analyse');
+            try {
+              idle.check('Analyse');
+            } catch (error) {
+              failRetry(error);
+            }
             // The agent asked the user: the step waits for the answer.
             const asked = turn.signal.aborted ? null : clarification;
             clarification = null;
             // Stopping the stream for the question is no model error.
-            if (asked) streamError = undefined;
-            // Any model error fails the step (agents.md 5.11).
+            if (asked) {
+              streamError = undefined;
+              retryFailure = undefined;
+            }
+            // Any model error fails the step (agents.md 5.11), but a
+            // retry's: the turn-scoped error is cleared, its records kept.
             if (streamError !== undefined && !turn.signal.aborted) {
-              throw await stepError(streamError);
+              failRetry(await stepError(streamError));
+            }
+            if (retryFailure !== undefined) {
+              streamError = undefined;
+              return {
+                ...analyseAttemptOf(
+                  data.slice(attemptStart),
+                  false,
+                  attemptNotes,
+                ),
+                retryError:
+                  retryFailure instanceof Error
+                    ? retryFailure.message
+                    : JSON.stringify(retryFailure),
+              };
             }
             return {
               ...analyseAttemptOf(

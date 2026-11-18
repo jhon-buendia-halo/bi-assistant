@@ -527,6 +527,117 @@ describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
   });
 });
 
+describe('the retry of Analyse carries attempt 1 forward (agents.md 5.11; workflows R27)', () => {
+  /** Attempt 1's query: a LIMIT with no sort, so the sample check fails. */
+  const SAMPLE_SQL = 'SELECT id FROM wc.public.matches LIMIT 1';
+  const sampleCall = {
+    type: 'tool-call',
+    payload: {
+      toolCallId: 's1',
+      toolName: 'run_readonly_sql',
+      args: { sql: SAMPLE_SQL, rationale: 'I look at one match.' },
+    },
+  };
+  const sampleResult = {
+    type: 'tool-result',
+    payload: {
+      toolCallId: 's1',
+      toolName: 'run_readonly_sql',
+      result: { columns: ['id'], rows: [{ id: 7 }], rowCount: 1 },
+    },
+  };
+  const ATTEMPT_1 = [now(sampleCall), now(sampleResult), now(text('Notes.'))];
+  type WrittenInput = {
+    queries: { sql: string }[];
+    findings: { check: string; passed: boolean }[];
+  };
+  const written = (ctx: ReturnType<typeof build>) =>
+    (ctx.mastra.writeAnswer.mock.calls[0] as unknown[])[0] as WrittenInput;
+  const streamOptions = (ctx: ReturnType<typeof build>, call: number) =>
+    (ctx.agent.stream.mock.calls[call] as unknown[])[1] as {
+      maxSteps?: number;
+      context: { role: string; content: string }[];
+    };
+
+  it('answers from attempt 1 when the retry ends on a model error: the stream error is cleared, the records kept, the retry check a warning', async () => {
+    const ctx = build('v2', (call) =>
+      call === 1
+        ? ATTEMPT_1
+        : [now({ type: 'error', payload: { error: new Error('Overloaded') } })],
+    );
+    const events: StreamEvent[] = [];
+    expect(await startTurn(ctx, events)).toBe('done');
+    expect(ctx.agent.stream).toHaveBeenCalledTimes(2);
+    // The retry runs with its own step budget; attempt 1 keeps the agent's.
+    expect(streamOptions(ctx, 0).maxSteps).toBe(15);
+    expect(streamOptions(ctx, 1).maxSteps).toBe(8);
+    // It is shown attempt 1's query after the plan block.
+    const system = streamOptions(ctx, 1).context.map((c) => c.content);
+    const plan = system.findIndex((c) =>
+      c.startsWith('Analysis plan for this turn:'),
+    );
+    expect(system[plan + 1]).toContain(
+      `1. [flagged: No answer from a sample] I look at one match. | SQL: ${SAMPLE_SQL}`,
+    );
+    expect(
+      streamOptions(ctx, 0).context.some((c) =>
+        c.content.startsWith('Queries an earlier attempt'),
+      ),
+    ).toBe(false);
+    const input = written(ctx);
+    expect(input.queries.map((q) => q.sql)).toEqual([SAMPLE_SQL]);
+    expect(input.findings.at(-1)).toMatchObject({
+      check: 'Retry completed (warning only)',
+      passed: false,
+    });
+    const answer = ctx.session.messages.at(-1)!;
+    expect(answer.content).toBe(WRITTEN);
+    // The answer's sources: attempt 1's one record, indexed once.
+    expect(answer.data?.map((record) => record.input)).toEqual([SAMPLE_SQL]);
+    expect(answer.evidence?.map((entry) => entry.index)).toEqual([0]);
+    expect(lastMove(events).failed).toBeUndefined();
+  });
+
+  it("keeps every record of both attempts once, in run order, while Write answer reads the merged set, attempt 2's first", async () => {
+    const ctx = build('v2', (call) =>
+      call === 1
+        ? ATTEMPT_1
+        : [now(SQL_CALL), now(SQL_RESULT), now(text('Ok.'))],
+    );
+    expect(await startTurn(ctx, [])).toBe('done');
+    // The flagged sample is left out of the merged set.
+    expect(written(ctx).queries.map((q) => q.sql)).toEqual(['SELECT 1 AS n']);
+    const answer = ctx.session.messages.at(-1)!;
+    expect(answer.data?.map((record) => record.input)).toEqual([
+      SAMPLE_SQL,
+      'SELECT 1 AS n',
+    ]);
+    expect(answer.evidence?.map((entry) => entry.index)).toEqual([0, 1]);
+  });
+
+  it('still fails the run on a model error in attempt 1', async () => {
+    const ctx = build('v2', () => [
+      now({ type: 'error', payload: { error: new Error('Overloaded') } }),
+    ]);
+    const outcome = await startTurn(ctx, []);
+    expect(outcome).toBeInstanceOf(Error);
+    expect(ctx.agent.stream).toHaveBeenCalledTimes(1);
+    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
+  });
+
+  it('still ends the run on a Stop during the retry, writing no answer', async () => {
+    const controller = new AbortController();
+    const ctx = build('v2', (call) => {
+      if (call === 1) return ATTEMPT_1;
+      controller.abort();
+      return [now(text('stopped'))];
+    });
+    expect(await startTurn(ctx, [], controller.signal)).toBe('done');
+    expect(ctx.agent.stream).toHaveBeenCalledTimes(2);
+    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
+  });
+});
+
 describe("a retry of a step's model call (workflows R43)", () => {
   it('is shown as a reasoning line of the running step', async () => {
     const ctx = build('v2', () => [

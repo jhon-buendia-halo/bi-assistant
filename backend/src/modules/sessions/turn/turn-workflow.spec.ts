@@ -2,6 +2,7 @@ import type { SessionDoc, ToolDataRecord } from '../entities/session.entity';
 import {
   ATTEMPT_ROWS_CAP,
   analyseAttemptOf,
+  attemptEarlierBlock,
   analyseQueriesOf,
   answeredTurnInput,
   catalogStepId,
@@ -9,6 +10,7 @@ import {
   clarifyingQuestionText,
   turnWorkflowOf,
 } from './turn-workflow';
+import { EARLIER_BLOCK_HEADER } from '../../../mastra/workflows/answer-business-question.prompts';
 
 const session = (partial: Partial<SessionDoc> = {}): SessionDoc => ({
   id: 's-1',
@@ -114,6 +116,29 @@ describe('an analysis attempt from its data records (agents.md 5.11)', () => {
       truncated: false,
       error: 'no column',
     });
+  });
+
+  it("gives an attempt resumed after the agent's question the queries it ran before it asked, after a retry's own block (agents.md 5.11)", () => {
+    const before: ToolDataRecord[] = [
+      { tool: 'list_entities', input: '' },
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT stage FROM wc.matches GROUP BY stage',
+        rationale: 'I list the stages.',
+        rows: [{ stage: 'final' }],
+        rowCount: 1,
+      },
+    ];
+    const own = attemptEarlierBlock(undefined, before)!;
+    expect(own.split('\n')).toEqual([
+      EARLIER_BLOCK_HEADER,
+      '1. I list the stages. | SQL: SELECT stage FROM wc.matches GROUP BY stage | coverage: whole-table | 1 rows | first rows: [{"stage":"final"}]',
+    ]);
+    expect(attemptEarlierBlock('RETRY', before)).toBe(`RETRY\n\n${own}`);
+    expect(attemptEarlierBlock('RETRY', [])).toBe('RETRY');
+    // Neither a retry nor a resume with queries: no block at all.
+    expect(attemptEarlierBlock(undefined, undefined)).toBeUndefined();
+    expect(attemptEarlierBlock(undefined, [before[0]])).toBeUndefined();
   });
 
   it('gives the calls, queries, the trimmed note and whether it stopped', () => {

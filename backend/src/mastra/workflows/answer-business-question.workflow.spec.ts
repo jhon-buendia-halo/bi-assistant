@@ -417,23 +417,38 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       ],
       plan: [
         ['question', 'catalog', 'columns', 'imageNotes', 'clarification'],
-        ['question', 'catalog', 'plan', 'stopped', 'imageNotes'],
+        ['question', 'catalog', 'columns', 'plan', 'stopped', 'imageNotes'],
       ],
       clarify: [
-        ['question', 'catalog', 'plan', 'stopped', 'imageNotes'],
+        ['question', 'catalog', 'columns', 'plan', 'stopped', 'imageNotes'],
         ['question', 'catalog', 'columns', 'imageNotes', 'clarification'],
       ],
+      // On a retry Analyse is given the earlier attempt's calls and queries,
+      // and hands Validate the earlier attempt to merge (agents.md 5.11).
       analyse: [
-        ['question', 'catalog', 'plan', 'attempt', 'findings', 'imageNotes'],
         [
           'question',
           'catalog',
+          'columns',
+          'plan',
+          'attempt',
+          'findings',
+          'calls',
+          'queries',
+          'imageNotes',
+        ],
+        [
+          'question',
+          'catalog',
+          'columns',
           'plan',
           'attempt',
           'calls',
           'queries',
           'text',
           'stopped',
+          'earlier',
+          'retryError',
           'imageNotes',
         ],
       ],
@@ -441,12 +456,15 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         [
           'question',
           'catalog',
+          'columns',
           'plan',
           'attempt',
           'calls',
           'queries',
           'text',
           'stopped',
+          'earlier',
+          'retryError',
           'imageNotes',
         ],
         [
@@ -455,9 +473,11 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
           'findings',
           'question',
           'catalog',
+          'columns',
           'plan',
           'calls',
           'queries',
+          'kept',
           'imageNotes',
         ],
       ],
@@ -578,13 +598,21 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     expect(turn.analyse).toHaveBeenCalledWith(
       expect.objectContaining({
         question: 'How many matches?',
-        catalogBlock,
+        // Analyse is given the columns Plan got (agents.md 5.11).
+        catalogBlock: [
+          catalogBlock,
+          '',
+          'Columns of each entity (name type):',
+          '- wc.public.matches: id, year',
+        ].join('\n'),
         plan: PLAN,
         attempt: 1,
         planBlock: `Analysis plan for this turn:\n${JSON.stringify(PLAN)}`,
         imageNotes: '',
       }),
     );
+    // With no earlier attempt there is no earlier-queries block.
+    expect(turn.analyse.mock.calls[0][0]).not.toHaveProperty('earlierBlock');
     expect(
       outputs.get('question-path.analysis-path.analysis-attempt.validate'),
     ).toMatchObject({ ok: true, attempt: 1 });
@@ -914,8 +942,100 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     );
     expect(
       outputs.get('question-path.analysis-path.analysis-attempt.validate'),
-    ).toMatchObject({ ok: true, attempt: 2 });
+    ).toMatchObject({ ok: true, attempt: 2, kept: 'merged' });
     expect(turn.writeAnswer).toHaveBeenCalledTimes(1);
+  });
+
+  describe('the carry-forward retry (agents.md 5.11; workflows R27)', () => {
+    /** Attempt 1: a usable result that kept an arbitrary sample of rows. */
+    const SAMPLE_ATTEMPT: AnalyseAttempt = {
+      calls: [{ tool: 'run_readonly_sql', rowCount: 2, failed: false }],
+      queries: [
+        {
+          sql: 'SELECT id, year FROM wc.public.matches LIMIT 2',
+          rationale: 'I look at a few matches.',
+          rows: [
+            { id: 1, year: 2018 },
+            { id: 2, year: 2018 },
+          ],
+          rowCount: 2,
+          truncated: false,
+        },
+      ],
+      text: '',
+      stopped: false,
+    };
+    const validateOf = (outputs: Map<string, unknown>) =>
+      outputs.get('question-path.analysis-path.analysis-attempt.validate');
+
+    it("shows the retry attempt 1's queries after the plan block, and answers from the merged set, attempt 2's first", async () => {
+      const turn = runtime({
+        analyse: jest
+          .fn()
+          .mockResolvedValueOnce(SAMPLE_ATTEMPT)
+          .mockResolvedValueOnce(GOOD_ATTEMPT),
+      });
+      const { outputs, result } = await run('How many matches?', turn);
+      const second = turn.analyse.mock.calls[1][0] as unknown as {
+        attempt: number;
+        earlierBlock?: string;
+        catalogBlock: string;
+      };
+      expect(second.attempt).toBe(2);
+      expect(second.catalogBlock).toContain('Columns of each entity');
+      expect(second.earlierBlock).toBe(
+        [
+          'Queries an earlier attempt of this analysis already ran (reuse their results; do not run them again):',
+          '1. [flagged: No answer from a sample] I look at a few matches. | SQL: SELECT id, year FROM wc.public.matches LIMIT 2 | coverage: sample | 2 rows | first rows: [{"id":1,"year":2018},{"id":2,"year":2018}]',
+        ].join('\n'),
+      );
+      // The flagged sample is left out of the merged set.
+      expect(validateOf(outputs)).toMatchObject({
+        ok: true,
+        attempt: 2,
+        kept: 'merged',
+        queries: GOOD_ATTEMPT.queries,
+      });
+      expect(turn.writeAnswer).toHaveBeenCalledWith(
+        expect.objectContaining({ queries: GOOD_ATTEMPT.queries }),
+      );
+      expect(result.status).toBe('success');
+    });
+
+    it('answers from attempt 1, with the warning-only retry check, when the retry ends on a model error', async () => {
+      const turn = runtime({
+        analyse: jest
+          .fn()
+          .mockResolvedValueOnce(SAMPLE_ATTEMPT)
+          .mockResolvedValueOnce({
+            calls: [],
+            queries: [],
+            text: '',
+            stopped: false,
+            retryError: 'Analyse failed: the model sent nothing for 5 minutes.',
+          }),
+      });
+      const { outputs, result } = await run('How many matches?', turn);
+      expect(validateOf(outputs)).toMatchObject({
+        attempt: 2,
+        kept: 'first',
+        queries: SAMPLE_ATTEMPT.queries,
+        calls: SAMPLE_ATTEMPT.calls,
+      });
+      const written = turn.writeAnswer.mock.calls[0][0];
+      expect(written.queries).toEqual(SAMPLE_ATTEMPT.queries);
+      expect(written.findings.at(-1)).toEqual({
+        check: 'Retry completed (warning only)',
+        passed: false,
+        detail:
+          "Attempt 2 stopped on an error (Analyse failed: the model sent nothing for 5 minutes.); the answer rests on attempt 1's queries.",
+      });
+      expect(result.status).toBe('success');
+      expect(turnSummaryOf(result.result)).toMatchObject({
+        sqlQueries: 1,
+        rows: 2,
+      });
+    });
   });
 
   it('writes the answer after a second failed attempt, with its findings', async () => {

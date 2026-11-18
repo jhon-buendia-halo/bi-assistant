@@ -2,16 +2,18 @@ import type { Agent } from '@mastra/core/agent';
 import type * as StepAgents from '../workflows/answer-business-question.agents';
 import type * as TurnWorkflow from '../workflows/answer-business-question.workflow';
 import {
+  ANALYSE_RETRY_MAX_STEPS,
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
   clarifyingQuestionOf,
   type ClarifyingQuestion,
   type AnswerBusinessQuestionRuntime,
 } from '../workflows/answer-business-question.steps';
+import { analyseSystemBlocks } from '../workflows/answer-business-question.prompts';
 import { DATASETS_CONTEXT_KEY } from '../tools/dataset.tools';
 import { parseClarification } from '../tools/clarification.tool';
 import { analyseAttemptOf } from '../../modules/sessions/turn/turn-workflow';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
-import { captureStepRecords } from './assistant.evals';
+import { captureStepRecords, type EvalCustomCheck } from './assistant.evals';
 import {
   EVAL_DETAILS_KEY,
   recordStepOutput,
@@ -25,9 +27,12 @@ import {
  * `generate` replaced by one run of the workflow, whose:
  * - Plan and Write answer steps call the model as a run's do;
  * - Analyse step is the agent's own `generate` with the case's options (its
- *   orientation, knowledge, step budget and scorer data) plus the catalog
- *   and plan blocks, so the scorers and checks read Analyse's tool calls
- *   (the last attempt's, when Validate made it retry);
+ *   orientation, knowledge, step budget and scorer data) plus the turn
+ *   engine's blocks (the catalog with its columns, the plan and, on a retry,
+ *   the earlier queries; the retry's step budget is
+ *   `ANALYSE_RETRY_MAX_STEPS`), so the scorers and checks read Analyse's
+ *   tool calls and results (both attempts', when Validate made it retry);
+ *   a retry whose `generate` throws keeps attempt 1, as a run does;
  * - answer (the scored text) is Write answer's, or, when the run is
  *   suspended on a clarifying question (Clarify's, or Analyse's after
  *   `ask_clarification`; ADR-0043), the question with its options, one per
@@ -146,6 +151,53 @@ function askedInResult(result: unknown): ClarifyingQuestion | undefined {
   return undefined;
 }
 
+/**
+ * The run details' key (in `steps`, beside the step outputs) of each Analyse
+ * attempt's tool names, in call order: `[attempt 1's, attempt 2's]`.
+ */
+export const ANALYSE_ATTEMPTS_KEY = 'analyse-attempts';
+
+/**
+ * The retry case's check (agents.md 8.1, 5.11): after a retry, the retry
+ * itself called neither `list_entities` nor `describe_entity` (its request
+ * lists attempt 1's queries and the columns of each entity), read from
+ * `ANALYSE_ATTEMPTS_KEY`. A run that did not retry passes.
+ */
+export function retryDoesNotRediscover(): EvalCustomCheck {
+  return {
+    id: 'retry-no-rediscovery',
+    description: 'The retry of Analyse lists and describes no entity again',
+    run: ({ details }) => {
+      const attempts = details?.steps?.[ANALYSE_ATTEMPTS_KEY];
+      if (!Array.isArray(attempts) || attempts.length < 2) return undefined;
+      const again = arrayOf(attempts[1]).filter(
+        (tool) => tool === 'list_entities' || tool === 'describe_entity',
+      );
+      return again.length
+        ? `the retry called ${again.join(', ')} again`
+        : undefined;
+    },
+  };
+}
+
+/** A result field as an array (`[]` when absent). */
+function arrayOf(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+/** The tool names an agent result called, in order, across its steps. */
+function toolNamesOf(result: unknown): string[] {
+  const steps = (result as { steps?: unknown })?.steps;
+  return arrayOf(steps).flatMap((step) =>
+    arrayOf((step as { toolCalls?: unknown })?.toolCalls).map((call) => {
+      const payload = ((call as { payload?: unknown })?.payload ?? call) as {
+        toolName?: unknown;
+      };
+      return typeof payload.toolName === 'string' ? payload.toolName : 'tool';
+    }),
+  );
+}
+
 type GenerateOptions = {
   context?: { role: 'system'; content: string }[];
   providerOptions?: Record<string, unknown>;
@@ -179,30 +231,72 @@ export function workflowTurnAgent(
     };
     let analysis: Record<string, unknown> | undefined;
     let answer = '';
+    // Each attempt's tool names, for the checks (`analyse-attempts`).
+    const attemptTools: string[][] = [];
     // Every case is a single-turn first question: the runtime holds no
     // earlier queries (`followUp`), so Interpret follow-up makes no model
     // call and the run takes the question path (roadmap 1.28.8).
     const runtime: AnswerBusinessQuestionRuntime = {
       plan: ({ question, catalogBlock }) =>
         parts.plan({ messages: input as never, question, catalogBlock }, model),
-      analyse: async ({ catalogBlock, planBlock }) => {
+      analyse: async ({
+        catalogBlock,
+        planBlock,
+        earlierBlock,
+        attempt,
+        imageNotes,
+      }) => {
         const records: ToolDataRecord[] = [];
-        const result = (await agent.generate(
-          input as never,
-          {
-            ...options,
-            context: [
-              ...(options.context ?? []),
-              { role: 'system', content: catalogBlock },
-              { role: 'system', content: planBlock },
-            ],
-            onStepFinish: (step: unknown) => {
-              captureStepRecords(step, records);
-              return options.onStepFinish?.(step);
-            },
-          } as never,
-        )) as unknown as Record<string, unknown>;
-        analysis = result;
+        let result: Record<string, unknown>;
+        try {
+          result = (await agent.generate(
+            input as never,
+            {
+              ...options,
+              // A retry's own step budget, as the turn engine's.
+              ...(attempt > 1 ? { maxSteps: ANALYSE_RETRY_MAX_STEPS } : {}),
+              // The turn engine's blocks: the catalog with its columns,
+              // the plan, the earlier queries on a retry (agents.md 5.11).
+              context: [
+                ...(options.context ?? []),
+                ...analyseSystemBlocks({
+                  catalogBlock,
+                  planBlock,
+                  earlierBlock,
+                  imageNotes,
+                }).map((content) => ({ role: 'system' as const, content })),
+              ],
+              onStepFinish: (step: unknown) => {
+                captureStepRecords(step, records);
+                return options.onStepFinish?.(step);
+              },
+            } as never,
+          )) as Record<string, unknown>;
+        } catch (error) {
+          // `generate` throws on a model error: a retry's keeps attempt 1,
+          // as the turn engine's does; attempt 1's fails the case.
+          if (attempt <= 1) throw error;
+          attemptTools.push(records.map((record) => record.tool));
+          return {
+            ...analyseAttemptOf(records, false, ''),
+            retryError: error instanceof Error ? error.message : String(error),
+          };
+        }
+        attemptTools.push(toolNamesOf(result));
+        // The scorers read the tool calls and results of every attempt.
+        analysis = analysis
+          ? {
+              ...result,
+              toolCalls: [
+                ...arrayOf(analysis['toolCalls']),
+                ...arrayOf(result['toolCalls']),
+              ],
+              toolResults: [
+                ...arrayOf(analysis['toolResults']),
+                ...arrayOf(result['toolResults']),
+              ],
+            }
+          : result;
         // The agent's question makes the step wait (the run is suspended).
         const asked = askedInResult(result);
         return {
@@ -231,6 +325,9 @@ export function workflowTurnAgent(
     });
     const steps: Record<string, unknown> = {};
     for await (const event of run.fullStream) recordStepOutput(event, steps);
+    // Not a step: each Analyse attempt's tool names, in order, so a check
+    // can tell what the retry itself called.
+    if (attemptTools.length) steps[ANALYSE_ATTEMPTS_KEY] = attemptTools;
     const outcome = await run.result;
     if (outcome.status === 'failed') {
       throw outcome.error instanceof Error
