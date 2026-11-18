@@ -3648,6 +3648,32 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
     expect(stored?.answer?.content).toBe('Bra');
     expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledTimes(1);
   });
+
+  it("a Stop during a stalled run's 10-second grace wins: the run ends stopped, not failed, and its log ends with done { run }", async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn(false);
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    await jest.advanceTimersByTimeAsync(5_000);
+    const answer = t.ctx().service.stop(id);
+    await jest.advanceTimersByTimeAsync(10_000);
+    const run = await answer;
+    expect(run.status).toBe('stopped');
+    expect(run.error).toBeUndefined();
+    expect(await t.ctx().repository.get(id)).toMatchObject({
+      status: 'stopped',
+    });
+    expect(watcher.got.at(-1)).toBe('done');
+    expect(watcher.got).not.toContain(`error:${STALLED}`);
+    expect(watcher.ended.value).toBe(true);
+    turn.release();
+    await t.flush();
+    const stored = await t.ctx().repository.get(id);
+    expect(stored?.status).toBe('stopped');
+    expect(stored?.error).toBeUndefined();
+  });
 });
 
 describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 amendment)', () => {

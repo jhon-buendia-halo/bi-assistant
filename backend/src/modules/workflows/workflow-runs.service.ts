@@ -1121,7 +1121,8 @@ export class WorkflowRunsService implements OnModuleInit {
    * failure rules; ADR-0048 amendment): its work is aborted, the abort's
    * reason the no-progress error, so the run ends `failed` with it, not
    * `stopped`. Work that has not unwound `RUN_UNWIND_MS` later is ended
-   * without it (`forceEnd`). A Stop that came first keeps the run stopped.
+   * without it (`forceEnd`). A Stop that came first keeps the run stopped,
+   * and so does a Stop during that grace: Stop wins over a stall.
    */
   private stall(
     held: HeldRun,
@@ -1136,7 +1137,12 @@ export class WorkflowRunsService implements OnModuleInit {
     turnAbort.abort(new Error(error));
     const timer = setTimeout(() => {
       if (held.driven !== driven) return;
-      void this.forceEnd(held, { status: 'failed', error });
+      void this.forceEnd(
+        held,
+        abortSignal?.aborted
+          ? { status: 'stopped' }
+          : { status: 'failed', error },
+      );
     }, RUN_UNWIND_MS);
     (timer as { unref?: () => void }).unref?.();
   }
