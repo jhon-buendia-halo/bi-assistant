@@ -7,3 +7,7 @@ Report: https://claude.ai/artifact/PJ68VcuPsc24xWAT8ujaRE (source: report.html).
 - scripts/: merge of the four question parts, the run launcher, the failure dossier builder.
 
 Run files stay in the BA-9 worktree: .eval-loop/runs/ba9/ecom-emily.json, ecom-workflow-{1,2,3}.json.
+
+## Re-run after fixing the checks (commit 3a24eaf9)
+
+Right 3 of 3: Emily 27 -> 59, workflow 21 -> 41 (the 5 ambiguous questions counted by behaviour: both targets asked back correctly 3 of 3; the matches check on the visible answer misses Emily's ask-tool turns). Run files: .eval-loop/runs/ba9/ecom2-emily-{1,2}.json, ecom2-workflow-{1,2,3}.json in the BA-9 worktree. fixes/: the 50 replaced cases and the script that applied them.

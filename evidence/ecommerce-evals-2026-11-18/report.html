@@ -75,7 +75,7 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);font-si
   <span class="eyebrow">Halo Workbench · e-commerce evals · 2026-11-18</span>
   <h1>E-commerce Evals Report</h1>
   <p class="lede">100 new, harder questions over the Edge Cases store, each asked 3 times to Emily (one agent) and to the Answer a Business Question workflow. Every failure was read and sorted: real app errors, checks that rejected right answers, and questions open to another reading. The improvement plan comes from that sorting.</p>
-  <div class="meta"><span>Branch feat/ecommerce-evals-100 (commits 660f7808, 494d813e)</span><span>Model gpt-5.6-luna, effort low</span><span>600 attempts · $1.67</span></div>
+  <div class="meta"><span>Branch feat/ecommerce-evals-100 (commits 660f7808, 494d813e)</span><span>Model gpt-5.6-luna, effort low</span><span>1,200 attempts in two runs · $3.36</span></div>
 </header>
 
 <section>
@@ -127,7 +127,47 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);font-si
 </section>
 
 <section>
-  <div class="sec-head"><span class="num">3</span><h2>Why questions failed</h2></div>
+  <div class="sec-head"><span class="num">2b</span><h2>After fixing the checks <span class="v v-pass">re-run 2026-11-18</span></h2></div>
+  <p class="prose">Step P1 of the plan, done: 50 questions whose checks rejected right answers were corrected (references trimmed to the facts asked, text checks ignore letter case, refusals that quote dates no longer count as invented figures), the result check now accepts an amount in cents written in currency units, and the 100 questions were run again on both targets, 3 attempts each.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Target</th><th class="n">Right 3 of 3, first run</th><th class="n">Right 3 of 3, after fixes</th><th class="n">Dev / held-out after</th><th class="n">Attempts right after</th><th class="n">Never right (0 of 3)</th><th class="n">Median seconds</th><th class="n">Cost per question</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Emily</strong></td><td class="n">27</td><td class="n"><strong>59</strong></td><td class="n">36/67 · 23/33</td><td class="n">211/300</td><td class="n">22</td><td class="n">9.4</td><td class="n">$0.0063</td></tr>
+      <tr><td><strong>Workflow</strong></td><td class="n">21</td><td class="n"><strong>41</strong></td><td class="n">29/67 · 12/33</td><td class="n">149/300</td><td class="n">43</td><td class="n">22.7</td><td class="n">$0.0106</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">The 5 ambiguous questions are counted by what each target did, because the new check for them read the visible answer, and Emily's visible answer is sometimes a stock "could not produce a final response" line even when she asked correctly with the ask tool. Both targets asked back correctly on all 5, 3 of 3 times. The lasting fix is to record the workflow's clarifying question as an ask-tool call so one rule fits both. Before that correction the after-fix counts read 54 and 36.</p>
+  <h3>By category, before and after the fixes (right 3 of 3)</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Category</th><th class="n">Questions</th><th class="n">Emily before → after</th><th class="n">Workflow before → after</th></tr></thead>
+    <tbody>
+      <tr><td><code>ranking</code></td><td class="n">11</td><td class="n">0 → 9</td><td class="n">0 → 5</td></tr>
+      <tr><td><code>aggregate</code></td><td class="n">16</td><td class="n">2 → 9</td><td class="n">4 → 6</td></tr>
+      <tr><td><code>join</code></td><td class="n">13</td><td class="n">6 → 7</td><td class="n">4 → 5</td></tr>
+      <tr><td><code>ratio</code></td><td class="n">11</td><td class="n">3 → 6</td><td class="n">1 → 3</td></tr>
+      <tr><td><code>paraphrase</code></td><td class="n">5</td><td class="n">0 → 4</td><td class="n">0 → 4</td></tr>
+      <tr><td><code>null</code></td><td class="n">5</td><td class="n">3 → 5</td><td class="n">4 → 4</td></tr>
+      <tr><td><code>encoding</code></td><td class="n">5</td><td class="n">4 → 4</td><td class="n">3 → 3</td></tr>
+      <tr><td><code>lookup</code></td><td class="n">3</td><td class="n">2 → 2</td><td class="n">2 → 2</td></tr>
+      <tr><td><code>ambiguous</code></td><td class="n">5</td><td class="n">5 → 5</td><td class="n">0 → 5</td></tr>
+      <tr><td><code>out-of-scope</code></td><td class="n">4</td><td class="n">0 → 2</td><td class="n">2 → 1</td></tr>
+      <tr><td><code>non-existent</code></td><td class="n">3</td><td class="n">1 → 2</td><td class="n">1 → 2</td></tr>
+      <tr><td><code>visual</code></td><td class="n">3</td><td class="n">0 → 2</td><td class="n">0 → 0</td></tr>
+      <tr><td><code>reasoning</code></td><td class="n">9</td><td class="n">0 → 1</td><td class="n">0 → 1</td></tr>
+      <tr><td><code>fuzzy-scope</code></td><td class="n">4</td><td class="n">1 → 1</td><td class="n">0 → 0</td></tr>
+      <tr><td><code>discovery</code></td><td class="n">3</td><td class="n">0 → 0</td><td class="n">0 → 0</td></tr>
+      <tr class="total"><td>All</td><td class="n">100</td><td class="n">27 → 59</td><td class="n">21 → 41</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="prose">
+    <li><strong>About 30 of Emily's and 20 of the workflow's failures were the checks</strong>, close to the estimate in section 2 for Emily (67 adjusted, 59 measured) and lower for the workflow (54 estimated, 41 measured): some of its "right" answers were flaky across attempts.</li>
+    <li><strong>The gap between the two is now clearer</strong>: Emily 59, the workflow 41. Emily is ahead on held-out questions too (23 of 33 against 12 of 33), at 40% of the time and 60% of the cost.</li>
+    <li><strong>What still fails is mostly real</strong>: reasoning (1 of 9 on each), the data's messy values (plan P2), the workflow asking back on clear questions (P3) and making no chart (P5). Discovery questions still fail on both: worth a look at whether those checks are still too strict.</li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">3</span><h2>Why questions failed (first run)</h2></div>
   <p class="prose">Each question that missed at least one attempt was read: the question, the expected result, the answer and the SQL. One verdict per question.</p>
   <div class="tbl"><table>
     <thead><tr><th>Verdict</th><th class="n">Emily</th><th class="n">Workflow</th><th>What it means</th></tr></thead>
@@ -157,7 +197,7 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);font-si
   <div class="sec-head"><span class="num">4</span><h2>Improvement plan</h2></div>
   <p class="prose">In order. Each step names what it changes and the failures it should remove; the test after each is a re-run of the same 100 questions on both targets (about $1.70 and 45 minutes on gpt-5.6-luna).</p>
   <ol class="plan">
-    <li><div class="body"><h3>Fix the checks first</h3><p>Make text checks ignore letter case; let the number check ignore dates and years; let the result check accept extra columns, other units (cents and dollars) and rounding; accept the workflow's own clarifying question for ambiguous questions; let the out-of-scope check allow supporting counts.</p><p class="why">Removes about 40 false failures for Emily and 33 for the workflow. Without it, every later score is wrong by 30 to 40 points.</p></div></li>
+    <li><div class="body"><h3>Fix the checks first <span class="v v-pass">done, re-run in section 2b</span></h3><p class="why">Left open: record the workflow's clarifying question as an ask-tool call; one question to reword (<code>ec-b-returns-lately</code>); checks that fail an agent that recovered from its own query error; a few number checks that flag correctly derived totals.</p><p>Make text checks ignore letter case; let the number check ignore dates and years; let the result check accept extra columns, other units (cents and dollars) and rounding; accept the workflow's own clarifying question for ambiguous questions; let the out-of-scope check allow supporting counts.</p><p class="why">Removes about 40 false failures for Emily and 33 for the workflow. Without it, every later score is wrong by 30 to 40 points.</p></div></li>
     <li><div class="body"><h3>Tell the agents how this store's data is messy</h3><p>Add instructions to the Edge Cases dataset's ontology (the place the app already sends to every agent): spellings vary, so trim and compare in lower case; "delivered" and "returned" are order statuses; valid ratings are 1 to 5; ignore shipments and returns dated before their order; promotion dates are swapped; departments are the top of the category tree.</p><p class="why">Targets 14 wrong answers for Emily and 21 for the workflow. This is the most common real error, and it is the same work a client would do for their own data.</p></div></li>
     <li><div class="body"><h3>Workflow: ask only when there is no sensible default</h3><p>A last rule for the plan step: when a question has one common reading, answer it and state the assumption; ask only when two readings give different answers and nothing in the question or the data picks one.</p><p class="why">Targets 14 to 15 workflow questions that ended on an unnecessary question.</p></div></li>
     <li><div class="body"><h3>Emily: four rules</h3><p>Compare equal periods (the same months in both years); merge spellings instead of asking about them; always end with a final answer, even "not enough data"; describe the data from the catalog for "what do we have" questions, without queries.</p><p class="why">Targets 12 Emily failures, including the 4 runs with no answer.</p></div></li>
@@ -169,7 +209,7 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);font-si
 <section>
   <div class="sec-head"><span class="num">5</span><h2>What this means for the decision</h2></div>
   <ul class="prose">
-    <li>On harder questions over messy data, the single agent is <strong>at least as accurate</strong> as the workflow, and faster and cheaper. The same held on 25 easier questions earlier today (61% and 65% of attempts).</li>
+    <li>On harder questions over messy data, the single agent is <strong>more accurate</strong> than the workflow once the checks are fixed (59 against 41 right 3 of 3), and faster and cheaper. The same held on 25 easier questions earlier today (61% and 65% of attempts).</li>
     <li>The workflow's step-by-step shape is not what fails it; its plan step's habit of asking back is, and that is one rule to change (P3).</li>
     <li>Both agents fail mostly for the same reason: they do not know the data's quirks. That is a context problem the app already has a place for (P2), and it is what a client deployment will need too.</li>
     <li>The numbers on this page are on gpt-5.6-luna. The beta ships on Claude, where these agents scored higher in earlier runs; the comparison should be repeated there.</li>

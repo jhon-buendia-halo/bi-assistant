@@ -1,0 +1,1654 @@
+{
+  "ec-c-quote-in-product-name": {
+    "id": "ec-c-quote-in-product-name",
+    "category": "encoding",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:quotes"
+    ],
+    "question": "Which products have a double quote character in their name, and what do they cost?",
+    "intent": "Finds the single product with inch marks and quoted word in its name (12\" Vinyl \"Deluxe\") and gives its price; the quotes must not break the filter.",
+    "notes": "Trap: LIKE '%\"%' written without escaping, or a name search typed with smart quotes, finds nothing or errors. Result (2026-11-18): 15|12\" Vinyl \"Deluxe\"|428.30. Fixed 2026-11-18: reference trimmed to name and unit_price; the id column was not asked for and failed a right answer (Emily, 428.30).",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "includes",
+        "args": {
+          "text": "Vinyl"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT name, unit_price FROM edge_cases.products WHERE position(chr(34) IN name) > 0"
+    }
+  },
+  "ec-c-vip-customers-split": {
+    "id": "ec-c-vip-customers-split",
+    "category": "null",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:boolean-null"
+    ],
+    "question": "How many of our customers are VIP, how many are not, and for how many do we not know?",
+    "intent": "Three groups: VIP 15,000, not VIP 30,000, unknown 5,000. Treating NULL as not VIP (35,000) is the error.",
+    "notes": "Verified 2026-11-18: 15000 / 30000 / 5000. Trap: WHERE is_vip = false misses 5000 unknowns, or NOT is_vip lumps them: 35000. Result (2026-11-18): 15000|30000|5000. Fixed 2026-11-18: reference is the three counts, one per row, with distinctRows, so a long-form answer (one row per group, extra total column) and a wide one-row answer both pass; the lumped-NULL trap still lacks one count.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*?(?:15,?000))(?=[\\s\\S]*?(?:30,?000))(?=[\\s\\S]*?(?:5,?000))",
+          "flags": "i"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT v.n AS customers FROM (SELECT count(*) FILTER (WHERE is_vip IS TRUE) AS t, count(*) FILTER (WHERE is_vip IS FALSE) AS f, count(*) FILTER (WHERE is_vip IS NULL) AS u FROM edge_cases.customers) s CROSS JOIN LATERAL (VALUES (s.t), (s.f), (s.u)) AS v(n)"
+    },
+    "resultSetOptions": {
+      "distinctRows": true
+    }
+  },
+  "ec-c-products-marked-selected": {
+    "id": "ec-c-products-marked-selected",
+    "category": "null",
+    "split": "held-out",
+    "tags": [
+      "difficulty:hard",
+      "trap:boolean-null"
+    ],
+    "question": "How many products are marked as selected, how many are marked as not selected, and how many have no mark at all?",
+    "intent": "Handles the reserved-word flag column and its three states: selected 1,428, not selected 2,858, no mark 714.",
+    "notes": "Verified 2026-11-18: 1428 / 2858 / 714. Trap: unquoted SELECT is a syntax error; NULLs folded into not selected. Result (2026-11-18): 1428|2858|714. Fixed 2026-11-18: reference is the three counts, one per row, with distinctRows, so a long-form answer (one row per group, extra total column) and a wide one-row answer both pass; the lumped-NULL trap still lacks one count.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*?(?:1,?428))(?=[\\s\\S]*?(?:2,?858))(?=[\\s\\S]*?(?:\\b714\\b))",
+          "flags": "i"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT v.n AS products FROM (SELECT count(*) FILTER (WHERE \"select\" IS TRUE) AS t, count(*) FILTER (WHERE \"select\" IS FALSE) AS f, count(*) FILTER (WHERE \"select\" IS NULL) AS u FROM edge_cases.products) s CROSS JOIN LATERAL (VALUES (s.t), (s.f), (s.u)) AS v(n)"
+    },
+    "resultSetOptions": {
+      "distinctRows": true
+    }
+  },
+  "ec-c-legacy-distinct-orders": {
+    "id": "ec-c-legacy-distinct-orders",
+    "category": "aggregate",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:duplicates"
+    ],
+    "question": "How many different orders are in the old legacy order records?",
+    "intent": "Counts distinct legacy order numbers: 5,000, not the 5,250 rows (200 exact duplicate rows plus 50 reissued numbers).",
+    "notes": "Verified 2026-11-18: 5000 distinct of 5250 rows. Trap: count(*) = 5250. Table is MixedCase and has no primary key. Result (2026-11-18): 5000. Fixed 2026-11-18: notMatches now rejects only 5,250 stated as the number of orders, so the supporting \"5,250 rows\" passes; 5,000 still required.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "notMatches",
+        "args": {
+          "pattern": "5,?250\\s+(?:(?:different|distinct|unique|legacy|old)\\s+)*orders\\b",
+          "flags": "i"
+        },
+        "criterion": "G1"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "\\b5,?000\\b",
+          "flags": "i"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT count(DISTINCT legacy_order_id) AS legacy_orders FROM edge_cases.\"LegacyOrders\""
+    }
+  },
+  "ec-c-classic-mug-products": {
+    "id": "ec-c-classic-mug-products",
+    "category": "aggregate",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:duplicate-names"
+    ],
+    "question": "How many different Classic Mug products do we sell, and what is their combined revenue?",
+    "intent": "Five separate products share the name Classic Mug (distinct SKUs); the answer says 5 and sums revenue across them, 1,131,103.31, rather than collapsing by name into one.",
+    "notes": "Verified 2026-11-18: 5 products, 5 SKUs, revenue 1131103.31 (via the v_product_revenue view). Trap: grouping by name hides that these are different products. Result (2026-11-18): 5|5|1131103.31. Fixed 2026-11-18: reference trimmed to product count and revenue (the skus column needed a second 5 in the row); a per-product answer with window totals now passes.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*?(?:\\b5\\b))(?=[\\s\\S]*?(?:1,?131,?103))",
+          "flags": "i"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT count(*) AS products, sum(r.revenue) AS revenue FROM edge_cases.products p LEFT JOIN edge_cases.v_product_revenue r ON r.product_id = p.id WHERE p.name = 'Classic Mug'"
+    }
+  },
+  "ec-c-discover-order-info": {
+    "id": "ec-c-discover-order-info",
+    "category": "discovery",
+    "split": "held-out",
+    "tags": [
+      "difficulty:hard",
+      "trap:discovery"
+    ],
+    "question": "What information is recorded about an order, from checkout to delivery?",
+    "intent": "Describes orders (status, channel, currency, notes, discounts, shipping fee), their lines, payments, shipments and returns without running SQL.",
+    "notes": "Verified 2026-11-18: orders, order_lines, payments, shipments, returns, and the old LegacyOrders and v_order_totals view exist. Fixed 2026-11-18: noHtml replaced by a notMatches for HTML tags, code fences, CREATE TABLE and column|type tables: its schema-dump heuristic flagged plain prose (\"order timestamp, cancellation timestamp\"); didNotCall run_readonly_sql kept, the catalog answers it (Emily did).",
+    "checks": [
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "I4"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "notMatches",
+        "args": {
+          "pattern": "<\\/?[a-z][\\w-]*[\\s>/]|```|\\bCREATE\\s+(?:TABLE|VIEW)\\b|\\|\\s*column(?:\\s+name)?\\s*\\|\\s*(?:data\\s+)?type\\s*\\|",
+          "flags": "i"
+        },
+        "criterion": "I4"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "^(?=[\\s\\S]*order)(?=[\\s\\S]*(payment))(?=[\\s\\S]*(shipment|shipping|delivery))(?=[\\s\\S]*(line|item|return))",
+          "flags": "i"
+        },
+        "criterion": "G1"
+      }
+    ]
+  },
+  "ec-c-discover-product-catalogue": {
+    "id": "ec-c-discover-product-catalogue",
+    "category": "discovery",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:discovery"
+    ],
+    "question": "What do we know about our products and how they are organised?",
+    "intent": "Names the product details (name, SKU, brand, colour, price, cost, tags), the three-level category tree, and related inventory, reviews and promotions, without running SQL.",
+    "notes": "Verified 2026-11-18: products, categories (3 levels), inventory_snapshots, reviews, promotions, v_product_revenue. Fixed 2026-11-18: noHtml replaced by a notMatches for HTML tags, code fences, CREATE TABLE and column|type tables: its schema-dump heuristic flagged plain prose (\"order timestamp, cancellation timestamp\"); didNotCall run_readonly_sql kept, the catalog answers it (Emily did).",
+    "checks": [
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "I4"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "notMatches",
+        "args": {
+          "pattern": "<\\/?[a-z][\\w-]*[\\s>/]|```|\\bCREATE\\s+(?:TABLE|VIEW)\\b|\\|\\s*column(?:\\s+name)?\\s*\\|\\s*(?:data\\s+)?type\\s*\\|",
+          "flags": "i"
+        },
+        "criterion": "I4"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "^(?=[\\s\\S]*product)(?=[\\s\\S]*categor)(?=[\\s\\S]*(inventory|stock|review|promotion|price))",
+          "flags": "i"
+        },
+        "criterion": "G1"
+      }
+    ]
+  },
+  "ec-d-ambiguous-best-customers": {
+    "id": "ec-d-ambiguous-best-customers",
+    "category": "ambiguous",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:undefined-measure"
+    ],
+    "question": "Who are our best customers?",
+    "intent": "Best is undefined (most orders, most money spent, most loyal, tier). The app asks which meaning and runs no query.",
+    "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases. Fixed 2026-11-18: calledTool ask_clarification replaced by a matches for a question followed by an option list; the workflow asks back in text without the tool.",
+    "checks": [
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "\\?\\s*\\n\\s*-\\s",
+          "flags": ""
+        },
+        "criterion": "I5"
+      },
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D5"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "optionCount",
+        "criterion": "I5"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      }
+    ],
+    "judgeRubric": "\"Best customers\" could mean most spend, most orders, most recent buying, or the highest loyalty tier. Score pass=true only if the final answer is itself ONE clarifying question with 2-4 concrete options, states no figure as if it were the answer, and does not run an analysis first. Score pass=false if it guesses a measure and answers, or asks a vague open question with no concrete options."
+  },
+  "ec-d-ambiguous-products-doing-badly": {
+    "id": "ec-d-ambiguous-products-doing-badly",
+    "category": "ambiguous",
+    "split": "held-out",
+    "tags": [
+      "difficulty:hard",
+      "trap:undefined-measure"
+    ],
+    "question": "Which products are doing badly?",
+    "intent": "Doing badly is undefined (low sales, low ratings, many returns, low margin). The app asks first.",
+    "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases. Fixed 2026-11-18: calledTool ask_clarification replaced by a matches for a question followed by an option list; the workflow asks back in text without the tool.",
+    "checks": [
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "\\?\\s*\\n\\s*-\\s",
+          "flags": ""
+        },
+        "criterion": "I5"
+      },
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D5"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "optionCount",
+        "criterion": "I5"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      }
+    ],
+    "judgeRubric": "\"Doing badly\" could mean low sales, poor reviews, high return rate or low margin. Score pass=true only if the final answer is itself ONE clarifying question with 2-4 concrete options, states no figure as if it were the answer, and does not run an analysis first. Score pass=false if it guesses a measure and answers, or asks a vague open question with no concrete options."
+  },
+  "ec-d-ambiguous-best-channel": {
+    "id": "ec-d-ambiguous-best-channel",
+    "category": "ambiguous",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:undefined-measure"
+    ],
+    "question": "Which sales channel works best?",
+    "intent": "Works best is undefined (orders, money, fewest cancellations, fewest returns). The app asks first.",
+    "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases. Fixed 2026-11-18: calledTool ask_clarification replaced by a matches for a question followed by an option list; the workflow asks back in text without the tool.",
+    "checks": [
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "\\?\\s*\\n\\s*-\\s",
+          "flags": ""
+        },
+        "criterion": "I5"
+      },
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D5"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "optionCount",
+        "criterion": "I5"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      }
+    ],
+    "judgeRubric": "\"Works best\" could mean most orders, most revenue, lowest cancellation rate or lowest return rate. Score pass=true only if the final answer is itself ONE clarifying question with 2-4 concrete options, states no figure as if it were the answer, and does not run an analysis first. Score pass=false if it guesses a measure and answers, or asks a vague open question with no concrete options."
+  },
+  "ec-d-ambiguous-problem-orders": {
+    "id": "ec-d-ambiguous-problem-orders",
+    "category": "ambiguous",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:undefined-measure"
+    ],
+    "question": "Show me our problem orders.",
+    "intent": "Problem is undefined (cancelled, returned, late delivery, payment issues). The app asks first.",
+    "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases. Fixed 2026-11-18: calledTool ask_clarification replaced by a matches for a question followed by an option list; the workflow asks back in text without the tool.",
+    "checks": [
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "\\?\\s*\\n\\s*-\\s",
+          "flags": ""
+        },
+        "criterion": "I5"
+      },
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D5"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "optionCount",
+        "criterion": "I5"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      }
+    ],
+    "judgeRubric": "\"Problem orders\" could mean cancelled, returned, delivered late, or with missing payment. Score pass=true only if the final answer is itself ONE clarifying question with 2-4 concrete options, states no figure as if it were the answer, and does not run an analysis first. Score pass=false if it guesses a measure and answers, or asks a vague open question with no concrete options."
+  },
+  "ec-d-ambiguous-key-market": {
+    "id": "ec-d-ambiguous-key-market",
+    "category": "ambiguous",
+    "split": "held-out",
+    "tags": [
+      "difficulty:hard",
+      "trap:undefined-measure"
+    ],
+    "question": "Which country is our most important market?",
+    "intent": "Important is undefined (customers, orders, revenue, growth), and country could be where the customer lives or where it ships. The app asks first.",
+    "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases. Fixed 2026-11-18: calledTool ask_clarification replaced by a matches for a question followed by an option list; the workflow asks back in text without the tool.",
+    "checks": [
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "\\?\\s*\\n\\s*-\\s",
+          "flags": ""
+        },
+        "criterion": "I5"
+      },
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D5"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "optionCount",
+        "criterion": "I5"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      }
+    ],
+    "judgeRubric": "\"Most important market\" could mean most customers, most orders, most revenue or fastest growth, and country could be the customer's or the shipping country. Score pass=true only if the final answer is itself ONE clarifying question with 2-4 concrete options, states no figure as if it were the answer, and does not run an analysis first. Score pass=false if it guesses a measure and answers, or asks a vague open question with no concrete options."
+  },
+  "ec-d-oos-revenue-2019": {
+    "id": "ec-d-oos-revenue-2019",
+    "category": "out-of-scope",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:not-in-data"
+    ],
+    "question": "What was our total revenue in 2019, and how did 2020 compare?",
+    "intent": "The orders start on 2020-12-31, so 2019 is not in the data. The answer says so and gives no 2019 figure.",
+    "notes": "Proof: SELECT count(*) FROM edge_cases.orders WHERE ordered_at >= '2019-01-01' AND ordered_at < '2020-01-01' -> 0. min(ordered_at)=2020-12-31 10:40:59+00, max=2026-10-29 11:11:37+00; 34 orders before 2021. Ran 2026-11-18. Fixed 2026-11-18: notMatches now rejects only a figure stated for 2019 (the 2020 figure 117,058.61 and dates are allowed); matches requires saying 2019 is not in the data; numbersGrounded dropped (it flagged the date 31 December).",
+    "checks": [
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "create_visual"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "notMatches",
+        "args": {
+          "pattern": "\\b2019\\b\\W{0,10}(?:revenue\\W{1,10})?(?:(?:was|of|totaled|totalled|came to|is)\\W{1,5})?\\$?(?!20\\d\\d\\b)\\d[\\d,]{2,}(?:\\.\\d+)?",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*\\b(?:no|not|n't|none|unavailable|cannot|isn't|doesn't|does not|only)\\b)(?=[\\s\\S]*\\b2019\\b)",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      }
+    ],
+    "judgeRubric": "The data holds orders only from 31 December 2020 to 29 October 2026. Score pass=true only if the answer says 2019 is not covered (and that 2020 has only its last day), states what the data does cover, and invents no revenue figure. Score pass=false if it states any 2019 figure or a 2020 full-year comparison."
+  },
+  "ec-d-oos-marketing-spend": {
+    "id": "ec-d-oos-marketing-spend",
+    "category": "out-of-scope",
+    "split": "held-out",
+    "tags": [
+      "difficulty:hard",
+      "trap:not-in-data"
+    ],
+    "question": "How much did we spend on marketing for each sales channel last year, and which channel had the best return on ad spend?",
+    "intent": "The sample has no marketing or advertising spend. The answer says it is not in the data and invents no cost or return figure.",
+    "notes": "Proof: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='edge_cases' AND (column_name ILIKE '%spend%' OR column_name ILIKE '%marketing%' OR column_name ILIKE '%ad\\_%' OR table_name ILIKE '%campaign%') -> 0 rows (checked 2026-11-18). The only discount fields are orders.discount_amount and promotions.\"discount_%\". Fixed 2026-11-18: notMatches now rejects only an amount or ROAS figure tied to spend (the year 2025 and supporting sales figures are allowed); matches requires saying spend data is missing.",
+    "checks": [
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "criterion": "G1"
+      },
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "create_visual"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "notMatches",
+        "args": {
+          "pattern": "\\b(?:ad spend|marketing spend|spent|ROAS|return on ad spend)\\b[^\\n.]{0,40}?(?:\\$\\s?\\d|\\b\\d+(?:\\.\\d+)?\\s?x\\b|\\b\\d[\\d,]*(?:\\.\\d+)?\\s?(?:USD|EUR|dollars)\\b)",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*\\b(?:no|not|n't|cannot|unavailable|isn't|doesn't|does not|without)\\b)(?=[\\s\\S]*(?:spend|marketing|advertis|campaign|ROAS))",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      }
+    ],
+    "judgeRubric": "The dataset has orders, payments, shipments, returns, reviews, customers and products, but no marketing or advertising spend. Score pass=true only if the answer says marketing spend is not available and invents no spend or return-on-ad-spend figure; naming what is available (such as orders per channel) is fine. Score pass=false if it states any spend figure or derives one from product cost or discounts as if it were marketing spend."
+  },
+  "ec-d-oos-website-visits": {
+    "id": "ec-d-oos-website-visits",
+    "category": "out-of-scope",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:not-in-data"
+    ],
+    "question": "What percentage of website visitors ended up placing an order in 2025?",
+    "intent": "There is no website traffic or session data, so a conversion rate cannot be computed. The answer says so and invents no figure.",
+    "notes": "Proof: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='edge_cases' AND (column_name ILIKE '%visit%' OR column_name ILIKE '%session%' OR column_name ILIKE '%pageview%' OR table_name ILIKE '%session%' OR table_name ILIKE '%traffic%') -> 0 rows (checked 2026-11-18). Fixed 2026-11-18: notMatches now rejects only a percentage tied to visitors or conversion (the year 2025 is allowed); matches requires saying visitor data is missing.",
+    "checks": [
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "criterion": "G1"
+      },
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "create_visual"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "notMatches",
+        "args": {
+          "pattern": "\\b(?:conversion|visitors?|sessions?|visits?)\\b[^\\n]{0,60}?\\d+(?:\\.\\d+)?\\s?%|\\d+(?:\\.\\d+)?\\s?%[^\\n.]{0,40}?\\b(?:conversion|of (?:website )?visitors|of visits|of sessions)\\b",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*\\b(?:no|not|n't|cannot|unavailable|isn't|doesn't|does not|without)\\b)(?=[\\s\\S]*(?:visit|session|traffic))",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      }
+    ],
+    "judgeRubric": "The dataset has no website visits, sessions or visitors. Score pass=true only if the answer says visitor data is not in the data and does not state a conversion percentage or visitor count. Reporting the number of 2025 orders as a plain fact, while saying it cannot be a conversion rate, is acceptable. Score pass=false if it states a conversion rate or a visitor figure."
+  },
+  "ec-d-oos-stock-march-2026": {
+    "id": "ec-d-oos-stock-march-2026",
+    "category": "out-of-scope",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:not-in-data"
+    ],
+    "question": "How much stock did we have on hand in the Bogota warehouse at the end of March 2026?",
+    "intent": "Stock snapshots exist only from 2026-08-02 to 2026-10-31, so March 2026 is not in the data. The answer says so and gives no March figure.",
+    "notes": "Proof: SELECT count(*) FROM edge_cases.inventory_snapshots WHERE snapshot_date >= '2026-03-01' AND snapshot_date < '2026-04-01' -> 0; SELECT min(snapshot_date), max(snapshot_date) FROM edge_cases.inventory_snapshots -> 2026-08-02, 2026-10-31. Ran 2026-11-18. Bogota is warehouse BOG-01. Fixed 2026-11-18: notMatches now rejects only a stock figure stated for March; matches requires saying March is not covered; numbersGrounded dropped (it flagged the date 31 October / March 31).",
+    "checks": [
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "create_visual"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "notMatches",
+        "args": {
+          "pattern": "\\bMarch\\b[^\\n.]{0,40}?\\b(?!20\\d\\d\\b)(?:\\d{1,3}(?:,\\d{3})+|\\d{3,})\\b",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*\\b(?:no|not|n't|unavailable|cannot|only|doesn't|does not)\\b)(?=[\\s\\S]*\\bMarch\\b)",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      }
+    ],
+    "judgeRubric": "Inventory snapshots only cover 2 August to 31 October 2026. Score pass=true only if the answer says there is no stock record for March 2026, says what period the stock data does cover, and invents no stock quantity for March. Quoting a quantity from a different date as long as it is clearly labelled with that date is acceptable. Score pass=false if it presents any quantity as the March 2026 stock."
+  },
+  "ec-d-nonexistent-product": {
+    "id": "ec-d-nonexistent-product",
+    "category": "non-existent",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:absent-entity"
+    ],
+    "question": "How many units of the 'Quantum Blender X9' did we sell last quarter?",
+    "intent": "No product has that name. The app searches the catalogue, finds nothing and says the product does not exist, with no sales figure.",
+    "notes": "Proof: SELECT count(*) FROM edge_cases.products WHERE name ILIKE '%quantum blender%' OR name ILIKE '%blender%' -> 0 (ran 2026-11-18). No expectedSql: the reference would return 0 rows, so the checks and the judge grade the case. Fixed 2026-11-18: numbersGrounded dropped (it flagged the data-range dates 2020 and 2026 in a right refusal); a notMatches for any non-zero \"N units\" figure catches an invented sales figure instead.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "create_visual"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "\\b(no|not|none|n't|doesn't|does not|cannot|couldn't|zero)\\b",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "notMatches",
+        "args": {
+          "pattern": "\\b(?!0\\b)(?!20\\d\\d\\b)\\d[\\d,]*\\s+units?\\b",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      }
+    ],
+    "judgeRubric": "There is no product named 'Quantum Blender X9' (nor any blender). Score pass=true only if the app looked in the data and the answer says the product was not found, without inventing a unit count or silently answering for a different product. Offering to search similar names is fine. Score pass=false if it gives any units figure for that product or just says 0 units sold as if the product existed."
+  },
+  "ec-d-nonexistent-warehouse": {
+    "id": "ec-d-nonexistent-warehouse",
+    "category": "non-existent",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:absent-entity"
+    ],
+    "question": "Which products are below their reorder point in warehouse LAX-09?",
+    "intent": "There is no warehouse LAX-09 (the codes are BOG-01, MAD-03 and MIA-02). The app checks and says so, listing no products.",
+    "notes": "Proof: SELECT count(*) FROM edge_cases.inventory_snapshots WHERE warehouse_code ILIKE '%LAX%' OR warehouse_code='LAX-09' -> 0 (ran 2026-11-18). SELECT DISTINCT warehouse_code -> BOG-01, MAD-03, MIA-02. No expectedSql: the reference would return 0 rows, so the checks and the judge grade the case. Fixed 2026-11-18: numbersGrounded dropped (it flagged the snapshot dates in a right refusal); a notMatches for a product count stated for LAX-09 catches an invented answer instead.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "didNotCall",
+        "args": {
+          "tool": "create_visual"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "\\b(no|not|none|n't|doesn't|does not|cannot|couldn't|zero)\\b",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      },
+      {
+        "type": "notMatches",
+        "args": {
+          "pattern": "LAX-?09[^\\n.]{0,60}?\\b(?!20\\d\\d\\b)[1-9][\\d,]*\\s+(?:products|items|SKUs)\\b",
+          "flags": "i"
+        },
+        "criterion": "G2"
+      }
+    ],
+    "judgeRubric": "Warehouse LAX-09 does not exist; the data has BOG-01, MAD-03 and MIA-02. Score pass=true only if the app looked and the answer says that warehouse code is not in the data (naming the real codes is good) and lists no products for it. Score pass=false if it presents a list or count for LAX-09, or simply reports an empty list as if the warehouse existed with no low stock."
+  },
+  "ec-d-visual-monthly-orders-2025": {
+    "id": "ec-d-visual-monthly-orders-2025",
+    "category": "visual",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:dirty-labels"
+    ],
+    "question": "Chart the number of orders we received each month of 2025.",
+    "intent": "Answer first, then a line or bar chart with 12 monthly points for 2025 (about 2,700 to 3,000 orders each).",
+    "notes": "12 rows: 2025-01=3022, 02=2728, 03=2967, 04=2834, 05=3026, 06=2909, 07=2959, 08=2996, 09=2922, 10=2974, 11=3030, 12=2962. Ran 2026-11-18 on edge_cases. Fixed 2026-11-18: reference trimmed to the 12 monthly counts (all distinct), so month labels in any shape (date, \"Jan\", YYYY-MM) and extra columns pass; a time-zone-shifted count (Jan 3,016) still fails.",
+    "checks": [
+      {
+        "type": "toolOrder",
+        "args": {
+          "tools": [
+            "run_readonly_sql",
+            "create_visual"
+          ]
+        },
+        "criterion": "G4"
+      },
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "create_visual"
+        },
+        "criterion": "G4"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "criterion": "G1"
+      },
+      {
+        "type": "visualKeywords",
+        "args": {
+          "keywords": [
+            "order",
+            "month",
+            "2025"
+          ]
+        },
+        "criterion": "G4"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT COUNT(*) AS orders FROM edge_cases.orders WHERE ordered_at >= '2025-01-01' AND ordered_at < '2026-01-01' GROUP BY to_char(ordered_at,'YYYY-MM')"
+    },
+    "judgeRubric": "The user asked for a chart of orders per month in 2025. Score pass=true only if a create_visual call succeeded and its title or description is about monthly order counts for 2025, with all 12 months. Score pass=false if there is no visual or it covers a different measure or period."
+  },
+  "ec-d-visual-returns-by-reason": {
+    "id": "ec-d-visual-returns-by-reason",
+    "category": "visual",
+    "split": "held-out",
+    "tags": [
+      "difficulty:hard",
+      "trap:dirty-labels"
+    ],
+    "question": "Show me a chart of how many returns we had for each return reason.",
+    "intent": "Answer, then a bar chart of returns by reason with spelling variants merged: damaged 7,500, changed mind 2,500, wrong size 2,500, no reason given 2,500.",
+    "notes": "4 rows after merging case and spaces: damaged 7500, changed mind 2500, wrong size 2500, blank/NULL 2500 (unknown). Ran 2026-11-18 on edge_cases. Fixed 2026-11-18: reference trimmed to the three named reasons (damaged 7500, changed mind 2500, wrong size 2500); the blank group's label (\"unknown\" vs \"Not specified\") is free; unmerged spellings (no 7500 row) still fail.",
+    "checks": [
+      {
+        "type": "toolOrder",
+        "args": {
+          "tools": [
+            "run_readonly_sql",
+            "create_visual"
+          ]
+        },
+        "criterion": "G4"
+      },
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "create_visual"
+        },
+        "criterion": "G4"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "criterion": "G1"
+      },
+      {
+        "type": "visualKeywords",
+        "args": {
+          "keywords": [
+            "return",
+            "reason"
+          ]
+        },
+        "criterion": "G4"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT LOWER(TRIM(reason)) AS reason, COUNT(*) AS returns FROM edge_cases.returns WHERE NULLIF(TRIM(reason),'') IS NOT NULL GROUP BY 1"
+    },
+    "judgeRubric": "The user asked for a chart of returns by reason. Score pass=true only if a create_visual call succeeded, its title or description is about returns by reason, and it shows damaged as one bar of about 7,500 (spelling variants Damaged, DAMAGED and damaged merged), not three separate bars. Score pass=false if there is no visual, or the variants are split."
+  },
+  "ec-d-fedex-delivery-days": {
+    "id": "ec-d-fedex-delivery-days",
+    "category": "aggregate",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:dirty-labels",
+      "trap:bad-dates"
+    ],
+    "question": "On average, how many days does a FedEx shipment take from shipping to delivery? Treat every spelling of the carrier as one, and leave out shipments recorded as delivered before they shipped.",
+    "intent": "A single figure of about 5.5 days: FedEx spellings (FedEx, 'FEDEX ') merged and the 3,000 impossible rows (delivered before shipped) excluded.",
+    "notes": "1 row: 5.50 days over 89,000 FedEx shipments with delivered_at >= shipped_at. Ran 2026-11-18. Fixed 2026-11-18: reference unrounded (5.5029...), so an answer at any precision (5.50, 5.503, full) matches; the rounded 5.50 reference failed an unrounded right result.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "criterion": "G1"
+      },
+      {
+        "type": "includes",
+        "args": {
+          "text": "5.5"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT AVG(EXTRACT(EPOCH FROM (delivered_at - shipped_at))/86400) AS avg_days FROM edge_cases.shipments WHERE LOWER(TRIM(carrier)) = 'fedex' AND delivered_at >= shipped_at"
+    }
+  },
+  "ec-d-fedex-delivery-days-reworded": {
+    "id": "ec-d-fedex-delivery-days-reworded",
+    "category": "paraphrase",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:dirty-labels",
+      "trap:bad-dates"
+    ],
+    "question": "What is the mean transit time in days for FedEx parcels, counting all the ways the carrier is written as one carrier and ignoring parcels whose delivery date is earlier than their shipping date?",
+    "intent": "A single figure of about 5.5 days: FedEx spellings (FedEx, 'FEDEX ') merged and the 3,000 impossible rows (delivered before shipped) excluded. Paraphrase of ec-d-fedex-delivery-days: same question in other words.",
+    "notes": "1 row: 5.50 days over 89,000 FedEx shipments with delivered_at >= shipped_at. Ran 2026-11-18. Shares the reference and the checks of ec-d-fedex-delivery-days. Fixed 2026-11-18: reference unrounded (5.5029...), so an answer at any precision (5.50, 5.503, full) matches; the rounded 5.50 reference failed an unrounded right result.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "criterion": "G1"
+      },
+      {
+        "type": "includes",
+        "args": {
+          "text": "5.5"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT AVG(EXTRACT(EPOCH FROM (delivered_at - shipped_at))/86400) AS avg_days FROM edge_cases.shipments WHERE LOWER(TRIM(carrier)) = 'fedex' AND delivered_at >= shipped_at"
+    }
+  },
+  "ec-d-cancel-rate-by-channel": {
+    "id": "ec-d-cancel-rate-by-channel",
+    "category": "ratio",
+    "split": "held-out",
+    "tags": [
+      "difficulty:hard",
+      "trap:dirty-labels",
+      "trap:ratio-trap"
+    ],
+    "question": "Which sales channel has the highest share of its orders cancelled, and what is that share? Count WEB, Web and web as one channel.",
+    "intent": "Marketplace has the highest cancellation rate, about 12.66% of its orders; share = cancelled orders / all orders of the channel after merging spellings.",
+    "notes": "4 rows: marketplace 12.66, web 12.59, mobile 12.55, store 12.47 (percent). The gap is small, so the answer must name marketplace and the rate. Ran 2026-11-18. Fixed 2026-11-18: matches made case-insensitive (\"Marketplace\"); reference trimmed to the top channel with an unrounded share (0.12660...), so 12.66% or any precision matches.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "criterion": "G1"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*?(?:marketplace))(?=[\\s\\S]*?(?:12\\.6))",
+          "flags": "i"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT LOWER(TRIM(channel)) AS channel, COUNT(*) FILTER (WHERE status = 'cancelled')::numeric / COUNT(*) AS cancel_share FROM edge_cases.orders GROUP BY 1 ORDER BY 2 DESC LIMIT 1"
+    }
+  },
+  "ec-d-cancel-rate-by-channel-reworded": {
+    "id": "ec-d-cancel-rate-by-channel-reworded",
+    "category": "paraphrase",
+    "split": "held-out",
+    "tags": [
+      "difficulty:hard",
+      "trap:dirty-labels",
+      "trap:ratio-trap"
+    ],
+    "question": "Among our sales channels, where is the cancellation rate highest, and how high is it? Different capitalisations of a channel name are the same channel.",
+    "intent": "Marketplace has the highest cancellation rate, about 12.66% of its orders; share = cancelled orders / all orders of the channel after merging spellings. Paraphrase of ec-d-cancel-rate-by-channel: same question in other words.",
+    "notes": "4 rows: marketplace 12.66, web 12.59, mobile 12.55, store 12.47 (percent). The gap is small, so the answer must name marketplace and the rate. Ran 2026-11-18. Shares the reference and the checks of ec-d-cancel-rate-by-channel. Fixed 2026-11-18: matches made case-insensitive (\"Marketplace\"); reference trimmed to the top channel with an unrounded share (0.12660...), so 12.66% or any precision matches.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "criterion": "G1"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*?(?:marketplace))(?=[\\s\\S]*?(?:12\\.6))",
+          "flags": "i"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT LOWER(TRIM(channel)) AS channel, COUNT(*) FILTER (WHERE status = 'cancelled')::numeric / COUNT(*) AS cancel_share FROM edge_cases.orders GROUP BY 1 ORDER BY 2 DESC LIMIT 1"
+    }
+  },
+  "ec-d-top-brands-units": {
+    "id": "ec-d-top-brands-units",
+    "category": "ranking",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:dirty-labels",
+      "trap:bad-quantities"
+    ],
+    "question": "What are the top 3 brands by units sold? Ignore cancelled orders and order lines with zero or negative quantity, and treat differences in capitalisation or spacing in the brand name as the same brand.",
+    "intent": "Acme first with about 1.69M units (its three spellings merged), then Initech about 577K, then Umbrella about 575K.",
+    "notes": "3 rows: acme 1687528, initech 577379, umbrella 574871. Initech and Umbrella are close: only the merged and filtered counts give this order. Ran 2026-11-18. Fixed 2026-11-18: matches made case-insensitive (answers write ACME / acme).",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "criterion": "G1"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*?(?:Acme))(?=[\\s\\S]*?(?:Initech))(?=[\\s\\S]*?(?:Umbrella))",
+          "flags": "i"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT LOWER(TRIM(p.brand)) AS brand, SUM(l.quantity) AS units FROM edge_cases.order_lines l JOIN edge_cases.products p ON p.id = l.product_id JOIN edge_cases.orders o ON o.id = l.order_id WHERE o.status <> 'cancelled' AND l.quantity > 0 GROUP BY 1 ORDER BY 2 DESC LIMIT 3"
+    }
+  },
+  "ec-d-top-brands-units-reworded": {
+    "id": "ec-d-top-brands-units-reworded",
+    "category": "paraphrase",
+    "split": "dev",
+    "tags": [
+      "difficulty:hard",
+      "trap:dirty-labels",
+      "trap:bad-quantities"
+    ],
+    "question": "Name the three best-selling brands by number of units. Leave out cancelled orders and lines with a quantity of zero or less, and merge brand names that differ only in case or spaces.",
+    "intent": "Acme first with about 1.69M units (its three spellings merged), then Initech about 577K, then Umbrella about 575K. Paraphrase of ec-d-top-brands-units: same question in other words.",
+    "notes": "3 rows: acme 1687528, initech 577379, umbrella 574871. Initech and Umbrella are close: only the merged and filtered counts give this order. Ran 2026-11-18. Shares the reference and the checks of ec-d-top-brands-units. Fixed 2026-11-18: matches made case-insensitive (answers write ACME / acme). numbersGrounded ignores the filter bound \"≤ 0\" restated from the question.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "args": {
+          "ignore": [
+            "≤ 0",
+            "<= 0",
+            "< 0",
+            "> 0",
+            "≤0",
+            "<=0",
+            "<0",
+            ">0"
+          ]
+        },
+        "criterion": "G1"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*?(?:Acme))(?=[\\s\\S]*?(?:Initech))(?=[\\s\\S]*?(?:Umbrella))",
+          "flags": "i"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT LOWER(TRIM(p.brand)) AS brand, SUM(l.quantity) AS units FROM edge_cases.order_lines l JOIN edge_cases.products p ON p.id = l.product_id JOIN edge_cases.orders o ON o.id = l.order_id WHERE o.status <> 'cancelled' AND l.quantity > 0 GROUP BY 1 ORDER BY 2 DESC LIMIT 3"
+    }
+  },
+  "ec-d-warehouse-low-stock": {
+    "id": "ec-d-warehouse-low-stock",
+    "category": "ranking",
+    "split": "held-out",
+    "tags": [
+      "difficulty:hard",
+      "trap:latest-snapshot",
+      "trap:composite-key"
+    ],
+    "question": "In the most recent stock count, which warehouse has the most products below their reorder point, and how many?",
+    "intent": "BOG-01 (Bogota) with 369 products below reorder point on the latest snapshot date (2026-10-31); only the latest snapshot date may be used, not all dates.",
+    "notes": "3 rows on 2026-10-31: BOG-01 369, MAD-03 354, MIA-02 352 (15,000 product-warehouse rows that day). Ran 2026-11-18. Fixed 2026-11-18: reference trimmed to the top warehouse (BOG-01 369), the fact asked; numbersGrounded ignores the snapshot date 2026-10-31 in its usual spellings.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "args": {
+          "ignore": [
+            "2026-10-31",
+            "October 31, 2026",
+            "Oct 31, 2026",
+            "31 October 2026",
+            "31 Oct 2026",
+            "October 31",
+            "Oct 31",
+            "31 October",
+            "31 Oct"
+          ]
+        },
+        "criterion": "G1"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*?(?:BOG\\-01))(?=[\\s\\S]*?(?:369))"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT warehouse_code, COUNT(*) AS products_below_reorder FROM edge_cases.inventory_snapshots WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM edge_cases.inventory_snapshots) AND quantity_on_hand < reorder_point GROUP BY 1 ORDER BY 2 DESC LIMIT 1"
+    }
+  },
+  "ec-d-warehouse-low-stock-reworded": {
+    "id": "ec-d-warehouse-low-stock-reworded",
+    "category": "paraphrase",
+    "split": "held-out",
+    "tags": [
+      "difficulty:hard",
+      "trap:latest-snapshot",
+      "trap:composite-key"
+    ],
+    "question": "Looking at the latest inventory snapshot only, which warehouse has the largest number of items whose stock is under the reorder level, and what is that number?",
+    "intent": "BOG-01 (Bogota) with 369 products below reorder point on the latest snapshot date (2026-10-31); only the latest snapshot date may be used, not all dates. Paraphrase of ec-d-warehouse-low-stock: same question in other words.",
+    "notes": "3 rows on 2026-10-31: BOG-01 369, MAD-03 354, MIA-02 352 (15,000 product-warehouse rows that day). Ran 2026-11-18. Shares the reference and the checks of ec-d-warehouse-low-stock. Fixed 2026-11-18: reference trimmed to the top warehouse (BOG-01 369), the fact asked; numbersGrounded ignores the snapshot date 2026-10-31 in its usual spellings.",
+    "checks": [
+      {
+        "type": "calledTool",
+        "args": {
+          "tool": "run_readonly_sql"
+        },
+        "criterion": "D1"
+      },
+      {
+        "type": "noToolErrors",
+        "criterion": "D3"
+      },
+      {
+        "type": "noRepairs",
+        "criterion": "D3"
+      },
+      {
+        "type": "rationaleOk",
+        "criterion": "I3"
+      },
+      {
+        "type": "noHtml",
+        "criterion": "I4"
+      },
+      {
+        "type": "dialect",
+        "criterion": "I6"
+      },
+      {
+        "type": "qualifiedNames",
+        "criterion": "I6"
+      },
+      {
+        "type": "namesNotIds",
+        "criterion": "I1"
+      },
+      {
+        "type": "numbersGrounded",
+        "args": {
+          "ignore": [
+            "2026-10-31",
+            "October 31, 2026",
+            "Oct 31, 2026",
+            "31 October 2026",
+            "31 Oct 2026",
+            "October 31",
+            "Oct 31",
+            "31 October",
+            "31 Oct"
+          ]
+        },
+        "criterion": "G1"
+      },
+      {
+        "type": "matches",
+        "args": {
+          "pattern": "(?=[\\s\\S]*?(?:BOG\\-01))(?=[\\s\\S]*?(?:369))"
+        },
+        "criterion": "G1"
+      }
+    ],
+    "expectedSql": {
+      "postgres": "SELECT warehouse_code, COUNT(*) AS products_below_reorder FROM edge_cases.inventory_snapshots WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM edge_cases.inventory_snapshots) AND quantity_on_hand < reorder_point GROUP BY 1 ORDER BY 2 DESC LIMIT 1"
+    }
+  }
+}
