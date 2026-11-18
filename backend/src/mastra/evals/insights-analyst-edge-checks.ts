@@ -61,10 +61,17 @@ export function sqlUsesAny(
 const TIE_WORDS =
   /\b(tie[ds]?|tying|same|equal(?:ly)?|identical|joint|share[ds]?|all five|all 5|five products)\b/i;
 const STRICT_ORDER = /\b(first place|1st|second place|2nd|runner[- ]up)\b/i;
+/**
+ * "Tied for first place", "share first place", "all in first place": the tie
+ * itself, no order.
+ */
+const TIED_FOR_FIRST =
+  /\b(?:tie[ds]?|tying|joint(?:ly)?|share[ds]?|sharing|equal(?:ly)?|all)\s+(?:(?:for|in|at|on)\s+)?(?:the\s+)?(?:first place|1st)\b/gi;
 
 /**
  * The answer about a tied ranking says they tie and invents no strict
- * order: no "first place" and "second place" among equals.
+ * order: no "first place" and "second place" among equals. "Tied for first
+ * place" is the tie, so it is taken out before the order is looked for.
  */
 export function answerKeepsTie(): EvalCustomCheck {
   return {
@@ -73,7 +80,7 @@ export function answerKeepsTie(): EvalCustomCheck {
       'The answer says the products tie and ranks none above another',
     run: ({ answer }) => {
       if (!TIE_WORDS.test(answer)) return 'the answer does not say they tie';
-      return STRICT_ORDER.test(answer)
+      return STRICT_ORDER.test(answer.replace(TIED_FOR_FIRST, ''))
         ? 'the answer ranks tied products in a strict order'
         : undefined;
     },
