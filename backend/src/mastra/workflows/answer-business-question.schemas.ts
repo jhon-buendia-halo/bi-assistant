@@ -290,12 +290,25 @@ export const planSchema = z.object({
     ),
 });
 
+/**
+ * The columns of each entity as Analyse carries them (agents.md 5.11): Load
+ * catalog's, passed on from Plan so Analyse's catalog block lists them too.
+ * A run stored before they were carried reads none.
+ */
+const carriedColumnsSchema = z
+  .array(entityColumnsSchema)
+  .default([])
+  .describe(
+    "The columns of each entity, from Load catalog: Analyse's catalog block lists them.",
+  );
+
 /** What Plan passes on: the question and catalog, with the plan. */
 export const plannedQuestionSchema = z.object({
   question: z.string().describe('The trimmed question.'),
   catalog: z
     .array(catalogEntitySchema)
     .describe("The entities of the run's datasets."),
+  columns: carriedColumnsSchema,
   plan: planSchema.describe('The analysis plan.'),
   stopped: z
     .boolean()
@@ -316,25 +329,6 @@ export const validationFindingSchema = z.object({
   check: z.string().describe('What was checked.'),
   passed: z.boolean().describe('Whether the check passed.'),
   detail: z.string().describe('What the check found.'),
-});
-
-/** What Analyse receives: the plan, and on a retry the failed validation. */
-export const analyseInputSchema = z.object({
-  question: z.string().describe('The trimmed question.'),
-  catalog: z
-    .array(catalogEntitySchema)
-    .describe("The entities of the run's datasets."),
-  plan: planSchema.describe('The analysis plan.'),
-  attempt: z
-    .number()
-    .optional()
-    .describe('On a retry: the attempt Validate checked.'),
-  findings: z
-    .array(validationFindingSchema)
-    .optional()
-    .describe("On a retry: the previous attempt's validation findings."),
-  // Analyse can be resumed from a run stored before Read images existed.
-  imageNotes: resumableImageNotesSchema,
 });
 
 /** One tool call of the turn, as Analyse reports it. */
@@ -358,12 +352,60 @@ export const analyseQuerySchema = z.object({
   error: z.string().optional().describe('Why it failed.'),
 });
 
+/**
+ * What Analyse receives: the plan, and on a retry the failed validation
+ * with the earlier attempt's calls and queries (Validate's output), which
+ * the retry is shown and Validate merges with its own (agents.md 5.11).
+ */
+export const analyseInputSchema = z.object({
+  question: z.string().describe('The trimmed question.'),
+  catalog: z
+    .array(catalogEntitySchema)
+    .describe("The entities of the run's datasets."),
+  columns: carriedColumnsSchema,
+  plan: planSchema.describe('The analysis plan.'),
+  attempt: z
+    .number()
+    .optional()
+    .describe('On a retry: the attempt Validate checked.'),
+  findings: z
+    .array(validationFindingSchema)
+    .optional()
+    .describe("On a retry: the previous attempt's validation findings."),
+  calls: z
+    .array(analyseCallSchema)
+    .optional()
+    .describe("On a retry: the earlier attempt's tool calls."),
+  queries: z
+    .array(analyseQuerySchema)
+    .optional()
+    .describe(
+      "On a retry: the earlier attempt's SQL queries, with their rows.",
+    ),
+  // Analyse can be resumed from a run stored before Read images existed.
+  imageNotes: resumableImageNotesSchema,
+});
+
+/** The earlier attempt a retry carries forward, for Validate to merge. */
+export const earlierAttemptSchema = z.object({
+  calls: z
+    .array(analyseCallSchema)
+    .describe("The earlier attempt's tool calls."),
+  queries: z
+    .array(analyseQuerySchema)
+    .describe("The earlier attempt's SQL queries, with their rows."),
+  findings: z
+    .array(validationFindingSchema)
+    .describe("The earlier attempt's validation findings."),
+});
+
 /** What Analyse returns, and what Validate receives. */
 export const analyseOutcomeSchema = z.object({
   question: z.string().describe('The trimmed question.'),
   catalog: z
     .array(catalogEntitySchema)
     .describe("The entities of the run's datasets."),
+  columns: carriedColumnsSchema,
   plan: planSchema.describe('The analysis plan.'),
   attempt: z.number().describe('This attempt: 1, or 2 on the retry.'),
   calls: z
@@ -374,6 +416,17 @@ export const analyseOutcomeSchema = z.object({
     .describe("The attempt's SQL queries, in order."),
   text: z.string().describe("The agent's own notes; never the run's answer."),
   stopped: z.boolean().describe('The turn ended early: the user stopped it.'),
+  earlier: earlierAttemptSchema
+    .optional()
+    .describe(
+      'On a retry: the earlier attempt, which Validate merges with this one.',
+    ),
+  retryError: z
+    .string()
+    .optional()
+    .describe(
+      'On a retry: the model error it ended on; the earlier attempt is kept.',
+    ),
   imageNotes: imageNotesSchema,
 });
 
@@ -385,18 +438,25 @@ export const validateOutcomeSchema = z.object({
   attempt: z.number().describe('The attempt it checked: 1 or 2.'),
   findings: z
     .array(validationFindingSchema)
-    .describe('Each check, passed or not.'),
+    .describe('Each check of the kept queries, passed or not.'),
   question: z.string().describe('The trimmed question.'),
   catalog: z
     .array(catalogEntitySchema)
     .describe("The entities of the run's datasets."),
+  columns: carriedColumnsSchema,
   plan: planSchema.describe('The analysis plan.'),
-  calls: z
-    .array(analyseCallSchema)
-    .describe("The checked attempt's tool calls."),
+  calls: z.array(analyseCallSchema).describe("The kept queries' tool calls."),
   queries: z
     .array(analyseQuerySchema)
-    .describe("The checked attempt's SQL queries."),
+    .describe(
+      "The kept SQL queries: the attempt's, or on a retry the merged set or attempt 1's.",
+    ),
+  kept: z
+    .enum(['merged', 'first'])
+    .optional()
+    .describe(
+      "On a retry: the merged set (attempt 2's queries first), or attempt 1's alone.",
+    ),
   imageNotes: imageNotesSchema,
 });
 
@@ -406,13 +466,15 @@ export const writeAnswerInputSchema = z.object({
   plan: planSchema.describe('The analysis plan.'),
   queries: z
     .array(analyseQuerySchema)
-    .describe('The SQL queries of the last attempt, with their rows.'),
+    .describe(
+      "The kept SQL queries, with their rows: after a retry, attempt 2's first.",
+    ),
   findings: z
     .array(validationFindingSchema)
-    .describe("The last attempt's validation findings."),
+    .describe("The kept queries' validation findings."),
   calls: z
     .array(analyseCallSchema)
-    .describe("The last attempt's tool calls, for Wrap up."),
+    .describe("The kept queries' tool calls, for Wrap up."),
   imageNotes: imageNotesSchema,
 });
 

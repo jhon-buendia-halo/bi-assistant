@@ -4,7 +4,10 @@ import { insightsAnalystAgent } from '../agents/insights-analyst.agent';
 import { INSIGHTS_ANALYST_TOOL_NAMES } from '../agents/insights-analyst-catalog';
 import { entityOrientationLines } from '../context-blocks';
 import type { OptionalAgentTool } from '../agent-tools';
-import { workflowTurnAgent } from './insights-analyst-workflow-target';
+import {
+  retryDoesNotRediscover,
+  workflowTurnAgent,
+} from './insights-analyst-workflow-target';
 import type {
   AssistantEvalCase,
   AssistantEvalSet,
@@ -285,6 +288,29 @@ const INSIGHTS_ANALYST_EVAL_CASES: AssistantEvalCase[] = [
       'knockout record is fine, if backed by its queries. Score pass=false ' +
       'if it states a group-stage win count as a fact, or does not say that ' +
       'the group stage is missing.',
+  },
+  {
+    id: 'v2-retry-sample-reuses-attempt-1',
+    question:
+      'Show me five goals scored at the 2022 World Cup, with the scorer and the minute.',
+    intent:
+      'Drives the retry (agents.md 5.11): a first attempt that keeps an arbitrary five rows (a LIMIT with no sort) fails the sample check, and the retry, shown its queries and the columns of each entity, runs only the query the failed check needs, without listing or describing the entities again.',
+    scorers: [checks.noToolErrors()],
+    customChecks: [ranSuccessfulSql(), retryDoesNotRediscover()],
+    expectedSql:
+      'SELECT player.full_name AS scorer, goal.minute FROM world_cup.goals goal ' +
+      'JOIN world_cup.players player ON player.id = goal.scorer_player_id ' +
+      'JOIN world_cup.matches match ON match.id = goal.match_id ' +
+      'JOIN world_cup.tournaments t ON t.id = match.tournament_id ' +
+      'WHERE t.tournament_year = 2022 ORDER BY goal.minute, goal.id LIMIT 5',
+    judgeRubric:
+      'The 2022 data holds 24 goals. Score pass=true only if the final ' +
+      'answer lists five goals of the 2022 World Cup, each with its scorer ' +
+      'and its minute as the queries returned them, and says how they were ' +
+      'chosen (for example the earliest five) or that they are five of the ' +
+      '24. Score pass=false if it lists goals of another tournament, fewer ' +
+      'than five, or a scorer or minute no query returned.' +
+      ANSWER_FORMAT,
   },
 ];
 
