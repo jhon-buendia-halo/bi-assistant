@@ -189,23 +189,35 @@ describe('MastraService.discardSuspendedWorkflowRuns (ADR-0043; workflows R20)',
       row('r2', 'question-path'),
     ]);
     useStore(store);
-    fakeMastra.getWorkflow.mockReturnValue({
+    // The workflow's own delete drops the top row and the in-memory Run.
+    const workflow = {
       createRun: () =>
         Promise.resolve({
           runId: 'r1',
           stream: () => ({ fullStream: [], result: Promise.resolve({}) }),
         }),
-    });
+      deleteWorkflowRunById: jest.fn((runId: string) => {
+        store.rows = store.rows.filter(
+          (r) =>
+            !(
+              r.runId === runId && r.workflowName === 'answer-business-question'
+            ),
+        );
+        return Promise.resolve();
+      }),
+    };
+    fakeMastra.getWorkflow.mockReturnValue(workflow);
     const stream = await new MastraService().streamWorkflow(
       'answer-business-question',
       {},
     );
     await stream.discard?.();
+    expect(workflow.deleteWorkflowRunById).toHaveBeenCalledWith('r1');
     expect(store.rows).toEqual([
       row('r2', 'answer-business-question'),
       row('r2', 'question-path'),
     ]);
-    expect(store.deleteWorkflowRunById).toHaveBeenCalledTimes(3);
+    expect(store.deleteWorkflowRunById).toHaveBeenCalledTimes(2);
   });
 
   it('with a key cleans that workflow only', async () => {

@@ -244,7 +244,16 @@ export class MastraService {
             ...(context ? { requestContext: context } : {}),
           }),
         ),
+      // The workflow's own delete removes the top row and drops the suspended
+      // Run from its in-memory map; the nested rows share the run id.
       discard: async () => {
+        try {
+          await workflow.deleteWorkflowRunById(run.runId);
+        } catch (failure) {
+          new Logger(MastraService.name).warn(
+            `Could not delete the run's snapshot: ${failure instanceof Error ? failure.message : String(failure)}`,
+          );
+        }
         await this.deleteSnapshotRows(undefined, run.runId);
       },
     });
