@@ -326,7 +326,10 @@ export class TurnEngine {
     // client having disconnected.
     const turn = new AbortController();
     const forwardAbort = () => turn.abort();
-    abortSignal?.addEventListener('abort', forwardAbort, { once: true });
+    // A listener added to an aborted signal never fires: a Stop that landed
+    // while the question was stored or the input built aborts the turn now.
+    if (abortSignal?.aborted) forwardAbort();
+    else abortSignal?.addEventListener('abort', forwardAbort, { once: true });
     const options = await this.deps.options.agentOptions(
       session,
       trimmed,
@@ -1062,11 +1065,25 @@ export class TurnEngine {
               tableCount: assessment.tableCount,
             };
           },
+          // Its progress goes out as the readiness tool's does, a
+          // `tool-progress` event (never to the model, never stored), so
+          // a long profile is not taken for a stalled run (workflows spec).
           profile: async () => {
             const started = startedAssessment();
+            let profiling = true;
             try {
               return {
-                ...(await started.profile({ signal: turn.signal })),
+                ...(await started.profile({
+                  signal: turn.signal,
+                  onProgress: (progress) => {
+                    if (!profiling || turn.signal.aborted) return;
+                    const event = readinessProgressEvent({
+                      type: 'data-readiness-progress',
+                      data: progress,
+                    });
+                    if (event) emit(event);
+                  },
+                })),
                 stopped: false,
               };
             } catch (error) {
@@ -1077,6 +1094,9 @@ export class TurnEngine {
                 notProfiledCount: 0,
                 stopped: true,
               };
+            } finally {
+              // Nothing is reported once the step ended.
+              profiling = false;
             }
           },
           score: () => {
@@ -1512,9 +1532,12 @@ export class TurnEngine {
               emit = io.emit;
               abortSignal = io.abortSignal;
               onStepEvent = io.onStepEvent;
-              abortSignal?.addEventListener('abort', forwardAbort, {
-                once: true,
-              });
+              // A resume stopped before it got here is aborted at once.
+              if (abortSignal?.aborted) forwardAbort();
+              else
+                abortSignal?.addEventListener('abort', forwardAbort, {
+                  once: true,
+                });
               let next: TurnRunOutcome;
               try {
                 next = await resumeRun(answer);

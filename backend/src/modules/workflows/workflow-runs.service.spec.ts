@@ -3852,4 +3852,105 @@ describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 am
     expect(run.status).toBe('stopped');
     expect(run.answer?.content).toBe('Bra');
   });
+
+  /**
+   * The next run host is made only when `release` is called, so a test can
+   * Stop (or stall) the run while it is being made.
+   */
+  function slowHost() {
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const make = t.ctx().sessions.createRunHost.getMockImplementation()!;
+    t.ctx().sessions.createRunHost.mockImplementationOnce(async (spec) => {
+      await released;
+      return make(spec);
+    });
+    return { release: () => release() };
+  }
+
+  it('a Stop while the run host is being made ends the run stopped through the normal path, its turn never started, without the 10-second wait', async () => {
+    t.state.ctx = build();
+    const host = slowHost();
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    const answer = t.ctx().service.stop(id);
+    host.release();
+    await t.flush();
+    // No timer advanced: the run ended on its own, not by the forced stop.
+    const run = await answer;
+    expect(run.status).toBe('stopped');
+    expect(run.finishedAt).toBeDefined();
+    expect(t.ctx().sessions.streamRunTurn).not.toHaveBeenCalled();
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledWith(`run-${id}`);
+    expect(watcher.got.at(-1)).toBe('done');
+    expect(watcher.ended.value).toBe(true);
+    expect(t.ctx().service.live.isRunning(id)).toBe(false);
+  });
+
+  it("a stall while the run host is being made ends the run failed with the watchdog's error, its turn never started", async () => {
+    t.state.ctx = build();
+    const host = slowHost();
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    host.release();
+    await t.flush();
+    await t.ctx().service.live.whenEnded(id);
+    expect(await t.ctx().repository.get(id)).toMatchObject({
+      status: 'failed',
+      error: 'The run made no progress for 15 minutes and was stopped',
+    });
+    expect(t.ctx().sessions.streamRunTurn).not.toHaveBeenCalled();
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledWith(`run-${id}`);
+    expect(watcher.ended.value).toBe(true);
+  });
+
+  it('a Stop before a resume starts ends the run stopped without resuming its turn, the waiting turn dropped', async () => {
+    t.state.ctx = build();
+    const suspension = {
+      stepId: 'clarify',
+      question: 'Which measure?',
+      options: ['Goals', 'Wins'],
+      resume: jest.fn(() => Promise.resolve(undefined)),
+      discard: jest.fn(() => Promise.resolve()),
+    };
+    t.ctx().sessions.streamRunTurn.mockImplementationOnce(() =>
+      Promise.resolve(suspension as never),
+    );
+    Object.assign(t.ctx().sessions, {
+      runHostView: jest.fn(() =>
+        Promise.resolve({ datasets: ['World Cup Core'] }),
+      ),
+    });
+    const id = await t.launch();
+    await t.ctx().service.live.whenEnded(id);
+    const prepared = await t.ctx().service.prepareResume(id, {
+      stepId: 'clarify',
+      answer: 'Goals',
+    });
+    // The Stop lands while the resume stores the run running again.
+    let stored!: () => void;
+    const storing = new Promise<void>((resolve) => (stored = resolve));
+    const repository = t.ctx().repository;
+    const update = jest
+      .spyOn(repository, 'update')
+      .mockImplementationOnce(async (...args) => {
+        await storing;
+        update.mockRestore();
+        return repository.update(...args);
+      });
+    t.ctx().service.resumeDetached(prepared);
+    const answer = t.ctx().service.stop(id);
+    await t.flush();
+    stored();
+    await t.flush();
+    const run = await answer;
+    expect(run.status).toBe('stopped');
+    expect(suspension.resume).not.toHaveBeenCalled();
+    expect(suspension.discard).toHaveBeenCalledTimes(1);
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledWith(`run-${id}`);
+    expect(t.ctx().service.live.isRunning(id)).toBe(false);
+  });
 });

@@ -123,6 +123,7 @@ import { DATA_READINESS_ASSESSMENT_STEPS } from '../../mastra/workflows/data-rea
 import { dataReadinessAssessmentWorkflow } from '../../mastra/workflows/data-readiness-assessment.workflow';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
 import type { ReadinessReport } from '../data-readiness/engine/types';
+import type { ReadinessProgressListener } from '../data-readiness/progress';
 import { BadGatewayException } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
@@ -1016,6 +1017,81 @@ describe('the run host (agents.md 5.14)', () => {
     expect(ctx.mastra.deleteMemoryThread).not.toHaveBeenCalled();
   });
 
+  /** A v2 host's turn on `signal`, the turn's model calls recorded. */
+  async function v2HostTurn(ctx: Ctx, runId: string, signal?: AbortSignal) {
+    const host = await ctx.sessions.createRunHost({
+      runId,
+      workflowId: 'answer-business-question',
+      name: 'Answer a Business Question',
+      datasets: ['World Cup'],
+    });
+    const suspension = await ctx.sessions.streamRunTurn(
+      host.id,
+      'Which team was the most dominant?',
+      () => undefined,
+      signal,
+      false,
+      () => undefined,
+    );
+    return { host, suspension };
+  }
+
+  it('a Stop while the turn stores its question aborts the turn at once: no step works on a live signal', async () => {
+    const ctx = build();
+    const abort = new AbortController();
+    const stored = ctx.sessions as unknown as {
+      updateDoc: (...args: unknown[]) => Promise<unknown>;
+    };
+    // The first write (the question) is stopped, then goes on as it was.
+    const write = jest
+      .spyOn(stored, 'updateDoc')
+      .mockImplementationOnce((...args) => {
+        abort.abort();
+        write.mockRestore();
+        return stored.updateDoc(...args);
+      });
+    await v2HostTurn(ctx, 'stop-write', abort.signal);
+    const calls = ctx.calls['insights-analyst'];
+    expect(calls.every((call) => call.options.abortSignal?.aborted)).toBe(true);
+    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
+  });
+
+  it("a Stop while the turn builds the agent's input aborts the turn at once", async () => {
+    const ctx = build();
+    const abort = new AbortController();
+    const agent = ctx.registry['insights-analyst'];
+    agent.getMemory.mockImplementationOnce(() => {
+      abort.abort();
+      return Promise.resolve({
+        getThreadById: jest.fn().mockResolvedValue(null),
+      });
+    });
+    await v2HostTurn(ctx, 'stop-input', abort.signal);
+    const calls = ctx.calls['insights-analyst'];
+    expect(calls.every((call) => call.options.abortSignal?.aborted)).toBe(true);
+    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
+  });
+
+  it('a resume whose signal is aborted before its listener is added aborts the resumed turn at once', async () => {
+    const ctx = build();
+    ctx.mastra.planAnalysis.mockResolvedValueOnce({
+      plan: ASKING_PLAN,
+      stopped: false,
+    });
+    const { suspension } = await v2HostTurn(ctx, 'stop-resume');
+    expect(suspension?.stepId).toBe('clarify');
+    const abort = new AbortController();
+    abort.abort();
+    await suspension!.resume('Matches won', {
+      emit: () => undefined,
+      abortSignal: abort.signal,
+      onStepEvent: () => undefined,
+    });
+    const calls = ctx.calls['insights-analyst'];
+    expect(calls.every((call) => call.options.abortSignal?.aborted)).toBe(true);
+    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
+  });
+
   it("careful: true on an agent host's turn runs the cross-check, as a careful chat turn does", async () => {
     const ctx = build();
     const crossCheck = jest
@@ -1142,6 +1218,12 @@ describe('the run host (agents.md 5.14)', () => {
     ]);
   });
 });
+
+/** The message of a `tool-progress` event. */
+function progressMessage(event: unknown): string {
+  const { content } = event as { content?: string };
+  return (JSON.parse(content ?? '{}') as { message: string }).message;
+}
 
 /** The data-readiness service: its phases, and the calls the tools make. */
 function readinessService() {
@@ -1529,6 +1611,124 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       call.options.context.some((block) => block.content.includes('SELECT')),
     ).toBe(false);
     expect(run.answer?.content).toBe('World Cup is Managed (84).');
+  });
+
+  // The no-progress watchdog (workflows spec), scaled down: a profile
+  // that reports progress for four times the limit is not ended by it.
+  it("reports the profile's progress while Profile source runs, so a long profile is not ended as stalled, and never after the step ended", async () => {
+    const PROFILE = {
+      sourceId: 'ds-pg',
+      sourceType: 'postgres',
+      entities: [{ namespace: 'public', name: 'matches' }],
+      relationships: [],
+    };
+    const longProfile = (reports: boolean) =>
+      jest.fn(
+        async (
+          _prepared: unknown,
+          options: { onProgress?: ReadinessProgressListener } = {},
+        ) => {
+          for (let done = 1; done <= 8; done += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            if (reports) {
+              options.onProgress?.({
+                phase: 'profiling',
+                message: `Profiling ${done} of 8`,
+                done,
+                total: 8,
+              });
+            }
+          }
+          // A late update, after the step ended, is not reported.
+          setTimeout(
+            () => options.onProgress?.({ phase: 'profiling', message: 'Late' }),
+            0,
+          );
+          return PROFILE;
+        },
+      );
+    const plainCtx = build({
+      chunks: EXPLAIN_CHUNKS,
+      readiness: readinessService(),
+    });
+    const plain = await readinessRun(plainCtx, { dataset: 'World Cup' });
+
+    const readiness = readinessService();
+    readiness.profileSource = longProfile(true);
+    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
+    ctx.runs.idleLimitMs = 100;
+    const { events, run } = await readinessRun(ctx, { dataset: 'World Cup' });
+    expect(run.status).toBe('success');
+    const progress = events
+      .map((event, index) => ({ event, index }))
+      .filter(({ event }) => event.type === 'tool-progress');
+    expect(progress.map(({ event }) => progressMessage(event))).toEqual(
+      [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `Profiling ${n} of 8`),
+    );
+    const stepAt = (status: string) =>
+      events.findIndex(
+        (e) =>
+          e.type === 'step' && e.id === 'profile-source' && e.status === status,
+      );
+    expect(progress[0].index).toBeGreaterThan(stepAt('running'));
+    expect(progress.at(-1)!.index).toBeLessThan(stepAt('success'));
+    // The progress changes nothing stored: the steps' outputs, the answer.
+    const outputs = (r: WorkflowRun) =>
+      r.steps.map((s) => ({ id: s.id, status: s.status, output: s.output }));
+    expect(outputs(run)).toEqual(outputs(plain.run));
+    expect(run.answer?.content).toBe(plain.run.answer?.content);
+    expect(run.output).toEqual(plain.run.output);
+    expect(ctx.calls['data-readiness'][0].options.context).toEqual(
+      plainCtx.calls['data-readiness'][0].options.context,
+    );
+
+    // The same profile reporting nothing is ended by the watchdog.
+    const silent = readinessService();
+    silent.profileSource = longProfile(false);
+    const silentCtx = build({ chunks: EXPLAIN_CHUNKS, readiness: silent });
+    silentCtx.runs.idleLimitMs = 100;
+    const stalled = await readinessRun(silentCtx, { dataset: 'World Cup' });
+    expect(stalled.run.status).toBe('failed');
+  });
+
+  it('reports no profile progress after a Stop', async () => {
+    const readiness = readinessService();
+    const abort = new AbortController();
+    readiness.profileSource = jest.fn(
+      async (
+        _prepared: unknown,
+        options: { onProgress?: ReadinessProgressListener } = {},
+      ) => {
+        options.onProgress?.({ phase: 'profiling', message: 'Before' });
+        abort.abort();
+        options.onProgress?.({ phase: 'profiling', message: 'After' });
+        await Promise.resolve();
+        throw new Error('aborted');
+      },
+    ) as never;
+    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
+    await ctx.sessions.onModuleInit();
+    // The turn itself, so nothing between it and the test drops an event.
+    const events: StreamEvent[] = [];
+    const host = await ctx.sessions.createRunHost({
+      runId: 'stop-profile',
+      workflowId: READINESS_WORKFLOW.id,
+      name: 'Assess Data Readiness',
+      datasets: ['World Cup'],
+    });
+    await ctx.sessions.streamRunTurn(
+      host.id,
+      'Assess the readiness of this dataset',
+      (e) => events.push(e),
+      abort.signal,
+      false,
+      () => undefined,
+    );
+    expect(readiness.profileSource).toHaveBeenCalledTimes(1);
+    const messages = events
+      .filter((e) => e.type === 'tool-progress')
+      .map(progressMessage);
+    expect(messages).toEqual(['Before']);
   });
 
   it('fails at Profile source with the datasource named when it cannot be reached, storing nothing', async () => {
