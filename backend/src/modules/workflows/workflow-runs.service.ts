@@ -828,6 +828,9 @@ export class WorkflowRunsService implements OnModuleInit {
           : {}),
       });
       held.hostId = host.id;
+      // A Stop or a stall while the host was made: the turn's work never
+      // starts, and the run ends as a stopped (or stalled) turn does.
+      if (io.abortSignal.aborted) return undefined;
       return this.sessions.streamRunTurn(
         host.id,
         prepared.turn.question,
@@ -922,11 +925,15 @@ export class WorkflowRunsService implements OnModuleInit {
     const suspension = held.suspension;
     if (!suspension) throw new Error(`Run "${base.id}" has no turn to resume`);
     return this.drive(held, live, abortSignal, (io) =>
-      suspension.resume(answer, {
-        emit: io.emit,
-        abortSignal: io.abortSignal,
-        onStepEvent: io.onStepEvent,
-      }),
+      // Stopped (or stalled) before it resumed: the turn does not go on, and
+      // the waiting turn handed back is dropped as a stopped run's is.
+      io.abortSignal.aborted
+        ? Promise.resolve(suspension)
+        : suspension.resume(answer, {
+            emit: io.emit,
+            abortSignal: io.abortSignal,
+            onStepEvent: io.onStepEvent,
+          }),
     );
   }
 
