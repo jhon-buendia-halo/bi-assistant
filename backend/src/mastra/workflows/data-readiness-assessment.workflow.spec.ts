@@ -10,9 +10,7 @@ import { RequestContext } from '@mastra/core/request-context';
 import { dataReadinessAssessmentWorkflow } from './data-readiness-assessment.workflow';
 import {
   READ_IMAGES_OUTCOME_ID,
-  READ_IMAGES_RUNTIME_KEY,
   READ_IMAGES_STEP_ID,
-  type ReadImagesRuntime,
 } from './read-images.steps';
 import {
   DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
@@ -51,14 +49,20 @@ const DIMENSIONS = [
   { dimension: 'accuracy', score: 100, assessed: false, findingCount: 0 },
 ];
 
+const NOTES = '## Reference images\nA scorecard screenshot.';
+
 /** Each phase of the runtime as a Jest mock, so a test reads its calls. */
 type MockedRuntime = {
   [K in keyof DataReadinessAssessmentRuntime]: jest.Mock;
 } & { calls: string[] };
 
-/** A runtime whose every phase succeeds, with each call recorded. */
+/**
+ * A runtime whose every phase succeeds, with each call recorded. Zoe's
+ * notes are started only when the step asks, as the turn starts them.
+ */
 function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
   const calls: string[] = [];
+  let reading = false;
   return {
     calls,
     resolve: jest.fn(({ dataset }: { dataset: string }) => {
@@ -68,6 +72,19 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
         datasourceName: 'World Cup DB',
         datasourceKind: 'postgres' as const,
         tableCount: 3,
+      });
+    }),
+    startImageNotes: jest.fn(() => {
+      calls.push('start-image-notes');
+      reading = true;
+    }),
+    readsImages: jest.fn(() => reading),
+    imageNotes: jest.fn(() => {
+      calls.push('image-notes');
+      return Promise.resolve({
+        imageNotes: NOTES,
+        imageCount: 1,
+        stopped: false,
       });
     }),
     profile: jest.fn(() => {
@@ -92,6 +109,9 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
       calls.push('save');
       return Promise.resolve({ reportId: 'r-1' });
     }),
+    startFindingRows: jest.fn(() => {
+      calls.push('start-finding-rows');
+    }),
     findingRows: jest.fn(() => {
       calls.push('finding-rows');
       return Promise.resolve({
@@ -114,16 +134,15 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
 async function run(
   given: MockedRuntime | undefined,
   question = '',
-  images?: { paths: string[]; reader: ReadImagesRuntime },
+  images?: string[],
 ) {
   const requestContext = new RequestContext();
   if (given) requestContext.set(DATA_READINESS_ASSESSMENT_RUNTIME_KEY, given);
-  if (images) requestContext.set(READ_IMAGES_RUNTIME_KEY, images.reader);
   const output = (await workflow.createRun()).stream({
     inputData: {
       question,
       dataset: 'World Cup',
-      ...(images ? { images: images.paths } : {}),
+      ...(images ? { images } : {}),
     },
     requestContext,
   });
@@ -144,8 +163,8 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
       ['profile-source', 'Profile source'],
       ['score-readiness', 'Score readiness'],
       ['save-report', 'Save report'],
-      ['finding-rows', 'Rows behind findings'],
       ['explain-report', 'Explain report'],
+      ['finding-rows', 'Rows behind findings'],
       ['wrap-up', 'Wrap up'],
     ]);
     expect(workflow.options?.shouldPersistSnapshot?.()).toBe(false);
@@ -171,7 +190,7 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
     );
   });
 
-  it('profiles, scores, saves and explains, and returns the summary', async () => {
+  it('profiles, scores, saves and explains, takes the finding rows, and returns the summary', async () => {
     const given = runtime();
     const { events, result } = await run(given, '  Worst problems?  ');
     expect(given.calls).toEqual([
@@ -179,11 +198,14 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
       'profile',
       'score',
       'save',
-      'finding-rows',
+      'start-finding-rows',
       'explain:r-1:Worst problems?',
+      'finding-rows',
     ]);
-    // No images: Read images is skipped and the notes are ''.
+    // No images: Read images is skipped, Zoe never starts, the notes are ''.
     expect(events.filter((e) => e.startsWith('read-images:'))).toEqual([]);
+    expect(given.startImageNotes).not.toHaveBeenCalled();
+    expect(given.imageNotes).not.toHaveBeenCalled();
     expect(given.explain).toHaveBeenCalledWith(
       expect.objectContaining({ imageNotes: '' }),
     );
@@ -197,8 +219,8 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
       'profile-source:success',
       'score-readiness:success',
       'save-report:success',
-      'finding-rows:success',
       'explain-report:success',
+      'finding-rows:success',
       'wrap-up:success',
     ]);
     expect(result).toMatchObject({
@@ -224,30 +246,80 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
     });
   });
 
-  it("reads the reference images first and hands Zoe's notes to Explain report", async () => {
+  it('starts Zoe at Resolve dataset, awaits her notes after Score readiness and hands them to Explain report', async () => {
     const given = runtime();
-    const notes = '## Reference images\nA scorecard screenshot.';
-    const readImages = jest.fn(() =>
-      Promise.resolve({ imageNotes: notes, imageCount: 1, stopped: false }),
-    );
-    const { events, result } = await run(given, '', {
-      paths: ['inputs/images/1.png'],
-      reader: { readImages },
-    });
-    expect(readImages).toHaveBeenCalledWith({
+    const { events, result } = await run(given, '', ['inputs/images/1.png']);
+    // The run's own question, as Read images always had it.
+    expect(given.startImageNotes).toHaveBeenCalledWith({
       question: '',
       images: ['inputs/images/1.png'],
     });
-    expect(events.filter((e) => e.endsWith(':success')).slice(0, 3)).toEqual([
+    expect(given.calls.slice(0, 6)).toEqual([
+      'resolve:World Cup',
+      'start-image-notes',
+      'profile',
+      'score',
+      'image-notes',
+      'save',
+    ]);
+    expect(events.filter((e) => e.endsWith(':success')).slice(2, 6)).toEqual([
+      'score-readiness:success',
       'read-images:success',
       `${READ_IMAGES_OUTCOME_ID}:success`,
-      'resolve-dataset:success',
+      'save-report:success',
     ]);
-    // The notes travel through every step's data to Explain report.
     expect(given.explain).toHaveBeenCalledWith(
-      expect.objectContaining({ imageNotes: notes }),
+      expect.objectContaining({ imageNotes: NOTES }),
     );
     expect(result.status).toBe('success');
+  });
+
+  it('refuses at Resolve dataset before Read images starts', async () => {
+    const given = runtime({
+      resolve: jest
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'Data readiness supports PostgreSQL and Databricks datasources only',
+          ),
+        ),
+    });
+    const { result } = await run(given, '', ['inputs/images/1.png']);
+    expect(result.status).toBe('failed');
+    expect(given.startImageNotes).not.toHaveBeenCalled();
+    expect(given.profile).not.toHaveBeenCalled();
+  });
+
+  it('fails at Read images before Save report stores anything when Zoe fails', async () => {
+    const given = runtime({
+      imageNotes: jest
+        .fn()
+        .mockRejectedValue(new Error('The Image Reader returned an error')),
+    });
+    const { result, events } = await run(given, '', ['inputs/images/1.png']);
+    expect(result.status).toBe('failed');
+    expect(String(result.error)).toContain(
+      'The Image Reader returned an error',
+    );
+    expect(events).toContain('read-images:failed');
+    expect(given.save).not.toHaveBeenCalled();
+    expect(given.startFindingRows).not.toHaveBeenCalled();
+    expect(given.explain).not.toHaveBeenCalled();
+  });
+
+  it('ends at Save report, storing nothing, when the run was stopped at Read images', async () => {
+    const given = runtime({
+      imageNotes: jest
+        .fn()
+        .mockResolvedValue({ imageNotes: '', imageCount: 0, stopped: true }),
+    });
+    const { result } = await run(given, '', ['inputs/images/1.png']);
+    expect(result).toMatchObject({
+      status: 'success',
+      result: { stopped: true },
+    });
+    expect(given.save).not.toHaveBeenCalled();
+    expect(given.explain).not.toHaveBeenCalled();
   });
 
   it('ends at Profile source when the run is stopped there: nothing is scored or stored', async () => {
@@ -270,21 +342,23 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
     });
   });
 
-  // Roadmap 1.28.11: the rows behind the report's top findings become the
-  // answer's sources before the agent explains the report.
-  it('looks up the rows behind the findings after Save report and before Explain report', async () => {
+  // Roadmap 1.28.11; data-readiness R34: the rows behind the report's top
+  // findings are looked up while the agent explains the report.
+  it('starts the rows behind the findings at Save report and takes them after Explain report', async () => {
     const given = runtime();
     const { events } = await run(given);
-    expect(given.calls.slice(-3)).toEqual([
+    expect(given.calls.slice(-4)).toEqual([
       'save',
-      'finding-rows',
+      'start-finding-rows',
       expect.stringMatching(/^explain:r-1:/),
+      'finding-rows',
     ]);
+    expect(given.startFindingRows).toHaveBeenCalledTimes(1);
     expect(given.findingRows).toHaveBeenCalledTimes(1);
     expect(events).toContain('finding-rows:success');
   });
 
-  it('goes on to Explain report when some finding queries failed', async () => {
+  it('wraps up with the answer when some finding queries failed', async () => {
     const given = runtime({
       findingRows: jest.fn().mockResolvedValue({
         sourceCount: 3,
@@ -301,7 +375,7 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
     });
   });
 
-  it('ends at Rows behind findings when the run is stopped there: the agent never runs', async () => {
+  it('ends at Rows behind findings when the run is stopped there: no wrap-up', async () => {
     const given = runtime({
       findingRows: jest.fn().mockResolvedValue({
         sourceCount: 1,
@@ -310,20 +384,20 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
       }),
     });
     const { events, result } = await run(given);
-    expect(given.explain).not.toHaveBeenCalled();
-    expect(events).not.toContain('explain-report:success');
+    expect(events).not.toContain('wrap-up:success');
     expect(result).toMatchObject({
       status: 'success',
       result: { reportId: 'r-1', stopped: true },
     });
   });
 
-  it('ends at Explain report when the agent turn is stopped', async () => {
+  it('ends at Explain report when the agent turn is stopped: the finding rows are never taken', async () => {
     const given = runtime({
       explain: jest.fn().mockResolvedValue({ answer: '', stopped: true }),
     });
     const { events, result } = await run(given);
     expect(events).not.toContain('wrap-up:success');
+    expect(given.findingRows).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       status: 'success',
       result: { reportId: 'r-1', stopped: true },

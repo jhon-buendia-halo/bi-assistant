@@ -2,6 +2,7 @@ import type { SessionDoc, ToolDataRecord } from '../entities/session.entity';
 import {
   ATTEMPT_ROWS_CAP,
   analyseAttemptOf,
+  attemptEarlierBlock,
   analyseQueriesOf,
   answeredTurnInput,
   catalogStepId,
@@ -9,6 +10,10 @@ import {
   clarifyingQuestionText,
   turnWorkflowOf,
 } from './turn-workflow';
+import {
+  EARLIER_BLOCK_CAP,
+  EARLIER_BLOCK_HEADER,
+} from '../../../mastra/workflows/answer-business-question.prompts';
 
 const session = (partial: Partial<SessionDoc> = {}): SessionDoc => ({
   id: 's-1',
@@ -114,6 +119,70 @@ describe('an analysis attempt from its data records (agents.md 5.11)', () => {
       truncated: false,
       error: 'no column',
     });
+  });
+
+  it("gives an attempt resumed after the agent's question the queries it ran before it asked, after a retry's own block (agents.md 5.11)", () => {
+    const before: ToolDataRecord[] = [
+      { tool: 'list_entities', input: '' },
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT stage FROM wc.matches GROUP BY stage',
+        rationale: 'I list the stages.',
+        rows: [{ stage: 'final' }],
+        rowCount: 1,
+      },
+    ];
+    const own = attemptEarlierBlock(undefined, before)!;
+    expect(own.split('\n')).toEqual([
+      EARLIER_BLOCK_HEADER,
+      '1. I list the stages. | SQL: SELECT stage FROM wc.matches GROUP BY stage | coverage: whole-table | 1 rows | first rows: [{"stage":"final"}]',
+    ]);
+    // A resume within a retry: one block, attempt 1's queries then the
+    // resumed attempt's, under one header, one numbering and one cap.
+    const earlier = {
+      queries: [
+        {
+          sql: 'SELECT count(*) FROM wc.goals',
+          rows: [{ count: 24 }],
+          rowCount: 1,
+          truncated: false,
+        },
+      ],
+      findings: [],
+    };
+    expect(attemptEarlierBlock(earlier, before)!.split('\n')).toEqual([
+      EARLIER_BLOCK_HEADER,
+      expect.stringMatching(
+        /^1\. .*SELECT count\(\*\) FROM wc\.goals/,
+      ) as string,
+      expect.stringMatching(/^2\. I list the stages\./) as string,
+    ]);
+    const wide = Array.from({ length: 5 }, () => ({ note: 'x'.repeat(400) }));
+    const many = Array.from({ length: 12 }, (_, n) => ({
+      sql: `SELECT ${n} AS n`,
+      rows: wide,
+      rowCount: 5,
+      truncated: false,
+    }));
+    const manyRecords: ToolDataRecord[] = many.map((query) => ({
+      tool: 'run_readonly_sql',
+      input: query.sql,
+      rows: query.rows,
+      rowCount: 5,
+    }));
+    expect(
+      attemptEarlierBlock({ queries: many, findings: [] }, manyRecords)!.length,
+    ).toBeLessThanOrEqual(EARLIER_BLOCK_CAP);
+    // A retry not resumed: attempt 1's queries alone.
+    expect(attemptEarlierBlock(earlier, [])).toBe(
+      attemptEarlierBlock(earlier, undefined),
+    );
+    expect(attemptEarlierBlock(earlier, undefined)).toContain(
+      'SELECT count(*) FROM wc.goals',
+    );
+    // Neither a retry nor a resume with queries: no block at all.
+    expect(attemptEarlierBlock(undefined, undefined)).toBeUndefined();
+    expect(attemptEarlierBlock(undefined, [before[0]])).toBeUndefined();
   });
 
   it('gives the calls, queries, the trimmed note and whether it stopped', () => {

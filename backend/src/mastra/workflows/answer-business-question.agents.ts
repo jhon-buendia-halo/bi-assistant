@@ -19,6 +19,7 @@ import {
 import { answerSchema, planSchema } from './answer-business-question.schemas';
 import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from './workflow-run';
+import { cutReply, guardedCall, ReplyCutError } from './model-call';
 import {
   answerDeltas,
   answerOf,
@@ -46,6 +47,11 @@ export interface StepModelOptions {
    * agent's thread (agents.md 5.14). The call itself has no memory.
    */
   onExchange?: (exchange: AgentExchange) => void | Promise<void>;
+  /**
+   * One line per retry of the call (workflows R43), which the turn shows as
+   * a reasoning line of the running step.
+   */
+  onRetry?: (line: string) => void;
 }
 
 /** The text of a request: the message the call ends with. */
@@ -98,6 +104,9 @@ export function stoppedBy(options: StepModelOptions): boolean {
  * The Plan step's call (agents.md 5.11): the turn's input messages (the
  * question, or the transcript it ends with) with the catalog block, and
  * the plan read from the reply (`planOf`). A stopped turn plans nothing.
+ * The call is guarded (`guardedCall`, workflows R43): a deadline, and one
+ * retry of a transient failure or of a reply cut at the output cap; cut
+ * twice, the step fails with `ReplyCutError`.
  */
 export async function planWithModel(
   input: {
@@ -119,35 +128,42 @@ export async function planWithModel(
   const planned = planMessages(input);
   const messages = planned.messages as MessageListInput;
   try {
-    const result = await planAgent.generate(messages, {
-      ...callOptions(options),
-      structuredOutput: {
-        schema: planSchema,
-        jsonPromptInjection: 'inline',
-        // A reply that is no plan is read leniently (`planOf`), not refused.
-        errorStrategy: 'warn',
-      },
+    return await guardedCall(options, { label: 'Plan' }, async (call) => {
+      const result = await planAgent.generate(messages, {
+        ...callOptions(call),
+        structuredOutput: {
+          schema: planSchema,
+          jsonPromptInjection: 'inline',
+          // A reply that is no plan is read leniently (`planOf`), not refused.
+          errorStrategy: 'warn',
+        },
+      });
+      const reply = result as {
+        object?: unknown;
+        text?: string;
+        error?: unknown;
+        finishReason?: unknown;
+      };
+      // The model's own failure fails the step (agents.md 5.11).
+      if (reply.error !== undefined && !stoppedBy(call)) {
+        throw reply.error instanceof Error
+          ? reply.error
+          : new Error(runErrorMessage(reply.error));
+      }
+      // A reply cut at the output cap is no plan read leniently.
+      if (!stoppedBy(call) && cutReply(reply.finishReason)) {
+        throw new ReplyCutError('Plan');
+      }
+      await noteExchange(
+        call,
+        requestText(planned.messages),
+        replyText(reply.object, reply.text),
+      );
+      return {
+        plan: planOf(reply.object ?? reply.text, planned.fallback),
+        stopped: stoppedBy(call),
+      };
     });
-    const reply = result as {
-      object?: unknown;
-      text?: string;
-      error?: unknown;
-    };
-    // The model's own failure fails the step (agents.md 5.11).
-    if (reply.error !== undefined && !stoppedBy(options)) {
-      throw reply.error instanceof Error
-        ? reply.error
-        : new Error(runErrorMessage(reply.error));
-    }
-    await noteExchange(
-      options,
-      requestText(planned.messages),
-      replyText(reply.object, reply.text),
-    );
-    return {
-      plan: planOf(reply.object ?? reply.text, planned.fallback),
-      stopped: stoppedBy(options),
-    };
   } catch (error) {
     if (stoppedBy(options)) {
       return { plan: planOf(undefined, planned.fallback), stopped: true };
@@ -162,6 +178,30 @@ function partialAnswer(partial: unknown): string {
   return typeof answer === 'string' ? answer : '';
 }
 
+/** The headline in a partial JSON object streamed so far, if any. */
+function partialHeadline(partial: unknown): string {
+  const headline = (partial as { headline?: unknown } | undefined)?.headline;
+  return typeof headline === 'string' ? headline.trim() : '';
+}
+
+/** A stream's finish reason; undefined when it has none or it failed. */
+async function finishReasonOf(stream: unknown): Promise<unknown> {
+  try {
+    return await (stream as { finishReason?: unknown }).finishReason;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The line Write answer adds when its reply was cut after text was shown. */
+export const ANSWER_CUT_NOTE = 'The answer was cut at the output limit.';
+
+/** What puts `ANSWER_CUT_NOTE` after a blank line, the shown text kept as it is. */
+function cutNoteGap(shown: string): string {
+  if (shown.endsWith('\n\n')) return '';
+  return shown.endsWith('\n') ? '\n' : '\n\n';
+}
+
 /**
  * The Write answer step's call (agents.md 5.11): the answer read from the
  * reply (`answerOf`), its row markers expanded into tables of the queries'
@@ -169,7 +209,10 @@ function partialAnswer(partial: unknown): string {
  * Markdown streams as it is written (each new piece of the partial object's
  * `answer`, markers expanded or held back by `answerDeltas`); whatever the
  * stream did not deliver is sent once the reply is complete, so `onText`
- * always receives the whole answer exactly once and never a marker.
+ * always receives the whole answer exactly once and never a marker. The
+ * call is guarded (`guardedCall`, workflows R43) and retried only while
+ * nothing was shown; a reply cut at the output cap after text was shown
+ * keeps that text, adds `ANSWER_CUT_NOTE` and succeeds.
  */
 export async function writeAnswerWithModel(
   input: {
@@ -193,33 +236,62 @@ export async function writeAnswerWithModel(
   const deltas = answerDeltas(input.queries, options.onText);
   const request = writeAnswerRequest(input);
   try {
-    const stream = await writeAnswerAgent.stream(request, {
-      ...callOptions(options),
-      structuredOutput: {
-        schema: answerSchema,
-        jsonPromptInjection: 'inline',
-        // A reply that is no JSON object is the answer text (`answerOf`).
-        errorStrategy: 'warn',
-      },
-    });
-    if (options.onText) {
-      for await (const partial of stream.objectStream as AsyncIterable<unknown>) {
-        deltas.update(partialAnswer(partial));
+    // Retried only while nothing was shown: a retry never repeats text.
+    const guard = { label: 'Write answer', canRetry: () => !deltas.sent() };
+    return await guardedCall(options, guard, async (call) => {
+      // The try's deadline fired while the run goes on: the step has failed
+      // already (`guardedCall`), so the aborted stream's rest is not shown.
+      const expired = () => stoppedBy(call) && !stoppedBy(options);
+      const stream = await writeAnswerAgent.stream(request, {
+        ...callOptions(call),
+        structuredOutput: {
+          schema: answerSchema,
+          jsonPromptInjection: 'inline',
+          // A reply that is no JSON object is the answer text (`answerOf`).
+          errorStrategy: 'warn',
+        },
+      });
+      let headline = '';
+      if (options.onText) {
+        for await (const partial of stream.objectStream as AsyncIterable<unknown>) {
+          if (expired()) break;
+          deltas.update(partialAnswer(partial));
+          headline = partialHeadline(partial) || headline;
+        }
       }
-    }
-    let object: unknown;
-    try {
-      object = await stream.object;
-    } catch {
-      // A reply that is no JSON object is read as the answer text below.
-    }
-    const text = await stream.text;
-    // The model's own failure fails the step (agents.md 5.11).
-    if (stream.error && !stoppedBy(options)) throw stream.error;
-    const answer = answerWithRowTables(answerOf(object ?? text), input.queries);
-    deltas.finish(answer.answer);
-    await noteExchange(options, request, replyText(object, text));
-    return { answer, stopped: stoppedBy(options) };
+      let object: unknown;
+      try {
+        object = await stream.object;
+      } catch {
+        // A reply that is no JSON object is read as the answer text below.
+      }
+      const text = await stream.text;
+      // Its result is never read: the step failed with the timeout.
+      if (expired()) return { answer: answerOf(deltas.sent()), stopped: false };
+      // The model's own failure fails the step (agents.md 5.11).
+      if (stream.error && !stoppedBy(call)) throw stream.error;
+      if (!stoppedBy(call) && cutReply(await finishReasonOf(stream))) {
+        // Cut before anything was shown: tried once more, then a failure.
+        if (!deltas.sent()) throw new ReplyCutError('Write answer');
+        // Cut after text was shown: the text stays as it was shown, so the
+        // note streams too, and the note follows it after a blank line.
+        const sent = deltas.sent();
+        const answer = {
+          headline: headline || answerOf(sent).headline,
+          answer: `${sent}${cutNoteGap(sent)}${ANSWER_CUT_NOTE}`,
+        };
+        deltas.finish(answer.answer);
+        await noteExchange(call, request, replyText(object, text));
+        return { answer, stopped: false };
+      }
+      const answer = answerWithRowTables(
+        answerOf(object ?? text),
+        input.queries,
+      );
+      deltas.finish(answer.answer);
+      await noteExchange(call, request, replyText(object, text));
+      return { answer, stopped: stoppedBy(call) };
+    });
   } catch (error) {
     if (stoppedBy(options)) {
       // What was shown, markers already expanded or held back.

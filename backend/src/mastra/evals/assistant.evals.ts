@@ -114,6 +114,12 @@ export interface AssistantEvalCase {
    * not from `question` (which is then only the case's label).
    */
   input?: unknown;
+  /**
+   * `insights-analyst` workflow target (agents.md 8.1): the SQL of a query
+   * the target adds to Analyse's attempt 1 as failed by a statement timeout,
+   * so Validate fails the attempt and the case always runs a retry.
+   */
+  forceRetryWith?: string;
 }
 
 /** One tool call as the agent made it, with its parsed input and output. */
@@ -1454,6 +1460,56 @@ function parseJsonObject(text: string | undefined): unknown {
 const LLM_JUDGE_CHECK_ID = 'llm-judge';
 
 /**
+ * The judge's prompt (agents.md 8.1): the question, the rubric, the context
+ * the target says the assistant was given (only when it reports one, in a
+ * section of its own before the tool calls), the tool calls and the answer.
+ */
+export function judgePrompt(
+  evalCase: AssistantEvalCase,
+  answer: string,
+  toolCalls: EvalToolCall[],
+  question: string,
+  history: EvalHistoryMessage[],
+  context?: string,
+): string {
+  return [
+    ...(history.length
+      ? [
+          'Earlier conversation, oldest first:',
+          ...history.map((m) => `${m.role}: ${m.content}`),
+          '',
+        ]
+      : []),
+    `Question asked: ${question}`,
+    '',
+    'Rubric:',
+    evalCase.judgeRubric,
+    '',
+    ...(context
+      ? [
+          'Catalogue the assistant was given (entities and their columns):',
+          context,
+          '',
+        ]
+      : []),
+    'Tool calls the assistant made, in order:',
+    toolCalls.length
+      ? JSON.stringify(
+          toolCalls.map((call) => ({
+            name: call.name,
+            input: call.input,
+            output: call.output,
+            error: call.error,
+          })),
+        )
+      : '(none)',
+    '',
+    "Assistant's final answer to the user:",
+    answer || '(the assistant produced no answer text)',
+  ].join('\n');
+}
+
+/**
  * Score a case's tool calls + final answer against its `judgeRubric` with
  * one structured-output `generate` call on `evalJudgeAgent` (same configured
  * model the assistant runs on, via `resolveAgentModel`). Returns `undefined`
@@ -1469,38 +1525,20 @@ async function runJudgeCheck(
   question: string = evalCase.question,
   /** Earlier turns sent before the question, if any. */
   history: EvalHistoryMessage[] = [],
+  /** What the target reports the assistant was given (`judgeContext`). */
+  context?: string,
 ): Promise<EvalCheckResult | undefined> {
   if (!evalCase.judgeRubric) return undefined;
   const description = `LLM judge: ${evalCase.judgeRubric}`;
   try {
-    const prompt = [
-      ...(history.length
-        ? [
-            'Earlier conversation, oldest first:',
-            ...history.map((m) => `${m.role}: ${m.content}`),
-            '',
-          ]
-        : []),
-      `Question asked: ${question}`,
-      '',
-      'Rubric:',
-      evalCase.judgeRubric,
-      '',
-      'Tool calls the assistant made, in order:',
-      toolCalls.length
-        ? JSON.stringify(
-            toolCalls.map((call) => ({
-              name: call.name,
-              input: call.input,
-              output: call.output,
-              error: call.error,
-            })),
-          )
-        : '(none)',
-      '',
-      "Assistant's final answer to the user:",
-      answer || '(the assistant produced no answer text)',
-    ].join('\n');
+    const prompt = judgePrompt(
+      evalCase,
+      answer,
+      toolCalls,
+      question,
+      history,
+      context,
+    );
 
     const result = await evalJudgeAgent.generate(prompt, {
       maxSteps: 1,
@@ -1755,6 +1793,7 @@ export async function runAssistantEvalCase(
         : toolCalls,
       question,
       history,
+      details.judgeContext,
     );
     if (judgeCheck) checkResults.push(judgeCheck);
 

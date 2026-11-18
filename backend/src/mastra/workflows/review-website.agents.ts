@@ -14,9 +14,13 @@ import {
 import {
   imagesMessage,
   replyFailure,
+  throwIfCut,
   tunedOptions,
+  type ModelReply,
   type StepImage,
 } from './recreate-dashboard.agents';
+import { guardedCall } from './model-call';
+import { IRIS_CALL_TIMEOUT_MS, IrisTimeoutError } from './review-website.steps';
 import { irisReviewOf } from './review-website.iris';
 import { reviewTemplateRequest } from './review-website.prompts';
 import {
@@ -40,6 +44,10 @@ const NO_REVIEW: IrisReview = { findings: [], summary: '' };
  * reply is read leniently (`irisReviewOf`) against the screens and marks
  * shown. The exchange is recorded as text only. A model error rejects with
  * the model's own error. A stopped turn reads nothing and records nothing.
+ * The call is guarded (`guardedCall`, workflows R43) with Iris's one
+ * deadline: two minutes per try (`IRIS_CALL_TIMEOUT_MS`), past which it
+ * fails with `IrisTimeoutError`; one retry of a transient failure or a cut
+ * reply.
  */
 export async function reviewTemplateWithModel(
   input: {
@@ -78,32 +86,36 @@ export async function reviewTemplateWithModel(
       ]),
     ),
   };
+  const guard = {
+    label: 'Review templates',
+    deadlineMs: IRIS_CALL_TIMEOUT_MS,
+    timeoutError: () => new IrisTimeoutError(input.template.id),
+  };
   try {
-    const result = await siteReviewerAgent.generate(
-      imagesMessage(request, images),
-      {
-        ...(await tunedOptions(options, REVIEW_OUTPUT_TOKENS)),
-        structuredOutput: {
-          schema: irisReviewSchema,
-          jsonPromptInjection: 'inline',
-          // A reply off the schema is read leniently (`irisReviewOf`).
-          errorStrategy: 'warn',
+    return await guardedCall(options, guard, async (call) => {
+      const result = await siteReviewerAgent.generate(
+        imagesMessage(request, images),
+        {
+          ...(await tunedOptions(call, REVIEW_OUTPUT_TOKENS)),
+          structuredOutput: {
+            schema: irisReviewSchema,
+            jsonPromptInjection: 'inline',
+            // A reply off the schema is read leniently (`irisReviewOf`).
+            errorStrategy: 'warn',
+          },
         },
-      },
-    );
-    const reply = result as {
-      object?: unknown;
-      text?: string;
-      error?: unknown;
-    };
-    if (stoppedBy(options)) return { review: NO_REVIEW, stopped: true };
-    const failure = replyFailure(reply.error);
-    if (failure) throw failure;
-    await noteExchange(options, request, replyText(reply.object, reply.text));
-    return {
-      review: irisReviewOf(reply.object ?? reply.text, valid),
-      stopped: false,
-    };
+      );
+      const reply = result as ModelReply;
+      if (stoppedBy(call)) return { review: NO_REVIEW, stopped: true };
+      const failure = replyFailure(reply.error);
+      if (failure) throw failure;
+      throwIfCut(reply, guard.label, REVIEW_OUTPUT_TOKENS);
+      await noteExchange(call, request, replyText(reply.object, reply.text));
+      return {
+        review: irisReviewOf(reply.object ?? reply.text, valid),
+        stopped: false,
+      };
+    });
   } catch (error) {
     if (stoppedBy(options)) return { review: NO_REVIEW, stopped: true };
     throw error;

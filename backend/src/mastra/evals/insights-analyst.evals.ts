@@ -4,7 +4,10 @@ import { insightsAnalystAgent } from '../agents/insights-analyst.agent';
 import { INSIGHTS_ANALYST_TOOL_NAMES } from '../agents/insights-analyst-catalog';
 import { entityOrientationLines } from '../context-blocks';
 import type { OptionalAgentTool } from '../agent-tools';
-import { workflowTurnAgent } from './insights-analyst-workflow-target';
+import {
+  retryDoesNotRediscover,
+  workflowTurnAgent,
+} from './insights-analyst-workflow-target';
 import type {
   AssistantEvalCase,
   AssistantEvalSet,
@@ -285,6 +288,35 @@ const INSIGHTS_ANALYST_EVAL_CASES: AssistantEvalCase[] = [
       'knockout record is fine, if backed by its queries. Score pass=false ' +
       'if it states a group-stage win count as a fact, or does not say that ' +
       'the group stage is missing.',
+  },
+  {
+    id: 'v2-retry-reuses-attempt-1',
+    question: 'How many goals were scored at the 2022 World Cup?',
+    intent:
+      'Drives the retry (agents.md 5.11, 8.1): the target adds to attempt 1 a query that timed out (`forceRetryWith`), so Validate fails its "No unresolved tool error" check whatever the model wrote and a retry always runs; the retry, shown attempt 1\'s queries and the columns of each entity, runs only the queries it needs, without listing or describing the entities again.',
+    scorers: [checks.noToolErrors()],
+    customChecks: [
+      ranSuccessfulSql(),
+      answerStatesNumbers([[{ value: 24 }]]),
+      retryDoesNotRediscover(),
+    ],
+    // The goals by type, as if that breakdown had timed out.
+    forceRetryWith:
+      'SELECT goal.goal_type, COUNT(*) AS goals FROM world_cup.goals goal ' +
+      'JOIN world_cup.matches match ON match.id = goal.match_id ' +
+      'JOIN world_cup.tournaments t ON t.id = match.tournament_id ' +
+      'WHERE t.tournament_year = 2022 GROUP BY goal.goal_type ' +
+      'ORDER BY goals DESC',
+    judgeRubric:
+      'The data holds 24 goals for the 2022 World Cup. Score pass=true only ' +
+      'if the final answer gives 24 as the number of goals of the 2022 ' +
+      'World Cup in the data. It may say which part of the tournament the ' +
+      'data covers when its queries show it, and any breakdown it gives ' +
+      'must come from its queries. Score pass=false if it gives no figure ' +
+      'or another figure for the goals in the data, a breakdown no query ' +
+      'returned, or presents a query of an earlier attempt that timed out ' +
+      'as a problem with the data.' +
+      ANSWER_FORMAT,
   },
 ];
 

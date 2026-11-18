@@ -470,15 +470,43 @@ export class MastraService {
    * Check data quality, Write answer; agents.md 5.11) in its thread on the
    * host (`agentThreadId`): the request and the reply as two text messages.
    * The call itself is unchanged; the thread is created on first use.
+   * Exchanges of one thread are written one after the other, in the order
+   * they finish (Grace's image reads run together, agents.md 5.20): two
+   * first exchanges never both create the thread. A failed write rejects
+   * its own call only; the next one still goes.
    */
-  async recordAgentExchange(
+  recordAgentExchange(
     hostId: string,
     agentKey: string,
     exchange: AgentExchange,
   ): Promise<void> {
+    const threadId = agentThreadId(hostId, agentKey);
+    const previous = this.threadWrites.get(threadId) ?? Promise.resolve();
+    const write = previous.then(() =>
+      this.writeAgentExchange(hostId, agentKey, threadId, exchange),
+    );
+    const settled = write.catch(() => undefined);
+    this.threadWrites.set(threadId, settled);
+    // The queue is dropped once its last write has settled.
+    void settled.then(() => {
+      if (this.threadWrites.get(threadId) === settled) {
+        this.threadWrites.delete(threadId);
+      }
+    });
+    return write;
+  }
+
+  /** The last write queued per thread (`recordAgentExchange`). */
+  private readonly threadWrites = new Map<string, Promise<void>>();
+
+  private async writeAgentExchange(
+    hostId: string,
+    agentKey: string,
+    threadId: string,
+    exchange: AgentExchange,
+  ): Promise<void> {
     const memory = await this.getAgent('assistant').getMemory();
     if (!memory) return;
-    const threadId = agentThreadId(hostId, agentKey);
     if (!(await memory.getThreadById({ threadId }))) {
       await memory.createThread({
         threadId,

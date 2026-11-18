@@ -4,8 +4,10 @@ import type {
   AnalyseAttempt,
   AnalyseQuery,
   AnsweredClarification,
+  CheckedAttempt,
   TurnCallsOutcome,
 } from '../../../mastra/workflows/answer-business-question.steps';
+import { earlierQueriesBlock } from '../../../mastra/workflows/answer-business-question.prompts';
 import {
   AGENT_TURN_STEPS,
   AGENT_TURN_WORKFLOW_ID,
@@ -141,6 +143,26 @@ export function analyseAttemptOf(
     queries: analyseQueriesOf(data),
     text: text.trim(),
   };
+}
+
+/**
+ * The earlier-queries block of one Analyse attempt (agents.md 5.11): on a
+ * retry the earlier attempt's queries (`earlier`), then, on an attempt
+ * resumed after the agent's clarifying question, the queries it ran before
+ * it asked (`resumed`, its records so far), so it does not run them again:
+ * one block, one numbering, at most `EARLIER_BLOCK_CAP` characters.
+ * Undefined when there is neither.
+ */
+export function attemptEarlierBlock(
+  earlier: Pick<CheckedAttempt, 'queries' | 'findings'> | undefined,
+  resumed: readonly ToolDataRecord[] | undefined,
+): string | undefined {
+  const block = earlierQueriesBlock(
+    earlier?.queries ?? [],
+    earlier?.findings ?? [],
+    resumed ? analyseQueriesOf(resumed) : [],
+  );
+  return block || undefined;
 }
 
 /** A clarification option as one line: its label, then ` — ` and its description. */

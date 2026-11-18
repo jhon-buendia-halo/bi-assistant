@@ -41,6 +41,7 @@ import {
   recommendFixesWithModel,
   reviseRequirementsWithModel,
 } from './consumption-gap-analysis.agents';
+import { ModelTimeoutError, ReplyCutError } from './model-call';
 import {
   GAP_ADVISOR_INSTRUCTIONS,
   LAYER_MAPPER_INSTRUCTIONS,
@@ -534,6 +535,96 @@ describe('mapRequirementsWithModel (agents.md 2.19)', () => {
     await expect(
       mapRequirementsWithModel({ requirements, tables: TABLES }, {}),
     ).rejects.toThrow('rate limited');
+  });
+});
+
+// The guarded call (workflows R43): one retry of a reset or a cut reply, a
+// deadline per try, ten minutes for Map requirements' 16,000-token reply.
+describe('the Consumption Gap calls under the guarded call (workflows R43)', () => {
+  const requirements = [req({})];
+  const reset = () =>
+    new TypeError('fetch failed', {
+      cause: Object.assign(new Error('read ECONNRESET'), {
+        code: 'ECONNRESET',
+      }),
+    });
+  beforeEach(() => {
+    jest.useFakeTimers();
+    analyst.mockReset();
+    mapper.mockReset();
+    checkedMappings.mockReset();
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('retries a reset once, with the same request, and reports one line', async () => {
+    analyst
+      .mockRejectedValueOnce(reset())
+      .mockResolvedValueOnce({ object: DERIVED, text: '' });
+    const lines: string[] = [];
+    const pending = deriveRequirementsWithModel(
+      { questions: QUESTIONS, dashboards: [] },
+      { onRetry: (line) => lines.push(line) },
+    );
+    await jest.advanceTimersByTimeAsync(2_000);
+    const outcome = await pending;
+    expect(outcome.stopped).toBe(false);
+    expect(outcome.requirements).toHaveLength(QUESTIONS.length);
+    expect(analyst).toHaveBeenCalledTimes(2);
+    expect(analyst.mock.calls[1][0]).toBe(analyst.mock.calls[0][0]);
+    expect(lines).toEqual([
+      'Derive requirements: the model call failed (fetch failed). Trying once more in 2 seconds.',
+    ]);
+  });
+
+  it('fails with ReplyCutError naming the step and its limit when the reply is cut twice, never an empty result', async () => {
+    mapper.mockResolvedValue({
+      object: undefined,
+      text: '{"mappings": [',
+      finishReason: 'length',
+    });
+    const exchanges: AgentExchange[] = [];
+    const pending = mapRequirementsWithModel(
+      { requirements, tables: TABLES },
+      { onExchange: (exchange) => void exchanges.push(exchange) },
+    ).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(2_000);
+    const error = await pending;
+    expect(error).toBeInstanceOf(ReplyCutError);
+    expect((error as Error).message).toContain(
+      "Map requirements failed: the model's reply was cut at its output limit (16000 tokens)",
+    );
+    expect(mapper).toHaveBeenCalledTimes(2);
+    expect(checkedMappings).not.toHaveBeenCalled();
+    expect(exchanges).toEqual([]);
+  });
+
+  it('gives Map requirements ten minutes, and fails with ModelTimeoutError past them', async () => {
+    mapper.mockImplementation(() => new Promise(() => undefined));
+    const pending = mapRequirementsWithModel(
+      { requirements, tables: TABLES },
+      { abortSignal: new AbortController().signal },
+    ).catch((error: Error) => error);
+    let settledEarly = false;
+    void pending.then(() => (settledEarly = true));
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+    expect(settledEarly).toBe(false);
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+    const error = await pending;
+    expect(error).toBeInstanceOf(ModelTimeoutError);
+    expect((error as Error).message).toContain(
+      'Map requirements failed: the model did not answer within 10 minutes',
+    );
+    expect(mapper).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives Derive requirements five minutes', async () => {
+    analyst.mockImplementation(() => new Promise(() => undefined));
+    const pending = deriveRequirementsWithModel(
+      { questions: QUESTIONS, dashboards: [] },
+      {},
+    ).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+    expect(await pending).toBeInstanceOf(ModelTimeoutError);
   });
 });
 

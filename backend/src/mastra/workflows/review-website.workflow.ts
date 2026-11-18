@@ -33,6 +33,7 @@ import {
   sessionLostAnswer,
 } from './review-website.report';
 import { engineInputSchema, withContract } from './workflow-contract';
+import { runErrorMessage } from './workflow-run';
 
 // The Review a Website workflow, defined in code (agents.md 5.19), on
 // Mastra's control flow (https://mastra.ai/docs/workflows/control-flow):
@@ -282,9 +283,14 @@ const reviewTemplatesStep = createStep({
       let stopped = false;
       let next = 0;
       let done = 0;
+      // The first failure, thrown only when no template was reviewed.
+      let firstError: unknown;
       runtime.progress(
         `Iris is reviewing ${queue.length} page template${queue.length === 1 ? '' : 's'}`,
       );
+      // Each worker catches its own template's failure and goes on: a
+      // template not reviewed is recorded with why (workflows R43); only a
+      // stop ends the workers.
       const worker = async () => {
         while (!stopped && next < queue.length) {
           const template = queue[next++];
@@ -295,11 +301,28 @@ const reviewTemplatesStep = createStep({
             (finding) =>
               finding.group === template.id && finding.source === 'measured',
           );
-          const result = await runtime.reviewTemplate({
-            template,
-            shots,
-            measured,
-          });
+          let result: Awaited<ReturnType<typeof runtime.reviewTemplate>>;
+          try {
+            result = await runtime.reviewTemplate({
+              template,
+              shots,
+              measured,
+            });
+          } catch (error) {
+            firstError ??= error;
+            const reason = runErrorMessage(error);
+            reviewed.push({
+              template: template.id,
+              summary: '',
+              findingCount: 0,
+              notReviewed: reason,
+            });
+            done += 1;
+            runtime.progress(
+              `Could not review ${template.id} (${done} of ${queue.length}): ${reason}`,
+            );
+            continue;
+          }
           if (result.stopped) {
             stopped = true;
             return;
@@ -332,6 +355,16 @@ const reviewTemplatesStep = createStep({
       reviewed.sort(
         (a, b) => (order.get(a.template) ?? 0) - (order.get(b.template) ?? 0),
       );
+      // Nothing reviewed and something failed: the step fails with it.
+      if (
+        !stopped &&
+        firstError !== undefined &&
+        reviewed.every((entry) => entry.notReviewed !== undefined)
+      ) {
+        throw firstError instanceof Error
+          ? firstError
+          : new Error(runErrorMessage(firstError));
+      }
       // A stop is passed on, not bailed: a bail inside the branch would end
       // only this step, and Save report would still save.
       return {

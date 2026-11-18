@@ -55,23 +55,14 @@ const MODEL_EXITS: readonly WorkflowStepExit[] = [
   { label: 'you stop it', outcome: 'stops' },
 ];
 
-/** The steps, in catalogue order. */
+/**
+ * The steps, in catalogue order: the order they run in. Resolve layers
+ * comes first, so a dataset with no Consumption schema is refused before
+ * any model call; the lineage checks start at Load layer catalogs and run
+ * while the dashboards are read and the requirements derived, and Infer
+ * lineage takes them (agents.md 5.20).
+ */
 export const CONSUMPTION_GAP_STEPS: readonly ContractStepEntry[] = [
-  contractStepEntry(
-    {
-      id: 'read-dashboards',
-      title: 'Read dashboards',
-      kind: 'agent',
-      summary:
-        'Grace reads each reference image as a dashboard blueprint; a saved dashboard is loaded from Artifacts without a model call. Skipped work when the run has no dashboard.',
-      exits: [
-        ...MODEL_EXITS,
-        { label: 'the saved dashboard no longer exists', outcome: 'fails' },
-      ],
-      modelOnly: true,
-    },
-    SCHEMAS['read-dashboards'],
-  ),
   contractStepEntry(
     {
       id: 'resolve-layers',
@@ -89,21 +80,25 @@ export const CONSUMPTION_GAP_STEPS: readonly ContractStepEntry[] = [
       title: 'Load layer catalogs',
       kind: 'code',
       summary:
-        'Lists the entities of every tagged schema and their columns. No row is read. No LLM.',
+        'Lists the entities of every tagged schema and their columns, and starts the lineage checks, which run while the next steps do. No row is read. No LLM.',
       exits: [],
     },
     SCHEMAS['load-layer-catalogs'],
   ),
   contractStepEntry(
     {
-      id: 'infer-lineage',
-      title: 'Infer lineage',
-      kind: 'code',
+      id: 'read-dashboards',
+      title: 'Read dashboards',
+      kind: 'agent',
       summary:
-        'Finds which columns feed which, layer to layer, without declared lineage: candidates by normalised name and type, then a read-only query per candidate that checks how many values match. No LLM.',
-      exits: [{ label: 'you stop it', outcome: 'stops' }],
+        'Grace reads every reference image as a dashboard blueprint, all at the same time; a saved dashboard is loaded from Artifacts without a model call. Skipped work when the run has no dashboard.',
+      exits: [
+        ...MODEL_EXITS,
+        { label: 'the saved dashboard no longer exists', outcome: 'fails' },
+      ],
+      modelOnly: true,
     },
-    SCHEMAS['infer-lineage'],
+    SCHEMAS['read-dashboards'],
   ),
   contractStepEntry(
     {
@@ -116,6 +111,17 @@ export const CONSUMPTION_GAP_STEPS: readonly ContractStepEntry[] = [
       modelOnly: true,
     },
     SCHEMAS['derive-requirements'],
+  ),
+  contractStepEntry(
+    {
+      id: 'infer-lineage',
+      title: 'Infer lineage',
+      kind: 'code',
+      summary:
+        'Finds which columns feed which, layer to layer, without declared lineage: candidates by normalised name and type, then a read-only query per candidate that checks how many values match (started at Load layer catalogs). No LLM.',
+      exits: [{ label: 'you stop it', outcome: 'stops' }],
+    },
+    SCHEMAS['infer-lineage'],
   ),
   contractStepEntry(
     {
@@ -189,12 +195,12 @@ export const CONSUMPTION_GAP_STEPS: readonly ContractStepEntry[] = [
 
 /** The edges of the workflow (api.md 117), from Start to End. */
 export const CONSUMPTION_GAP_EDGES: readonly WorkflowEdge[] = [
-  { from: 'start', to: 'read-dashboards', kind: 'next' },
-  { from: 'read-dashboards', to: 'resolve-layers', kind: 'next' },
+  { from: 'start', to: 'resolve-layers', kind: 'next' },
   { from: 'resolve-layers', to: 'load-layer-catalogs', kind: 'next' },
-  { from: 'load-layer-catalogs', to: 'infer-lineage', kind: 'next' },
-  { from: 'infer-lineage', to: 'derive-requirements', kind: 'next' },
-  { from: 'derive-requirements', to: 'confirm-requirements', kind: 'next' },
+  { from: 'load-layer-catalogs', to: 'read-dashboards', kind: 'next' },
+  { from: 'read-dashboards', to: 'derive-requirements', kind: 'next' },
+  { from: 'derive-requirements', to: 'infer-lineage', kind: 'next' },
+  { from: 'infer-lineage', to: 'confirm-requirements', kind: 'next' },
   { from: 'confirm-requirements', to: 'map-requirements', kind: 'next' },
   { from: 'map-requirements', to: 'trace-gaps', kind: 'next' },
   { from: 'trace-gaps', to: 'probe-evidence', kind: 'next' },
@@ -227,15 +233,23 @@ export interface GapQueryResult {
  * modules/sessions/turn/turn-engine.ts). A step throws when it is missing.
  */
 export interface ConsumptionGapRuntime {
-  /** Read dashboards: Grace over one stored image (agents.md 2.13). */
+  /**
+   * Read dashboards: Grace over one stored image (agents.md 2.13). The
+   * step reads every image at the same time; `signal` ends this read when
+   * another one failed.
+   */
   readDashboard(input: {
     image: string;
+    signal?: AbortSignal;
   }): Promise<{ blueprint: DashboardBlueprint; stopped: boolean }>;
   /** Read dashboards: a saved dashboard; throws when it is gone. */
   loadDashboard(input: {
     artifact: string;
   }): Promise<{ name: string; blueprint: DashboardBlueprint }>;
-  /** Resolve layers: the run's datasets' schema notes and entities. */
+  /**
+   * Resolve layers and Load layer catalogs: the run's datasets' schema
+   * notes and entities, fetched once per run (both steps ask).
+   */
   datasetLayers(input: { datasets: string[] }): Promise<
     Array<{
       dataset: string;
@@ -249,14 +263,22 @@ export interface ConsumptionGapRuntime {
     }>
   >;
   /**
-   * Infer lineage and Probe evidence: run read-only queries one after the
-   * other, each recorded as a `run_readonly_sql` source of the answer (the
-   * query inspector). A failed query is a result with `error`, never a
-   * thrown error. Stops before the next query once the run is stopped.
+   * Probe evidence: run read-only queries, each recorded in query order as
+   * a `run_readonly_sql` source of the answer (the query inspector). A
+   * failed query is a result with `error`, never a thrown error. Stops
+   * before the next query once the run is stopped.
    */
   runQueries(input: {
     queries: GapQuery[];
   }): Promise<{ results: GapQueryResult[]; stopped: boolean }>;
+  /**
+   * Load layer catalogs: start the lineage checks as `runQueries` runs
+   * them, while the next steps run. Their sources reach the answer, in
+   * query order, when Infer lineage takes them.
+   */
+  startLineage(input: { queries: GapQuery[] }): void;
+  /** Infer lineage: the checks started at Load layer catalogs; rethrows. */
+  takeLineage(): Promise<{ results: GapQueryResult[]; stopped: boolean }>;
   /** Derive requirements: the Requirements Analyst over the questions. */
   deriveRequirements(input: {
     questions: string[];

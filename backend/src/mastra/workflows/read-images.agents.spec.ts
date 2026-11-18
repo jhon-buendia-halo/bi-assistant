@@ -19,6 +19,7 @@ jest.mock('../agents/answer-writer.agent', () => ({ answerWriterAgent: {} }));
 jest.mock('../agents/data-readiness.agent', () => ({}));
 
 import type { AgentExchange } from '../agent-threads';
+import { ModelTimeoutError, ReplyCutError } from './model-call';
 import { readImagesWithModel } from './read-images.agents';
 import { readImagesRequest } from './read-images.prompts';
 import { imageDescriptionsSchema } from './read-images.schemas';
@@ -180,5 +181,64 @@ describe('readImagesWithModel (agents.md 2.15)', () => {
       readImagesWithModel({ question: 'Why?', images: [] }, {}),
     ).resolves.toEqual({ imageNotes: '', imageCount: 0, stopped: false });
     expect(generate).not.toHaveBeenCalled();
+  });
+});
+
+// The guarded call (workflows R35, R43): a cut reply is not an off-shape
+// reply read leniently; it is tried once more, then fails the step.
+describe('readImagesWithModel under the guarded call (workflows R43)', () => {
+  const INPUT = { question: 'Why?', images: [PNG, JPEG] };
+  beforeEach(() => {
+    jest.useFakeTimers();
+    generate.mockReset();
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('retries once after a reset, with the same request, and reports one line', async () => {
+    generate
+      .mockRejectedValueOnce(
+        new TypeError('fetch failed', {
+          cause: Object.assign(new Error('socket'), { code: 'UND_ERR_SOCKET' }),
+        }),
+      )
+      .mockResolvedValueOnce({ object: DESCRIBED, text: '' });
+    const lines: string[] = [];
+    const pending = readImagesWithModel(INPUT, {
+      onRetry: (line) => lines.push(line),
+    });
+    await jest.advanceTimersByTimeAsync(2_000);
+    expect((await pending).imageCount).toBe(2);
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[1][0]).toEqual(generate.mock.calls[0][0]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^Read images: the model call failed/);
+  });
+
+  it('fails with ReplyCutError when the reply is cut twice, never empty notes', async () => {
+    generate.mockResolvedValue({
+      object: undefined,
+      text: '{"images": [',
+      finishReason: 'length',
+    });
+    const pending = readImagesWithModel(INPUT, {}).catch(
+      (error: Error) => error,
+    );
+    await jest.advanceTimersByTimeAsync(2_000);
+    const error = await pending;
+    expect(error).toBeInstanceOf(ReplyCutError);
+    expect((error as Error).message).toContain(
+      "Read images failed: the model's reply was cut at its output limit (4000 tokens)",
+    );
+    expect(generate).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails with ModelTimeoutError past five minutes', async () => {
+    generate.mockImplementation(() => new Promise(() => undefined));
+    const pending = readImagesWithModel(INPUT, {
+      abortSignal: new AbortController().signal,
+    }).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+    expect(await pending).toBeInstanceOf(ModelTimeoutError);
+    expect(generate).toHaveBeenCalledTimes(1);
   });
 });

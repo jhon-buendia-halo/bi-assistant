@@ -27,6 +27,7 @@ import {
   ASSISTANT_EVAL_SETS,
   cleanupEvalHost,
   createEvalHost,
+  judgePrompt,
   runAssistantEvalCase,
 } from './assistant.evals';
 import type { SessionsService } from '../../modules/sessions/sessions.service';
@@ -223,5 +224,57 @@ describe('createEvalHost (agents.md 8.3)', () => {
       id: 'run-eval-1',
     });
     expect(sessions.deleteRunHostResources).toHaveBeenCalledWith('run-eval-1');
+  });
+});
+
+describe('judgePrompt (agents.md 8.1, 8.2)', () => {
+  const judged: AssistantEvalCase = {
+    ...evalCase,
+    judgeRubric: 'RUBRIC',
+  };
+  const calls = [{ name: 'run_readonly_sql', input: 'SELECT 1', output: '1' }];
+
+  it('keeps the prompt as it was for a target that reports no context', () => {
+    expect(judgePrompt(judged, 'ANSWER', calls, 'Q?', [])).toBe(
+      [
+        'Question asked: Q?',
+        '',
+        'Rubric:',
+        'RUBRIC',
+        '',
+        'Tool calls the assistant made, in order:',
+        JSON.stringify([
+          {
+            name: 'run_readonly_sql',
+            input: 'SELECT 1',
+            output: '1',
+            error: undefined,
+          },
+        ]),
+        '',
+        "Assistant's final answer to the user:",
+        'ANSWER',
+      ].join('\n'),
+    );
+  });
+
+  it('puts the reported context in a section of its own before the tool calls', () => {
+    const prompt = judgePrompt(
+      judged,
+      'ANSWER',
+      calls,
+      'Q?',
+      [],
+      'matches: home_penalties, away_penalties',
+    );
+    const heading =
+      'Catalogue the assistant was given (entities and their columns):';
+    expect(prompt).toContain(
+      `${heading}\nmatches: home_penalties, away_penalties\n`,
+    );
+    expect(prompt.indexOf(heading)).toBeGreaterThan(prompt.indexOf('RUBRIC'));
+    expect(prompt.indexOf(heading)).toBeLessThan(
+      prompt.indexOf('Tool calls the assistant made, in order:'),
+    );
   });
 });

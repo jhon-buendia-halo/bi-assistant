@@ -74,6 +74,29 @@ describe('insights-analyst-edge checks (story 1.29.6)', () => {
     ).toBeDefined();
   });
 
+  // Two real answers of 2026-11-17 the check failed although they keep the
+  // tie: "tied for first place" names no order among the five.
+  it('answerKeepsTie takes "tied for first place" as the tie, not as an order', async () => {
+    for (const answer of [
+      'Products 1, 2, 3, 4 and 5 are tied for the top 5 by revenue, at 50,000,000.00 each. They are tied for first place, with identical line counts, units and revenue.',
+      'The five products are tied for first place, so no one of them ranks above another. The cut-off at fifth place is therefore clear.',
+      'All five share first place at 50,000,000.00.',
+      'Exactly five products came back, all in first place.',
+      'The five are tied for 1st.',
+    ]) {
+      expect(await run(answerKeepsTie(), answer)).toBeUndefined();
+    }
+    for (const answer of [
+      'The five tie on revenue. Product 1 is in first place and Product 2 in second place.',
+      'The five tie on revenue; Product 5 is in first place.',
+      'They are tied for first place, and Product 2 is the runner-up.',
+    ]) {
+      expect(await run(answerKeepsTie(), answer)).toBe(
+        'the answer ranks tied products in a strict order',
+      );
+    }
+  });
+
   it('answerSaysNoRows refuses an invented table', async () => {
     expect(
       await run(
@@ -140,6 +163,22 @@ describe('insights-analyst-edge checks (story 1.29.6)', () => {
       ),
     ).toBeUndefined();
     expect(avg([{ avg: 25.18 }], ctx('The average is NaN.'))).toBeDefined();
+    // A real answer of 2026-11-17 the check failed: its table names what it
+    // left out ("Excluded: NaN ..."), which is no reported value.
+    expect(
+      avg(
+        [{ avg: 25.17 }],
+        ctx(
+          '**The average product weight is about 25.17 kg.**\n' +
+            '| Measure | Value |\n|---|---|\n' +
+            '| Excluded: NaN (not-a-number) weights | 5 |\n' +
+            '| Excluded: infinite weights | 1 |',
+        ),
+      ),
+    ).toBeUndefined();
+    expect(
+      avg([{ avg: 25.17 }], ctx('Excluding nothing, the average is NaN.')),
+    ).toBeDefined();
   });
 });
 

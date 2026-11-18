@@ -119,7 +119,12 @@ import {
 import { ANALYSE_VISUAL_LINE } from '../../mastra/workflows/answer-business-question.prompts';
 import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
 import { askAgentWorkflow } from '../../mastra/workflows/ask-agent.workflow';
-import { DATA_READINESS_ASSESSMENT_STEPS } from '../../mastra/workflows/data-readiness-assessment.steps';
+import {
+  DATA_READINESS_ASSESSMENT_STEPS,
+  explainReportBlock,
+} from '../../mastra/workflows/data-readiness-assessment.steps';
+import { readinessModelOutput } from '../../mastra/tools/readiness.tools';
+import { readinessSummary } from './readiness-bridge';
 import { dataReadinessAssessmentWorkflow } from '../../mastra/workflows/data-readiness-assessment.workflow';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
 import type { ReadinessReport } from '../data-readiness/engine/types';
@@ -1456,14 +1461,14 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
 
     expect(run.status).toBe('success');
     expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
-      // No reference images (workflows R35).
-      'read-images:skipped',
       'resolve-dataset:success',
       'profile-source:success',
       'score-readiness:success',
+      // No reference images (workflows R35).
+      'read-images:skipped',
       'save-report:success',
-      'finding-rows:success',
       'explain-report:success',
+      'finding-rows:success',
       'wrap-up:success',
     ]);
     // One assessment of the run's dataset, recorded with the run; the
@@ -1484,6 +1489,18 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
     ]);
     expect(call.options.context.at(-1)?.content).toContain(
       'stored readiness report r-wc',
+    );
+    // The block carries the stored report's summary, as get_readiness_report
+    // hands it to the model (data-readiness R4): no call needed to read it.
+    expect(call.options.context.at(-1)?.content).toBe(
+      explainReportBlock({
+        dataset: 'World Cup',
+        reportId: 'r-wc',
+        summary: readinessModelOutput({
+          report: READINESS_REPORT,
+          summary: readinessSummary(READINESS_REPORT),
+        }),
+      }),
     );
     expect(
       call.options.requestContext.values.get('readiness-assessed-report'),
@@ -1611,6 +1628,119 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       call.options.context.some((block) => block.content.includes('SELECT')),
     ).toBe(false);
     expect(run.answer?.content).toBe('World Cup is Managed (84).');
+  });
+
+  // agents.md 5.13: the rows behind findings run while the agent explains
+  // the report; their sources still come first, in their own order.
+  it("keeps the finding rows the answer's first sources, and the Q refs in that order, when the agent ran a query during Explain report", async () => {
+    const readiness = readinessService();
+    readiness.scoreProfile.mockReturnValue({
+      ...READINESS_REPORT,
+      findings: [
+        ...READINESS_REPORT.findings,
+        {
+          dimension: 'uniqueness',
+          level: 'entity',
+          namespace: 'public',
+          entity: 'matches',
+          field: 'match_id',
+          severity: 'high',
+          measured: '2 duplicate row(s)',
+          description: 'The primary key (match_id) has 2 duplicate row(s).',
+          recommendation: 'De-duplicate.',
+        },
+      ],
+    });
+    // The finding queries end only once the agent has answered.
+    let explained!: () => void;
+    const agentDone = new Promise<void>((done) => (explained = done));
+    const runReadOnlySql = jest.fn(async (_id: string, sql: string) => {
+      await agentDone;
+      return {
+        columns: sql.includes('IS NULL')
+          ? ['winner', 'matching_rows']
+          : ['match_id', 'occurrences'],
+        rows: sql.includes('IS NULL')
+          ? [{ winner: null, matching_rows: 1 }]
+          : [{ match_id: 7, occurrences: 2 }],
+        totalRows: 1,
+      };
+    });
+    const AGENT_SQL = 'SELECT winner FROM matches';
+    const chunks = [
+      ...EXPLAIN_CHUNKS.slice(0, 2),
+      {
+        type: 'tool-call',
+        payload: {
+          toolCallId: 'q0',
+          toolName: 'run_readonly_sql',
+          args: { sql: AGENT_SQL, rationale: 'Who won.' },
+        },
+      },
+      {
+        type: 'tool-result',
+        payload: {
+          toolCallId: 'q0',
+          toolName: 'run_readonly_sql',
+          result: { columns: ['winner'], rows: [{ winner: 'Brazil' }] },
+        },
+      },
+      EXPLAIN_CHUNKS[2],
+    ];
+    const ctx = build({ chunks, readiness, runReadOnlySql });
+    const events: RunStreamEvent[] = [];
+    await ctx.sessions.onModuleInit();
+    const prepared = await ctx.runs.prepare(READINESS_WORKFLOW.id, {
+      input: { dataset: 'World Cup' },
+    });
+    const running = ctx.runs.stream(prepared, (e) => {
+      events.push(e);
+      if (e.type === 'text') explained();
+    });
+    const run = await running;
+
+    expect(run.status).toBe('success');
+    const sources = (run.answer?.data ?? []).map((record) => record.input);
+    expect(sources).toHaveLength(3);
+    expect(sources.at(-1)).toBe(AGENT_SQL);
+    expect(sources.slice(0, 2).every((sql) => sql !== AGENT_SQL)).toBe(true);
+    // The queries `explore_result` pages are numbered in that same order.
+    const [call] = ctx.calls['data-readiness'];
+    const explorable = call.options.requestContext.values.get(
+      'explorable-queries',
+    ) as { ref: string; sql: string }[];
+    expect(explorable.map((query) => query.ref)).toEqual(['Q1', 'Q2', 'Q3']);
+    expect(explorable.map((query) => query.sql)).toEqual(sources);
+  });
+
+  it('fails at Read images before Save report stores anything when Zoe fails', async () => {
+    const readiness = readinessService();
+    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
+    jest.mocked(writeWorkspaceFile).mockResolvedValue(undefined);
+    jest.mocked(readWorkspaceImage).mockResolvedValue({
+      path: 'inputs/images/1.png',
+      data: PNG_BYTES,
+      mediaType: 'image/png',
+    });
+    ctx.mastra.readImages.mockRejectedValue(
+      new Error('The Image Reader returned an error'),
+    );
+    try {
+      const { run } = await readinessRun(ctx, {
+        dataset: 'World Cup',
+        images: [PNG_URL],
+      });
+      expect(run.status).toBe('failed');
+      expect(run.error).toContain('The Image Reader returned an error');
+      expect(run.steps.find((step) => step.id === 'read-images')?.status).toBe(
+        'failed',
+      );
+      expect(readiness.saveReport).not.toHaveBeenCalled();
+      expect(ctx.calls['data-readiness'] ?? []).toEqual([]);
+    } finally {
+      jest.mocked(writeWorkspaceFile).mockReset();
+      jest.mocked(readWorkspaceImage).mockReset();
+    }
   });
 
   // The no-progress watchdog (workflows spec), scaled down: a profile
@@ -1778,10 +1908,9 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
     });
     expect(plain.run.status).toBe('success');
     expect(noted.run.status).toBe('success');
-    expect(noted.run.steps[0]).toMatchObject({
-      id: 'read-images',
-      status: 'success',
-    });
+    expect(
+      noted.run.steps.find((step) => step.id === 'read-images'),
+    ).toMatchObject({ id: 'read-images', status: 'success' });
     const [before, after] = ctx.calls['data-readiness'].map((call) =>
       call.options.context.map((block) => block.content),
     );
@@ -1794,6 +1923,65 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
     expect(ctx.mastra.readImages).toHaveBeenCalledTimes(1);
     jest.mocked(writeWorkspaceFile).mockReset();
     jest.mocked(readWorkspaceImage).mockReset();
+  });
+
+  // agents.md 5.13: Rows behind findings waits for queries Save report
+  // started; each one done while it waits is a progress line, so a slow
+  // warehouse never trips the run's no-progress watchdog (15 minutes).
+  it('reports each finding query done while Rows behind findings waits, so a slow warehouse never ends the run as stalled', async () => {
+    jest.useFakeTimers({
+      doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
+    });
+    try {
+      const readiness = readinessService();
+      const fields = Array.from({ length: 20 }, (_v, at) => `field_${at}`);
+      readiness.scoreProfile.mockReturnValue({
+        ...READINESS_REPORT,
+        findings: fields.map((field) => ({
+          ...READINESS_REPORT.findings[0],
+          field,
+          severity: 'high' as const,
+          description: `${field} is null`,
+        })),
+      });
+      // Each statement takes four minutes; four run at a time, so the
+      // twenty take twenty minutes in all.
+      const runReadOnlySql = jest.fn(
+        () =>
+          new Promise((done) =>
+            setTimeout(
+              () =>
+                done({
+                  columns: ['matching_rows'],
+                  rows: [{ matching_rows: 1 }],
+                  totalRows: 1,
+                }),
+              4 * 60_000,
+            ),
+          ),
+      );
+      const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness, runReadOnlySql });
+      const ran = readinessRun(ctx, { dataset: 'World Cup' });
+      for (let minute = 0; minute < 24; minute++) {
+        await jest.advanceTimersByTimeAsync(60_000);
+      }
+      const { events, run } = await ran;
+      expect(run.status).toBe('success');
+      expect(runReadOnlySql).toHaveBeenCalledTimes(20);
+      const lines = events
+        .filter((e) => e.type === 'reasoning')
+        .map((e) => (e as { content: string }).content);
+      expect(lines).toContain('Read the rows behind 4 findings\n');
+      expect(lines.at(-1)).toBe('Read the rows behind 20 findings\n');
+      // The sources are the answer's first records, in query order.
+      expect(
+        run.answer?.data?.slice(0, 20).map((record) => record.rationale),
+      ).toEqual(
+        fields.map((field) => expect.stringContaining(field) as unknown),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
