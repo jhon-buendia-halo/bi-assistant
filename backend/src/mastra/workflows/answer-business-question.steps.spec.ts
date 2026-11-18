@@ -1616,8 +1616,35 @@ describe('the carry-forward retry of the analysis (agents.md 5.11; workflows R27
       expect(huge.length).toBeLessThanOrEqual(EARLIER_BLOCK_CAP);
     });
 
+    it("lists a resumed attempt's own queries after the earlier attempt's, under one header, one numbering and one cap", () => {
+      const own = query({ sql: 'SELECT 42 AS own', rows: [], rowCount: 0 });
+      const lines = earlierQueriesBlock(FIRST_QUERIES, firstFindings(), [
+        own,
+      ]).split('\n');
+      expect(
+        lines.filter((line) => line === EARLIER_BLOCK_HEADER),
+      ).toHaveLength(1);
+      expect(lines.map((line) => line.split('.')[0])).toEqual([
+        EARLIER_BLOCK_HEADER.split('.')[0],
+        '2',
+        '1',
+        '3',
+      ]);
+      // The resumed attempt's queries are never flagged by attempt 1's checks.
+      expect(lines[3]).not.toContain('[flagged');
+      const wide = Array.from({ length: 5 }, () => ({ note: 'x'.repeat(400) }));
+      const many = (from: number) =>
+        Array.from({ length: 12 }, (_, n) =>
+          query({ sql: `SELECT ${from + n} AS n`, rows: wide, rowCount: 5 }),
+        );
+      const capped = earlierQueriesBlock(many(0), [], many(100));
+      expect(capped.length).toBeLessThanOrEqual(EARLIER_BLOCK_CAP);
+      expect(earlierQueriesBlock([], [], [own])).toContain('1. ');
+    });
+
     it('is empty with no earlier query', () => {
       expect(earlierQueriesBlock([], firstFindings())).toBe('');
+      expect(earlierQueriesBlock([], firstFindings(), [])).toBe('');
     });
   });
 
@@ -1663,6 +1690,40 @@ describe('the carry-forward retry of the analysis (agents.md 5.11; workflows R27
       // The calls follow the queries: attempt 2's, then the kept SQL call.
       expect(merged.calls).toEqual([sql(), sql()]);
       expect(merged.findings.every((f) => f.passed)).toBe(true);
+    });
+
+    it("checks the merged set in the order it ran: attempt 1's kept queries never resolve a problem attempt 2 left", () => {
+      // The retry takes a sample again; attempt 1's whole count ran before
+      // it, so it reads no whole data after the sample.
+      const again = sampled({
+        sql: "SELECT player, minute FROM world_cup.goals WHERE player <> '' LIMIT 2",
+      });
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: first(),
+        second: { calls: [sql()], queries: [again] },
+      });
+      expect(merged.ok).toBe(false);
+      expect(
+        merged.findings.find((f) => f.check === VALIDATION_CHECKS.sample)
+          ?.passed,
+      ).toBe(false);
+      // Write answer still reads attempt 2's queries first.
+      expect(merged.queries).toEqual([again, query()]);
+      // The same for a retry query cut at its row limit, and for a failed
+      // retry call that only attempt 1's earlier calls follow.
+      const cut = mergeAttempts({
+        plan: PLAN,
+        first: first(),
+        second: {
+          calls: [sql(), sql(true)],
+          queries: [
+            query({ truncated: true }),
+            query({ error: 'boom', rows: [], rowCount: 0 }),
+          ],
+        },
+      });
+      expect(cut.ok).toBe(false);
     });
 
     it("drops attempt 1's failed queries from the merged set", () => {

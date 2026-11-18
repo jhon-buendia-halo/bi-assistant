@@ -488,6 +488,12 @@ export interface AnswerBusinessQuestionRuntime {
     planBlock: string;
     /** On a retry: the earlier attempt's queries (`earlierQueriesBlock`). */
     earlierBlock?: string;
+    /**
+     * On a retry: the earlier attempt's queries and findings the block was
+     * built from, so an attempt resumed after the agent's question rebuilds
+     * one block with its own queries after them.
+     */
+    earlier?: Pick<CheckedAttempt, 'queries' | 'findings'>;
     answered?: AnsweredClarification;
     /** Read images' notes (agents.md 2.15); absent or `''` without images. */
     imageNotes?: string;
@@ -1123,7 +1129,10 @@ export interface MergedAttempts {
  * attempt 2's queries first, then attempt 1's that ran and that no failed
  * check flagged (`flaggedQueries`), so Write answer's cut drops attempt 1's
  * first; the calls follow (attempt 2's, then the kept queries' SQL calls:
- * a data record's call and its query come in the same order). Attempt 1
+ * a data record's call and its query come in the same order). The merged
+ * set is checked in the order it ran (attempt 1's kept queries, then
+ * attempt 2's), so a query attempt 1 ran never resolves a sample, a cut or
+ * a failed call attempt 2 left. Attempt 1
  * alone is kept (`first`) when attempt 2 ended on a model error (with the
  * warning-only `Retry completed` check), ran nothing successfully, or the
  * merged set fails a check attempt 1 passed: a retry never scores below
@@ -1165,7 +1174,17 @@ export function mergeAttempts(input: {
     ...second.queries,
     ...first.queries.filter((_query, index) => keeps[index]),
   ];
-  const checked = validateAttempt({ plan, calls, queries });
+  // Validate's "resolved by a later query" rules read the order the queries
+  // ran: attempt 1's kept ones, then attempt 2's. The display order above
+  // is for Write answer only, so an earlier query never resolves a later one.
+  const checked = validateAttempt({
+    plan,
+    calls: [...firstCalls, ...second.calls],
+    queries: [
+      ...first.queries.filter((_query, index) => keeps[index]),
+      ...second.queries,
+    ],
+  });
   const worse = first.findings.some(
     (before) =>
       before.passed &&

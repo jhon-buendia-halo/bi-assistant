@@ -4,6 +4,7 @@ import type {
   AnalyseAttempt,
   AnalyseQuery,
   AnsweredClarification,
+  CheckedAttempt,
   TurnCallsOutcome,
 } from '../../../mastra/workflows/answer-business-question.steps';
 import { earlierQueriesBlock } from '../../../mastra/workflows/answer-business-question.prompts';
@@ -145,21 +146,23 @@ export function analyseAttemptOf(
 }
 
 /**
- * The earlier-queries block of one Analyse attempt (agents.md 5.11): a
- * retry's own (the earlier attempt's queries, built by the workflow), then,
- * on an attempt resumed after the agent's clarifying question, the queries
- * it ran before it asked (`resumed`, its records so far), so it does not run
- * them again. Undefined when there is neither.
+ * The earlier-queries block of one Analyse attempt (agents.md 5.11): on a
+ * retry the earlier attempt's queries (`earlier`), then, on an attempt
+ * resumed after the agent's clarifying question, the queries it ran before
+ * it asked (`resumed`, its records so far), so it does not run them again:
+ * one block, one numbering, at most `EARLIER_BLOCK_CAP` characters.
+ * Undefined when there is neither.
  */
 export function attemptEarlierBlock(
-  earlierBlock: string | undefined,
+  earlier: Pick<CheckedAttempt, 'queries' | 'findings'> | undefined,
   resumed: readonly ToolDataRecord[] | undefined,
 ): string | undefined {
-  const own = resumed ? earlierQueriesBlock(analyseQueriesOf(resumed), []) : '';
-  const blocks = [earlierBlock, own].filter(
-    (block): block is string => !!block,
+  const block = earlierQueriesBlock(
+    earlier?.queries ?? [],
+    earlier?.findings ?? [],
+    resumed ? analyseQueriesOf(resumed) : [],
   );
-  return blocks.length ? blocks.join('\n\n') : undefined;
+  return block || undefined;
 }
 
 /** A clarification option as one line: its label, then ` — ` and its description. */

@@ -780,19 +780,19 @@ export class TurnEngine {
             catalogBlock,
             planBlock,
             earlierBlock,
+            earlier: earlierAttempt,
             attempt,
             answered,
             imageNotes,
           }) => {
             // A resumed attempt keeps the records it made before it asked,
-            // and is shown their queries, as a retry is shown the earlier
-            // attempt's (agents.md 5.11).
+            // and is shown their queries after the earlier attempt's, in
+            // one block under one cap (agents.md 5.11).
             if (answered) answers.push(answered);
             else attemptStart = data.length;
-            const earlier = attemptEarlierBlock(
-              earlierBlock,
-              answered ? data.slice(attemptStart) : undefined,
-            );
+            const earlier = answered
+              ? attemptEarlierBlock(earlierAttempt, data.slice(attemptStart))
+              : earlierBlock;
             // A retry, and an attempt after the user answered the agent,
             // run without the memory thread, so the question is not stored
             // twice; the plan block and the answered questions carry what

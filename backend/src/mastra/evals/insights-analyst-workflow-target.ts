@@ -185,6 +185,42 @@ function arrayOf(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+/**
+ * Two Analyse attempts' agent results as one (agents.md 8.1): the later
+ * attempt's own fields, with the steps, tool calls, tool results and
+ * scoring output of both, the earlier attempt's first.
+ */
+function joinAttempts(
+  earlier: Record<string, unknown>,
+  later: Record<string, unknown>,
+): Record<string, unknown> {
+  const join = (key: string) => [
+    ...arrayOf(earlier[key]),
+    ...arrayOf(later[key]),
+  ];
+  type Scoring = { output?: unknown } | undefined;
+  const earlierScoring = earlier['scoringData'] as Scoring;
+  const laterScoring = later['scoringData'] as Scoring;
+  return {
+    ...later,
+    steps: join('steps'),
+    toolCalls: join('toolCalls'),
+    toolResults: join('toolResults'),
+    ...(earlierScoring || laterScoring
+      ? {
+          scoringData: {
+            ...earlierScoring,
+            ...laterScoring,
+            output: [
+              ...arrayOf(earlierScoring?.output),
+              ...arrayOf(laterScoring?.output),
+            ],
+          },
+        }
+      : {}),
+  };
+}
+
 /** The tool names an agent result called, in order, across its steps. */
 function toolNamesOf(result: unknown): string[] {
   const steps = (result as { steps?: unknown })?.steps;
@@ -283,20 +319,10 @@ export function workflowTurnAgent(
           };
         }
         attemptTools.push(toolNamesOf(result));
-        // The scorers read the tool calls and results of every attempt.
-        analysis = analysis
-          ? {
-              ...result,
-              toolCalls: [
-                ...arrayOf(analysis['toolCalls']),
-                ...arrayOf(result['toolCalls']),
-              ],
-              toolResults: [
-                ...arrayOf(analysis['toolResults']),
-                ...arrayOf(result['toolResults']),
-              ],
-            }
-          : result;
+        // The scorers, the checks and the judge read the tool calls and
+        // results of every attempt: the runner's trace is `steps`
+        // (extractRawToolCalls), the judge's `scoringData.output`.
+        analysis = analysis ? joinAttempts(analysis, result) : result;
         // The agent's question makes the step wait (the run is suspended).
         const asked = askedInResult(result);
         return {

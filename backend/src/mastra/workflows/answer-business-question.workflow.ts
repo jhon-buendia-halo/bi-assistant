@@ -386,7 +386,12 @@ const analyseStep = createStep({
             ? { attempt: previous, findings: inputData.findings }
             : undefined,
         ),
-        ...(earlierBlock ? { earlierBlock } : {}),
+        ...(earlier && earlierBlock
+          ? {
+              earlierBlock,
+              earlier: { queries: earlier.queries, findings: earlier.findings },
+            }
+          : {}),
         ...(asked && answer ? { answered: { ...asked, answer } } : {}),
         imageNotes: inputData.imageNotes,
       });

@@ -248,6 +248,21 @@ describe('the v2 eval target runs the whole answer-business-question workflow (a
     expect(retryOptions['maxSteps']).toBe(8);
     // The scorers read the tool calls and results of both attempts.
     expect(result['toolResults'] as unknown[]).toHaveLength(2);
+    // The runner reads the trace from `steps` (extractRawToolCalls), and
+    // the judge from `scoringData`: both hold both attempts.
+    const resultSteps = result['steps'] as { toolResults: unknown[] }[];
+    expect(resultSteps).toHaveLength(2);
+    expect(resultSteps[0].toolResults).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          result: { error: 'relation "goalz" does not exist' },
+        }) as unknown,
+      }),
+    ]);
+    expect(result['scoringData']).toEqual({
+      input: 'q',
+      output: ['analyse messages', 'analyse messages'],
+    });
     expect(evalDetailsOf(result).steps?.['analyse-attempts']).toEqual([
       ['run_readonly_sql'],
       ['run_readonly_sql'],

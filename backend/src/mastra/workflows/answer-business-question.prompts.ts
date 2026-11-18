@@ -297,14 +297,22 @@ function earlierQueryLine(
  * resumed after the agent's clarifying question, the queries the attempt
  * before ran, one line each under their own number, those a failed check
  * flagged (`flaggedQueries`) first; at most `EARLIER_BLOCK_CAP` characters,
- * a last line saying how many were left out. `''` with no query.
+ * a last line saying how many were left out. `''` with no query. A resumed
+ * retry passes the queries it ran before it asked as `resumed`: they follow
+ * the earlier attempt's under the same header, numbering and cap, and no
+ * check of the earlier attempt flags them.
  */
 export function earlierQueriesBlock(
-  queries: readonly AnalyseQuery[],
+  earlier: readonly AnalyseQuery[],
   findings: readonly Finding[],
+  resumed: readonly AnalyseQuery[] = [],
 ): string {
+  const queries = [...earlier, ...resumed];
   if (!queries.length) return '';
-  const flags = flaggedQueries(queries, findings);
+  const flags = [
+    ...flaggedQueries(earlier, findings),
+    ...resumed.map(() => undefined),
+  ];
   const order = queries
     .map((_query, index) => index)
     .sort((a, b) => Number(!flags[a]) - Number(!flags[b]) || a - b);

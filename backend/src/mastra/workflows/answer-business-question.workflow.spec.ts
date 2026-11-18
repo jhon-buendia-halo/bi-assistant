@@ -979,9 +979,13 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       const second = turn.analyse.mock.calls[1][0] as unknown as {
         attempt: number;
         earlierBlock?: string;
+        earlier?: { queries: unknown[]; findings: { check: string }[] };
         catalogBlock: string;
       };
       expect(second.attempt).toBe(2);
+      // What the block was built from, so a resume rebuilds one block.
+      expect(second.earlier?.queries).toEqual(SAMPLE_ATTEMPT.queries);
+      expect(second.earlier?.findings.length).toBeGreaterThan(0);
       expect(second.catalogBlock).toContain('Columns of each entity');
       expect(second.earlierBlock).toBe(
         [
