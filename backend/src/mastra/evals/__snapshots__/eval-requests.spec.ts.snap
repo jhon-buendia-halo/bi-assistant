@@ -20,6 +20,7 @@ Use describe_entity / sample_rows / run_readonly_sql to inspect and query them."
   "requestContextKeys": [
     "datasets",
     "eval-case",
+    "eval-usage-sink",
     "turn-data-records",
     "turn-question",
   ],
@@ -45,6 +46,7 @@ Today is 2026-11-12.",
   "requestContextKeys": [
     "datasets",
     "eval-case",
+    "eval-usage-sink",
     "turn-data-records",
     "turn-question",
   ],

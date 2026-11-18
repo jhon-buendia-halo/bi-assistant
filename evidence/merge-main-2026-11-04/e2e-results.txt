@@ -1,0 +1,87 @@
+Impacted E2E, web target, on feat/BA-9-golden-dataset-evals at 3b9c107, 2026-11-04.
+Postgres: the shared compose container questions-to-insights-world-cup-postgres-1 on 55432, started with docker start (E2E_SKIP_DOCKER=1, so compose did not recreate it).
+
+Run 1: E2E_SKIP_DOCKER=1 npm run test:e2e -- --reporter=list e2e/agents.spec.ts e2e/data-readiness.spec.ts e2e/llm-custom-endpoint.spec.ts e2e/agent-hub.spec.ts e2e/session-management.spec.ts e2e/testing-data.spec.ts
+  59 passed, 1 failed: testing-data.spec.ts 'registers the Intellify RFP API'.
+  The app said: The Intellify API cannot reach its database at 127.0.0.1:55432/intellify_mercer_demo. Load the "Intellify" sample into that database first.
+  That database did not exist on this machine (a hand-loaded precondition, .claude/skills/intellify-api; the same failure as on 2026-10-15).
+
+Between the runs: an isolated CLI (node backend/dist/cli.js --no-open --port 3417 --intellify-api-port 0 --data-dir <scratchpad>) loaded the Intellify sample into intellify_mercer_demo:
+  POST /testing-data/intellify/load → "Seeded intellify on 127.0.0.1:55432 and loaded 49 entities into dataset \"Intellify\" — created the database"; the CLI was stopped by its PID.
+
+Run 2: E2E_SKIP_DOCKER=1 npx playwright test --project=web --reporter=list e2e/testing-data.spec.ts (same build)
+  3 passed.
+
+Result: 60 of 60 across the six specs.
+  agent-hub.spec.ts 12, agents.spec.ts 20, data-readiness.spec.ts 5, llm-custom-endpoint.spec.ts 10, session-management.spec.ts 10, testing-data.spec.ts 3
+Screenshots the runs rewrote under evidence/1.14.17/ and evidence/1.15.2/ were restored with git checkout.
+
+===== Run 1 output =====
+  ✓   1 [web] › e2e/agent-hub.spec.ts:106:5 › shows the built-in agents and mine in sections (2.8s)
+  ✓   2 [web] › e2e/agent-hub.spec.ts:157:5 › search narrows the agents by name or description (878ms)
+  ✓   3 [web] › e2e/agent-hub.spec.ts:173:5 › filters limit the hub to one kind of agent (1.1s)
+  ✓   4 [web] › e2e/agent-hub.spec.ts:200:5 › pinned agents come first in their own section and survive a restart (1.8s)
+  ✓   5 [web] › e2e/agent-hub.spec.ts:260:5 › flags an agent whose dataset no longer exists (831ms)
+  ✓   6 [web] › e2e/agent-hub.spec.ts:277:5 › a card opens the agent's detail view with its actions (1.1s)
+  ✓   7 [web] › e2e/agent-hub.spec.ts:303:5 › publishing a draft makes it Live (1.2s)
+  ✓   8 [web] › e2e/agent-hub.spec.ts:329:5 › deleting an agent asks first (992ms)
+  ✓   9 [web] › e2e/agent-hub.spec.ts:357:5 › skills opens the skills library and Back returns to the hub (967ms)
+  ✓  10 [web] › e2e/agent-hub.spec.ts:386:5 › the hub has no detectable accessibility violations in either theme (2.3s)
+  ✓  11 [web] › e2e/agent-hub.spec.ts:407:5 › the showcase agents are Official cards that cannot chat yet (930ms)
+  ✓  12 [web] › e2e/agent-hub.spec.ts:451:5 › a showcase agent's page shows its description and System Prompt (979ms)
+  ✓  13 [web] › e2e/agents.spec.ts:684:5 › opens an agent from the Agents list and switches between its tabs (1.5s)
+  ✓  14 [web] › e2e/agents.spec.ts:786:5 › shows the stateless, no-tool agents accurately (1.0s)
+  ✓  15 [web] › e2e/agents.spec.ts:810:5 › offers the configured datasources and starts a run from the evals tab (3.1s)
+  ✓  16 [web] › e2e/agents.spec.ts:839:5 › runs only the ticked questions (1.6s)
+  ✓  17 [web] › e2e/agents.spec.ts:871:5 › refuses to run against a datasource with no datasets (1.4s)
+  ✓  18 [web] › e2e/agents.spec.ts:888:5 › explains an incomplete eval dataset without starting a run (1.9s)
+  ✓  19 [web] › e2e/agents.spec.ts:908:5 › opens a question in the right panel with what it is scored on (1.2s)
+  ✓  20 [web] › e2e/agents.spec.ts:937:5 › separates the question suite from past executions (3.7s)
+  ✓  21 [web] › e2e/agents.spec.ts:969:5 › downloads an execution as a Markdown report (3.5s)
+  ✓  22 [web] › e2e/agents.spec.ts:1053:5 › lists every question set, the former golden set inside the World Cup sets (1.3s)
+  ✓  23 [web] › e2e/agents.spec.ts:1096:5 › runs with the judge off by default (3.4s)
+  ✓  24 [web] › e2e/agents.spec.ts:1153:5 › reports pass rate by category (5.1s)
+  ✓  25 [web] › e2e/agents.spec.ts:1244:5 › runs every question three times when Repeats is 3 (2.8s)
+  ✓  26 [web] › e2e/agents.spec.ts:1294:5 › shows dev and held-out side by side, with repeats, flaky questions and cost (2.6s)
+  ✓  27 [web] › e2e/agents.spec.ts:1396:5 › says "Not priced" for a model with no price (1.2s)
+  ✓  28 [web] › e2e/agents.spec.ts:1442:5 › shows a memory run's arm and a question's recall time (1.2s)
+  ✓  29 [web] › e2e/agents.spec.ts:1491:5 › shows which attempt of a question is running when Repeats is 3 (4.8s)
+  ✓  30 [web] › e2e/agents.spec.ts:1531:5 › downloads the report of a command-line run with Repeats 3, compared with a run of Repeats 1 (1.0s)
+  ✓  31 [web] › e2e/agents.spec.ts:1591:5 › shows a run saved before repeats and costs with its splits and nothing it did not record (1.2s)
+  ✓  32 [web] › e2e/agents.spec.ts:1664:5 › refuses repeats other than 1, 3 or 5 from the API (2.6s)
+  ✓  33 [web] › e2e/data-readiness.spec.ts:407:5 › start chat is blocked without a PostgreSQL or Databricks dataset (892ms)
+  ✓  34 [web] › e2e/data-readiness.spec.ts:430:5 › assessing a dataset from the chat shows the scorecard (1.5s)
+  ✓  35 [web] › e2e/data-readiness.spec.ts:551:5 › the scorecard shows the same numbers as the API (1.3s)
+  ✓  36 [web] › e2e/data-readiness.spec.ts:577:5 › past assessments lists and reopens earlier reports (1.7s)
+  ✓  37 [web] › e2e/data-readiness.spec.ts:628:5 › filtering findings by dimension and severity (1.3s)
+  ✓  38 [web] › e2e/llm-custom-endpoint.spec.ts:140:7 › OpenAI-compatible › configures an OpenAI-compatible endpoint by loading models, testing and saving (1.2s)
+  ✓  39 [web] › e2e/llm-custom-endpoint.spec.ts:191:7 › OpenAI-compatible › a chat turn runs on the custom endpoint (1.2s)
+  ✓  40 [web] › e2e/llm-custom-endpoint.spec.ts:218:7 › OpenAI-compatible › uses an endpoint that needs no key (1.0s)
+  ✓  41 [web] › e2e/llm-custom-endpoint.spec.ts:245:7 › OpenAI-compatible › reports an unreachable endpoint (920ms)
+  ✓  42 [web] › e2e/llm-custom-endpoint.spec.ts:256:7 › OpenAI-compatible › points at the version path when the endpoint answers 404 (926ms)
+  ✓  43 [web] › e2e/llm-custom-endpoint.spec.ts:271:7 › OpenAI-compatible › never sends another provider's key to a custom endpoint (2.3s)
+  ✓  44 [web] › e2e/llm-custom-endpoint.spec.ts:378:7 › Anthropic-compatible › configures an Anthropic-compatible endpoint by loading models, testing and saving, then chats on it (5.6s)
+  ✓  45 [web] › e2e/llm-custom-endpoint.spec.ts:449:7 › Anthropic-compatible › sends no x-api-key to an endpoint that needs no key (1.1s)
+  ✓  46 [web] › e2e/llm-custom-endpoint.spec.ts:471:7 › Anthropic-compatible › removes trailing slashes and accepts /v1 (949ms)
+  ✓  47 [web] › e2e/llm-custom-endpoint.spec.ts:483:7 › Anthropic-compatible › reports a rejected key (998ms)
+  ✓  48 [web] › e2e/session-management.spec.ts:85:5 › create stays disabled until the session has a name and a dataset (1.0s)
+  ✓  49 [web] › e2e/session-management.spec.ts:104:5 › shows guidance when there are no datasets (886ms)
+  ✓  50 [web] › e2e/session-management.spec.ts:113:5 › a new session opens on its welcome block (1.1s)
+  ✓  51 [web] › e2e/session-management.spec.ts:150:5 › I start an RFP Builder session from New conversation (1.2s)
+  ✓  52 [web] › e2e/session-management.spec.ts:207:5 › the Agent field disables an agent that cannot start (943ms)
+  ✓  53 [web] › e2e/session-management.spec.ts:234:5 › deletes a session after confirmation (1.1s)
+  ✓  54 [web] › e2e/session-management.spec.ts:265:5 › cancelling the delete confirmation keeps the session (1.0s)
+  ✓  55 [web] › e2e/session-management.spec.ts:283:5 › the Sessions page finds a session by name or ID (1.1s)
+  ✓  56 [web] › e2e/session-management.spec.ts:333:5 › I copy the session id to share it (1.1s)
+  ✓  57 [web] › e2e/session-management.spec.ts:351:5 › the Agent field lists the showcase agents disabled (934ms)
+  ✓  58 [web] › e2e/testing-data.spec.ts:82:5 › lists the bundled samples and what is loaded (951ms)
+  ✓  59 [web] › e2e/testing-data.spec.ts:115:7 › loads the Intellify sample into a new database › seeds it, registers it and reports 49/49 (1.9s)
+  ✘  60 [web] › e2e/testing-data.spec.ts:168:5 › registers the Intellify RFP API (1.0m)
+  1 failed
+  59 passed (2.7m)
+
+===== Run 2 output =====
+  ✓  1 [web] › e2e/testing-data.spec.ts:82:5 › lists the bundled samples and what is loaded (1.9s)
+  ✓  2 [web] › e2e/testing-data.spec.ts:115:7 › loads the Intellify sample into a new database › seeds it, registers it and reports 49/49 (2.0s)
+  ✓  3 [web] › e2e/testing-data.spec.ts:168:5 › registers the Intellify RFP API (1.4s)
+  3 passed (5.5s)

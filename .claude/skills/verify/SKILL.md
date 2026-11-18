@@ -27,6 +27,7 @@ Its prompt, skills, tools, context blocks or model routing. Run the agent's eval
 - A judged case that is flaky on **both** builds at the same rate is not chased: list it as known-flaky, with both pass rates, in the changelog entry and the PR. If the user wants it fixed, that's a separate story.
 - Stop a round as soon as a run fails a code check; there is no point finishing it.
 - After stopping a looping eval script, list leftover `run-assistant-evals` node processes and kill them by PID.
+- **One exception, for the BA-9 epic PR (#81) only**, decided by the user on 2026-10-26: the three loop sets run on `main` and on the branch on the beta's Claude model, and the PR passes when `eval:diff` flags no category `down` in either split and every `out-of-scope` and `non-existent` question passes 3 of 3 (*Dependencies, risks and open questions* in [specs/epics/BA-9/spec.md](../../../specs/epics/BA-9/spec.md)).
 
 ## Check the running web app
 

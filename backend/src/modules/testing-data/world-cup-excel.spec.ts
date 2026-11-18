@@ -9,7 +9,17 @@ jest.mock('../datasources/connectors/rest.connector', () => ({
   RestConnector: class {},
 }));
 // The eval sets are built at import; their scorers and agents never run here.
-jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
+jest.mock('@mastra/core/evals', () => ({
+  runEvals: jest.fn(),
+  // The set files' deterministic checks are wrapped with it at import.
+  createScorer: (config: Record<string, unknown>) => {
+    const scorer: Record<string, unknown> = { ...config };
+    for (const step of ['analyze', 'generateScore', 'generateReason']) {
+      scorer[step] = () => scorer;
+    }
+    return scorer;
+  },
+}));
 jest.mock('@mastra/evals/checks', () => ({
   checks: new Proxy({}, { get: () => () => ({ id: 'stub-check' }) }),
 }));
@@ -56,6 +66,8 @@ import { DatasetsService } from '../datasets/datasets.service';
 import { RestConnector } from '../datasources/connectors/rest.connector';
 import { Test } from '@nestjs/testing';
 import { TestingDataService } from './testing-data.service';
+import { OntologyService } from '../ontology/ontology.service';
+import { MetricsService } from '../metrics/metrics.service';
 import { findFixture } from './fixtures/registry';
 
 let dataDir: string;
@@ -117,6 +129,9 @@ beforeEach(async () => {
       { provide: RestConnector, useValue: {} },
       { provide: FILE_UPLOAD_MAX_BYTES, useValue: 200 * 1024 * 1024 },
       { provide: DatasetsService, useValue: fakeDatasets },
+      // The Excel sample carries no knowledge seed, so neither is called.
+      { provide: OntologyService, useValue: {} },
+      { provide: MetricsService, useValue: {} },
     ],
   }).compile();
   datasources = moduleRef.get(DatasourcesService);

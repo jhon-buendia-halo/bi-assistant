@@ -369,7 +369,8 @@ export class SessionsService implements OnModuleInit {
         );
         return options?.signal ? raceAbort(sample, options.signal) : sample;
       },
-      // The statement and its repair get the tool call's stop (agents.md 3.4).
+      // The statement and its repair get the tool call's stop (agents.md 3.4)
+      // and, inside an eval attempt, its usage sink (R219).
       runReadOnlySql: (datasourceId, sql, limit, datasets, options) =>
         options
           ? this.sqlChecks.runSqlWithRepair(
@@ -398,6 +399,7 @@ export class SessionsService implements OnModuleInit {
         sourceMessageAt,
         instruction,
         turnRecords,
+        usageSink,
       ) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.create(
@@ -405,17 +407,25 @@ export class SessionsService implements OnModuleInit {
           sourceMessageAt,
           instruction,
           turnRecords,
+          usageSink,
         );
         await this.saveVisualMetadata(session, metadata);
         return this.toolResult(metadata);
       },
-      updateVisual: async (sessionId, visualId, instruction, turnRecords) => {
+      updateVisual: async (
+        sessionId,
+        visualId,
+        instruction,
+        turnRecords,
+        usageSink,
+      ) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.update(
           session,
           visualId,
           instruction,
           turnRecords,
+          usageSink,
         );
         await this.saveVisualMetadata(session, metadata);
         return this.toolResult(metadata);

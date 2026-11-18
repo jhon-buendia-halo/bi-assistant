@@ -1,0 +1,53 @@
+# Row counts through each registered plain REST datasource vs the dump (_meta.json, which equals PostgreSQL at dump time)
+
+Finance REST API: 17 of 17 endpoints read whole
+  ✓ regions                       4 of 4
+  ✓ branches                      8 of 8
+  ✓ customers                    90 of 90
+  ✓ account_types                 5 of 5
+  ✓ accounts                    200 of 200
+  ✓ cards                       150 of 150
+  ✓ fx_rates                     48 of 48
+  ✓ transactions               5400 of 5400
+  ✓ loans                       110 of 110
+  ✓ loan_payments              1538 of 1538
+  ✓ fiscal_periods               36 of 36
+  ✓ securities                   28 of 28
+  ✓ portfolios                   46 of 46
+  ✓ holdings                   2165 of 2165
+  ✓ fees                       1536 of 1536
+  ✓ v_accounts                  200 of 200
+  ✓ v_transactions             5400 of 5400
+
+Marketing Analytics REST API: 14 of 14 endpoints read whole
+  ✓ regions                       4 of 4
+  ✓ states                       12 of 12
+  ✓ carriers                      6 of 6
+  ✓ lines_of_business             5 of 5
+  ✓ products                     24 of 24
+  ✓ channels                      4 of 4
+  ✓ periods                       9 of 9
+  ✓ policy_sales              10822 of 10822
+  ✓ revenue_by_period           191 of 191
+  ✓ campaigns                    26 of 26
+  ✓ campaign_results             51 of 51
+  ✓ market_benchmarks           955 of 955
+  ✓ competitor_masks             30 of 30
+  ✓ analyst_access               12 of 12
+
+World Cup REST API: 14 of 14 endpoints read whole
+  ✓ confederations                5 of 5
+  ✓ countries                    13 of 13
+  ✓ teams                        12 of 12
+  ✓ tournaments                   2 of 2
+  ✓ tournament_teams             16 of 16
+  ✓ venues                        9 of 9
+  ✓ players                      50 of 50
+  ✓ squad_members                79 of 79
+  ✓ matches                      16 of 16
+  ✓ match_team_statistics        32 of 32
+  ✓ goals                        47 of 47
+  ✓ disciplinary_events           8 of 8
+  ✓ v_match_results              16 of 16
+  ✓ v_player_goal_totals         36 of 36
+

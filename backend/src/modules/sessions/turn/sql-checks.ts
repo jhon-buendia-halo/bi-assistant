@@ -10,6 +10,9 @@ import type {
 import { sqlFixOutputSchema } from '../../../mastra/agents/sql-fixer.agent';
 import { sqlVerifyOutputSchema } from '../../../mastra/agents/sql-verifier.agent';
 import { schemaSnapshotBlock } from '../../../mastra/context-blocks';
+import { modelIdOf } from '../../../mastra/model-compat';
+import { resolveAgentModelConfig } from '../../../mastra/model-resolver';
+import type { UsageSink } from '../../../mastra/usage-sink';
 import type { DatasourcesService } from '../../datasources/datasources.service';
 import type { LlmService } from '../../llm/llm.service';
 import type { VerifiedQueriesService } from '../../verified-queries/verified-queries.service';
@@ -123,6 +126,7 @@ export class SqlChecks {
     options?: SqlCallOptions,
   ): Promise<SqlRunResult> {
     const signal = options?.signal;
+    const usageSink = options?.usageSink;
     let statement = sql;
     let fixerContext: { dialect: string; schema: string } | undefined;
     for (let attempt = 0; ; attempt++) {
@@ -170,6 +174,7 @@ export class SqlChecks {
           message,
           fixerContext,
           signal,
+          usageSink,
         );
         signal?.throwIfAborted();
         if (!corrected || corrected === statement) throw error;
@@ -221,6 +226,7 @@ export class SqlChecks {
     error: string,
     context: { dialect: string; schema: string },
     abortSignal?: AbortSignal,
+    usageSink?: UsageSink,
   ): Promise<string | undefined> {
     try {
       const result = await this.deps.mastra
@@ -255,6 +261,15 @@ export class SqlChecks {
             ...(abortSignal ? { abortSignal } : {}),
           },
         );
+      // The fixer runs on the model `resolveAgentModelConfig` names; looked
+      // up only when an eval is listening.
+      if (usageSink) {
+        usageSink(
+          'sql-fixer',
+          result,
+          modelIdOf(await resolveAgentModelConfig()),
+        );
+      }
       const parsed = sqlFixOutputSchema.safeParse(
         result.object ?? parseJsonObject(result.text),
       );
@@ -333,7 +348,8 @@ export class SqlChecks {
         { widthTolerant: true },
       );
       // Logged so the agree / shape / disagree / error split is measurable
-      // rather than anecdotal — `npm run eval` reports the same verdicts.
+      // rather than anecdotal — the eval suite's result-set check
+      // (`mastra/evals/result-set-check.ts`) grades with the same comparison.
       this.deps.logger.log(
         `Cross-check ${match ? (shapeDiffers ? 'agree (shape differs)' : 'agree') : 'disagree'}${
           match ? '' : `: ${reason}`

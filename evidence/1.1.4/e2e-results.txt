@@ -1,0 +1,97 @@
+Web E2E suite, 2026-10-13, BA-182 (Step 1a), project web, E2E_SKIP_DOCKER=1 (shared World Cup Postgres on 55432 already up), macOS arm64
+
+[web] › e2e/agent-editor.spec.ts:129:5 › creates an agent, previews it, publishes it and deletes it
+[web] › e2e/agent-editor.spec.ts:178:5 › editing a Live agent keeps its sessions on the Live version until republished
+[web] › e2e/agent-editor.spec.ts:232:5 › sending in the preview saves the form first
+[web] › e2e/agent-editor.spec.ts:251:5 › reset and leaving the editor discard the preview
+[web] › e2e/agent-editor.spec.ts:280:5 › preview needs a dataset, and names must be unique
+[web] › e2e/agent-editor.spec.ts:302:5 › leaving with unsaved changes asks first
+[web] › e2e/agent-editor.spec.ts:325:5 › a dataset that no longer exists stays visible in the editor
+[web] › e2e/agent-editor.spec.ts:347:5 › the editor has no detectable accessibility violations in either theme
+[web] › e2e/agent-hub.spec.ts:92:5 › shows the built-in agents and mine in sections
+[web] › e2e/agent-hub.spec.ts:143:5 › search narrows the agents by name or description
+[web] › e2e/agent-hub.spec.ts:159:5 › filters limit the hub to one kind of agent
+[web] › e2e/agent-hub.spec.ts:181:5 › pinned agents come first in their own section and survive a restart
+[web] › e2e/agent-hub.spec.ts:241:5 › flags an agent whose dataset no longer exists
+[web] › e2e/agent-hub.spec.ts:258:5 › a card opens the agent's detail view with its actions
+[web] › e2e/agent-hub.spec.ts:284:5 › publishing a draft makes it Live
+[web] › e2e/agent-hub.spec.ts:310:5 › deleting an agent asks first
+[web] › e2e/agent-hub.spec.ts:338:5 › the hub has no detectable accessibility violations in either theme
+[web] › e2e/agent-sessions.spec.ts:128:5 › start chat on an agent card opens a session bound to the agent
+[web] › e2e/agent-sessions.spec.ts:154:5 › only Live agents and the Official agent offer Start chat
+[web] › e2e/agent-sessions.spec.ts:188:5 › start chat is unavailable when none of the agent's datasets exist
+[web] › e2e/agent-sessions.spec.ts:208:5 › the agent's Live instructions and model shape every turn
+[web] › e2e/agent-sessions.spec.ts:262:5 › instructions can't switch off the read-only guard
+[web] › e2e/agent-sessions.spec.ts:302:5 › deleting the agent keeps its sessions on the plain assistant
+[web] › e2e/agents.spec.ts:30:5 › opens an agent from the Agents list and switches between its tabs
+[web] › e2e/agents.spec.ts:99:5 › shows the stateless, no-tool agents accurately
+[web] › e2e/agents.spec.ts:120:5 › offers the configured datasources and starts a run from the evals tab
+[web] › e2e/agents.spec.ts:146:5 › runs only the ticked questions
+[web] › e2e/agents.spec.ts:175:5 › refuses to run against a datasource with no datasets
+[web] › e2e/agents.spec.ts:189:5 › explains an incomplete eval dataset without starting a run
+[web] › e2e/agents.spec.ts:206:5 › opens a question in the right panel with what it is scored on
+[web] › e2e/agents.spec.ts:232:5 › separates the question suite from past executions
+[web] › e2e/agents.spec.ts:261:5 › downloads an execution as a Markdown report
+[web] › e2e/agents.spec.ts:310:5 › lists every question set, the golden set among them
+[web] › e2e/agents.spec.ts:350:5 › starts a run of the golden set on the World Cup datasource
+[web] › e2e/appearance.spec.ts:73:5 › opens in the light theme by default
+[web] › e2e/appearance.spec.ts:83:5 › follows the operating system theme when System is chosen
+[web] › e2e/appearance.spec.ts:103:5 › forces a theme regardless of the operating system
+[web] › e2e/appearance.spec.ts:123:5 › remembers the chosen theme after a restart
+[web] › e2e/appearance.spec.ts:152:5 › keeps the chosen theme in the database
+[web] › e2e/appearance.spec.ts:169:5 › moves a theme chosen before the database stored it
+[web] › e2e/appearance.spec.ts:191:5 › has no automatically detectable accessibility violations in either theme
+[web] › e2e/chat-and-visuals.spec.ts:141:5 › renders streamed reasoning, tool activity, final Markdown, and supports stopping
+[web] › e2e/chat-and-visuals.spec.ts:170:5 › renders a deterministic interactive visualization and its version controls
+[web] › e2e/developer-observability.spec.ts:82:5 › backend traces reach the OTLP endpoint when observability is on
+[web] › e2e/developer-observability.spec.ts:100:5 › agent runs reach Phoenix when observability is on
+[web] › e2e/developer-observability.spec.ts:121:5 › backend logs reach the OTLP endpoint when observability is on
+[web] › e2e/developer-observability.spec.ts:136:5 › nothing is exported when observability is off
+[web] › e2e/developer-settings.spec.ts:36:5 › developer observability is off by default
+[web] › e2e/developer-settings.spec.ts:70:5 › turning observability on asks for a restart
+[web] › e2e/developer-settings.spec.ts:94:7 › desktop app › the desktop app offers to restart the backend, and restarting applies it
+[web] › e2e/developer-settings.spec.ts:115:7 › browser › in a browser, the notice asks me to restart the CLI
+[web] › e2e/developer-settings.spec.ts:125:7 › browser › restarting the CLI applies the saved setting
+[web] › e2e/developer-settings.spec.ts:140:5 › turning it back off before restarting needs no restart
+[web] › e2e/developer-settings.spec.ts:157:5 › rejects an endpoint that is not a URL
+[web] › e2e/developer-settings.spec.ts:167:5 › tests an endpoint that accepts OTLP traces
+[web] › e2e/developer-settings.spec.ts:193:5 › tests an endpoint that is not listening
+[web] › e2e/diagnostics.spec.ts:8:7 › desktop shell › captures live renderer failures, filters issues, and exports a redacted LLM-readable report
+[web] › e2e/diagnostics.spec.ts:90:5 › replaces the help icon and supports log refresh, follow mode, and dismissal
+[web] › e2e/layout-accessibility.spec.ts:9:5 › supports keyboard layout controls and persists the right-panel width
+[web] › e2e/layout-accessibility.spec.ts:38:5 › has no automatically detectable accessibility violations in the application shell
+[web] › e2e/layout-accessibility.spec.ts:48:5 › has no automatically detectable accessibility violations on any screen in either theme
+[web] › e2e/layout-accessibility.spec.ts:133:5 › matches the stable application-shell visual baseline
+[web] › e2e/llm-settings.spec.ts:93:5 › LenAI needs a deployment name and a base URL
+[web] › e2e/llm-settings.spec.ts:106:5 › never shows the stored key
+[web] › e2e/llm-settings.spec.ts:125:5 › keeps a key saved under the former development secret
+[web] › e2e/llm-settings.spec.ts:154:5 › asks for the key again when the app secret changed
+[web] › e2e/llm-settings.spec.ts:189:5 › offers the effort levels of the chosen model
+[web] › e2e/llm-settings.spec.ts:229:5 › tests a reasoning model at its lowest effort
+[web] › e2e/llm-settings.spec.ts:241:5 › saves the chosen effort and uses it on the next turn
+[web] › e2e/local-sign-in.spec.ts:64:5 › The app opens on the sign-in page listing the personas
+[web] › e2e/local-sign-in.spec.ts:104:5 › Signing in as Demo User opens the shell
+[web] › e2e/local-sign-in.spec.ts:124:5 › Uma User sees no maker, data or admin controls
+[web] › e2e/local-sign-in.spec.ts:143:5 › Mark Maker's agents are private
+[web] › e2e/local-sign-in.spec.ts:172:5 › Signing out returns to the sign-in page
+[web] › e2e/local-sign-in.spec.ts:199:5 › A role change in Admin persists
+[web] › e2e/local-sign-in.spec.ts:224:5 › Dana Data Owner owns every datasource
+[web] › e2e/local-sign-in.spec.ts:245:5 › Data from before sign-in belongs to Demo User
+[web] › e2e/navigation.spec.ts:15:5 › moves between areas from the rail
+[web] › e2e/navigation.spec.ts:46:5 › opens with the navigation drawer expanded
+[web] › e2e/navigation.spec.ts:57:5 › remembers a collapsed drawer after a restart
+[web] › e2e/navigation.spec.ts:82:5 › expands the rail into a drawer with labels and sessions
+[web] › e2e/navigation.spec.ts:117:5 › shows the details panel only on demand
+[web] › e2e/navigation.spec.ts:126:5 › opens Settings as an area with a section list
+[web] › e2e/navigation.spec.ts:154:5 › shows the product name
+[web] › e2e/navigation.spec.ts:166:5 › local mode signs in as Demo User
+[web] › e2e/world-cup-workflow.spec.ts:15:5 › creates a PostgreSQL datasource, dataset, and session using the real World Cup database
+[web] › e2e/world-cup-workflow.spec.ts:44:5 › preserves masked credentials when editing and supports datasource deletion
+[web] › e2e/world-cup-workflow.spec.ts:70:5 › surfaces a failed connection in both the form and system diagnostics
+[web] › e2e/world-cup-workflow.spec.ts:98:5 › shows the real catalog schema and column metadata before a dataset is saved
+
+[88/89] [web] › e2e/world-cup-workflow.spec.ts:70:5 › surfaces a failed connection in both the form and system diagnostics
+  1 failed
+    [web] › e2e/layout-accessibility.spec.ts:133:5 › matches the stable application-shell visual baseline 
+  2 skipped
+  86 passed (2.6m)

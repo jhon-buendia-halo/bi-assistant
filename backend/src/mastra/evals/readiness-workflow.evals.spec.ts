@@ -9,7 +9,17 @@ jest.mock('@mastra/evals/checks', () => ({
     },
   ),
 }));
-jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
+jest.mock('@mastra/core/evals', () => ({
+  runEvals: jest.fn(),
+  // The set files' deterministic checks are wrapped with it at import.
+  createScorer: (config: Record<string, unknown>) => {
+    const scorer: Record<string, unknown> = { ...config };
+    for (const step of ['analyze', 'generateScore', 'generateReason']) {
+      scorer[step] = () => scorer;
+    }
+    return scorer;
+  },
+}));
 jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
 jest.mock('../agents/data-readiness.agent', () => ({
   dataReadinessAgent: { id: 'data-readiness' },

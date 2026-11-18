@@ -1,0 +1,509 @@
+$ npm run fixture:databricks -- --fixture finance --dry-run   (backend/, no DATABRICKS_* variables set, 2026-10-13)
+
+-- Databricks load plan for the Finance (Databricks) sample (finance-databricks)
+-- dump: backend/scripts/fixtures/finance/data (dumped 2026-10-13T20:09:06.380Z)
+-- target: evals.finance
+-- 17 relations, 16964 rows, 66 statements; INSERTs abbreviated to 2 rows (--full prints them whole)
+-- column types (Databricks <- PostgreSQL, from seed | dump | values):
+--   regions (4 rows): id BIGINT <- bigint (seed); code STRING <- text (seed); name STRING <- text (seed)
+--   branches (8 rows): id BIGINT <- bigint (seed); code STRING <- text (seed); name STRING <- text (seed); region_id BIGINT <- bigint (seed); city STRING <- text (seed); state_code STRING <- char(2) (seed); opened_on DATE <- date (seed)
+--   customers (90 rows): id BIGINT <- bigint (seed); customer_number STRING <- text (seed); full_name STRING <- text (seed); date_of_birth DATE <- date (seed); segment STRING <- text (seed); home_branch_id BIGINT <- bigint (seed); joined_on DATE <- date (seed)
+--   account_types (5 rows): id BIGINT <- bigint (seed); code STRING <- text (seed); name STRING <- text (seed); category STRING <- text (seed); annual_rate_bps INT <- integer (seed)
+--   accounts (200 rows): id BIGINT <- bigint (seed); account_number STRING <- text (seed); customer_id BIGINT <- bigint (seed); account_type_id BIGINT <- bigint (seed); branch_id BIGINT <- bigint (seed); currency STRING <- text (seed); opened_on DATE <- date (seed); closed_on DATE <- date (seed); status STRING <- text (seed); current_balance_minor BIGINT <- bigint (seed); is_test BOOLEAN <- boolean (seed)
+--   cards (150 rows): id BIGINT <- bigint (seed); card_number_masked STRING <- text (seed); account_id BIGINT <- bigint (seed); network STRING <- text (seed); card_type STRING <- text (seed); issued_on DATE <- date (seed); expires_on DATE <- date (seed); status STRING <- text (seed)
+--   fx_rates (48 rows): id BIGINT <- bigint (seed); currency STRING <- text (seed); rate_month DATE <- date (seed); usd_per_unit DECIMAL(12,6) <- numeric(12,6) (seed)
+--   transactions (5400 rows): id BIGINT <- bigint (seed); transaction_ref STRING <- text (seed); account_id BIGINT <- bigint (seed); card_id BIGINT <- bigint (seed); booked_on DATE <- date (seed); type STRING <- text (seed); direction STRING <- text (seed); channel STRING <- text (seed); status STRING <- text (seed); currency STRING <- text (seed); amount_minor BIGINT <- bigint (seed); amount_usd_minor BIGINT <- bigint (seed); merchant_category STRING <- text (seed); counterparty_account_id BIGINT <- bigint (seed)
+--   loans (110 rows): id BIGINT <- bigint (seed); loan_number STRING <- text (seed); customer_id BIGINT <- bigint (seed); branch_id BIGINT <- bigint (seed); product STRING <- text (seed); currency STRING <- text (seed); principal_minor BIGINT <- bigint (seed); interest_rate_bps INT <- integer (seed); term_months INT <- integer (seed); originated_on DATE <- date (seed); status STRING <- text (seed); outstanding_minor BIGINT <- bigint (seed)
+--   loan_payments (1538 rows): id BIGINT <- bigint (seed); loan_id BIGINT <- bigint (seed); paid_on DATE <- date (seed); amount_minor BIGINT <- bigint (seed); principal_minor BIGINT <- bigint (seed); interest_minor BIGINT <- bigint (seed)
+--   fiscal_periods (36 rows): id BIGINT <- bigint (seed); period_code STRING <- text (seed); fiscal_year INT <- integer (seed); fiscal_quarter INT <- integer (seed); fiscal_month INT <- integer (seed); period_start DATE <- date (seed); period_end DATE <- date (seed)
+--   securities (28 rows): id BIGINT <- bigint (seed); symbol STRING <- text (seed); name STRING <- text (seed); asset_class STRING <- text (seed); sector STRING <- text (seed)
+--   portfolios (46 rows): id BIGINT <- bigint (seed); portfolio_number STRING <- text (seed); customer_id BIGINT <- bigint (seed); branch_id BIGINT <- bigint (seed); mandate STRING <- text (seed); risk_profile STRING <- text (seed); base_currency STRING <- text (seed); advisory_fee_bps INT <- integer (seed); opened_on DATE <- date (seed); closed_on DATE <- date (seed); status STRING <- text (seed); is_test BOOLEAN <- boolean (seed)
+--   holdings (2165 rows): id BIGINT <- bigint (seed); portfolio_id BIGINT <- bigint (seed); security_id BIGINT <- bigint (seed); as_of DATE <- date (seed); quantity DECIMAL(18,4) <- numeric(18,4) (seed); market_value_cents BIGINT <- bigint (seed); cost_basis_cents BIGINT <- bigint (seed)
+--   fees (1536 rows): id BIGINT <- bigint (seed); fee_ref STRING <- text (seed); portfolio_id BIGINT <- bigint (seed); fiscal_period_id BIGINT <- bigint (seed); fee_type STRING <- text (seed); amount_cents BIGINT <- bigint (seed); charged_on DATE <- date (seed); status STRING <- text (seed)
+--   v_accounts (200 rows): account_id BIGINT <- bigint (dump); account_number STRING <- text (dump); customer_id BIGINT <- bigint (dump); customer_name STRING <- text (dump); segment STRING <- text (dump); account_type_code STRING <- text (dump); account_type_name STRING <- text (dump); account_category STRING <- text (dump); branch_id BIGINT <- bigint (dump); branch_name STRING <- text (dump); region_name STRING <- text (dump); currency STRING <- text (dump); opened_on DATE <- date (dump); closed_on DATE <- date (dump); status STRING <- text (dump); current_balance_minor BIGINT <- bigint (dump); is_test BOOLEAN <- boolean (dump)
+--   v_transactions (5400 rows): transaction_id BIGINT <- bigint (dump); transaction_ref STRING <- text (dump); booked_on DATE <- date (dump); type STRING <- text (dump); direction STRING <- text (dump); channel STRING <- text (dump); status STRING <- text (dump); currency STRING <- text (dump); amount_minor BIGINT <- bigint (dump); amount_usd_minor BIGINT <- bigint (dump); merchant_category STRING <- text (dump); card_id BIGINT <- bigint (dump); counterparty_account_id BIGINT <- bigint (dump); account_id BIGINT <- bigint (dump); account_number STRING <- text (dump); account_currency STRING <- text (dump); account_type_code STRING <- text (dump); account_type_name STRING <- text (dump); account_category STRING <- text (dump); is_test BOOLEAN <- boolean (dump); customer_id BIGINT <- bigint (dump); customer_name STRING <- text (dump); segment STRING <- text (dump); branch_name STRING <- text (dump); region_name STRING <- text (dump)
+
+CREATE SCHEMA IF NOT EXISTS `evals`.`finance`;
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`regions` (
+  `id` BIGINT NOT NULL,
+  `code` STRING NOT NULL,
+  `name` STRING NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`regions` (`id`, `code`, `name`) VALUES
+  (1, 'NORTHEAST', 'Northeast'),
+  (2, 'SOUTHEAST', 'Southeast')
+  -- … 2 more rows in this statement (186 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`branches` (
+  `id` BIGINT NOT NULL,
+  `code` STRING NOT NULL,
+  `name` STRING NOT NULL,
+  `region_id` BIGINT NOT NULL,
+  `city` STRING NOT NULL,
+  `state_code` STRING NOT NULL,
+  `opened_on` DATE NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`branches` (`id`, `code`, `name`, `region_id`, `city`, `state_code`, `opened_on`) VALUES
+  (1, 'BR-BOS', 'Boston Back Bay', 1, 'Boston', 'MA', DATE'1998-04-14'),
+  (2, 'BR-HFD', 'Hartford Downtown', 1, 'Hartford', 'CT', DATE'2003-09-02')
+  -- … 6 more rows in this statement (723 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`customers` (
+  `id` BIGINT NOT NULL,
+  `customer_number` STRING NOT NULL,
+  `full_name` STRING NOT NULL,
+  `date_of_birth` DATE NOT NULL,
+  `segment` STRING NOT NULL,
+  `home_branch_id` BIGINT NOT NULL,
+  `joined_on` DATE NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`customers` (`id`, `customer_number`, `full_name`, `date_of_birth`, `segment`, `home_branch_id`, `joined_on`) VALUES
+  (1, 'C-300005', 'Adaeze Okafor', DATE'1994-05-09', 'RETAIL', 7, DATE'2019-08-05'),
+  (2, 'C-300022', 'Bram Vandersloot', DATE'1952-12-05', 'RETAIL', 4, DATE'2024-07-02')
+  -- … 88 more rows in this statement (8107 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`account_types` (
+  `id` BIGINT NOT NULL,
+  `code` STRING NOT NULL,
+  `name` STRING NOT NULL,
+  `category` STRING NOT NULL,
+  `annual_rate_bps` INT NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`account_types` (`id`, `code`, `name`, `category`, `annual_rate_bps`) VALUES
+  (1, 'CHK', 'Everyday Checking', 'DEPOSIT', 0),
+  (2, 'SAV', 'High-Yield Savings', 'DEPOSIT', 420)
+  -- … 3 more rows in this statement (369 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`accounts` (
+  `id` BIGINT NOT NULL,
+  `account_number` STRING NOT NULL,
+  `customer_id` BIGINT NOT NULL,
+  `account_type_id` BIGINT NOT NULL,
+  `branch_id` BIGINT NOT NULL,
+  `currency` STRING NOT NULL,
+  `opened_on` DATE NOT NULL,
+  `closed_on` DATE,
+  `status` STRING NOT NULL,
+  `current_balance_minor` BIGINT NOT NULL,
+  `is_test` BOOLEAN NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`accounts` (`id`, `account_number`, `customer_id`, `account_type_id`, `branch_id`, `currency`, `opened_on`, `closed_on`, `status`, `current_balance_minor`, `is_test`) VALUES
+  (1, '4100014818', 28, 2, 5, 'USD', DATE'2019-04-15', NULL, 'ACTIVE', 2997364, FALSE),
+  (2, '4100019534', 87, 5, 5, 'USD', DATE'2019-07-06', NULL, 'ACTIVE', 606611, FALSE)
+  -- … 198 more rows in this statement (18026 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`cards` (
+  `id` BIGINT NOT NULL,
+  `card_number_masked` STRING NOT NULL,
+  `account_id` BIGINT NOT NULL,
+  `network` STRING NOT NULL,
+  `card_type` STRING NOT NULL,
+  `issued_on` DATE NOT NULL,
+  `expires_on` DATE NOT NULL,
+  `status` STRING NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`cards` (`id`, `card_number_masked`, `account_id`, `network`, `card_type`, `issued_on`, `expires_on`, `status`) VALUES
+  (1, '4929 **** **** 6081', 3, 'VISA', 'DEBIT', DATE'2019-08-02', DATE'2023-08-31', 'EXPIRED'),
+  (2, '5412 **** **** 3991', 4, 'MASTERCARD', 'DEBIT', DATE'2019-08-27', DATE'2023-08-31', 'EXPIRED')
+  -- … 148 more rows in this statement (15416 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`fx_rates` (
+  `id` BIGINT NOT NULL,
+  `currency` STRING NOT NULL,
+  `rate_month` DATE NOT NULL,
+  `usd_per_unit` DECIMAL(12,6) NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`fx_rates` (`id`, `currency`, `rate_month`, `usd_per_unit`) VALUES
+  (1, 'EUR', DATE'2024-01-01', 1.082955),
+  (2, 'EUR', DATE'2024-02-01', 1.087221)
+  -- … 46 more rows in this statement (2150 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`transactions` (
+  `id` BIGINT NOT NULL,
+  `transaction_ref` STRING NOT NULL,
+  `account_id` BIGINT NOT NULL,
+  `card_id` BIGINT,
+  `booked_on` DATE NOT NULL,
+  `type` STRING NOT NULL,
+  `direction` STRING NOT NULL,
+  `channel` STRING NOT NULL,
+  `status` STRING NOT NULL,
+  `currency` STRING NOT NULL,
+  `amount_minor` BIGINT NOT NULL,
+  `amount_usd_minor` BIGINT NOT NULL,
+  `merchant_category` STRING,
+  `counterparty_account_id` BIGINT
+);
+
+INSERT INTO `evals`.`finance`.`transactions` (`id`, `transaction_ref`, `account_id`, `card_id`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `counterparty_account_id`) VALUES
+  (1, 'TXN-202401-000001', 66, 40, DATE'2024-01-02', 'CARD_PURCHASE', 'DEBIT', 'CARD', 'POSTED', 'USD', 6451, 6451, 'ENTERTAINMENT', NULL),
+  (2, 'TXN-202401-000002', 49, 31, DATE'2024-01-02', 'CARD_PURCHASE', 'DEBIT', 'CARD', 'REVERSED', 'USD', 5944, 5944, 'UTILITIES', NULL)
+  -- … 498 more rows in this statement (66676 characters in all);
+
+INSERT INTO `evals`.`finance`.`transactions` (`id`, `transaction_ref`, `account_id`, `card_id`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `counterparty_account_id`) VALUES
+  (501, 'TXN-202404-000501', 57, NULL, DATE'2024-04-06', 'FEE', 'DEBIT', 'SYSTEM', 'POSTED', 'USD', 2900, 2900, NULL, NULL),
+  (502, 'TXN-202404-000502', 16, NULL, DATE'2024-04-06', 'FEE', 'DEBIT', 'SYSTEM', 'POSTED', 'USD', 8742, 8742, NULL, NULL)
+  -- … 498 more rows in this statement (66612 characters in all);
+
+INSERT INTO `evals`.`finance`.`transactions` (`id`, `transaction_ref`, `account_id`, `card_id`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `counterparty_account_id`) VALUES
+  (1001, 'TXN-202407-001001', 67, 43, DATE'2024-07-02', 'CARD_PURCHASE', 'DEBIT', 'CARD', 'POSTED', 'USD', 8941, 8941, 'GROCERY', NULL),
+  (1002, 'TXN-202407-001002', 80, NULL, DATE'2024-07-02', 'DEPOSIT', 'CREDIT', 'MOBILE', 'POSTED', 'EUR', 334860, 361573, NULL, NULL)
+  -- … 498 more rows in this statement (67238 characters in all);
+
+INSERT INTO `evals`.`finance`.`transactions` (`id`, `transaction_ref`, `account_id`, `card_id`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `counterparty_account_id`) VALUES
+  (1501, 'TXN-202409-001501', 131, NULL, DATE'2024-09-16', 'FEE', 'DEBIT', 'SYSTEM', 'POSTED', 'USD', 1200, 1200, NULL, NULL),
+  (1502, 'TXN-202409-001502', 56, NULL, DATE'2024-09-17', 'TRANSFER_OUT', 'DEBIT', 'MOBILE', 'POSTED', 'USD', 52628, 52628, NULL, 19)
+  -- … 498 more rows in this statement (67421 characters in all);
+
+INSERT INTO `evals`.`finance`.`transactions` (`id`, `transaction_ref`, `account_id`, `card_id`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `counterparty_account_id`) VALUES
+  (2001, 'TXN-202411-002001', 129, NULL, DATE'2024-11-24', 'WITHDRAWAL', 'DEBIT', 'BRANCH', 'POSTED', 'USD', 229800, 229800, NULL, NULL),
+  (2002, 'TXN-202411-002002', 59, NULL, DATE'2024-11-25', 'DEPOSIT', 'CREDIT', 'MOBILE', 'POSTED', 'USD', 1000, 1000, NULL, NULL)
+  -- … 498 more rows in this statement (67482 characters in all);
+
+INSERT INTO `evals`.`finance`.`transactions` (`id`, `transaction_ref`, `account_id`, `card_id`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `counterparty_account_id`) VALUES
+  (2501, 'TXN-202501-002501', 31, NULL, DATE'2025-01-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'USD', 90728, 90728, NULL, NULL),
+  (2502, 'TXN-202501-002502', 80, NULL, DATE'2025-01-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'EUR', 10544, 11413, NULL, NULL)
+  -- … 498 more rows in this statement (67449 characters in all);
+
+INSERT INTO `evals`.`finance`.`transactions` (`id`, `transaction_ref`, `account_id`, `card_id`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `counterparty_account_id`) VALUES
+  (3001, 'TXN-202503-003001', 7, NULL, DATE'2025-03-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'USD', 55973, 55973, NULL, NULL),
+  (3002, 'TXN-202503-003002', 10, NULL, DATE'2025-03-31', 'TRANSFER_OUT', 'DEBIT', 'MOBILE', 'PENDING', 'USD', 267300, 267300, NULL, 25)
+  -- … 498 more rows in this statement (67465 characters in all);
+
+INSERT INTO `evals`.`finance`.`transactions` (`id`, `transaction_ref`, `account_id`, `card_id`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `counterparty_account_id`) VALUES
+  (3501, 'TXN-202505-003501', 7, NULL, DATE'2025-05-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'USD', 47454, 47454, NULL, NULL),
+  (3502, 'TXN-202505-003502', 83, 57, DATE'2025-05-31', 'CARD_PURCHASE', 'DEBIT', 'CARD', 'POSTED', 'USD', 25894, 25894, 'UTILITIES', NULL)
+  -- … 498 more rows in this statement (67556 characters in all);
+
+INSERT INTO `evals`.`finance`.`transactions` (`id`, `transaction_ref`, `account_id`, `card_id`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `counterparty_account_id`) VALUES
+  (4001, 'TXN-202507-004001', 151, NULL, DATE'2025-07-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'USD', 11251, 11251, NULL, NULL),
+  (4002, 'TXN-202507-004002', 109, NULL, DATE'2025-07-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'USD', 13508, 13508, NULL, NULL)
+  -- … 498 more rows in this statement (67640 characters in all);
+
+INSERT INTO `evals`.`finance`.`transactions` (`id`, `transaction_ref`, `account_id`, `card_id`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `counterparty_account_id`) VALUES
+  (4501, 'TXN-202509-004501', 76, 49, DATE'2025-09-29', 'CARD_PURCHASE', 'DEBIT', 'CARD', 'POSTED', 'USD', 17963, 17963, 'GROCERY', NULL),
+  (4502, 'TXN-202509-004502', 11, NULL, DATE'2025-09-29', 'DEPOSIT', 'CREDIT', 'MOBILE', 'POSTED', 'EUR', 571544, 628552, NULL, NULL)
+  -- … 498 more rows in this statement (67413 characters in all);
+
+INSERT INTO `evals`.`finance`.`transactions` (`id`, `transaction_ref`, `account_id`, `card_id`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `counterparty_account_id`) VALUES
+  (5001, 'TXN-202511-005001', 20, NULL, DATE'2025-11-21', 'DEPOSIT', 'CREDIT', 'MOBILE', 'POSTED', 'USD', 164883, 164883, NULL, NULL),
+  (5002, 'TXN-202511-005002', 121, NULL, DATE'2025-11-21', 'FEE', 'DEBIT', 'SYSTEM', 'POSTED', 'USD', 1200, 1200, NULL, NULL)
+  -- … 398 more rows in this statement (54017 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`loans` (
+  `id` BIGINT NOT NULL,
+  `loan_number` STRING NOT NULL,
+  `customer_id` BIGINT NOT NULL,
+  `branch_id` BIGINT NOT NULL,
+  `product` STRING NOT NULL,
+  `currency` STRING NOT NULL,
+  `principal_minor` BIGINT NOT NULL,
+  `interest_rate_bps` INT NOT NULL,
+  `term_months` INT NOT NULL,
+  `originated_on` DATE NOT NULL,
+  `status` STRING NOT NULL,
+  `outstanding_minor` BIGINT NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`loans` (`id`, `loan_number`, `customer_id`, `branch_id`, `product`, `currency`, `principal_minor`, `interest_rate_bps`, `term_months`, `originated_on`, `status`, `outstanding_minor`) VALUES
+  (1, 'LN-2019-00001', 10, 1, 'AUTO', 'USD', 1820000, 870, 72, DATE'2019-02-11', 'PAID_OFF', 0),
+  (2, 'LN-2019-00002', 47, 4, 'PERSONAL', 'USD', 3480000, 1284, 48, DATE'2019-02-11', 'PAID_OFF', 0)
+  -- … 108 more rows in this statement (11723 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`loan_payments` (
+  `id` BIGINT NOT NULL,
+  `loan_id` BIGINT NOT NULL,
+  `paid_on` DATE NOT NULL,
+  `amount_minor` BIGINT NOT NULL,
+  `principal_minor` BIGINT NOT NULL,
+  `interest_minor` BIGINT NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`loan_payments` (`id`, `loan_id`, `paid_on`, `amount_minor`, `principal_minor`, `interest_minor`) VALUES
+  (1, 35, DATE'2024-01-05', 55255, 47761, 7494),
+  (2, 41, DATE'2024-01-05', 278430, 198632, 79798)
+  -- … 498 more rows in this statement (26201 characters in all);
+
+INSERT INTO `evals`.`finance`.`loan_payments` (`id`, `loan_id`, `paid_on`, `amount_minor`, `principal_minor`, `interest_minor`) VALUES
+  (501, 51, DATE'2024-08-08', 80403, 52160, 28243),
+  (502, 15, DATE'2024-08-09', 236177, 157573, 78604)
+  -- … 498 more rows in this statement (26386 characters in all);
+
+INSERT INTO `evals`.`finance`.`loan_payments` (`id`, `loan_id`, `paid_on`, `amount_minor`, `principal_minor`, `interest_minor`) VALUES
+  (1001, 85, DATE'2025-04-06', 108549, 56973, 51576),
+  (1002, 70, DATE'2025-04-07', 84529, 54497, 30032)
+  -- … 498 more rows in this statement (26987 characters in all);
+
+INSERT INTO `evals`.`finance`.`loan_payments` (`id`, `loan_id`, `paid_on`, `amount_minor`, `principal_minor`, `interest_minor`) VALUES
+  (1501, 58, DATE'2025-12-12', 58848, 52787, 6061),
+  (1502, 76, DATE'2025-12-12', 210354, 36366, 173988)
+  -- … 36 more rows in this statement (2187 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`fiscal_periods` (
+  `id` BIGINT NOT NULL,
+  `period_code` STRING NOT NULL,
+  `fiscal_year` INT NOT NULL,
+  `fiscal_quarter` INT NOT NULL,
+  `fiscal_month` INT NOT NULL,
+  `period_start` DATE NOT NULL,
+  `period_end` DATE NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`fiscal_periods` (`id`, `period_code`, `fiscal_year`, `fiscal_quarter`, `fiscal_month`, `period_start`, `period_end`) VALUES
+  (1, 'FY2024-P01', 2024, 1, 1, DATE'2023-07-01', DATE'2023-07-31'),
+  (2, 'FY2024-P02', 2024, 1, 2, DATE'2023-08-01', DATE'2023-08-31')
+  -- … 34 more rows in this statement (2673 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`securities` (
+  `id` BIGINT NOT NULL,
+  `symbol` STRING NOT NULL,
+  `name` STRING NOT NULL,
+  `asset_class` STRING NOT NULL,
+  `sector` STRING
+);
+
+INSERT INTO `evals`.`finance`.`securities` (`id`, `symbol`, `name`, `asset_class`, `sector`) VALUES
+  (1, 'NWSC', 'Northwind Semiconductors', 'EQUITY', 'Technology'),
+  (2, 'CLRA', 'Clearwater Analytics Group', 'EQUITY', 'Technology')
+  -- … 26 more rows in this statement (1973 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`portfolios` (
+  `id` BIGINT NOT NULL,
+  `portfolio_number` STRING NOT NULL,
+  `customer_id` BIGINT NOT NULL,
+  `branch_id` BIGINT NOT NULL,
+  `mandate` STRING NOT NULL,
+  `risk_profile` STRING NOT NULL,
+  `base_currency` STRING NOT NULL,
+  `advisory_fee_bps` INT NOT NULL,
+  `opened_on` DATE NOT NULL,
+  `closed_on` DATE,
+  `status` STRING NOT NULL,
+  `is_test` BOOLEAN NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`portfolios` (`id`, `portfolio_number`, `customer_id`, `branch_id`, `mandate`, `risk_profile`, `base_currency`, `advisory_fee_bps`, `opened_on`, `closed_on`, `status`, `is_test`) VALUES
+  (1, 'PF-020203', 50, 8, 'EXECUTION_ONLY', 'GROWTH', 'USD', 0, DATE'2019-02-18', NULL, 'OPEN', FALSE),
+  (2, 'PF-020277', 56, 8, 'ADVISORY', 'BALANCED', 'USD', 75, DATE'2019-03-17', NULL, 'OPEN', FALSE)
+  -- … 44 more rows in this statement (5108 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`holdings` (
+  `id` BIGINT NOT NULL,
+  `portfolio_id` BIGINT NOT NULL,
+  `security_id` BIGINT NOT NULL,
+  `as_of` DATE NOT NULL,
+  `quantity` DECIMAL(18,4) NOT NULL,
+  `market_value_cents` BIGINT NOT NULL,
+  `cost_basis_cents` BIGINT
+);
+
+INSERT INTO `evals`.`finance`.`holdings` (`id`, `portfolio_id`, `security_id`, `as_of`, `quantity`, `market_value_cents`, `cost_basis_cents`) VALUES
+  (1, 1, 2, DATE'2024-03-31', 3005.2223, 27708150, 25424181),
+  (2, 1, 4, DATE'2024-03-31', 2125.6403, 30343515, 29031995)
+  -- … 498 more rows in this statement (32408 characters in all);
+
+INSERT INTO `evals`.`finance`.`holdings` (`id`, `portfolio_id`, `security_id`, `as_of`, `quantity`, `market_value_cents`, `cost_basis_cents`) VALUES
+  (501, 3, 9, DATE'2024-09-30', 7251.5576, 57345318, 53436728),
+  (502, 3, 13, DATE'2024-09-30', 10940.4797, 59636555, 47503563)
+  -- … 498 more rows in this statement (32512 characters in all);
+
+INSERT INTO `evals`.`finance`.`holdings` (`id`, `portfolio_id`, `security_id`, `as_of`, `quantity`, `market_value_cents`, `cost_basis_cents`) VALUES
+  (1001, 1, 7, DATE'2025-03-31', 3039.2542, 36474090, NULL),
+  (1002, 1, 11, DATE'2025-03-31', 2350.7489, 33770859, 25470364)
+  -- … 498 more rows in this statement (32982 characters in all);
+
+INSERT INTO `evals`.`finance`.`holdings` (`id`, `portfolio_id`, `security_id`, `as_of`, `quantity`, `market_value_cents`, `cost_basis_cents`) VALUES
+  (1501, 36, 3, DATE'2025-06-30', 4217.9951, 30740748, 28922792),
+  (1502, 36, 6, DATE'2025-06-30', 11500.1427, 38157473, 37467465)
+  -- … 498 more rows in this statement (32910 characters in all);
+
+INSERT INTO `evals`.`finance`.`holdings` (`id`, `portfolio_id`, `security_id`, `as_of`, `quantity`, `market_value_cents`, `cost_basis_cents`) VALUES
+  (2001, 25, 3, DATE'2025-12-31', 3015.7330, 23604142, 17895360),
+  (2002, 25, 6, DATE'2025-12-31', 2362.9861, 8246821, 6495849)
+  -- … 163 more rows in this statement (11037 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`fees` (
+  `id` BIGINT NOT NULL,
+  `fee_ref` STRING NOT NULL,
+  `portfolio_id` BIGINT NOT NULL,
+  `fiscal_period_id` BIGINT NOT NULL,
+  `fee_type` STRING NOT NULL,
+  `amount_cents` BIGINT NOT NULL,
+  `charged_on` DATE,
+  `status` STRING NOT NULL
+);
+
+INSERT INTO `evals`.`finance`.`fees` (`id`, `fee_ref`, `portfolio_id`, `fiscal_period_id`, `fee_type`, `amount_cents`, `charged_on`, `status`) VALUES
+  (1, 'WF-202401-00001', 1, 7, 'TRADING', 1995, DATE'2024-01-02', 'SETTLED'),
+  (2, 'WF-202401-00002', 1, 7, 'TRADING', 1995, DATE'2024-01-07', 'SETTLED')
+  -- … 498 more rows in this statement (41473 characters in all);
+
+INSERT INTO `evals`.`finance`.`fees` (`id`, `fee_ref`, `portfolio_id`, `fiscal_period_id`, `fee_type`, `amount_cents`, `charged_on`, `status`) VALUES
+  (501, 'WF-202409-00501', 27, 15, 'TRADING', 1495, DATE'2024-09-19', 'SETTLED'),
+  (502, 'WF-202409-00502', 27, 15, 'TRADING', 995, DATE'2024-09-10', 'SETTLED')
+  -- … 498 more rows in this statement (41711 characters in all);
+
+INSERT INTO `evals`.`finance`.`fees` (`id`, `fee_ref`, `portfolio_id`, `fiscal_period_id`, `fee_type`, `amount_cents`, `charged_on`, `status`) VALUES
+  (1001, 'WF-202505-01001', 35, 23, 'TRADING', 1495, DATE'2025-05-21', 'SETTLED'),
+  (1002, 'WF-202505-01002', 35, 23, 'TRADING', 995, DATE'2025-05-26', 'SETTLED')
+  -- … 498 more rows in this statement (41655 characters in all);
+
+INSERT INTO `evals`.`finance`.`fees` (`id`, `fee_ref`, `portfolio_id`, `fiscal_period_id`, `fee_type`, `amount_cents`, `charged_on`, `status`) VALUES
+  (1501, 'WF-202512-01501', 34, 30, 'TRADING', 995, DATE'2025-12-23', 'SETTLED'),
+  (1502, 'WF-202512-01502', 34, 30, 'TRADING', 1495, DATE'2025-12-25', 'SETTLED')
+  -- … 34 more rows in this statement (2910 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`v_accounts` (
+  `account_id` BIGINT,
+  `account_number` STRING,
+  `customer_id` BIGINT,
+  `customer_name` STRING,
+  `segment` STRING,
+  `account_type_code` STRING,
+  `account_type_name` STRING,
+  `account_category` STRING,
+  `branch_id` BIGINT,
+  `branch_name` STRING,
+  `region_name` STRING,
+  `currency` STRING,
+  `opened_on` DATE,
+  `closed_on` DATE,
+  `status` STRING,
+  `current_balance_minor` BIGINT,
+  `is_test` BOOLEAN
+);
+
+INSERT INTO `evals`.`finance`.`v_accounts` (`account_id`, `account_number`, `customer_id`, `customer_name`, `segment`, `account_type_code`, `account_type_name`, `account_category`, `branch_id`, `branch_name`, `region_name`, `currency`, `opened_on`, `closed_on`, `status`, `current_balance_minor`, `is_test`) VALUES
+  (1, '4100014818', 28, 'Beatriz Salgado', 'RETAIL', 'SAV', 'High-Yield Savings', 'DEPOSIT', 5, 'Charlotte Uptown', 'Southeast', 'USD', DATE'2019-04-15', NULL, 'ACTIVE', 2997364, FALSE),
+  (2, '4100019534', 87, 'Lorcan Doherty', 'BUSINESS', 'LOC', 'Personal Line of Credit', 'CREDIT', 5, 'Charlotte Uptown', 'Southeast', 'USD', DATE'2019-07-06', NULL, 'ACTIVE', 606611, FALSE)
+  -- … 198 more rows in this statement (37697 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`finance`.`v_transactions` (
+  `transaction_id` BIGINT,
+  `transaction_ref` STRING,
+  `booked_on` DATE,
+  `type` STRING,
+  `direction` STRING,
+  `channel` STRING,
+  `status` STRING,
+  `currency` STRING,
+  `amount_minor` BIGINT,
+  `amount_usd_minor` BIGINT,
+  `merchant_category` STRING,
+  `card_id` BIGINT,
+  `counterparty_account_id` BIGINT,
+  `account_id` BIGINT,
+  `account_number` STRING,
+  `account_currency` STRING,
+  `account_type_code` STRING,
+  `account_type_name` STRING,
+  `account_category` STRING,
+  `is_test` BOOLEAN,
+  `customer_id` BIGINT,
+  `customer_name` STRING,
+  `segment` STRING,
+  `branch_name` STRING,
+  `region_name` STRING
+);
+
+INSERT INTO `evals`.`finance`.`v_transactions` (`transaction_id`, `transaction_ref`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `card_id`, `counterparty_account_id`, `account_id`, `account_number`, `account_currency`, `account_type_code`, `account_type_name`, `account_category`, `is_test`, `customer_id`, `customer_name`, `segment`, `branch_name`, `region_name`) VALUES
+  (1, 'TXN-202401-000001', DATE'2024-01-02', 'CARD_PURCHASE', 'DEBIT', 'CARD', 'POSTED', 'USD', 6451, 6451, 'ENTERTAINMENT', 40, NULL, 66, '4100526984', 'USD', 'CHK', 'Everyday Checking', 'DEPOSIT', FALSE, 34, 'Henrietta Vos', 'BUSINESS', 'Atlanta Midtown', 'Southeast'),
+  (2, 'TXN-202401-000002', DATE'2024-01-02', 'CARD_PURCHASE', 'DEBIT', 'CARD', 'REVERSED', 'USD', 5944, 5944, 'UTILITIES', 31, NULL, 49, '4100392484', 'USD', 'CC', 'Rewards Credit Card', 'CREDIT', FALSE, 3, 'Celestine Moreau', 'RETAIL', 'Columbus Short North', 'Midwest')
+  -- … 498 more rows in this statement (132852 characters in all);
+
+INSERT INTO `evals`.`finance`.`v_transactions` (`transaction_id`, `transaction_ref`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `card_id`, `counterparty_account_id`, `account_id`, `account_number`, `account_currency`, `account_type_code`, `account_type_name`, `account_category`, `is_test`, `customer_id`, `customer_name`, `segment`, `branch_name`, `region_name`) VALUES
+  (501, 'TXN-202404-000501', DATE'2024-04-06', 'FEE', 'DEBIT', 'SYSTEM', 'POSTED', 'USD', 2900, 2900, NULL, NULL, NULL, 57, '4100456739', 'USD', 'CC', 'Rewards Credit Card', 'CREDIT', FALSE, 55, 'Esme Carrington', 'RETAIL', 'Charlotte Uptown', 'Southeast'),
+  (502, 'TXN-202404-000502', DATE'2024-04-06', 'FEE', 'DEBIT', 'SYSTEM', 'POSTED', 'USD', 8742, 8742, NULL, NULL, NULL, 16, '4100133245', 'USD', 'CC', 'Rewards Credit Card', 'CREDIT', FALSE, 13, 'Mireille Dubois', 'RETAIL', 'Boston Back Bay', 'Northeast')
+  -- … 498 more rows in this statement (132942 characters in all);
+
+INSERT INTO `evals`.`finance`.`v_transactions` (`transaction_id`, `transaction_ref`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `card_id`, `counterparty_account_id`, `account_id`, `account_number`, `account_currency`, `account_type_code`, `account_type_name`, `account_category`, `is_test`, `customer_id`, `customer_name`, `segment`, `branch_name`, `region_name`) VALUES
+  (1001, 'TXN-202407-001001', DATE'2024-07-02', 'CARD_PURCHASE', 'DEBIT', 'CARD', 'POSTED', 'USD', 8941, 8941, 'GROCERY', 43, NULL, 67, '4100531162', 'USD', 'CC', 'Rewards Credit Card', 'CREDIT', FALSE, 48, 'Wolfgang Richter', 'RETAIL', 'Boston Back Bay', 'Northeast'),
+  (1002, 'TXN-202407-001002', DATE'2024-07-02', 'DEPOSIT', 'CREDIT', 'MOBILE', 'POSTED', 'EUR', 334860, 361573, NULL, NULL, NULL, 80, '4100640486', 'EUR', 'SAV', 'High-Yield Savings', 'DEPOSIT', FALSE, 52, 'Barnaby Cole', 'RETAIL', 'Columbus Short North', 'Midwest')
+  -- … 498 more rows in this statement (133300 characters in all);
+
+INSERT INTO `evals`.`finance`.`v_transactions` (`transaction_id`, `transaction_ref`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `card_id`, `counterparty_account_id`, `account_id`, `account_number`, `account_currency`, `account_type_code`, `account_type_name`, `account_category`, `is_test`, `customer_id`, `customer_name`, `segment`, `branch_name`, `region_name`) VALUES
+  (1501, 'TXN-202409-001501', DATE'2024-09-16', 'FEE', 'DEBIT', 'SYSTEM', 'POSTED', 'USD', 1200, 1200, NULL, NULL, NULL, 131, '4101040045', 'USD', 'CHK', 'Everyday Checking', 'DEPOSIT', FALSE, 63, 'Marisa Quintero', 'BUSINESS', 'Atlanta Midtown', 'Southeast'),
+  (1502, 'TXN-202409-001502', DATE'2024-09-17', 'TRANSFER_OUT', 'DEBIT', 'MOBILE', 'POSTED', 'USD', 52628, 52628, NULL, NULL, 19, 56, '4100447172', 'USD', 'CHK', 'Everyday Checking', 'DEPOSIT', FALSE, 24, 'Xiomara Castellanos', 'RETAIL', 'Chicago Loop', 'Midwest')
+  -- … 498 more rows in this statement (133560 characters in all);
+
+INSERT INTO `evals`.`finance`.`v_transactions` (`transaction_id`, `transaction_ref`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `card_id`, `counterparty_account_id`, `account_id`, `account_number`, `account_currency`, `account_type_code`, `account_type_name`, `account_category`, `is_test`, `customer_id`, `customer_name`, `segment`, `branch_name`, `region_name`) VALUES
+  (2001, 'TXN-202411-002001', DATE'2024-11-24', 'WITHDRAWAL', 'DEBIT', 'BRANCH', 'POSTED', 'USD', 229800, 229800, NULL, NULL, NULL, 129, '4101022488', 'USD', 'CHK', 'Everyday Checking', 'DEPOSIT', FALSE, 73, 'Ximena Arriaga', 'RETAIL', 'Atlanta Midtown', 'Southeast'),
+  (2002, 'TXN-202411-002002', DATE'2024-11-25', 'DEPOSIT', 'CREDIT', 'MOBILE', 'POSTED', 'USD', 1000, 1000, NULL, NULL, NULL, 59, '4100473792', 'USD', 'MMA', 'Money Market Account', 'DEPOSIT', TRUE, 51, 'Anouk Verbeek', 'PREMIER', 'Charlotte Uptown', 'Southeast')
+  -- … 498 more rows in this statement (133756 characters in all);
+
+INSERT INTO `evals`.`finance`.`v_transactions` (`transaction_id`, `transaction_ref`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `card_id`, `counterparty_account_id`, `account_id`, `account_number`, `account_currency`, `account_type_code`, `account_type_name`, `account_category`, `is_test`, `customer_id`, `customer_name`, `segment`, `branch_name`, `region_name`) VALUES
+  (2501, 'TXN-202501-002501', DATE'2025-01-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'USD', 90728, 90728, NULL, NULL, NULL, 31, '4100247314', 'USD', 'MMA', 'Money Market Account', 'DEPOSIT', FALSE, 23, 'Winston Adebayo', 'PREMIER', 'Chicago Loop', 'Midwest'),
+  (2502, 'TXN-202501-002502', DATE'2025-01-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'EUR', 10544, 11413, NULL, NULL, NULL, 80, '4100640486', 'EUR', 'SAV', 'High-Yield Savings', 'DEPOSIT', FALSE, 52, 'Barnaby Cole', 'RETAIL', 'Columbus Short North', 'Midwest')
+  -- … 498 more rows in this statement (133890 characters in all);
+
+INSERT INTO `evals`.`finance`.`v_transactions` (`transaction_id`, `transaction_ref`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `card_id`, `counterparty_account_id`, `account_id`, `account_number`, `account_currency`, `account_type_code`, `account_type_name`, `account_category`, `is_test`, `customer_id`, `customer_name`, `segment`, `branch_name`, `region_name`) VALUES
+  (3001, 'TXN-202503-003001', DATE'2025-03-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'USD', 55973, 55973, NULL, NULL, NULL, 7, '4100060607', 'USD', 'MMA', 'Money Market Account', 'DEPOSIT', FALSE, 53, 'Cassia Montrose', 'RETAIL', 'Charlotte Uptown', 'Southeast'),
+  (3002, 'TXN-202503-003002', DATE'2025-03-31', 'TRANSFER_OUT', 'DEBIT', 'MOBILE', 'PENDING', 'USD', 267300, 267300, NULL, NULL, 25, 10, '4100083470', 'USD', 'CHK', 'Everyday Checking', 'DEPOSIT', FALSE, 86, 'Kerensa Trelawney', 'RETAIL', 'Chicago Loop', 'Midwest')
+  -- … 498 more rows in this statement (133864 characters in all);
+
+INSERT INTO `evals`.`finance`.`v_transactions` (`transaction_id`, `transaction_ref`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `card_id`, `counterparty_account_id`, `account_id`, `account_number`, `account_currency`, `account_type_code`, `account_type_name`, `account_category`, `is_test`, `customer_id`, `customer_name`, `segment`, `branch_name`, `region_name`) VALUES
+  (3501, 'TXN-202505-003501', DATE'2025-05-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'USD', 47454, 47454, NULL, NULL, NULL, 7, '4100060607', 'USD', 'MMA', 'Money Market Account', 'DEPOSIT', FALSE, 53, 'Cassia Montrose', 'RETAIL', 'Charlotte Uptown', 'Southeast'),
+  (3502, 'TXN-202505-003502', DATE'2025-05-31', 'CARD_PURCHASE', 'DEBIT', 'CARD', 'POSTED', 'USD', 25894, 25894, 'UTILITIES', 57, NULL, 83, '4100663550', 'USD', 'CHK', 'Everyday Checking', 'DEPOSIT', FALSE, 48, 'Wolfgang Richter', 'RETAIL', 'Chicago Loop', 'Midwest')
+  -- … 498 more rows in this statement (133847 characters in all);
+
+INSERT INTO `evals`.`finance`.`v_transactions` (`transaction_id`, `transaction_ref`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `card_id`, `counterparty_account_id`, `account_id`, `account_number`, `account_currency`, `account_type_code`, `account_type_name`, `account_category`, `is_test`, `customer_id`, `customer_name`, `segment`, `branch_name`, `region_name`) VALUES
+  (4001, 'TXN-202507-004001', DATE'2025-07-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'USD', 11251, 11251, NULL, NULL, NULL, 151, '4101196495', 'USD', 'SAV', 'High-Yield Savings', 'DEPOSIT', FALSE, 1, 'Adaeze Okafor', 'RETAIL', 'Columbus Short North', 'Midwest'),
+  (4002, 'TXN-202507-004002', DATE'2025-07-31', 'INTEREST', 'CREDIT', 'SYSTEM', 'POSTED', 'USD', 13508, 13508, NULL, NULL, NULL, 109, '4100868294', 'USD', 'SAV', 'High-Yield Savings', 'DEPOSIT', FALSE, 26, 'Zelda Harrington', 'RETAIL', 'Chicago Loop', 'Midwest')
+  -- … 498 more rows in this statement (134144 characters in all);
+
+INSERT INTO `evals`.`finance`.`v_transactions` (`transaction_id`, `transaction_ref`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `card_id`, `counterparty_account_id`, `account_id`, `account_number`, `account_currency`, `account_type_code`, `account_type_name`, `account_category`, `is_test`, `customer_id`, `customer_name`, `segment`, `branch_name`, `region_name`) VALUES
+  (4501, 'TXN-202509-004501', DATE'2025-09-29', 'CARD_PURCHASE', 'DEBIT', 'CARD', 'POSTED', 'USD', 17963, 17963, 'GROCERY', 49, NULL, 76, '4100606497', 'USD', 'CHK', 'Everyday Checking', 'DEPOSIT', FALSE, 14, 'Nikhil Deshpande', 'BUSINESS', 'Chicago Loop', 'Midwest'),
+  (4502, 'TXN-202509-004502', DATE'2025-09-29', 'DEPOSIT', 'CREDIT', 'MOBILE', 'POSTED', 'EUR', 571544, 628552, NULL, NULL, NULL, 11, '4100091538', 'EUR', 'CHK', 'Everyday Checking', 'DEPOSIT', FALSE, 76, 'Alistair Buchanan', 'PREMIER', 'Denver LoDo', 'West')
+  -- … 498 more rows in this statement (133625 characters in all);
+
+INSERT INTO `evals`.`finance`.`v_transactions` (`transaction_id`, `transaction_ref`, `booked_on`, `type`, `direction`, `channel`, `status`, `currency`, `amount_minor`, `amount_usd_minor`, `merchant_category`, `card_id`, `counterparty_account_id`, `account_id`, `account_number`, `account_currency`, `account_type_code`, `account_type_name`, `account_category`, `is_test`, `customer_id`, `customer_name`, `segment`, `branch_name`, `region_name`) VALUES
+  (5001, 'TXN-202511-005001', DATE'2025-11-21', 'DEPOSIT', 'CREDIT', 'MOBILE', 'POSTED', 'USD', 164883, 164883, NULL, NULL, NULL, 20, '4100164039', 'USD', 'CHK', 'Everyday Checking', 'DEPOSIT', FALSE, 47, 'Verity Hollingsworth', 'RETAIL', 'Atlanta Midtown', 'Southeast'),
+  (5002, 'TXN-202511-005002', DATE'2025-11-21', 'FEE', 'DEBIT', 'SYSTEM', 'POSTED', 'USD', 1200, 1200, NULL, NULL, NULL, 121, '4100961908', 'USD', 'CHK', 'Everyday Checking', 'DEPOSIT', FALSE, 69, 'Talulah Greer', 'RETAIL', 'Chicago Loop', 'Midwest')
+  -- … 398 more rows in this statement (107372 characters in all);
+
+SELECT 'regions' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`regions`
+UNION ALL
+SELECT 'branches' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`branches`
+UNION ALL
+SELECT 'customers' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`customers`
+UNION ALL
+SELECT 'account_types' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`account_types`
+UNION ALL
+SELECT 'accounts' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`accounts`
+UNION ALL
+SELECT 'cards' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`cards`
+UNION ALL
+SELECT 'fx_rates' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`fx_rates`
+UNION ALL
+SELECT 'transactions' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`transactions`
+UNION ALL
+SELECT 'loans' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`loans`
+UNION ALL
+SELECT 'loan_payments' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`loan_payments`
+UNION ALL
+SELECT 'fiscal_periods' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`fiscal_periods`
+UNION ALL
+SELECT 'securities' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`securities`
+UNION ALL
+SELECT 'portfolios' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`portfolios`
+UNION ALL
+SELECT 'holdings' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`holdings`
+UNION ALL
+SELECT 'fees' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`fees`
+UNION ALL
+SELECT 'v_accounts' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`v_accounts`
+UNION ALL
+SELECT 'v_transactions' AS relation, COUNT(*) AS row_count FROM `evals`.`finance`.`v_transactions`;
+
+-- Would register in the backend at http://127.0.0.1:3000:
+--   datasource "Finance Databricks" (kind databricks, upserted by name)
+--   dataset "Finance (Databricks)" with 17 entities: evals.finance.regions, evals.finance.branches, evals.finance.customers, evals.finance.account_types, evals.finance.accounts, evals.finance.cards, evals.finance.fx_rates, evals.finance.transactions, evals.finance.loans, evals.finance.loan_payments, evals.finance.fiscal_periods, evals.finance.securities, evals.finance.portfolios, evals.finance.holdings, evals.finance.fees, evals.finance.v_accounts, evals.finance.v_transactions
+-- Dry run: nothing was connected to.

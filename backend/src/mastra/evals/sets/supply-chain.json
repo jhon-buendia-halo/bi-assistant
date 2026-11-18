@@ -1,0 +1,676 @@
+{
+  "variants": [
+    {
+      "id": "supply-chain",
+      "name": "Supply Chain",
+      "description": "Questions against the bundled synthetic Supply Chain sample (suppliers, purchase orders, shipments, receipts and inventory of 2024 and 2025, money in cents), each guarding a planted trap. Select its PostgreSQL datasource with a saved dataset containing the supply_chain tables and views; Settings, Testing Data loads both.",
+      "fixtureId": "supply-chain",
+      "dialect": "postgres",
+      "caseIdPrefix": ""
+    }
+  ],
+  "cases": [
+    {
+      "id": "acceptance-rate-by-supplier",
+      "category": "ratio",
+      "split": "dev",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:medium"
+      ],
+      "question": "Of the units we received from each supplier that have been inspected, what share was accepted?",
+      "intent": "Divide units accepted by units received — two different quantity columns on receipts — over inspected receipts only, instead of dividing one quantity column by itself.",
+      "notes": "units_received and units_accepted both read like \"the units\", so received/received is one keystroke away and returns 1.0000 for every supplier, turning the ranking into noise. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 18 rows — Ironclad Fastener Works 0.9900, Voltmark Electronics Ltd. 0.9775, Brightpath Packaging Co. 0.9650, Sentinel Safety Supply 0.9525, Nordhavn Industrial Chemicals 0.9400, Lakeshore Corrugated 0.9275, Takumi Precision Tools 0.9150, Rheinfeld Befestigungstechnik GmbH 0.9025, Kestrel Tool & Die 0.8900, Pacific Crest Components 0.8775, Bolt & Anchor Trading 0.8650, Harborview Packaging Solutions 0.8525, Guardline Protective Wear 0.8400, Meseta Chemical Supply 0.8275, Silverline Electrical Supply 0.8150, Crescent Lab Chemicals 0.8025, Evergreen Safety Products 0.7900, Northstar Hand Tools 0.7775 — a planted 0.0125 ladder, so the ordering is not a rounding artefact, and the generator asserts it holds with test POs included too. The reference obeys the dataset's default filter (purchase_orders.is_test = false, reached through shipments) and leaves PENDING receipts out because the question asks about inspected units: a PENDING receipt carries units_accepted = 0 by CHECK constraint, so keeping the 252 pending receipts drops Ironclad to 0.9781 and reorders everyone below it (Sentinel Safety Supply 0.8955 second). The shares are checked by the result set; the text check only asks for the top supplier by name. Trap: trapSql divides units received by units received and returns 1.0000 for all 18 suppliers (differs). Accepts a fraction or a percentage — the question names no unit; alternative verified the same day: ROUND(100.0 * accepted / received, 2) returns the same 18 suppliers, 99.00 down to 77.75, each exactly the reference × 100.\n\nTrap query (must return different rows): SELECT supplier.name AS supplier, ROUND(CAST(SUM(receipt.units_received) AS DECIMAL(38,6)) / SUM(receipt.units_received), 4) AS acceptance_rate FROM supply_chain.receipts receipt JOIN supply_chain.shipments shipment ON shipment.id = receipt.shipment_id JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id JOIN supply_chain.suppliers supplier ON supplier.id = po.supplier_id WHERE po.is_test = false AND receipt.qc_status <> 'PENDING' GROUP BY supplier.name\n\nAlternative reference the branch also accepted: SELECT supplier.name AS supplier, ROUND(100.0 * SUM(receipt.units_accepted) / SUM(receipt.units_received), 2) AS acceptance_rate_pct FROM supply_chain.receipts receipt JOIN supply_chain.shipments shipment ON shipment.id = receipt.shipment_id JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id JOIN supply_chain.suppliers supplier ON supplier.id = po.supplier_id WHERE po.is_test = false AND receipt.qc_status <> 'PENDING' GROUP BY supplier.name ORDER BY acceptance_rate_pct DESC, supplier.name\n\nParaphrases: For each supplier, what proportion of the inspected units we received did we accept? | What share of each supplier's received units that went through inspection did we end up accepting?\n\nMoved from feat/engine-eval-loop (branch category ratio-trap, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Ironclad Fastener Works"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT supplier.name AS supplier, ROUND(SUM(receipt.units_accepted)::numeric / SUM(receipt.units_received), 4) AS acceptance_rate FROM supply_chain.receipts receipt JOIN supply_chain.shipments shipment ON shipment.id = receipt.shipment_id JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id JOIN supply_chain.suppliers supplier ON supplier.id = po.supplier_id WHERE po.is_test = false AND receipt.qc_status <> 'PENDING' GROUP BY supplier.name ORDER BY acceptance_rate DESC, supplier.name"
+      }
+    },
+    {
+      "id": "freight-share-of-goods-value-by-mode",
+      "category": "ratio",
+      "split": "held-out",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:medium"
+      ],
+      "question": "For each transport mode, what did freight cost us as a share of the value of the goods shipped that way?",
+      "intent": "Freight cost over goods value — two different money columns on shipments — not a money column divided by itself.",
+      "notes": "freight_cost_cents and goods_value_cents are both *_cents amounts on shipments, so goods/goods (or freight/freight) is the degenerate ratio that returns 1.0000 for every mode. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 4 rows — AIR 0.1874, ROAD 0.0869, RAIL 0.0597, SEA 0.0340, over the 854 shipments on non-test POs (the reference obeys the dataset's default filter, one hop away on purchase_orders). Shipments from suppliers on DDP terms carry freight_cost_cents = 0 — the supplier paid the carrier — and stay in, because zero is what the freight cost us. The question says \"shipped\", so in-transit and exception shipments count: restricting to delivered shipments would give AIR 0.1924, ROAD 0.0863, RAIL 0.0622, SEA 0.0341. The shares are checked by the result set. Trap: trapSql divides goods value by goods value and returns 1.0000 for all four modes (differs). Accepts a fraction or a percentage — the question names no unit; alternative verified the same day: ROUND(100.0 * freight / goods, 2) returns AIR 18.74, ROAD 8.69, RAIL 5.97, SEA 3.40, each exactly the reference × 100.\n\nTrap query (must return different rows): SELECT shipment.mode, ROUND(CAST(SUM(shipment.goods_value_cents) AS DECIMAL(38,6)) / SUM(shipment.goods_value_cents), 4) AS freight_share FROM supply_chain.shipments shipment JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id WHERE po.is_test = false GROUP BY shipment.mode\n\nAlternative reference the branch also accepted: SELECT shipment.mode, ROUND(100.0 * SUM(shipment.freight_cost_cents) / SUM(shipment.goods_value_cents), 2) AS freight_share_pct FROM supply_chain.shipments shipment JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id WHERE po.is_test = false GROUP BY shipment.mode ORDER BY freight_share_pct DESC, shipment.mode\n\nParaphrases: By shipping mode, how much did we pay in freight relative to the value of the goods shipped?\n\nMoved from feat/engine-eval-loop (branch category ratio-trap, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT shipment.mode, ROUND(SUM(shipment.freight_cost_cents)::numeric / SUM(shipment.goods_value_cents), 4) AS freight_share FROM supply_chain.shipments shipment JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id WHERE po.is_test = false GROUP BY shipment.mode ORDER BY freight_share DESC, shipment.mode"
+      }
+    },
+    {
+      "id": "products-by-unit-of-measure",
+      "category": "aggregate",
+      "split": "dev",
+      "tags": [
+        "trap:constant-column",
+        "difficulty:easy"
+      ],
+      "question": "How do our products break down by unit of measure?",
+      "intent": "Group by a column that holds exactly one value — the answer has to say every product is stocked by the each, instead of presenting 100% as a finding or inventing a case unit.",
+      "notes": "unit_of_measure is 'EA' on all 80 products and a CHECK constraint allows nothing else. Products are bought in case packs (case_pack_qty 1 on 16 products, 6 to 500 on the other 64), but a pack size is not a unit of measure — a case of 24 is still 24 eaches. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 1 row — EA 80. products has no test flag, so no default filter applies. Trap: trapSql invents a case unit from the pack size and returns EA 16, CS 64 against the reference's single EA 80 row (differs) — the rubric's named failure. Grouping by the constant column cannot be the trap, because it is the reference; the rubric carries that half of the case. The text check asks the answer to name the single unit (EA or each).\n\nTrap query (must return different rows): SELECT CASE WHEN product.case_pack_qty = 1 THEN 'EA' ELSE 'CS' END AS unit_of_measure, COUNT(*) AS products FROM supply_chain.products product GROUP BY CASE WHEN product.case_pack_qty = 1 THEN 'EA' ELSE 'CS' END\n\nMoved from feat/engine-eval-loop (branch category constant-column, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\bEA\\b|\\beach\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT product.unit_of_measure, COUNT(*) AS products FROM supply_chain.products product GROUP BY product.unit_of_measure ORDER BY product.unit_of_measure"
+      },
+      "judgeRubric": "The fixture stores only one unit of measure: every one of the 80 products is 'EA' (each), enforced by a CHECK constraint. The correct answer says all products share a single unit of measure, EA (each), so there is no breakdown to compare; it may add that products are bought in case packs of 1 to 500 eaches. Score pass=true only if the final answer states that every product has the same unit of measure (EA / each) and therefore that there is no real breakdown — reporting the count (80) or \"100%\" is fine as long as the answer says the column is constant. Score pass=false if it presents the single value as a meaningful distribution, invents a second unit of measure (e.g. case, box, pallet or CS derived from the pack size), or reports case pack sizes as if they were units of measure. Close but wrong: an answer that shows the one-row table \"EA: 80 (100%)\" as a breakdown, or comments on the unit mix, without ever saying the column holds a single value — that must FAIL."
+    },
+    {
+      "id": "shipments-with-tracking-number",
+      "category": "null",
+      "split": "dev",
+      "tags": [
+        "trap:empty-column",
+        "difficulty:easy"
+      ],
+      "question": "How many shipments have a tracking number on file?",
+      "intent": "Count the populated rows of a mostly-null column instead of grouping by it or counting every shipment.",
+      "notes": "tracking_number is non-null on 61 of the 877 shipments (93.0% null): only air shipments ever carry one, and only 61 of the 153 air shipments do. One tracked shipment belongs to a test PO, so with the dataset's default filter (purchase_orders.is_test = false, one hop from shipments) the answer is 60 of the 854 remaining shipments. Grouping by tracking_number instead returns 61 groups — 60 single-shipment numbers and a 794-shipment null bucket. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 1 row — 60. Trap: trapSql counts every non-test shipment and returns 854 (differs). The count is checked by the result set, not by a text match on 60.\n\nTrap query (must return different rows): SELECT COUNT(*) AS shipments_with_tracking FROM supply_chain.shipments shipment JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id WHERE po.is_test = false\n\nParaphrases: How many of our shipments came with a tracking number?\n\nMoved from feat/engine-eval-loop (branch category empty-column, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS shipments_with_tracking FROM supply_chain.shipments shipment JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id WHERE po.is_test = false AND shipment.tracking_number IS NOT NULL"
+      }
+    },
+    {
+      "id": "suppliers-with-41-orders",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:ties",
+        "difficulty:medium"
+      ],
+      "question": "Which suppliers appear on exactly 41 of our purchase orders?",
+      "intent": "A HAVING-style question whose answer is a tie, so no arbitrary tie-break can hide.",
+      "notes": "Crescent Lab Chemicals and Northstar Hand Tools each have exactly 41 purchase orders, counting every status (DRAFT and CANCELLED included), and neither has a test PO, so the tie holds with or without the dataset's default filter — the reference still applies it. 41 is also the minimum: the next smallest suppliers, Bolt & Anchor Trading, Evergreen Safety Products and Meseta Chemical Supply, have 45 non-test POs each (47 with test POs), so the tie is isolated. A \"which supplier has the fewest purchase orders\" phrasing would let a LIMIT 1 silently drop one of the tied pair, so the question asks for the tie explicitly and both names must appear. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 2 rows — Crescent Lab Chemicals 41, Northstar Hand Tools 41. Trap: trapSql takes the smallest supplier with LIMIT 1 and returns Crescent Lab Chemicals alone (differs). The default filter cannot serve as this case's trap: the tie holds with test POs included.\n\nTrap query (must return different rows): SELECT supplier.name AS supplier, COUNT(*) AS purchase_orders FROM supply_chain.purchase_orders po JOIN supply_chain.suppliers supplier ON supplier.id = po.supplier_id WHERE po.is_test = false GROUP BY supplier.name ORDER BY purchase_orders, supplier.name LIMIT 1\n\nParaphrases: Which suppliers have exactly 41 purchase orders with us? | List the suppliers we have raised exactly 41 purchase orders with.\n\nMoved from feat/engine-eval-loop (branch category ties, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Crescent Lab Chemicals"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\bNorthstar Hand Tools\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT supplier.name AS supplier, COUNT(*) AS purchase_orders FROM supply_chain.purchase_orders po JOIN supply_chain.suppliers supplier ON supplier.id = po.supplier_id WHERE po.is_test = false GROUP BY supplier.name HAVING COUNT(*) = 41 ORDER BY supplier.name"
+      }
+    },
+    {
+      "id": "open-purchase-orders",
+      "category": "encoding",
+      "split": "dev",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:medium"
+      ],
+      "question": "How many purchase orders are currently open?",
+      "intent": "Map the business word \"open\" onto the stored statuses — ISSUED plus PARTIALLY_RECEIVED — not ISSUED alone, not a literal OPEN, and not DRAFT.",
+      "notes": "There is no 'OPEN' status. Across the 879 non-test purchase orders the status is DRAFT 44, ISSUED 146, PARTIALLY_RECEIVED 81, RECEIVED 298, CLOSED 229 or CANCELLED 81. An open PO has been sent to the supplier and is still waiting for goods: ISSUED (nothing received yet) plus PARTIALLY_RECEIVED (some received) = 227. A DRAFT was never sent, so \"everything not received, closed or cancelled\" (271) over-counts, and status = 'OPEN' returns 0. The data is as of 2025-12-31, so \"currently\" is the stored status, not a date filter. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 1 row — 227, with the dataset's default filter dropping test POs. Trap: trapSql counts ISSUED only and returns 146 (differs). The count is checked by the result set; the text check asks the answer to name partially received orders as part of \"open\".\n\nTrap query (must return different rows): SELECT COUNT(*) AS open_purchase_orders FROM supply_chain.purchase_orders po WHERE po.is_test = false AND po.status = 'ISSUED'\n\nParaphrases: How many of our purchase orders are still open?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "partially[ _]received"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS open_purchase_orders FROM supply_chain.purchase_orders po WHERE po.is_test = false AND po.status IN ('ISSUED', 'PARTIALLY_RECEIVED')"
+      }
+    },
+    {
+      "id": "orders-raised-2022",
+      "category": "out-of-scope",
+      "split": "dev",
+      "tags": [
+        "trap:out-of-scope",
+        "difficulty:medium"
+      ],
+      "question": "How much did we order from suppliers in 2022?",
+      "intent": "Purchase orders exist for 2024 and 2025 only — the agent must say so instead of returning a confident zero or inventing a figure.",
+      "notes": "ordered_on runs 2024-01-02 to 2025-12-31 (463 POs raised in 2024 and 437 in 2025; 458 and 421 once the dataset's default filter drops test POs) and a CHECK constraint forbids anything outside 2024-01-01..2025-12-31, so a 2022 query returns an empty aggregate, not a small one. A bare '$0' is technically true, reads like a finding and is the failure this case exists to catch. Three suppliers (Guardline Protective Wear, Lakeshore Corrugated, Silverline Electrical Supply) were onboarded in 2022 and warehouse opening dates reach back to 2012 — those are master-data dates, not purchasing history, and must not be read as 2022 orders. didNotCall create_visual is the one tool check: charting a year with no data is always wrong. Verified against the live fixture 2026-09-28 (seed 20260928, psql): MIN(ordered_on) 2024-01-02, MAX(ordered_on) 2025-12-31; supplier onboarding 2015-01-19..2023-07-10. Guards against silently answering outside the fixture's coverage.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        }
+      ],
+      "judgeRubric": "The question asks about 2022, a year this dataset does not cover: every purchase order was raised between 2024-01-01 and 2025-12-31. The correct answer says there is no 2022 purchasing data and that the data covers 2024 and 2025. Score pass=true only if the final answer makes clear there are no 2022 purchase orders in the data AND explicitly states the period the data DOES cover (2024 and/or 2025), without inventing any 2022 spend, order count or trend. Score pass=false if it reports a 2022 figure as if it were a real measurement, presents a bare '0' or '$0' with no statement of what the data covers, treats supplier onboarding dates in 2022 as orders placed in 2022, or fabricates any claim about 2022 purchasing. Close but wrong: an answer that says \"we ordered $0 in 2022\" with only a vague caveat (\"the data may be incomplete\") and no covered years, or one that states the coverage correctly but then presents a 2024 or 2025 total as the answer to the 2022 question — that must FAIL."
+    },
+    {
+      "id": "biggest-supplier",
+      "category": "ambiguous",
+      "split": "dev",
+      "tags": [
+        "trap:clarification",
+        "difficulty:hard"
+      ],
+      "question": "Who is our biggest supplier?",
+      "intent": "\"Biggest\" is undefined on this schema — number of purchase orders, committed spend and units received name three different suppliers, so the agent must ask.",
+      "notes": "Three defensible answers sit in the data (non-test POs; none of the three winners has a test PO, so their figures are the same with the default filter off): Brightpath Packaging Co. has the most purchase orders (70, against 55 each for Voltmark Electronics Ltd., Ironclad Fastener Works and Sentinel Safety Supply); Voltmark Electronics Ltd. has the most committed spend (59,602,245 cents = $596,022.45 on POs that are not DRAFT or CANCELLED, against Pacific Crest Components' 50,024,285); Ironclad Fastener Works has the most units received (3,582,124, against Rheinfeld Befestigungstechnik GmbH's 2,909,532). Each winner is at least 10% clear of its runner-up, with and without test POs (asserted by the generator). Whichever the agent picks unasked looks authoritative and is unfalsifiable to the reader, so the pass condition is that it asks which measure is meant. Verified against the live fixture 2026-09-28 (seed 20260928, psql). No finalSqlSucceeded or noToolErrors: a clarification has no reference SQL. Guards against confident single-metric guesses on an under-specified size question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "ask_clarification"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D5"
+        }
+      ],
+      "judgeRubric": "The question (\"Who is our biggest supplier?\") is ambiguous: \"biggest\" could mean the number of purchase orders we placed, the money committed on purchase orders, or the volume of units received — and these pick different suppliers in this data (Brightpath Packaging Co. by number of purchase orders, Voltmark Electronics Ltd. by committed spend, Ironclad Fastener Works by units received). The correct answer is a clarifying question such as \"Biggest by number of purchase orders, by spend, or by units received?\". Score pass=true only if the final answer is itself a clarifying question that offers 2-4 concrete, well-formed options grounded in this purchasing dataset (naming real notions such as purchase-order count, committed or total spend, units ordered or received, or number of order lines), and that does not name a supplier or state any figure as if it were the answer. Score pass=false if it picks a supplier, invents a measure the data does not hold (e.g. supplier revenue, market share or headcount), or asks a vague open-ended question with no concrete options. Close but wrong: an answer that names a supplier for one measure (e.g. \"Voltmark Electronics Ltd., by spend\") and only then offers the other measures as follow-ups, or that asks for clarification but offers a single option — that must FAIL."
+    },
+    {
+      "id": "product-on-most-order-lines-2024",
+      "category": "ranking",
+      "split": "held-out",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:medium"
+      ],
+      "question": "Which product appeared on the most purchase order lines in 2024?",
+      "intent": "purchase_order_lines carries product_id only — the answer has to join through to the product's name instead of handing back a surrogate key.",
+      "notes": "The path is purchase_order_lines.product_id -> products.name (sku is a code, not a name). Nitrile Exam Gloves, Large, Box of 100 sits on 26 of the non-test lines on POs raised in 2024, ahead of Thermal Shipping Label Roll, 4 x 6 in on 24, so the maximum is unique and LIMIT 1 is deterministic. Leaving DRAFT and CANCELLED POs out keeps the same winner (23 against 21), and none of its 2024 lines is on a test PO, so the dataset's default filter moves neither figure — the reference still applies it. Grouping on product_id answers numerically (\"product 43\") and is useless to a buyer. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 1 row — Nitrile Exam Gloves, Large, Box of 100, 26. Trap: trapSql groups on purchase_order_lines.product_id and returns 43, 26 — the surrogate key instead of the name (differs). The count is checked by the result set; the text check asks for the product name.\n\nTrap query (must return different rows): SELECT line.product_id, COUNT(*) AS order_lines FROM supply_chain.purchase_order_lines line JOIN supply_chain.purchase_orders po ON po.id = line.po_id WHERE po.is_test = false AND po.ordered_on >= DATE '2024-01-01' AND po.ordered_on < DATE '2025-01-01' GROUP BY line.product_id ORDER BY order_lines DESC LIMIT 1\n\nMoved from feat/engine-eval-loop (branch category id-vs-name, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Nitrile Exam Gloves"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT product.name AS product, COUNT(*) AS order_lines FROM supply_chain.purchase_order_lines line JOIN supply_chain.purchase_orders po ON po.id = line.po_id JOIN supply_chain.products product ON product.id = line.product_id WHERE po.is_test = false AND po.ordered_on >= DATE '2024-01-01' AND po.ordered_on < DATE '2025-01-01' GROUP BY product.name ORDER BY order_lines DESC, product.name LIMIT 1"
+      }
+    },
+    {
+      "id": "on-time-delivery-by-supplier-2025",
+      "category": "business-term",
+      "split": "dev",
+      "tags": [
+        "trap:metric-definition",
+        "difficulty:hard"
+      ],
+      "question": "What was each supplier's on-time delivery rate for shipments delivered in 2025?",
+      "intent": "On-time is a governed definition — delivered on or before the purchase order's promised date — not the carrier ETA (shipments.expected_on) that sits next to it.",
+      "notes": "Two dates compete: purchase_orders.promised_on (the date the supplier committed to when the PO was raised) and shipments.expected_on (the carrier's ETA quoted at dispatch). The dataset's on_time_delivery_rate metric measures against the promise; in the bare arm (no Metrics) the case is expected to fail or to state which date it used. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 18 rows over the 339 shipments on non-test POs delivered in 2025 — Silverline Electrical Supply 90.00, Crescent Lab Chemicals 85.71, Ironclad Fastener Works 71.43, Sentinel Safety Supply 70.00, Brightpath Packaging Co. 69.23, Pacific Crest Components 68.75, Rheinfeld Befestigungstechnik GmbH 66.67, Harborview Packaging Solutions 64.71, Lakeshore Corrugated 61.90, Voltmark Electronics Ltd. 59.26, Bolt & Anchor Trading 58.82, Meseta Chemical Supply 58.82, Kestrel Tool & Die 56.52, Nordhavn Industrial Chemicals 52.63, Takumi Precision Tools 52.17, Guardline Protective Wear 47.06, Northstar Hand Tools 47.06, Evergreen Safety Products 29.41. Shipments still IN_TRANSIT (29 on non-test POs) or in EXCEPTION (57) have no delivery date and belong in no rate. Trap: trapSql measures against the carrier ETA and returns a different rate for every supplier (e.g. Silverline Electrical Supply 70.00, Northstar Hand Tools 76.47, Evergreen Safety Products 58.82 — the generator asserts a gap of at least 3 points per supplier) (differs). The rates are checked by the result set; the text check asks the answer to say it measured against the promised date. Accepts a percentage or a fraction — the question names no unit; alternative verified the same day: the same ratio as ROUND(…, 4) returns 0.9000 down to 0.2941, each exactly the reference ÷ 100.\n\nTrap query (must return different rows): SELECT supplier.name AS supplier, ROUND(100.0 * COUNT(*) FILTER (WHERE shipment.delivered_on <= shipment.expected_on) / COUNT(*), 2) AS on_time_pct FROM supply_chain.shipments shipment JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id JOIN supply_chain.suppliers supplier ON supplier.id = po.supplier_id WHERE po.is_test = false AND shipment.status = 'DELIVERED' AND shipment.delivered_on >= DATE '2025-01-01' AND shipment.delivered_on < DATE '2026-01-01' GROUP BY supplier.name\n\nAlternative reference the branch also accepted: SELECT supplier.name AS supplier, ROUND(COUNT(*) FILTER (WHERE shipment.delivered_on <= po.promised_on)::numeric / COUNT(*), 4) AS on_time_rate FROM supply_chain.shipments shipment JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id JOIN supply_chain.suppliers supplier ON supplier.id = po.supplier_id WHERE po.is_test = false AND shipment.status = 'DELIVERED' AND shipment.delivered_on >= DATE '2025-01-01' AND shipment.delivered_on < DATE '2026-01-01' GROUP BY supplier.name ORDER BY on_time_rate DESC, supplier.name\n\nMoved from feat/engine-eval-loop (branch category metric-definition, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "promis"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT supplier.name AS supplier, ROUND(100.0 * COUNT(*) FILTER (WHERE shipment.delivered_on <= po.promised_on) / COUNT(*), 2) AS on_time_pct FROM supply_chain.shipments shipment JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id JOIN supply_chain.suppliers supplier ON supplier.id = po.supplier_id WHERE po.is_test = false AND shipment.status = 'DELIVERED' AND shipment.delivered_on >= DATE '2025-01-01' AND shipment.delivered_on < DATE '2026-01-01' GROUP BY supplier.name ORDER BY on_time_pct DESC, supplier.name"
+      }
+    },
+    {
+      "id": "committed-spend-by-tier-2024",
+      "category": "business-term",
+      "split": "held-out",
+      "tags": [
+        "trap:metric-definition",
+        "difficulty:medium"
+      ],
+      "question": "What was our committed purchase spend by supplier tier for orders raised in 2024?",
+      "intent": "Committed spend is a defined metric — line totals on purchase orders actually placed, excluding DRAFT and CANCELLED — not every line on file.",
+      "notes": "A DRAFT PO was never sent and a CANCELLED one will never be fulfilled, so neither commits money; the dataset's committed_spend_cents metric sums line_total_cents where the PO status is not DRAFT or CANCELLED. Every tier has 2024 draft and cancelled POs with lines (non-test: STRATEGIC 2 drafts / 13 cancelled, PREFERRED 9 / 11, APPROVED 10 / 13, CONDITIONAL 1 / 4), so summing every line overstates all four tiers. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 4 rows — PREFERRED 92,054,255, STRATEGIC 62,595,677, APPROVED 56,790,073, CONDITIONAL 30,450,085 cents (241,890,090 in total), with the dataset's default filter dropping test POs. line_total_cents is already cases × case pack × unit_price_cents; products.unit_cost_cents is a standard cost, not what was agreed, and re-pricing the same lines at standard cost gives different totals (PREFERRED 91,890,019, STRATEGIC 62,607,964, APPROVED 57,249,484, CONDITIONAL 33,136,370). Trap: trapSql drops the status filter and returns PREFERRED 106,533,403, APPROVED 73,038,938, STRATEGIC 70,987,624, CONDITIONAL 32,568,528 — APPROVED overtakes STRATEGIC (differs). The totals are checked by the result set; the text check asks for a tier by name. Accepts cents or dollars — the question names no unit; alternative verified the same day: the same sum / 100.0 returns PREFERRED 920,542.55, STRATEGIC 625,956.77, APPROVED 567,900.73, CONDITIONAL 304,500.85, each exactly the reference ÷ 100.\n\nTrap query (must return different rows): SELECT supplier.tier, SUM(line.line_total_cents) AS committed_spend_cents FROM supply_chain.purchase_order_lines line JOIN supply_chain.purchase_orders po ON po.id = line.po_id JOIN supply_chain.suppliers supplier ON supplier.id = po.supplier_id WHERE po.is_test = false AND po.ordered_on >= DATE '2024-01-01' AND po.ordered_on < DATE '2025-01-01' GROUP BY supplier.tier\n\nAlternative reference the branch also accepted: SELECT supplier.tier, SUM(line.line_total_cents) / 100.0 AS committed_spend_dollars FROM supply_chain.purchase_order_lines line JOIN supply_chain.purchase_orders po ON po.id = line.po_id JOIN supply_chain.suppliers supplier ON supplier.id = po.supplier_id WHERE po.is_test = false AND po.status NOT IN ('DRAFT', 'CANCELLED') AND po.ordered_on >= DATE '2024-01-01' AND po.ordered_on < DATE '2025-01-01' GROUP BY supplier.tier ORDER BY committed_spend_dollars DESC, supplier.tier\n\nParaphrases: For purchase orders raised in 2024, how much spend did we commit to each supplier tier?\n\nMoved from feat/engine-eval-loop (branch category metric-definition, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "STRATEGIC"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT supplier.tier, SUM(line.line_total_cents) AS committed_spend_cents FROM supply_chain.purchase_order_lines line JOIN supply_chain.purchase_orders po ON po.id = line.po_id JOIN supply_chain.suppliers supplier ON supplier.id = po.supplier_id WHERE po.is_test = false AND po.status NOT IN ('DRAFT', 'CANCELLED') AND po.ordered_on >= DATE '2024-01-01' AND po.ordered_on < DATE '2025-01-01' GROUP BY supplier.tier ORDER BY committed_spend_cents DESC, supplier.tier"
+      }
+    },
+    {
+      "id": "purchase-orders-january-2025",
+      "category": "default-filter",
+      "split": "dev",
+      "tags": [
+        "trap:default-filter",
+        "difficulty:hard"
+      ],
+      "question": "How many purchase orders were raised in January 2025?",
+      "intent": "Sandbox test purchase orders are flagged and must come out of a reported volume without being asked for.",
+      "notes": "21 of the 900 purchase orders are is_test = true (2.33%) — sandbox orders raised while testing the procurement integration — and the Supply Chain dataset carries a default-filter knowledge entry saying to exclude them (with their lines, shipments and receipts) from every aggregate. January 2025 has 33 POs by ordered_on and 24 once its 9 test POs are dropped; the test traffic is concentrated in that month on purpose. Every status counts as raised (ordered_on is set on DRAFT too); the 24 are RECEIVED 11, CANCELLED 4, PARTIALLY_RECEIVED 4, CLOSED 3 and ISSUED 2 — no non-test DRAFT, so an answer that also drops drafts still gets 24. Every reference in this suite obeys the default filter; this is the case that makes it the question, so its wording never announces the filter. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 1 row — 24. Trap: trapSql drops the default filter and returns 33 (differs). The count is checked by the result set; the test|sandbox word check asks the answer to say it left test orders out.\n\nTrap query (must return different rows): SELECT COUNT(*) AS purchase_orders FROM supply_chain.purchase_orders po WHERE po.ordered_on >= DATE '2025-01-01' AND po.ordered_on < DATE '2025-02-01'\n\nParaphrases: How many purchase orders did we raise in January 2025? | What was our purchase order count for January 2025?\n\nMoved from feat/engine-eval-loop (branch category default-filter, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "test|sandbox"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS purchase_orders FROM supply_chain.purchase_orders po WHERE po.is_test = false AND po.ordered_on >= DATE '2025-01-01' AND po.ordered_on < DATE '2025-02-01'"
+      }
+    },
+    {
+      "id": "deliveries-by-region-2025",
+      "category": "join",
+      "split": "dev",
+      "tags": [
+        "trap:multi-step-join",
+        "difficulty:hard"
+      ],
+      "question": "How many shipments were delivered to each of our regions in 2025?",
+      "intent": "Shipments carry no region — the answer needs the shipments -> purchase_orders -> warehouses -> regions path.",
+      "notes": "The path is shipments.po_id -> purchase_orders.warehouse_id -> warehouses.region_id -> regions.name: the region is the receiving warehouse's, and the supplier's country is a different geography. Stopping one join short reports 7 warehouses at the wrong grain (Singapore Gateway Warehouse 68, Reno Distribution Center 63, Columbus Fulfillment Center 51, Portland Cross-Dock 50, Charlotte Regional Warehouse 43, Leipzig Distribution Center 36, Rotterdam Logistics Hub 28). Verified against the live fixture 2026-09-28 (seed 20260928, psql): 4 rows — North America West 113, North America East 94, Asia Pacific 68, Europe Middle East and Africa 64, counting DELIVERED shipments with delivered_on in 2025 on non-test POs. The default filter has to travel with the join (shipments -> purchase_orders.is_test), and every region has at least one 2025 delivery on a test PO. Trap: trapSql drops that filter and returns North America West 115, North America East 103, Asia Pacific 70, Europe Middle East and Africa 68 — different in all four regions (differs). The counts are checked by the result set; the text check asks for the largest region by name.\n\nTrap query (must return different rows): SELECT region.name AS region, COUNT(*) AS deliveries FROM supply_chain.shipments shipment JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id JOIN supply_chain.warehouses warehouse ON warehouse.id = po.warehouse_id JOIN supply_chain.regions region ON region.id = warehouse.region_id WHERE shipment.status = 'DELIVERED' AND shipment.delivered_on >= DATE '2025-01-01' AND shipment.delivered_on < DATE '2026-01-01' GROUP BY region.name\n\nMoved from feat/engine-eval-loop (branch category multi-step-join, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "North America West"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT region.name AS region, COUNT(*) AS deliveries FROM supply_chain.shipments shipment JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id JOIN supply_chain.warehouses warehouse ON warehouse.id = po.warehouse_id JOIN supply_chain.regions region ON region.id = warehouse.region_id WHERE po.is_test = false AND shipment.status = 'DELIVERED' AND shipment.delivered_on >= DATE '2025-01-01' AND shipment.delivered_on < DATE '2026-01-01' GROUP BY region.name ORDER BY deliveries DESC, region.name"
+      }
+    },
+    {
+      "id": "inventory-data-discovery",
+      "category": "discovery",
+      "split": "dev",
+      "tags": [
+        "trap:discovery",
+        "difficulty:easy"
+      ],
+      "question": "What data do we have about inventory levels?",
+      "intent": "Pure discovery — must answer from the session datasets rather than run SQL or invent entities.",
+      "notes": "A schema question answered by querying rows is a wrong process even when the prose happens to be right, so this case scores the process and the entity names. The honest answer names inventory_snapshots (one month-end balance per warehouse and stocked product — 7 warehouses × 28 products × 24 month-ends, 2024-01-31 through 2025-12-31 — with on_hand_units and allocated_units) and the warehouses and products it references. There is no live or daily stock position, no bin or shelf location, no reorder point and no inventory valuation; receipts record goods coming in but are not a balance. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 4704 snapshot rows, 28 distinct products, 7 warehouses, 24 snapshot dates. The entity list is already in the per-turn system block, so there is no calledTool list_entities check. Guards against the engine reaching for run_readonly_sql on questions about what exists.\n\nMoved from feat/engine-eval-loop (branch category discovery, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*inventory[ _]snapshots)(?=[\\s\\S]*warehouses)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "I4"
+        }
+      ],
+      "judgeRubric": "The user asks what data exists about inventory levels; the correct answer names the relevant entities without running SQL. It names inventory_snapshots (one row per warehouse, product and month-end date from 2024-01-31 through 2025-12-31, holding on_hand_units and allocated_units — point-in-time balances, not stock movements) and the warehouses and products tables it links to, and may add that receipts record inbound units. Score pass=true only if the final answer names inventory_snapshots (by name or an unambiguous equivalent) and warehouses, says what the snapshots hold (month-end on-hand and allocated units per warehouse and product), and no run_readonly_sql call was made. Score pass=false if it ran SQL against the data, invents an inventory entity or column the dataset does not have (e.g. live or real-time stock levels, bin or shelf locations, reorder points, safety stock or an inventory value), or names only one of inventory_snapshots and warehouses. Close but wrong: an answer that names inventory_snapshots but describes it as a live or daily stock position, or that lists a reorder point or bin location among the available fields — that must FAIL."
+    },
+    {
+      "id": "on-hand-end-of-2024-by-warehouse",
+      "category": "business-term",
+      "split": "dev",
+      "tags": [
+        "trap:domain-semantics",
+        "difficulty:medium"
+      ],
+      "question": "How many units did each warehouse have on hand at the end of 2024?",
+      "intent": "Inventory snapshots are point-in-time month-end balances — the year-end figure is the 2024-12-31 snapshot, not a sum over the year's snapshots.",
+      "notes": "inventory_snapshots holds one balance per warehouse, stocked product and month-end, and balances at different dates are not additive: a unit on the shelf in November and still there in December is the same unit. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 7 rows — Singapore Gateway Warehouse 143,000, Columbus Fulfillment Center 126,627, Portland Cross-Dock 121,609, Leipzig Distribution Center 93,472, Charlotte Regional Warehouse 88,019, Rotterdam Logistics Hub 77,315, Reno Distribution Center 76,338 units (726,380 in total). Snapshots carry no test flag, so no default filter applies. \"On hand\" is on_hand_units; subtracting allocated_units gives the unallocated balance (Singapore Gateway Warehouse 115,703), which the question does not ask for, and averaging the twelve 2024 month-ends is also wrong (Singapore Gateway Warehouse 135,144). Trap: trapSql sums every 2024 month-end and returns roughly twelve times the balance — Singapore Gateway Warehouse 1,621,722, Columbus Fulfillment Center 1,312,443, Rotterdam Logistics Hub 1,194,010, Portland Cross-Dock 1,167,954, Charlotte Regional Warehouse 1,120,067, Reno Distribution Center 955,822, Leipzig Distribution Center 930,724 (differs, and reorders the warehouses). The balances are checked by the result set; the text check asks for the largest warehouse by name.\n\nTrap query (must return different rows): SELECT warehouse.name AS warehouse, SUM(snapshot.on_hand_units) AS on_hand_units FROM supply_chain.inventory_snapshots snapshot JOIN supply_chain.warehouses warehouse ON warehouse.id = snapshot.warehouse_id WHERE snapshot.snapshot_date BETWEEN DATE '2024-01-01' AND DATE '2024-12-31' GROUP BY warehouse.name\n\nParaphrases: At the close of 2024, how many units were on hand in each of our warehouses?\n\nMoved from feat/engine-eval-loop (branch category domain-semantics, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Singapore Gateway Warehouse"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT warehouse.name AS warehouse, SUM(snapshot.on_hand_units) AS on_hand_units FROM supply_chain.inventory_snapshots snapshot JOIN supply_chain.warehouses warehouse ON warehouse.id = snapshot.warehouse_id WHERE snapshot.snapshot_date = DATE '2024-12-31' GROUP BY warehouse.name ORDER BY on_hand_units DESC, warehouse.name"
+      }
+    },
+    {
+      "id": "units-ordered-of-safety-glasses-2024",
+      "category": "encoding",
+      "split": "held-out",
+      "tags": [
+        "trap:unit-confusion",
+        "difficulty:medium"
+      ],
+      "question": "How many units of Anti-Fog Safety Glasses did we order in 2024?",
+      "intent": "Purchase-order lines order whole cases — units ordered is cases_ordered × products.case_pack_qty (24 for this product).",
+      "notes": "cases_ordered counts cases, and Anti-Fog Safety Glasses (SKU SAF-GLS-0024) come 24 to a case, so the raw column is wrong by 24x. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 1 row — 9,000 units, from 375 cases over 15 lines on POs raised in 2024. None of those lines sits on a DRAFT or CANCELLED PO (5 CLOSED, 6 RECEIVED, 2 PARTIALLY_RECEIVED, 2 ISSUED) and none on a test PO, so neither a status filter nor the dataset's default filter moves the figure — the reference still applies the latter. Units received is a different measure: 6,144 of those units had arrived by 2025-12-31. Trap: trapSql sums cases_ordered and returns 375 (differs). The figure is checked by the result set, not by a text match on 9,000.\n\nTrap query (must return different rows): SELECT SUM(line.cases_ordered) AS units_ordered FROM supply_chain.purchase_order_lines line JOIN supply_chain.purchase_orders po ON po.id = line.po_id JOIN supply_chain.products product ON product.id = line.product_id WHERE product.name = 'Anti-Fog Safety Glasses' AND po.is_test = false AND po.ordered_on >= DATE '2024-01-01' AND po.ordered_on < DATE '2025-01-01'\n\nParaphrases: In 2024, how many individual units of Anti-Fog Safety Glasses did we order?\n\nMoved from feat/engine-eval-loop (branch category unit-confusion, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT SUM(line.cases_ordered * product.case_pack_qty) AS units_ordered FROM supply_chain.purchase_order_lines line JOIN supply_chain.purchase_orders po ON po.id = line.po_id JOIN supply_chain.products product ON product.id = line.product_id WHERE product.name = 'Anti-Fog Safety Glasses' AND po.is_test = false AND po.ordered_on >= DATE '2024-01-01' AND po.ordered_on < DATE '2025-01-01'"
+      }
+    },
+    {
+      "id": "inspection-failure-rate-2025",
+      "category": "default-filter",
+      "split": "held-out",
+      "tags": [
+        "trap:quality-filter",
+        "difficulty:medium"
+      ],
+      "question": "What share of the receipts we took in during 2025 failed inspection, as a percentage?",
+      "intent": "PENDING receipts have not been inspected yet — they are neither passes nor failures and belong out of the denominator.",
+      "notes": "Of the 942 receipts on non-test POs received in 2025, 646 PASSED, 144 FAILED and 152 are still PENDING (16.1%). A PENDING receipt accepts 0 units until it is inspected, but that is not a failure. The failure rate over inspected receipts is 144 / 790 = 18.23%; dividing by every receipt gives 15.29%. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 1 row — 18.23, with the dataset's default filter dropping receipts on test POs. A unit-weighted rejection share (rejected units over inspected units, 7.13%) answers a different question — this one counts receipts. Trap: trapSql keeps PENDING receipts in the denominator and returns 15.29 (differs). The rate is checked by the result set; the text check asks the answer to say how pending (uninspected) receipts were treated.\n\nTrap query (must return different rows): SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE receipt.qc_status = 'FAILED') / COUNT(*), 2) AS failure_rate_pct FROM supply_chain.receipts receipt JOIN supply_chain.shipments shipment ON shipment.id = receipt.shipment_id JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id WHERE po.is_test = false AND receipt.received_on >= DATE '2025-01-01' AND receipt.received_on < DATE '2026-01-01'\n\nMoved from feat/engine-eval-loop (branch category quality-filter, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "pending|not yet inspected|uninspected|awaiting"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE receipt.qc_status = 'FAILED') / COUNT(*) FILTER (WHERE receipt.qc_status <> 'PENDING'), 2) AS failure_rate_pct FROM supply_chain.receipts receipt JOIN supply_chain.shipments shipment ON shipment.id = receipt.shipment_id JOIN supply_chain.purchase_orders po ON po.id = shipment.po_id WHERE po.is_test = false AND receipt.received_on >= DATE '2025-01-01' AND receipt.received_on < DATE '2026-01-01'"
+      }
+    },
+    {
+      "id": "suppliers-per-tier",
+      "category": "aggregate",
+      "split": "dev",
+      "tags": [
+        "trap:control",
+        "difficulty:easy"
+      ],
+      "question": "How many suppliers do we have in each tier?",
+      "intent": "One table, one GROUP BY, no trap — the healthy baseline for this fixture.",
+      "notes": "PREFERRED 6, APPROVED 5, STRATEGIC 4, CONDITIONAL 3 — all 18 suppliers. Every supplier is active (is_active is true on all 18), so an answer that filters to active suppliers gets the same counts, and there is no purchase-order table in play and therefore no default filter to apply. If this fails, the problem is schema linking rather than any planted trap, and no guard may fire on it. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 4 rows as listed. The counts are checked by the result set. The reference is portable SQL, so it needs no Databricks override.\n\nParaphrases: What's the supplier count for each tier? | Break down our suppliers by tier.\n\nMoved from feat/engine-eval-loop (branch category control, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "STRATEGIC"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT supplier.tier, COUNT(*) AS suppliers FROM supply_chain.suppliers supplier GROUP BY supplier.tier ORDER BY suppliers DESC, supplier.tier"
+      }
+    },
+    {
+      "id": "warehouses-per-region",
+      "category": "aggregate",
+      "split": "held-out",
+      "tags": [
+        "trap:control",
+        "difficulty:easy"
+      ],
+      "question": "How many warehouses do we operate in each region?",
+      "intent": "One join to fetch the region name, no filter implied by the question — a control on the location hierarchy.",
+      "notes": "North America West 2, North America East 2, Europe Middle East and Africa 2, Asia Pacific 1 — 7 warehouses, all active (is_active is true on every row, so \"operate\" filters nothing out). The counterpart to the region-level delivery case: this one counts WAREHOUSES, not shipments, so a fix that reflexively joins to purchase orders or applies the test-PO filter over-fires here. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 4 rows as listed. The counts are checked by the result set. The reference is portable SQL, so it needs no Databricks override.\n\nMoved from feat/engine-eval-loop (branch category control, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Asia Pacific"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT region.name AS region, COUNT(*) AS warehouses FROM supply_chain.warehouses warehouse JOIN supply_chain.regions region ON region.id = warehouse.region_id GROUP BY region.name ORDER BY warehouses DESC, region.name"
+      }
+    },
+    {
+      "id": "products-per-category",
+      "category": "aggregate",
+      "split": "dev",
+      "tags": [
+        "trap:control",
+        "difficulty:easy"
+      ],
+      "question": "How many products do we carry in each category?",
+      "intent": "One join to the category name, no trap.",
+      "notes": "Fasteners 14, Packaging 14, Chemicals 13, Electronic Components 13, Hand Tools 13, Safety Equipment 13 — 80 products. No product is discontinued (is_discontinued is false on all 80), so \"carry\" filters nothing out, and products are not purchase orders, so the test-PO filter does not apply. Verified against the live fixture 2026-09-28 (seed 20260928, psql): 6 rows as listed. The counts are checked by the result set. The reference is portable SQL, so it needs no Databricks override.\n\nParaphrases: What's the product count by category?\n\nMoved from feat/engine-eval-loop (branch category control, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Packaging"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT category.name AS category, COUNT(*) AS products FROM supply_chain.products product JOIN supply_chain.product_categories category ON category.id = product.category_id GROUP BY category.name ORDER BY products DESC, category.name"
+      }
+    }
+  ]
+}

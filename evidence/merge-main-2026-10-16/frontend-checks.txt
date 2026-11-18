@@ -1,0 +1,4 @@
+Output location: /Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/frontend/dist/frontend
+Chrome Headless 153.0.0.0 (Mac OS 10.15.7): Executed 345 of 345 (1 FAILED) (4.779 secs / 4.716 secs)
+Chrome Headless 153.0.0.0 (Mac OS 10.15.7) PromptEditor inserts the chosen link as [[kind:name]] FAILED
+	Uncaught InvalidStateError: Failed to execute 'collapseToEnd' on 'Selection': there is no selection. thrown

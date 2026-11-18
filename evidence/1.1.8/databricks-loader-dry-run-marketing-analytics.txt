@@ -1,0 +1,368 @@
+$ npm run fixture:databricks -- --fixture marketing-analytics --dry-run   (backend/, no DATABRICKS_* variables set, 2026-10-13)
+
+-- Databricks load plan for the Marketing Analytics (Databricks) sample (marketing-analytics-databricks)
+-- dump: backend/scripts/fixtures/marketing-analytics/data (dumped 2026-10-13T20:09:07.015Z)
+-- target: evals.marketing_analytics
+-- 14 relations, 12151 rows, 52 statements; INSERTs abbreviated to 2 rows (--full prints them whole)
+-- column types (Databricks <- PostgreSQL, from seed | dump | values):
+--   regions (4 rows): id BIGINT <- bigint (seed); region_code STRING <- text (seed); name STRING <- text (seed)
+--   states (12 rows): id BIGINT <- bigint (seed); state_code STRING <- text (seed); name STRING <- text (seed); region_id BIGINT <- bigint (seed)
+--   carriers (6 rows): id BIGINT <- bigint (seed); carrier_code STRING <- text (seed); name STRING <- text (seed); segment STRING <- text (seed); hq_state_id BIGINT <- bigint (seed); subscribed_on DATE <- date (seed)
+--   lines_of_business (5 rows): id BIGINT <- bigint (seed); line_code STRING <- text (seed); name STRING <- text (seed); product_family STRING <- text (seed)
+--   products (24 rows): id BIGINT <- bigint (seed); product_code STRING <- text (seed); name STRING <- text (seed); carrier_id BIGINT <- bigint (seed); line_id BIGINT <- bigint (seed); launched_on DATE <- date (seed)
+--   channels (4 rows): id BIGINT <- bigint (seed); channel_code STRING <- text (seed); name STRING <- text (seed); is_digital BOOLEAN <- boolean (seed)
+--   periods (9 rows): id BIGINT <- bigint (seed); period_code STRING <- text (seed); calendar_year INT <- integer (seed); calendar_quarter INT <- integer (seed); fiscal_year INT <- integer (seed); fiscal_quarter INT <- integer (seed); starts_on DATE <- date (seed); ends_on DATE <- date (seed); reporting_status STRING <- text (seed)
+--   policy_sales (10822 rows): id BIGINT <- bigint (seed); carrier_id BIGINT <- bigint (seed); product_id BIGINT <- bigint (seed); channel_id BIGINT <- bigint (seed); state_id BIGINT <- bigint (seed); period_id BIGINT <- bigint (seed); sale_status STRING <- text (seed); policy_count INT <- integer (seed); written_premium_cents BIGINT <- bigint (seed); currency_code STRING <- text (seed); is_test BOOLEAN <- boolean (seed)
+--   revenue_by_period (191 rows): id BIGINT <- bigint (seed); carrier_id BIGINT <- bigint (seed); line_id BIGINT <- bigint (seed); period_id BIGINT <- bigint (seed); earned_premium_cents BIGINT <- bigint (seed); fee_income_cents BIGINT <- bigint (seed)
+--   campaigns (26 rows): id BIGINT <- bigint (seed); campaign_code STRING <- text (seed); name STRING <- text (seed); carrier_id BIGINT <- bigint (seed); line_id BIGINT <- bigint (seed); channel_id BIGINT <- bigint (seed); objective STRING <- text (seed); starts_on DATE <- date (seed); ends_on DATE <- date (seed); promo_code STRING <- text (seed)
+--   campaign_results (51 rows): id BIGINT <- bigint (seed); campaign_id BIGINT <- bigint (seed); period_id BIGINT <- bigint (seed); budget_cents BIGINT <- bigint (seed); spend_cents BIGINT <- bigint (seed); impressions INT <- integer (seed); clicks INT <- integer (seed); leads INT <- integer (seed); quotes INT <- integer (seed); policies_bound INT <- integer (seed)
+--   market_benchmarks (955 rows): id BIGINT <- bigint (seed); viewer_carrier_id BIGINT <- bigint (seed); period_id BIGINT <- bigint (seed); line_id BIGINT <- bigint (seed); competitor_label STRING <- text (seed); policy_count INT <- integer (seed); written_premium_cents BIGINT <- bigint (seed)
+--   competitor_masks (30 rows): id BIGINT <- bigint (seed); viewer_carrier_id BIGINT <- bigint (seed); competitor_label STRING <- text (seed); competitor_carrier_id BIGINT <- bigint (seed)
+--   analyst_access (12 rows): id BIGINT <- bigint (seed); email STRING <- text (seed); full_name STRING <- text (seed); carrier_id BIGINT <- bigint (seed); access_role STRING <- text (seed); competitor_visibility STRING <- text (seed)
+
+CREATE SCHEMA IF NOT EXISTS `evals`.`marketing_analytics`;
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`regions` (
+  `id` BIGINT NOT NULL,
+  `region_code` STRING NOT NULL,
+  `name` STRING NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`regions` (`id`, `region_code`, `name`) VALUES
+  (1, 'NE', 'Northeast'),
+  (2, 'SE', 'Southeast')
+  -- … 2 more rows in this statement (184 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`states` (
+  `id` BIGINT NOT NULL,
+  `state_code` STRING NOT NULL,
+  `name` STRING NOT NULL,
+  `region_id` BIGINT NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`states` (`id`, `state_code`, `name`, `region_id`) VALUES
+  (1, 'NY', 'New York', 1),
+  (2, 'MA', 'Massachusetts', 1)
+  -- … 10 more rows in this statement (449 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`carriers` (
+  `id` BIGINT NOT NULL,
+  `carrier_code` STRING NOT NULL,
+  `name` STRING NOT NULL,
+  `segment` STRING NOT NULL,
+  `hq_state_id` BIGINT NOT NULL,
+  `subscribed_on` DATE NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`carriers` (`id`, `carrier_code`, `name`, `segment`, `hq_state_id`, `subscribed_on`) VALUES
+  (1, 'HBM', 'Harborline Mutual', 'MUTUAL', 2, DATE'2021-04-01'),
+  (2, 'CRV', 'Crestview Insurance', 'NATIONAL', 7, DATE'2020-09-15')
+  -- … 4 more rows in this statement (552 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`lines_of_business` (
+  `id` BIGINT NOT NULL,
+  `line_code` STRING NOT NULL,
+  `name` STRING NOT NULL,
+  `product_family` STRING NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`lines_of_business` (`id`, `line_code`, `name`, `product_family`) VALUES
+  (1, 'AUTO', 'Personal auto', 'Property & casualty'),
+  (2, 'HOME', 'Homeowners', 'Property & casualty')
+  -- … 3 more rows in this statement (346 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`products` (
+  `id` BIGINT NOT NULL,
+  `product_code` STRING NOT NULL,
+  `name` STRING NOT NULL,
+  `carrier_id` BIGINT NOT NULL,
+  `line_id` BIGINT NOT NULL,
+  `launched_on` DATE NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`products` (`id`, `product_code`, `name`, `carrier_id`, `line_id`, `launched_on`) VALUES
+  (1, 'HBM-AUTO-01', 'Anchor Auto', 1, 1, DATE'2016-06-17'),
+  (2, 'HBM-HOME-01', 'Anchor Home', 1, 2, DATE'2018-06-02')
+  -- … 22 more rows in this statement (1658 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`channels` (
+  `id` BIGINT NOT NULL,
+  `channel_code` STRING NOT NULL,
+  `name` STRING NOT NULL,
+  `is_digital` BOOLEAN NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`channels` (`id`, `channel_code`, `name`, `is_digital`) VALUES
+  (1, 'AGT', 'Independent agents', FALSE),
+  (2, 'WEB', 'Direct online', TRUE)
+  -- … 2 more rows in this statement (253 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`periods` (
+  `id` BIGINT NOT NULL,
+  `period_code` STRING NOT NULL,
+  `calendar_year` INT NOT NULL,
+  `calendar_quarter` INT NOT NULL,
+  `fiscal_year` INT NOT NULL,
+  `fiscal_quarter` INT NOT NULL,
+  `starts_on` DATE NOT NULL,
+  `ends_on` DATE NOT NULL,
+  `reporting_status` STRING NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`periods` (`id`, `period_code`, `calendar_year`, `calendar_quarter`, `fiscal_year`, `fiscal_quarter`, `starts_on`, `ends_on`, `reporting_status`) VALUES
+  (1, '2024-Q1', 2024, 1, 2024, 3, DATE'2024-01-01', DATE'2024-03-31', 'FINAL'),
+  (2, '2024-Q2', 2024, 2, 2024, 4, DATE'2024-04-01', DATE'2024-06-30', 'FINAL')
+  -- … 7 more rows in this statement (935 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`policy_sales` (
+  `id` BIGINT NOT NULL,
+  `carrier_id` BIGINT NOT NULL,
+  `product_id` BIGINT NOT NULL,
+  `channel_id` BIGINT NOT NULL,
+  `state_id` BIGINT NOT NULL,
+  `period_id` BIGINT NOT NULL,
+  `sale_status` STRING NOT NULL,
+  `policy_count` INT NOT NULL,
+  `written_premium_cents` BIGINT NOT NULL,
+  `currency_code` STRING NOT NULL,
+  `is_test` BOOLEAN NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (1, 1, 1, 1, 1, 1, 'BOUND', 245, 35752360, 'USD', FALSE),
+  (2, 1, 1, 1, 1, 1, 'NTU', 7, 1046931, 'USD', FALSE)
+  -- … 498 more rows in this statement (29949 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (501, 1, 2, 4, 1, 6, 'BOUND', 56, 10477376, 'USD', FALSE),
+  (502, 1, 2, 4, 1, 7, 'BOUND', 61, 11372889, 'USD', FALSE)
+  -- … 498 more rows in this statement (29675 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (1001, 1, 3, 2, 3, 5, 'NTU', 3, 60489, 'USD', FALSE),
+  (1002, 1, 3, 2, 3, 6, 'BOUND', 78, 1634404, 'USD', FALSE)
+  -- … 498 more rows in this statement (29801 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (1501, 1, 4, 2, 4, 8, 'NTU', 2, 130647, 'USD', FALSE),
+  (1502, 1, 4, 2, 4, 8, 'PENDING', 1, 65837, 'USD', FALSE)
+  -- … 498 more rows in this statement (29787 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (2001, 1, 5, 2, 7, 6, 'BOUND', 41, 2281867, 'USD', FALSE),
+  (2002, 1, 5, 2, 7, 6, 'NTU', 2, 109574, 'USD', FALSE)
+  -- … 498 more rows in this statement (30557 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (2501, 2, 6, 4, 7, 6, 'BOUND', 117, 16564660, 'USD', FALSE),
+  (2502, 2, 6, 4, 7, 6, 'NTU', 7, 974002, 'USD', FALSE)
+  -- … 498 more rows in this statement (30786 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (3001, 2, 7, 1, 5, 5, 'BOUND', 140, 26183707, 'USD', FALSE),
+  (3002, 2, 7, 1, 5, 5, 'NTU', 5, 962438, 'USD', FALSE)
+  -- … 498 more rows in this statement (30548 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (3501, 2, 8, 1, 2, 8, 'BOUND', 132, 2882795, 'USD', FALSE),
+  (3502, 2, 8, 1, 2, 8, 'NTU', 5, 106008, 'USD', FALSE)
+  -- … 498 more rows in this statement (29940 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (4001, 2, 8, 1, 11, 5, 'NTU', 3, 64157, 'USD', FALSE),
+  (4002, 2, 8, 1, 11, 6, 'BOUND', 137, 2708278, 'USD', FALSE)
+  -- … 498 more rows in this statement (29911 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (4501, 2, 9, 1, 8, 7, 'NTU', 3, 186724, 'USD', FALSE),
+  (4502, 2, 9, 1, 8, 8, 'BOUND', 49, 2908076, 'USD', FALSE)
+  -- … 498 more rows in this statement (30213 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (5001, 2, 10, 2, 5, 3, 'BOUND', 36, 1801715, 'USD', FALSE),
+  (5002, 2, 10, 2, 5, 3, 'NTU', 2, 102778, 'USD', FALSE)
+  -- … 498 more rows in this statement (30579 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (5501, 3, 11, 4, 2, 4, 'NTU', 4, 613123, 'USD', FALSE),
+  (5502, 3, 11, 4, 2, 5, 'BOUND', 76, 11690181, 'USD', FALSE)
+  -- … 498 more rows in this statement (31183 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (6001, 3, 12, 1, 3, 4, 'BOUND', 142, 27955713, 'USD', FALSE),
+  (6002, 3, 12, 1, 3, 4, 'NTU', 3, 581636, 'USD', FALSE)
+  -- … 498 more rows in this statement (30869 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (6501, 3, 13, 1, 3, 2, 'NTU', 4, 95682, 'USD', FALSE),
+  (6502, 3, 13, 1, 3, 3, 'BOUND', 129, 2776468, 'USD', FALSE)
+  -- … 498 more rows in this statement (30413 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (7001, 3, 14, 4, 2, 2, 'NTU', 1, 69408, 'USD', FALSE),
+  (7002, 3, 14, 4, 2, 3, 'BOUND', 18, 1204157, 'USD', FALSE)
+  -- … 498 more rows in this statement (30433 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (7501, 4, 15, 1, 6, 5, 'NTU', 5, 687512, 'USD', FALSE),
+  (7502, 4, 15, 1, 6, 6, 'BOUND', 161, 22340465, 'USD', FALSE)
+  -- … 498 more rows in this statement (30628 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (8001, 5, 19, 3, 11, 7, 'BOUND', 36, 799427, 'USD', FALSE),
+  (8002, 5, 19, 3, 11, 7, 'NTU', 5, 109211, 'USD', FALSE)
+  -- … 498 more rows in this statement (30898 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (8501, 6, 21, 1, 7, 1, 'BOUND', 244, 35036814, 'USD', FALSE),
+  (8502, 6, 21, 1, 7, 1, 'NTU', 9, 1319093, 'USD', FALSE)
+  -- … 498 more rows in this statement (31225 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (9001, 6, 22, 2, 4, 6, 'BOUND', 127, 23164851, 'USD', FALSE),
+  (9002, 6, 22, 2, 4, 6, 'NTU', 7, 1293657, 'USD', FALSE)
+  -- … 498 more rows in this statement (30967 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (9501, 6, 23, 2, 1, 8, 'BOUND', 133, 3009910, 'USD', FALSE),
+  (9502, 6, 23, 2, 1, 8, 'NTU', 10, 223141, 'USD', FALSE)
+  -- … 498 more rows in this statement (30245 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (10001, 6, 23, 1, 10, 7, 'BOUND', 191, 4329072, 'USD', FALSE),
+  (10002, 6, 23, 1, 10, 7, 'NTU', 6, 132388, 'USD', FALSE)
+  -- … 498 more rows in this statement (30936 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`policy_sales` (`id`, `carrier_id`, `product_id`, `channel_id`, `state_id`, `period_id`, `sale_status`, `policy_count`, `written_premium_cents`, `currency_code`, `is_test`) VALUES
+  (10501, 6, 24, 2, 7, 5, 'NTU', 2, 132452, 'USD', FALSE),
+  (10502, 6, 24, 2, 7, 6, 'BOUND', 40, 2585856, 'USD', FALSE)
+  -- … 320 more rows in this statement (20043 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`revenue_by_period` (
+  `id` BIGINT NOT NULL,
+  `carrier_id` BIGINT NOT NULL,
+  `line_id` BIGINT NOT NULL,
+  `period_id` BIGINT NOT NULL,
+  `earned_premium_cents` BIGINT NOT NULL,
+  `fee_income_cents` BIGINT NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`revenue_by_period` (`id`, `carrier_id`, `line_id`, `period_id`, `earned_premium_cents`, `fee_income_cents`) VALUES
+  (1, 1, 1, 1, 540903055, 7069961),
+  (2, 1, 1, 2, 576797606, 8702116)
+  -- … 189 more rows in this statement (6978 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`campaigns` (
+  `id` BIGINT NOT NULL,
+  `campaign_code` STRING NOT NULL,
+  `name` STRING NOT NULL,
+  `carrier_id` BIGINT NOT NULL,
+  `line_id` BIGINT NOT NULL,
+  `channel_id` BIGINT NOT NULL,
+  `objective` STRING NOT NULL,
+  `starts_on` DATE NOT NULL,
+  `ends_on` DATE NOT NULL,
+  `promo_code` STRING
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`campaigns` (`id`, `campaign_code`, `name`, `carrier_id`, `line_id`, `channel_id`, `objective`, `starts_on`, `ends_on`, `promo_code`) VALUES
+  (1, 'HBM-24-01', 'New Year Auto Switch', 1, 1, 2, 'ACQUISITION', DATE'2024-01-08', DATE'2024-03-31', NULL),
+  (2, 'HBM-24-02', 'Renters Starter Pack', 1, 3, 3, 'ACQUISITION', DATE'2024-02-01', DATE'2024-06-30', 'NEST10')
+  -- … 24 more rows in this statement (3067 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`campaign_results` (
+  `id` BIGINT NOT NULL,
+  `campaign_id` BIGINT NOT NULL,
+  `period_id` BIGINT NOT NULL,
+  `budget_cents` BIGINT NOT NULL,
+  `spend_cents` BIGINT NOT NULL,
+  `impressions` INT NOT NULL,
+  `clicks` INT NOT NULL,
+  `leads` INT NOT NULL,
+  `quotes` INT NOT NULL,
+  `policies_bound` INT NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`campaign_results` (`id`, `campaign_id`, `period_id`, `budget_cents`, `spend_cents`, `impressions`, `clicks`, `leads`, `quotes`, `policies_bound`) VALUES
+  (1, 1, 1, 8307700, 8019381, 1302621, 24235, 1811, 1147, 297),
+  (2, 2, 1, 2967000, 2738921, 507728, 11681, 1209, 681, 140)
+  -- … 49 more rows in this statement (3389 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`market_benchmarks` (
+  `id` BIGINT NOT NULL,
+  `viewer_carrier_id` BIGINT NOT NULL,
+  `period_id` BIGINT NOT NULL,
+  `line_id` BIGINT NOT NULL,
+  `competitor_label` STRING NOT NULL,
+  `policy_count` INT NOT NULL,
+  `written_premium_cents` BIGINT NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`market_benchmarks` (`id`, `viewer_carrier_id`, `period_id`, `line_id`, `competitor_label`, `policy_count`, `written_premium_cents`) VALUES
+  (1, 1, 1, 1, 'Competitor A', 1042, 140886910),
+  (2, 1, 1, 1, 'Competitor B', 5220, 791541676)
+  -- … 498 more rows in this statement (25158 characters in all);
+
+INSERT INTO `evals`.`marketing_analytics`.`market_benchmarks` (`id`, `viewer_carrier_id`, `period_id`, `line_id`, `competitor_label`, `policy_count`, `written_premium_cents`) VALUES
+  (501, 4, 2, 5, 'Competitor C', 111, 6046097),
+  (502, 4, 2, 5, 'Competitor D', 1766, 90043861)
+  -- … 453 more rows in this statement (23064 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`competitor_masks` (
+  `id` BIGINT NOT NULL,
+  `viewer_carrier_id` BIGINT NOT NULL,
+  `competitor_label` STRING NOT NULL,
+  `competitor_carrier_id` BIGINT NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`competitor_masks` (`id`, `viewer_carrier_id`, `competitor_label`, `competitor_carrier_id`) VALUES
+  (1, 1, 'Competitor A', 4),
+  (2, 1, 'Competitor B', 3)
+  -- … 28 more rows in this statement (1030 characters in all);
+
+CREATE OR REPLACE TABLE `evals`.`marketing_analytics`.`analyst_access` (
+  `id` BIGINT NOT NULL,
+  `email` STRING NOT NULL,
+  `full_name` STRING NOT NULL,
+  `carrier_id` BIGINT NOT NULL,
+  `access_role` STRING NOT NULL,
+  `competitor_visibility` STRING NOT NULL
+);
+
+INSERT INTO `evals`.`marketing_analytics`.`analyst_access` (`id`, `email`, `full_name`, `carrier_id`, `access_role`, `competitor_visibility`) VALUES
+  (1, 'dana.whitfield@harborline.example', 'Dana Whitfield', 1, 'ANALYST', 'MASKED'),
+  (2, 'marcus.oyelaran@harborline.example', 'Marcus Oyelaran', 1, 'MANAGER', 'MASKED')
+  -- … 10 more rows in this statement (1138 characters in all);
+
+SELECT 'regions' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`regions`
+UNION ALL
+SELECT 'states' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`states`
+UNION ALL
+SELECT 'carriers' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`carriers`
+UNION ALL
+SELECT 'lines_of_business' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`lines_of_business`
+UNION ALL
+SELECT 'products' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`products`
+UNION ALL
+SELECT 'channels' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`channels`
+UNION ALL
+SELECT 'periods' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`periods`
+UNION ALL
+SELECT 'policy_sales' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`policy_sales`
+UNION ALL
+SELECT 'revenue_by_period' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`revenue_by_period`
+UNION ALL
+SELECT 'campaigns' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`campaigns`
+UNION ALL
+SELECT 'campaign_results' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`campaign_results`
+UNION ALL
+SELECT 'market_benchmarks' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`market_benchmarks`
+UNION ALL
+SELECT 'competitor_masks' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`competitor_masks`
+UNION ALL
+SELECT 'analyst_access' AS relation, COUNT(*) AS row_count FROM `evals`.`marketing_analytics`.`analyst_access`;
+
+-- Would register in the backend at http://127.0.0.1:3000:
+--   datasource "Marketing Analytics Databricks" (kind databricks, upserted by name)
+--   dataset "Marketing Analytics (Databricks)" with 14 entities: evals.marketing_analytics.regions, evals.marketing_analytics.states, evals.marketing_analytics.carriers, evals.marketing_analytics.lines_of_business, evals.marketing_analytics.products, evals.marketing_analytics.channels, evals.marketing_analytics.periods, evals.marketing_analytics.policy_sales, evals.marketing_analytics.revenue_by_period, evals.marketing_analytics.campaigns, evals.marketing_analytics.campaign_results, evals.marketing_analytics.market_benchmarks, evals.marketing_analytics.competitor_masks, evals.marketing_analytics.analyst_access
+-- Dry run: nothing was connected to.

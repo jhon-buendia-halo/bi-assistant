@@ -1,0 +1,64 @@
+Databricks references: world-cup.json, the 40 questions added on 2026-10-16 (roadmap 1.1.10)
+Checked 2026-10-16 the way evidence/1.1.8 checked the first five. Every added case with a reference (34: 17 questions
+and their 17 paraphrases, which share the reference); the first five are re-run as a control.
+The set that grades against them: world-cup-databricks (fixture world-cup-databricks).
+None was executed on a Databricks warehouse: that run is the VDI validation of BA-186 (agents-evals R208). Every line
+below is "not executed — VDI".
+
+How each reference was checked without a warehouse
+- Written from the PostgreSQL reference as R206 says: every table `evals`.world_cup.<table>, the ::numeric cast dropped
+  before a division (whole numbers divide into a DOUBLE on Databricks), the alias match renamed m.
+- Static (static-checks.ts, with the repository's check modules, the checks of databricks-references.spec.ts):
+  dialectProblem(sql, 'databricks') finds nothing (R118); no '::' cast, no age/to_char/generate_series/
+  string_to_array, no FILTER; every table reference is `evals`.world_cup.<table> with the catalog backticked and a
+  required table of the sample; the reference reads the same tables as the PostgreSQL one. The Jest suite
+  databricks-references.spec.ts (R188, also rewritten to two other catalogs, R192) passes on the file.
+- Parse: sqlglot 30.23.0 parses it with its Databricks dialect, raising on any error.
+- Proxy run: the parsed statement, transpiled by sqlglot to DuckDB 1.5.6, runs on DuckDB tables in
+  catalog evals, schema world_cup (14 relations), created with the PostgreSQL column types of the isolated
+  database and loaded from the same dump (backend/scripts/worldcup-rest-api/data). DuckDB, like Databricks, divides
+  whole numbers into a fraction. Its rows are compared with the PostgreSQL reference's rows as the result-set match
+  compares them. This shows the translation keeps the meaning; it does not show the warehouse accepts the text.
+
+✓ champion-2022  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ final-score-2018  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ top-scorer-2022  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ shootouts  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ biggest-venue  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ shot-accuracy-by-team-2022  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ shot-conversion-2022  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ busiest-stadium  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL; not executed — VDI
+✓ highest-scoring-match  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL; not executed — VDI
+✓ top-scorer-both-tournaments  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL; not executed — VDI
+✓ semi-final-goals-2022  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ goals-by-defenders  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ third-place-2022  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ most-fouls-team  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ booked-in-2022-final  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ quickest-goal-scorer  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ top-assist-provider  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ mandzukic-goals-2018  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ extra-time-goals  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ argentina-draws-2022  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ south-american-goals  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ third-placed-team-scorers-2018  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ shot-accuracy-by-team-2022-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ shot-conversion-2022-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ busiest-stadium-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL; not executed — VDI
+✓ highest-scoring-match-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL; not executed — VDI
+✓ top-scorer-both-tournaments-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL; not executed — VDI
+✓ semi-final-goals-2022-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ goals-by-defenders-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ third-place-2022-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ most-fouls-team-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ booked-in-2022-final-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ quickest-goal-scorer-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ top-assist-provider-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ mandzukic-goals-2018-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ extra-time-goals-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ argentina-draws-2022-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ south-american-goals-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ third-placed-team-scorers-2018-reworded  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+
+world-cup: 39 of 39 Databricks references (5 earlier, 34 added) pass the static checks, parse as Databricks SQL and return the PostgreSQL rows on the DuckDB proxy; 0 of 39 executed on a warehouse (VDI).
+finalists-groups-2022: left out of the set, see agents-evals.

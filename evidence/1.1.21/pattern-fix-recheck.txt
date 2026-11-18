@@ -1,0 +1,51 @@
+# The 36 answers of round 17 re-scored with the matches and notMatches patterns widened on 2026-10-27 (RegExp.test, as the checks do). 'old' is the verdict recorded in the run, 'new' the widened pattern's.
+# Script: recheck.cjs on real-answers.json (both in the session's scratchpad); the set files are the source of the patterns.
+
+why-harborline-q3-2024-dip #1 [failed] matches old=FAIL new=FAIL  | notMatches pass
+why-harborline-q3-2024-dip #2 [failed] matches old=FAIL new=FAIL  | notMatches pass
+why-harborline-q3-2024-dip #3 [failed] matches old=FAIL new=FAIL  | notMatches pass
+harborline-q3-2024-dip-summer-claim #1 [failed] matches old=FAIL new=FAIL  | notMatches pass
+harborline-q3-2024-dip-summer-claim #2 [failed] matches old=FAIL new=FAIL  | notMatches pass
+harborline-q3-2024-dip-summer-claim #3 [failed] matches old=FAIL new=FAIL  | notMatches pass
+harborline-q3-2024-dip-campaign-calendar #1 [failed] matches old=pass new=pass  | notMatches pass
+harborline-q3-2024-dip-campaign-calendar #2 [passed] matches old=pass new=pass  | notMatches pass
+harborline-q3-2024-dip-campaign-calendar #3 [failed] matches old=FAIL new=pass FAIL→pass | notMatches pass
+    No — we **cannot rule marketing out** based on the campaign calendar. - Harborline’s bound policy sales fell from **11,337 in Q2 2024 to 10,028 in Q3**, a decline of **1,309 policies (11.5%)**. - Although **two campaigns overlapped Q3**—*Loyalty Renewal Remind
+harborline-q4-2024-rebound #1 [failed] matches old=FAIL new=FAIL  | notMatches pass
+harborline-q4-2024-rebound #2 [failed] matches old=FAIL new=FAIL  | notMatches pass
+harborline-q4-2024-rebound #3 [failed] matches old=FAIL new=FAIL  | notMatches pass
+harborline-q3-2024-board-review #1 [failed] matches old=pass new=pass  | notMatches pass
+harborline-q3-2024-board-review #2 [passed] matches old=pass new=pass  | notMatches pass
+harborline-q3-2024-board-review #3 [failed] matches old=pass new=pass  | notMatches pass
+harborline-q3-2024-premium-shortfall #1 [failed] matches old=FAIL new=FAIL  | notMatches pass
+harborline-q3-2024-premium-shortfall #2 [failed] matches old=FAIL new=FAIL  | notMatches pass
+harborline-q3-2024-premium-shortfall #3 [failed] matches old=FAIL new=FAIL  | notMatches pass
+why-no-wealth-fees-billed-august-2025 #1 [passed] matches old=pass new=pass  | notMatches pass
+why-no-wealth-fees-billed-august-2025 #2 [passed] matches old=pass new=pass  | notMatches pass
+why-no-wealth-fees-billed-august-2025 #3 [failed] matches old=pass new=pass  | notMatches pass
+august-2025-fees-lost-clients-claim #1 [failed] matches old=FAIL new=pass FAIL→pass | notMatches pass
+    ## Bottom line **No, the zero was not caused by an asset exodus.** It appears to be a **billing-timing gap**: - **Billed fee income in August 2025:** **$0**, with no fee records billed that month. - **Fees earned for August’s fiscal period:** **$42,451.44**, s
+august-2025-fees-lost-clients-claim #2 [failed] matches old=FAIL new=pass FAIL→pass | notMatches pass
+    **Short answer: we lost one client, but not assets overall—and the zero appears to be a billing-timing issue.** - **No fees were charged in August 2025** according to `fees.charged_on`, which explains the zero in a billing-month report. - However, the **August
+august-2025-fees-lost-clients-claim #3 [failed] matches old=FAIL new=pass FAIL→pass | notMatches pass
+    **Short answer: not assets, but there was a small net client decline.** - **Clients:** Wealth clients fell from **30 on August 1 to 29 on September 1** — a **net loss of 1 client**. During August, **one portfolio was closed and one was opened**, so open portfo
+september-2025-fee-billing-spike #1 [passed] matches old=pass new=pass  | notMatches pass
+september-2025-fee-billing-spike #2 [failed] matches old=pass new=pass  | notMatches pass
+september-2025-fee-billing-spike #3 [failed] matches old=pass new=pass  | notMatches pass
+wealth-fee-revenue-august-2025 #1 [failed] matches old=FAIL new=pass FAIL→pass | notMatches pass
+    Yes. Using the fiscal period in which fees were **earned**, wealth fee revenue fell from **$45,529.75 in July 2025** to **$42,451.44 in August**, a decrease of **$3,078.31 (6.8%)**. For billed fees specifically, August recorded **$0**, versus **$115,956.54 in 
+wealth-fee-revenue-august-2025 #2 [failed] matches old=FAIL new=pass FAIL→pass | notMatches pass
+    Yes. Using **earned revenue** (settled + accrued fees assigned to the fee period), wealth fee revenue fell from **$45,529.75 in July 2025** to **$42,451.44 in August**, a decrease of **$3,078.31 or 6.8%**. For comparison, on a **billing-date basis**, August re
+wealth-fee-revenue-august-2025 #3 [failed] matches old=FAIL new=pass FAIL→pass | notMatches pass
+    Yes. On an **earned-revenue basis**, wealth fee revenue fell from **$45,529.75 in July 2025** to **$42,451.44 in August 2025**: - **Decrease:** $3,078.31 - **Percentage decline:** **6.76%** For the alternative **billing-date view**, August recorded **$0**, ver
+august-2025-wealth-fee-report-gap #1 [failed] matches old=pass new=pass  | notMatches pass
+august-2025-wealth-fee-report-gap #2 [failed] matches old=pass new=pass  | notMatches pass
+august-2025-wealth-fee-report-gap #3 [failed] matches old=FAIL new=pass FAIL→pass | notMatches pass
+    The data indicates a **timing/reporting issue, not a missing fee run**: - **No fees have a `charged_on` date in August 2025**, so a report filtered by billing date correctly returns zero. - The fees earned for August were all billed together on **September 5, 
+buchanan-two-advisory-fees-claim #1 [passed] matches old=pass new=pass  | notMatches pass
+buchanan-two-advisory-fees-claim #2 [failed] matches old=FAIL new=pass FAIL→pass | notMatches pass
+    No—these appear to be **two legitimate monthly advisory fees**, not a duplicate. Both $5,258.08 charges were for the same portfolio, **PF-021539**, but covered different fiscal periods: - **WF-202507-01135** — July 1–31, 2025 - **WF-202508-01187** — August 1–3
+buchanan-two-advisory-fees-claim #3 [failed] matches old=FAIL new=pass FAIL→pass | notMatches pass
+    No — the data indicates this was **not a duplicate mistake**. Both $5,258.08 advisory fees were for the same portfolio, **PF-021539**, but they correspond to **different earning periods**: - **WF-202507-01135** — July 1–31, 2025 - **WF-202508-01187** — August 
+
+matches now passes 24 of 36 attempts; 10 FAIL→pass, 0 pass→FAIL

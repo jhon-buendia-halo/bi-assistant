@@ -1,0 +1,1836 @@
+{
+  "variants": [
+    {
+      "id": "memory-world-cup",
+      "name": "Memory (World Cup)",
+      "description": "Memory questions against the bundled World Cup sample (2018 and 2022 knockout matches): each case teaches through signals stored in the memory under test, then asks its probe as the first turn of a new session. Select its PostgreSQL datasource with a saved dataset containing the world_cup tables and views.",
+      "fixtureId": "world-cup",
+      "dialect": "postgres",
+      "caseIdPrefix": ""
+    },
+    {
+      "id": "memory-finance",
+      "name": "Memory (Finance)",
+      "description": "Memory questions against the bundled synthetic Finance sample, where a taught signal contradicts the curated Finance knowledge seed: each case teaches, then asks its probe as the first turn of a new session. Select its PostgreSQL datasource with a saved dataset containing the finance tables and views.",
+      "fixtureId": "finance",
+      "dialect": "postgres",
+      "caseIdPrefix": ""
+    },
+    {
+      "id": "memory-marketing-analytics",
+      "name": "Memory (Marketing Analytics)",
+      "description": "Memory questions against the bundled synthetic Marketing Analytics sample, where a taught signal contradicts the curated Marketing Analytics knowledge seed: each case teaches, then asks its probe as the first turn of a new session. Select its PostgreSQL datasource with a saved dataset containing the marketing_analytics tables and views.",
+      "fixtureId": "marketing-analytics",
+      "dialect": "postgres",
+      "caseIdPrefix": ""
+    }
+  ],
+  "cases": [
+    {
+      "id": "top-scorer-2018-reused-approval-es",
+      "fixture": "world-cup",
+      "category": "memory-reuse",
+      "split": "dev",
+      "tags": [
+        "lang:es",
+        "difficulty:medium",
+        "trap:own-goals-counted"
+      ],
+      "intent": "An English approval of the 2018 top-scorer SQL that leaves own goals out must be reused for the same question asked in Spanish in a new session.",
+      "notes": "Why a model without memory takes the trap: 'máximo goleador' is plausibly answered by counting world_cup.goals rows per scorer_player_id, which credits Mario Mandzukic's own goal in the 2018 final (18', goal_type own_goal) to him and makes him the sole leader with 3 (the trap); a LIMIT 1 query also drops two of the three players tied on 2. The view v_player_goal_totals leaves own goals out, so a model that picks it is right without memory: hence medium. Facts: 001_world_cup.sql lines 384-406 (2018 goals: Griezmann 61' and 38' penalty, Perisic 68' and 28', Mandzukic 109' and 69', two own goals, at 13' and Mandzukic's at 18') and 524-538 (v_player_goal_totals filters own_goal out); reference and trap rows in validation.txt. Provenance: the teach question, the approved SQL (re-qualified for the loop database) and the probe are Q1 and Q2 of the October smoke test (feat/hindsight-memory:evidence/1.3.6/smoke-memory-results.json). Same reference as top-scorers-2018-own-goals-updated. Related but not paraphrased: top-scorer-2022 (dev), top-scorer-both-tournaments (held-out).",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-02T15:00:00Z",
+          "question": "Which player scored the most goals in the 2018 World Cup, excluding own goals?",
+          "sql": "SELECT p.full_name AS player, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON g.match_id = m.id JOIN world_cup.tournaments t ON m.tournament_id = t.id JOIN world_cup.players p ON g.scorer_player_id = p.id WHERE t.tournament_year = 2018 AND g.goal_type <> 'own_goal' GROUP BY p.full_name ORDER BY goals DESC, p.full_name ASC"
+        }
+      ],
+      "probe": {
+        "question": "¿Quién fue el máximo goleador del Mundial 2018?",
+        "expectedSql": {
+          "postgres": "WITH totals AS (SELECT p.full_name AS player, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2018 AND g.goal_type <> 'own_goal' GROUP BY p.full_name) SELECT player, goals FROM totals WHERE goals = (SELECT MAX(goals) FROM totals) ORDER BY player"
+        },
+        "trapSql": {
+          "postgres": "SELECT p.full_name AS player, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2018 GROUP BY p.full_name ORDER BY goals DESC, p.full_name LIMIT 1"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "argentina-penalties-2022-reused-approval",
+      "fixture": "world-cup",
+      "category": "memory-reuse",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:hard",
+        "trap:shootout-kicks-as-penalties"
+      ],
+      "intent": "An approval that read 'penalties' as penalty kicks scored during play (goal_type 'penalty'), not shoot-out kicks, must be reused when the same question is asked about another team.",
+      "notes": "Why a model without memory takes the trap: the question is ambiguous and the columns home_penalties and away_penalties invite summing Argentina's shoot-out kicks (4 against the Netherlands, 4 against France: 8, the trap); the dev case argentina-penalties-2022 even expects a clarification instead of an answer, which fails here too. The approval (asked in Spanish about Croatia: no penalty goal, 4 shoot-out kicks) fixes the reading goal_type = 'penalty'; 'Croatia' is redacted from the stored SQL because the Spanish question says Croacia, so only the reading carries over. Reference: 3 (Messi 73', 34', 23'). Facts: 001_world_cup.sql lines 313-320 (2022 shoot-outs: Croatia 4-2 Brazil, Netherlands 3-4 Argentina, Argentina 4-2 France) and 407-430 (2022 goals, goal_type penalty); rows in validation.txt. Close paraphrase of argentina-penalties-2022 (dev, ambiguous), where the expected behaviour without memory is to ask.",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-03T09:20:00Z",
+          "question": "¿Cuántos penaltis marcó Croacia en el Mundial 2022?",
+          "sql": "SELECT COUNT(*) AS penalties FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2022 AND tm.common_name = 'Croatia' AND g.goal_type = 'penalty'"
+        }
+      ],
+      "probe": {
+        "question": "How many penalties did Argentina convert at the 2022 World Cup?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS penalties FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2022 AND tm.common_name = 'Argentina' AND g.goal_type = 'penalty'"
+        },
+        "trapSql": {
+          "postgres": "SELECT SUM(CASE WHEN m.home_team_id = tm.id THEN m.home_penalties ELSE m.away_penalties END) AS penalties FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id IN (m.home_team_id, m.away_team_id) WHERE t.tournament_year = 2022 AND tm.common_name = 'Argentina' AND m.home_penalties IS NOT NULL"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "goal-involvements-2022-reused-approval",
+      "fixture": "world-cup",
+      "category": "memory-reuse",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:goals-without-assists"
+      ],
+      "intent": "An approval that counted goal involvements as goals plus assists must be reused for a paraphrase that asks who contributed to the most goals.",
+      "notes": "Why a model without memory takes the trap: 'contributed to the most goals' is plausibly read as goals scored, which gives Lionel Messi 4 (the trap); the approved SQL adds the goals he set up (assist_player_id on Molina's 35' and Alvarez's 69'), so the answer is Messi with 6. Facts: 001_world_cup.sql lines 407-430 (2022 goals; the only two assists are on lines 409 and 419); rows in validation.txt. Related but not paraphrased: top-assist-provider (dev), top-scorer-2022 (dev).",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-03T14:05:00Z",
+          "question": "Which players were involved in the most goals at the 2022 World Cup, counting goals and assists?",
+          "sql": "WITH involvements AS (SELECT g.scorer_player_id AS player_id FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND g.goal_type <> 'own_goal' UNION ALL SELECT g.assist_player_id FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND g.assist_player_id IS NOT NULL) SELECT p.full_name AS player, COUNT(*) AS goal_involvements FROM involvements i JOIN world_cup.players p ON p.id = i.player_id GROUP BY p.full_name ORDER BY goal_involvements DESC, p.full_name LIMIT 5"
+        }
+      ],
+      "probe": {
+        "question": "Who contributed to the most goals at the 2022 World Cup?",
+        "expectedSql": {
+          "postgres": "WITH involvements AS (SELECT g.scorer_player_id AS player_id FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND g.goal_type <> 'own_goal' UNION ALL SELECT g.assist_player_id FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND g.assist_player_id IS NOT NULL), totals AS (SELECT p.full_name AS player, COUNT(*) AS goal_involvements FROM involvements i JOIN world_cup.players p ON p.id = i.player_id GROUP BY p.full_name) SELECT player, goal_involvements FROM totals WHERE goal_involvements = (SELECT MAX(goal_involvements) FROM totals)"
+        },
+        "trapSql": {
+          "postgres": "WITH totals AS (SELECT p.full_name AS player, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2022 AND g.goal_type <> 'own_goal' GROUP BY p.full_name) SELECT player, goals FROM totals WHERE goals = (SELECT MAX(goals) FROM totals)"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "argentina-second-half-goals-2022-reused-approval-es",
+      "fixture": "world-cup",
+      "category": "memory-reuse",
+      "split": "dev",
+      "tags": [
+        "lang:es",
+        "difficulty:medium",
+        "trap:extra-time-in-second-half"
+      ],
+      "intent": "An approval that counted second-half goals as minutes 46 to 90, extra time left out, must be reused in Spanish for another team.",
+      "notes": "Why a model without memory takes the trap: 'segundos tiempos' is plausibly filtered as minute > 45, which also counts Messi's extra-time goal at 108' in the final and gives 3 (the trap); minutes 46 to 90 give 2 (Messi 73', Alvarez 69'). The approval asked about 'the 2022 runners-up' and filtered 'France', a literal the store redacts; the reading BETWEEN 46 AND 90 survives redaction. Facts: 001_world_cup.sql lines 409-429 (Argentina's 2022 goals and minutes) and 414-430 (France's); rows in validation.txt.",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-04T11:00:00Z",
+          "question": "How many second-half goals did the 2022 runners-up score?",
+          "sql": "SELECT COUNT(*) AS second_half_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2022 AND tm.common_name = 'France' AND g.minute BETWEEN 46 AND 90"
+        }
+      ],
+      "probe": {
+        "question": "¿Cuántos goles marcó Argentina en los segundos tiempos del Mundial 2022?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS second_half_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2022 AND tm.common_name = 'Argentina' AND g.minute BETWEEN 46 AND 90"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS second_half_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2022 AND tm.common_name = 'Argentina' AND g.minute > 45"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sellout-99pct-2018-es",
+      "fixture": "world-cup",
+      "category": "memory-reuse",
+      "split": "held-out",
+      "tags": [
+        "lang:es",
+        "difficulty:medium",
+        "trap:sellout-equals-capacity"
+      ],
+      "intent": "An approved query that defined a sell-out as attendance at 99% of capacity or more must be reused when the same need is asked in Spanish for the other tournament.",
+      "notes": "Without the memory, 'estadio lleno' reads as attendance = capacity (or >=), which is how the fixture's exact-capacity rows invite it. The approved SQL set the bar at 99% of capacity. Facts read from backend/src/modules/testing-data/fixtures/001_world_cup.sql: venues and capacities lines 210-224, matches with attendance lines 299-336. 2018: Nizhny Novgorod 43319/43319, Saint Petersburg 64406/64468 (99.9%), Fisht 39991/44287 (90.3%) and 44287/44287, Saint Petersburg 64286/64468 (99.72%), Luzhniki 78011/78011, Saint Petersburg 64406/64468, Luzhniki 78011/78011: seven matches at 99% or more, four at exactly capacity. 2022 (the teach SQL): six at 99% or more, three at capacity.\n\nChecked on loop_world_cup (127.0.0.1:55433, read-only) on 2026-10-30 with a pg script outside the repo: reference -> (sold_out_matches = 7); trap -> (sold_out_matches = 4); the trap fails the repo's result-set comparison (ported compareEvidence of result-set-check.ts): yes; teach 1 (verified_query): (sold_out_matches = 6).\n\nWording: written by Fable 5.1 as a held-out candidate, 2026-10-30. Chosen as a held-out case by the user at checkpoint C, 2026-10-30, from 18 candidates (3 per category).",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-03T09:10:00Z",
+          "question": "How many matches sold out at the 2022 World Cup? Count a match as sold out when attendance reached 99% of the stadium's capacity or more.",
+          "sql": "SELECT COUNT(*) AS sold_out_matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.venues v ON v.id = m.venue_id WHERE t.tournament_year = 2022 AND m.attendance >= 0.99 * v.capacity"
+        }
+      ],
+      "probe": {
+        "question": "¿Cuántos partidos del Mundial 2018 se jugaron con el estadio lleno?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS sold_out_matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.venues v ON v.id = m.venue_id WHERE t.tournament_year = 2018 AND m.attendance >= 0.99 * v.capacity"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS sold_out_matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.venues v ON v.id = m.venue_id WHERE t.tournament_year = 2018 AND m.attendance >= v.capacity"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "late-goals-85th-minute-2022-es",
+      "fixture": "world-cup",
+      "category": "memory-reuse",
+      "split": "held-out",
+      "tags": [
+        "lang:es",
+        "difficulty:medium",
+        "trap:late-goal-threshold"
+      ],
+      "intent": "An approved query that fixed 'late goal' at the 85th minute or later must be reused when the same question is asked in Spanish for the other tournament.",
+      "notes": "A late goal has no fixed definition; without the memory a model picks its own cut (the last ten or fifteen minutes: minute >= 80, > 75, >= 76) and lands on a different count. Only the approved SQL says 85. Facts read from backend/src/modules/testing-data/fixtures/001_world_cup.sql: goals lines 379-431. 2022 goals with minute >= 85: Weghorst 90+11, Neymar 105+1, Petkovic 117, Messi 108, Mbappe 118: five. With minute >= 80 three more (Weghorst 83, Mbappe 80, Mbappe 81): eight; with minute > 75 ten. 2018 (the teach SQL): Vida 101, Mandzukic 109, Fernandes 115: three.\n\nChecked on loop_world_cup (127.0.0.1:55433, read-only) on 2026-10-30 with a pg script outside the repo: reference -> (late_goals = 5); trap -> (late_goals = 8); the trap fails the repo's result-set comparison (ported compareEvidence of result-set-check.ts): yes; teach 1 (verified_query): (late_goals = 3).\n\nWording: written by Fable 5.1 as a held-out candidate, 2026-10-30. Chosen as a held-out case by the user at checkpoint C, 2026-10-30, from 18 candidates (3 per category).",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-04T08:05:00Z",
+          "question": "How many late goals were scored at the 2018 World Cup? A late goal for us is one scored in the 85th minute or later, extra time included.",
+          "sql": "SELECT COUNT(*) AS late_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018 AND g.minute >= 85"
+        }
+      ],
+      "probe": {
+        "question": "¿Cuántos goles tardíos se marcaron en el Mundial 2022?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS late_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND g.minute >= 85"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS late_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND g.minute >= 80"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "shootout-losses-brazil-es",
+      "fixture": "world-cup",
+      "category": "memory-correction",
+      "split": "dev",
+      "tags": [
+        "lang:es",
+        "difficulty:medium",
+        "trap:winner-team-id-as-result"
+      ],
+      "intent": "A reviewer's note that a match decided on penalties is a draw must change how a team's losses are counted in a different question.",
+      "notes": "Why a model without memory takes the trap: in a knockout, 'perdió' is plausibly read as 'did not go through' (winner_team_id is the other team), which counts Brazil's 2022 quarter-final against Croatia (1-1, lost 2-4 on penalties) as a loss and gives 2 (the trap); with the note a match settled on penalties is a draw, so Brazil lost only the 2018 quarter-final to Belgium (1-2): 1. Facts: 001_world_cup.sql lines 306 and 313 (Brazil's two matches); rows in validation.txt. Provenance: the teach question, the corrected SQL (re-qualified for the loop database) and the note are Q3 and the expert-feedback comment of the October smoke test (feat/hindsight-memory:evidence/1.3.6/smoke-memory-results.json). The case was the CONTRACT's example (id shootout-draws-argentina-2022-es, probe on Argentina's 2022 draws); the probe was replaced in round 2 because it asked what held-out argentina-draws-2022 asks. The new probe touches none of Argentina's matches and no held-out question (heldout-overlap.txt).",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-02T15:00:00Z",
+          "question": "How many matches did Croatia win in the 2018 World Cup?",
+          "sql": "SELECT COUNT(*) AS croatia_wins_2018 FROM world_cup.matches m JOIN world_cup.tournaments t ON m.tournament_id = t.id JOIN world_cup.teams w ON m.winner_team_id = w.id WHERE t.tournament_year = 2018 AND w.common_name = 'Croatia'",
+          "note": "For us a match decided on penalties is a draw, not a win. Count wins only from home_goals/away_goals after 90 minutes or extra time; never use winner_team_id for matches with home_penalties/away_penalties set."
+        }
+      ],
+      "probe": {
+        "question": "¿Cuántos partidos perdió Brasil sumando los dos Mundiales?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS losses FROM world_cup.matches m JOIN world_cup.teams tm ON tm.id IN (m.home_team_id, m.away_team_id) WHERE tm.common_name = 'Brazil' AND ((m.home_team_id = tm.id AND m.home_goals < m.away_goals) OR (m.away_team_id = tm.id AND m.away_goals < m.home_goals))"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS losses FROM world_cup.matches m JOIN world_cup.teams tm ON tm.id IN (m.home_team_id, m.away_team_id) WHERE tm.common_name = 'Brazil' AND m.winner_team_id <> tm.id"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "belgium-pass-completion-2018-ratio-of-totals",
+      "fixture": "world-cup",
+      "category": "memory-correction",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:hard",
+        "trap:average-of-match-ratios"
+      ],
+      "intent": "A reviewer's note that a rate over several matches is total over total must carry over from shots on target to pass completion.",
+      "notes": "Why a model without memory takes the trap: a team's pass completion over a tournament is plausibly computed as the average of its per-match rates (0.8596 for Belgium, the trap) instead of total completed over total attempted (1356 / 1566 = 0.8659). The corrected SQL averaged per-match shares of shots on target for 'the 2022 champions' ('Argentina' is redacted from the stored SQL); the note states the rule for every rate. Facts: 001_world_cup.sql lines 346, 349 and 351 (Belgium's 2018 passes: 354/422, 594/651, 408/493); rows in validation.txt. Related: pass-completion-by-team and pass-accuracy-by-team (dev), which read total over total across both tournaments.",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-05T10:15:00Z",
+          "question": "What share of the 2022 champions' shots were on target?",
+          "sql": "SELECT AVG(s.shots_on_target::numeric / s.shots) AS share_on_target FROM world_cup.match_team_statistics s JOIN world_cup.matches m ON m.id = s.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = s.team_id WHERE t.tournament_year = 2022 AND tm.common_name = 'Argentina'",
+          "note": "Over several matches a share is the total over the total, here SUM(shots_on_target) / SUM(shots). Never average the per-match shares; the same goes for every rate we report across more than one match."
+        }
+      ],
+      "probe": {
+        "question": "What was Belgium's pass completion rate at the 2018 World Cup?",
+        "expectedSql": {
+          "postgres": "SELECT SUM(s.passes_completed)::numeric / SUM(s.passes_attempted) AS pass_completion FROM world_cup.match_team_statistics s JOIN world_cup.matches m ON m.id = s.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = s.team_id WHERE t.tournament_year = 2018 AND tm.common_name = 'Belgium'"
+        },
+        "trapSql": {
+          "postgres": "SELECT AVG(s.passes_completed::numeric / s.passes_attempted) AS pass_completion FROM world_cup.match_team_statistics s JOIN world_cup.matches m ON m.id = s.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = s.team_id WHERE t.tournament_year = 2018 AND tm.common_name = 'Belgium'"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "croatia-extra-time-wins-shootouts-excluded",
+      "fixture": "world-cup",
+      "category": "memory-correction",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:shootout-as-extra-time-win"
+      ],
+      "intent": "A reviewer's note that a match settled by a shoot-out was not decided in extra time must carry over to counting a team's extra-time wins.",
+      "notes": "Why a model without memory takes the trap: 'won in extra time' is plausibly read as went_to_extra_time with Croatia as winner_team_id, which also counts the two shoot-outs Croatia won (Russia 2018, Brazil 2022) and gives 3 (the trap); only the 2018 semi-final against England (2-1 after extra time, no shoot-out) was won in extra time: 1. Facts: 001_world_cup.sql lines 308, 310 and 313 (went_to_extra_time, home_penalties and winner of Croatia's three extra-time matches); rows in validation.txt.",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-06T16:40:00Z",
+          "question": "How many matches at the 2022 World Cup were decided in extra time?",
+          "sql": "SELECT COUNT(*) AS matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND m.went_to_extra_time",
+          "note": "Going to extra time is not being decided in it. A match was decided in extra time only when it went to extra time and had no penalty shoot-out; the matches that went to penalties were decided by the shoot-out."
+        }
+      ],
+      "probe": {
+        "question": "How many matches did Croatia win in extra time across both World Cups?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS extra_time_wins FROM world_cup.matches m JOIN world_cup.teams tm ON tm.id = m.winner_team_id WHERE tm.common_name = 'Croatia' AND m.went_to_extra_time AND m.home_penalties IS NULL"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS extra_time_wins FROM world_cup.matches m JOIN world_cup.teams tm ON tm.id = m.winner_team_id WHERE tm.common_name = 'Croatia' AND m.went_to_extra_time"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "france-open-play-goals-2018-headers-es",
+      "fixture": "world-cup",
+      "category": "memory-correction",
+      "split": "dev",
+      "tags": [
+        "lang:es",
+        "difficulty:hard",
+        "trap:headers-not-open-play"
+      ],
+      "intent": "A reviewer's note that headers count as open play must change how open-play goals are counted for another team, asked in Spanish.",
+      "notes": "Why a model without memory takes the trap: 'goles de jugada' maps literally to goal_type = 'open_play', which leaves out Varane's and Umtiti's headers and gives 3 (the trap); the team's convention counts every goal except penalty, free_kick and own_goal: 5. The convention is team knowledge, not a fact the data states (goal_type mixes how the ball went in with how the chance came), so only the note can settle it. Facts: 001_world_cup.sql lines 384-406 (France's 2018 goals: Varane 40' header, Griezmann 61', Umtiti 51' header, Mandzukic own goal 18', Griezmann 38' penalty, Pogba 59', Mbappe 65'; England's: Maguire and Alli headers, Trippier free kick); rows in validation.txt.",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-07T12:30:00Z",
+          "question": "How many open-play goals did England score at the 2018 World Cup?",
+          "sql": "SELECT COUNT(*) AS open_play_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2018 AND tm.common_name = 'England' AND g.goal_type = 'open_play'",
+          "note": "Headers are open-play goals too: goal_type 'header' says how the ball went in, not that it came from a set piece. For us open play is every goal except penalty, free_kick and own_goal."
+        }
+      ],
+      "probe": {
+        "question": "¿Cuántos goles de jugada marcó Francia en el Mundial 2018?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS open_play_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2018 AND tm.common_name = 'France' AND g.goal_type NOT IN ('penalty', 'free_kick', 'own_goal')"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS open_play_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2018 AND tm.common_name = 'France' AND g.goal_type = 'open_play'"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "knockout-excludes-third-place-croatia-conceded-2022",
+      "fixture": "world-cup",
+      "category": "memory-correction",
+      "split": "held-out",
+      "tags": [
+        "lang:en",
+        "difficulty:hard",
+        "trap:third-place-in-knockout"
+      ],
+      "intent": "A reviewer's note that the third-place play-off is not part of the knockout bracket must change how a different knockout question (goals conceded, another team) is answered.",
+      "notes": "Every match in the sample is a knockout match, so without the note 'the 2022 knockout rounds' means all of a team's matches, third-place play-off included. The note excludes stage third_place from anything called knockout rounds or bracket. Facts read from backend/src/modules/testing-data/fixtures/001_world_cup.sql: matches lines 313-320. Croatia 2022 conceded 1 v Brazil (QF), 3 v Argentina (SF) and 1 v Morocco (third place): 4 without the play-off, 5 with it. The teach question's Morocco scored 1 v Portugal and 1 in the play-off.\n\nChecked on loop_world_cup (127.0.0.1:55433, read-only) on 2026-10-30 with a pg script outside the repo: reference -> (goals_conceded = 4); trap -> (goals_conceded = 5); the trap fails the repo's result-set comparison (ported compareEvidence of result-set-check.ts): yes; teach 1 (correction): (goals = 2).\n\nWording: written by Fable 5.1 as a held-out candidate, 2026-10-30. Chosen as a held-out case by the user at checkpoint C, 2026-10-30, from 18 candidates (3 per category).",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-04T15:20:00Z",
+          "question": "How many goals did Morocco score in the 2022 knockout rounds?",
+          "sql": "SELECT COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.teams tm ON tm.id = g.scoring_team_id JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND tm.common_name = 'Morocco'",
+          "note": "The third-place play-off is a consolation match, not part of our knockout bracket. Whenever I ask about the knockout rounds or the bracket, leave the third-place match out (stage third_place)."
+        }
+      ],
+      "probe": {
+        "question": "How many goals did Croatia concede in the 2022 knockout rounds?",
+        "expectedSql": {
+          "postgres": "SELECT SUM(CASE WHEN m.home_team_id = tm.id THEN m.away_goals ELSE m.home_goals END) AS goals_conceded FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id IN (m.home_team_id, m.away_team_id) WHERE t.tournament_year = 2022 AND tm.common_name = 'Croatia' AND m.stage <> 'third_place'"
+        },
+        "trapSql": {
+          "postgres": "SELECT SUM(CASE WHEN m.home_team_id = tm.id THEN m.away_goals ELSE m.home_goals END) AS goals_conceded FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id IN (m.home_team_id, m.away_team_id) WHERE t.tournament_year = 2022 AND tm.common_name = 'Croatia'"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fouls-suffered-opponent-row-france-2022",
+      "fixture": "world-cup",
+      "category": "memory-correction",
+      "split": "held-out",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:own-fouls-committed-row"
+      ],
+      "intent": "A reviewer's note that 'fouled' means fouls suffered, read from the opponent's statistics row, must change a different question (a team's fouls suffered, another team) that the fouls_committed column invites to answer from the team's own row.",
+      "notes": "match_team_statistics has one row per team and match with fouls_committed only; 'fouls France suffered' tempts a model to read France's own row (the fouls France committed). The note says fouled means the opponent's fouls_committed in the same match. Facts read from backend/src/modules/testing-data/fixtures/001_world_cup.sql: match_team_statistics lines 338-377 (home and away fouls per match) and matches lines 313-320. France 2022: opponents committed 10 (England) + 11 (Morocco) + 26 (Argentina) = 47 fouls on France; France itself committed 14 + 11 + 19 = 44. Teach question: the team fouled most per match in 2022 is Brazil (22 in its one match); ranking the teams' own fouls_committed per match puts the Netherlands first with 30.\n\nChecked on loop_world_cup (127.0.0.1:55433, read-only) on 2026-10-30 with a pg script outside the repo: reference -> (fouls_suffered = 47); trap -> (fouls_suffered = 44); the trap fails the repo's result-set comparison (ported compareEvidence of result-set-check.ts): yes; teach 1 (correction): (team = Netherlands, fouls_per_match = 30).\n\nWording: written by Fable 5.1 as a held-out candidate, 2026-10-30. Chosen as a held-out case by the user at checkpoint C, 2026-10-30, from 18 candidates (3 per category).",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-05T17:45:00Z",
+          "question": "Which team was fouled the most per match at the 2022 World Cup?",
+          "sql": "SELECT tm.common_name AS team, ROUND(AVG(s.fouls_committed), 2) AS fouls_per_match FROM world_cup.match_team_statistics s JOIN world_cup.teams tm ON tm.id = s.team_id JOIN world_cup.matches m ON m.id = s.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 GROUP BY tm.common_name ORDER BY fouls_per_match DESC, tm.common_name LIMIT 1",
+          "note": "Fouled means fouls suffered: in each match that is the opponent's fouls_committed, not the team's own row. A team's own row counts the fouls it committed."
+        }
+      ],
+      "probe": {
+        "question": "How many fouls did France suffer at the 2022 World Cup?",
+        "expectedSql": {
+          "postgres": "SELECT SUM(opp.fouls_committed) AS fouls_suffered FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id IN (m.home_team_id, m.away_team_id) JOIN world_cup.match_team_statistics opp ON opp.match_id = m.id AND opp.team_id <> tm.id WHERE t.tournament_year = 2022 AND tm.common_name = 'France'"
+        },
+        "trapSql": {
+          "postgres": "SELECT SUM(own.fouls_committed) AS fouls_suffered FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id IN (m.home_team_id, m.away_team_id) JOIN world_cup.match_team_statistics own ON own.match_id = m.id AND own.team_id = tm.id WHERE t.tournament_year = 2022 AND tm.common_name = 'France'"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "top-scorers-2018-own-goals-updated",
+      "fixture": "world-cup",
+      "category": "memory-update",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:stale-approval-own-goals"
+      ],
+      "intent": "A later correction that own goals do not count for the scorer must win over an earlier approval that counted them.",
+      "notes": "The older approval counts every world_cup.goals row per scorer, own goals included; following it makes Mario Mandzukic the sole leader with 3 (the trap). The newer correction leaves own goals out: a three-way tie on 2 (Griezmann, Perisic, Mandzukic). Why a model without memory takes the trap: counting goals rows per scorer_player_id is the plausible default too (only v_player_goal_totals avoids it). Facts: 001_world_cup.sql lines 384-406 (2018 goals; two own goals, at 13' and Mandzukic's at 18'); rows in validation.txt. Same reference as top-scorer-2018-reused-approval-es. Related but not paraphrased: top-scorer-2022 (dev); the correction's question is close to mandzukic-goals-2018 (dev, the whole tournament). Round 2 moved the correction off the other 2018 own goal, which sits in the trap of a held-out case (see heldout-overlap.txt), to Mandzukic's own goal in the final.",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-02T09:00:00Z",
+          "question": "How many goals did each player score at the 2018 World Cup?",
+          "sql": "SELECT p.full_name AS player, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2018 GROUP BY p.full_name ORDER BY goals DESC, p.full_name"
+        },
+        {
+          "kind": "correction",
+          "at": "2026-11-16T14:30:00Z",
+          "question": "How many goals did Mario Mandzukic score in the 2018 final?",
+          "sql": "SELECT COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2018 AND m.stage = 'final' AND p.full_name = 'Mario Mandzukic'",
+          "note": "Own goals do not count for the player who scored them. Leave goal_type 'own_goal' out of every player's goal tally; the goal still counts for the team that benefited."
+        }
+      ],
+      "probe": {
+        "question": "Who were the leading goalscorers at the 2018 World Cup, and how many goals did each of them score?",
+        "expectedSql": {
+          "postgres": "WITH totals AS (SELECT p.full_name AS player, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2018 AND g.goal_type <> 'own_goal' GROUP BY p.full_name) SELECT player, goals FROM totals WHERE goals = (SELECT MAX(goals) FROM totals) ORDER BY player"
+        },
+        "trapSql": {
+          "postgres": "WITH totals AS (SELECT p.full_name AS player, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2018 GROUP BY p.full_name) SELECT player, goals FROM totals WHERE goals = (SELECT MAX(goals) FROM totals)"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "most-wins-2022-shootouts-updated",
+      "fixture": "world-cup",
+      "category": "memory-update",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:hard",
+        "trap:stale-approval-shootout-wins"
+      ],
+      "intent": "A later correction that a shoot-out is not a win must win over an earlier approval that counted wins with matches.winner_team_id.",
+      "notes": "The older approval counts wins with matches.winner_team_id, the team that went through, penalty shoot-outs included; following it gives Argentina 3 (the trap). The newer correction counts a win only on goals at the end of extra time: France 2 (England 2-1, Morocco 2-0), Argentina, Croatia and Morocco 1 each. Why a model without memory takes the trap: winner_team_id is the plausible default, and the champion winning the most matches looks right. Facts: 001_world_cup.sql lines 313-320 (2022 results, winner_team_id set on the three shoot-out matches). Checked on world_cup (127.0.0.1:55432, read-only) on 2026-11-02: reference -> (France, 2); trap -> (Argentina, 3); teach 1 (verified_query): (2); teach 2 (correction): (2). On 2026-11-02 the teach and trap SQL moved from v_seeded_team_performance, which is outside the World Cup dataset, to matches.winner_team_id (the user's decision E, option 1); the rows are unchanged. Related but not paraphrased: champion-2022 (dev; the champion went through twice on penalties, which is why it does not have the most wins) and top-scorer-2022 (dev, a player question). Held-out argentina-draws-2022 is not revealed: no teach question asks about Argentina (round 2 moved the older approval from Argentina 2022 to Croatia 2018), the reference names France only, and the trap's Argentina 3 is the wrong, advancement-based count, not a draw count.",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-03T10:00:00Z",
+          "question": "How many matches did Croatia win at the 2018 World Cup?",
+          "sql": "SELECT COUNT(*) AS wins FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = m.winner_team_id WHERE t.tournament_year = 2018 AND tm.common_name = 'Croatia'"
+        },
+        {
+          "kind": "correction",
+          "at": "2026-11-12T17:45:00Z",
+          "question": "How many matches did Croatia win at the 2022 World Cup?",
+          "sql": "SELECT COUNT(*) AS wins FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = m.winner_team_id WHERE t.tournament_year = 2022 AND tm.common_name = 'Croatia'",
+          "note": "A penalty shoot-out is not a win. matches.winner_team_id names the team that went through, shoot-outs included; count a win only when the team had more goals at the end of extra time, and treat a match settled on penalties as a draw."
+        }
+      ],
+      "probe": {
+        "question": "Which team won the most matches at the 2022 World Cup?",
+        "expectedSql": {
+          "postgres": "WITH results AS (SELECT m.home_team_id AS team_id, m.home_goals AS goals_for, m.away_goals AS goals_against FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 UNION ALL SELECT m.away_team_id, m.away_goals, m.home_goals FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022), team_wins AS (SELECT tm.common_name AS team, COUNT(*) FILTER (WHERE r.goals_for > r.goals_against) AS wins FROM results r JOIN world_cup.teams tm ON tm.id = r.team_id GROUP BY tm.common_name) SELECT team, wins FROM team_wins WHERE wins = (SELECT MAX(wins) FROM team_wins)"
+        },
+        "trapSql": {
+          "postgres": "WITH team_wins AS (SELECT tm.common_name AS team, COUNT(*) AS wins FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = m.winner_team_id WHERE t.tournament_year = 2022 GROUP BY tm.common_name) SELECT team, wins FROM team_wins WHERE wins = (SELECT MAX(wins) FROM team_wins)"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "france-extra-time-goals-2022-updated-es",
+      "fixture": "world-cup",
+      "category": "memory-update",
+      "split": "dev",
+      "tags": [
+        "lang:es",
+        "difficulty:medium",
+        "trap:stale-approval-extra-time-matches"
+      ],
+      "intent": "A later correction that extra time means minutes 91 to 120 must win over an earlier approval that counted every goal of a match that went to extra time.",
+      "notes": "The older approval counts every goal of a match with went_to_extra_time; following it gives France 3 in the 2022 final (Mbappe 80', 81', 118', the trap). The newer correction filters on the goal's minute: 1 (Mbappe 118'). Why a model without memory takes the trap: filtering on went_to_extra_time is the plausible default too (it is the documented trap of extra-time-goals). The correction asked about 'the 2018 hosts' and filtered 'Russia', a literal the store redacts. Facts: 001_world_cup.sql lines 308-310 (2018 extra-time matches), 391-398 (their goals), 320 and 425-430 (the 2022 final); rows in validation.txt. Related: extra-time-goals (dev).",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-04T08:30:00Z",
+          "question": "How many goals were scored in extra time at the 2018 World Cup?",
+          "sql": "SELECT COUNT(*) AS extra_time_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018 AND m.went_to_extra_time"
+        },
+        {
+          "kind": "correction",
+          "at": "2026-11-13T11:10:00Z",
+          "question": "How many extra-time goals did the 2018 hosts score?",
+          "sql": "SELECT COUNT(*) AS extra_time_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2018 AND tm.common_name = 'Russia' AND m.went_to_extra_time",
+          "note": "Extra time is minutes 91 to 120 only. A goal from the first 90 minutes of a match that later went to extra time is not an extra-time goal: filter on the goal's minute (minute > 90), not on went_to_extra_time."
+        }
+      ],
+      "probe": {
+        "question": "¿Cuántos goles marcó Francia en la prórroga en el Mundial 2022?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS extra_time_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2022 AND tm.common_name = 'France' AND g.minute > 90"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS extra_time_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2022 AND tm.common_name = 'France' AND m.went_to_extra_time"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "croatia-open-play-goals-2018-updated",
+      "fixture": "world-cup",
+      "category": "memory-update",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:hard",
+        "trap:stale-approval-headers-excluded"
+      ],
+      "intent": "A later correction that headers count as open play must win over an earlier approval that read open play as goal_type 'open_play' only.",
+      "notes": "The older approval filters goal_type = 'open_play'; following it gives Croatia 4 at the 2018 World Cup (the trap). The newer correction counts every goal except penalty, free_kick and own_goal, which adds Kramaric's and Vida's headers: 6. Why a model without memory takes the trap: the literal code 'open_play' is the plausible default too. The correction was asked in Spanish about Marruecos and filtered 'Morocco', a literal the store redacts. Facts: 001_world_cup.sql lines 392-406 (Croatia's 2018 goals) and 413-424 (Morocco's 2022 headers); rows in validation.txt.",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-05T13:00:00Z",
+          "question": "How many open-play goals were scored at the 2022 World Cup?",
+          "sql": "SELECT COUNT(*) AS open_play_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND g.goal_type = 'open_play'"
+        },
+        {
+          "kind": "correction",
+          "at": "2026-11-14T15:20:00Z",
+          "question": "¿Cuántos goles de jugada marcó Marruecos en el Mundial 2022?",
+          "sql": "SELECT COUNT(*) AS open_play_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2022 AND tm.common_name = 'Morocco' AND g.goal_type = 'open_play'",
+          "note": "Headers count as open play: goal_type 'header' records how the goal was scored. Open-play goals are all goals except penalty, free_kick and own_goal."
+        }
+      ],
+      "probe": {
+        "question": "How many open-play goals did Croatia score at the 2018 World Cup?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS open_play_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2018 AND tm.common_name = 'Croatia' AND g.goal_type NOT IN ('penalty', 'free_kick', 'own_goal')"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS open_play_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2018 AND tm.common_name = 'Croatia' AND g.goal_type = 'open_play'"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "weekend-includes-friday-2022",
+      "fixture": "world-cup",
+      "category": "memory-update",
+      "split": "held-out",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:saturday-sunday-weekend"
+      ],
+      "intent": "An older approval of 'weekend = Saturday and Sunday' is superseded by a newer note that the weekend starts on Friday for the audience reports; the probe on the other tournament must count Fridays.",
+      "notes": "Saturday and Sunday is what any model (and the older approval) takes as the weekend; the newer note adds Friday. Both tournaments open their quarter-finals on a Friday, so the two rules differ by two matches each. The SQL reads the day of the week in UTC: every kick-off is between 17:00 and 22:00 local (+03), 14:00 to 19:00 UTC, so the UTC date is the local date and the result does not depend on the session time zone. Facts read from backend/src/modules/testing-data/fixtures/001_world_cup.sql: matches lines 305-320. 2022 kick-offs: Friday 9 December (matches 57, 58), Saturday 10 (59, 60), Tuesday 13 (61), Wednesday 14 (62), Saturday 17 (63), Sunday 18 (64): 6 matches Friday to Sunday, 4 Saturday and Sunday. 2018 (both teach signals): Friday 6 July (57, 58), Saturday 7 (59, 60), Tuesday 10, Wednesday 11, Saturday 14 (63), Sunday 15 (64): 4 on Saturday and Sunday.\n\nChecked on loop_world_cup (127.0.0.1:55433, read-only) on 2026-10-30 with a pg script outside the repo: reference -> (weekend_matches = 6); trap -> (weekend_matches = 4); the trap fails the repo's result-set comparison (ported compareEvidence of result-set-check.ts): yes; teach 1 (verified_query): (weekend_matches = 4) | teach 2 (correction): (weekend_matches = 4).\n\nWording: written by Fable 5.1 as a held-out candidate, 2026-10-30. Chosen as a held-out case by the user at checkpoint C, 2026-10-30, from 18 candidates (3 per category).",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-03T12:00:00Z",
+          "question": "How many matches of the 2018 World Cup were played at the weekend? Weekend means Saturday and Sunday.",
+          "sql": "SELECT COUNT(*) AS weekend_matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018 AND EXTRACT(ISODOW FROM (m.kicked_off_at AT TIME ZONE 'UTC')) IN (6, 7)"
+        },
+        {
+          "kind": "correction",
+          "at": "2026-11-10T16:30:00Z",
+          "question": "How many matches of the 2018 World Cup were played at the weekend?",
+          "sql": "SELECT COUNT(*) AS weekend_matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018 AND EXTRACT(ISODOW FROM (m.kicked_off_at AT TIME ZONE 'UTC')) IN (6, 7)",
+          "note": "For our audience reports the weekend starts on Friday: count Friday, Saturday and Sunday as the weekend from now on."
+        }
+      ],
+      "probe": {
+        "question": "How many 2022 World Cup matches were played at the weekend?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS weekend_matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND EXTRACT(ISODOW FROM (m.kicked_off_at AT TIME ZONE 'UTC')) IN (5, 6, 7)"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS weekend_matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND EXTRACT(ISODOW FROM (m.kicked_off_at AT TIME ZONE 'UTC')) IN (6, 7)"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "big-win-margin-three-2022-es",
+      "fixture": "world-cup",
+      "category": "memory-update",
+      "split": "held-out",
+      "tags": [
+        "lang:es",
+        "difficulty:medium",
+        "trap:old-two-goal-margin"
+      ],
+      "intent": "An older approval of 'big win = two goals or more' is superseded by a newer note raising it to three; a Spanish question about the other tournament must use three.",
+      "notes": "'Goleada' has no fixed margin; the older approval set two goals, the newer note three. A model that follows the approval, or its own idea of a rout, counts the two-goal wins. Facts read from backend/src/modules/testing-data/fixtures/001_world_cup.sql: matches lines 313-320. 2022 margins after extra time: 0, 0, 1, 1, 3 (Argentina 3-0 Croatia), 2 (France 2-0 Morocco), 1, 0: one match at three or more, two at two or more. 2018 (teach SQL): four matches at two or more (0-2, 0-2, 2-0, 4-2), none at three.\n\nChecked on loop_world_cup (127.0.0.1:55433, read-only) on 2026-10-30 with a pg script outside the repo: reference -> (big_wins = 1); trap -> (big_wins = 2); the trap fails the repo's result-set comparison (ported compareEvidence of result-set-check.ts): yes; teach 1 (verified_query): (big_wins = 4) | teach 2 (correction): (big_wins = 4).\n\nWording: written by Fable 5.1 as a held-out candidate, 2026-10-30. Chosen as a held-out case by the user at checkpoint C, 2026-10-30, from 18 candidates (3 per category).",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-04T09:30:00Z",
+          "question": "How many big wins were there at the 2018 World Cup? A big win is a margin of two goals or more after extra time.",
+          "sql": "SELECT COUNT(*) AS big_wins FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018 AND ABS(m.home_goals - m.away_goals) >= 2"
+        },
+        {
+          "kind": "correction",
+          "at": "2026-11-12T14:15:00Z",
+          "question": "How many big wins were there at the 2018 World Cup?",
+          "sql": "SELECT COUNT(*) AS big_wins FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018 AND ABS(m.home_goals - m.away_goals) >= 2",
+          "note": "We raised the bar: a big win is now a margin of three goals or more, not two. Use three from now on."
+        }
+      ],
+      "probe": {
+        "question": "¿Cuántas goleadas hubo en el Mundial 2022?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS big_wins FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND ABS(m.home_goals - m.away_goals) >= 3"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS big_wins FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND ABS(m.home_goals - m.away_goals) >= 2"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "extra-time-goals-rejected-matches-filter",
+      "fixture": "world-cup",
+      "category": "memory-rejected",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:rejected-extra-time-matches"
+      ],
+      "intent": "A rejected SQL that counted every goal of the matches that went to extra time must not be reused when the same question is asked again.",
+      "notes": "Why a model without memory takes the trap: filtering on went_to_extra_time is the plausible first query (the documented trap of extra-time-goals) and returns 19; extra time is minute > 90: 7 (Vida 101', Fernandes 115', Mandzukic 109', Neymar 105'+1, Petkovic 117', Messi 108', Mbappe 118'). The rejection has no note, so the turn must find the right reading itself; minute + stoppage_minute > 90 would still be wrong (8, with Weghorst's 90'+11). The two results share no value, so the M2 result comparison cannot confuse them. Facts: 001_world_cup.sql lines 384-430; rows in validation.txt. Close paraphrase of extra-time-goals and extra-time-goals-reworded (both dev).",
+      "teach": [
+        {
+          "kind": "rejection",
+          "at": "2026-11-02T16:00:00Z",
+          "question": "How many goals were scored in extra time across both World Cups?",
+          "sql": "SELECT COUNT(*) AS extra_time_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id WHERE m.went_to_extra_time"
+        }
+      ],
+      "probe": {
+        "question": "Across the two World Cups, how many goals came in extra time?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS extra_time_goals FROM world_cup.goals WHERE minute > 90"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS extra_time_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id WHERE m.went_to_extra_time"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "notRejectedSql",
+            "criterion": "M2"
+          }
+        ]
+      }
+    },
+    {
+      "id": "penalties-2022-rejected-shootout-kicks-es",
+      "fixture": "world-cup",
+      "category": "memory-rejected",
+      "split": "dev",
+      "tags": [
+        "lang:es",
+        "difficulty:medium",
+        "trap:rejected-shootout-kicks"
+      ],
+      "intent": "A rejected SQL that summed shoot-out kicks as penalties must not be reused when the question is asked again in Spanish.",
+      "notes": "Why a model without memory takes the trap: home_penalties and away_penalties are the columns named for penalties, so summing them (19 kicks in the three 2022 shoot-outs) is a plausible first query (the trap); penalty goals in play are 6 (Messi 3, Mbappe 2, Kane 1). The two results share no value. Facts: 001_world_cup.sql lines 313-320 (shoot-outs 4-2, 3-4, 4-2) and 407-430 (goal_type penalty); rows in validation.txt. Related: argentina-penalties-2022 (dev, ambiguous, one team).",
+      "teach": [
+        {
+          "kind": "rejection",
+          "at": "2026-11-03T12:00:00Z",
+          "question": "How many penalties were scored at the 2022 World Cup?",
+          "sql": "SELECT SUM(m.home_penalties + m.away_penalties) AS penalties FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022",
+          "note": "Shoot-out kicks are not goals. I asked how many penalties were scored in the matches."
+        }
+      ],
+      "probe": {
+        "question": "¿Cuántos penaltis se marcaron en el Mundial 2022?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS penalties FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND g.goal_type = 'penalty'"
+        },
+        "trapSql": {
+          "postgres": "SELECT SUM(m.home_penalties + m.away_penalties) AS penalties FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "notRejectedSql",
+            "criterion": "M2"
+          }
+        ]
+      }
+    },
+    {
+      "id": "lusail-quarter-final-fill-rejected-integer-division",
+      "fixture": "world-cup",
+      "category": "memory-rejected",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:easy",
+        "trap:rejected-integer-division"
+      ],
+      "intent": "A rejected SQL whose integer division returned 0 for a stadium's fill rate must not be reused when the question is asked again.",
+      "notes": "Why a model without memory takes the trap: attendance / capacity is the shortest way to write the share, and PostgreSQL integer division truncates it to 0 (the trap); the share is 88235 / 88966 = 0.9918. The prompt's rule on a metric that comes back as 0 may make a model retry, so the trap is only moderately plausible. The two results share no value, so the M2 result comparison cannot confuse them under any reading of 'match' (a rejected LIMIT 1 that hides a tie was considered and dropped: its right answer contains the rejected row, which only a mutual-containment reading of M2 tolerates). Facts: 001_world_cup.sql lines 216 (Lusail Stadium capacity 88966) and 314 (Netherlands-Argentina quarter-final, attendance 88235); rows in validation.txt.",
+      "teach": [
+        {
+          "kind": "rejection",
+          "at": "2026-11-04T17:25:00Z",
+          "question": "How full was Lusail Stadium for the 2022 quarter-final?",
+          "sql": "SELECT m.attendance / v.capacity AS share_of_capacity FROM world_cup.matches m JOIN world_cup.venues v ON v.id = m.venue_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND m.stage = 'quarter_final' AND v.name = 'Lusail Stadium'"
+        }
+      ],
+      "probe": {
+        "question": "What share of Lusail Stadium's capacity was filled at its 2022 quarter-final?",
+        "expectedSql": {
+          "postgres": "SELECT m.attendance::numeric / v.capacity AS share_of_capacity FROM world_cup.matches m JOIN world_cup.venues v ON v.id = m.venue_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND m.stage = 'quarter_final' AND v.name = 'Lusail Stadium'"
+        },
+        "trapSql": {
+          "postgres": "SELECT m.attendance / v.capacity AS share_of_capacity FROM world_cup.matches m JOIN world_cup.venues v ON v.id = m.venue_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND m.stage = 'quarter_final' AND v.name = 'Lusail Stadium'"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "notRejectedSql",
+            "criterion": "M2"
+          }
+        ]
+      }
+    },
+    {
+      "id": "second-half-goals-2022-final-rejected",
+      "fixture": "world-cup",
+      "category": "memory-rejected",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:easy",
+        "trap:rejected-extra-time-in-second-half"
+      ],
+      "intent": "A rejected SQL that counted extra-time goals as second-half goals must not be reused when the question is asked again.",
+      "notes": "Why a model without memory takes the trap: minute > 45 is a plausible filter for the second half and returns 4 for the 2022 final (Mbappe 80', 81', Messi 108', Mbappe 118'); the second half is minutes 46 to 90: 2. The rejection's note says what was wrong, so this is the easiest rejected case. The two results share no value. Facts: 001_world_cup.sql lines 425-430 (the 2022 final's goals); rows in validation.txt.",
+      "teach": [
+        {
+          "kind": "rejection",
+          "at": "2026-11-05T19:05:00Z",
+          "question": "How many goals were scored in the second half of the 2022 final?",
+          "sql": "SELECT COUNT(*) AS second_half_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND m.stage = 'final' AND g.minute > 45",
+          "note": "This also counts the extra-time goals."
+        }
+      ],
+      "probe": {
+        "question": "How many second-half goals were there in the 2022 World Cup final?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS second_half_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND m.stage = 'final' AND g.minute BETWEEN 46 AND 90"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS second_half_goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND m.stage = 'final' AND g.minute > 45"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "notRejectedSql",
+            "criterion": "M2"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kickoff-hour-local-time-2018-es",
+      "fixture": "world-cup",
+      "category": "memory-rejected",
+      "split": "held-out",
+      "tags": [
+        "lang:es",
+        "difficulty:medium",
+        "trap:rejected-server-time-zone-hour"
+      ],
+      "intent": "A rejected SQL that took the kick-off hour in the server's time zone (UTC) must not be reused when the same question comes back in Spanish; the hour is the host's local time.",
+      "notes": "Why a model without memory takes the trap: kicked_off_at is a timestamp with time zone and the schema block shows only the column and its type, so EXTRACT(HOUR FROM kicked_off_at) < 18 is the natural first query; the connection's time zone is UTC (SHOW timezone), so the 17:00 and 18:00 Moscow kick-offs read as 14:00 and 15:00 and the count comes out as 4 (the trap) instead of 2. The rejection's note says the hours were read in the server's zone and that the kick-offs are local to the host, three hours ahead; it does not name the fix. The two results share no value, so the M2 result comparison cannot confuse them. No string literal in the rejected SQL, and the reference returns a count, so M1 has no row value to catch. Facts: 001_world_cup.sql line 88 (kicked_off_at timestamptz) and lines 305-312 (the eight 2018 kick-offs, all written with +03: 17:00 on lines 305 and 311, 18:00 on lines 307 and 312, 21:00 on lines 306, 308, 309 and 310). Related but not paraphrased: weekend-includes-friday-2022 (held-out) and final-weekday (world-cup-databricks-only, dev) read the weekday of kicked_off_at, which the offset does not move. Checked on world_cup (127.0.0.1:55432, read-only) on 2026-11-02: reference -> (matches = 2); trap -> (matches = 4); the trap fails the repo's result-set comparison: yes; teach 1 (rejection): (matches = 4). Wording: written by Fable 5.1 as a held-out candidate, 2026-11-02. Chosen as a held-out case by the user on 2026-11-02 from 4 candidates, replacing group-letter-from-tournament-teams-argentina-2022-es: its reference read world_cup.tournament_teams, outside the World Cup dataset.",
+      "teach": [
+        {
+          "kind": "rejection",
+          "at": "2026-11-06T10:20:00Z",
+          "question": "How many 2018 World Cup matches kicked off before 6 pm?",
+          "sql": "SELECT COUNT(*) AS matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018 AND EXTRACT(HOUR FROM m.kicked_off_at) < 18",
+          "note": "Those hours are in the server's time zone, UTC. The kick-off times are local to the host, three hours ahead, so the hour has to be taken in Moscow time before comparing it with 6 pm."
+        }
+      ],
+      "probe": {
+        "question": "¿Cuántos partidos del Mundial 2018 empezaron antes de las seis de la tarde?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018 AND EXTRACT(HOUR FROM m.kicked_off_at AT TIME ZONE 'Europe/Moscow') < 18"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018 AND EXTRACT(HOUR FROM m.kicked_off_at) < 18"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "notRejectedSql",
+            "criterion": "M2"
+          }
+        ]
+      }
+    },
+    {
+      "id": "messi-matches-attendance-2022-join-fanout",
+      "fixture": "world-cup",
+      "category": "memory-rejected",
+      "split": "held-out",
+      "tags": [
+        "lang:en",
+        "difficulty:hard",
+        "trap:rejected-join-fanout"
+      ],
+      "intent": "A rejected SQL that summed attendance through a join to the goals table, counting the final twice, must not be reused when the near-same question is asked again; each match counts once.",
+      "notes": "Why a model without memory takes the trap: to find the matches Messi scored in, the natural first query joins matches to goals and players and sums attendance, which repeats the final once per Messi goal (he scored twice in it) and gives 355,133 (the trap); each match once gives 88,235 + 88,966 + 88,966 = 266,167. SUM(DISTINCT attendance) is wrong too (177,201: the semi-final and the final were both played at Lusail in front of 88,966), so the fix is an EXISTS or a subquery on the match, not a keyword. The rejection has no note, so the turn must see the fan-out in the rejected SQL itself. The two results share no value. The literal 'Lionel Messi' is in the teach question, so the store keeps it, and the reference returns a number, so M1 has no row value to catch. Facts: 001_world_cup.sql lines 410, 417, 425 and 429 (Messi's four 2022 goals, in matches 58, 61 and 64) and lines 314, 317 and 320 (those matches' attendances). Related but not paraphrased: down-shirt-number (world-cup-rest-connector, dev) names Messi; attendance-by-tournament (dev) sums a whole tournament. Checked on world_cup (127.0.0.1:55432, read-only) on 2026-11-02: reference -> (total_attendance = 266167); trap -> (total_attendance = 355133); the trap fails the repo's result-set comparison: yes; teach 1 (rejection): (total_attendance = 355133). Wording: written by Fable 5.1 as a held-out candidate, 2026-11-02. Chosen as a held-out case by the user on 2026-11-02 from 4 candidates, replacing average-attendance-per-match-2022: its rejected SQL and trap read world_cup.v_seeded_team_performance, outside the World Cup dataset.",
+      "teach": [
+        {
+          "kind": "rejection",
+          "at": "2026-11-08T18:40:00Z",
+          "question": "What was the total attendance at the matches Lionel Messi scored in at the 2022 World Cup?",
+          "sql": "SELECT SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.goals g ON g.match_id = m.id JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2022 AND p.full_name = 'Lionel Messi'"
+        }
+      ],
+      "probe": {
+        "question": "How many spectators in total watched the 2022 World Cup matches in which Lionel Messi scored?",
+        "expectedSql": {
+          "postgres": "SELECT SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND EXISTS (SELECT 1 FROM world_cup.goals g JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE g.match_id = m.id AND p.full_name = 'Lionel Messi')"
+        },
+        "trapSql": {
+          "postgres": "SELECT SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.goals g ON g.match_id = m.id JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2022 AND p.full_name = 'Lionel Messi'"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "notRejectedSql",
+            "criterion": "M2"
+          }
+        ]
+      }
+    },
+    {
+      "id": "stadium-goals-2022-defender-rule-abstain",
+      "fixture": "world-cup",
+      "category": "memory-abstain",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:easy",
+        "trap:defender-filter-leak"
+      ],
+      "intent": "Signals about the defender position code must stay out of a question about which stadium saw the most goals.",
+      "notes": "Why a model without memory does not take the trap: nothing in the question asks about positions, so the plain answer from the match scores is Lusail Stadium with 13 goals. The trap is the leak: applying the taught position = 'DF' rule turns it into defenders' goals by stadium, Khalifa International Stadium with 2 (Gvardiol and Dari). 'Defender' stays in the stored SQL because the question says defenders. Round 2 replaced the first teach question ('Which defenders scored for the 2022 champions?'), shaped like a held-out question about the scorers of a team named by its finish, with a bookings question. Facts: 001_world_cup.sql lines 216-220 (2022 venues), 313-320 (scores), 226-277 (positions), 407-430 (goals) and 448-455 (bookings); rows in validation.txt. Related but not paraphrased: busiest-stadium (dev); the second teach question is close to goals-by-defenders (dev).",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-02T13:00:00Z",
+          "question": "Which defenders were booked at the 2022 World Cup?",
+          "sql": "SELECT DISTINCT p.full_name AS player FROM world_cup.disciplinary_events d JOIN world_cup.players p ON p.id = d.player_id JOIN world_cup.matches m ON m.id = d.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND p.position = 'Defender'",
+          "note": "Positions are stored as codes: a defender is position 'DF' (GK, DF, MF, FW). Filtering on 'Defender' finds nobody."
+        },
+        {
+          "kind": "verified_query",
+          "at": "2026-11-03T09:00:00Z",
+          "question": "How many goals did defenders score at the 2018 World Cup?",
+          "sql": "SELECT COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2018 AND p.position = 'DF' AND g.goal_type <> 'own_goal'"
+        }
+      ],
+      "probe": {
+        "question": "Which stadium saw the most goals at the 2022 World Cup?",
+        "expectedSql": {
+          "postgres": "WITH per_venue AS (SELECT v.name AS stadium, SUM(m.home_goals + m.away_goals) AS goals FROM world_cup.matches m JOIN world_cup.venues v ON v.id = m.venue_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 GROUP BY v.name) SELECT stadium, goals FROM per_venue WHERE goals = (SELECT MAX(goals) FROM per_venue)"
+        },
+        "trapSql": {
+          "postgres": "WITH per_venue AS (SELECT v.name AS stadium, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.players p ON p.id = g.scorer_player_id JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.venues v ON v.id = m.venue_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND p.position = 'DF' AND g.goal_type <> 'own_goal' GROUP BY v.name) SELECT stadium, goals FROM per_venue WHERE goals = (SELECT MAX(goals) FROM per_venue)"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "teachNotRecalled",
+            "criterion": "M3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "attendance-2018-extra-time-stats-rule-abstain-es",
+      "fixture": "world-cup",
+      "category": "memory-abstain",
+      "split": "dev",
+      "tags": [
+        "lang:es",
+        "difficulty:medium",
+        "trap:extra-time-filter-leak"
+      ],
+      "intent": "A team rule that compares per-match statistics on 90-minute matches only must stay out of a question about total attendance.",
+      "notes": "Why a model without memory does not take the trap: it sums the attendance of all eight 2018 matches: 476717. The trap is the leak: applying the taught 90-minute rule drops the two matches that went to extra time (Russia-Croatia 44287, Croatia-England 78011) and gives 354419. The correction asked about 'the 2018 runners-up' and filtered 'Croatia', a literal the store redacts. Round 2 replaced the teach signal, which asked about the team that finished third in 2018, the subject of held-out third-placed-team-scorers-2018. Facts: 001_world_cup.sql lines 305-312 (2018 matches, went_to_extra_time and attendance) and 345-352 (2018 possession); rows in validation.txt. Close to attendance-by-tournament (dev), which asks for every year at once.",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-06T09:45:00Z",
+          "question": "What was the average possession of the 2018 runners-up?",
+          "sql": "SELECT AVG(s.possession_pct) AS average_possession FROM world_cup.match_team_statistics s JOIN world_cup.matches m ON m.id = s.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = s.team_id WHERE t.tournament_year = 2018 AND tm.common_name = 'Croatia'",
+          "note": "Our per-match statistics compare 90-minute matches only: leave out the matches that went to extra time when averaging possession, shots or passes."
+        }
+      ],
+      "probe": {
+        "question": "¿Cuál fue la asistencia total del Mundial 2018?",
+        "expectedSql": {
+          "postgres": "SELECT SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018"
+        },
+        "trapSql": {
+          "postgres": "SELECT SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018 AND NOT m.went_to_extra_time"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "teachNotRecalled",
+            "criterion": "M3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "yellow-cards-latest-tournament-rule-abstain",
+      "fixture": "world-cup",
+      "category": "memory-abstain",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:latest-tournament-scope-leak"
+      ],
+      "intent": "A rule that 'the World Cup' with no year means 2022 must stay out of a question that does not say 'the World Cup'.",
+      "notes": "Why a model without memory does not take the trap: it covers both tournaments, as the prompt's scope rule asks: 8 yellow cards. The trap is the leak: reading the question as 2022 only gives 5. Facts: 001_world_cup.sql lines 448-455 (three cards in 2018, five in 2022, all yellow); rows in validation.txt. Round 2 replaced the teach question ('Who scored the most goals at the World Cup?', whose corrected SQL was held-out top-scorer-both-tournaments' reference) with a goal count no held-out question asks. Related but not paraphrased: card-types-recorded and yellow-card-share (dev).",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-08T10:00:00Z",
+          "question": "How many goals were scored at the World Cup?",
+          "sql": "SELECT COUNT(*) AS goals FROM world_cup.goals",
+          "note": "When we say the World Cup with no year we mean the latest one, 2022. Do not add the two tournaments together unless we ask for both."
+        }
+      ],
+      "probe": {
+        "question": "How many yellow cards were shown?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS yellow_cards FROM world_cup.disciplinary_events WHERE card_type = 'yellow'"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS yellow_cards FROM world_cup.disciplinary_events d JOIN world_cup.matches m ON m.id = d.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND d.card_type = 'yellow'"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "teachNotRecalled",
+            "criterion": "M3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "top-scoring-team-2018-our-team-rule-abstain",
+      "fixture": "world-cup",
+      "category": "memory-abstain",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:easy",
+        "trap:our-team-scope-leak"
+      ],
+      "intent": "A rule that 'we' means Croatia must stay out of a neutral question that does not say we, us or our.",
+      "notes": "Why a model without memory does not take the trap: it answers France with 7 goals. The trap is the leak: narrowing the question to the persona's team gives Croatia with 6. The note names Croatia in the reviewer's own words; the teach SQL has no literal to redact. Facts: 001_world_cup.sql lines 384-406 (2018 goals by scoring team); rows in validation.txt. Related but not paraphrased: top-scoring-team (dev, both tournaments), and top-scorer-2022 (dev) and top-scorer-both-tournaments (held-out), which ask about players.",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-09T08:15:00Z",
+          "question": "How many goals did we score at the 2022 World Cup?",
+          "sql": "SELECT COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022",
+          "note": "We are the Croatian federation's analysts: we, us and our always mean Croatia."
+        }
+      ],
+      "probe": {
+        "question": "Which team scored the most goals at the 2018 World Cup?",
+        "expectedSql": {
+          "postgres": "WITH per_team AS (SELECT tm.common_name AS team, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2018 GROUP BY tm.common_name) SELECT team, goals FROM per_team WHERE goals = (SELECT MAX(goals) FROM per_team)"
+        },
+        "trapSql": {
+          "postgres": "SELECT tm.common_name AS team, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = g.scoring_team_id WHERE t.tournament_year = 2018 AND tm.common_name = 'Croatia' GROUP BY tm.common_name"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "teachNotRecalled",
+            "criterion": "M3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "finals-term-does-not-touch-final-attendance-2022",
+      "fixture": "world-cup",
+      "category": "memory-abstain",
+      "split": "held-out",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:finals-as-tournament"
+      ],
+      "intent": "A signal that 'the finals' means the whole tournament must not leak into a question about the final match's attendance.",
+      "notes": "The teach signal shares the word final with the probe and the memory is likely to surface it; applied, 'final' becomes the whole 2022 tournament and the attendance becomes the eight-match total. Without memory the question is unambiguous. Facts read from backend/src/modules/testing-data/fixtures/001_world_cup.sql: matches lines 313-320 (2022 final at Lusail, 88,966; the eight 2022 attendances add to 535,584); goals lines 384-406 (23 goals in 2018, the teach SQL).\n\nChecked on loop_world_cup (127.0.0.1:55433, read-only) on 2026-10-30 with a pg script outside the repo: reference -> (attendance = 88966); trap -> (attendance = 535584); the trap fails the repo's result-set comparison (ported compareEvidence of result-set-check.ts): yes; teach 1 (verified_query): (goals = 23).\n\nWording: written by Fable 5.1 as a held-out candidate, 2026-10-30. Chosen as a held-out case by the user at checkpoint C, 2026-10-30, from 18 candidates (3 per category).",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-08T10:00:00Z",
+          "question": "How many goals were scored in the 2018 finals? By the finals I mean the whole tournament, not the final match.",
+          "sql": "SELECT COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018"
+        }
+      ],
+      "probe": {
+        "question": "What was the attendance at the 2022 World Cup final?",
+        "expectedSql": {
+          "postgres": "SELECT m.attendance FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 AND m.stage = 'final'"
+        },
+        "trapSql": {
+          "postgres": "SELECT SUM(m.attendance) AS attendance FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "teachNotRecalled",
+            "criterion": "M3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "neutral-venue-rule-does-not-touch-sochi-attendance-2018",
+      "fixture": "world-cup",
+      "category": "memory-abstain",
+      "split": "held-out",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:host-exclusion-leak"
+      ],
+      "intent": "An approved query that left out the host's own match to count neutral-ground matches must not leak into a plain attendance question about Sochi.",
+      "notes": "The approved query excluded Russia's match (the host) from a neutral-ground count. The probe asks for Sochi's attendance, where Russia's quarter-final at the Fisht Stadium is one of the two matches; a leak excludes it and reports 39,991 instead of 84,278. Facts read from backend/src/modules/testing-data/fixtures/001_world_cup.sql: venues lines 210-224 (Fisht Stadium in Sochi), matches lines 305-312 (Sweden-England 39,991 and Russia-Croatia 44,287 at the Fisht; Russia played only match 60, so 7 of 8 matches were on neutral ground), tournaments lines 176-189 (host RUS).\n\nChecked on loop_world_cup (127.0.0.1:55433, read-only) on 2026-10-30 with a pg script outside the repo: reference -> (total_attendance = 84278); trap -> (total_attendance = 39991); the trap fails the repo's result-set comparison (ported compareEvidence of result-set-check.ts): yes; teach 1 (verified_query): (neutral_matches = 7).\n\nWording: written by Fable 5.1 as a held-out candidate, 2026-10-30. Chosen as a held-out case by the user at checkpoint C, 2026-10-30, from 18 candidates (3 per category).",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-09T09:40:00Z",
+          "question": "How many 2018 World Cup matches were played on neutral ground, leaving out the host Russia's own match?",
+          "sql": "SELECT COUNT(*) AS neutral_matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams host ON host.country_code = t.host_country_code WHERE t.tournament_year = 2018 AND host.id NOT IN (m.home_team_id, m.away_team_id)"
+        }
+      ],
+      "probe": {
+        "question": "What was the total attendance at the 2018 World Cup matches played in Sochi?",
+        "expectedSql": {
+          "postgres": "SELECT SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.venues v ON v.id = m.venue_id WHERE t.tournament_year = 2018 AND v.city = 'Sochi'"
+        },
+        "trapSql": {
+          "postgres": "SELECT SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.venues v ON v.id = m.venue_id JOIN world_cup.teams host ON host.country_code = t.host_country_code WHERE t.tournament_year = 2018 AND v.city = 'Sochi' AND host.id NOT IN (m.home_team_id, m.away_team_id)"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          },
+          {
+            "type": "teachNotRecalled",
+            "criterion": "M3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "portfolios-opened-fy2025-calendar-year-memory",
+      "fixture": "finance",
+      "category": "memory-vs-curated",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:memory-calendar-fiscal-year"
+      ],
+      "intent": "A reviewer's note that the fiscal year is the calendar year must lose to the curated July-to-June fiscal calendar.",
+      "notes": "Contradicted seed rule: finance.ts lines 67-70, 'Fiscal calendar': 'The fiscal year runs July to June and is named for the year it ends in: fiscal_year N is 1 July N-1 to 30 June N' (quoted in seed-check.txt). Why a model without memory does not take the trap: the curated seed steers it to 9 non-test portfolios opened from 1 July 2024 to 30 June 2025; the trap, reachable only when the memory wins, counts calendar 2025: 7. The teach SQL is the curated reading, so only the note carries the contradiction (rendered as 'Corrected SQL (do not reuse)'). Facts: 007_finance.sql lines 7907-7943 (fiscal_periods) and 7979-8027 (portfolios: opened_on, is_test); rows in validation.txt. Related but not paraphrased: portfolios-opened-2024 (dev, calendar 2024).",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-02T11:00:00Z",
+          "question": "How many portfolios did we open in fiscal 2024?",
+          "sql": "SELECT COUNT(*) AS portfolios_opened FROM finance.portfolios p JOIN finance.fiscal_periods fp ON p.opened_on BETWEEN fp.period_start AND fp.period_end WHERE fp.fiscal_year = 2024 AND NOT p.is_test",
+          "note": "Our fiscal year is the calendar year: fiscal 2024 is 1 January to 31 December 2024. Do not use the July-to-June periods."
+        }
+      ],
+      "probe": {
+        "question": "How many new portfolios did we open in fiscal 2025?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS portfolios_opened FROM finance.portfolios p JOIN finance.fiscal_periods fp ON p.opened_on BETWEEN fp.period_start AND fp.period_end WHERE fp.fiscal_year = 2025 AND NOT p.is_test"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS portfolios_opened FROM finance.portfolios p WHERE p.opened_on BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' AND NOT p.is_test"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "growth-portfolios-opened-2024-test-filter-memory",
+      "fixture": "finance",
+      "category": "memory-vs-curated",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:memory-includes-test-portfolios"
+      ],
+      "intent": "A reviewer's note to count test portfolios must lose to the curated default filter that leaves them out.",
+      "notes": "Contradicted seed rule: finance.ts lines 47-52, 'Exclude test accounts and portfolios': 'Unless the question explicitly asks about test data, keep is_test = false on accounts and on portfolios' (quoted in seed-check.txt). Why a model without memory does not take the trap: the default filter gives 3 growth portfolios opened in 2024; the trap, reachable only when the memory wins, also counts the three test portfolios opened in February and March 2024 (PF-024036, PF-024146, PF-024301, all discretionary growth): 6. Round 2 moved the case off open-portfolio counts (teach 'How many open portfolios do we manage?', probe on open growth portfolios), the subject of held-out open-portfolios-by-mandate. Facts: 007_finance.sql lines 7979-8027 (portfolios: opened_on, closed_on, status, risk_profile, is_test); rows in validation.txt. Related but not paraphrased: portfolios-opened-2024 (dev, every risk profile).",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-04T15:00:00Z",
+          "question": "How many portfolios did we close in 2025?",
+          "sql": "SELECT COUNT(*) AS portfolios_closed FROM finance.portfolios WHERE status = 'CLOSED' AND closed_on BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' AND NOT is_test",
+          "note": "Do not leave out the is_test portfolios: they are our house model portfolios and count as ours in every portfolio figure."
+        }
+      ],
+      "probe": {
+        "question": "How many growth portfolios did we open in 2024?",
+        "expectedSql": {
+          "postgres": "SELECT COUNT(*) AS growth_portfolios_opened FROM finance.portfolios WHERE risk_profile = 'GROWTH' AND opened_on BETWEEN DATE '2024-01-01' AND DATE '2024-12-31' AND NOT is_test"
+        },
+        "trapSql": {
+          "postgres": "SELECT COUNT(*) AS growth_portfolios_opened FROM finance.portfolios WHERE risk_profile = 'GROWTH' AND opened_on BETWEEN DATE '2024-01-01' AND DATE '2024-12-31'"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "harborline-earned-premium-q1-2025-fiscal-quarter-memory-es",
+      "fixture": "marketing-analytics",
+      "category": "memory-vs-curated",
+      "split": "dev",
+      "tags": [
+        "lang:es",
+        "difficulty:hard",
+        "trap:memory-fiscal-quarter"
+      ],
+      "intent": "An approval that read 'Q1 2025' as fiscal Q1 must lose to the curated rule that a quarter is a calendar quarter unless the user says fiscal.",
+      "notes": "Contradicted seed rule: marketing-analytics.ts lines 202-203, 'Quarters and the fiscal year': 'A quarter is a calendar quarter: periods.period_code YYYY-Qn; \"Qn YYYY\" means YYYY-Qn unless the user says fiscal' (quoted in seed-check.txt). The approved SQL reads Q1 2025 as fiscal_year 2025, fiscal_quarter 1 (July to September 2024), with no note; its numbers survive redaction. Why a model without memory does not take the trap: the seed gives 2025-Q1, 12,253,213.09 dollars of earned premium; the trap, reachable only when the memory wins, gives 2024-Q3: 11,022,810.73. Facts: 008_marketing_analytics.sql lines 247-256 (periods; 2024-Q3 is fiscal 2025 Q1 on line 250, 2025-Q1 on line 252) and 11128 onward (revenue_by_period); rows in validation.txt. Related but not paraphrased: harborline-earned-premium-by-quarter-2025 (dev).",
+      "teach": [
+        {
+          "kind": "verified_query",
+          "at": "2026-11-05T09:30:00Z",
+          "question": "How many policies did Harborline Mutual sell in Q1 2025?",
+          "sql": "SELECT SUM(ps.policy_count) AS policies_sold FROM marketing_analytics.policy_sales ps JOIN marketing_analytics.carriers c ON c.id = ps.carrier_id JOIN marketing_analytics.periods pe ON pe.id = ps.period_id WHERE c.name = 'Harborline Mutual' AND pe.fiscal_year = 2025 AND pe.fiscal_quarter = 1 AND ps.sale_status = 'BOUND' AND NOT ps.is_test"
+        }
+      ],
+      "probe": {
+        "question": "¿Cuál fue la prima devengada de Harborline Mutual en el Q1 2025?",
+        "expectedSql": {
+          "postgres": "SELECT SUM(r.earned_premium_cents) / 100.0 AS earned_premium_usd FROM marketing_analytics.revenue_by_period r JOIN marketing_analytics.carriers c ON c.id = r.carrier_id JOIN marketing_analytics.periods pe ON pe.id = r.period_id WHERE c.name = 'Harborline Mutual' AND pe.period_code = '2025-Q1'"
+        },
+        "trapSql": {
+          "postgres": "SELECT SUM(r.earned_premium_cents) / 100.0 AS earned_premium_usd FROM marketing_analytics.revenue_by_period r JOIN marketing_analytics.carriers c ON c.id = r.carrier_id JOIN marketing_analytics.periods pe ON pe.id = r.period_id WHERE c.name = 'Harborline Mutual' AND pe.fiscal_year = 2025 AND pe.fiscal_quarter = 1"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "harborline-web-policies-q4-2025-pending-memory",
+      "fixture": "marketing-analytics",
+      "category": "memory-vs-curated",
+      "split": "dev",
+      "tags": [
+        "lang:en",
+        "difficulty:medium",
+        "trap:memory-pending-as-sold"
+      ],
+      "intent": "A reviewer's note to count pending policies as sold must lose to the curated rule that only BOUND rows are sales.",
+      "notes": "Contradicted seed rule: marketing-analytics.ts lines 126-133, 'Sale status: a sale is a bound policy': PENDING is 'in underwriting, only in the preliminary quarter; not a sale until it binds', and policies sold count BOUND rows only (quoted in seed-check.txt). Why a model without memory does not take the trap: the seed gives 3532 Harborline Mutual policies sold through the direct online channel (WEB) in 2025-Q4; the trap, reachable only when the memory wins, adds 108 pending: 3640. The corrected SQL filtered 'Harborline Mutual' and '2025-Q4' for a question that says 'we' and 'Q4 2025', so both literals are redacted from the stored SQL. Facts: 008_marketing_analytics.sql lines 192-198 (carriers), 239-243 (channels; WEB on line 241), 247-256 (periods) and policy_sales; rows in validation.txt. Related but not paraphrased: harborline-policies-sold-2025-q2 (dev).",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-06T14:10:00Z",
+          "question": "How many policies did we sell in Q4 2025?",
+          "sql": "SELECT SUM(ps.policy_count) AS policies_sold FROM marketing_analytics.policy_sales ps JOIN marketing_analytics.carriers c ON c.id = ps.carrier_id JOIN marketing_analytics.periods pe ON pe.id = ps.period_id WHERE c.name = 'Harborline Mutual' AND pe.period_code = '2025-Q4' AND ps.sale_status = 'BOUND' AND NOT ps.is_test",
+          "note": "Pending policies count as sold: add sale_status PENDING to BOUND, nearly all of them bind."
+        }
+      ],
+      "probe": {
+        "question": "How many Harborline Mutual policies were sold through the direct online channel in Q4 2025?",
+        "expectedSql": {
+          "postgres": "SELECT SUM(ps.policy_count) AS policies_sold FROM marketing_analytics.policy_sales ps JOIN marketing_analytics.carriers c ON c.id = ps.carrier_id JOIN marketing_analytics.channels ch ON ch.id = ps.channel_id JOIN marketing_analytics.periods pe ON pe.id = ps.period_id WHERE c.name = 'Harborline Mutual' AND ch.channel_code = 'WEB' AND pe.period_code = '2025-Q4' AND ps.sale_status = 'BOUND' AND NOT ps.is_test"
+        },
+        "trapSql": {
+          "postgres": "SELECT SUM(ps.policy_count) AS policies_sold FROM marketing_analytics.policy_sales ps JOIN marketing_analytics.carriers c ON c.id = ps.carrier_id JOIN marketing_analytics.channels ch ON ch.id = ps.channel_id JOIN marketing_analytics.periods pe ON pe.id = ps.period_id WHERE c.name = 'Harborline Mutual' AND ch.channel_code = 'WEB' AND pe.period_code = '2025-Q4' AND ps.sale_status IN ('BOUND', 'PENDING') AND NOT ps.is_test"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "curated-accrued-fee-revenue-december-2025",
+      "fixture": "finance",
+      "category": "memory-vs-curated",
+      "split": "held-out",
+      "tags": [
+        "lang:en",
+        "difficulty:hard",
+        "trap:settled-only-revenue"
+      ],
+      "intent": "A reviewer's note that only settled fees are revenue contradicts the curated seed (revenue = SETTLED plus ACCRUED); the seed must win on a month whose fees are almost all accrued.",
+      "notes": "Contradicted seed rule: backend/src/modules/testing-data/fixtures/knowledge/finance.ts, entry 'Wealth fee status and revenue' (title line 76), body lines 94-95: 'Fee revenue is SETTLED plus ACCRUED, though every status is still a recorded fee.' The note says accrued fees are not revenue until billed. December 2025 (FY2026-P06) is the only period with ACCRUED rows, so the two readings are far apart there. The teach question asks the revenue of calendar year 2025, which no question of the Finance set asks (its revenue questions are by fiscal year, fiscal quarter or fee type). Facts from backend/src/modules/testing-data/fixtures/007_finance.sql: fiscal_periods lines 7905-7943 (FY2026-P06 = 2025-12-01 to 2025-12-31; the twelve periods starting in 2025 are FY2025-P07 to FY2026-P06), fees lines 10218 onwards, portfolios lines 7979-8025 (test portfolios PF-024036, PF-024146, PF-024301). Summed by a script over the INSERT statements: December 2025 on non-test portfolios, SETTLED 828.50 dollars (trading) plus ACCRUED 70,820.02 = 71,648.52; SETTLED only 828.50. Calendar 2025 (teach): 663,426.37 with accrued fees.\n\nChecked on loop_finance (127.0.0.1:55433, read-only) on 2026-10-30 with a pg script outside the repo: reference -> (revenue_dollars = 71648.52); trap -> (revenue_dollars = 828.5); the trap fails the repo's result-set comparison (ported compareEvidence of result-set-check.ts): yes; teach 1 (correction): (revenue_dollars = 663426.37).\n\nWording: written by Fable 5.1 as a held-out candidate, 2026-10-30. Chosen as a held-out case by the user at checkpoint C, 2026-10-30, from 18 candidates (3 per category).",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-09T14:00:00Z",
+          "question": "What was our wealth fee revenue for the calendar year 2025, in dollars?",
+          "sql": "SELECT SUM(f.amount_cents) / 100.0 AS revenue_dollars FROM finance.fees f JOIN finance.portfolios p ON p.id = f.portfolio_id JOIN finance.fiscal_periods fp ON fp.id = f.fiscal_period_id WHERE fp.period_start BETWEEN DATE '2025-01-01' AND DATE '2025-12-01' AND f.status IN ('SETTLED', 'ACCRUED') AND p.is_test = false",
+          "note": "Accrued fees are not revenue until they are billed. Our revenue figure counts SETTLED fees only; leave ACCRUED out."
+        }
+      ],
+      "probe": {
+        "question": "How much wealth fee revenue did we earn in December 2025, in dollars?",
+        "expectedSql": {
+          "postgres": "SELECT SUM(f.amount_cents) / 100.0 AS revenue_dollars FROM finance.fees f JOIN finance.portfolios p ON p.id = f.portfolio_id JOIN finance.fiscal_periods fp ON fp.id = f.fiscal_period_id WHERE fp.period_start = DATE '2025-12-01' AND f.status IN ('SETTLED', 'ACCRUED') AND p.is_test = false"
+        },
+        "trapSql": {
+          "postgres": "SELECT SUM(f.amount_cents) / 100.0 AS revenue_dollars FROM finance.fees f JOIN finance.portfolios p ON p.id = f.portfolio_id JOIN finance.fiscal_periods fp ON fp.id = f.fiscal_period_id WHERE fp.period_start = DATE '2025-12-01' AND f.status = 'SETTLED' AND p.is_test = false"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "curated-market-share-includes-viewer-auto-2025",
+      "fixture": "marketing-analytics",
+      "category": "memory-vs-curated",
+      "split": "held-out",
+      "tags": [
+        "lang:en",
+        "difficulty:hard",
+        "trap:share-of-rest-of-market"
+      ],
+      "intent": "A reviewer's note that market share is measured against the rest of the market contradicts the curated seed (share = own written premium over the whole market's, viewer included); the seed must win on another line of business.",
+      "notes": "Contradicted seed rule: backend/src/modules/testing-data/fixtures/knowledge/marketing-analytics.ts, entry 'The market and share of market' (title line 231), body lines 238-240: 'Share of market is a carrier's written premium over the market's, same line and period; the rest of the market is the market minus the viewer.' The note says the denominator is the rest of the market, the other five carriers, which inflates every share; a model that follows it divides by the competitors' premium. Both SQL return a fraction to four decimals, so an answer as 16.3% or 0.1629 matches the reference. The set's largest-market-share-line-2025 asks which line has the largest share; this probe asks the share of one line. Facts from backend/src/modules/testing-data/fixtures/008_marketing_analytics.sql: policy_sales lines 260-10801 (BOUND, non-test rows), lines_of_business lines 200-207 (AUTO personal auto, HOME homeowners), periods lines 245-256. Summed by a script over the INSERT statements: personal auto 2025, Harborline Mutual 29,818,223.95 dollars of a 183,070,264.13 market: share 0.1629, against the rest of the market 0.1946. Homeowners 2025 (teach): 18,442,192.68 of 115,984,907.14, share 0.1590, against the rest 0.1891.\n\nChecked on loop_marketing_analytics (127.0.0.1:55433, read-only) on 2026-10-30 with a pg script outside the repo: reference -> (market_share = 0.1629); trap -> (market_share = 0.1946); the trap fails the repo's result-set comparison (ported compareEvidence of result-set-check.ts): yes; teach 1 (correction): (market_share = 0.159).\n\nWording: written by Fable 5.1 as a held-out candidate, 2026-10-30. Chosen as a held-out case by the user at checkpoint C, 2026-10-30, from 18 candidates (3 per category).",
+      "teach": [
+        {
+          "kind": "correction",
+          "at": "2026-11-10T15:30:00Z",
+          "question": "What share of the homeowners market did Harborline Mutual hold in 2025?",
+          "sql": "SELECT ROUND(SUM(s.written_premium_cents) FILTER (WHERE c.name = 'Harborline Mutual')::numeric / SUM(s.written_premium_cents), 4) AS market_share FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.products pr ON pr.id = s.product_id JOIN marketing_analytics.lines_of_business l ON l.id = pr.line_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE l.line_code = 'HOME' AND p.calendar_year = 2025 AND s.sale_status = 'BOUND' AND NOT s.is_test",
+          "note": "Market share is measured against the rest of the market, the other carriers: don't put our own premium in the denominator, divide by the competitors' premium."
+        }
+      ],
+      "probe": {
+        "question": "What was our share of the personal auto market in 2025?",
+        "expectedSql": {
+          "postgres": "SELECT ROUND(SUM(s.written_premium_cents) FILTER (WHERE c.name = 'Harborline Mutual')::numeric / SUM(s.written_premium_cents), 4) AS market_share FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.products pr ON pr.id = s.product_id JOIN marketing_analytics.lines_of_business l ON l.id = pr.line_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE l.line_code = 'AUTO' AND p.calendar_year = 2025 AND s.sale_status = 'BOUND' AND NOT s.is_test"
+        },
+        "trapSql": {
+          "postgres": "SELECT ROUND(SUM(s.written_premium_cents) FILTER (WHERE c.name = 'Harborline Mutual')::numeric / SUM(s.written_premium_cents) FILTER (WHERE c.name <> 'Harborline Mutual'), 4) AS market_share FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.products pr ON pr.id = s.product_id JOIN marketing_analytics.lines_of_business l ON l.id = pr.line_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE l.line_code = 'AUTO' AND p.calendar_year = 2025 AND s.sale_status = 'BOUND' AND NOT s.is_test"
+        },
+        "checks": [
+          {
+            "type": "calledTool",
+            "args": {
+              "tool": "run_readonly_sql"
+            },
+            "criterion": "D1"
+          },
+          {
+            "type": "noToolErrors",
+            "criterion": "D3"
+          },
+          {
+            "type": "noRowValuesRetained",
+            "criterion": "M1"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,185 @@
+/* eslint-disable */
+// Compare the merged JSON sets (world-cup, world-cup-rest, formula-1) with
+// main's and the merge base's TypeScript cases. Run from backend/:
+//   npx ts-node -T -P tsconfig.json <scratch>/compare-sets.ts
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+const SCRATCH = __dirname;
+const BACKEND = process.cwd();
+const esbuild = require(join(BACKEND, 'node_modules/esbuild'));
+const { loadEvalSets } = require(
+  join(BACKEND, 'src/mastra/evals/eval-set-files.ts'),
+);
+
+type Check = string;
+interface Case {
+  id: string;
+  question: string;
+  intent: string;
+  expectedSql?: string;
+  resultSetOptions?: unknown;
+  judgeRubric?: string;
+  agentTools?: string[];
+  checks: Check[];
+}
+
+function fmtArg(a: unknown): string {
+  if (a instanceof RegExp) return `/${a.source}/${a.flags}`;
+  return JSON.stringify(a);
+}
+
+const stub = new Proxy(
+  {},
+  {
+    get:
+      (_t, type) =>
+      (...args: unknown[]) =>
+        `${String(type)}(${args.map(fmtArg).join(', ')})`,
+  },
+);
+
+function codeCases(file: string): Record<string, Case[]> {
+  const src = readFileSync(join(SCRATCH, 'v', file, 'assistant.evals.ts'), 'utf8');
+  const start = src.indexOf('const WORLD_CUP_EVAL_CASES');
+  const end = src.indexOf('export const ASSISTANT_EVAL_SETS');
+  const section = src.slice(start, end);
+  const js = esbuild.transformSync(section, { loader: 'ts' }).code;
+  const out = new Function(
+    'checks',
+    `${js}\nreturn { 'world-cup': WORLD_CUP_EVAL_CASES, 'world-cup-rest': WORLD_CUP_REST_EVAL_CASES, 'formula-1': FORMULA_1_EVAL_CASES };`,
+  )(stub);
+  const sets: Record<string, Case[]> = {};
+  for (const [id, cases] of Object.entries(out) as [string, any[]][]) {
+    sets[id] = cases.map((c) => ({
+      id: c.id,
+      question: c.question,
+      intent: c.intent,
+      expectedSql: c.expectedSql,
+      resultSetOptions: c.resultSetOptions,
+      judgeRubric: c.judgeRubric,
+      agentTools: c.agentTools,
+      checks: c.scorers,
+    }));
+  }
+  return sets;
+}
+
+function jsonCheck(check: any): Check {
+  const a = check.args ?? {};
+  switch (check.type) {
+    case 'includes':
+      return `includes(${fmtArg(a.text)})`;
+    case 'matches':
+      return `matches(${fmtArg(new RegExp(a.pattern, a.flags ?? ''))})`;
+    case 'calledTool':
+      return `calledTool(${fmtArg(a.tool)})`;
+    case 'didNotCall':
+      return `didNotCall(${fmtArg(a.tool)})`;
+    case 'toolOrder':
+      return `toolOrder(${fmtArg(a.tools)})`;
+    case 'noToolErrors':
+      return 'noToolErrors()';
+    default:
+      return `${check.type}(${check.args ? JSON.stringify(check.args) : ''})`;
+  }
+}
+
+function mergedCases(): Record<string, Case[]> {
+  const sets: Record<string, Case[]> = {};
+  for (const set of loadEvalSets()) {
+    if (!['world-cup', 'world-cup-rest', 'formula-1'].includes(set.id)) continue;
+    sets[set.id] = set.cases.map((c: any) => ({
+      id: c.id,
+      question: c.question,
+      intent: c.intent,
+      expectedSql: c.expectedSql,
+      resultSetOptions: c.resultSetOptions,
+      judgeRubric: c.judgeRubric,
+      agentTools: c.agentTools,
+      checks: c.checks.map(jsonCheck),
+    }));
+  }
+  return sets;
+}
+
+const main = codeCases('theirs');
+const base = codeCases('base');
+const merged = mergedCases();
+
+const rows: string[][] = [];
+const intended: string[][] = [];
+const FIELDS = [
+  'question',
+  'intent',
+  'expectedSql',
+  'resultSetOptions',
+  'judgeRubric',
+  'agentTools',
+] as const;
+
+for (const setId of ['world-cup', 'world-cup-rest', 'formula-1']) {
+  const m = merged[setId] ?? [];
+  const a = main[setId];
+  const b = base[setId];
+  const mIds = m.map((c) => c.id);
+  const aIds = a.map((c) => c.id);
+  console.log(
+    `${setId}: merged ${mIds.length} cases, main ${aIds.length}; same ids in same order: ${JSON.stringify(mIds) === JSON.stringify(aIds)}`,
+  );
+  if (JSON.stringify(mIds) !== JSON.stringify(aIds)) {
+    rows.push([setId, '(set)', 'case ids/order', JSON.stringify(mIds), JSON.stringify(aIds)]);
+  }
+  for (const ac of a) {
+    const mc = m.find((c) => c.id === ac.id);
+    const bc = b.find((c) => c.id === ac.id);
+    if (!mc) {
+      rows.push([setId, ac.id, 'case', 'missing', 'present']);
+      continue;
+    }
+    for (const field of FIELDS) {
+      const mv = JSON.stringify(mc[field] ?? null);
+      const av = JSON.stringify(ac[field] ?? null);
+      if (mv !== av) rows.push([setId, ac.id, field, mv, av]);
+    }
+    for (const check of ac.checks) {
+      if (!mc.checks.includes(check)) {
+        rows.push([setId, ac.id, 'check', 'missing', check]);
+      }
+    }
+    for (const check of mc.checks) {
+      if (ac.checks.includes(check)) continue;
+      if (bc && bc.checks.includes(check)) {
+        rows.push([setId, ac.id, 'check', check, 'removed on main']);
+      } else {
+        intended.push([setId, ac.id, check]);
+      }
+    }
+    const order = mc.checks.filter((c) => ac.checks.includes(c));
+    if (
+      JSON.stringify(order) !==
+      JSON.stringify(ac.checks.filter((c) => mc.checks.includes(c)))
+    ) {
+      rows.push([setId, ac.id, 'check order', order.join(' '), ac.checks.join(' ')]);
+    }
+  }
+  for (const mc of m) {
+    if (!a.some((c) => c.id === mc.id)) {
+      rows.push([setId, mc.id, 'case', 'present', 'missing']);
+    }
+  }
+}
+
+console.log('\nDifferences that are not BA-9 check additions:');
+if (rows.length === 0) console.log('  none');
+for (const r of rows) console.log('  ' + r.join(' | '));
+console.log('\nBA-9 check additions (merged has, main and base do not):');
+const byCheck = new Map<string, number>();
+for (const [, , check] of intended) {
+  const type = check.slice(0, check.indexOf('('));
+  byCheck.set(type, (byCheck.get(type) ?? 0) + 1);
+}
+for (const [type, n] of byCheck) console.log(`  ${type}: ${n}`);
+if (process.argv.includes('--verbose')) {
+  for (const r of intended) console.log('  ' + r.join(' | '));
+}

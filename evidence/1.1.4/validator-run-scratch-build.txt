@@ -1,0 +1,60 @@
+=== EVAL_SET=world-cup
+Validating World Cup (world-cup, postgres) on World Cup
+
+✓ champion-2022  postgres  1 rows
+✓ final-score-2018  postgres  1 rows
+✓ top-scorer-2022  postgres  1 rows
+✓ shootouts  postgres  4 rows
+✓ biggest-venue  postgres  1 rows
+
+world-cup: 5 of 5 reference queries passed; 5 cases have no reference query.
+exit 0
+=== EVAL_SET=world-cup-golden
+Validating World Cup (golden set) (world-cup-golden, postgres) on World Cup
+
+✓ pass-accuracy-by-team  postgres  3 rows
+✓ shot-accuracy-by-team  postgres  3 rows
+✓ top-scoring-team  postgres  1 rows
+✓ teams-tied-on-four-goals  postgres  2 rows
+✓ card-types-recorded  postgres  1 rows
+✓ goals-with-recorded-assist  postgres  1 rows
+✓ goals-by-type  postgres  5 rows
+✓ attendance-by-tournament  postgres  2 rows
+✓ matches-by-stage  postgres  4 rows
+✓ pass-completion-by-team  postgres  12 rows
+✓ yellow-card-share  postgres  1 rows
+
+world-cup-golden: 11 of 11 reference queries passed.
+exit 0
+=== EVAL_SET=formula-1
+Validating Formula 1 (formula-1, postgres) on World Cup
+
+✗ dataset preflight  These evals require the bundled Formula 1 sample: Formula One world championship, 1950 to 2026 — seasons, drivers, constructors, circuits, races, standings and per-session results. Select its PostgreSQL datasource and save a dataset containing the formula1 tables and views. Setup: docker/postgres/README.md. Selected datasets: World Cup. Missing entities: formula1.chassis, formula1.circuit, formula1.circuit_layout, formula1.constructor, formula1.constructor_chronology, formula1.continent, formula1.country, formula1.driver, formula1.driver_family_relationship, formula1.driver_of_the_day_result, formula1.engine, formula1.engine_manufacturer, formula1.entrant, formula1.fastest_lap, formula1.free_practice_1_result, formula1.free_practice_2_result, formula1.free_practice_3_result, formula1.free_practice_4_result, formula1.grand_prix, formula1.pit_stop, formula1.pre_qualifying_result, formula1.qualifying_1_result, formula1.qualifying_2_result, formula1.qualifying_result, formula1.race, formula1.race_constructor_standing, formula1.race_data, formula1.race_driver_standing, formula1.race_result, formula1.season, formula1.season_constructor, formula1.season_constructor_standing, formula1.season_driver, formula1.season_driver_standing, formula1.season_engine_manufacturer, formula1.season_entrant, formula1.season_entrant_chassis, formula1.season_entrant_constructor, formula1.season_entrant_driver, formula1.season_entrant_engine, formula1.season_entrant_tyre_manufacturer, formula1.season_tyre_manufacturer, formula1.sprint_qualifying_result, formula1.sprint_race_result, formula1.sprint_starting_grid_position, formula1.starting_grid_position, formula1.tyre_manufacturer, formula1.warming_up_result.
+
+formula-1: the dataset preflight failed; no reference query ran.
+exit 1
+=== unknown set
+Unknown eval set "world-cop". Known sets: world-cup, world-cup-rest, formula-1, world-cup-golden.
+exit 1
+=== no set
+Set EVAL_SET to the set to validate (world-cup, world-cup-rest, formula-1, world-cup-golden), e.g. EVAL_SET=world-cup EVAL_DATASETS="World Cup" npm run eval:validate
+exit 1
+=== preflight: Matches only
+Validating World Cup (world-cup, postgres) on Matches only
+
+✗ dataset preflight  These evals require the bundled World Cup sample: Men’s FIFA World Cup, 2018 and 2022 — tournaments, matches, teams, venues, players, goals and two reporting views. Select its PostgreSQL datasource and save a dataset containing the world_cup tables and views. Setup: docker/postgres/README.md. Selected datasets: Matches only. Missing entities: world_cup.tournaments, world_cup.teams, world_cup.venues, world_cup.players, world_cup.goals, world_cup.match_team_statistics, world_cup.v_match_results, world_cup.v_player_goal_totals.
+
+world-cup: the dataset preflight failed; no reference query ran.
+exit 1
+=== broken champion-2022 reference (scratch build copy only)
+Validating World Cup (world-cup, postgres) on World Cup
+
+[33m[Nest] 96648  - [39m10/13/2026, 1:05:36 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column champion.common_nme does not exist — HINT: Perhaps you meant to reference the column "champion.common_name".[39m
+✗ champion-2022  postgres  Postgres — column champion.common_nme does not exist — HINT: Perhaps you meant to reference the column "champion.common_name".
+✓ final-score-2018  postgres  1 rows
+✓ top-scorer-2022  postgres  1 rows
+✓ shootouts  postgres  4 rows
+✓ biggest-venue  postgres  1 rows
+
+world-cup: 4 of 5 reference queries passed; 5 cases have no reference query.
+exit 1

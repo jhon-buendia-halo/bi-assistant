@@ -1,0 +1,31 @@
+# Checks after merging main v0.44.0 (996a4b2a, budget d025aabc), 2026-11-10
+
+## npx tsc -p tsconfig.build.json --noEmit
+exit=0
+
+## npx tsc -p tsconfig.json --noEmit (specs included)
+exit=0
+
+## npx eslint / npx prettier --check on every backend file the merge changed (148)
+eslint exit 0, no problems; All matched files use Prettier code style!
+
+## npx jest (full)
+Test Suites: 192 passed, 192 total
+Tests:       3307 passed, 3307 total
+Time:        2.456 s, estimated 3 s
+
+## frontend: npx ng test --watch=false --browsers=ChromeHeadless
+TOTAL: 541 SUCCESS
+
+## frontend: npx ng build (production budgets)
+Initial total before the budget change: 1.00 MB, 'bundle initial exceeded maximum budget. Budget 1.00 MB was not met by 2.81 kB' (error).
+Measured in scratch worktrees with the same node_modules: origin/main 986.24 kB; feat/BA-9 before the merge (599d5f19) 922.38 kB.
+After d025aabc (error 1.1 MB):
+                      | Initial total |   1.00 MB |               229.78 kB
+▲ [WARNING] bundle initial exceeded maximum budget. Budget 500.00 kB was not met by 502.81 kB with a total of 1.00 MB.
+
+## frontend: npx tsc -p e2e/tsconfig.json --noEmit; npx playwright test --list
+exit 0; Total: 464 tests in 29 files
+
+## python3 scripts/check-specs.py
+ALL CHECKS PASSED on feat/BA-9-golden-dataset-evals, docs/BA-123-knowledge-store-research (cbededde, 611b86b7) and docs/BA-124-knowledge-store-execution-plan (d53347e1, d56d5980)

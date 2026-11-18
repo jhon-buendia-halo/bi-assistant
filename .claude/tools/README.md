@@ -9,6 +9,6 @@ Each tool is one of two kinds:
 
 | Tool | Kind | Skill | What it does |
 |---|---|---|---|
-| — | — | — | No tools at the moment. The Jira MCP server was removed on 2026-11-11 (roadmap 0.5.1): planning lives only in the repo. |
+| [eval-loop](eval-loop/README.md) | Script | `eval-loop` | The improvement loop's fixer isolation: a detached worktree without the held-out questions, a locked claude session, its change collected as a patch |
 
 A new tool gets its own folder with a README (kind, files, how to test), a row here, and a line in [delivery.md](../../specs/system/delivery.md) section 11.

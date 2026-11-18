@@ -1,0 +1,37 @@
+# 1.1.13 and 1.1.14, memory part (BA-190) — checks, 2026-11-02
+# Worktree feat/BA-9-golden-dataset-evals; the change is 1458eac, plus this gate's spec and E2E changes.
+
+What changed
+- The memory arm on a run: arm.memory = none, mastra or hindsight-mastra, set through EVAL_MEMORY or the API's arm. mastra needs BA-81's store and is refused as not built on this branch alone; hindsight-mastra is not built.
+- memory.json: 36 teach-and-probe cases in six memory categories, 4 dev and 2 held out each, in three sets: memory-world-cup 30, memory-finance 3, memory-marketing-analytics 3.
+- The memory checks M1 to M3, the validator's trap and teach queries, the Memory and Recall lines, memory usage priced, eval:diff and the leak check on memory cases.
+- The Evals tab: a Memory <arm> chip, and Recall plus the Memory tokens in the Details panel.
+- Before the commit, the user decided E, option 1 (case changes):
+  - the dev case most-wins-2022-shootouts-updated moved from v_seeded_team_performance to matches.winner_team_id;
+  - the held-out cases group-letter-from-tournament-teams-argentina-2022-es and average-attendance-per-match-2022 were replaced by kickoff-hour-local-time-2018-es and messi-matches-attendance-2022-join-fanout, chosen by the user from four Fable 5.1 candidates.
+- All 115 queries of the 36 cases now read only their dataset's tables.
+
+Fast loop, before 1458eac
+- backend: npx jest → 140 suites, 2355 tests passed; npm run lint → 0 errors (8 warnings in files this change does not touch; --fix changed nothing).
+- frontend: ng test (ChromeHeadless, Playwright's Chromium) → 370 of 370 SUCCESS.
+- python3 scripts/check-specs.py → ALL CHECKS PASSED.
+- e2e/agents.spec.ts → 18 passed, 1 knowingly stale ("lists every question set": 15 expected, 18 with the memory sets); updated at this gate.
+
+Validator (no model call)
+- On this branch alone: memory-world-cup 30 of 30, after the case changes above (29 of 30 before them: the tournament_teams case).
+- On the local build that merges the BA-4 branch (6226b07): validate-memory-world-cup.txt 30/30, validate-memory-finance.txt 3/3, validate-memory-marketing-analytics.txt 3/3.
+
+Smoke on the merged build (smoke-none.txt, smoke-mastra.txt; gpt-5.6-luna, low effort, 1 attempt)
+- Cases: top-scorer-2018-reused-approval-es and extra-time-goals-rejected-matches-filter.
+- none: 2/2, $0.0044.
+- mastra: 2/2, $0.0069, recall p50 814 ms, p90 837 ms.
+- Each mastra attempt held its signal, index and summary, recalled its teach signal and sent the summary.
+- No eval row was left in the store after the run.
+
+Acceptance gate (this folder's e2e-impact.md)
+- e2e/agents.spec.ts, web target → 20 passed (e2e-results.txt). It includes the updated set list (18 sets) and the new "shows a memory run's arm and a question's recall time".
+- python3 scripts/check-specs.py → ALL CHECKS PASSED.
+- backend npx jest src/mastra/evals → 46 suites, 696 tests passed, after the case changes and the two validator tests that used the replaced case.
+
+The decision runs that used these arms and sets (two runs per arm on gpt-5.6-luna and on gpt-6-luna) are BA-81's evidence, roadmap 1.3.7 on the BA-4 branch.
+- The arms behaved as specified: each attempt in its own scope, deleted afterwards; usage under the memory agent; recall times recorded; runs compared only within an arm; eval:diff warns when the arms differ.
