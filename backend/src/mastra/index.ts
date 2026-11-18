@@ -27,6 +27,7 @@ import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { askAgentWorkflow } from './workflows/ask-agent.workflow';
 import { answerBusinessQuestionWorkflow } from './workflows/answer-business-question.workflow';
+import { answerBusinessQuestionSharedWorkflow } from './workflows/answer-business-question-shared.workflow';
 import { consumptionGapAnalysisWorkflow } from './workflows/consumption-gap-analysis.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 import { mapDashboardDataWorkflow } from './workflows/map-dashboard-data.workflow';
@@ -79,6 +80,9 @@ export const mastra = new Mastra({
     // A follow-up that asks one agent of Answer a Business Question (5.21).
     'ask-agent': askAgentWorkflow,
     'answer-business-question': answerBusinessQuestionWorkflow,
+    // Experiment: the same turn with a shared run context (board). Not in
+    // the catalogue; run by an eval target only.
+    'answer-business-question-shared': answerBusinessQuestionSharedWorkflow,
     'data-readiness-assessment': dataReadinessAssessmentWorkflow,
     'recreate-dashboard': recreateDashboardWorkflow,
     'map-dashboard-data': mapDashboardDataWorkflow,

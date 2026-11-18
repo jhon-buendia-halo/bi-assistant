@@ -6,7 +6,9 @@
  * instructions, no tools, no memory and structured output by JSON prompt
  * injection, so any provider answers it (a native response format is not
  * required). The session's turn and the eval runner call them through
- * `AnswerBusinessQuestionRuntime`.
+ * `AnswerBusinessQuestionRuntime`. The shared-context experiment's variants
+ * (`planWithSharedContext`, `writeAnswerWithSharedContext`) are the same
+ * calls with a short index of the run's board and its two read tools.
  */
 import type { MessageListInput } from '@mastra/core/agent/message-list';
 import type { RequestContext } from '@mastra/core/request-context';
@@ -15,8 +17,16 @@ import { answerWriterAgent } from '../agents/answer-writer.agent';
 import {
   planMessages,
   writeAnswerRequest,
+  type PlanMessage,
 } from './answer-business-question.prompts';
+import {
+  SHARED_CONTEXT_MAX_STEPS,
+  sharedPlanMessages,
+  sharedWriteAnswerRequest,
+} from './answer-business-question-shared.prompts';
 import { answerSchema, planSchema } from './answer-business-question.schemas';
+import { RUN_CONTEXT_TOOLS } from '../tools/run-context.tools';
+import { runContextOf, type RunContextBoard } from './run-context';
 import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from './workflow-run';
 import { cutReply, guardedCall, ReplyCutError } from './model-call';
@@ -29,6 +39,7 @@ import {
   type AnsweredClarification,
   type BusinessAnswer,
   type AnalysisPlan,
+  type CatalogEntity,
   type ValidationFinding,
 } from './answer-business-question.steps';
 
@@ -95,6 +106,60 @@ export function callOptions(options: StepModelOptions) {
   };
 }
 
+/**
+ * A shared-context call (the run context experiment, ./run-context.ts): the
+ * same call with the board's two read tools and a short tool loop. The
+ * final step's text is still the JSON the structured output reads.
+ */
+export function sharedCallOptions(options: StepModelOptions) {
+  return {
+    ...callOptions(options),
+    maxSteps: SHARED_CONTEXT_MAX_STEPS,
+    toolChoice: 'auto' as const,
+    toolsets: { runContext: RUN_CONTEXT_TOOLS },
+    prepareStep: sharedPrepareStep,
+  };
+}
+
+/**
+ * The shared tool loop's last step runs without tools, so the loop always
+ * ends with the final JSON instead of one more read (the experiment's first
+ * rounds lost answers to Write answer reading until it ran out of steps).
+ */
+export function sharedPrepareStep({
+  stepNumber,
+}: {
+  stepNumber: number;
+}): { toolChoice: 'none' } | undefined {
+  return stepNumber >= SHARED_CONTEXT_MAX_STEPS - 1
+    ? { toolChoice: 'none' }
+    : undefined;
+}
+
+/** How a call's options are made: the baseline's or the shared ones. */
+type CallOptionsOf = typeof callOptions | typeof sharedCallOptions;
+
+/**
+ * Whether a shared-context reply is cut: at the output cap, or when the
+ * tool loop ran out of steps right after a tool call (`tool-calls`, no
+ * final JSON). Either is retried once, then fails the step, instead of
+ * being read as an empty plan or answer.
+ */
+export function sharedCutReply(finishReason: unknown): boolean {
+  return cutReply(finishReason) || finishReason === 'tool-calls';
+}
+
+/**
+ * The tools read the board from the call's RequestContext: a shared call
+ * runs only when it holds the board its request indexes.
+ */
+function requireBoard(options: StepModelOptions, board: RunContextBoard) {
+  const held = options.requestContext
+    ? runContextOf(options.requestContext)
+    : undefined;
+  if (held !== board) throw new Error('The run context is missing');
+}
+
 /** Whether a failure is the turn's own stop. */
 export function stoppedBy(options: StepModelOptions): boolean {
   return options.abortSignal?.aborted === true;
@@ -125,12 +190,47 @@ export async function planWithModel(
 ): Promise<{ plan: AnalysisPlan; stopped: boolean }> {
   // The conversation before the question, then the question with the
   // catalog (after Clarify: the question, Plan's question and the answer).
-  const planned = planMessages(input);
+  return planFrom(planMessages(input), options, callOptions);
+}
+
+/**
+ * The Plan step's call in the shared-context experiment: `planWithModel`
+ * with the catalog's index and the board's read tools (`sharedCallOptions`)
+ * in place of the catalog with its columns and image notes. The call's
+ * RequestContext must hold `board`.
+ */
+export async function planWithSharedContext(
+  input: {
+    messages: MessageListInput | undefined;
+    question: string;
+    catalog: readonly CatalogEntity[];
+    board: RunContextBoard;
+    /** After Clarify: its question and the user's answer (ADR-0043). */
+    answered?: AnsweredClarification;
+  },
+  options: StepModelOptions,
+): Promise<{ plan: AnalysisPlan; stopped: boolean }> {
+  requireBoard(options, input.board);
+  return planFrom(
+    sharedPlanMessages(input),
+    options,
+    sharedCallOptions,
+    sharedCutReply,
+  );
+}
+
+/** Plan's guarded call on its messages, the plan read from the reply. */
+async function planFrom(
+  planned: { messages: string | PlanMessage[]; fallback: string },
+  options: StepModelOptions,
+  optionsOf: CallOptionsOf,
+  isCut: (finishReason: unknown) => boolean = cutReply,
+): Promise<{ plan: AnalysisPlan; stopped: boolean }> {
   const messages = planned.messages as MessageListInput;
   try {
     return await guardedCall(options, { label: 'Plan' }, async (call) => {
       const result = await planAgent.generate(messages, {
-        ...callOptions(call),
+        ...optionsOf(call),
         structuredOutput: {
           schema: planSchema,
           jsonPromptInjection: 'inline',
@@ -151,7 +251,7 @@ export async function planWithModel(
           : new Error(runErrorMessage(reply.error));
       }
       // A reply cut at the output cap is no plan read leniently.
-      if (!stoppedBy(call) && cutReply(reply.finishReason)) {
+      if (!stoppedBy(call) && isCut(reply.finishReason)) {
         throw new ReplyCutError('Plan');
       }
       await noteExchange(
@@ -233,8 +333,52 @@ export async function writeAnswerWithModel(
   },
   options: StepModelOptions & { onText?: (delta: string) => void },
 ): Promise<{ answer: BusinessAnswer; stopped: boolean }> {
-  const deltas = answerDeltas(input.queries, options.onText);
-  const request = writeAnswerRequest(input);
+  return writeAnswerFrom(
+    writeAnswerRequest(input),
+    input.queries,
+    options,
+    callOptions,
+  );
+}
+
+/**
+ * The Write answer step's call in the shared-context experiment:
+ * `writeAnswerWithModel` with a query index and the board's read tools
+ * (`sharedCallOptions`) in place of the queries' rows and image notes. The
+ * markers still expand from `queries`' rows. The call's RequestContext must
+ * hold `board`.
+ */
+export async function writeAnswerWithSharedContext(
+  input: {
+    question: string;
+    plan: AnalysisPlan;
+    queries: readonly AnalyseQuery[];
+    findings: readonly ValidationFinding[];
+    board: RunContextBoard;
+    /** Build visual runs after it and the request cues a visual. */
+    visualFollows?: boolean;
+  },
+  options: StepModelOptions & { onText?: (delta: string) => void },
+): Promise<{ answer: BusinessAnswer; stopped: boolean }> {
+  requireBoard(options, input.board);
+  return writeAnswerFrom(
+    sharedWriteAnswerRequest(input),
+    input.queries,
+    options,
+    sharedCallOptions,
+    sharedCutReply,
+  );
+}
+
+/** Write answer's guarded, streamed call on its request. */
+async function writeAnswerFrom(
+  request: string,
+  queries: readonly AnalyseQuery[],
+  options: StepModelOptions & { onText?: (delta: string) => void },
+  optionsOf: CallOptionsOf,
+  isCut: (finishReason: unknown) => boolean = cutReply,
+): Promise<{ answer: BusinessAnswer; stopped: boolean }> {
+  const deltas = answerDeltas(queries, options.onText);
   try {
     // Retried only while nothing was shown: a retry never repeats text.
     const guard = { label: 'Write answer', canRetry: () => !deltas.sent() };
@@ -243,7 +387,7 @@ export async function writeAnswerWithModel(
       // already (`guardedCall`), so the aborted stream's rest is not shown.
       const expired = () => stoppedBy(call) && !stoppedBy(options);
       const stream = await writeAnswerAgent.stream(request, {
-        ...callOptions(call),
+        ...optionsOf(call),
         structuredOutput: {
           schema: answerSchema,
           jsonPromptInjection: 'inline',
@@ -270,7 +414,7 @@ export async function writeAnswerWithModel(
       if (expired()) return { answer: answerOf(deltas.sent()), stopped: false };
       // The model's own failure fails the step (agents.md 5.11).
       if (stream.error && !stoppedBy(call)) throw stream.error;
-      if (!stoppedBy(call) && cutReply(await finishReasonOf(stream))) {
+      if (!stoppedBy(call) && isCut(await finishReasonOf(stream))) {
         // Cut before anything was shown: tried once more, then a failure.
         if (!deltas.sent()) throw new ReplyCutError('Write answer');
         // Cut after text was shown: the text stays as it was shown, so the
@@ -284,10 +428,7 @@ export async function writeAnswerWithModel(
         await noteExchange(call, request, replyText(object, text));
         return { answer, stopped: false };
       }
-      const answer = answerWithRowTables(
-        answerOf(object ?? text),
-        input.queries,
-      );
+      const answer = answerWithRowTables(answerOf(object ?? text), queries);
       deltas.finish(answer.answer);
       await noteExchange(call, request, replyText(object, text));
       return { answer, stopped: stoppedBy(call) };

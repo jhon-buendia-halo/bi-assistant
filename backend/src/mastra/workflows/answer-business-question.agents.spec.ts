@@ -15,17 +15,38 @@ jest.mock('../agents/analysis-planner.agent', () => ({
   },
 }));
 jest.mock('../agents/data-readiness.agent', () => ({}));
+// The run context's tools are Mastra tools (ESM): a stand-in toolset.
+jest.mock('../tools/run-context.tools', () => ({
+  RUN_CONTEXT_TOOLS: { list_run_context: {}, read_run_context: {} },
+}));
 
 import {
   ANSWER_CUT_NOTE,
   planWithModel,
+  planWithSharedContext,
+  sharedCutReply,
+  sharedPrepareStep,
   writeAnswerWithModel,
+  writeAnswerWithSharedContext,
 } from './answer-business-question.agents';
+import { RUN_CONTEXT_TOOLS } from '../tools/run-context.tools';
+import {
+  sharedPlanMessages,
+  sharedWriteAnswerRequest,
+} from './answer-business-question-shared.prompts';
+import {
+  publishCatalog,
+  publishQueries,
+  RUN_CONTEXT_KEY,
+  RunContextBoard,
+} from './run-context';
 import { ModelTimeoutError, ReplyCutError } from './model-call';
 import {
   findingStatus,
+  planMessages,
   writeAnswerRequest,
 } from './answer-business-question.prompts';
+import { answerSchema, planSchema } from './answer-business-question.schemas';
 import type {
   AnalyseQuery,
   AnalysisPlan,
@@ -136,6 +157,260 @@ describe("the model calls with Read images' notes", () => {
       'Question: Q\n\nCAT',
       `Question: Q\n\nCAT\n\n${NOTES}`,
     ]);
+  });
+});
+
+// The baseline's calls stay byte-identical to what they were before the
+// shared-context experiment: the same request and exactly these options.
+describe('the baseline calls (shared-context experiment)', () => {
+  const requestContext = { get: () => undefined } as never;
+
+  /**
+   * Exactly the baseline's options: these keys in this order, the guard's
+   * own abort signal, the caller's context and the schema by identity.
+   */
+  function expectBaselineOptions(options: unknown, schema: unknown) {
+    const {
+      abortSignal,
+      requestContext: context,
+      structuredOutput,
+      ...rest
+    } = options as Record<string, unknown>;
+    expect(Object.keys(options as object)).toEqual([
+      'maxSteps',
+      'toolChoice',
+      'abortSignal',
+      'requestContext',
+      'structuredOutput',
+    ]);
+    expect(abortSignal).toBeInstanceOf(AbortSignal);
+    expect(context).toBe(requestContext);
+    expect(rest).toStrictEqual({ maxSteps: 1, toolChoice: 'none' });
+    const { schema: sent, ...output } = structuredOutput as Record<
+      string,
+      unknown
+    >;
+    expect(sent).toBe(schema);
+    expect(output).toStrictEqual({
+      jsonPromptInjection: 'inline',
+      errorStrategy: 'warn',
+    });
+  }
+
+  beforeEach(() => {
+    stream.mockReset();
+    generate.mockReset();
+  });
+
+  it("sends Plan's request and call options exactly as before", async () => {
+    generate.mockResolvedValue({ object: PLAN, text: JSON.stringify(PLAN) });
+    const input = {
+      messages: [
+        { role: 'user' as const, content: 'Earlier question' },
+        { role: 'assistant' as const, content: 'Earlier answer' },
+        { role: 'user' as const, content: 'Q' },
+      ],
+      question: 'Q',
+      catalogBlock: 'CAT',
+      imageNotes: 'NOTES',
+    };
+    await planWithModel(input, { requestContext });
+    expect(generate).toHaveBeenCalledTimes(1);
+    const [messages, options] = generate.mock.calls[0];
+    expect(messages).toStrictEqual(planMessages(input).messages);
+    expect(messages).toStrictEqual([
+      { role: 'user', content: 'Earlier question' },
+      { role: 'assistant', content: 'Earlier answer' },
+      { role: 'user', content: 'Question: Q\n\nCAT\n\nNOTES' },
+    ]);
+    expectBaselineOptions(options, planSchema);
+  });
+
+  it("sends Write answer's request and call options exactly as before", async () => {
+    stream.mockResolvedValue(reply('Lewis leads.', 'Lewis leads.'));
+    const input = {
+      question: PLAN.question,
+      plan: PLAN,
+      queries: [QUERY],
+      findings: [],
+      visualFollows: true,
+    };
+    await writeAnswerWithModel(input, { requestContext });
+    expect(stream).toHaveBeenCalledTimes(1);
+    const [request, options] = stream.mock.calls[0];
+    expect(request).toBe(writeAnswerRequest(input));
+    expectBaselineOptions(options, answerSchema);
+  });
+});
+
+// The shared-context calls: the board's index in the request, its two read
+// tools and a short tool loop; the reply read as the baseline's is.
+describe('the shared-context calls (run context experiment)', () => {
+  it('reads a loop that ran out of steps on a tool call as a cut reply', () => {
+    expect(sharedCutReply('tool-calls')).toBe(true);
+    expect(sharedCutReply('length')).toBe(true);
+    expect(sharedCutReply('stop')).toBe(false);
+  });
+
+  it('runs the tool loop’s last step without tools, so it ends with the JSON', () => {
+    expect(sharedPrepareStep({ stepNumber: 0 })).toBeUndefined();
+    expect(sharedPrepareStep({ stepNumber: 6 })).toBeUndefined();
+    expect(sharedPrepareStep({ stepNumber: 7 })).toEqual({
+      toolChoice: 'none',
+    });
+  });
+
+  it('retries a plan whose tool loop ran out of steps, then fails it', async () => {
+    const { board, requestContext } = boardAndContext();
+    generate.mockResolvedValue({ text: '', finishReason: 'tool-calls' });
+    await expect(
+      planWithSharedContext(
+        { messages: 'Q', question: 'Q', catalog: CATALOG, board },
+        { requestContext },
+      ),
+    ).rejects.toBeInstanceOf(ReplyCutError);
+    expect(generate).toHaveBeenCalledTimes(2);
+  });
+
+  const CATALOG = [
+    {
+      entity: 'f1.drivers',
+      dataset: 'F1',
+      datasourceId: null,
+      datasourceKind: null,
+      columnCount: 2,
+    },
+  ];
+  /** A board with the catalog and the query published, on a context. */
+  function boardAndContext() {
+    const board = new RunContextBoard();
+    publishCatalog(board, CATALOG, [
+      {
+        entity: 'f1.drivers',
+        columns: [{ name: 'name', type: 'text' }],
+        more: 1,
+      },
+    ]);
+    publishQueries(board, [QUERY]);
+    const requestContext = {
+      get: (key: string) => (key === RUN_CONTEXT_KEY ? board : undefined),
+    } as never;
+    return { board, requestContext };
+  }
+
+  /** The baseline's options with the tools: same keys, then `toolsets`. */
+  function expectSharedOptions(
+    options: unknown,
+    requestContext: unknown,
+    schema: unknown,
+  ) {
+    const sent = options as Record<string, unknown>;
+    expect(Object.keys(sent)).toEqual([
+      'maxSteps',
+      'toolChoice',
+      'abortSignal',
+      'requestContext',
+      'toolsets',
+      'prepareStep',
+      'structuredOutput',
+    ]);
+    expect(sent['prepareStep']).toBe(sharedPrepareStep);
+    expect(sent['maxSteps']).toBe(8);
+    expect(sent['toolChoice']).toBe('auto');
+    expect(sent['requestContext']).toBe(requestContext);
+    expect(sent['toolsets']).toEqual({ runContext: RUN_CONTEXT_TOOLS });
+    expect((sent['toolsets'] as { runContext: unknown }).runContext).toBe(
+      RUN_CONTEXT_TOOLS,
+    );
+    const { schema: given, ...output } = sent['structuredOutput'] as Record<
+      string,
+      unknown
+    >;
+    expect(given).toBe(schema);
+    expect(output).toStrictEqual({
+      jsonPromptInjection: 'inline',
+      errorStrategy: 'warn',
+    });
+  }
+
+  beforeEach(() => {
+    stream.mockReset();
+    generate.mockReset();
+  });
+
+  it('plans from the index with the read tools, reading the final text as the plan', async () => {
+    const { board, requestContext } = boardAndContext();
+    // After a tool step the reply's text is the last step's: the JSON.
+    generate.mockResolvedValue({
+      object: undefined,
+      text: JSON.stringify(PLAN),
+    });
+    const input = {
+      messages: 'Q',
+      question: 'Q',
+      catalog: CATALOG,
+      board,
+    };
+    const { plan, stopped } = await planWithSharedContext(input, {
+      requestContext,
+    });
+    expect(stopped).toBe(false);
+    expect(plan).toEqual(PLAN);
+    const [messages, options] = generate.mock.calls[0];
+    expect(messages).toBe(sharedPlanMessages(input).messages);
+    expect(messages).toContain('catalog/f1.drivers');
+    expectSharedOptions(options, requestContext, planSchema);
+  });
+
+  it('writes the answer from the query index, its markers expanded from the full rows', async () => {
+    const { board, requestContext } = boardAndContext();
+    stream.mockResolvedValue(
+      reply('Lewis leads.\n\n[[rows:1]]', 'Lewis leads.'),
+    );
+    const input = {
+      question: PLAN.question,
+      plan: PLAN,
+      queries: [QUERY],
+      findings: [],
+      board,
+      visualFollows: true,
+    };
+    const deltas: string[] = [];
+    const { answer } = await writeAnswerWithSharedContext(input, {
+      requestContext,
+      onText: (delta) => deltas.push(delta),
+    });
+    const [request, options] = stream.mock.calls[0];
+    expect(request).toBe(sharedWriteAnswerRequest(input));
+    expect(request).not.toContain('Driver 1"');
+    expectSharedOptions(options, requestContext, answerSchema);
+    expect(answer.answer).toContain('| Driver 102 | 299 |');
+    expect(deltas.join('')).toBe(answer.answer);
+  });
+
+  it('refuses to call the model without the board on the call context', async () => {
+    const { board } = boardAndContext();
+    const other = boardAndContext().requestContext;
+    await expect(
+      planWithSharedContext(
+        { messages: 'Q', question: 'Q', catalog: CATALOG, board },
+        {},
+      ),
+    ).rejects.toThrow('The run context is missing');
+    await expect(
+      writeAnswerWithSharedContext(
+        {
+          question: 'Q',
+          plan: PLAN,
+          queries: [],
+          findings: [],
+          board,
+        },
+        { requestContext: other },
+      ),
+    ).rejects.toThrow('The run context is missing');
+    expect(generate).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
   });
 });
 

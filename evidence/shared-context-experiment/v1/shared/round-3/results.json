@@ -1,0 +1,2199 @@
+[
+  {
+    "id": "shared-v2-ranking-ties-top-scorers-2018",
+    "question": "Who were the top scorers of the 2018 World Cup?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "names-all",
+        "description": "The answer names Griezmann, Perisic, Mandzukic",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 2",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "has-table",
+        "description": "The answer has a Markdown table of at least 3 rows",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: In the 2018 data three players tie for the most goals, 2 each: Antoine Griezmann, Ivan Perisic and Mario Mandzukic (own goals are not goals scored). Score pass=true only if the final answer names all three as the top scorers with 2 goals each and makes clear that they are tied (it does not crown one of them alone and does not leave one out). It may also list the players on 1 goal. Score pass=false if it names a single top scorer, a different count, or fewer than the three. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**Ivan Perisic, Mario Mandzukic and Antoine Griezmann are tied as top scorers with 2 goals each. The data holds only 8 matches from the 2018 World Cup (quarter-finals onward), so this is not a full-tournament ranking.**\n\n| Rank | Player | Team | Goals | Penalties | Own goals | First goal minute |\n|---|---|---|---|---|---|---|\n| 1 (tied) | Ivan Perisic | Croatia | 2 | 0 | 0 | 28 |\n| 1 (tied) | Mario Mandzukic | Croatia | 2 | 0 | 1 | 69 |\n| 1 (tied) | Antoine Griezmann | France | 2 | 1 | 0 | 38 |\n| 4 (tied) | Andrej Kramaric | Croatia | 1 | 0 | 0 | 39 |\n| 4 (tied) | Dele Alli | England | 1 | 0 | 0 | 58 |\n| 4 (tied) | Denis Cheryshev | Russia | 1 | 0 | 0 | 31 |\n| 4 (tied) | Domagoj Vida | Croatia | 1 | 0 | 0 | 101 |\n| 4 (tied) | Eden Hazard | Belgium | 1 | 0 | 0 | 82 |\n| 4 (tied) | Harry Maguire | England | 1 | 0 | 0 | 30 |\n| 4 (tied) | Kevin De Bruyne | Belgium | 1 | 0 | 0 | 31 |\n| 4 (tied) | Kieran Trippier | England | 1 | 0 | 0 | 5 |\n| 4 (tied) | Kylian Mbappe | France | 1 | 0 | 0 | 65 |\n| 4 (tied) | Mario Fernandes | Russia | 1 | 0 | 0 | 115 |\n| 4 (tied) | Paul Pogba | France | 1 | 0 | 0 | 59 |\n| 4 (tied) | Raphael Varane | France | 1 | 0 | 0 | 40 |\n| 4 (tied) | Renato Augusto | Brazil | 1 | 0 | 0 | 76 |\n| 4 (tied) | Samuel Umtiti | France | 1 | 0 | 0 | 51 |\n| 4 (tied) | Thomas Meunier | Belgium | 1 | 0 | 0 | 4 |\n\nBehind the three leaders, 15 players are tied on 1 goal. Because they are tied at the top-10 cut-off, all 15 are listed, which gives 18 players in total.\n\n**How I got this**\n- I ranked players by goals in the 2018 World Cup player goal totals. Players with equal goals share a rank, and everyone tied at the top-10 cut-off is kept.\n- I checked how much of the tournament the data covers. It has 8 matches and 23 goal records, and 19 players appear in the totals.\n- The matches are 4 quarter-finals, 2 semi-finals, the final and the third-place match.\n\n**Assumptions**\n- \"Top scorers\" means the players with the most goals, and the top 10 are shown.\n- Goals are taken from the goals column as the view defines it. Penalties and own goals are shown separately and are not added or subtracted.\n- Within a tie, players are listed with fewer penalty goals first, then alphabetically. This is a display order only and does not change the ranks.\n\n**Caveats**\n- The data has no group-stage or round-of-16 matches for 2018. These totals cover only the quarter-finals onward, so they are not full-tournament totals.\n- Goals scored in the earlier rounds are not counted, so players could have scored more over the whole tournament.",
+    "toolCalls": [
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.v_player_goal_totals\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.v_player_goal_totals\",\n  \"title\": \"Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.v_player_goal_totals (name type):\\n- tournament_year integer\\n- player text\\n- national_team text\\n- goals bigint\\n- penalties bigint\\n- own_goals bigint\\n- first_goal_minute integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 206\n}"
+      },
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"sql-analysis\"\n}",
+        "output": "# SQL analysis patterns\n\nTools for this skill: the \"run_readonly_sql\" tool, the \"sample_rows\" tool.\n\nWrite one read-only SELECT (or WITH) per call, in the dialect of the entity's datasource, with fully-qualified names. Aggregate in the query; bring back the few rows the answer needs.\n\n## Top-N and ties\n- Rank with a window function, not a bare `ORDER BY … LIMIT n`: `RANK() OVER (ORDER BY total DESC) AS rnk`, then keep `rnk <= n` in an outer query. Every row tied at the cut-off comes back.\n- When the rows at the cut-off tie, say so and name every tied row (\"Brazil and Germany share second place with 18 wins\").\n- Order by the measure and by a name as a tie-breaker, so the order is stable.\n- \"Top per group\" (best team per tournament): `ROW_NUMBER()` or `RANK() OVER (PARTITION BY group ORDER BY measure DESC)`.\n\n## Ratios and shares\n- A ratio needs two different measures: `SUM(goals) * 1.0 / NULLIF(COUNT(DISTINCT match_id), 0)`. Never divide an expression by itself.\n- Multiply by `1.0` (or cast to a decimal) before dividing: integer division truncates in PostgreSQL and SQLite.\n- Guard the denominator with `NULLIF(…, 0)`.\n- A share of the total: `measure * 1.0 / SUM(measure) OVER ()`. Shares of one breakdown add up to 100 %; check that they do.\n- Say what the ratio is per (\"goals per match\", \"share of all goals\").\n\n## Period over period\n- Group by the period (year, quarter, month) and compare with `LAG(measure) OVER (ORDER BY period)`: change = `measure - LAG(…)`, growth = `(measure - LAG(…)) * 1.0 / NULLIF(LAG(…), 0)`.\n- Compare like with like: a partial period (the current year, a tournament still running) is not comparable to a full one. Say so, or compare the same span of both.\n- Truncate dates per dialect: PostgreSQL and Databricks `date_trunc('month', d)`; SQLite `strftime('%Y-%m', d)`.\n\n## Distinct counts and join fan-out\n- `COUNT(DISTINCT key)` counts entities; `COUNT(*)` counts rows. Pick the one the question means.\n- A join to a child table repeats the parent ro… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT rnk, player, national_team, goals, penalties, own_goals, first_goal_minute FROM (SELECT tournament_year, player, national_team, goals, penalties, own_goals, first_goal_minute, RANK() OVER (ORDER BY goals DESC) AS rnk FROM world_cup.world_cup.v_player_goal_totals WHERE tournament_year = 2018) t WHERE rnk <= 10 ORDER BY goals DESC, penalties ASC, player ASC\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm ranking the players by goals scored at the 2018 World Cup and keeping everyone tied at the cut-off, to find the top scorers.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"rnk\",\n    \"player\",\n    \"national_team\",\n    \"goals\",\n    \"penalties\",\n    \"own_goals\",\n    \"first_goal_minute\"\n  ],\n  \"rows\": [\n    {\n      \"rnk\": \"1\",\n      \"player\": \"Ivan Perisic\",\n      \"national_team\": \"Croatia\",\n      \"goals\": \"2\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"first_goal_minute\": 28\n    },\n    {\n      \"rnk\": \"1\",\n      \"player\": \"Mario Mandzukic\",\n      \"national_team\": \"Croatia\",\n      \"goals\": \"2\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"1\",\n      \"first_goal_minute\": 69\n    },\n    {\n      \"rnk\": \"1\",\n      \"player\": \"Antoine Griezmann\",\n      \"national_team\": \"France\",\n      \"goals\": \"2\",\n      \"penalties\": \"1\",\n      \"own_goals\": \"0\",\n      \"first_goal_minute\": 38\n    },\n    {\n      \"rnk\": \"4\",\n      \"player\": \"Andrej Kramaric\",\n      \"national_team\": \"Croatia\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"first_goal_minute\": 39\n    },\n    {\n      \"rnk\": \"4\",\n      \"player\": \"Dele Alli\",\n      \"national_team\": \"England\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"first_goal_minute\": 58\n    },\n    {\n      \"rnk\": \"4\",\n      \"player\": \"Denis Cheryshev\",\n      \"national_team\": \"Russia\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"first_goal_minute\": 31\n    },\n    {\n      \"rnk\": \"4\",\n      \"player\": \"Domagoj Vida\",\n      \"national_team\": \"Croatia\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"first_goal_minute\": 101\n    },\n    {\n      \"rnk\": \"4\",\n      \"player\": \"Eden Hazard\",\n      \"national_team\": \"Belgium\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"first_goal_minute\": 82\n    },\n    {\n      \"rnk\": \"4\",\n      \"player\": \"Harry Maguire\",\n      \"national_team\": \"England\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"first_goal_minute\": 30\n    },\n    {\n      \"rnk\": \"4\",\n      \"player\": \"Kevin De Bruyne\",\n      \"national_team\": \"B… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.year, COUNT(DISTINCT m.id) AS matches, (SELECT COUNT(*) FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m2 ON m2.id = g.match_id WHERE m2.tournament_id = t.id) AS goal_rows, (SELECT COUNT(*) FROM world_cup.world_cup.v_player_goal_totals v WHERE v.tournament_year = t.year) AS players_in_view FROM world_cup.world_cup.tournaments t LEFT JOIN world_cup.world_cup.matches m ON m.tournament_id = t.id WHERE t.year = 2018 GROUP BY t.id, t.year\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"The top scorer has only 2 goals, which looks low for a full tournament, so I'm checking how many 2018 matches and goals the data holds.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"matches\",\n    \"goal_rows\",\n    \"players_in_view\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"matches\": \"8\",\n      \"goal_rows\": \"23\",\n      \"players_in_view\": \"19\"\n    }\n  ],\n  \"correctedSql\": \"SELECT t.tournament_year, COUNT(DISTINCT m.id) AS matches, (SELECT COUNT(*) FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m2 ON m2.id = g.match_id WHERE m2.tournament_id = t.id) AS goal_rows, (SELECT COUNT(*) FROM world_cup.world_cup.v_player_goal_totals v WHERE v.tournament_year = t.tournament_year) AS players_in_view FROM world_cup.world_cup.tournaments t LEFT JOIN world_cup.world_cup.matches m ON m.tournament_id = t.id WHERE t.tournament_year = 2018 GROUP BY t.id, t.tournament_year\",\n  \"note\": \"original query failed and was auto-corrected — cite the corrected SQL\"\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT stage, COUNT(*) AS matches FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2018 GROUP BY stage ORDER BY matches DESC\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking which stages of the 2018 tournament are in the data, so I can say what the scorer ranking covers.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\"\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\"\n    },\n    {\n      \"stage\": \"final\",\n      \"matches\": \"1\"\n    },\n    {\n      \"stage\": \"third_place\",\n      \"matches\": \"1\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 71097,
+    "runContext": {
+      "reads": [
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "offset": 0,
+          "chars": 206,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "offset": 0,
+          "chars": 143,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "offset": 0,
+          "chars": 206,
+          "step": "analyse"
+        },
+        {
+          "key": "queries/1",
+          "offset": 0,
+          "chars": 2865,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/2",
+          "offset": 0,
+          "chars": 755,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/3",
+          "offset": 0,
+          "chars": 429,
+          "step": "write-answer"
+        }
+      ],
+      "entries": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "title": "Columns of world_cup.world_cup.tournaments (dataset: World Cup)",
+          "chars": 223
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "title": "Columns of world_cup.world_cup.teams (dataset: World Cup)",
+          "chars": 133
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "title": "Columns of world_cup.world_cup.matches (dataset: World Cup)",
+          "chars": 419
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "title": "Columns of world_cup.world_cup.venues (dataset: World Cup)",
+          "chars": 128
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "title": "Columns of world_cup.world_cup.players (dataset: World Cup)",
+          "chars": 143
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "title": "Columns of world_cup.world_cup.goals (dataset: World Cup)",
+          "chars": 270
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "title": "Columns of world_cup.world_cup.match_team_statistics (dataset: World Cup)",
+          "chars": 319
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "title": "Columns of world_cup.world_cup.v_match_results (dataset: World Cup)",
+          "chars": 348
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "title": "Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)",
+          "chars": 206
+        },
+        {
+          "key": "queries/1",
+          "title": "Query 1: I'm ranking the players by goals scored at the 2018 World Cup and keeping everyone tied at the cut-off, to find the top scorers.",
+          "chars": 2865
+        },
+        {
+          "key": "queries/2",
+          "title": "Query 2: The top scorer has only 2 goals, which looks low for a full tournament, so I'm checking how many 2018 matches and goals the data holds.",
+          "chars": 755
+        },
+        {
+          "key": "queries/3",
+          "title": "Query 3: I'm checking which stages of the 2018 tournament are in the data, so I can say what the scorer ranking covers.",
+          "chars": 429
+        }
+      ]
+    }
+  },
+  {
+    "id": "shared-v2-share-penalty-goals-2022",
+    "question": "What share of the goals in the 2022 World Cup came from penalties?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 25 or 6 and 24",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The data holds 24 goals for 2022, 6 of them penalties scored during matches (not shootout kicks), so the share is 25%. Score pass=true only if the final answer gives the share as 25% (or 6 of 24, one quarter) and says what it counted (goals of the matches in the data, penalty shootouts not included, or the counts it used). Score pass=false if the share is a different figure, if it counts shootout kicks as goals, or if the figure is not backed by its queries. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**Penalties made up 25% of the 2022 World Cup goals in the data (6 of 24). The data only covers 8 matches, from the quarter-finals on.**\n\n| Goal type | Goals |\n|---|---|\n| Open play | 13 |\n| Penalty | 6 |\n| Header | 5 |\n| **Total** | **24** |\n\n**How I got this**\n- I counted every 2022 goal record by goal type. Penalties were 6 of the 24 goals, which is 25%.\n- I checked the goal records against the match scores. The scores add up to 24 goals across the 8 matches, the same as the goal records.\n- I looked at which stages are in the data. They are 4 quarter-finals, 2 semi-finals, the third-place match and the final.\n\n**Assumptions**\n- Penalty goals are the records with goal type \"penalty\". Penalty shootout kicks are not counted as goals.\n- The share is penalty goals divided by all goal records for the tournament.\n\n**Caveats**\n- The data holds only 8 matches for 2022, all from the quarter-final stage onward. The 25% therefore describes these matches only. It is not the share for the whole tournament, and the data has no group-stage or round-of-16 matches.",
+    "toolCalls": [
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\",\n  \"title\": \"Columns of world_cup.world_cup.goals (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.goals (name type):\\n- id bigint\\n- match_id bigint\\n- scoring_team_id bigint\\n- scorer_player_id bigint\\n- assist_player_id bigint\\n- minute integer\\n- stoppage_minute integer\\n- goal_type text\\n- home_score_after integer\\n- away_score_after integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 270\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\",\n  \"title\": \"Columns of world_cup.world_cup.matches (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.matches (name type):\\n- id bigint\\n- tournament_id bigint\\n- match_number integer\\n- stage text\\n- group_letter character(1)\\n- kicked_off_at timestamp with time zone\\n- venue_id bigint\\n- home_team_id bigint\\n- away_team_id bigint\\n- home_goals integer\\n- away_goals integer\\n- went_to_extra_time boolean\\n- home_penalties integer\\n- away_penalties integer\\n- winner_team_id bigint\\n- attendance integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 419\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\",\n  \"title\": \"Columns of world_cup.world_cup.tournaments (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.tournaments (name type):\\n- id bigint\\n- name text\\n- tournament_year integer\\n- host_country_code character(3)\\n- starts_on date\\n- ends_on date\\n- champion_team_id bigint\\n- runner_up_team_id bigint\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 223\n}"
+      },
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"sql-analysis\"\n}",
+        "output": "# SQL analysis patterns\n\nTools for this skill: the \"run_readonly_sql\" tool, the \"sample_rows\" tool.\n\nWrite one read-only SELECT (or WITH) per call, in the dialect of the entity's datasource, with fully-qualified names. Aggregate in the query; bring back the few rows the answer needs.\n\n## Top-N and ties\n- Rank with a window function, not a bare `ORDER BY … LIMIT n`: `RANK() OVER (ORDER BY total DESC) AS rnk`, then keep `rnk <= n` in an outer query. Every row tied at the cut-off comes back.\n- When the rows at the cut-off tie, say so and name every tied row (\"Brazil and Germany share second place with 18 wins\").\n- Order by the measure and by a name as a tie-breaker, so the order is stable.\n- \"Top per group\" (best team per tournament): `ROW_NUMBER()` or `RANK() OVER (PARTITION BY group ORDER BY measure DESC)`.\n\n## Ratios and shares\n- A ratio needs two different measures: `SUM(goals) * 1.0 / NULLIF(COUNT(DISTINCT match_id), 0)`. Never divide an expression by itself.\n- Multiply by `1.0` (or cast to a decimal) before dividing: integer division truncates in PostgreSQL and SQLite.\n- Guard the denominator with `NULLIF(…, 0)`.\n- A share of the total: `measure * 1.0 / SUM(measure) OVER ()`. Shares of one breakdown add up to 100 %; check that they do.\n- Say what the ratio is per (\"goals per match\", \"share of all goals\").\n\n## Period over period\n- Group by the period (year, quarter, month) and compare with `LAG(measure) OVER (ORDER BY period)`: change = `measure - LAG(…)`, growth = `(measure - LAG(…)) * 1.0 / NULLIF(LAG(…), 0)`.\n- Compare like with like: a partial period (the current year, a tournament still running) is not comparable to a full one. Say so, or compare the same span of both.\n- Truncate dates per dialect: PostgreSQL and Databricks `date_trunc('month', d)`; SQLite `strftime('%Y-%m', d)`.\n\n## Distinct counts and join fan-out\n- `COUNT(DISTINCT key)` counts entities; `COUNT(*)` counts rows. Pick the one the question means.\n- A join to a child table repeats the parent ro… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, g.goal_type, COUNT(*) AS n\\nFROM world_cup.world_cup.goals g\\nJOIN world_cup.world_cup.matches m ON m.id = g.match_id\\nJOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\\nWHERE t.tournament_year = 2022\\nGROUP BY t.tournament_year, g.goal_type\\nORDER BY n DESC\",\n  \"rationale\": \"I'm checking that 2022 is in the data and which goal types exist, so I can tell which goals are penalties.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"goal_type\",\n    \"n\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2022,\n      \"goal_type\": \"open_play\",\n      \"n\": \"13\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"goal_type\": \"penalty\",\n      \"n\": \"6\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"goal_type\": \"header\",\n      \"n\": \"5\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, SUM(m.home_goals + m.away_goals) AS match_goals, COUNT(*) AS matches\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\\nWHERE t.tournament_year = 2022\\nGROUP BY t.tournament_year\",\n  \"rationale\": \"I'm cross-checking the goal records against the match scores for 2022, to make sure the goals table is complete.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"match_goals\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2022,\n      \"match_goals\": \"24\",\n      \"matches\": \"8\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT m.stage, COUNT(*) AS matches\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\\nWHERE t.tournament_year = 2022\\nGROUP BY m.stage\\nORDER BY matches DESC\",\n  \"rationale\": \"I'm checking which stages of the 2022 tournament are in the data, since only 8 matches came back.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\"\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\"\n    },\n    {\n      \"stage\": \"final\",\n      \"matches\": \"1\"\n    },\n    {\n      \"stage\": \"third_place\",\n      \"matches\": \"1\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 36446,
+    "runContext": {
+      "reads": [
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "analyse"
+        },
+        {
+          "key": "queries/1",
+          "offset": 0,
+          "chars": 598,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/2",
+          "offset": 0,
+          "chars": 454,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/3",
+          "offset": 0,
+          "chars": 481,
+          "step": "write-answer"
+        }
+      ],
+      "entries": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "title": "Columns of world_cup.world_cup.tournaments (dataset: World Cup)",
+          "chars": 223
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "title": "Columns of world_cup.world_cup.teams (dataset: World Cup)",
+          "chars": 133
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "title": "Columns of world_cup.world_cup.matches (dataset: World Cup)",
+          "chars": 419
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "title": "Columns of world_cup.world_cup.venues (dataset: World Cup)",
+          "chars": 128
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "title": "Columns of world_cup.world_cup.players (dataset: World Cup)",
+          "chars": 143
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "title": "Columns of world_cup.world_cup.goals (dataset: World Cup)",
+          "chars": 270
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "title": "Columns of world_cup.world_cup.match_team_statistics (dataset: World Cup)",
+          "chars": 319
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "title": "Columns of world_cup.world_cup.v_match_results (dataset: World Cup)",
+          "chars": 348
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "title": "Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)",
+          "chars": 206
+        },
+        {
+          "key": "queries/1",
+          "title": "Query 1: I'm checking that 2022 is in the data and which goal types exist, so I can tell which goals are penalties.",
+          "chars": 598
+        },
+        {
+          "key": "queries/2",
+          "title": "Query 2: I'm cross-checking the goal records against the match scores for 2022, to make sure the goals table is complete.",
+          "chars": 454
+        },
+        {
+          "key": "queries/3",
+          "title": "Query 3: I'm checking which stages of the 2022 tournament are in the data, since only 8 matches came back.",
+          "chars": 481
+        }
+      ]
+    }
+  },
+  {
+    "id": "shared-v2-compare-goals-per-match-2018-2022",
+    "question": "How did the average number of goals per match change between the 2018 and 2022 World Cups?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 2.875 and 3",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: In the data 2018 averages 2.875 goals per match (23 goals in 8 matches) and 2022 averages 3.0 (24 goals in 8 matches): a small rise, about 0.13 goals per match or 4%. Score pass=true only if the final answer gives both averages (rounded to at most 2 decimals), says the average went UP from 2018 to 2022 by about 0.1 goals, and states what the comparison covers (the 8 matches of each tournament in the data, or that it holds only knockout matches). Score pass=false if the direction or the averages are wrong, or the answer implies the data covers whole tournaments with their group stage. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**In the data, average goals per match rose from 2.88 in 2018 to 3 in 2022 (+0.13, +4.3%). This covers only the quarter-finals onward.**\n\n| Tournament | Matches | Total goals | Avg goals per match |\n|---|---|---|---|\n| 2018 | 8 | 23 | 2.88 |\n| 2022 | 8 | 24 | 3 |\n| Change | 0 | +1 | +0.13 (+4.3%) |\n\nEach tournament has 8 matches in the data, and all 8 have a recorded score. The 2022 total is one goal higher than the 2018 total.\n\n**How I got this**\n- I added home and away goals for every match in each tournament and divided by the number of matches.\n- I checked which stages the matches belong to. Each tournament has 4 quarter-finals, 2 semi-finals, the third-place match and the final.\n\n**Assumptions**\n- Goals per match is home goals plus away goals, divided by the number of matches with a recorded score.\n- Penalty shootout goals are not counted.\n\n**Caveats**\n- The data holds no group-stage or round-of-16 matches for either year. The figures describe only the quarter-finals, semi-finals, third-place match and final, not the whole tournaments.\n- With only 8 matches per tournament, a difference of one goal in total moves the average noticeably.",
+    "toolCalls": [
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\",\n  \"title\": \"Columns of world_cup.world_cup.matches (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.matches (name type):\\n- id bigint\\n- tournament_id bigint\\n- match_number integer\\n- stage text\\n- group_letter character(1)\\n- kicked_off_at timestamp with time zone\\n- venue_id bigint\\n- home_team_id bigint\\n- away_team_id bigint\\n- home_goals integer\\n- away_goals integer\\n- went_to_extra_time boolean\\n- home_penalties integer\\n- away_penalties integer\\n- winner_team_id bigint\\n- attendance integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 419\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\",\n  \"title\": \"Columns of world_cup.world_cup.tournaments (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.tournaments (name type):\\n- id bigint\\n- name text\\n- tournament_year integer\\n- host_country_code character(3)\\n- starts_on date\\n- ends_on date\\n- champion_team_id bigint\\n- runner_up_team_id bigint\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 223\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.v_match_results\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.v_match_results\",\n  \"title\": \"Columns of world_cup.world_cup.v_match_results (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.v_match_results (name type):\\n- tournament_year integer\\n- match_number integer\\n- stage text\\n- kicked_off_at timestamp with time zone\\n- venue text\\n- city text\\n- home_team text\\n- away_team text\\n- home_goals integer\\n- away_goals integer\\n- home_penalties integer\\n- away_penalties integer\\n- winner text\\n- attendance integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 348\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, t.name, COUNT(*) AS matches, COUNT(m.home_goals) AS scored_matches, SUM(m.home_goals + m.away_goals) AS total_goals, ROUND(AVG((m.home_goals + m.away_goals)::numeric), 3) AS avg_goals_per_match FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year, t.name ORDER BY t.tournament_year\",\n  \"rationale\": \"I'm checking which World Cups are in the data and computing total goals, match counts and average goals per match for each, so I can compare 2018 with 2022.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"name\",\n    \"matches\",\n    \"scored_matches\",\n    \"total_goals\",\n    \"avg_goals_per_match\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"name\": \"2018 FIFA World Cup\",\n      \"matches\": \"8\",\n      \"scored_matches\": \"8\",\n      \"total_goals\": \"23\",\n      \"avg_goals_per_match\": \"2.875\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"matches\": \"8\",\n      \"scored_matches\": \"8\",\n      \"total_goals\": \"24\",\n      \"avg_goals_per_match\": \"3.000\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, m.stage, COUNT(*) AS matches, SUM(m.home_goals + m.away_goals) AS goals FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year, m.stage ORDER BY t.tournament_year, m.stage\",\n  \"rationale\": \"I'm checking which stages the matches in the data belong to, so I can tell whether each tournament is fully covered or only partly.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"stage\",\n    \"matches\",\n    \"goals\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"final\",\n      \"matches\": \"1\",\n      \"goals\": \"6\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\",\n      \"goals\": \"11\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\",\n      \"goals\": \"4\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\",\n      \"goals\": \"2\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"final\",\n      \"matches\": \"1\",\n      \"goals\": \"6\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\",\n      \"goals\": \"10\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\",\n      \"goals\": \"5\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\",\n      \"goals\": \"3\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 31487,
+    "runContext": {
+      "reads": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "offset": 0,
+          "chars": 348,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "offset": 0,
+          "chars": 348,
+          "step": "analyse"
+        },
+        {
+          "key": "queries/1",
+          "offset": 0,
+          "chars": 845,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/2",
+          "offset": 0,
+          "chars": 1008,
+          "step": "write-answer"
+        }
+      ],
+      "entries": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "title": "Columns of world_cup.world_cup.tournaments (dataset: World Cup)",
+          "chars": 223
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "title": "Columns of world_cup.world_cup.teams (dataset: World Cup)",
+          "chars": 133
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "title": "Columns of world_cup.world_cup.matches (dataset: World Cup)",
+          "chars": 419
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "title": "Columns of world_cup.world_cup.venues (dataset: World Cup)",
+          "chars": 128
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "title": "Columns of world_cup.world_cup.players (dataset: World Cup)",
+          "chars": 143
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "title": "Columns of world_cup.world_cup.goals (dataset: World Cup)",
+          "chars": 270
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "title": "Columns of world_cup.world_cup.match_team_statistics (dataset: World Cup)",
+          "chars": 319
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "title": "Columns of world_cup.world_cup.v_match_results (dataset: World Cup)",
+          "chars": 348
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "title": "Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)",
+          "chars": 206
+        },
+        {
+          "key": "queries/1",
+          "title": "Query 1: I'm checking which World Cups are in the data and computing total goals, match counts and average goals per match for each, so I can compare 2018 with 2022.",
+          "chars": 845
+        },
+        {
+          "key": "queries/2",
+          "title": "Query 2: I'm checking which stages the matches in the data belong to, so I can tell whether each tournament is fully covered or only partly.",
+          "chars": 1008
+        }
+      ]
+    }
+  },
+  {
+    "id": "shared-v2-out-of-coverage-2014-final",
+    "question": "Who won the 2014 World Cup, and what was the score of the final?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-none",
+        "description": "The answer never says Germany, Gotze, Mario Gotze",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The question asks about 2014, a tournament this dataset does not cover (it holds the 2018 and 2022 World Cups). Score pass=true only if the final answer clearly says the data has no 2014 tournament, states what the data does cover (2018 and 2022), and gives no 2014 winner, score or other fact from general knowledge. Offering to answer the same question for 2018 or 2022 is fine. Score pass=false if it names a 2014 winner or score, or does not say what is covered.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**The data doesn't cover the 2014 World Cup, so I can't say who won or what the final score was.**\n\nThe data holds only two tournaments, 2018 and 2022. Each has 8 match results. No tournament record or match results exist for 2014.\n\n| Tournament | Champion | Runner-up | Matches in data |\n|---|---|---|---|\n| 2018 FIFA World Cup | France | Croatia | 8 |\n| 2022 FIFA World Cup | Argentina | France | 8 |\n\n**How I got this**\n- I searched the match results for 2014 and found no rows.\n- I looked for a 2014 tournament record with a champion and runner-up and found none.\n- I listed every tournament and every year with match results. Only 2018 and 2022 appear.\n\n**Caveats**\n- I can't give the 2014 champion, the final score, extra time or penalties from this data.\n- The extra-time flag wasn't checked in any query, because there was no 2014 final to check.",
+    "toolCalls": [
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\",\n  \"title\": \"Columns of world_cup.world_cup.tournaments (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.tournaments (name type):\\n- id bigint\\n- name text\\n- tournament_year integer\\n- host_country_code character(3)\\n- starts_on date\\n- ends_on date\\n- champion_team_id bigint\\n- runner_up_team_id bigint\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 223\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.v_match_results\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.v_match_results\",\n  \"title\": \"Columns of world_cup.world_cup.v_match_results (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.v_match_results (name type):\\n- tournament_year integer\\n- match_number integer\\n- stage text\\n- kicked_off_at timestamp with time zone\\n- venue text\\n- city text\\n- home_team text\\n- away_team text\\n- home_goals integer\\n- away_goals integer\\n- home_penalties integer\\n- away_penalties integer\\n- winner text\\n- attendance integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 348\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.teams\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.teams\",\n  \"title\": \"Columns of world_cup.world_cup.teams (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.teams (name type):\\n- id bigint\\n- country_code character(3)\\n- common_name text\\n- fifa_code character(3)\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 133\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT tournament_year, stage, match_number, kicked_off_at, home_team, away_team, home_goals, away_goals, home_penalties, away_penalties, winner FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2014 ORDER BY kicked_off_at DESC LIMIT 5\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm looking at the last matches of the 2014 tournament to find the final and its score, including any penalty shootout.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"stage\",\n    \"match_number\",\n    \"kicked_off_at\",\n    \"home_team\",\n    \"away_team\",\n    \"home_goals\",\n    \"away_goals\",\n    \"home_penalties\",\n    \"away_penalties\",\n    \"winner\"\n  ],\n  \"rows\": [],\n  \"note\": \"query returned 0 rows — verify filters/values before concluding\"\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, t.name, c.common_name AS champion, r.common_name AS runner_up FROM world_cup.world_cup.tournaments t LEFT JOIN world_cup.world_cup.teams c ON c.id = t.champion_team_id LEFT JOIN world_cup.world_cup.teams r ON r.id = t.runner_up_team_id WHERE t.tournament_year = 2014\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking which team the tournament record lists as the 2014 champion and runner-up, to confirm it matches the final's winner.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"name\",\n    \"champion\",\n    \"runner_up\"\n  ],\n  \"rows\": [],\n  \"note\": \"query returned 0 rows — verify filters/values before concluding\"\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, t.name, c.common_name AS champion, r.common_name AS runner_up FROM world_cup.world_cup.tournaments t LEFT JOIN world_cup.world_cup.teams c ON c.id = t.champion_team_id LEFT JOIN world_cup.world_cup.teams r ON r.id = t.runner_up_team_id ORDER BY t.tournament_year\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm listing every tournament in the data, with its champion, to see whether 2014 is covered.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"name\",\n    \"champion\",\n    \"runner_up\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"name\": \"2018 FIFA World Cup\",\n      \"champion\": \"France\",\n      \"runner_up\": \"Croatia\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"champion\": \"Argentina\",\n      \"runner_up\": \"France\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT tournament_year, COUNT(*) AS matches FROM world_cup.world_cup.v_match_results GROUP BY tournament_year ORDER BY tournament_year\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking which years have match results, so I know what the data can answer.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"matches\": \"8\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"matches\": \"8\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 46098,
+    "runContext": {
+      "reads": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "offset": 0,
+          "chars": 348,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "offset": 0,
+          "chars": 348,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "offset": 0,
+          "chars": 133,
+          "step": "analyse"
+        },
+        {
+          "key": "queries/3",
+          "offset": 0,
+          "chars": 606,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/4",
+          "offset": 0,
+          "chars": 324,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/1",
+          "offset": 0,
+          "chars": 402,
+          "step": "write-answer"
+        }
+      ],
+      "entries": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "title": "Columns of world_cup.world_cup.tournaments (dataset: World Cup)",
+          "chars": 223
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "title": "Columns of world_cup.world_cup.teams (dataset: World Cup)",
+          "chars": 133
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "title": "Columns of world_cup.world_cup.matches (dataset: World Cup)",
+          "chars": 419
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "title": "Columns of world_cup.world_cup.venues (dataset: World Cup)",
+          "chars": 128
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "title": "Columns of world_cup.world_cup.players (dataset: World Cup)",
+          "chars": 143
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "title": "Columns of world_cup.world_cup.goals (dataset: World Cup)",
+          "chars": 270
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "title": "Columns of world_cup.world_cup.match_team_statistics (dataset: World Cup)",
+          "chars": 319
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "title": "Columns of world_cup.world_cup.v_match_results (dataset: World Cup)",
+          "chars": 348
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "title": "Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)",
+          "chars": 206
+        },
+        {
+          "key": "queries/1",
+          "title": "Query 1: I'm looking at the last matches of the 2014 tournament to find the final and its score, including any penalty shootout.",
+          "chars": 402
+        },
+        {
+          "key": "queries/2",
+          "title": "Query 2: I'm checking which team the tournament record lists as the 2014 champion and runner-up, to confirm it matches the final's winner.",
+          "chars": 454
+        },
+        {
+          "key": "queries/3",
+          "title": "Query 3: I'm listing every tournament in the data, with its champion, to see whether 2014 is covered.",
+          "chars": 606
+        },
+        {
+          "key": "queries/4",
+          "title": "Query 4: I'm checking which years have match results, so I know what the data can answer.",
+          "chars": 324
+        }
+      ]
+    }
+  },
+  {
+    "id": "shared-v2-clarify-most-dominant-team",
+    "question": "Which team was the most dominant?",
+    "scores": {
+      "check-did-not-call": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-did-not-call",
+        "description": "Checks that \"run_readonly_sql\" was NOT called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "ends-on-clarification",
+        "description": "The run ended on one clarifying question with 2-4 options",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The question (\"Which team was the most dominant?\") does not say what \"dominant\" means (results? goals? possession? shots?) nor which tournament, and each reading changes the analysis. Score pass=true only if the final answer is itself ONE clarifying question that offers 2-4 concrete options grounded in this World Cup data (a named measure such as matches won, goals or possession, or a tournament year in the data) and states no figure as if it were the answer. The options of the ask_clarification call are shown to the user as buttons: options given there count as offered even when the text only says to pick one; judge them as the options. Score pass=false if it answers with data, asks several questions, asks a vague open question with no concrete options, or invents a measure or scope the data does not have.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "How should 'most dominant' be measured?\n- Most titles — counts how many World Cups each team won, using the champion team in the tournaments table.\n- Highest win rate — the share of each team's matches that it won, using home and away goals and the winner in the match results.\n- Best goal difference per match — average goals scored minus goals conceded per match, using the match results.\n- Most control of play — average possession, shots and expected goals per match, using the match team statistics.",
+    "toolCalls": [],
+    "passed": true,
+    "durationMs": 12242,
+    "runContext": {
+      "reads": [
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "offset": 0,
+          "chars": 348,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "offset": 0,
+          "chars": 133,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "offset": 0,
+          "chars": 319,
+          "step": "plan"
+        }
+      ],
+      "entries": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "title": "Columns of world_cup.world_cup.tournaments (dataset: World Cup)",
+          "chars": 223
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "title": "Columns of world_cup.world_cup.teams (dataset: World Cup)",
+          "chars": 133
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "title": "Columns of world_cup.world_cup.matches (dataset: World Cup)",
+          "chars": 419
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "title": "Columns of world_cup.world_cup.venues (dataset: World Cup)",
+          "chars": 128
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "title": "Columns of world_cup.world_cup.players (dataset: World Cup)",
+          "chars": 143
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "title": "Columns of world_cup.world_cup.goals (dataset: World Cup)",
+          "chars": 270
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "title": "Columns of world_cup.world_cup.match_team_statistics (dataset: World Cup)",
+          "chars": 319
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "title": "Columns of world_cup.world_cup.v_match_results (dataset: World Cup)",
+          "chars": 348
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "title": "Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)",
+          "chars": 206
+        }
+      ]
+    }
+  },
+  {
+    "id": "shared-v2-no-clarify-total-goals",
+    "question": "How many goals were scored at the World Cup?",
+    "scores": {
+      "check-did-not-call": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-did-not-call",
+        "description": "Checks that \"ask_clarification\" was NOT called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 47 or 23 and 24",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The question does not name a tournament, but the natural reading is every tournament in the data, which holds 47 goals (23 in 2018 and 24 in 2022). Score pass=true only if the final answer gives 47 in total (or 23 and 24 per tournament), states the scope it assumed (the 2018 and 2022 tournaments in the data) and does not ask the user a question instead of answering. Score pass=false if it asks which tournament the user means, gives another total, or does not say what it covered. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**The data records 47 goals at the World Cup: 23 in 2018 and 24 in 2022. It covers only the quarter-finals onward.**\n\n| Tournament | Matches | Goals | Goals per match |\n|---|---|---|---|\n| 2018 FIFA World Cup | 8 | 23 | 2.88 |\n| 2022 FIFA World Cup | 8 | 24 | 3 |\n| **Total** | **16** | **47** | **2.94** |\n\n**How I got this**\n- I added the home and away goals for every match in each tournament, then summed them across both tournaments.\n- I checked that total against the individual goal records. They agree: 23 goal records for 2018 and 24 for 2022, which is 47 in all. The goal types in those records also add up to 47.\n- No match had a missing score.\n\n**Assumptions**\n- You didn't name a tournament, so I covered every tournament in the data.\n- Goals scored in extra time count. Penalty shootout kicks do not.\n\n**Caveats**\n- Each tournament holds only 8 matches: 4 quarter-finals, 2 semi-finals, the third-place match and the final. Group-stage and round-of-16 matches are not in the data, so 47 is the total for the matches in the data, not for the whole tournaments.\n- Only 2018 and 2022 are in the data.",
+    "toolCalls": [
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\",\n  \"title\": \"Columns of world_cup.world_cup.matches (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.matches (name type):\\n- id bigint\\n- tournament_id bigint\\n- match_number integer\\n- stage text\\n- group_letter character(1)\\n- kicked_off_at timestamp with time zone\\n- venue_id bigint\\n- home_team_id bigint\\n- away_team_id bigint\\n- home_goals integer\\n- away_goals integer\\n- went_to_extra_time boolean\\n- home_penalties integer\\n- away_penalties integer\\n- winner_team_id bigint\\n- attendance integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 419\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\",\n  \"title\": \"Columns of world_cup.world_cup.goals (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.goals (name type):\\n- id bigint\\n- match_id bigint\\n- scoring_team_id bigint\\n- scorer_player_id bigint\\n- assist_player_id bigint\\n- minute integer\\n- stoppage_minute integer\\n- goal_type text\\n- home_score_after integer\\n- away_score_after integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 270\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\",\n  \"title\": \"Columns of world_cup.world_cup.tournaments (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.tournaments (name type):\\n- id bigint\\n- name text\\n- tournament_year integer\\n- host_country_code character(3)\\n- starts_on date\\n- ends_on date\\n- champion_team_id bigint\\n- runner_up_team_id bigint\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 223\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, t.name, COUNT(m.id) AS matches, SUM(m.home_goals + m.away_goals) AS goals_from_matches, COUNT(*) FILTER (WHERE m.home_goals IS NULL OR m.away_goals IS NULL) AS null_score_matches, (SELECT COUNT(*) FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m2 ON g.match_id = m2.id WHERE m2.tournament_id = t.id) AS goal_rows FROM world_cup.world_cup.tournaments t LEFT JOIN world_cup.world_cup.matches m ON m.tournament_id = t.id GROUP BY t.id, t.tournament_year, t.name ORDER BY t.tournament_year\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm totalling the goals in every match for each tournament and comparing them with the individual goal records, to get the overall total and confirm the two sources agree.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"name\",\n    \"matches\",\n    \"goals_from_matches\",\n    \"null_score_matches\",\n    \"goal_rows\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"name\": \"2018 FIFA World Cup\",\n      \"matches\": \"8\",\n      \"goals_from_matches\": \"23\",\n      \"null_score_matches\": \"0\",\n      \"goal_rows\": \"23\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"matches\": \"8\",\n      \"goals_from_matches\": \"24\",\n      \"null_score_matches\": \"0\",\n      \"goal_rows\": \"24\"\n    }\n  ],\n  \"warnings\": [\n    \"null_score_matches is 0 on every row, so it cannot explain any difference between them.\"\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT goal_type, COUNT(*) AS n FROM world_cup.world_cup.goals GROUP BY goal_type ORDER BY n DESC\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking what kinds of goals are recorded (for example penalties or own goals) so I know whether the individual goal records line up with the match scores.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"goal_type\",\n    \"n\"\n  ],\n  \"rows\": [\n    {\n      \"goal_type\": \"open_play\",\n      \"n\": \"24\"\n    },\n    {\n      \"goal_type\": \"header\",\n      \"n\": \"13\"\n    },\n    {\n      \"goal_type\": \"penalty\",\n      \"n\": \"7\"\n    },\n    {\n      \"goal_type\": \"own_goal\",\n      \"n\": \"2\"\n    },\n    {\n      \"goal_type\": \"free_kick\",\n      \"n\": \"1\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, m.stage, COUNT(*) AS matches, SUM(m.home_goals + m.away_goals) AS goals FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year, m.stage ORDER BY t.tournament_year, matches DESC\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking which stages of each tournament the data holds, so I can say exactly what the total covers.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"stage\",\n    \"matches\",\n    \"goals\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\",\n      \"goals\": \"11\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\",\n      \"goals\": \"4\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"final\",\n      \"matches\": \"1\",\n      \"goals\": \"6\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\",\n      \"goals\": \"2\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\",\n      \"goals\": \"10\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\",\n      \"goals\": \"5\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"final\",\n      \"matches\": \"1\",\n      \"goals\": \"6\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\",\n      \"goals\": \"3\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 37153,
+    "runContext": {
+      "reads": [
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "analyse"
+        },
+        {
+          "key": "queries/1",
+          "offset": 0,
+          "chars": 1005,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/2",
+          "offset": 0,
+          "chars": 454,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/3",
+          "offset": 0,
+          "chars": 986,
+          "step": "write-answer"
+        }
+      ],
+      "entries": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "title": "Columns of world_cup.world_cup.tournaments (dataset: World Cup)",
+          "chars": 223
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "title": "Columns of world_cup.world_cup.teams (dataset: World Cup)",
+          "chars": 133
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "title": "Columns of world_cup.world_cup.matches (dataset: World Cup)",
+          "chars": 419
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "title": "Columns of world_cup.world_cup.venues (dataset: World Cup)",
+          "chars": 128
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "title": "Columns of world_cup.world_cup.players (dataset: World Cup)",
+          "chars": 143
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "title": "Columns of world_cup.world_cup.goals (dataset: World Cup)",
+          "chars": 270
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "title": "Columns of world_cup.world_cup.match_team_statistics (dataset: World Cup)",
+          "chars": 319
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "title": "Columns of world_cup.world_cup.v_match_results (dataset: World Cup)",
+          "chars": 348
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "title": "Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)",
+          "chars": 206
+        },
+        {
+          "key": "queries/1",
+          "title": "Query 1: I'm totalling the goals in every match for each tournament and comparing them with the individual goal records, to get the overall total and confirm the two sources agree.",
+          "chars": 1005
+        },
+        {
+          "key": "queries/2",
+          "title": "Query 2: I'm checking what kinds of goals are recorded (for example penalties or own goals) so I know whether the individual goal records line up with the match scores.",
+          "chars": 454
+        },
+        {
+          "key": "queries/3",
+          "title": "Query 3: I'm checking which stages of each tournament the data holds, so I can say exactly what the total covers.",
+          "chars": 986
+        }
+      ]
+    }
+  },
+  {
+    "id": "shared-v2-value-lookup-free-kick-goals",
+    "question": "How many goals came directly from free kicks, and who scored them?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "uses-stored-value",
+        "description": "A successful query uses the stored value 'free_kick'",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "names-all",
+        "description": "The answer names Trippier",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 1",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The data holds exactly one goal of type free kick: Kieran Trippier (England, 2018, minute 5). Score pass=true only if the final answer says one goal came directly from a free kick and names Kieran Trippier. An empty-handed \"no free-kick goals\" answer, or a different count or scorer, is pass=false. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**Only 1 goal came directly from a free kick: Kieran Trippier (England) scored it.**\n\n| Scorer | Team | Minute | Match ID | Free-kick goals |\n|---|---|---|---|---|\n| Kieran Trippier | England | 5 | 7 | 1 |\n\nThe data records 47 goals in total. The free-kick goal is 1 of them.\n\n**How I got this**\n- I listed the goal types in the data: open play (24), header (13), penalty (7), own goal (2) and free kick (1).\n- I took the goals marked as free kick and looked up the scorer's name and team.\n\n**Assumptions**\n- Only goals marked as a free kick count. Penalties and own goals are not included.\n- No tournament filter was applied, so every tournament in the data is included.",
+    "toolCalls": [
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\",\n  \"title\": \"Columns of world_cup.world_cup.goals (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.goals (name type):\\n- id bigint\\n- match_id bigint\\n- scoring_team_id bigint\\n- scorer_player_id bigint\\n- assist_player_id bigint\\n- minute integer\\n- stoppage_minute integer\\n- goal_type text\\n- home_score_after integer\\n- away_score_after integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 270\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.players\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.players\",\n  \"title\": \"Columns of world_cup.world_cup.players (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.players (name type):\\n- id bigint\\n- national_team_id bigint\\n- full_name text\\n- position text\\n- date_of_birth date\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 143\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.teams\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.teams\",\n  \"title\": \"Columns of world_cup.world_cup.teams (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.teams (name type):\\n- id bigint\\n- country_code character(3)\\n- common_name text\\n- fifa_code character(3)\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 133\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT goal_type, COUNT(*) AS n FROM world_cup.world_cup.goals GROUP BY goal_type ORDER BY n DESC\",\n  \"rationale\": \"I'm checking which goal types the data records so I can pick the one that means a direct free kick.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"goal_type\",\n    \"n\"\n  ],\n  \"rows\": [\n    {\n      \"goal_type\": \"open_play\",\n      \"n\": \"24\"\n    },\n    {\n      \"goal_type\": \"header\",\n      \"n\": \"13\"\n    },\n    {\n      \"goal_type\": \"penalty\",\n      \"n\": \"7\"\n    },\n    {\n      \"goal_type\": \"own_goal\",\n      \"n\": \"2\"\n    },\n    {\n      \"goal_type\": \"free_kick\",\n      \"n\": \"1\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT g.id, p.full_name, t.common_name AS team, g.minute, g.stoppage_minute, m.id AS match_id\\nFROM world_cup.world_cup.goals g\\nLEFT JOIN world_cup.world_cup.players p ON p.id = g.scorer_player_id\\nLEFT JOIN world_cup.world_cup.teams t ON t.id = g.scoring_team_id\\nLEFT JOIN world_cup.world_cup.matches m ON m.id = g.match_id\\nWHERE g.goal_type = 'free_kick'\",\n  \"rationale\": \"I'm pulling the free-kick goal(s) with the scorer's name and team to answer who scored them.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"full_name\",\n    \"team\",\n    \"minute\",\n    \"stoppage_minute\",\n    \"match_id\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"24\",\n      \"full_name\": \"Kieran Trippier\",\n      \"team\": \"England\",\n      \"minute\": 5,\n      \"stoppage_minute\": 0,\n      \"match_id\": \"7\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 92513,
+    "runContext": {
+      "reads": [
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "offset": 0,
+          "chars": 143,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "offset": 0,
+          "chars": 206,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "offset": 0,
+          "chars": 143,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "offset": 0,
+          "chars": 133,
+          "step": "analyse"
+        },
+        {
+          "key": "queries/1",
+          "offset": 0,
+          "chars": 394,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/2",
+          "offset": 0,
+          "chars": 584,
+          "step": "write-answer"
+        }
+      ],
+      "entries": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "title": "Columns of world_cup.world_cup.tournaments (dataset: World Cup)",
+          "chars": 223
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "title": "Columns of world_cup.world_cup.teams (dataset: World Cup)",
+          "chars": 133
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "title": "Columns of world_cup.world_cup.matches (dataset: World Cup)",
+          "chars": 419
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "title": "Columns of world_cup.world_cup.venues (dataset: World Cup)",
+          "chars": 128
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "title": "Columns of world_cup.world_cup.players (dataset: World Cup)",
+          "chars": 143
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "title": "Columns of world_cup.world_cup.goals (dataset: World Cup)",
+          "chars": 270
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "title": "Columns of world_cup.world_cup.match_team_statistics (dataset: World Cup)",
+          "chars": 319
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "title": "Columns of world_cup.world_cup.v_match_results (dataset: World Cup)",
+          "chars": 348
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "title": "Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)",
+          "chars": 206
+        },
+        {
+          "key": "queries/1",
+          "title": "Query 1: I'm checking which goal types the data records so I can pick the one that means a direct free kick.",
+          "chars": 394
+        },
+        {
+          "key": "queries/2",
+          "title": "Query 2: I'm pulling the free-kick goal(s) with the scorer's name and team to answer who scored them.",
+          "chars": 584
+        }
+      ]
+    }
+  },
+  {
+    "id": "shared-v2-multistep-top-team-top-scorer-2022",
+    "question": "Which team scored the most goals in the 2022 World Cup, and who was its leading scorer?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "names-all",
+        "description": "The answer names Argentina, Messi",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 8 and 4",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: In the 2022 data Argentina scored the most goals (8, ahead of France with 7) and its leading scorer is Lionel Messi with 4 goals. Score pass=true only if the final answer names Argentina with 8 goals and Lionel Messi with 4 goals. Score pass=false if either part is missing or wrong. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**Argentina scored the most goals in the 2022 World Cup data, 8, and Lionel Messi was their leading scorer with 4.** This covers only the 8 knockout matches the data holds for 2022 (quarter-finals to the final), not the whole tournament.\n\n| Team | Goals | Matches in data |\n|---|---|---|\n| Argentina | 8 | 3 |\n| France | 7 | 3 |\n| Croatia | 3 | 3 |\n| Morocco | 2 | 3 |\n| Netherlands | 2 | 1 |\n| Brazil | 1 | 1 |\n| England | 1 | 1 |\n| Portugal | 0 | 1 |\n\n**Argentina's scorers**\n\n| Player | Goals | Of which penalties |\n|---|---|---|\n| Lionel Messi | 4 | 3 |\n| Julian Alvarez | 2 | 0 |\n| Angel Di Maria | 1 | 0 |\n| Nahuel Molina | 1 | 0 |\n\nMessi's lead is clear. Julian Alvarez is next with 2. For comparison, France's top scorer was Kylian Mbappe with 3, two of them penalties.\n\n**How I got this**\n- I added up each team's goals across all its 2022 matches in the data. Argentina was first with 8 and France second with 7.\n- I checked those totals against the individual goal records. They match for every team, and no own goals appear in them.\n- I then listed the goal scorers on Argentina's squad to find the leader.\n\n**Assumptions**\n- Goals from penalty shootouts are not counted. Only goals scored in the match count. Argentina's shootout wins against the Netherlands and in the final are therefore excluded.\n- Penalties scored in play are counted as goals. Messi's 4 includes 3 penalties.\n\n**Caveats**\n- The data holds only 8 matches for 2022: 4 quarter-finals, 2 semi-finals, the third-place match and the final. Group-stage and round-of-16 matches are missing. The answer is therefore the top-scoring team and scorer from the knockout matches in the data, not for the full tournament. Team and player totals could change if the missing matches were added.",
+    "toolCalls": [
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.v_match_results\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.v_match_results\",\n  \"title\": \"Columns of world_cup.world_cup.v_match_results (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.v_match_results (name type):\\n- tournament_year integer\\n- match_number integer\\n- stage text\\n- kicked_off_at timestamp with time zone\\n- venue text\\n- city text\\n- home_team text\\n- away_team text\\n- home_goals integer\\n- away_goals integer\\n- home_penalties integer\\n- away_penalties integer\\n- winner text\\n- attendance integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 348\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.v_player_goal_totals\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.v_player_goal_totals\",\n  \"title\": \"Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.v_player_goal_totals (name type):\\n- tournament_year integer\\n- player text\\n- national_team text\\n- goals bigint\\n- penalties bigint\\n- own_goals bigint\\n- first_goal_minute integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 206\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\",\n  \"title\": \"Columns of world_cup.world_cup.goals (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.goals (name type):\\n- id bigint\\n- match_id bigint\\n- scoring_team_id bigint\\n- scorer_player_id bigint\\n- assist_player_id bigint\\n- minute integer\\n- stoppage_minute integer\\n- goal_type text\\n- home_score_after integer\\n- away_score_after integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 270\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\",\n  \"title\": \"Columns of world_cup.world_cup.tournaments (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.tournaments (name type):\\n- id bigint\\n- name text\\n- tournament_year integer\\n- host_country_code character(3)\\n- starts_on date\\n- ends_on date\\n- champion_team_id bigint\\n- runner_up_team_id bigint\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 223\n}"
+      },
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"sql-analysis\"\n}",
+        "output": "# SQL analysis patterns\n\nTools for this skill: the \"run_readonly_sql\" tool, the \"sample_rows\" tool.\n\nWrite one read-only SELECT (or WITH) per call, in the dialect of the entity's datasource, with fully-qualified names. Aggregate in the query; bring back the few rows the answer needs.\n\n## Top-N and ties\n- Rank with a window function, not a bare `ORDER BY … LIMIT n`: `RANK() OVER (ORDER BY total DESC) AS rnk`, then keep `rnk <= n` in an outer query. Every row tied at the cut-off comes back.\n- When the rows at the cut-off tie, say so and name every tied row (\"Brazil and Germany share second place with 18 wins\").\n- Order by the measure and by a name as a tie-breaker, so the order is stable.\n- \"Top per group\" (best team per tournament): `ROW_NUMBER()` or `RANK() OVER (PARTITION BY group ORDER BY measure DESC)`.\n\n## Ratios and shares\n- A ratio needs two different measures: `SUM(goals) * 1.0 / NULLIF(COUNT(DISTINCT match_id), 0)`. Never divide an expression by itself.\n- Multiply by `1.0` (or cast to a decimal) before dividing: integer division truncates in PostgreSQL and SQLite.\n- Guard the denominator with `NULLIF(…, 0)`.\n- A share of the total: `measure * 1.0 / SUM(measure) OVER ()`. Shares of one breakdown add up to 100 %; check that they do.\n- Say what the ratio is per (\"goals per match\", \"share of all goals\").\n\n## Period over period\n- Group by the period (year, quarter, month) and compare with `LAG(measure) OVER (ORDER BY period)`: change = `measure - LAG(…)`, growth = `(measure - LAG(…)) * 1.0 / NULLIF(LAG(…), 0)`.\n- Compare like with like: a partial period (the current year, a tournament still running) is not comparable to a full one. Say so, or compare the same span of both.\n- Truncate dates per dialect: PostgreSQL and Databricks `date_trunc('month', d)`; SQLite `strftime('%Y-%m', d)`.\n\n## Distinct counts and join fan-out\n- `COUNT(DISTINCT key)` counts entities; `COUNT(*)` counts rows. Pick the one the question means.\n- A join to a child table repeats the parent ro… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"WITH t AS (\\n  SELECT home_team AS team, home_goals AS gf, match_number FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2022\\n  UNION ALL\\n  SELECT away_team, away_goals, match_number FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2022\\n), agg AS (\\n  SELECT team, SUM(gf) AS goals, COUNT(*) AS matches, COUNT(gf) AS matches_with_score FROM t GROUP BY team\\n)\\nSELECT team, goals, matches, matches_with_score, RANK() OVER (ORDER BY goals DESC) AS rnk FROM agg ORDER BY goals DESC, team LIMIT 10\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm totaling the goals each team scored across all its 2022 World Cup matches to find the top-scoring team.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"team\",\n    \"goals\",\n    \"matches\",\n    \"matches_with_score\",\n    \"rnk\"\n  ],\n  \"rows\": [\n    {\n      \"team\": \"Argentina\",\n      \"goals\": \"8\",\n      \"matches\": \"3\",\n      \"matches_with_score\": \"3\",\n      \"rnk\": \"1\"\n    },\n    {\n      \"team\": \"France\",\n      \"goals\": \"7\",\n      \"matches\": \"3\",\n      \"matches_with_score\": \"3\",\n      \"rnk\": \"2\"\n    },\n    {\n      \"team\": \"Croatia\",\n      \"goals\": \"3\",\n      \"matches\": \"3\",\n      \"matches_with_score\": \"3\",\n      \"rnk\": \"3\"\n    },\n    {\n      \"team\": \"Morocco\",\n      \"goals\": \"2\",\n      \"matches\": \"3\",\n      \"matches_with_score\": \"3\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"team\": \"Netherlands\",\n      \"goals\": \"2\",\n      \"matches\": \"1\",\n      \"matches_with_score\": \"1\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"team\": \"Brazil\",\n      \"goals\": \"1\",\n      \"matches\": \"1\",\n      \"matches_with_score\": \"1\",\n      \"rnk\": \"6\"\n    },\n    {\n      \"team\": \"England\",\n      \"goals\": \"1\",\n      \"matches\": \"1\",\n      \"matches_with_score\": \"1\",\n      \"rnk\": \"6\"\n    },\n    {\n      \"team\": \"Portugal\",\n      \"goals\": \"0\",\n      \"matches\": \"1\",\n      \"matches_with_score\": \"1\",\n      \"rnk\": \"8\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT tournament_year, COUNT(*) AS matches FROM world_cup.world_cup.v_match_results GROUP BY tournament_year ORDER BY tournament_year DESC LIMIT 5\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm confirming the data includes the 2022 World Cup and how many matches it holds.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2022,\n      \"matches\": \"8\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"matches\": \"8\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT match_number, stage, home_team, away_team, home_goals, away_goals, home_penalties, away_penalties FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2022 ORDER BY match_number\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm listing the 2022 matches in the data to see which stages are covered, since only a few matches appear.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"match_number\",\n    \"stage\",\n    \"home_team\",\n    \"away_team\",\n    \"home_goals\",\n    \"away_goals\",\n    \"home_penalties\",\n    \"away_penalties\"\n  ],\n  \"rows\": [\n    {\n      \"match_number\": 57,\n      \"stage\": \"quarter_final\",\n      \"home_team\": \"Croatia\",\n      \"away_team\": \"Brazil\",\n      \"home_goals\": 1,\n      \"away_goals\": 1,\n      \"home_penalties\": 4,\n      \"away_penalties\": 2\n    },\n    {\n      \"match_number\": 58,\n      \"stage\": \"quarter_final\",\n      \"home_team\": \"Netherlands\",\n      \"away_team\": \"Argentina\",\n      \"home_goals\": 2,\n      \"away_goals\": 2,\n      \"home_penalties\": 3,\n      \"away_penalties\": 4\n    },\n    {\n      \"match_number\": 59,\n      \"stage\": \"quarter_final\",\n      \"home_team\": \"Morocco\",\n      \"away_team\": \"Portugal\",\n      \"home_goals\": 1,\n      \"away_goals\": 0,\n      \"home_penalties\": null,\n      \"away_penalties\": null\n    },\n    {\n      \"match_number\": 60,\n      \"stage\": \"quarter_final\",\n      \"home_team\": \"England\",\n      \"away_team\": \"France\",\n      \"home_goals\": 1,\n      \"away_goals\": 2,\n      \"home_penalties\": null,\n      \"away_penalties\": null\n    },\n    {\n      \"match_number\": 61,\n      \"stage\": \"semi_final\",\n      \"home_team\": \"Argentina\",\n      \"away_team\": \"Croatia\",\n      \"home_goals\": 3,\n      \"away_goals\": 0,\n      \"home_penalties\": null,\n      \"away_penalties\": null\n    },\n    {\n      \"match_number\": 62,\n      \"stage\": \"semi_final\",\n      \"home_team\": \"France\",\n      \"away_team\": \"Morocco\",\n      \"home_goals\": 2,\n      \"away_goals\": 0,\n      \"home_penalties\": null,\n      \"away_penalties\": null\n    },\n    {\n      \"match_number\": 63,\n      \"stage\": \"third_place\",\n      \"home_team\": \"Croatia\",\n      \"away_team\": \"Morocco\",\n      \"home_goals\": 2,\n      \"away_goals\": 1,\n      \"home_penalties\": null,\n      \"away_penalties\": null\n    },\n    {\n      \"match_number\": 64,\n      \"stage\": \"final\",\n      \"home_team\": \"Argentina\",\n      \"away_team\": \"France\",\n      \"home_goals\": 3,\n      \"away_goals\": 3,\n      \"home_penalti… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT player, national_team, goals, penalties, own_goals, RANK() OVER (PARTITION BY national_team ORDER BY goals DESC) AS rnk_in_team FROM world_cup.world_cup.v_player_goal_totals WHERE tournament_year = 2022 AND national_team IN ('Argentina','France') ORDER BY national_team, goals DESC, player\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm looking at each scorer for the top two teams to find the leading scorer and check how penalties and own goals are recorded.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"player\",\n    \"national_team\",\n    \"goals\",\n    \"penalties\",\n    \"own_goals\",\n    \"rnk_in_team\"\n  ],\n  \"rows\": [\n    {\n      \"player\": \"Lionel Messi\",\n      \"national_team\": \"Argentina\",\n      \"goals\": \"4\",\n      \"penalties\": \"3\",\n      \"own_goals\": \"0\",\n      \"rnk_in_team\": \"1\"\n    },\n    {\n      \"player\": \"Julian Alvarez\",\n      \"national_team\": \"Argentina\",\n      \"goals\": \"2\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk_in_team\": \"2\"\n    },\n    {\n      \"player\": \"Angel Di Maria\",\n      \"national_team\": \"Argentina\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk_in_team\": \"3\"\n    },\n    {\n      \"player\": \"Nahuel Molina\",\n      \"national_team\": \"Argentina\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk_in_team\": \"3\"\n    },\n    {\n      \"player\": \"Kylian Mbappe\",\n      \"national_team\": \"France\",\n      \"goals\": \"3\",\n      \"penalties\": \"2\",\n      \"own_goals\": \"0\",\n      \"rnk_in_team\": \"1\"\n    },\n    {\n      \"player\": \"Aurelien Tchouameni\",\n      \"national_team\": \"France\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk_in_team\": \"2\"\n    },\n    {\n      \"player\": \"Olivier Giroud\",\n      \"national_team\": \"France\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk_in_team\": \"2\"\n    },\n    {\n      \"player\": \"Randal Kolo Muani\",\n      \"national_team\": \"France\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk_in_team\": \"2\"\n    },\n    {\n      \"player\": \"Theo Hernandez\",\n      \"national_team\": \"France\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk_in_team\": \"2\"\n    }\n  ],\n  \"warnings\": [\n    \"own_goals is 0 on every row, so it cannot explain any difference between them.\"\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT te.name AS team, COUNT(*) AS goal_rows, COUNT(*) FILTER (WHERE g.goal_type ILIKE '%own%') AS own_goal_rows\\nFROM world_cup.world_cup.goals g\\nJOIN world_cup.world_cup.matches m ON m.id = g.match_id\\nJOIN world_cup.world_cup.tournaments to ON to.id = m.tournament_id\\nJOIN world_cup.world_cup.teams te ON te.id = g.scoring_team_id\\nWHERE to.tournament_year = 2022\\nGROUP BY te.name ORDER BY goal_rows DESC, team LIMIT 10\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm cross-checking the team totals against the individual goal records for 2022.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"team\",\n    \"goal_rows\",\n    \"own_goal_rows\"\n  ],\n  \"rows\": [\n    {\n      \"team\": \"Argentina\",\n      \"goal_rows\": \"8\",\n      \"own_goal_rows\": \"0\"\n    },\n    {\n      \"team\": \"France\",\n      \"goal_rows\": \"7\",\n      \"own_goal_rows\": \"0\"\n    },\n    {\n      \"team\": \"Croatia\",\n      \"goal_rows\": \"3\",\n      \"own_goal_rows\": \"0\"\n    },\n    {\n      \"team\": \"Morocco\",\n      \"goal_rows\": \"2\",\n      \"own_goal_rows\": \"0\"\n    },\n    {\n      \"team\": \"Netherlands\",\n      \"goal_rows\": \"2\",\n      \"own_goal_rows\": \"0\"\n    },\n    {\n      \"team\": \"Brazil\",\n      \"goal_rows\": \"1\",\n      \"own_goal_rows\": \"0\"\n    },\n    {\n      \"team\": \"England\",\n      \"goal_rows\": \"1\",\n      \"own_goal_rows\": \"0\"\n    }\n  ],\n  \"correctedSql\": \"SELECT te.common_name AS team, COUNT(*) AS goal_rows, COUNT(*) FILTER (WHERE g.goal_type ILIKE '%own%') AS own_goal_rows FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m ON m.id = g.match_id JOIN world_cup.world_cup.tournaments tr ON tr.id = m.tournament_id JOIN world_cup.world_cup.teams te ON te.id = g.scoring_team_id WHERE tr.tournament_year = 2022 GROUP BY te.common_name ORDER BY goal_rows DESC, team LIMIT 10\",\n  \"note\": \"original query failed and was auto-corrected — cite the corrected SQL\",\n  \"warnings\": [\n    \"own_goal_rows is 0 on every row, so it cannot explain any difference between them.\"\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 51007,
+    "runContext": {
+      "reads": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "offset": 0,
+          "chars": 206,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "offset": 0,
+          "chars": 348,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "offset": 0,
+          "chars": 319,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "offset": 0,
+          "chars": 348,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "offset": 0,
+          "chars": 206,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "analyse"
+        },
+        {
+          "key": "queries/1",
+          "offset": 0,
+          "chars": 1306,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/2",
+          "offset": 0,
+          "chars": 339,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/3",
+          "offset": 0,
+          "chars": 1603,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/4",
+          "offset": 0,
+          "chars": 1506,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/5",
+          "offset": 0,
+          "chars": 935,
+          "step": "write-answer"
+        }
+      ],
+      "entries": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "title": "Columns of world_cup.world_cup.tournaments (dataset: World Cup)",
+          "chars": 223
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "title": "Columns of world_cup.world_cup.teams (dataset: World Cup)",
+          "chars": 133
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "title": "Columns of world_cup.world_cup.matches (dataset: World Cup)",
+          "chars": 419
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "title": "Columns of world_cup.world_cup.venues (dataset: World Cup)",
+          "chars": 128
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "title": "Columns of world_cup.world_cup.players (dataset: World Cup)",
+          "chars": 143
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "title": "Columns of world_cup.world_cup.goals (dataset: World Cup)",
+          "chars": 270
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "title": "Columns of world_cup.world_cup.match_team_statistics (dataset: World Cup)",
+          "chars": 319
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "title": "Columns of world_cup.world_cup.v_match_results (dataset: World Cup)",
+          "chars": 348
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "title": "Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)",
+          "chars": 206
+        },
+        {
+          "key": "queries/1",
+          "title": "Query 1: I'm totaling the goals each team scored across all its 2022 World Cup matches to find the top-scoring team.",
+          "chars": 1306
+        },
+        {
+          "key": "queries/2",
+          "title": "Query 2: I'm confirming the data includes the 2022 World Cup and how many matches it holds.",
+          "chars": 339
+        },
+        {
+          "key": "queries/3",
+          "title": "Query 3: I'm listing the 2022 matches in the data to see which stages are covered, since only a few matches appear.",
+          "chars": 1603
+        },
+        {
+          "key": "queries/4",
+          "title": "Query 4: I'm looking at each scorer for the top two teams to find the leading scorer and check how penalties and own goals are recorded.",
+          "chars": 1506
+        },
+        {
+          "key": "queries/5",
+          "title": "Query 5: I'm cross-checking the team totals against the individual goal records for 2022.",
+          "chars": 935
+        }
+      ]
+    }
+  },
+  {
+    "id": "shared-v2-ranking-ties-busiest-stadium",
+    "question": "Which stadium hosted the most matches?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "names-all",
+        "description": "The answer names Lusail, Saint Petersburg",
+        "score": 0,
+        "passed": false,
+        "reason": "the answer does not name Lusail, Saint Petersburg"
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 3",
+        "score": 0,
+        "passed": false,
+        "reason": "expected the answer to state 3; the numbers in it are none"
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: Two stadiums tie for the most matches in the data, 3 each: Lusail Stadium and Saint Petersburg Stadium. Score pass=true only if the final answer names both with 3 matches each and makes clear they are tied. Score pass=false if it names one stadium alone, a different count, or a stadium that does not host the most. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 0,
+        "passed": false,
+        "reason": "The assistant produced no final answer text. Its queries did show Lusail Stadium and Saint Petersburg Stadium tied at 3 matches each, but the answer never names both, states the tie, or opens with a headline stating the key figure."
+      }
+    ],
+    "answer": "",
+    "toolCalls": [
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\",\n  \"title\": \"Columns of world_cup.world_cup.matches (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.matches (name type):\\n- id bigint\\n- tournament_id bigint\\n- match_number integer\\n- stage text\\n- group_letter character(1)\\n- kicked_off_at timestamp with time zone\\n- venue_id bigint\\n- home_team_id bigint\\n- away_team_id bigint\\n- home_goals integer\\n- away_goals integer\\n- went_to_extra_time boolean\\n- home_penalties integer\\n- away_penalties integer\\n- winner_team_id bigint\\n- attendance integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 419\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.venues\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.venues\",\n  \"title\": \"Columns of world_cup.world_cup.venues (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.venues (name type):\\n- id bigint\\n- tournament_id bigint\\n- name text\\n- city text\\n- capacity integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 128\n}"
+      },
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"sql-analysis\"\n}",
+        "output": "# SQL analysis patterns\n\nTools for this skill: the \"run_readonly_sql\" tool, the \"sample_rows\" tool.\n\nWrite one read-only SELECT (or WITH) per call, in the dialect of the entity's datasource, with fully-qualified names. Aggregate in the query; bring back the few rows the answer needs.\n\n## Top-N and ties\n- Rank with a window function, not a bare `ORDER BY … LIMIT n`: `RANK() OVER (ORDER BY total DESC) AS rnk`, then keep `rnk <= n` in an outer query. Every row tied at the cut-off comes back.\n- When the rows at the cut-off tie, say so and name every tied row (\"Brazil and Germany share second place with 18 wins\").\n- Order by the measure and by a name as a tie-breaker, so the order is stable.\n- \"Top per group\" (best team per tournament): `ROW_NUMBER()` or `RANK() OVER (PARTITION BY group ORDER BY measure DESC)`.\n\n## Ratios and shares\n- A ratio needs two different measures: `SUM(goals) * 1.0 / NULLIF(COUNT(DISTINCT match_id), 0)`. Never divide an expression by itself.\n- Multiply by `1.0` (or cast to a decimal) before dividing: integer division truncates in PostgreSQL and SQLite.\n- Guard the denominator with `NULLIF(…, 0)`.\n- A share of the total: `measure * 1.0 / SUM(measure) OVER ()`. Shares of one breakdown add up to 100 %; check that they do.\n- Say what the ratio is per (\"goals per match\", \"share of all goals\").\n\n## Period over period\n- Group by the period (year, quarter, month) and compare with `LAG(measure) OVER (ORDER BY period)`: change = `measure - LAG(…)`, growth = `(measure - LAG(…)) * 1.0 / NULLIF(LAG(…), 0)`.\n- Compare like with like: a partial period (the current year, a tournament still running) is not comparable to a full one. Say so, or compare the same span of both.\n- Truncate dates per dialect: PostgreSQL and Databricks `date_trunc('month', d)`; SQLite `strftime('%Y-%m', d)`.\n\n## Distinct counts and join fan-out\n- `COUNT(DISTINCT key)` counts entities; `COUNT(*)` counts rows. Pick the one the question means.\n- A join to a child table repeats the parent ro… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"WITH s AS (\\n  SELECT v.name, v.city, COUNT(m.id) AS matches, COUNT(DISTINCT m.tournament_id) AS tournaments\\n  FROM world_cup.world_cup.matches m\\n  JOIN world_cup.world_cup.venues v ON v.id = m.venue_id\\n  GROUP BY v.name, v.city\\n), r AS (\\n  SELECT *, RANK() OVER (ORDER BY matches DESC) AS rnk FROM s\\n)\\nSELECT name, city, matches, tournaments, rnk FROM r WHERE rnk <= 5 ORDER BY rnk, name\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm counting how many matches each stadium hosted across all tournaments, and ranking them to find the one with the most, including any ties.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"name\",\n    \"city\",\n    \"matches\",\n    \"tournaments\",\n    \"rnk\"\n  ],\n  \"rows\": [\n    {\n      \"name\": \"Lusail Stadium\",\n      \"city\": \"Lusail\",\n      \"matches\": \"3\",\n      \"tournaments\": \"1\",\n      \"rnk\": \"1\"\n    },\n    {\n      \"name\": \"Saint Petersburg Stadium\",\n      \"city\": \"Saint Petersburg\",\n      \"matches\": \"3\",\n      \"tournaments\": \"1\",\n      \"rnk\": \"1\"\n    },\n    {\n      \"name\": \"Al Bayt Stadium\",\n      \"city\": \"Al Khor\",\n      \"matches\": \"2\",\n      \"tournaments\": \"1\",\n      \"rnk\": \"3\"\n    },\n    {\n      \"name\": \"Fisht Stadium\",\n      \"city\": \"Sochi\",\n      \"matches\": \"2\",\n      \"tournaments\": \"1\",\n      \"rnk\": \"3\"\n    },\n    {\n      \"name\": \"Luzhniki Stadium\",\n      \"city\": \"Moscow\",\n      \"matches\": \"2\",\n      \"tournaments\": \"1\",\n      \"rnk\": \"3\"\n    }\n  ],\n  \"warnings\": [\n    \"tournaments is 1 on every row, so it cannot explain any difference between them.\"\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT COUNT(*) AS total_matches, COUNT(venue_id) AS with_venue, COUNT(DISTINCT tournament_id) AS tournaments FROM world_cup.world_cup.matches\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking that every match has a stadium recorded and how many tournaments are covered, so the ranking isn't missing matches.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"total_matches\",\n    \"with_venue\",\n    \"tournaments\"\n  ],\n  \"rows\": [\n    {\n      \"total_matches\": \"16\",\n      \"with_venue\": \"16\",\n      \"tournaments\": \"2\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": false,
+    "durationMs": 31608,
+    "runContext": {
+      "reads": [
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "offset": 0,
+          "chars": 128,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "offset": 0,
+          "chars": 348,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "offset": 0,
+          "chars": 128,
+          "step": "analyse"
+        },
+        {
+          "key": "queries/1",
+          "offset": 0,
+          "chars": 1002,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/2",
+          "offset": 0,
+          "chars": 361,
+          "step": "write-answer"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "write-answer"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "offset": 0,
+          "chars": 128,
+          "step": "write-answer"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "write-answer"
+        }
+      ],
+      "entries": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "title": "Columns of world_cup.world_cup.tournaments (dataset: World Cup)",
+          "chars": 223
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "title": "Columns of world_cup.world_cup.teams (dataset: World Cup)",
+          "chars": 133
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "title": "Columns of world_cup.world_cup.matches (dataset: World Cup)",
+          "chars": 419
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "title": "Columns of world_cup.world_cup.venues (dataset: World Cup)",
+          "chars": 128
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "title": "Columns of world_cup.world_cup.players (dataset: World Cup)",
+          "chars": 143
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "title": "Columns of world_cup.world_cup.goals (dataset: World Cup)",
+          "chars": 270
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "title": "Columns of world_cup.world_cup.match_team_statistics (dataset: World Cup)",
+          "chars": 319
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "title": "Columns of world_cup.world_cup.v_match_results (dataset: World Cup)",
+          "chars": 348
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "title": "Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)",
+          "chars": 206
+        },
+        {
+          "key": "queries/1",
+          "title": "Query 1: I'm counting how many matches each stadium hosted across all tournaments, and ranking them to find the one with the most, including any ties.",
+          "chars": 1002
+        },
+        {
+          "key": "queries/2",
+          "title": "Query 2: I'm checking that every match has a stadium recorded and how many tournaments are covered, so the ranking isn't missing matches.",
+          "chars": 361
+        }
+      ]
+    }
+  },
+  {
+    "id": "shared-v2-coverage-group-stage-wins",
+    "question": "How many group-stage matches did Argentina win in 2022?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The data holds only the knockout stages (quarter-finals, semi-finals, third place and final) of 2018 and 2022: there are no group-stage matches. Score pass=true only if the final answer says the data has no group-stage matches, so it cannot give a group-stage win count (saying 0 as if it were a result does not count as stating it), and says what the data does hold (the knockout stage). Offering the knockout record is fine, if backed by its queries. Score pass=false if it states a group-stage win count as a fact, or does not say that the group stage is missing.",
+        "score": 0,
+        "passed": false,
+        "reason": "The assistant produced no final answer text, so it never told the user that the data has no group-stage matches or that it only holds the knockout stages. The queries did show this, but the rubric requires the final answer to say it."
+      }
+    ],
+    "answer": "",
+    "toolCalls": [
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.v_match_results\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.v_match_results\",\n  \"title\": \"Columns of world_cup.world_cup.v_match_results (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.v_match_results (name type):\\n- tournament_year integer\\n- match_number integer\\n- stage text\\n- kicked_off_at timestamp with time zone\\n- venue text\\n- city text\\n- home_team text\\n- away_team text\\n- home_goals integer\\n- away_goals integer\\n- home_penalties integer\\n- away_penalties integer\\n- winner text\\n- attendance integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 348\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\",\n  \"title\": \"Columns of world_cup.world_cup.tournaments (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.tournaments (name type):\\n- id bigint\\n- name text\\n- tournament_year integer\\n- host_country_code character(3)\\n- starts_on date\\n- ends_on date\\n- champion_team_id bigint\\n- runner_up_team_id bigint\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 223\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\",\n  \"title\": \"Columns of world_cup.world_cup.matches (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.matches (name type):\\n- id bigint\\n- tournament_id bigint\\n- match_number integer\\n- stage text\\n- group_letter character(1)\\n- kicked_off_at timestamp with time zone\\n- venue_id bigint\\n- home_team_id bigint\\n- away_team_id bigint\\n- home_goals integer\\n- away_goals integer\\n- went_to_extra_time boolean\\n- home_penalties integer\\n- away_penalties integer\\n- winner_team_id bigint\\n- attendance integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 419\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT tournament_year, stage, COUNT(*) AS matches FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2022 GROUP BY tournament_year, stage ORDER BY matches DESC\",\n  \"rationale\": \"I'm checking that 2022 is in the data and how the stages are labelled, so I pick out the group stage correctly.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"stage\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"final\",\n      \"matches\": \"1\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT DISTINCT home_team AS team FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2022 AND home_team ILIKE '%argentin%' UNION SELECT DISTINCT away_team FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2022 AND away_team ILIKE '%argentin%'\",\n  \"rationale\": \"I'm confirming how Argentina's name is spelled in the data so I filter on the right team.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"team\"\n  ],\n  \"rows\": [\n    {\n      \"team\": \"Argentina\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, m.stage, COUNT(*) AS matches FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 GROUP BY t.tournament_year, m.stage ORDER BY matches DESC\",\n  \"rationale\": \"I'm checking the raw matches table for 2022 to see whether group-stage games are recorded there, since the summary view shows none.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"stage\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"final\",\n      \"matches\": \"1\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT stage, COUNT(*) AS matches FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2022 AND (home_team = 'Argentina' OR away_team = 'Argentina') GROUP BY stage\",\n  \"rationale\": \"I'm listing which 2022 stages Argentina's matches appear under, to see what is covered for the team.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"final\",\n      \"matches\": \"1\"\n    },\n    {\n      \"stage\": \"quarter_final\",\n      \"matches\": \"1\"\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"matches\": \"1\"\n    }\n  ],\n  \"warnings\": [\n    \"matches is 1 on every row, so it cannot explain any difference between them.\"\n  ]\n}"
+      }
+    ],
+    "passed": false,
+    "durationMs": 210915,
+    "runContext": {
+      "reads": [
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "offset": 0,
+          "chars": 348,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "offset": 0,
+          "chars": 133,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "offset": 0,
+          "chars": 348,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "analyse"
+        },
+        {
+          "key": "queries/1",
+          "offset": 0,
+          "chars": 556,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/3",
+          "offset": 0,
+          "chars": 645,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/4",
+          "offset": 0,
+          "chars": 416,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/2",
+          "offset": 0,
+          "chars": 413,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/4",
+          "offset": 0,
+          "chars": 416,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/4",
+          "offset": 0,
+          "chars": 416,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/3",
+          "offset": 0,
+          "chars": 645,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/2",
+          "offset": 0,
+          "chars": 413,
+          "step": "write-answer"
+        }
+      ],
+      "entries": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "title": "Columns of world_cup.world_cup.tournaments (dataset: World Cup)",
+          "chars": 223
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "title": "Columns of world_cup.world_cup.teams (dataset: World Cup)",
+          "chars": 133
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "title": "Columns of world_cup.world_cup.matches (dataset: World Cup)",
+          "chars": 419
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "title": "Columns of world_cup.world_cup.venues (dataset: World Cup)",
+          "chars": 128
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "title": "Columns of world_cup.world_cup.players (dataset: World Cup)",
+          "chars": 143
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "title": "Columns of world_cup.world_cup.goals (dataset: World Cup)",
+          "chars": 270
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "title": "Columns of world_cup.world_cup.match_team_statistics (dataset: World Cup)",
+          "chars": 319
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "title": "Columns of world_cup.world_cup.v_match_results (dataset: World Cup)",
+          "chars": 348
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "title": "Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)",
+          "chars": 206
+        },
+        {
+          "key": "queries/1",
+          "title": "Query 1: I'm checking that 2022 is in the data and how the stages are labelled, so I pick out the group stage correctly.",
+          "chars": 556
+        },
+        {
+          "key": "queries/2",
+          "title": "Query 2: I'm confirming how Argentina's name is spelled in the data so I filter on the right team.",
+          "chars": 413
+        },
+        {
+          "key": "queries/3",
+          "title": "Query 3: I'm checking the raw matches table for 2022 to see whether group-stage games are recorded there, since the summary view shows none.",
+          "chars": 645
+        },
+        {
+          "key": "queries/4",
+          "title": "Query 4: I'm listing which 2022 stages Argentina's matches appear under, to see what is covered for the team.",
+          "chars": 416
+        }
+      ]
+    }
+  },
+  {
+    "id": "shared-v2-retry-reuses-attempt-1",
+    "question": "How many goals were scored at the 2022 World Cup?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 24",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "retry-no-rediscovery",
+        "description": "The retry of Analyse lists and describes no entity again",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The data holds 24 goals for the 2022 World Cup. Score pass=true only if the final answer gives 24 as the number of goals of the 2022 World Cup in the data. It may say which part of the tournament the data covers when its queries show it, and any breakdown it gives must come from its queries. Score pass=false if it gives no figure or another figure for the goals in the data, a breakdown no query returned, or presents a query of an earlier attempt that timed out as a problem with the data. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**The data records 24 goals in the 2022 World Cup, but it only holds 8 matches (quarter-finals to the final), so this is not a full-tournament total.**\n\n| Stage | Matches | Goals |\n|---|---|---|\n| Quarter-finals | 4 | 10 |\n| Semi-finals | 2 | 5 |\n| Third place | 1 | 3 |\n| Final | 1 | 6 |\n| **Total** | **8** | **24** |\n\nThe individual goal records also add up to 24: 13 open play, 6 penalty and 5 header.\n\n**How I got this**\n- I added up the home and away goals across every 2022 match in the data. That gives 24 across 8 matches, and none of those matches has a missing score.\n- I counted the individual goal records for those matches as a cross-check. The count was also 24, so the two sources agree.\n- I confirmed that the data has a single 2022 tournament.\n\n**Assumptions**\n- Total goals is home goals plus away goals, with extra-time goals included and penalty shootout kicks left out.\n\n**Caveats**\n- The 2022 data covers only the knockout matches, which kicked off between 2022-12-09 and 2022-12-18. It has no group-stage or round-of-16 matches, so 24 is the total for the matches in the data. The question asks about the whole tournament, and the data cannot answer that.",
+    "toolCalls": [
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\",\n  \"title\": \"Columns of world_cup.world_cup.matches (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.matches (name type):\\n- id bigint\\n- tournament_id bigint\\n- match_number integer\\n- stage text\\n- group_letter character(1)\\n- kicked_off_at timestamp with time zone\\n- venue_id bigint\\n- home_team_id bigint\\n- away_team_id bigint\\n- home_goals integer\\n- away_goals integer\\n- went_to_extra_time boolean\\n- home_penalties integer\\n- away_penalties integer\\n- winner_team_id bigint\\n- attendance integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 419\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\",\n  \"title\": \"Columns of world_cup.world_cup.tournaments (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.tournaments (name type):\\n- id bigint\\n- name text\\n- tournament_year integer\\n- host_country_code character(3)\\n- starts_on date\\n- ends_on date\\n- champion_team_id bigint\\n- runner_up_team_id bigint\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 223\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\",\n  \"title\": \"Columns of world_cup.world_cup.goals (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.goals (name type):\\n- id bigint\\n- match_id bigint\\n- scoring_team_id bigint\\n- scorer_player_id bigint\\n- assist_player_id bigint\\n- minute integer\\n- stoppage_minute integer\\n- goal_type text\\n- home_score_after integer\\n- away_score_after integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 270\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.id, t.name, t.tournament_year, COUNT(m.id) AS matches, SUM(m.home_goals + m.away_goals) AS match_goals, SUM(CASE WHEN m.home_goals IS NULL OR m.away_goals IS NULL THEN 1 ELSE 0 END) AS null_score_matches, (SELECT COUNT(*) FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m2 ON g.match_id = m2.id WHERE m2.tournament_id = t.id) AS goal_records FROM world_cup.world_cup.tournaments t LEFT JOIN world_cup.world_cup.matches m ON m.tournament_id = t.id WHERE t.tournament_year = 2022 GROUP BY t.id, t.name, t.tournament_year\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm totalling the goals in every 2022 match and comparing that with the individual goal records, so I can confirm the number is right.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"name\",\n    \"tournament_year\",\n    \"matches\",\n    \"match_goals\",\n    \"null_score_matches\",\n    \"goal_records\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022,\n      \"matches\": \"8\",\n      \"match_goals\": \"24\",\n      \"null_score_matches\": \"0\",\n      \"goal_records\": \"24\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT tournament_year, name FROM world_cup.world_cup.tournaments ORDER BY tournament_year\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking which tournaments the data covers so I know 2022 is included and there is only one 2022 edition.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"name\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"name\": \"2018 FIFA World Cup\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT m.stage, COUNT(*) AS matches, SUM(m.home_goals + m.away_goals) AS goals, MIN(m.kicked_off_at) AS first_kickoff, MAX(m.kicked_off_at) AS last_kickoff FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 GROUP BY m.stage ORDER BY MIN(m.kicked_off_at)\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking which stages of the 2022 tournament the match data holds, since only a handful of matches came back.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\",\n    \"matches\",\n    \"goals\",\n    \"first_kickoff\",\n    \"last_kickoff\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\",\n      \"goals\": \"10\",\n      \"first_kickoff\": \"2022-12-09T15:00:00.000Z\",\n      \"last_kickoff\": \"2022-12-10T19:00:00.000Z\"\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\",\n      \"goals\": \"5\",\n      \"first_kickoff\": \"2022-12-13T19:00:00.000Z\",\n      \"last_kickoff\": \"2022-12-14T19:00:00.000Z\"\n    },\n    {\n      \"stage\": \"third_place\",\n      \"matches\": \"1\",\n      \"goals\": \"3\",\n      \"first_kickoff\": \"2022-12-17T15:00:00.000Z\",\n      \"last_kickoff\": \"2022-12-17T15:00:00.000Z\"\n    },\n    {\n      \"stage\": \"final\",\n      \"matches\": \"1\",\n      \"goals\": \"6\",\n      \"first_kickoff\": \"2022-12-18T15:00:00.000Z\",\n      \"last_kickoff\": \"2022-12-18T15:00:00.000Z\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"earlier-queries\"\n}",
+        "output": "{\n  \"key\": \"earlier-queries\",\n  \"title\": \"The earlier attempt's queries and their outcomes\",\n  \"content\": \"Queries an earlier attempt of this analysis already ran (reuse their results; do not run them again):\\n4. [flagged: No unresolved tool error] A check of the same figures. | SQL: SELECT goal.goal_type, COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.matches match ON match.id = goal.match_id JOIN world_cup.tournaments t ON t.id = match.tournament_id WHERE t.tournament_year = 2022 GROUP BY goal.goal_type ORDER BY goals DESC | failed: canceling statement due to statement timeout\\n1. I'm totalling the goals in every 2022 match and comparing that with the individual goal records, so I can confirm the number is right. | SQL: SELECT t.id, t.name, t.tournament_year, COUNT(m.id) AS matches, SUM(m.home_goals + m.away_goals) AS match_goals, SUM(CASE WHEN m.home_goals IS NULL OR m.away_goals IS NULL THEN 1 ELSE 0 END) AS null_score_matches, (SELECT COUNT(*) FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m2 ON g.match_id = m2.id WHERE m2.tournament_id = t.id) AS goal_records FROM world_cup.world_cup.tournaments t LEFT JOIN world_cup.world_cup.matches m ON m.tournament_id = t.id WHERE t.tournament_year = 2022 GROUP BY t.id, t.name, t.tournament_year | coverage: whole-table | 1 rows | first rows: [{\\\"id\\\":\\\"2\\\",\\\"name\\\":\\\"2022 FIFA World Cup\\\",\\\"tournament_year\\\":2022,\\\"matches\\\":\\\"8\\\",\\\"match_goals\\\":\\\"24\\\",\\\"null_score_matches\\\":\\\"0\\\",\\\"goal_records\\\":\\\"24\\\"}]\\n2. I'm checking which tournaments the data covers so I know 2022 is included and there is only one 2022 edition. | SQL: SELECT tournament_year, name FROM world_cup.world_cup.tournaments ORDER BY tournament_year | coverage: whole-table | 2 rows | first rows: [{\\\"tournament_year\\\":2018,\\\"name\\\":\\\"2018 FIFA World Cup\\\"},{\\\"tournament_year\\\":2022,\\\"name\\\":\\\"2022 FIFA World Cup\\\"}]\\n3. I'm checking which stages of the 2022 tournament the match data holds, since only a handful of matches came b… (truncated)"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.matches\",\n  \"title\": \"Columns of world_cup.world_cup.matches (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.matches (name type):\\n- id bigint\\n- tournament_id bigint\\n- match_number integer\\n- stage text\\n- group_letter character(1)\\n- kicked_off_at timestamp with time zone\\n- venue_id bigint\\n- home_team_id bigint\\n- away_team_id bigint\\n- home_goals integer\\n- away_goals integer\\n- went_to_extra_time boolean\\n- home_penalties integer\\n- away_penalties integer\\n- winner_team_id bigint\\n- attendance integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 419\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.tournaments\",\n  \"title\": \"Columns of world_cup.world_cup.tournaments (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.tournaments (name type):\\n- id bigint\\n- name text\\n- tournament_year integer\\n- host_country_code character(3)\\n- starts_on date\\n- ends_on date\\n- champion_team_id bigint\\n- runner_up_team_id bigint\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 223\n}"
+      },
+      {
+        "name": "read_run_context",
+        "input": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\"\n}",
+        "output": "{\n  \"key\": \"catalog/world_cup.world_cup.goals\",\n  \"title\": \"Columns of world_cup.world_cup.goals (dataset: World Cup)\",\n  \"content\": \"Columns of world_cup.world_cup.goals (name type):\\n- id bigint\\n- match_id bigint\\n- scoring_team_id bigint\\n- scorer_player_id bigint\\n- assist_player_id bigint\\n- minute integer\\n- stoppage_minute integer\\n- goal_type text\\n- home_score_after integer\\n- away_score_after integer\",\n  \"offset\": 0,\n  \"nextOffset\": null,\n  \"totalChars\": 270\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT g.goal_type, COUNT(*) AS goals FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m ON m.id = g.match_id JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 GROUP BY g.goal_type ORDER BY goals DESC\",\n  \"rationale\": \"I'm breaking the 2022 goal records down by type to confirm they add up to the same total as the match scores.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"goal_type\",\n    \"goals\"\n  ],\n  \"rows\": [\n    {\n      \"goal_type\": \"open_play\",\n      \"goals\": \"13\"\n    },\n    {\n      \"goal_type\": \"penalty\",\n      \"goals\": \"6\"\n    },\n    {\n      \"goal_type\": \"header\",\n      \"goals\": \"5\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 426315,
+    "runContext": {
+      "reads": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "offset": 0,
+          "chars": 348,
+          "step": "plan"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "analyse"
+        },
+        {
+          "key": "earlier-queries",
+          "offset": 0,
+          "chars": 2781,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "offset": 0,
+          "chars": 419,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "offset": 0,
+          "chars": 223,
+          "step": "analyse"
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "offset": 0,
+          "chars": 270,
+          "step": "analyse"
+        },
+        {
+          "key": "queries/1",
+          "offset": 0,
+          "chars": 514,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/2",
+          "offset": 0,
+          "chars": 852,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/3",
+          "offset": 0,
+          "chars": 339,
+          "step": "write-answer"
+        },
+        {
+          "key": "queries/4",
+          "offset": 0,
+          "chars": 1014,
+          "step": "write-answer"
+        }
+      ],
+      "entries": [
+        {
+          "key": "catalog/world_cup.world_cup.tournaments",
+          "title": "Columns of world_cup.world_cup.tournaments (dataset: World Cup)",
+          "chars": 223
+        },
+        {
+          "key": "catalog/world_cup.world_cup.teams",
+          "title": "Columns of world_cup.world_cup.teams (dataset: World Cup)",
+          "chars": 133
+        },
+        {
+          "key": "catalog/world_cup.world_cup.matches",
+          "title": "Columns of world_cup.world_cup.matches (dataset: World Cup)",
+          "chars": 419
+        },
+        {
+          "key": "catalog/world_cup.world_cup.venues",
+          "title": "Columns of world_cup.world_cup.venues (dataset: World Cup)",
+          "chars": 128
+        },
+        {
+          "key": "catalog/world_cup.world_cup.players",
+          "title": "Columns of world_cup.world_cup.players (dataset: World Cup)",
+          "chars": 143
+        },
+        {
+          "key": "catalog/world_cup.world_cup.goals",
+          "title": "Columns of world_cup.world_cup.goals (dataset: World Cup)",
+          "chars": 270
+        },
+        {
+          "key": "catalog/world_cup.world_cup.match_team_statistics",
+          "title": "Columns of world_cup.world_cup.match_team_statistics (dataset: World Cup)",
+          "chars": 319
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_match_results",
+          "title": "Columns of world_cup.world_cup.v_match_results (dataset: World Cup)",
+          "chars": 348
+        },
+        {
+          "key": "catalog/world_cup.world_cup.v_player_goal_totals",
+          "title": "Columns of world_cup.world_cup.v_player_goal_totals (dataset: World Cup)",
+          "chars": 206
+        },
+        {
+          "key": "earlier-queries",
+          "title": "The earlier attempt's queries and their outcomes",
+          "chars": 2781
+        },
+        {
+          "key": "queries/1",
+          "title": "Query 1: I'm breaking the 2022 goal records down by type to confirm they add up to the same total as the match scores.",
+          "chars": 514
+        },
+        {
+          "key": "queries/2",
+          "title": "Query 2: I'm totalling the goals in every 2022 match and comparing that with the individual goal records, so I can confirm the number is right.",
+          "chars": 852
+        },
+        {
+          "key": "queries/3",
+          "title": "Query 3: I'm checking which tournaments the data covers so I know 2022 is included and there is only one 2022 edition.",
+          "chars": 339
+        },
+        {
+          "key": "queries/4",
+          "title": "Query 4: I'm checking which stages of the 2022 tournament the match data holds, since only a handful of matches came back.",
+          "chars": 1014
+        }
+      ]
+    }
+  }
+]

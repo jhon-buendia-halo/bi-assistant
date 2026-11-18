@@ -54,6 +54,25 @@ export interface EvalRunDetails {
    * calls, so it can see the schema the agent worked from (agents.md 8.1).
    */
   judgeContext?: string;
+  /**
+   * The Insights Analyst shared-context target only (the shared-context
+   * experiment): what the run's board held and what its agents read from it.
+   * The runner copies it onto the case's result (`AssistantEvalCaseResult`),
+   * so a results file can count the reads.
+   */
+  runContext?: EvalRunContextUse;
+}
+
+/** One case's use of the run context board (the shared-context experiment). */
+export interface EvalRunContextUse {
+  /**
+   * Every `read_run_context` call, in order: the entry key, where the page
+   * started, how many characters it returned, and the step whose agent read
+   * it (`plan`, `analyse`, `write-answer`).
+   */
+  reads: { key: string; offset: number; chars: number; step: string }[];
+  /** Each entry the board held at the end of the run, with its size. */
+  entries: { key: string; title: string; chars: number }[];
 }
 
 /** The key of a target result's details (`runAssistantEvalCase` reads it). */

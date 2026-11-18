@@ -334,6 +334,37 @@ export const INSIGHTS_ANALYST_EVAL_SET: AssistantEvalSet = {
   cases: INSIGHTS_ANALYST_EVAL_CASES,
 };
 
+/**
+ * The target id of the shared-context experiment (approach B): the same
+ * agent and cases, run as the `answer-business-question-shared` workflow.
+ */
+export const INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_TARGET =
+  'insights-analyst-shared-context';
+
+/**
+ * The shared-context experiment's set: the Insights Analyst set's cases,
+ * checks and judge rubrics, each id prefixed `shared-` (case ids are unique
+ * suite-wide), on the shared-context target, so the two workflows can be
+ * compared case for case (`EVAL_SET=insights-analyst-shared-context`).
+ */
+export const INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_SET: AssistantEvalSet = {
+  id: 'insights-analyst-shared-context',
+  name: 'Insights Analyst: Shared context (experiment)',
+  description:
+    'The Insights Analyst questions run on the shared-context workflow: ' +
+    'the catalog columns, image notes and queries are published to a run ' +
+    'board the agents read on demand. Compare with the Insights Analyst ' +
+    'set. Select its PostgreSQL datasource with a saved dataset containing ' +
+    'the world_cup tables and views.',
+  fixtureId: INSIGHTS_ANALYST_EVAL_FIXTURE_ID,
+  agentKey: INSIGHTS_ANALYST_EVAL_AGENT_KEY,
+  target: INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_TARGET,
+  cases: INSIGHTS_ANALYST_EVAL_CASES.map((evalCase) => ({
+    ...evalCase,
+    id: `shared-${evalCase.id}`,
+  })),
+};
+
 /** The optional tools v2's orientation names, from its tool list. */
 export function insightsAnalystOrientationSelection(
   toolNames: readonly string[] = INSIGHTS_ANALYST_TOOL_NAMES,
@@ -352,6 +383,34 @@ export function insightsAnalystEvalTarget(
   toolNames: readonly string[] = INSIGHTS_ANALYST_TOOL_NAMES,
   wholeTurn: (agent: Agent) => Agent = (agent) => workflowTurnAgent(agent),
 ): EvalTarget {
+  return analystTarget(loadAgent, toolNames, wholeTurn, [
+    INSIGHTS_ANALYST_EVAL_SET,
+    INSIGHTS_ANALYST_EDGE_EVAL_SET,
+  ]);
+}
+
+/**
+ * The shared-context experiment's target (`INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_TARGET`):
+ * Insights Analyst's target, each case run as the shared-context workflow
+ * (`workflowTurnAgent` in `shared` mode). Same orientation, knowledge and
+ * judge as the baseline's, so only the workflow differs.
+ */
+export function insightsAnalystSharedContextEvalTarget(
+  sets: AssistantEvalSet[] = [INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_SET],
+  loadAgent: () => Agent = () => insightsAnalystAgent,
+  toolNames: readonly string[] = INSIGHTS_ANALYST_TOOL_NAMES,
+  wholeTurn: (agent: Agent) => Agent = (agent) =>
+    workflowTurnAgent(agent, undefined, 'shared'),
+): EvalTarget {
+  return analystTarget(loadAgent, toolNames, wholeTurn, sets);
+}
+
+function analystTarget(
+  loadAgent: () => Agent,
+  toolNames: readonly string[],
+  wholeTurn: (agent: Agent) => Agent,
+  sets: AssistantEvalSet[],
+): EvalTarget {
   let agent: Agent | undefined;
   let run: Agent | undefined;
   const selection = insightsAnalystOrientationSelection(toolNames);
@@ -366,7 +425,7 @@ export function insightsAnalystEvalTarget(
       run ??= wholeTurn((agent ??= loadAgent()));
       return run;
     },
-    sets: [INSIGHTS_ANALYST_EVAL_SET, INSIGHTS_ANALYST_EDGE_EVAL_SET],
+    sets,
     // The judge checks that every fact rests on a query, so it reads the
     // whole result the model saw, not its first 2,000 characters.
     judgeTraceChars: 12_000,

@@ -47,6 +47,7 @@ import type { SessionsService } from '../../modules/sessions/sessions.service';
 import {
   EVAL_CASE_CONTEXT_KEY,
   evalDetailsOf,
+  type EvalRunContextUse,
   type EvalRunDetails,
 } from './eval-details';
 
@@ -1094,6 +1095,11 @@ export interface AssistantEvalCaseResult {
   error?: string;
   /** Wall time for the question, in milliseconds. */
   durationMs: number;
+  /**
+   * The shared-context target only: the run context board's entries and
+   * reads (`EvalRunDetails.runContext`). Absent for every other target.
+   */
+  runContext?: EvalRunContextUse;
 }
 
 /** Tool payloads can be whole result sets; keep the trace readable. */
@@ -1807,6 +1813,7 @@ export async function runAssistantEvalCase(
       passed:
         checkResults.length > 0 && checkResults.every((check) => check.passed),
       durationMs: Date.now() - startedAt,
+      ...(details.runContext ? { runContext: details.runContext } : {}),
     };
   } catch (err) {
     return {

@@ -32,6 +32,7 @@ import {
 } from './assistant.evals';
 import type { SessionsService } from '../../modules/sessions/sessions.service';
 import type { AssistantEvalCase } from './assistant.evals';
+import { EVAL_DETAILS_KEY } from './eval-details';
 
 const BLOCK =
   'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):\n- [instruction] Coverage: only 2018 and 2022.';
@@ -90,6 +91,48 @@ describe('runAssistantEvalCase context (agents.md 4.1, 8.5)', () => {
       expect(contents).toHaveLength(1);
       expect(contents.join('\n')).not.toContain('Curated knowledge:');
     }
+  });
+});
+
+describe('runAssistantEvalCase result (the shared-context experiment)', () => {
+  /** One run whose target result carries `details`. */
+  function answeredWith(details?: Record<string, unknown>) {
+    (runEvals as jest.Mock).mockImplementationOnce(
+      (config: { onItemComplete: (item: unknown) => void }) => {
+        config.onItemComplete({
+          targetResult: {
+            text: 'An answer.',
+            ...(details ? { [EVAL_DETAILS_KEY]: details } : {}),
+          },
+          scorerResults: {},
+        });
+        return Promise.resolve({ scores: {} });
+      },
+    );
+  }
+
+  it("carries the run context board's reads and entries onto the result", async () => {
+    const runContext = {
+      reads: [
+        { key: 'queries/1', offset: 0, chars: 120, step: 'write-answer' },
+      ],
+      entries: [{ key: 'queries/1', title: 'Query 1: goals', chars: 120 }],
+    };
+    answeredWith({ steps: {}, runContext });
+    const result = await runAssistantEvalCase(evalCase, ['World Cup Core']);
+    expect(result.error).toBeUndefined();
+    expect(result.runContext).toEqual(runContext);
+    // So EVAL_RESULTS_FILE holds it.
+    expect(JSON.parse(JSON.stringify(result))).toMatchObject({ runContext });
+  });
+
+  it('adds no key for a target that reports no run context', async () => {
+    answeredWith({ steps: {} });
+    const result = await runAssistantEvalCase(evalCase, ['World Cup Core']);
+    expect(Object.keys(result)).not.toContain('runContext');
+    answeredWith();
+    const bare = await runAssistantEvalCase(evalCase, ['World Cup Core']);
+    expect(Object.keys(bare)).not.toContain('runContext');
   });
 });
 

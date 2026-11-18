@@ -35,7 +35,13 @@ jest.mock('../model-resolver', () => ({ resolveAgentModel: jest.fn() }));
 import type { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
 import { answerBusinessQuestionWorkflow } from '../workflows/answer-business-question.workflow';
+import { answerBusinessQuestionSharedWorkflow } from '../workflows/answer-business-question-shared.workflow';
 import type { AnalysisPlan } from '../workflows/answer-business-question.steps';
+import {
+  RUN_CONTEXT_KEY,
+  RunContextBoard,
+  runContextOf,
+} from '../workflows/run-context';
 import { EVAL_CASE_CONTEXT_KEY, evalDetailsOf } from './eval-details';
 import { endsOnClarifyingQuestion } from './insights-analyst-eval-checks';
 import {
@@ -531,5 +537,202 @@ describe('the v2 eval target runs the whole answer-business-question workflow (a
     expect(
       clarificationAnswer({ question: 'Which?', options: ['A', 'B'] }),
     ).toBe('Which?\n- A\n- B');
+  });
+});
+
+/** The board a step's call reads, from the case's context. */
+function boardOf(options: unknown): RunContextBoard {
+  const context = (options as { requestContext?: RequestContext })
+    .requestContext;
+  const board = context ? runContextOf(context) : undefined;
+  if (!board) throw new Error('no board');
+  return board;
+}
+
+/**
+ * The shared mode on the real shared workflow: each stand-in reads the
+ * board as its agent would through `read_run_context`.
+ */
+function setUpShared(
+  plan: AnalysisPlan,
+  results: ReturnType<typeof agentResult>[],
+) {
+  const base = setUp(plan, results);
+  // Analyse reads the entity's columns, then runs its query.
+  base.generate.mockImplementation((_input, options) => {
+    boardOf(options).read('catalog/world_cup.goals');
+    const result = results.shift()!;
+    (options['onStepFinish'] as (step: unknown) => void)(result.steps[0]);
+    return Promise.resolve(result);
+  });
+  const shared = {
+    plan: jest.fn((_input: unknown, options: unknown) => {
+      boardOf(options).read('catalog/world_cup.goals');
+      return Promise.resolve({ plan, stopped: false });
+    }),
+    writeAnswer: jest.fn((_input: unknown, options: unknown) => {
+      boardOf(options).read('queries/1', 0, 10);
+      return Promise.resolve({
+        answer: { headline: 'Kane: 6.', answer: 'Kane scored 6 goals.' },
+        stopped: false,
+      });
+    }),
+    analyseBlocks: jest.fn(
+      (input: { planBlock: string; hasEarlier?: boolean }) => [
+        'Shared index.',
+        input.planBlock,
+        ...(input.hasEarlier ? ['Read earlier-queries.'] : []),
+      ],
+    ),
+    tools: { list_run_context: {}, read_run_context: {} },
+  };
+  const parts: WorkflowTargetParts = {
+    ...base.parts,
+    workflow:
+      answerBusinessQuestionSharedWorkflow as unknown as WorkflowTargetParts['workflow'],
+    shared,
+  };
+  return {
+    ...base,
+    shared,
+    target: workflowTurnAgent(base.agent, parts, 'shared'),
+  };
+}
+
+describe('the shared-context mode runs answer-business-question-shared (the shared-context experiment)', () => {
+  it('runs on a fresh board: Plan and Write answer through their shared calls, Analyse with the index blocks and the read tools', async () => {
+    const { target, generate, parts, shared, options } = setUpShared(PLAN, [
+      agentResult([{ player: 'Kane', goals: 6 }]),
+    ]);
+    const result = (await target.generate(
+      'Who scored the most in 2018?',
+      options as never,
+    )) as unknown as Record<string, unknown>;
+
+    // The baseline's calls are not made.
+    expect(parts.plan).not.toHaveBeenCalled();
+    expect(parts.writeAnswer).not.toHaveBeenCalled();
+    const board = options.requestContext.get(RUN_CONTEXT_KEY);
+    expect(board).toBeInstanceOf(RunContextBoard);
+    expect(shared.plan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'Who scored the most in 2018?',
+        catalog: [expect.objectContaining({ entity: 'world_cup.goals' })],
+        board,
+      }),
+      expect.objectContaining({ requestContext: options.requestContext }),
+    );
+    // Analyse: the case's context, then the shared blocks; its own tools
+    // plus the board's.
+    const [, analyseOptions] = generate.mock.calls[0];
+    const context = (analyseOptions['context'] as { content: string }[]).map(
+      (entry) => entry.content,
+    );
+    expect(context[0]).toBe('Orientation.');
+    expect(context[1]).toBe('Shared index.');
+    expect(context[2]).toBe(
+      `Analysis plan for this turn:\n${JSON.stringify(PLAN)}`,
+    );
+    expect(analyseOptions['toolsets']).toEqual({ runContext: shared.tools });
+    // The case's 15 steps plus 3 for the board reads.
+    expect(analyseOptions['maxSteps']).toBe(18);
+    expect(shared.analyseBlocks).toHaveBeenCalledWith(
+      expect.objectContaining({ board, hasEarlier: false }),
+    );
+    // Write answer: the queries were published before its call.
+    expect(shared.writeAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        board,
+        queries: [
+          expect.objectContaining({ rows: [{ player: 'Kane', goals: 6 }] }),
+        ],
+      }),
+      expect.objectContaining({ requestContext: options.requestContext }),
+    );
+    expect(result['text']).toBe('Kane scored 6 goals.');
+
+    const details = evalDetailsOf(result);
+    // The judge reads the full catalog block, as in the baseline.
+    expect(details.judgeContext).toBe(
+      'Catalog loaded for this turn: 1 entity.\n- world_cup.goals (dataset: World Cup; ? columns)',
+    );
+    // Every read, with the step that made it, and every entry's size.
+    expect(details.runContext?.reads).toEqual([
+      expect.objectContaining({
+        key: 'catalog/world_cup.goals',
+        offset: 0,
+        step: 'plan',
+      }),
+      expect.objectContaining({
+        key: 'catalog/world_cup.goals',
+        offset: 0,
+        step: 'analyse',
+      }),
+      { key: 'queries/1', offset: 0, chars: 10, step: 'write-answer' },
+    ]);
+    expect(details.runContext?.entries.map((entry) => entry.key)).toEqual([
+      'catalog/world_cup.goals',
+      'queries/1',
+    ]);
+    for (const entry of details.runContext?.entries ?? []) {
+      expect(entry.chars).toBeGreaterThan(0);
+    }
+  });
+
+  it('publishes the earlier queries on a retry and points Analyse at them', async () => {
+    const { target, generate, shared, options } = setUpShared(PLAN, [
+      agentResult({ error: 'relation "goalz" does not exist' }),
+      agentResult([{ player: 'Kane', goals: 6 }]),
+    ]);
+    const result = (await target.generate(
+      'Who scored the most in 2018?',
+      options as never,
+    )) as unknown as Record<string, unknown>;
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(
+      shared.analyseBlocks.mock.calls.map(([input]) => input.hasEarlier),
+    ).toEqual([false, true]);
+    const retryContext = (
+      generate.mock.calls[1][1]['context'] as { content: string }[]
+    ).map((entry) => entry.content);
+    expect(retryContext).toContain('Read earlier-queries.');
+    // Not inline: the earlier queries are an entry of the board.
+    expect(retryContext.join('\n')).not.toContain('goalz');
+    const board = boardOf(options);
+    expect(board.get('earlier-queries')?.content).toContain(
+      'failed: relation "goalz" does not exist',
+    );
+    // The retry's 8 steps plus 3 for the board reads.
+    expect(generate.mock.calls[1][1]['maxSteps']).toBe(11);
+    expect(
+      evalDetailsOf(result).runContext?.reads.map((read) => read.step),
+    ).toEqual(['plan', 'analyse', 'analyse', 'write-answer']);
+  });
+
+  it('fails the case without its shared parts', async () => {
+    const { agent, parts, options } = setUp(PLAN, []);
+    const target = workflowTurnAgent(agent, parts, 'shared');
+    await expect(
+      target.generate('Who scored?', options as never),
+    ).rejects.toThrow('The shared-context target runs without its parts');
+  });
+
+  it('leaves the baseline without a board, read tools or run context details', async () => {
+    const { target, generate, options } = setUp(PLAN, [
+      agentResult([{ player: 'Kane', goals: 6 }]),
+    ]);
+    const result = (await target.generate(
+      'Who scored the most in 2018?',
+      options as never,
+    )) as unknown as Record<string, unknown>;
+    expect(options.requestContext.get(RUN_CONTEXT_KEY)).toBeUndefined();
+    expect(Object.keys(generate.mock.calls[0][1]).sort()).toEqual([
+      'context',
+      'maxSteps',
+      'onStepFinish',
+      'requestContext',
+      'returnScorerData',
+    ]);
+    expect(evalDetailsOf(result).runContext).toBeUndefined();
   });
 });

@@ -117,7 +117,7 @@ const STEP = Object.fromEntries(
 const SCHEMAS = ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS;
 
 /** What the engine hands the execute of a step with these schemas. */
-type StepParams<
+export type StepParams<
   S extends {
     input: z.ZodType;
     output: z.ZodType;
@@ -137,8 +137,11 @@ type StepParams<
  * Snapshots are written only while a run waits for an answer: Mastra
  * resumes a run from its snapshot (ADR-0043), and nothing else needs one.
  */
-const persistWhileWaiting = ({ workflowStatus }: { workflowStatus: string }) =>
-  workflowStatus === 'suspended';
+export const persistWhileWaiting = ({
+  workflowStatus,
+}: {
+  workflowStatus: string;
+}) => workflowStatus === 'suspended';
 
 /** The run's turn, or an error naming the step that needs it. */
 function runtimeOf(
@@ -152,7 +155,7 @@ function runtimeOf(
   return runtime;
 }
 
-const receiveQuestionStep = createStep({
+export const receiveQuestionStep = createStep({
   id: STEP['receive-question'].id,
   description: STEP['receive-question'].title,
   inputSchema: engineInputSchema(SCHEMAS['receive-question'].input),
@@ -169,7 +172,7 @@ const receiveQuestionStep = createStep({
   ),
 });
 
-const loadCatalogStep = createStep({
+export const loadCatalogStep = createStep({
   id: STEP['load-catalog'].id,
   description: STEP['load-catalog'].title,
   inputSchema: engineInputSchema(SCHEMAS['load-catalog'].input),
@@ -196,7 +199,7 @@ function optionalRuntimeOf(params: {
 // A follow-up over an earlier result (roadmap 1.28.8): a code gate, then at
 // most one result-explorer call. A run without earlier queries makes no
 // model call; a new question or a model error plans as before.
-const interpretFollowUpStep = createStep({
+export const interpretFollowUpStep = createStep({
   id: STEP['interpret-follow-up'].id,
   description: STEP['interpret-follow-up'].title,
   inputSchema: engineInputSchema(SCHEMAS['interpret-follow-up'].input),
@@ -679,7 +682,7 @@ const analysisPathWorkflow = createWorkflow({
 
 // A new question: the plan loop (Plan, asking the user first when it
 // needs to), then the analysis unless the turn was stopped.
-const questionPathWorkflow = createWorkflow({
+export const questionPathWorkflow = createWorkflow({
   id: 'question-path',
   // Interpret follow-up's output: Plan's input, with no follow-up.
   inputSchema: engineInputSchema(followedUpQuestionSchema),
@@ -718,7 +721,7 @@ const questionPathWorkflow = createWorkflow({
 
 // A follow-up over an earlier result (roadmap 1.28.8): its page, then the
 // answer written from it. Never waits.
-const exploreResultWorkflow = createWorkflow({
+export const exploreResultWorkflow = createWorkflow({
   id: 'explore-result',
   inputSchema: engineInputSchema(followedUpQuestionSchema),
   outputSchema: turnSummarySchema,
@@ -729,7 +732,7 @@ const exploreResultWorkflow = createWorkflow({
   .commit();
 
 /** Interpret follow-up's output, as a branch condition reads it. */
-function followedUp(inputData: unknown): {
+export function followedUp(inputData: unknown): {
   stopped: boolean;
   explore: boolean;
 } {

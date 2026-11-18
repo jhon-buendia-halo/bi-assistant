@@ -614,6 +614,7 @@ interface AssistantEvalCaseResult {
   toolCalls: { name: string; input?: string; output?: string; error?: string }[];   // JSON-encoded, truncated to ~2000 chars each
   passed: boolean;                                    // every scorer scored 1
   error?: string; durationMs: number;
+  runContext?: { reads: { key: string; offset: number; chars: number; step: string }[]; entries: { key: string; title: string; chars: number }[] };   // only the `insights-analyst-shared-context` target (agents.md 8.1 Run details)
 }
 ```
 

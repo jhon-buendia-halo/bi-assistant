@@ -1,0 +1,645 @@
+[
+  {
+    "id": "v2-ranking-ties-top-scorers-2018",
+    "question": "Who were the top scorers of the 2018 World Cup?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "names-all",
+        "description": "The answer names Griezmann, Perisic, Mandzukic",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 2",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "has-table",
+        "description": "The answer has a Markdown table of at least 3 rows",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: In the 2018 data three players tie for the most goals, 2 each: Antoine Griezmann, Ivan Perisic and Mario Mandzukic (own goals are not goals scored). Score pass=true only if the final answer names all three as the top scorers with 2 goals each and makes clear that they are tied (it does not crown one of them alone and does not leave one out). It may also list the players on 1 goal. Score pass=false if it names a single top scorer, a different count, or fewer than the three. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**Griezmann (France), Perisic (Croatia) and Mandzukic (Croatia) tie for top scorer with 2 goals each, but the data only covers the 2018 knockout matches from the quarter-finals on.**\n\n| Rank | Player | Team | Goals | Penalties | Own goals |\n|---|---|---|---|---|---|\n| 1 (tied) | Antoine Griezmann | France | 2 | 1 | 0 |\n| 1 (tied) | Ivan Perisic | Croatia | 2 | 0 | 0 |\n| 1 (tied) | Mario Mandzukic | Croatia | 2 | 0 | 1 |\n| 4 (tied) | 15 players | various | 1 | 0 | 0 |\n\nThe 15 players tied on 1 goal are Kramaric, Dele Alli, Cheryshev, Vida, Hazard, Maguire, De Bruyne, Trippier, Mbappe, Mario Fernandes, Pogba, Varane, Renato Augusto, Umtiti and Meunier. Fernandinho (Brazil) has 0 goals and 1 own goal.\n\n**How I got this**\n- I ranked every 2018 player in the goal totals by goals scored, keeping ties at the same rank.\n- I checked the goal records against the match scores. The 23 goal rows match the 23 goals in the 8 matches in the data, so nothing is missing within those matches.\n\n**Assumptions**\n- \"Top scorers\" means the players with the most goals in the tournament. Goals exclude own goals and include penalties.\n- Players on equal goals share a rank, and I listed penalties as a secondary detail.\n\n**Caveats**\n- The 2018 data holds only 8 matches: 4 quarter-finals, 2 semi-finals, the third-place match and the final. Group-stage and round-of-16 matches are not included.\n- This ranking is therefore the top scorers across those 8 matches, not necessarily the whole 2018 tournament.",
+    "toolCalls": [
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"sql-analysis\"\n}",
+        "output": "# SQL analysis patterns\n\nTools for this skill: the \"run_readonly_sql\" tool, the \"sample_rows\" tool.\n\nWrite one read-only SELECT (or WITH) per call, in the dialect of the entity's datasource, with fully-qualified names. Aggregate in the query; bring back the few rows the answer needs.\n\n## Top-N and ties\n- Rank with a window function, not a bare `ORDER BY … LIMIT n`: `RANK() OVER (ORDER BY total DESC) AS rnk`, then keep `rnk <= n` in an outer query. Every row tied at the cut-off comes back.\n- When the rows at the cut-off tie, say so and name every tied row (\"Brazil and Germany share second place with 18 wins\").\n- Order by the measure and by a name as a tie-breaker, so the order is stable.\n- \"Top per group\" (best team per tournament): `ROW_NUMBER()` or `RANK() OVER (PARTITION BY group ORDER BY measure DESC)`.\n\n## Ratios and shares\n- A ratio needs two different measures: `SUM(goals) * 1.0 / NULLIF(COUNT(DISTINCT match_id), 0)`. Never divide an expression by itself.\n- Multiply by `1.0` (or cast to a decimal) before dividing: integer division truncates in PostgreSQL and SQLite.\n- Guard the denominator with `NULLIF(…, 0)`.\n- A share of the total: `measure * 1.0 / SUM(measure) OVER ()`. Shares of one breakdown add up to 100 %; check that they do.\n- Say what the ratio is per (\"goals per match\", \"share of all goals\").\n\n## Period over period\n- Group by the period (year, quarter, month) and compare with `LAG(measure) OVER (ORDER BY period)`: change = `measure - LAG(…)`, growth = `(measure - LAG(…)) * 1.0 / NULLIF(LAG(…), 0)`.\n- Compare like with like: a partial period (the current year, a tournament still running) is not comparable to a full one. Say so, or compare the same span of both.\n- Truncate dates per dialect: PostgreSQL and Databricks `date_trunc('month', d)`; SQLite `strftime('%Y-%m', d)`.\n\n## Distinct counts and join fan-out\n- `COUNT(DISTINCT key)` counts entities; `COUNT(*)` counts rows. Pick the one the question means.\n- A join to a child table repeats the parent ro… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT tournament_year, COUNT(*) AS players, SUM(goals) AS total_goals FROM world_cup.world_cup.v_player_goal_totals GROUP BY tournament_year ORDER BY tournament_year\",\n  \"rationale\": \"I'm checking that 2018 is covered in the player goal totals before ranking scorers.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"players\",\n    \"total_goals\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"players\": \"19\",\n      \"total_goals\": \"21\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"players\": \"17\",\n      \"total_goals\": \"24\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT player, national_team, goals, penalties, own_goals, RANK() OVER (ORDER BY goals DESC) AS rnk FROM world_cup.world_cup.v_player_goal_totals WHERE tournament_year = 2018 ORDER BY goals DESC, penalties DESC, player\",\n  \"rationale\": \"I'm ranking every 2018 player by goals scored, keeping ties, to find the top scorers.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"player\",\n    \"national_team\",\n    \"goals\",\n    \"penalties\",\n    \"own_goals\",\n    \"rnk\"\n  ],\n  \"rows\": [\n    {\n      \"player\": \"Antoine Griezmann\",\n      \"national_team\": \"France\",\n      \"goals\": \"2\",\n      \"penalties\": \"1\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"1\"\n    },\n    {\n      \"player\": \"Ivan Perisic\",\n      \"national_team\": \"Croatia\",\n      \"goals\": \"2\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"1\"\n    },\n    {\n      \"player\": \"Mario Mandzukic\",\n      \"national_team\": \"Croatia\",\n      \"goals\": \"2\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"1\",\n      \"rnk\": \"1\"\n    },\n    {\n      \"player\": \"Andrej Kramaric\",\n      \"national_team\": \"Croatia\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"player\": \"Dele Alli\",\n      \"national_team\": \"England\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"player\": \"Denis Cheryshev\",\n      \"national_team\": \"Russia\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"player\": \"Domagoj Vida\",\n      \"national_team\": \"Croatia\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"player\": \"Eden Hazard\",\n      \"national_team\": \"Belgium\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"player\": \"Harry Maguire\",\n      \"national_team\": \"England\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"player\": \"Kevin De Bruyne\",\n      \"national_team\": \"Belgium\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"player\": \"Kieran Trippier\",\n      \"national_team\": \"England\",\n      \"goals\": \"1\",\n      \"penalties\": \"0\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"player\": \"Kylian Mbappe\",\n      \"national_… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, COUNT(*) AS goal_rows, COUNT(DISTINCT m.id) AS matches_with_goals, (SELECT COUNT(*) FROM world_cup.world_cup.matches m2 JOIN world_cup.world_cup.tournaments t2 ON t2.id = m2.tournament_id WHERE t2.tournament_year = 2018) AS matches_2018, (SELECT SUM(home_goals + away_goals) FROM world_cup.world_cup.matches m3 JOIN world_cup.world_cup.tournaments t3 ON t3.id = m3.tournament_id WHERE t3.tournament_year = 2018) AS match_goals_2018 FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m ON m.id = g.match_id JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2018 GROUP BY t.tournament_year\",\n  \"rationale\": \"I'm checking how much of the 2018 tournament the goal records cover, by comparing them with the match scores, so I can say whether the ranking is complete.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"goal_rows\",\n    \"matches_with_goals\",\n    \"matches_2018\",\n    \"match_goals_2018\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"goal_rows\": \"23\",\n      \"matches_with_goals\": \"8\",\n      \"matches_2018\": \"8\",\n      \"match_goals_2018\": \"23\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT stage, COUNT(*) AS matches FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2018 GROUP BY stage ORDER BY matches DESC\",\n  \"rationale\": \"I'm checking which stages of the 2018 tournament are in the data, so I can say what the ranking covers.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\"\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\"\n    },\n    {\n      \"stage\": \"final\",\n      \"matches\": \"1\"\n    },\n    {\n      \"stage\": \"third_place\",\n      \"matches\": \"1\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 40987
+  },
+  {
+    "id": "v2-share-penalty-goals-2022",
+    "question": "What share of the goals in the 2022 World Cup came from penalties?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 25 or 6 and 24",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The data holds 24 goals for 2022, 6 of them penalties scored during matches (not shootout kicks), so the share is 25%. Score pass=true only if the final answer gives the share as 25% (or 6 of 24, one quarter) and says what it counted (goals of the matches in the data, penalty shootouts not included, or the counts it used). Score pass=false if the share is a different figure, if it counts shootout kicks as goals, or if the figure is not backed by its queries. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**25% of the 2022 World Cup goals in the data (6 of 24) came from penalties, but the data covers only the quarter-finals onward.**\n\n| Goal type | Goals | Share |\n|---|---|---|\n| Open play | 13 | 54.2% |\n| Penalty | 6 | 25% |\n| Header | 5 | 20.8% |\n| **Total** | **24** | **100%** |\n\n**How I got this**\n- I counted every recorded goal for the 2022 tournament by goal type. Penalty goals were 6 of 24.\n- I checked the goal records against the match scores. Both total 24 goals across the 8 matches, so no goals are missing from the records.\n\n**Assumptions**\n- Penalty goals are goals recorded with the type \"penalty\". Penalty shootout kicks are not counted.\n- The 2022 World Cup is identified by tournament year 2022.\n\n**Caveats**\n- The data holds only 8 matches for 2022: 4 quarter-finals, 2 semi-finals, the final and the third-place match. Earlier stages are not in it, so the 25% describes these knockout matches only, not the whole tournament.",
+    "toolCalls": [
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"sql-analysis\"\n}",
+        "output": "# SQL analysis patterns\n\nTools for this skill: the \"run_readonly_sql\" tool, the \"sample_rows\" tool.\n\nWrite one read-only SELECT (or WITH) per call, in the dialect of the entity's datasource, with fully-qualified names. Aggregate in the query; bring back the few rows the answer needs.\n\n## Top-N and ties\n- Rank with a window function, not a bare `ORDER BY … LIMIT n`: `RANK() OVER (ORDER BY total DESC) AS rnk`, then keep `rnk <= n` in an outer query. Every row tied at the cut-off comes back.\n- When the rows at the cut-off tie, say so and name every tied row (\"Brazil and Germany share second place with 18 wins\").\n- Order by the measure and by a name as a tie-breaker, so the order is stable.\n- \"Top per group\" (best team per tournament): `ROW_NUMBER()` or `RANK() OVER (PARTITION BY group ORDER BY measure DESC)`.\n\n## Ratios and shares\n- A ratio needs two different measures: `SUM(goals) * 1.0 / NULLIF(COUNT(DISTINCT match_id), 0)`. Never divide an expression by itself.\n- Multiply by `1.0` (or cast to a decimal) before dividing: integer division truncates in PostgreSQL and SQLite.\n- Guard the denominator with `NULLIF(…, 0)`.\n- A share of the total: `measure * 1.0 / SUM(measure) OVER ()`. Shares of one breakdown add up to 100 %; check that they do.\n- Say what the ratio is per (\"goals per match\", \"share of all goals\").\n\n## Period over period\n- Group by the period (year, quarter, month) and compare with `LAG(measure) OVER (ORDER BY period)`: change = `measure - LAG(…)`, growth = `(measure - LAG(…)) * 1.0 / NULLIF(LAG(…), 0)`.\n- Compare like with like: a partial period (the current year, a tournament still running) is not comparable to a full one. Say so, or compare the same span of both.\n- Truncate dates per dialect: PostgreSQL and Databricks `date_trunc('month', d)`; SQLite `strftime('%Y-%m', d)`.\n\n## Distinct counts and join fan-out\n- `COUNT(DISTINCT key)` counts entities; `COUNT(*)` counts rows. Pick the one the question means.\n- A join to a child table repeats the parent ro… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, g.goal_type, COUNT(*) AS n FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m ON m.id = g.match_id JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022 GROUP BY t.tournament_year, g.goal_type ORDER BY n DESC\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking that 2022 is in the data and which kinds of goals are recorded, so I can tell penalty goals apart from the rest.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"goal_type\",\n    \"n\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2022,\n      \"goal_type\": \"open_play\",\n      \"n\": \"13\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"goal_type\": \"penalty\",\n      \"n\": \"6\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"goal_type\": \"header\",\n      \"n\": \"5\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT COUNT(*) AS matches, SUM(COALESCE(m.home_goals,0)+COALESCE(m.away_goals,0)) AS score_goals, (SELECT COUNT(*) FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches mm ON mm.id=g.match_id WHERE mm.tournament_id=t.id) AS goal_rows, (SELECT COUNT(DISTINCT g.match_id) FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches mm ON mm.id=g.match_id WHERE mm.tournament_id=t.id) AS matches_with_goal_rows FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id=m.tournament_id WHERE t.tournament_year=2022 GROUP BY t.id\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking that the goal records for 2022 add up to the goals in the match scores, so the share isn't skewed by missing records.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"matches\",\n    \"score_goals\",\n    \"goal_rows\",\n    \"matches_with_goal_rows\"\n  ],\n  \"rows\": [\n    {\n      \"matches\": \"8\",\n      \"score_goals\": \"24\",\n      \"goal_rows\": \"24\",\n      \"matches_with_goal_rows\": \"8\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT m.stage, COUNT(*) AS matches FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id=m.tournament_id WHERE t.tournament_year=2022 GROUP BY m.stage ORDER BY matches DESC\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking which stages of the 2022 tournament the data holds, since only 8 matches are recorded.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\"\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\"\n    },\n    {\n      \"stage\": \"final\",\n      \"matches\": \"1\"\n    },\n    {\n      \"stage\": \"third_place\",\n      \"matches\": \"1\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 35103
+  },
+  {
+    "id": "v2-compare-goals-per-match-2018-2022",
+    "question": "How did the average number of goals per match change between the 2018 and 2022 World Cups?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 2.875 and 3",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: In the data 2018 averages 2.875 goals per match (23 goals in 8 matches) and 2022 averages 3.0 (24 goals in 8 matches): a small rise, about 0.13 goals per match or 4%. Score pass=true only if the final answer gives both averages (rounded to at most 2 decimals), says the average went UP from 2018 to 2022 by about 0.1 goals, and states what the comparison covers (the 8 matches of each tournament in the data, or that it holds only knockout matches). Score pass=false if the direction or the averages are wrong, or the answer implies the data covers whole tournaments with their group stage. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**Average goals per match rose from 2.88 in 2018 to 3 in 2022 (+0.13, about +4.3%), but only for the 8 matches per tournament in the data.**\n\n| Tournament | Matches | Total goals | Avg goals per match |\n|---|---|---|---|\n| 2018 | 8 | 23 | 2.88 |\n| 2022 | 8 | 24 | 3 |\n| Change | 0 | +1 | +0.13 (+4.3%) |\n\nBy stage (matches / goals):\n\n| Stage | 2018 | 2022 |\n|---|---|---|\n| Quarter-finals | 4 / 11 | 4 / 10 |\n| Semi-finals | 2 / 4 | 2 / 5 |\n| Third place | 1 / 2 | 1 / 3 |\n| Final | 1 / 6 | 1 / 6 |\n\n**How I got this**\n- I added up home and away goals for every match of each tournament and divided by the number of matches.\n- I compared the two averages, then broke the goals down by stage to see what the figures cover.\n\n**Assumptions**\n- Goals come from each match's final score columns, so penalty shootout goals are not counted.\n- Matches are assigned to a tournament by its year (2018 or 2022).\n\n**Caveats**\n- The plan assumed all stages were included, but the data holds only quarter-finals, semi-finals, third-place matches and finals: 8 matches per tournament. No group-stage or round-of-16 matches appear, so these averages describe only those later-stage matches, not the full tournaments.\n- With 8 matches each, a single goal moves the average by 0.13, so the rise rests on one extra goal (23 vs 24).",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, t.name, COUNT(*) AS matches, SUM(m.home_goals + m.away_goals) AS total_goals, ROUND(AVG((m.home_goals + m.away_goals)::numeric), 3) AS avg_goals_per_match, SUM(CASE WHEN m.home_goals IS NULL OR m.away_goals IS NULL THEN 1 ELSE 0 END) AS null_scores FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year IN (2018, 2022) GROUP BY t.tournament_year, t.name ORDER BY t.tournament_year\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm counting matches and total goals for the 2018 and 2022 World Cups to compute the average goals per match for each and compare them.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"name\",\n    \"matches\",\n    \"total_goals\",\n    \"avg_goals_per_match\",\n    \"null_scores\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"name\": \"2018 FIFA World Cup\",\n      \"matches\": \"8\",\n      \"total_goals\": \"23\",\n      \"avg_goals_per_match\": \"2.875\",\n      \"null_scores\": \"0\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"matches\": \"8\",\n      \"total_goals\": \"24\",\n      \"avg_goals_per_match\": \"3.000\",\n      \"null_scores\": \"0\"\n    }\n  ],\n  \"warnings\": [\n    \"null_scores is 0 on every row, so it cannot explain any difference between them.\"\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, m.stage, COUNT(*) AS matches, SUM(m.home_goals + m.away_goals) AS total_goals FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year IN (2018, 2022) GROUP BY t.tournament_year, m.stage ORDER BY t.tournament_year, m.stage\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking which stages the matches in the data belong to, so I can say exactly what the averages cover.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"stage\",\n    \"matches\",\n    \"total_goals\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"final\",\n      \"matches\": \"1\",\n      \"total_goals\": \"6\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\",\n      \"total_goals\": \"11\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\",\n      \"total_goals\": \"4\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\",\n      \"total_goals\": \"2\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"final\",\n      \"matches\": \"1\",\n      \"total_goals\": \"6\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\",\n      \"total_goals\": \"10\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\",\n      \"total_goals\": \"5\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\",\n      \"total_goals\": \"3\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 159176
+  },
+  {
+    "id": "v2-out-of-coverage-2014-final",
+    "question": "Who won the 2014 World Cup, and what was the score of the final?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-none",
+        "description": "The answer never says Germany, Gotze, Mario Gotze",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The question asks about 2014, a tournament this dataset does not cover (it holds the 2018 and 2022 World Cups). Score pass=true only if the final answer clearly says the data has no 2014 tournament, states what the data does cover (2018 and 2022), and gives no 2014 winner, score or other fact from general knowledge. Offering to answer the same question for 2018 or 2022 is fine. Score pass=false if it names a 2014 winner or score, or does not say what is covered.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**The data does not include the 2014 World Cup, so I can't say who won or what the final score was.**\n\n| Tournament year | Champion | Runner-up |\n|---|---|---|\n| 2018 | France | Croatia |\n| 2022 | Argentina | France |\n\nThe only tournaments available are 2018 and 2022, shown above.\n\n**How I got this**\n- I looked for a 2014 tournament record and its champion, and found none.\n- I searched for 2014 final-stage matches and found no rows.\n- I listed every tournament in the data, which returned only 2018 and 2022.\n\n**Caveats**\n- The data has no 2014 tournament or match records, so the winner, final score, extra time and penalty shootout details for 2014 can't be answered from it.\n- If you want a final score, I can give it for 2018 or 2022 instead, but I haven't looked those up yet.",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, c.common_name AS champion, r.common_name AS runner_up FROM world_cup.world_cup.tournaments t LEFT JOIN world_cup.world_cup.teams c ON c.id = t.champion_team_id LEFT JOIN world_cup.world_cup.teams r ON r.id = t.runner_up_team_id WHERE t.tournament_year = 2014\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking whether the data includes the 2014 tournament and who is recorded as its champion and runner-up.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"champion\",\n    \"runner_up\"\n  ],\n  \"rows\": [],\n  \"note\": \"query returned 0 rows — verify filters/values before concluding\"\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT tournament_year, stage, home_team, away_team, home_goals, away_goals, home_penalties, away_penalties, winner, kicked_off_at FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2014 AND stage ILIKE '%final%' ORDER BY kicked_off_at\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm looking up the 2014 final and the other late-stage matches to get the score and confirm which one is the final.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"stage\",\n    \"home_team\",\n    \"away_team\",\n    \"home_goals\",\n    \"away_goals\",\n    \"home_penalties\",\n    \"away_penalties\",\n    \"winner\",\n    \"kicked_off_at\"\n  ],\n  \"rows\": [],\n  \"note\": \"query returned 0 rows — verify filters/values before concluding\"\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, t.name, c.common_name AS champion, r.common_name AS runner_up FROM world_cup.world_cup.tournaments t LEFT JOIN world_cup.world_cup.teams c ON c.id = t.champion_team_id LEFT JOIN world_cup.world_cup.teams r ON r.id = t.runner_up_team_id ORDER BY t.tournament_year\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm listing every tournament year in the data to see whether 2014 is covered and what is available instead.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"name\",\n    \"champion\",\n    \"runner_up\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"name\": \"2018 FIFA World Cup\",\n      \"champion\": \"France\",\n      \"runner_up\": \"Croatia\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"champion\": \"Argentina\",\n      \"runner_up\": \"France\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 17015
+  },
+  {
+    "id": "v2-clarify-most-dominant-team",
+    "question": "Which team was the most dominant?",
+    "scores": {
+      "check-did-not-call": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-did-not-call",
+        "description": "Checks that \"run_readonly_sql\" was NOT called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "ends-on-clarification",
+        "description": "The run ended on one clarifying question with 2-4 options",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The question (\"Which team was the most dominant?\") does not say what \"dominant\" means (results? goals? possession? shots?) nor which tournament, and each reading changes the analysis. Score pass=true only if the final answer is itself ONE clarifying question that offers 2-4 concrete options grounded in this World Cup data (a named measure such as matches won, goals or possession, or a tournament year in the data) and states no figure as if it were the answer. The options of the ask_clarification call are shown to the user as buttons: options given there count as offered even when the text only says to pick one; judge them as the options. Score pass=false if it answers with data, asks several questions, asks a vague open question with no concrete options, or invents a measure or scope the data does not have.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "How should 'most dominant' be measured?\n- Win rate — share of a team's matches won, from the winner and team columns in matches\n- Goal difference per match — average goals scored minus goals conceded, from home and away goals in matches\n- Titles won — number of tournaments a team finished as champion, from the champion column in tournaments\n- Single-tournament dominance — the largest goal difference in one tournament, from matches grouped by tournament",
+    "toolCalls": [],
+    "passed": true,
+    "durationMs": 9736
+  },
+  {
+    "id": "v2-no-clarify-total-goals",
+    "question": "How many goals were scored at the World Cup?",
+    "scores": {
+      "check-did-not-call": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-did-not-call",
+        "description": "Checks that \"ask_clarification\" was NOT called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 47 or 23 and 24",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The question does not name a tournament, but the natural reading is every tournament in the data, which holds 47 goals (23 in 2018 and 24 in 2022). Score pass=true only if the final answer gives 47 in total (or 23 and 24 per tournament), states the scope it assumed (the 2018 and 2022 tournaments in the data) and does not ask the user a question instead of answering. Score pass=false if it asks which tournament the user means, gives another total, or does not say what it covered. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**47 goals were scored in the World Cup matches in the data (23 in 2018 and 24 in 2022).**\n\nThe data covers only two tournaments, 2018 and 2022, and only part of each. So 47 is the total for those matches, not for every World Cup.\n\n| Tournament | Matches in data | Goals |\n|---|---|---|\n| 2018 | 8 | 23 |\n| 2022 | 8 | 24 |\n| **Total** | **16** | **47** |\n\nThe matches in the data are the quarter-finals (4 per tournament), semi-finals (2), third-place match (1) and final (1).\n\n**How I got this**\n- I added up the home and away goals in every match, tournament by tournament. No match had a missing score.\n- I cross-checked against the separate record of individual goals. It has 47 goal rows across the same 16 matches, which matches the total.\n\n**Assumptions**\n- The question is read as an all-time total across every tournament in the data, with a per-tournament breakdown for context.\n- Own goals are counted in the match total. The goal records include 2 own-goal rows.\n\n**Caveats**\n- The data contains only the 2018 and 2022 tournaments, and only their quarter-final, semi-final, third-place and final matches. No other stages appear, so goals from any other matches or tournaments are not in the 47.",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, COUNT(*) AS matches, SUM(m.home_goals + m.away_goals) AS goals_from_matches, SUM(CASE WHEN m.home_goals IS NULL OR m.away_goals IS NULL THEN 1 ELSE 0 END) AS null_score_matches FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year ORDER BY t.tournament_year\",\n  \"rationale\": \"I'm adding up the goals recorded in every match, tournament by tournament, to get the total and see which World Cups the data covers.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"matches\",\n    \"goals_from_matches\",\n    \"null_score_matches\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"matches\": \"8\",\n      \"goals_from_matches\": \"23\",\n      \"null_score_matches\": \"0\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"matches\": \"8\",\n      \"goals_from_matches\": \"24\",\n      \"null_score_matches\": \"0\"\n    }\n  ],\n  \"warnings\": [\n    \"null_score_matches is 0 on every row, so it cannot explain any difference between them.\"\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT COUNT(*) AS goal_rows, COUNT(DISTINCT match_id) AS matches_with_goals, SUM(CASE WHEN goal_type ILIKE '%own%' THEN 1 ELSE 0 END) AS own_goal_rows FROM world_cup.world_cup.goals\",\n  \"rationale\": \"I'm counting the individual goal records as a cross-check against the match scores.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"goal_rows\",\n    \"matches_with_goals\",\n    \"own_goal_rows\"\n  ],\n  \"rows\": [\n    {\n      \"goal_rows\": \"47\",\n      \"matches_with_goals\": \"16\",\n      \"own_goal_rows\": \"2\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, m.stage, COUNT(*) AS matches, SUM(m.home_goals + m.away_goals) AS goals FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year, m.stage ORDER BY t.tournament_year, m.stage\",\n  \"rationale\": \"I'm checking which stages of each tournament are in the data, so I can say exactly what the total covers.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"stage\",\n    \"matches\",\n    \"goals\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"final\",\n      \"matches\": \"1\",\n      \"goals\": \"6\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\",\n      \"goals\": \"11\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\",\n      \"goals\": \"4\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\",\n      \"goals\": \"2\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"final\",\n      \"matches\": \"1\",\n      \"goals\": \"6\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\",\n      \"goals\": \"10\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\",\n      \"goals\": \"5\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\",\n      \"goals\": \"3\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 25453
+  },
+  {
+    "id": "v2-value-lookup-free-kick-goals",
+    "question": "How many goals came directly from free kicks, and who scored them?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "uses-stored-value",
+        "description": "A successful query uses the stored value 'free_kick'",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "names-all",
+        "description": "The answer names Trippier",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 1",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The data holds exactly one goal of type free kick: Kieran Trippier (England, 2018, minute 5). Score pass=true only if the final answer says one goal came directly from a free kick and names Kieran Trippier. An empty-handed \"no free-kick goals\" answer, or a different count or scorer, is pass=false. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**Only 1 goal came directly from a free kick: Kieran Trippier (England), 2018 semi-final.**\n\n| Scorer | Team | Tournament | Stage | Minute |\n|---|---|---|---|---|\n| Kieran Trippier | England | 2018 | Semi-final | 5 |\n\n**How I got this**\n- I checked the goal types recorded in the data (open play, header, penalty, own goal, free kick) and picked the one labelled free kick.\n- I listed every goal with that type and looked up the scorer, team, tournament and match stage.\n\n**Assumptions**\n- Direct free-kick goals are those recorded with the goal type \"free_kick\"; penalties, own goals, headers and open-play goals are excluded.\n\n**Caveats**\n- The dataset holds 47 goals in total (24 open play, 13 header, 7 penalty, 2 own goal, 1 free kick), so this answer covers only the goals recorded in it.",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT goal_type, COUNT(*) AS n FROM world_cup.world_cup.goals GROUP BY goal_type ORDER BY n DESC\",\n  \"rationale\": \"I'm checking which goal types exist in the data so I can pick the one that means a direct free-kick goal.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"goal_type\",\n    \"n\"\n  ],\n  \"rows\": [\n    {\n      \"goal_type\": \"open_play\",\n      \"n\": \"24\"\n    },\n    {\n      \"goal_type\": \"header\",\n      \"n\": \"13\"\n    },\n    {\n      \"goal_type\": \"penalty\",\n      \"n\": \"7\"\n    },\n    {\n      \"goal_type\": \"own_goal\",\n      \"n\": \"2\"\n    },\n    {\n      \"goal_type\": \"free_kick\",\n      \"n\": \"1\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT p.full_name, t.common_name AS team, tr.tournament_year, m.stage, g.minute, g.stoppage_minute\\nFROM world_cup.world_cup.goals g\\nLEFT JOIN world_cup.world_cup.players p ON p.id = g.scorer_player_id\\nLEFT JOIN world_cup.world_cup.teams t ON t.id = g.scoring_team_id\\nLEFT JOIN world_cup.world_cup.matches m ON m.id = g.match_id\\nLEFT JOIN world_cup.world_cup.tournaments tr ON tr.id = m.tournament_id\\nWHERE g.goal_type = 'free_kick'\",\n  \"rationale\": \"I'm listing the free-kick goal with its scorer, team and tournament to answer who scored it.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"full_name\",\n    \"team\",\n    \"tournament_year\",\n    \"stage\",\n    \"minute\",\n    \"stoppage_minute\"\n  ],\n  \"rows\": [\n    {\n      \"full_name\": \"Kieran Trippier\",\n      \"team\": \"England\",\n      \"tournament_year\": 2018,\n      \"stage\": \"semi_final\",\n      \"minute\": 5,\n      \"stoppage_minute\": 0\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 21433
+  },
+  {
+    "id": "v2-multistep-top-team-top-scorer-2022",
+    "question": "Which team scored the most goals in the 2022 World Cup, and who was its leading scorer?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "names-all",
+        "description": "The answer names Argentina, Messi",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 8 and 4",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: In the 2022 data Argentina scored the most goals (8, ahead of France with 7) and its leading scorer is Lionel Messi with 4 goals. Score pass=true only if the final answer names Argentina with 8 goals and Lionel Messi with 4 goals. Score pass=false if either part is missing or wrong. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**Argentina scored the most goals in the 2022 data (8), and Lionel Messi was its leading scorer with 4, but the data only covers the quarter-finals onward.**\n\n| Team | Goals |\n|---|---|\n| Argentina | 8 |\n| France | 7 |\n| Croatia | 3 |\n| Morocco | 2 |\n| Netherlands | 2 |\n| Brazil | 1 |\n| England | 1 |\n| Portugal | 0 |\n\nArgentina's goals by player:\n\n| Player | Goals |\n|---|---|\n| Lionel Messi | 4 |\n| Julian Alvarez | 2 |\n| Angel Di Maria | 1 |\n| Nahuel Molina | 1 |\n\nMessi is the sole top scorer for Argentina, 2 goals ahead of Alvarez.\n\n**How I got this**\n- I added up goals per team in the 2022 tournament from the goal log. The totals match the scores in the match records for every team.\n- I then counted Argentina's goals by scorer.\n\n**Assumptions**\n- Team goals come from the goal log by scoring team. Penalty shootout kicks are not counted as goals.\n\n**Caveats**\n- The data holds only 8 matches for 2022: four quarter-finals, two semi-finals, the third-place match and the final. The group stage and round of 16 are not included. So Argentina and Messi lead among these matches only, and the full-tournament totals could differ.\n- I left out how Messi's goals were scored (penalty or open play). The check I ran for penalties also matched open-play goals, so its penalty counts are unreliable.",
+    "toolCalls": [
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"sql-analysis\"\n}",
+        "output": "# SQL analysis patterns\n\nTools for this skill: the \"run_readonly_sql\" tool, the \"sample_rows\" tool.\n\nWrite one read-only SELECT (or WITH) per call, in the dialect of the entity's datasource, with fully-qualified names. Aggregate in the query; bring back the few rows the answer needs.\n\n## Top-N and ties\n- Rank with a window function, not a bare `ORDER BY … LIMIT n`: `RANK() OVER (ORDER BY total DESC) AS rnk`, then keep `rnk <= n` in an outer query. Every row tied at the cut-off comes back.\n- When the rows at the cut-off tie, say so and name every tied row (\"Brazil and Germany share second place with 18 wins\").\n- Order by the measure and by a name as a tie-breaker, so the order is stable.\n- \"Top per group\" (best team per tournament): `ROW_NUMBER()` or `RANK() OVER (PARTITION BY group ORDER BY measure DESC)`.\n\n## Ratios and shares\n- A ratio needs two different measures: `SUM(goals) * 1.0 / NULLIF(COUNT(DISTINCT match_id), 0)`. Never divide an expression by itself.\n- Multiply by `1.0` (or cast to a decimal) before dividing: integer division truncates in PostgreSQL and SQLite.\n- Guard the denominator with `NULLIF(…, 0)`.\n- A share of the total: `measure * 1.0 / SUM(measure) OVER ()`. Shares of one breakdown add up to 100 %; check that they do.\n- Say what the ratio is per (\"goals per match\", \"share of all goals\").\n\n## Period over period\n- Group by the period (year, quarter, month) and compare with `LAG(measure) OVER (ORDER BY period)`: change = `measure - LAG(…)`, growth = `(measure - LAG(…)) * 1.0 / NULLIF(LAG(…), 0)`.\n- Compare like with like: a partial period (the current year, a tournament still running) is not comparable to a full one. Say so, or compare the same span of both.\n- Truncate dates per dialect: PostgreSQL and Databricks `date_trunc('month', d)`; SQLite `strftime('%Y-%m', d)`.\n\n## Distinct counts and join fan-out\n- `COUNT(DISTINCT key)` counts entities; `COUNT(*)` counts rows. Pick the one the question means.\n- A join to a child table repeats the parent ro… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.id, t.name, t.tournament_year, (SELECT COUNT(*) FROM world_cup.world_cup.matches m WHERE m.tournament_id = t.id) AS matches FROM world_cup.world_cup.tournaments t ORDER BY t.tournament_year DESC\",\n  \"rationale\": \"I'm checking that the 2022 World Cup is in the data and how many matches it holds before ranking teams.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"name\",\n    \"tournament_year\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022,\n      \"matches\": \"8\"\n    },\n    {\n      \"id\": \"1\",\n      \"name\": \"2018 FIFA World Cup\",\n      \"tournament_year\": 2018,\n      \"matches\": \"8\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"WITH g AS (\\n  SELECT g.scoring_team_id AS team_id, COUNT(*) AS goals\\n  FROM world_cup.world_cup.goals g\\n  JOIN world_cup.world_cup.matches m ON m.id = g.match_id\\n  JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\\n  WHERE t.tournament_year = 2022\\n  GROUP BY g.scoring_team_id\\n), mg AS (\\n  SELECT team_id, SUM(goals) AS match_goals FROM (\\n    SELECT m.home_team_id AS team_id, m.home_goals AS goals FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id=m.tournament_id WHERE t.tournament_year=2022\\n    UNION ALL\\n    SELECT m.away_team_id, m.away_goals FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id=m.tournament_id WHERE t.tournament_year=2022\\n  ) x GROUP BY team_id\\n)\\nSELECT tm.common_name, g.goals AS goals_table, mg.match_goals AS matches_table,\\n  RANK() OVER (ORDER BY mg.match_goals DESC) AS rnk\\nFROM mg JOIN world_cup.world_cup.teams tm ON tm.id = mg.team_id\\nLEFT JOIN g ON g.team_id = mg.team_id\\nORDER BY mg.match_goals DESC, tm.common_name\",\n  \"rationale\": \"I'm totalling goals per team in the 2022 tournament from two sources, the goal log and the match scores, to rank teams and confirm the totals agree.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"common_name\",\n    \"goals_table\",\n    \"matches_table\",\n    \"rnk\"\n  ],\n  \"rows\": [\n    {\n      \"common_name\": \"Argentina\",\n      \"goals_table\": \"8\",\n      \"matches_table\": \"8\",\n      \"rnk\": \"1\"\n    },\n    {\n      \"common_name\": \"France\",\n      \"goals_table\": \"7\",\n      \"matches_table\": \"7\",\n      \"rnk\": \"2\"\n    },\n    {\n      \"common_name\": \"Croatia\",\n      \"goals_table\": \"3\",\n      \"matches_table\": \"3\",\n      \"rnk\": \"3\"\n    },\n    {\n      \"common_name\": \"Morocco\",\n      \"goals_table\": \"2\",\n      \"matches_table\": \"2\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"common_name\": \"Netherlands\",\n      \"goals_table\": \"2\",\n      \"matches_table\": \"2\",\n      \"rnk\": \"4\"\n    },\n    {\n      \"common_name\": \"Brazil\",\n      \"goals_table\": \"1\",\n      \"matches_table\": \"1\",\n      \"rnk\": \"6\"\n    },\n    {\n      \"common_name\": \"England\",\n      \"goals_table\": \"1\",\n      \"matches_table\": \"1\",\n      \"rnk\": \"6\"\n    },\n    {\n      \"common_name\": \"Portugal\",\n      \"goals_table\": null,\n      \"matches_table\": \"0\",\n      \"rnk\": \"8\"\n    }\n  ],\n  \"warnings\": [\n    \"goals_table is missing on 1 of 8 rows, so those rows are grouped under a blank value.\"\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT m.match_number, m.stage, h.common_name AS home, a.common_name AS away, m.home_goals, m.away_goals FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id=m.tournament_id JOIN world_cup.world_cup.teams h ON h.id=m.home_team_id JOIN world_cup.world_cup.teams a ON a.id=m.away_team_id WHERE t.tournament_year=2022 ORDER BY m.match_number\",\n  \"rationale\": \"I'm listing the 2022 matches held in the data to see which stages are covered.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"match_number\",\n    \"stage\",\n    \"home\",\n    \"away\",\n    \"home_goals\",\n    \"away_goals\"\n  ],\n  \"rows\": [\n    {\n      \"match_number\": 57,\n      \"stage\": \"quarter_final\",\n      \"home\": \"Croatia\",\n      \"away\": \"Brazil\",\n      \"home_goals\": 1,\n      \"away_goals\": 1\n    },\n    {\n      \"match_number\": 58,\n      \"stage\": \"quarter_final\",\n      \"home\": \"Netherlands\",\n      \"away\": \"Argentina\",\n      \"home_goals\": 2,\n      \"away_goals\": 2\n    },\n    {\n      \"match_number\": 59,\n      \"stage\": \"quarter_final\",\n      \"home\": \"Morocco\",\n      \"away\": \"Portugal\",\n      \"home_goals\": 1,\n      \"away_goals\": 0\n    },\n    {\n      \"match_number\": 60,\n      \"stage\": \"quarter_final\",\n      \"home\": \"England\",\n      \"away\": \"France\",\n      \"home_goals\": 1,\n      \"away_goals\": 2\n    },\n    {\n      \"match_number\": 61,\n      \"stage\": \"semi_final\",\n      \"home\": \"Argentina\",\n      \"away\": \"Croatia\",\n      \"home_goals\": 3,\n      \"away_goals\": 0\n    },\n    {\n      \"match_number\": 62,\n      \"stage\": \"semi_final\",\n      \"home\": \"France\",\n      \"away\": \"Morocco\",\n      \"home_goals\": 2,\n      \"away_goals\": 0\n    },\n    {\n      \"match_number\": 63,\n      \"stage\": \"third_place\",\n      \"home\": \"Croatia\",\n      \"away\": \"Morocco\",\n      \"home_goals\": 2,\n      \"away_goals\": 1\n    },\n    {\n      \"match_number\": 64,\n      \"stage\": \"final\",\n      \"home\": \"Argentina\",\n      \"away\": \"France\",\n      \"home_goals\": 3,\n      \"away_goals\": 3\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT p.full_name, COUNT(*) AS goals, COUNT(*) FILTER (WHERE g.goal_type ILIKE '%pen%') AS penalty_goals, COUNT(*) FILTER (WHERE g.goal_type ILIKE '%own%') AS own_goals, RANK() OVER (ORDER BY COUNT(*) DESC) AS rnk\\nFROM world_cup.world_cup.goals g\\nJOIN world_cup.world_cup.matches m ON m.id = g.match_id\\nJOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\\nJOIN world_cup.world_cup.teams tm ON tm.id = g.scoring_team_id\\nLEFT JOIN world_cup.world_cup.players p ON p.id = g.scorer_player_id\\nWHERE t.tournament_year = 2022 AND tm.common_name = 'Argentina'\\nGROUP BY p.full_name\\nORDER BY goals DESC, p.full_name\",\n  \"rationale\": \"I'm counting Argentina's 2022 goals by player to find its leading scorer and check for ties or own goals.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"full_name\",\n    \"goals\",\n    \"penalty_goals\",\n    \"own_goals\",\n    \"rnk\"\n  ],\n  \"rows\": [\n    {\n      \"full_name\": \"Lionel Messi\",\n      \"goals\": \"4\",\n      \"penalty_goals\": \"4\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"1\"\n    },\n    {\n      \"full_name\": \"Julian Alvarez\",\n      \"goals\": \"2\",\n      \"penalty_goals\": \"2\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"2\"\n    },\n    {\n      \"full_name\": \"Angel Di Maria\",\n      \"goals\": \"1\",\n      \"penalty_goals\": \"1\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"3\"\n    },\n    {\n      \"full_name\": \"Nahuel Molina\",\n      \"goals\": \"1\",\n      \"penalty_goals\": \"1\",\n      \"own_goals\": \"0\",\n      \"rnk\": \"3\"\n    }\n  ],\n  \"warnings\": [\n    \"own_goals is 0 on every row, so it cannot explain any difference between them.\"\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT g.goal_type, COUNT(*) AS n FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m ON m.id=g.match_id JOIN world_cup.world_cup.tournaments t ON t.id=m.tournament_id WHERE t.tournament_year=2022 GROUP BY g.goal_type ORDER BY n DESC\",\n  \"rationale\": \"Every Argentina goal showed as a penalty, which looks wrong, so I'm checking the goal types recorded for 2022 before describing how Messi scored.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"goal_type\",\n    \"n\"\n  ],\n  \"rows\": [\n    {\n      \"goal_type\": \"open_play\",\n      \"n\": \"13\"\n    },\n    {\n      \"goal_type\": \"penalty\",\n      \"n\": \"6\"\n    },\n    {\n      \"goal_type\": \"header\",\n      \"n\": \"5\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 119681
+  },
+  {
+    "id": "v2-ranking-ties-busiest-stadium",
+    "question": "Which stadium hosted the most matches?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "names-all",
+        "description": "The answer names Lusail, Saint Petersburg",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 3",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: Two stadiums tie for the most matches in the data, 3 each: Lusail Stadium and Saint Petersburg Stadium. Score pass=true only if the final answer names both with 3 matches each and makes clear they are tied. Score pass=false if it names one stadium alone, a different count, or a stadium that does not host the most. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**Lusail Stadium (Lusail) and Saint Petersburg Stadium (Saint Petersburg) are tied for the most matches hosted, with 3 each.**\n\n| Stadium | City | Matches hosted |\n|---|---|---|\n| Lusail Stadium | Lusail | 3 |\n| Saint Petersburg Stadium | Saint Petersburg | 3 |\n| Al Bayt Stadium | Al Khor | 2 |\n| Fisht Stadium | Sochi | 2 |\n| Luzhniki Stadium | Moscow | 2 |\n| Al Thumama Stadium | Doha | 1 |\n| Education City Stadium | Al Rayyan | 1 |\n| Khalifa International Stadium | Al Rayyan | 1 |\n| Nizhny Novgorod Stadium | Nizhny Novgorod | 1 |\n\n**How I got this**\n- I counted the match records at each stadium, combining rows for the same stadium name and city.\n- All 16 matches in the data have a stadium recorded, so none were left out. The data covers 2 tournaments and 9 stadiums.\n- Each stadium appears in only one tournament in this data.\n\n**Assumptions**\n- \"Most matches\" is the count of match records per stadium, across all stages of the tournament.\n- Ties for the top spot are all reported.\n\n**Caveats**\n- The dataset holds only 16 matches across 2 tournaments, so this ranking reflects just those matches.",
+    "toolCalls": [
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"sql-analysis\"\n}",
+        "output": "# SQL analysis patterns\n\nTools for this skill: the \"run_readonly_sql\" tool, the \"sample_rows\" tool.\n\nWrite one read-only SELECT (or WITH) per call, in the dialect of the entity's datasource, with fully-qualified names. Aggregate in the query; bring back the few rows the answer needs.\n\n## Top-N and ties\n- Rank with a window function, not a bare `ORDER BY … LIMIT n`: `RANK() OVER (ORDER BY total DESC) AS rnk`, then keep `rnk <= n` in an outer query. Every row tied at the cut-off comes back.\n- When the rows at the cut-off tie, say so and name every tied row (\"Brazil and Germany share second place with 18 wins\").\n- Order by the measure and by a name as a tie-breaker, so the order is stable.\n- \"Top per group\" (best team per tournament): `ROW_NUMBER()` or `RANK() OVER (PARTITION BY group ORDER BY measure DESC)`.\n\n## Ratios and shares\n- A ratio needs two different measures: `SUM(goals) * 1.0 / NULLIF(COUNT(DISTINCT match_id), 0)`. Never divide an expression by itself.\n- Multiply by `1.0` (or cast to a decimal) before dividing: integer division truncates in PostgreSQL and SQLite.\n- Guard the denominator with `NULLIF(…, 0)`.\n- A share of the total: `measure * 1.0 / SUM(measure) OVER ()`. Shares of one breakdown add up to 100 %; check that they do.\n- Say what the ratio is per (\"goals per match\", \"share of all goals\").\n\n## Period over period\n- Group by the period (year, quarter, month) and compare with `LAG(measure) OVER (ORDER BY period)`: change = `measure - LAG(…)`, growth = `(measure - LAG(…)) * 1.0 / NULLIF(LAG(…), 0)`.\n- Compare like with like: a partial period (the current year, a tournament still running) is not comparable to a full one. Say so, or compare the same span of both.\n- Truncate dates per dialect: PostgreSQL and Databricks `date_trunc('month', d)`; SQLite `strftime('%Y-%m', d)`.\n\n## Distinct counts and join fan-out\n- `COUNT(DISTINCT key)` counts entities; `COUNT(*)` counts rows. Pick the one the question means.\n- A join to a child table repeats the parent ro… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT v.name, v.city, COUNT(*) AS matches_hosted, COUNT(DISTINCT v.tournament_id) AS tournaments, COUNT(DISTINCT v.id) AS venue_rows\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.venues v ON v.id = m.venue_id\\nGROUP BY v.name, v.city\\nORDER BY matches_hosted DESC, v.name\\nLIMIT 15\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm counting how many matches were played at each stadium, combining the same stadium across tournaments, to find the one that hosted the most.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"name\",\n    \"city\",\n    \"matches_hosted\",\n    \"tournaments\",\n    \"venue_rows\"\n  ],\n  \"rows\": [\n    {\n      \"name\": \"Lusail Stadium\",\n      \"city\": \"Lusail\",\n      \"matches_hosted\": \"3\",\n      \"tournaments\": \"1\",\n      \"venue_rows\": \"1\"\n    },\n    {\n      \"name\": \"Saint Petersburg Stadium\",\n      \"city\": \"Saint Petersburg\",\n      \"matches_hosted\": \"3\",\n      \"tournaments\": \"1\",\n      \"venue_rows\": \"1\"\n    },\n    {\n      \"name\": \"Al Bayt Stadium\",\n      \"city\": \"Al Khor\",\n      \"matches_hosted\": \"2\",\n      \"tournaments\": \"1\",\n      \"venue_rows\": \"1\"\n    },\n    {\n      \"name\": \"Fisht Stadium\",\n      \"city\": \"Sochi\",\n      \"matches_hosted\": \"2\",\n      \"tournaments\": \"1\",\n      \"venue_rows\": \"1\"\n    },\n    {\n      \"name\": \"Luzhniki Stadium\",\n      \"city\": \"Moscow\",\n      \"matches_hosted\": \"2\",\n      \"tournaments\": \"1\",\n      \"venue_rows\": \"1\"\n    },\n    {\n      \"name\": \"Al Thumama Stadium\",\n      \"city\": \"Doha\",\n      \"matches_hosted\": \"1\",\n      \"tournaments\": \"1\",\n      \"venue_rows\": \"1\"\n    },\n    {\n      \"name\": \"Education City Stadium\",\n      \"city\": \"Al Rayyan\",\n      \"matches_hosted\": \"1\",\n      \"tournaments\": \"1\",\n      \"venue_rows\": \"1\"\n    },\n    {\n      \"name\": \"Khalifa International Stadium\",\n      \"city\": \"Al Rayyan\",\n      \"matches_hosted\": \"1\",\n      \"tournaments\": \"1\",\n      \"venue_rows\": \"1\"\n    },\n    {\n      \"name\": \"Nizhny Novgorod Stadium\",\n      \"city\": \"Nizhny Novgorod\",\n      \"matches_hosted\": \"1\",\n      \"tournaments\": \"1\",\n      \"venue_rows\": \"1\"\n    }\n  ],\n  \"warnings\": [\n    \"tournaments is 1 on every row, so it cannot explain any difference between them.\",\n    \"venue_rows is 1 on every row, so it cannot explain any difference between them.\"\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT COUNT(*) AS total_matches, COUNT(venue_id) AS with_venue, COUNT(DISTINCT tournament_id) AS tournaments, (SELECT COUNT(*) FROM world_cup.world_cup.venues) AS venue_rows FROM world_cup.world_cup.matches\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm checking how many matches have a stadium recorded and how many tournaments the data covers, so the ranking is complete.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"total_matches\",\n    \"with_venue\",\n    \"tournaments\",\n    \"venue_rows\"\n  ],\n  \"rows\": [\n    {\n      \"total_matches\": \"16\",\n      \"with_venue\": \"16\",\n      \"tournaments\": \"2\",\n      \"venue_rows\": \"9\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 18817
+  },
+  {
+    "id": "v2-coverage-group-stage-wins",
+    "question": "How many group-stage matches did Argentina win in 2022?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The data holds only the knockout stages (quarter-finals, semi-finals, third place and final) of 2018 and 2022: there are no group-stage matches. Score pass=true only if the final answer says the data has no group-stage matches, so it cannot give a group-stage win count (saying 0 as if it were a result does not count as stating it), and says what the data does hold (the knockout stage). Offering the knockout record is fine, if backed by its queries. Score pass=false if it states a group-stage win count as a fact, or does not say that the group stage is missing.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**The data can't answer this: it holds no 2022 group-stage matches, so there is no count of Argentina's group-stage wins.**\n\nFor 2022, the match data covers only these stages:\n\n| Stage | Matches |\n|---|---|\n| Quarter-final | 4 |\n| Semi-final | 2 |\n| Third place | 1 |\n| Final | 1 |\n\n**How I got this**\n- I listed the stages recorded for the 2022 tournament in the match results view. None of them is a group stage.\n- I then checked the underlying matches table in case the view had dropped group-stage rows. That table has the same four stages for 2022 and for 2018, and no group-stage matches for either.\n\n**Caveats**\n- Match numbers for 2022 in the results view run only from 57 to 64, so the earlier matches are not in the data.\n- I did not estimate or fill in a figure, because Argentina's group-stage results are not in the data available.",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT stage, COUNT(*) AS matches, MIN(match_number) AS min_no, MAX(match_number) AS max_no FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2022 GROUP BY stage ORDER BY min_no\",\n  \"rationale\": \"I'm checking which stage labels exist for the 2022 tournament so I filter on the right one for the group stage.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\",\n    \"matches\",\n    \"min_no\",\n    \"max_no\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\",\n      \"min_no\": 57,\n      \"max_no\": 60\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\",\n      \"min_no\": 61,\n      \"max_no\": 62\n    },\n    {\n      \"stage\": \"third_place\",\n      \"matches\": \"1\",\n      \"min_no\": 63,\n      \"max_no\": 63\n    },\n    {\n      \"stage\": \"final\",\n      \"matches\": \"1\",\n      \"min_no\": 64,\n      \"max_no\": 64\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.tournament_year, m.stage, COUNT(*) AS matches FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year, m.stage ORDER BY t.tournament_year, m.stage\",\n  \"rationale\": \"I'm checking whether group-stage matches exist for any tournament in the underlying match table, in case the results view leaves them out.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"stage\",\n    \"matches\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"final\",\n      \"matches\": \"1\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\"\n    },\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"final\",\n      \"matches\": \"1\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"third_place\",\n      \"matches\": \"1\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 93128
+  },
+  {
+    "id": "v2-retry-reuses-attempt-1",
+    "question": "How many goals were scored at the 2022 World Cup?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "sql-succeeded",
+        "description": "At least one run_readonly_sql call succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "states-numbers",
+        "description": "The answer states 24",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "retry-no-rediscovery",
+        "description": "The retry of Analyse lists and describes no entity again",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The data holds 24 goals for the 2022 World Cup. Score pass=true only if the final answer gives 24 as the number of goals of the 2022 World Cup in the data. It may say which part of the tournament the data covers when its queries show it, and any breakdown it gives must come from its queries. Score pass=false if it gives no figure or another figure for the goals in the data, a breakdown no query returned, or presents a query of an earlier attempt that timed out as a problem with the data. The answer must also open with a one-line headline that states the key figure, rest every figure and fact on the queries it ran (anything that only general knowledge of football would supply fails), and not dump a schema or SQL into the answer.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**The data shows 24 goals at the 2022 World Cup, but it only holds 8 matches (quarter-finals to the final), so this may not be the full tournament total.**\n\n| Stage | Matches | Goals |\n|---|---|---|\n| Quarter-final | 4 | 10 |\n| Semi-final | 2 | 5 |\n| Third place | 1 | 3 |\n| Final | 1 | 6 |\n| **Total** | **8** | **24** |\n\n**How I got this**\n- I added the home and away goals across every 2022 World Cup match in the data, which gives 24 goals over 8 matches.\n- I cross-checked this against the individual goal records. They also show 24 goals across the same 8 matches, so the two sources agree.\n- The goal records split into 13 open play, 6 penalty and 5 header goals.\n\n**Assumptions**\n- Goals scored in extra time are included. Penalty shootout kicks are excluded because they are stored separately.\n- Own goals would count toward the match total. None appear in the goal records for 2022.\n\n**Caveats**\n- The stage breakdown shows only quarter-final, semi-final, third-place and final matches for 2022. No group-stage or round-of-16 matches are in the data, so 24 is the total for the matches available, not necessarily for the whole tournament.",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.id, t.name, t.tournament_year, COUNT(m.id) AS matches, SUM(m.home_goals + m.away_goals) AS total_goals FROM world_cup.world_cup.tournaments t LEFT JOIN world_cup.world_cup.matches m ON m.tournament_id = t.id WHERE t.tournament_year = 2022 GROUP BY t.id, t.name, t.tournament_year\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm adding up the home and away goals across every 2022 World Cup match to get the tournament total.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"name\",\n    \"tournament_year\",\n    \"matches\",\n    \"total_goals\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022,\n      \"matches\": \"8\",\n      \"total_goals\": \"24\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT COUNT(*) AS goal_rows, COUNT(DISTINCT g.match_id) AS matches_with_goals, SUM(CASE WHEN g.goal_type ILIKE '%own%' THEN 1 ELSE 0 END) AS own_goal_rows FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m ON m.id = g.match_id JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm cross-checking the total against the individual goal records for 2022 to make sure the two sources agree.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"goal_rows\",\n    \"matches_with_goals\",\n    \"own_goal_rows\"\n  ],\n  \"rows\": [\n    {\n      \"goal_rows\": \"24\",\n      \"matches_with_goals\": \"8\",\n      \"own_goal_rows\": \"0\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT stage, COUNT(*) AS matches, SUM(home_goals + away_goals) AS goals FROM world_cup.world_cup.v_match_results WHERE tournament_year = 2022 GROUP BY stage ORDER BY goals DESC\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\",\n  \"rationale\": \"I'm breaking the 2022 total down by stage to confirm all stages are covered and the pieces add up.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\",\n    \"matches\",\n    \"goals\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"quarter_final\",\n      \"matches\": \"4\",\n      \"goals\": \"10\"\n    },\n    {\n      \"stage\": \"final\",\n      \"matches\": \"1\",\n      \"goals\": \"6\"\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"matches\": \"2\",\n      \"goals\": \"5\"\n    },\n    {\n      \"stage\": \"third_place\",\n      \"matches\": \"1\",\n      \"goals\": \"3\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT g.goal_type, COUNT(*) AS goals FROM world_cup.world_cup.goals g WHERE g.match_id IN (SELECT m.id FROM world_cup.world_cup.matches m WHERE m.tournament_id = 2) GROUP BY g.goal_type ORDER BY goals DESC\",\n  \"rationale\": \"I'm re-running the goal-type breakdown for 2022 in a lighter form, since the earlier attempt timed out. It confirms how the 24 goal records split by type.\",\n  \"datasourceId\": \"8d78d334-2927-4546-88e8-427a078c9f85\"\n}",
+        "output": "{\n  \"columns\": [\n    \"goal_type\",\n    \"goals\"\n  ],\n  \"rows\": [\n    {\n      \"goal_type\": \"open_play\",\n      \"goals\": \"13\"\n    },\n    {\n      \"goal_type\": \"penalty\",\n      \"goals\": \"6\"\n    },\n    {\n      \"goal_type\": \"header\",\n      \"goals\": \"5\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 92327
+  }
+]

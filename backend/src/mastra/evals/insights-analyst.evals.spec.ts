@@ -28,8 +28,11 @@ import { findFixture } from '../../modules/testing-data/fixtures/registry';
 import type { DatasetSnapshot } from '../tool-services';
 import {
   INSIGHTS_ANALYST_EVAL_SET,
+  INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_SET,
+  INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_TARGET,
   insightsAnalystEvalTarget,
   insightsAnalystOrientationSelection,
+  insightsAnalystSharedContextEvalTarget,
 } from './insights-analyst.evals';
 import { EVAL_SETS, agentForCases, evalTargetFor, hasEvals } from './eval-sets';
 import { selectCliEvalCases } from './eval-cli-selection';
@@ -118,10 +121,12 @@ describe('insights-analyst registration', () => {
     const ownCases = EVAL_SETS.filter(
       (set) => set.agentKey === 'insights-analyst',
     );
-    // Its World Cup set and the Edge Cases set (story 1.29.6).
+    // Its World Cup set, the Edge Cases set (story 1.29.6) and the
+    // shared-context experiment's set.
     expect(ownCases.map((set) => set.id).sort()).toEqual([
       'insights-analyst',
       'insights-analyst-edge',
+      'insights-analyst-shared-context',
     ]);
   });
 
@@ -144,7 +149,11 @@ describe('insights-analyst registration', () => {
   });
 
   it('builds its target through evalTargetFor', () => {
-    const target = evalTargetFor('insights-analyst');
+    // Its cases name the set: the experiment's set runs on another target.
+    const target = evalTargetFor(
+      'insights-analyst',
+      INSIGHTS_ANALYST_EVAL_SET.cases.map((c) => c.id),
+    );
     expect(target.agentKey).toBe('insights-analyst');
     // The Edge Cases set (story 1.29.6) runs on the same target.
     expect(target.sets[0]).toBe(INSIGHTS_ANALYST_EVAL_SET);
@@ -155,6 +164,81 @@ describe('insights-analyst registration', () => {
     expect((target.agent as unknown as { id: string }).id).toBe(
       'insights-analyst',
     );
+  });
+});
+
+describe('insights-analyst-shared-context set (the shared-context experiment)', () => {
+  const shared = INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_SET;
+  const ids = () => shared.cases.map((c) => c.id);
+
+  it('holds the Insights Analyst cases, ids prefixed shared-, the rest the same', () => {
+    expect(shared.agentKey).toBe('insights-analyst');
+    expect(shared.fixtureId).toBe(INSIGHTS_ANALYST_EVAL_SET.fixtureId);
+    expect(shared.target).toBe('insights-analyst-shared-context');
+    expect(EVAL_SETS).toContain(shared);
+    expect(ids()).toEqual(
+      INSIGHTS_ANALYST_EVAL_SET.cases.map((c) => `shared-${c.id}`),
+    );
+    shared.cases.forEach((evalCase, index) => {
+      const own = INSIGHTS_ANALYST_EVAL_SET.cases[index];
+      expect({ ...evalCase, id: own.id }).toEqual(own);
+    });
+  });
+
+  it('is selected by EVAL_SET=insights-analyst-shared-context and runs on its own target', () => {
+    expect(
+      selectCliEvalCases(
+        { EVAL_SET: 'insights-analyst-shared-context' },
+        EVAL_SETS,
+      ),
+    ).toEqual({ caseIds: ids() });
+    expect(agentForCases(ids())).toEqual({ agentKey: 'insights-analyst' });
+    const target = evalTargetFor('insights-analyst', ids());
+    expect(target.agentKey).toBe('insights-analyst');
+    expect(target.sets).toEqual([shared]);
+    expect(target.judgeTraceChars).toBe(12_000);
+    expect(target.runTarget).not.toBe(target.agent);
+  });
+
+  it('keeps the baseline cases on the baseline target', () => {
+    const baseline = evalTargetFor(
+      'insights-analyst',
+      INSIGHTS_ANALYST_EVAL_SET.cases.map((c) => c.id),
+    );
+    expect(baseline.sets.map((set) => set.id)).not.toContain(shared.id);
+  });
+
+  it("refuses a run of all the agent's questions: they span two targets", () => {
+    expect(() => evalTargetFor('insights-analyst')).toThrow(
+      'run one set at a time',
+    );
+  });
+
+  it('runs each case in shared mode on the same agent, orientation and knowledge as the baseline', async () => {
+    const agent = { id: 'insights-analyst' } as unknown as Agent;
+    const wholeTurn = jest.fn(
+      () => ({ id: 'shared-turn' }) as unknown as Agent,
+    );
+    const target = insightsAnalystSharedContextEvalTarget(
+      [shared],
+      () => agent,
+      undefined,
+      wholeTurn,
+    );
+    expect(target.runTarget).toEqual({ id: 'shared-turn' });
+    expect(wholeTurn).toHaveBeenCalledWith(agent);
+    expect(target.agent).toBe(agent);
+    const baseline = insightsAnalystEvalTarget(() => agent);
+    expect(target.sendsKnowledge).toBe(baseline.sendsKnowledge);
+    const input = {
+      datasets: ['World Cup'],
+      snapshots: [SNAPSHOT],
+      requestContext: new RequestContext(),
+    };
+    expect(await target.orientation(input)).toBe(
+      await baseline.orientation(input),
+    );
+    expect(INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_TARGET).toBe(shared.target);
   });
 });
 

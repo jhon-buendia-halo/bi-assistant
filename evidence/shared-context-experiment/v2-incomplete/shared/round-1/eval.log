@@ -1,0 +1,214 @@
+Model: claude-sonnet-5-5 on custom endpoint 127.0.0.1:8412 (Anthropic-compatible, with API key)
+[33m[Nest] 66395  - [39m11/18/2026, 4:37:55 AM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column g.own_goal does not exist[39m
+[33m[Nest] 66395  - [39m11/18/2026, 4:37:58 AM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column g.own_goal does not exist — SQL: SELECT g.scorer_player_id, p.id, count(*) AS n, count(*) FILTER (WHERE g.own_goal) AS og FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.players p ON p.id = g.scorer_player_id JOIN world_cup.world_cup.matches m ON m.id = g.match_id JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id WHERE t.year = 2018 GROUP BY g.scorer_player_id, p.id ORDER BY n DESC LIMIT 5[39m
+[33m[Nest] 66395  - [39m11/18/2026, 4:38:05 AM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column m.match_date does not exist[39m
+[33m[Nest] 66395  - [39m11/18/2026, 4:38:07 AM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column m.match_date does not exist — SQL: SELECT (SELECT name FROM world_cup.world_cup.players WHERE id = 17) AS player17, count(*) AS matches_2018, min(m.match_date) AS first_match, max(m.match_date) AS last_match, (SELECT count(*) FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m2 ON m2.id = g.match_id JOIN world_cup.world_cup.tournaments t2 ON t2.id = m2.tournament_id WHERE t2.tournament_year = 2018) AS goal_rows_2018 FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_i…[39m
+[31mERROR[39m [2026-11-18 04:55:40.062 -0500] (Mastra): [36mError executing step workflow.answer-path.step.write-answer: ModelTimeoutError: Write answer failed: the model did not answer within 5 minutes. The model may be busy or rate limited: run again later.
+    at /Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:167:50
+    at withDeadline (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:137:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async guardedCall (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:171:20)
+    at async writeAnswerFrom (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/answer-business-question.agents.js:161:16)
+    at async tagged (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/evals/insights-analyst-workflow-target.js:182:24)
+    at async Object.writeAnswer (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/evals/insights-analyst-workflow-target.js:297:23)
+    at async /Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/answer-business-question.workflow.js:254:37
+    at async Object.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/workflow-contract.js:293:24)
+    at async engine.executeStepWithRetry.retries.retries (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2903:18)
+    at async DefaultExecutionEngine.executeStepWithRetry (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:3484:14)
+    at async executeStep (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2888:26)
+    at async executeEntry (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:1914:50)
+    at async DefaultExecutionEngine.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:3776:17)
+    at async Run._start (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:6192:18)
+    at async Workflow.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:5696:15)[39m
+    [35mtrace_id[39m: "28b902f02ffc0e3061601337d8e6c22c"
+    [35mspan_id[39m: "6d70ddf2d760f772"
+FAIL  shared-v2-ranking-ties-top-scorers-2018  (1078171ms)
+      error: Failed to run experiment: Error generating result from target
+[31mERROR[39m [2026-11-18 04:55:40.065 -0500] (Mastra): [36mError executing step workflow.analysis-path.step.answer-path: undefined[39m
+    [35mtrace_id[39m: "28b902f02ffc0e3061601337d8e6c22c"
+    [35mspan_id[39m: "9e9e753e19314146"
+[31mERROR[39m [2026-11-18 04:55:40.066 -0500] (Mastra): [36mError executing step workflow.question-path.step.analysis-path: undefined[39m
+    [35mtrace_id[39m: "28b902f02ffc0e3061601337d8e6c22c"
+    [35mspan_id[39m: "9fb74f32731bec82"
+[31mERROR[39m [2026-11-18 04:55:40.232 -0500] (Mastra): [36mError executing step workflow.answer-business-question-shared.step.question-path: undefined[39m
+[31mERROR[39m [2026-11-18 05:12:06.972 -0500] (Mastra): [36mError executing step workflow.plan-round.step.plan: ModelTimeoutError: Plan failed: the model did not answer within 5 minutes. The model may be busy or rate limited: run again later.
+    at /Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:167:50
+    at withDeadline (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:137:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async guardedCall (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:171:20)
+    at async planFrom (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/answer-business-question.agents.js:96:16)
+    at async tagged (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/evals/insights-analyst-workflow-target.js:182:24)
+    at async /Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/answer-business-question.workflow.js:107:35
+    at async Object.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/workflow-contract.js:293:24)
+    at async engine.executeStepWithRetry.retries.retries (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2903:18)
+    at async DefaultExecutionEngine.executeStepWithRetry (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:3484:14)
+    at async executeStep (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2888:26)
+    at async executeEntry (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:1914:50)
+    at async DefaultExecutionEngine.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:3776:17)
+    at async Run._start (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:6192:18)
+    at async Workflow.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:5696:15)
+    at async engine.executeStepWithRetry.retries.retries (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2903:18)[39m
+    [35mtrace_id[39m: "a4e802698a216751a5fc5f248a26dee6"
+    [35mspan_id[39m: "04d5dbdfa88d25e4"
+FAIL  shared-v2-share-penalty-goals-2022  (986975ms)
+      error: Failed to run experiment: Error generating result from target
+[31mERROR[39m [2026-11-18 05:12:06.974 -0500] (Mastra): [36mError executing step workflow.question-path.step.plan-round: undefined[39m
+    [35mtrace_id[39m: "a4e802698a216751a5fc5f248a26dee6"
+    [35mspan_id[39m: "1a5e2289a4a5c316"
+[31mERROR[39m [2026-11-18 05:12:06.976 -0500] (Mastra): [36mError executing step workflow.answer-business-question-shared.step.question-path: undefined[39m
+[31mERROR[39m [2026-11-18 05:28:14.171 -0500] (Mastra): [36mError executing step workflow.plan-round.step.plan: ModelTimeoutError: Plan failed: the model did not answer within 5 minutes. The model may be busy or rate limited: run again later.
+    at /Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:167:50
+    at withDeadline (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:137:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async guardedCall (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:171:20)
+    at async planFrom (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/answer-business-question.agents.js:96:16)
+    at async tagged (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/evals/insights-analyst-workflow-target.js:182:24)
+    at async /Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/answer-business-question.workflow.js:107:35
+    at async Object.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/workflow-contract.js:293:24)
+    at async engine.executeStepWithRetry.retries.retries (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2903:18)
+    at async DefaultExecutionEngine.executeStepWithRetry (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:3484:14)
+    at async executeStep (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2888:26)
+    at async executeEntry (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:1914:50)
+    at async DefaultExecutionEngine.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:3776:17)
+    at async Run._start (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:6192:18)
+    at async Workflow.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:5696:15)
+    at async engine.executeStepWithRetry.retries.retries (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2903:18)[39m
+    [35mtrace_id[39m: "8b6478a0ebb26c4e328cd9c203041bc3"
+    [35mspan_id[39m: "7b4b0022dc9724fd"
+FAIL  shared-v2-compare-goals-per-match-2018-2022  (966972ms)
+      error: Failed to run experiment: Error generating result from target
+[31mERROR[39m [2026-11-18 05:28:14.172 -0500] (Mastra): [36mError executing step workflow.question-path.step.plan-round: undefined[39m
+    [35mtrace_id[39m: "8b6478a0ebb26c4e328cd9c203041bc3"
+    [35mspan_id[39m: "5465548af4042fa6"
+[31mERROR[39m [2026-11-18 05:28:14.173 -0500] (Mastra): [36mError executing step workflow.answer-business-question-shared.step.question-path: undefined[39m
+[31mERROR[39m [2026-11-18 05:38:31.913 -0500] (Mastra): [36mError executing step workflow.plan-round.step.plan: ModelTimeoutError: Plan failed: the model did not answer within 5 minutes. The model may be busy or rate limited: run again later.
+    at /Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:167:50
+    at withDeadline (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:137:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async guardedCall (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/model-call.js:171:20)
+    at async planFrom (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/answer-business-question.agents.js:96:16)
+    at async tagged (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/evals/insights-analyst-workflow-target.js:182:24)
+    at async /Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/answer-business-question.workflow.js:107:35
+    at async Object.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/dist/mastra/workflows/workflow-contract.js:293:24)
+    at async engine.executeStepWithRetry.retries.retries (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2903:18)
+    at async DefaultExecutionEngine.executeStepWithRetry (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:3484:14)
+    at async executeStep (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2888:26)
+    at async executeEntry (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:1914:50)
+    at async DefaultExecutionEngine.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:3776:17)
+    at async Run._start (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:6192:18)
+    at async Workflow.execute (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:5696:15)
+    at async engine.executeStepWithRetry.retries.retries (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2903:18)[39m
+    [35mtrace_id[39m: "2409c1aee6fbcde6d9b44ebe1ea32748"
+    [35mspan_id[39m: "6958fdfaef2a810b"
+FAIL  shared-v2-out-of-coverage-2014-final  (617984ms)
+      error: Failed to run experiment: Error generating result from target
+[31mERROR[39m [2026-11-18 05:38:31.915 -0500] (Mastra): [36mError executing step workflow.question-path.step.plan-round: undefined[39m
+    [35mtrace_id[39m: "2409c1aee6fbcde6d9b44ebe1ea32748"
+    [35mspan_id[39m: "614230a80caf560f"
+[31mERROR[39m [2026-11-18 05:38:31.916 -0500] (Mastra): [36mError executing step workflow.answer-business-question-shared.step.question-path: undefined[39m
+[33mWARN[39m [2026-11-18 05:38:40.704 -0500] (Mastra): [36mFailed to save score for scorer check-did-not-call:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-did-not-call not found",
+      "stack":
+          Error: Scorer with id check-did-not-call not found
+              at Mastra.getScorerById (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-18 05:38:40.705 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  shared-v2-clarify-most-dominant-team  (13358ms)
+      pass check-did-not-call: Checks that "run_readonly_sql" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass ends-on-clarification: The run ended on one clarifying question with 2-4 options
+      pass llm-judge: LLM judge: The question ("Which team was the most dominant?") does not say what "dominant" means (results? goals? posses
+[33mWARN[39m [2026-11-18 05:39:16.566 -0500] (Mastra): [36mFailed to save score for scorer check-did-not-call:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-did-not-call not found",
+      "stack":
+          Error: Scorer with id check-did-not-call not found
+              at Mastra.getScorerById (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-18 05:39:16.566 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  shared-v2-no-clarify-total-goals  (937722ms)
+      pass check-did-not-call: Checks that "ask_clarification" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass sql-succeeded: At least one run_readonly_sql call succeeded
+      pass states-numbers: The answer states 47 or 23 and 24
+      pass llm-judge: LLM judge: The question does not name a tournament, but the natural reading is every tournament in the data, which holds
+[33m[Nest] 66395  - [39m11/18/2026, 5:54:37 AM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column t.name does not exist[39m
+[33m[Nest] 66395  - [39m11/18/2026, 5:54:39 AM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column t.name does not exist — SQL: SELECT g.id, p.full_name AS scorer, t.name AS team, g.match_id, g.minute, g.stoppage_minute FROM world_cup.world_cup.goals g LEFT JOIN world_cup.world_cup.players p ON p.id = g.scorer_player_id LEFT JOIN world_cup.world_cup.teams t ON t.id = g.scoring_team_id WHERE g.goal_type = 'free_kick'[39m
+[33mWARN[39m [2026-11-18 05:54:50.476 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  shared-v2-value-lookup-free-kick-goals  (1893000ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass result-set-match: Result set matches expectedSql (primary correctness signal)
+      pass sql-succeeded: At least one run_readonly_sql call succeeded
+      pass uses-stored-value: A successful query uses the stored value 'free_kick'
+      pass names-all: The answer names Trippier
+      pass states-numbers: The answer states 1
+      pass llm-judge: LLM judge: The data holds exactly one goal of type free kick: Kieran Trippier (England, 2018, minute 5). Score pass=true

@@ -7,7 +7,10 @@ import {
 import {
   INSIGHTS_ANALYST_EVAL_AGENT_KEY,
   INSIGHTS_ANALYST_EVAL_SET,
+  INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_SET,
+  INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_TARGET,
   insightsAnalystEvalTarget,
+  insightsAnalystSharedContextEvalTarget,
 } from './insights-analyst.evals';
 import {
   DATA_READINESS_EVAL_SET,
@@ -62,6 +65,7 @@ export const EVAL_SETS: AssistantEvalSet[] = [
   INSIGHTS_ANALYST_EDGE_EVAL_SET,
   IMAGE_READER_EVAL_SET,
   INSIGHTS_ANALYST_EVAL_SET,
+  INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_SET,
   QUERY_EXPLAINER_EVAL_SET,
   RESULT_EXPLORER_EVAL_SET,
   RESULT_EXPLORER_EDGE_EVAL_SET,
@@ -98,6 +102,8 @@ const EVAL_TARGET_FACTORIES: Record<
   [ANSWER_WRITER_EVAL_TARGET]: (sets) => answerWriterEvalTarget(sets),
   [IMAGE_READER_EVAL_TARGET]: (sets) => imageReaderEvalTarget(sets),
   [READINESS_WORKFLOW_EVAL_TARGET]: (sets) => readinessWorkflowEvalTarget(sets),
+  [INSIGHTS_ANALYST_SHARED_CONTEXT_EVAL_TARGET]: (sets) =>
+    insightsAnalystSharedContextEvalTarget(sets),
 };
 
 /** The target id a set runs on: its `target`, else its agent's key. */

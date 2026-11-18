@@ -1,0 +1,130 @@
+Model: claude-sonnet-5-5 on custom endpoint 127.0.0.1:8411 (Anthropic-compatible, with API key)
+[33mWARN[39m [2026-11-18 04:38:17.122 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  v2-ranking-ties-top-scorers-2018  (3668270ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass result-set-match: Result set matches expectedSql (primary correctness signal)
+      pass sql-succeeded: At least one run_readonly_sql call succeeded
+      pass names-all: The answer names Griezmann, Perisic, Mandzukic
+      pass states-numbers: The answer states 2
+      pass has-table: The answer has a Markdown table of at least 3 rows
+      pass llm-judge: LLM judge: In the 2018 data three players tie for the most goals, 2 each: Antoine Griezmann, Ivan Perisic and Mario Mand
+[33mWARN[39m [2026-11-18 05:39:09.496 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  v2-share-penalty-goals-2022  (22975ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass sql-succeeded: At least one run_readonly_sql call succeeded
+      pass states-numbers: The answer states 25 or 6 and 24
+      pass llm-judge: LLM judge: The data holds 24 goals for 2022, 6 of them penalties scored during matches (not shootout kicks), so the shar
+[33mWARN[39m [2026-11-18 05:54:38.525 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  v2-compare-goals-per-match-2018-2022  (929710ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass sql-succeeded: At least one run_readonly_sql call succeeded
+      pass states-numbers: The answer states 2.875 and 3
+      pass llm-judge: LLM judge: In the data 2018 averages 2.875 goals per match (23 goals in 8 matches) and 2022 averages 3.0 (24 goals in 8 
+[33mWARN[39m [2026-11-18 06:26:02.568 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  v2-out-of-coverage-2014-final  (1881358ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass states-none: The answer never says Germany, Gotze, Mario Gotze
+      pass llm-judge: LLM judge: The question asks about 2014, a tournament this dataset does not cover (it holds the 2018 and 2022 World Cups
+[33mWARN[39m [2026-11-18 06:26:08.541 -0500] (Mastra): [36mFailed to save score for scorer check-did-not-call:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-did-not-call not found",
+      "stack":
+          Error: Scorer with id check-did-not-call not found
+              at Mastra.getScorerById (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-18 06:26:08.541 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/jhonbuendia/conductor/workspaces/bi-assistant/roseau/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  v2-clarify-most-dominant-team  (7757ms)
+      pass check-did-not-call: Checks that "run_readonly_sql" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass ends-on-clarification: The run ended on one clarifying question with 2-4 options
+      pass llm-judge: LLM judge: The question ("Which team was the most dominant?") does not say what "dominant" means (results? goals? posses
