@@ -36,14 +36,18 @@ import {
 import type { ExplorableQuery } from '../../modules/sessions/query-evidence/explorable-queries';
 import type { ExplorerSpec } from '../agents/result-explorer.prompts';
 import {
+  ANALYSE_VISUAL_LINE,
+  ANSWER_REQUEST_CAP,
   ANSWER_ROWS_CAP,
   PLAN_FIRST_LINE,
   PLAN_INSTRUCTIONS,
   WRITE_ANSWER_FIRST_LINE,
   WRITE_ANSWER_INSTRUCTIONS,
+  WRITE_ANSWER_VISUAL_LINE,
   analysePlanBlock,
   analyseSystemBlocks,
   planMessages,
+  visualCued,
   writeAnswerRequest,
 } from './answer-business-question.prompts';
 
@@ -1391,6 +1395,107 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
           imageNotes: NOTES,
         }),
       ).toEqual(['CAT', 'PLAN', NOTES]);
+    });
+
+    // The lines that tell Analyse and Write answer a visual follows: only
+    // when the run builds one and the request cues it.
+    describe('when a visual follows', () => {
+      it('cues a visual on image notes or on a visual word in the question', () => {
+        expect(visualCued('Show me a dashboard of sales')).toBe(true);
+        expect(visualCued('Chart the goals per team')).toBe(true);
+        expect(visualCued('Put employees by state on a map')).toBe(true);
+        expect(visualCued('Can you visualise the spread?')).toBe(true);
+        expect(visualCued('A HEATMAP of age by plan')).toBe(true);
+        expect(visualCued('Plot it, then pivot by year')).toBe(true);
+        // Plurals cue too.
+        expect(visualCued('Two charts and some maps, please')).toBe(true);
+        expect(visualCued('Build me dashboards for each region')).toBe(true);
+        expect(visualCued('Which team scored most goals?')).toBe(false);
+        expect(visualCued('Which team scored most goals?', '')).toBe(false);
+        expect(visualCued('Which team scored most goals?', ' \n ')).toBe(false);
+        // Whole words only: "mapping" and "charter" cue nothing.
+        expect(visualCued('Explain the mapping of the charter')).toBe(false);
+        expect(visualCued('Which team scored most goals?', NOTES)).toBe(true);
+      });
+
+      it('holds the fixed copy of the two lines', () => {
+        expect(ANALYSE_VISUAL_LINE).toBe(
+          'A later step draws the visual from your query results, so never say you cannot render a chart, a dashboard or a map. Run one query per view the request asks for, each returning the rows that view shows: the headline totals as one single-row query, and one query for each table, chart or map. For a view that crosses two dimensions, return one row per combination with the measure in one column, never one column per value, so the visual labels its columns with the values in the data.',
+        );
+        expect(WRITE_ANSWER_VISUAL_LINE).toBe(
+          'An interactive visual of these results is built right after your answer and shown under it. Never say you cannot render a chart, a dashboard or a map, and do not lay the data out as tables to stand in for one: state the findings and point the reader to the visual.',
+        );
+      });
+
+      it("adds the line last to Write answer's request, after the findings and the notes", () => {
+        expect(
+          writeAnswerRequest({ ...WRITE_INPUT, visualFollows: true }),
+        ).toBe(`${WRITE_REQUEST_BEFORE}\n\n${WRITE_ANSWER_VISUAL_LINE}`);
+        const withNotes = writeAnswerRequest({
+          ...WRITE_INPUT,
+          imageNotes: NOTES,
+          visualFollows: true,
+        });
+        expect(withNotes.endsWith(`\n\n${WRITE_ANSWER_VISUAL_LINE}`)).toBe(
+          true,
+        );
+        expect(withNotes.indexOf(NOTES)).toBeLessThan(
+          withNotes.indexOf(WRITE_ANSWER_VISUAL_LINE),
+        );
+      });
+
+      it("adds the line as Analyse's last system block, after the notes", () => {
+        expect(
+          analyseSystemBlocks({
+            catalogBlock: 'CAT',
+            planBlock: 'PLAN',
+            visualFollows: true,
+          }),
+        ).toEqual(['CAT', 'PLAN', ANALYSE_VISUAL_LINE]);
+        expect(
+          analyseSystemBlocks({
+            catalogBlock: 'CAT',
+            planBlock: 'PLAN',
+            imageNotes: NOTES,
+            visualFollows: true,
+          }),
+        ).toEqual(['CAT', 'PLAN', NOTES, ANALYSE_VISUAL_LINE]);
+      });
+
+      it('leaves both prompts byte for byte as before when no visual follows', () => {
+        expect(
+          writeAnswerRequest({ ...WRITE_INPUT, visualFollows: false }),
+        ).toBe(WRITE_REQUEST_BEFORE);
+        expect(
+          analyseSystemBlocks({
+            catalogBlock: 'CAT',
+            planBlock: 'PLAN',
+            visualFollows: false,
+          }),
+        ).toEqual(['CAT', 'PLAN']);
+      });
+
+      it("keeps Write answer's request within its cap with the line", () => {
+        const many = Array.from({ length: 50 }, (_, i) => ({
+          player: `Player ${i} ${'x'.repeat(200)}`,
+          goals: i,
+        }));
+        // Eight queries of about 11,000 characters each: over the cap.
+        const queries = Array.from({ length: 8 }, () =>
+          query({ rows: many, rowCount: many.length }),
+        );
+        const request = writeAnswerRequest({
+          ...WRITE_INPUT,
+          queries,
+          visualFollows: true,
+        });
+        expect(request.endsWith(WRITE_ANSWER_VISUAL_LINE)).toBe(true);
+        expect(request.includes('[rows shortened to fit]')).toBe(true);
+        // The line takes its room from the rows: the request is no longer.
+        const without = writeAnswerRequest({ ...WRITE_INPUT, queries });
+        expect(without.length).toBeGreaterThan(ANSWER_REQUEST_CAP);
+        expect(request.length).toBe(without.length);
+      });
     });
   });
 });

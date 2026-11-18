@@ -249,7 +249,7 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       title: 'Build visual',
       kind: 'agent',
       summary:
-        "On unless the run turns it off (Build a visual): Ryan's model designs an interactive visual from the answer and the rows its queries returned. No tools. Skipped when no query returned rows; a design that fails leaves the answer without a visual, never a failed run.",
+        "On unless the run turns it off (Build a visual): Ryan's model designs an interactive visual from the answer and the rows its queries returned, following Read images' notes when the run has reference images. No tools. Skipped when no query returned rows; a design that fails leaves the answer without a visual, never a failed run.",
       exits: [{ label: 'you stop it', outcome: 'stops' }],
       modelOnly: true,
     },
@@ -477,6 +477,11 @@ export interface AnswerBusinessQuestionRuntime {
     answered?: AnsweredClarification;
     /** Read images' notes (agents.md 2.15); absent or `''` without images. */
     imageNotes?: string;
+    /**
+     * Build visual runs after this turn and the request cues a visual
+     * (`visualCued`): the agent is told a visual follows. Absent otherwise.
+     */
+    visualFollows?: true;
   }): Promise<AnalyseAttempt>;
   /**
    * Whether the run builds a visual (its input's `buildVisual`): the
@@ -492,6 +497,11 @@ export interface AnswerBusinessQuestionRuntime {
     question: string;
     answer: string;
     queries: AnalyseQuery[];
+    /**
+     * Read images' notes, the reference the designer follows; present only
+     * when the run has some (not blank).
+     */
+    imageNotes?: string;
   }): Promise<{ visual: BuiltVisual; stopped: boolean }>;
   /** The Write answer step's model call; its text is the run's answer. */
   writeAnswer(input: {
@@ -501,6 +511,11 @@ export interface AnswerBusinessQuestionRuntime {
     findings: ValidationFinding[];
     /** Read images' notes (agents.md 2.15); absent or `''` without images. */
     imageNotes?: string;
+    /**
+     * Build visual runs after it and the request cues a visual
+     * (`visualCued`): the request says a visual follows. Absent otherwise.
+     */
+    visualFollows?: true;
   }): Promise<{ answer: BusinessAnswer; stopped: boolean }>;
   /**
    * The run's earlier queries (roadmap 1.28.8): an earlier run's answer's

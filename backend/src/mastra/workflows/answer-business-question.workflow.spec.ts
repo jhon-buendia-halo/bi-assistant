@@ -466,7 +466,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         ['headline', 'answer', 'calls'],
       ],
       'build-visual': [
-        ['headline', 'answer', 'calls', 'question', 'queries'],
+        ['headline', 'answer', 'calls', 'question', 'queries', 'imageNotes'],
         ['headline', 'answer', 'calls', 'visual'],
       ],
       'wrap-up': [
@@ -877,6 +877,69 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       expect(String(result.error)).toContain(
         'The Build visual step has no designer to run',
       );
+    });
+
+    it("hands Read images' notes to the designer, so it designs from the reference", async () => {
+      const turn = runtime({ buildsVisual: true });
+      await run('How many matches?', turn, ['World Cup'], ONE_IMAGE());
+      expect(turn.buildVisual).toHaveBeenCalledWith({
+        question: 'How many matches?',
+        answer: 'The data holds 16 matches.\n\nHow I got this: …',
+        queries: GOOD_ATTEMPT.queries,
+        imageNotes: NOTES,
+      });
+    });
+
+    it('hands the designer no notes when the run has no images', async () => {
+      const turn = runtime({ buildsVisual: true });
+      await run('How many matches?', turn);
+      expect(turn.buildVisual.mock.calls[0]?.[0]).not.toHaveProperty(
+        'imageNotes',
+      );
+    });
+  });
+
+  // Analyse and Write answer learn that a visual follows only when the run
+  // builds one and the request cues it; otherwise their input is as before.
+  describe('telling Analyse and Write answer a visual follows', () => {
+    const told = (turn: ScriptedTurn) => [
+      turn.analyse.mock.calls[0]?.[0],
+      turn.writeAnswer.mock.calls[0]?.[0],
+    ];
+
+    it('tells both when the run builds a visual and the question asks for one', async () => {
+      const turn = runtime({ buildsVisual: true });
+      await run('Show a dashboard of the matches', turn);
+      for (const input of told(turn)) {
+        expect(input).toMatchObject({ visualFollows: true });
+      }
+    });
+
+    it('tells both when the run has a reference image, whatever the question', async () => {
+      const turn = runtime({ buildsVisual: true });
+      await run('How many matches?', turn, ['World Cup'], ONE_IMAGE());
+      for (const input of told(turn)) {
+        expect(input).toMatchObject({ visualFollows: true });
+      }
+    });
+
+    it('tells neither when the question cues no visual and there are no images', async () => {
+      const turn = runtime({ buildsVisual: true });
+      await run('How many matches?', turn);
+      for (const input of told(turn)) {
+        expect(input).not.toHaveProperty('visualFollows');
+      }
+    });
+
+    it('tells neither when the run builds no visual, even when the request cues one', async () => {
+      const turn = runtime({ buildsVisual: false });
+      await run('Show a dashboard of the matches', turn, ['World Cup'], {
+        paths: ['inputs/images/1.png'],
+        reader: reader(),
+      });
+      for (const input of told(turn)) {
+        expect(input).not.toHaveProperty('visualFollows');
+      }
     });
   });
 

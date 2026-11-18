@@ -479,3 +479,211 @@ test(
     );
   },
 );
+
+/**
+ * "A visual can be a dashboard" (visuals, panels): the designer returns a spec
+ * with KPI tiles and two panels, and the frame draws them from the answer's
+ * stored result sets. No result set has a US state column, so the map form is
+ * not covered here (it has unit tests).
+ */
+const DASHBOARD_QUESTION =
+  'Give me a dashboard of the matches: totals, and by stage.';
+const DASHBOARD_ANSWER = 'There were many matches; most were group games.';
+const TOTALS_SQL =
+  'SELECT COUNT(*)::int AS matches, SUM(home_goals + away_goals)::int AS goals FROM world_cup.world_cup.matches';
+const BY_STAGE_SQL =
+  'SELECT stage, COUNT(*)::int AS matches FROM world_cup.world_cup.matches GROUP BY stage';
+const BY_STAGE_DURATION_SQL =
+  "SELECT stage, CASE WHEN went_to_extra_time THEN 'Extra time' ELSE 'Regular time' END AS duration, COUNT(*)::int AS matches FROM world_cup.world_cup.matches GROUP BY 1, 2";
+const DASHBOARD_SQL = [TOTALS_SQL, BY_STAGE_SQL, BY_STAGE_DURATION_SQL];
+const PIVOT_TITLE = 'Matches by stage and duration';
+const BAR_TITLE = 'Matches per stage';
+const DASHBOARD_REPLY = {
+  title: 'Matches dashboard',
+  description: 'Totals, then the matches by stage as a pivot and a bar chart.',
+  spec: {
+    spec: 1,
+    kpis: [
+      {
+        label: 'Matches played',
+        select: ['matches', 'goals'],
+        column: 'matches',
+        agg: 'sum',
+      },
+      {
+        label: 'Goals scored',
+        select: ['matches', 'goals'],
+        column: 'goals',
+        agg: 'sum',
+      },
+    ],
+    panels: [
+      {
+        title: PIVOT_TITLE,
+        span: 7,
+        chart: {
+          form: 'pivot',
+          select: ['stage', 'duration', 'matches'],
+          x: 'stage',
+          series: 'duration',
+          y: 'matches',
+        },
+      },
+      {
+        title: BAR_TITLE,
+        span: 5,
+        chart: {
+          form: 'bar',
+          select: ['stage', 'matches'],
+          x: 'stage',
+          y: 'matches',
+        },
+      },
+    ],
+  },
+};
+
+test(
+  'a dashboard visual shows its KPI tiles and two panels side by side',
+  { tag: ['@story-visual-panels'] },
+  async ({ page }) => {
+    // One query per view, one per tool call; the designer returns the dashboard.
+    stub.reply = (request): StubReply => {
+      if (isDesignerCall(request))
+        return { text: JSON.stringify(DASHBOARD_REPLY) };
+      if (!request.stream) return { text: DASHBOARD_ANSWER };
+      const done = request.messages.filter(
+        (message) => message.role === 'tool',
+      ).length;
+      if (done < DASHBOARD_SQL.length) {
+        return {
+          toolCall: {
+            name: 'run_readonly_sql',
+            arguments: {
+              sql: DASHBOARD_SQL[done],
+              rationale: 'One query for each view of the dashboard.',
+            },
+          },
+        };
+      }
+      return { text: DASHBOARD_ANSWER };
+    };
+    // Wide enough for the 12-column grid: a frame under 720px stacks the panels.
+    await page.setViewportSize({ width: 1600, height: 1000 });
+
+    const runVisual = page.getByTestId('run-visual');
+    let runId = '';
+    await scenarioStep(
+      page,
+      'Given an answer whose queries returned three result sets',
+      async () => {
+        const run = await apiJson<{ id: string }>(
+          page,
+          'POST',
+          `/workflows/${V2_WORKFLOW_ID}/runs`,
+          {
+            input: {
+              question: DASHBOARD_QUESTION,
+              datasets: [WORLD_CUP_DATASET],
+              buildVisual: false,
+            },
+          },
+        );
+        runId = run.id;
+        await page.reload();
+        await page
+          .getByRole('complementary', { name: 'Navigation rail' })
+          .getByRole('button', { name: 'Runs', exact: true })
+          .click();
+        await page
+          .getByTestId(`run-${runId}`)
+          .getByRole('button')
+          .first()
+          .click();
+        await expect(page.getByTestId('run-answer')).toContainText(
+          DASHBOARD_ANSWER,
+        );
+      },
+    );
+    await scenarioStep(
+      page,
+      'When the designer returns a spec with KPIs and two panels',
+      async () => {
+        await apiJson(
+          page,
+          'POST',
+          `/workflow-runs/${runId}/visualizations`,
+          {},
+        );
+        await page.reload();
+        await page
+          .getByRole('complementary', { name: 'Navigation rail' })
+          .getByRole('button', { name: 'Runs', exact: true })
+          .click();
+        await page
+          .getByTestId(`run-${runId}`)
+          .getByRole('button')
+          .first()
+          .click();
+        await expect(page.getByTestId('run-answer')).toContainText(
+          DASHBOARD_ANSWER,
+        );
+        await page
+          .getByTestId('workflow-run-chat-log')
+          .getByTestId('run-artifact-open')
+          .first()
+          .click();
+        await expect(runVisual).toBeVisible();
+        await runVisual
+          .getByRole('button', { name: 'Full screen', exact: true })
+          .click();
+      },
+    );
+    await scenarioStep(
+      page,
+      'Then the frame shows the dashboard: KPI tiles and two panels side by side',
+      async () => {
+        const frame = await visualFrame(page);
+        await expect(frame.locator('main')).toHaveClass(/qti-frame--wide/);
+        await expect(frame.locator('.qti-panels')).toBeVisible();
+        await expect(frame.locator('section.qti-panel')).toHaveCount(2);
+
+        const pivot = frame.getByRole('region', {
+          name: PIVOT_TITLE,
+          exact: true,
+        });
+        const bar = frame.getByRole('region', {
+          name: BAR_TITLE,
+          exact: true,
+        });
+        await expect(pivot).toBeVisible();
+        await expect(bar).toBeVisible();
+        await expect(pivot).toHaveAttribute('data-qti-span', '7');
+        await expect(bar).toHaveAttribute('data-qti-span', '5');
+
+        // The KPI tiles come from the totals result set.
+        await expect(frame.locator('.qti-kpi')).toHaveCount(2);
+        await expect(
+          frame.getByText('Matches played', { exact: true }),
+        ).toBeVisible();
+        await expect(
+          frame.getByText('Goals scored', { exact: true }),
+        ).toBeVisible();
+
+        // Both panels drew their charts from the stored rows.
+        await expect(frame.getByText('No data for this view.')).toHaveCount(0);
+        await expect(pivot.locator('table.qti-pivot')).toBeVisible();
+        await expect(pivot.locator('tr.qti-pivot-total')).toBeVisible();
+        await expect(bar.locator('[data-qti-value]').first()).toBeVisible();
+
+        // Side by side: the same row, the first panel on the left.
+        const first = await pivot.boundingBox();
+        const second = await bar.boundingBox();
+        expect(first, 'the pivot panel has a box').not.toBeNull();
+        expect(second, 'the bar panel has a box').not.toBeNull();
+        expect(Math.abs(first!.y - second!.y)).toBeLessThan(4);
+        expect(first!.x).toBeLessThan(second!.x);
+      },
+    );
+  },
+);

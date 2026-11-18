@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { usStateCode } from './visual-runtime-map';
 
 /**
  * Visual spec v1 — the small JSON document the designer agent emits instead of
@@ -38,6 +39,8 @@ export const SPEC_CHART_FORMS = [
   'metric-cards',
   'table',
   'donut',
+  'pivot',
+  'us-map',
 ] as const;
 
 /** Forms that plot a category/measure pair and therefore need `x` and `y`. */
@@ -47,7 +50,20 @@ const XY_FORMS: ReadonlySet<string> = new Set([
   'scatter',
   'heatmap',
   'donut',
+  'pivot',
+  'us-map',
 ]);
+
+/** KPI tiles a spec may carry. */
+export const SPEC_MAX_KPIS = 6;
+/** Panels a dashboard spec may carry. */
+export const SPEC_MAX_PANELS = 8;
+/** A panel's width in the 12-column grid: narrowest, widest, and when omitted. */
+export const SPEC_PANEL_SPAN = { min: 3, max: 12, default: 6 } as const;
+/** Aggregations that pick one row, so a KPI can name it (`category`). */
+const ROW_AGGREGATIONS: ReadonlySet<string> = new Set(['max', 'min', 'value']);
+/** Share of a `us-map`'s sampled x values that must name a state. */
+const US_MAP_MIN_MATCH = 0.6;
 
 const columnName = z
   .string()
@@ -71,6 +87,14 @@ export const kpiSpecSchema = z.object({
   agg: z.enum(SPEC_AGGREGATIONS).describe('How the column is reduced'),
   format: z.enum(SPEC_FORMATS).optional(),
   unit: z.string().max(16).optional().describe('Short unit suffix, e.g. "%"'),
+  // `.nullish()` with no transform, here and on the fields below: a transform
+  // would make the key required in the inferred type, breaking every caller
+  // that builds a spec by hand. Readers treat null like an absent key.
+  category: columnName
+    .nullish()
+    .describe(
+      'Only with agg max, min or value: the column that names the row the figure comes from, shown before it ("FL · 262"); null otherwise',
+    ),
 });
 
 /**
@@ -94,6 +118,8 @@ export interface ChartSpecShape {
   format?: { y?: (typeof SPEC_FORMATS)[number] };
   xLabel?: string;
   yLabel?: string;
+  /** `pivot` only; `undefined` reads as true. */
+  totals?: boolean;
 }
 
 export const chartSpecSchema = z
@@ -155,6 +181,12 @@ export const chartSpecSchema = z
       .optional(),
     xLabel: z.string().max(120).optional(),
     yLabel: z.string().max(120).optional(),
+    totals: z
+      .boolean()
+      .nullish()
+      .describe(
+        'pivot only: draw the Total row (and the Total column when series is set); default true',
+      ),
   })
   .transform((chart): ChartSpecShape => {
     const x = chart.x ?? undefined;
@@ -179,8 +211,24 @@ export const chartSpecSchema = z
       series: chart.series ?? undefined,
       sort,
       format: chart.format ? { y: chart.format.y ?? undefined } : undefined,
+      totals: chart.totals ?? undefined,
     };
   });
+
+/** One chart of a dashboard: a titled card in the 12-column grid. */
+export const panelSpecSchema = z.object({
+  title: z.string().min(1).max(120).describe('Short panel heading'),
+  span: z
+    .number()
+    .int()
+    .min(SPEC_PANEL_SPAN.min)
+    .max(SPEC_PANEL_SPAN.max)
+    .nullish()
+    .describe(
+      'Width in a 12-column grid, 3 to 12; panels wrap in order. Null for the default, 6',
+    ),
+  chart: chartSpecSchema,
+});
 
 export const tableSpecSchema = z.object({
   select: selectColumns,
@@ -195,15 +243,31 @@ export const tableSpecSchema = z.object({
   collapsed: z.boolean().optional(),
 });
 
+/**
+ * A spec draws either one `chart` (a single visual) or `panels` (a dashboard
+ * of several charts). Which of the two is present is checked by
+ * `validateSpecAgainstData`, not here, so a spec with neither or both comes
+ * back to the designer as a plain-language problem like every other one.
+ */
 export const visualSpecSchema = z.object({
   spec: z.literal(1).describe('Spec version; always 1'),
-  kpis: z.array(kpiSpecSchema).max(4).optional(),
-  chart: chartSpecSchema,
+  kpis: z.array(kpiSpecSchema).max(SPEC_MAX_KPIS).optional(),
+  chart: chartSpecSchema
+    .nullish()
+    .describe('The one chart of a single visual; null when panels is given'),
+  panels: z
+    .array(panelSpecSchema)
+    .max(SPEC_MAX_PANELS)
+    .nullish()
+    .describe(
+      'The charts of a dashboard, in reading order; null when chart is given',
+    ),
   table: tableSpecSchema.optional(),
 });
 
 export type KpiSpec = z.infer<typeof kpiSpecSchema>;
 export type ChartSpec = z.infer<typeof chartSpecSchema>;
+export type PanelSpec = z.infer<typeof panelSpecSchema>;
 export type TableSpec = z.infer<typeof tableSpecSchema>;
 export type VisualSpec = z.infer<typeof visualSpecSchema>;
 
@@ -277,6 +341,34 @@ function isNumericColumn(record: SpecDataRecord, column: string): boolean {
 }
 
 /**
+ * Every chart a spec draws, with the name its problems are reported under:
+ * `chart` for a single visual, `panels[i] ("<title>")` for a dashboard's.
+ */
+export function specCharts(
+  spec: Pick<VisualSpec, 'chart' | 'panels'>,
+): { where: string; title?: string; chart: ChartSpec }[] {
+  if (spec.panels?.length) {
+    return spec.panels.map((panel, index) => ({
+      where: `panels[${index}] ("${panel.title}")`,
+      title: panel.title,
+      chart: panel.chart,
+    }));
+  }
+  return spec.chart ? [{ where: 'chart', chart: spec.chart }] : [];
+}
+
+/** Whether enough of a column's sampled values name a US state for a map. */
+function namesUsStates(record: SpecDataRecord, column: string): boolean {
+  const values = (record.rows ?? [])
+    .slice(0, SAMPLE_ROWS)
+    .map((row) => row[column])
+    .filter((value) => !isBlank(value));
+  if (!values.length) return false;
+  const named = values.filter((value) => usStateCode(value) !== null).length;
+  return named / values.length >= US_MAP_MIN_MATCH;
+}
+
+/**
  * Check a spec against the exact rows the visual will render from, and report
  * every problem in plain language. An empty array means the spec is renderable;
  * anything else is fed straight back to the designer as a retry instruction.
@@ -328,44 +420,70 @@ export function validateSpecAgainstData(
     );
   };
 
-  const chart = spec.chart;
-  const measures =
-    chart.y === undefined ? [] : Array.isArray(chart.y) ? chart.y : [chart.y];
-  if (XY_FORMS.has(chart.form)) {
-    if (!chart.x)
-      problems.push(`chart: form "${chart.form}" needs an x column`);
-    if (!measures.length) {
-      problems.push(`chart: form "${chart.form}" needs a y column`);
-    }
-  }
-  if (chart.form === 'heatmap' && !chart.series) {
-    problems.push('chart: a heatmap needs a series column for its second axis');
-  }
-  // The schema already resolves a `sort.by` column name that matches `x` or a
-  // plotted measure to "x"/"y" (see the `chartSpecSchema` transform); whatever
-  // is left here named neither the x column nor a y measure, so it is reported
-  // as a data problem instead of a parse-time rejection.
-  if (chart.sort && chart.sort.by !== 'x' && chart.sort.by !== 'y') {
+  if (spec.chart && spec.panels?.length) {
     problems.push(
-      `chart.sort.by: "${chart.sort.by}" is not "x", "y", the x column, or a plotted y column`,
+      'spec: give either chart (a single visual) or panels (a dashboard), not both',
+    );
+  }
+  const charts = specCharts(spec);
+  if (!charts.length) {
+    problems.push(
+      'spec: needs a chart (a single visual) or at least one panel (a dashboard)',
     );
   }
 
-  const chartRecord = resolve(chart.select, 'chart');
-  if (chartRecord) {
-    if (chart.x && requireColumn(chartRecord, chart.x, 'chart.x')) {
+  for (const { where, chart } of charts) {
+    const measures =
+      chart.y === undefined ? [] : Array.isArray(chart.y) ? chart.y : [chart.y];
+    if (XY_FORMS.has(chart.form)) {
+      if (!chart.x)
+        problems.push(`${where}: form "${chart.form}" needs an x column`);
+      if (!measures.length) {
+        problems.push(`${where}: form "${chart.form}" needs a y column`);
+      }
+    }
+    if (chart.form === 'heatmap' && !chart.series) {
+      problems.push(
+        `${where}: a heatmap needs a series column for its second axis`,
+      );
+    }
+    if (chart.form === 'pivot' && chart.series && measures.length > 1) {
+      problems.push(
+        `${where}: a pivot with a series column takes one y measure; drop series to show several measures as the columns`,
+      );
+    }
+    // The schema already resolves a `sort.by` column name that matches `x` or
+    // a plotted measure to "x"/"y" (see the `chartSpecSchema` transform);
+    // whatever is left here named neither the x column nor a y measure, so it
+    // is reported as a data problem instead of a parse-time rejection.
+    if (chart.sort && chart.sort.by !== 'x' && chart.sort.by !== 'y') {
+      problems.push(
+        `${where}.sort.by: "${chart.sort.by}" is not "x", "y", the x column, or a plotted y column`,
+      );
+    }
+
+    const chartRecord = resolve(chart.select, where);
+    if (!chartRecord) continue;
+    if (chart.x && requireColumn(chartRecord, chart.x, `${where}.x`)) {
       // Only a scatter puts x on a value scale; every other form treats it as
       // a category or a time label.
       if (chart.form === 'scatter') {
-        requireNumeric(chartRecord, chart.x, 'chart.x');
+        requireNumeric(chartRecord, chart.x, `${where}.x`);
+      }
+      if (chart.form === 'us-map' && !namesUsStates(chartRecord, chart.x)) {
+        problems.push(
+          `${where}.x: form "us-map" needs a column of US state codes or names, and "${chart.x}" is not one; use a bar instead`,
+        );
       }
     }
     for (const measure of measures) {
-      if (requireColumn(chartRecord, measure, 'chart.y')) {
-        requireNumeric(chartRecord, measure, 'chart.y');
+      if (requireColumn(chartRecord, measure, `${where}.y`)) {
+        requireNumeric(chartRecord, measure, `${where}.y`);
       }
     }
-    if (chart.series) requireColumn(chartRecord, chart.series, 'chart.series');
+    if (chart.series) {
+      requireColumn(chartRecord, chart.series, `${where}.series`);
+    }
   }
 
   (spec.kpis ?? []).forEach((kpi, index) => {
@@ -374,6 +492,14 @@ export function validateSpecAgainstData(
     if (!record) return;
     if (requireColumn(record, kpi.column, where) && kpi.agg !== 'count') {
       requireNumeric(record, kpi.column, where);
+    }
+    if (kpi.category) {
+      if (!ROW_AGGREGATIONS.has(kpi.agg)) {
+        problems.push(
+          `${where}: category only goes with agg "max", "min" or "value", not "${kpi.agg}"`,
+        );
+      }
+      requireColumn(record, kpi.category, `${where}.category`);
     }
   });
 

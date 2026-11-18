@@ -233,7 +233,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Visual / visualization.** An interactive, sandboxed chart document created from an answer's data. Has a title, a description (the takeaway), a *visual version* history and files in the session's workspace. Framed with the question, the analysis, a data provenance section and a footer. The code and API say "visualization"; the UI says "visual".
 
-**Visual spec.** A small JSON description of a chart (forms: bar, line, scatter, heatmap, metric cards, table, donut) rendered by a fixed runtime. Preferred over freeform generation because it cannot break on bad generated code.
+**Visual spec.** A small JSON description of a visual: up to 6 KPI tiles and either one chart (forms: bar, line, scatter, heatmap, metric cards, table, donut, pivot, US state map) or a dashboard of up to 8 *panels*, each a titled chart with a width in a 12-column grid. Rendered by a fixed runtime from every stored row of the answer's result sets. Preferred over freeform generation because it cannot break on bad generated code. A dashboard visual holds query results, so it has no filters or measure, row and column pickers.
+
+**Panel.** One titled chart of a dashboard *visual spec*, 3 to 12 columns wide in a 12-column grid (6 by default).
+
+**Pivot.** A chart form: a crosstab of exact figures with a Total row (and a Total column when one measure is split by a column dimension).
+
+**US state map.** A chart form: one tile per US state in a state tile map, shaded by a measure.
 
 **Visual version.** One immutable snapshot of a visual. Version 1 is created from the answer; each tailoring adds a version with its instruction. *Revert* moves the current-version pointer; it does not delete versions. A *refresh* re-runs the SQL and rewrites the current version's data in place without adding a version. An *auto-repair* version carries the instruction prefix `auto-repair: `.
 

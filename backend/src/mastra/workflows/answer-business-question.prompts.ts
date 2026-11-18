@@ -64,6 +64,32 @@ Rules:
 
 Counts stay exact even when you describe a spread: never round a count into a range ("about 37,000 to 38,000"); give the exact smallest and largest counts the rows hold.`;
 
+/**
+ * The words in a question that ask for a visual, as whole words: the cue,
+ * with reference image notes, for telling Analyse and Write answer that
+ * Build visual draws one after them.
+ */
+const VISUAL_CUE =
+  /\b(dashboards?|charts?|graphs?|plots?|maps?|heatmaps?|pivots?|visual\w*)\b/i;
+
+/**
+ * Whether the request cues a visual: the run has reference image notes
+ * (not blank), or the question names a visual. Only a run that also builds
+ * a visual tells its steps so; any other request keeps its prompts as they
+ * are, so the agents' eval results stay valid for it.
+ */
+export function visualCued(question: string, imageNotes?: string): boolean {
+  return Boolean(imageNotes?.trim()) || VISUAL_CUE.test(question);
+}
+
+/** Analyse's last system block when a visual follows its queries. */
+export const ANALYSE_VISUAL_LINE =
+  'A later step draws the visual from your query results, so never say you cannot render a chart, a dashboard or a map. Run one query per view the request asks for, each returning the rows that view shows: the headline totals as one single-row query, and one query for each table, chart or map. For a view that crosses two dimensions, return one row per combination with the measure in one column, never one column per value, so the visual labels its columns with the values in the data.';
+
+/** The last line of Write answer's request when a visual follows it. */
+export const WRITE_ANSWER_VISUAL_LINE =
+  'An interactive visual of these results is built right after your answer and shown under it. Never say you cannot render a chart, a dashboard or a map, and do not lay the data out as tables to stand in for one: state the findings and point the reader to the visual.';
+
 /** The most result rows of one query Write answer reads. */
 export const ANSWER_ROWS_CAP = 50;
 
@@ -204,6 +230,8 @@ export function writeAnswerRequest(input: {
   findings: readonly Finding[];
   /** Read images' notes (agents.md 2.15); absent or `''` without images. */
   imageNotes?: string;
+  /** Build visual runs after it and the request cues a visual (`visualCued`). */
+  visualFollows?: boolean;
 }): string {
   const notes = imageNotesBlock(input.imageNotes);
   const head = [
@@ -226,12 +254,17 @@ export function writeAnswerRequest(input: {
   const queries = input.queries.length
     ? input.queries.map(queryLines).join('\n\n')
     : '(no query ran)';
-  const room = Math.max(0, ANSWER_REQUEST_CAP - head.length - findings.length);
+  // When a visual follows, its line ends the request, after everything else.
+  const tail = input.visualFollows ? `\n\n${WRITE_ANSWER_VISUAL_LINE}` : '';
+  const room = Math.max(
+    0,
+    ANSWER_REQUEST_CAP - head.length - findings.length - tail.length,
+  );
   const body =
     queries.length > room
       ? `${queries.slice(0, room)}\n[rows shortened to fit]`
       : queries;
-  return `${head}Queries and their result rows:\n${body}\n${findings}`;
+  return `${head}Queries and their result rows:\n${body}\n${findings}${tail}`;
 }
 
 /**
@@ -258,14 +291,22 @@ export function analysePlanBlock(
 /**
  * The system blocks the Analyse step adds after the agent's own context
  * (agents.md 5.11): the catalog block, the plan block, then Read images'
- * notes only when the run has images; without them, the two blocks it has
+ * notes only when the run has images, and last the line saying a visual
+ * follows only when one does; without either, the two blocks it has
  * always had.
  */
 export function analyseSystemBlocks(input: {
   catalogBlock: string;
   planBlock: string;
   imageNotes?: string;
+  /** Build visual runs after it and the request cues a visual (`visualCued`). */
+  visualFollows?: boolean;
 }): string[] {
   const notes = imageNotesBlock(input.imageNotes);
-  return [input.catalogBlock, input.planBlock, ...(notes ? [notes] : [])];
+  return [
+    input.catalogBlock,
+    input.planBlock,
+    ...(notes ? [notes] : []),
+    ...(input.visualFollows ? [ANALYSE_VISUAL_LINE] : []),
+  ];
 }
