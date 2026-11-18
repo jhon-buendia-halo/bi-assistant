@@ -41,6 +41,7 @@ import {
   type DataMapping,
 } from './recreate-dashboard.steps';
 import { runErrorMessage } from './workflow-run';
+import { cutReply, guardedCall, ReplyCutError } from './model-call';
 
 /** The image a step shows its model. */
 export interface StepImage {
@@ -116,62 +117,91 @@ export function replyFailure(error: unknown): Error | undefined {
   return error instanceof Error ? error : new Error(runErrorMessage(error));
 }
 
+/** What a one-call step reads of `generate`'s reply. */
+export interface ModelReply {
+  object?: unknown;
+  text?: string;
+  error?: unknown;
+  finishReason?: unknown;
+}
+
+/**
+ * Throws `ReplyCutError` when the reply was cut at the output cap (finish
+ * reason `length`; workflows R43): a JSON reply cut short is never read as
+ * an empty result. The guarded call tries once more; cut again, the step
+ * fails with it.
+ */
+export function throwIfCut(
+  reply: ModelReply,
+  label: string,
+  maxOutputTokens: number,
+): void {
+  if (cutReply(reply.finishReason)) {
+    throw new ReplyCutError(label, maxOutputTokens);
+  }
+}
+
 /**
  * The Read dashboard step's call (agents.md 5.17): the image with the run's
  * instructions, and the blueprint read from the reply (`blueprintOf`). A
  * reply that describes no widget fails the step: there is nothing to
- * recreate. A stopped turn reads nothing.
+ * recreate. A stopped turn reads nothing. Both calls of this file are
+ * guarded (`guardedCall`, workflows R43): a five-minute deadline per try,
+ * one retry of a transient failure or a cut reply.
  */
 export async function readDashboardWithModel(
   input: { question: string; image: StepImage },
   options: StepModelOptions,
 ): Promise<{ blueprint: DashboardBlueprint; stopped: boolean }> {
   const request = readDashboardRequest(input);
+  const guard = { label: 'Read dashboard' };
+  // A reply with no dashboard is thrown only after the guarded call: it is
+  // the model's answer, not a failed call, and is never retried.
+  let read: { blueprint: DashboardBlueprint; stopped: boolean } | string;
   try {
-    const result = await dashboardReaderAgent.generate(
-      imageMessage(request, input.image),
-      {
-        ...(await tunedOptions(options, READ_OUTPUT_TOKENS)),
-        structuredOutput: {
-          schema: dashboardBlueprintSchema,
-          jsonPromptInjection: 'inline',
-          // A reply off the schema is read leniently (`blueprintOf`).
-          errorStrategy: 'warn',
+    read = await guardedCall(options, guard, async (call) => {
+      const result = await dashboardReaderAgent.generate(
+        imageMessage(request, input.image),
+        {
+          ...(await tunedOptions(call, READ_OUTPUT_TOKENS)),
+          structuredOutput: {
+            schema: dashboardBlueprintSchema,
+            jsonPromptInjection: 'inline',
+            // A reply off the schema is read leniently (`blueprintOf`).
+            errorStrategy: 'warn',
+          },
         },
-      },
-    );
-    const reply = result as {
-      object?: unknown;
-      text?: string;
-      error?: unknown;
-    };
-    if (stoppedBy(options)) {
-      return { blueprint: emptyBlueprint(), stopped: true };
-    }
-    const failure = replyFailure(reply.error);
-    if (failure) throw failure;
-    await noteExchange(options, request, replyText(reply.object, reply.text));
-    const blueprint = blueprintOf(reply.object ?? reply.text);
-    if (!blueprint) {
-      // The model says in `summary` why the image is no dashboard.
-      const summary = (
-        jsonObjectOf(reply.object ?? reply.text) as
-          { summary?: unknown } | undefined
-      )?.summary;
-      const why = typeof summary === 'string' ? summary.trim() : '';
-      throw new Error(
-        why
-          ? `The image shows no dashboard to recreate: ${why}`
-          : 'The image shows no dashboard to recreate',
       );
-    }
-    return { blueprint, stopped: false };
+      const reply = result as ModelReply;
+      if (stoppedBy(call)) {
+        return { blueprint: emptyBlueprint(), stopped: true };
+      }
+      const failure = replyFailure(reply.error);
+      if (failure) throw failure;
+      throwIfCut(reply, guard.label, READ_OUTPUT_TOKENS);
+      await noteExchange(call, request, replyText(reply.object, reply.text));
+      const blueprint = blueprintOf(reply.object ?? reply.text);
+      if (!blueprint) {
+        // The model says in `summary` why the image is no dashboard.
+        const summary = (
+          jsonObjectOf(reply.object ?? reply.text) as
+            { summary?: unknown } | undefined
+        )?.summary;
+        const why = typeof summary === 'string' ? summary.trim() : '';
+        return why
+          ? `The image shows no dashboard to recreate: ${why}`
+          : 'The image shows no dashboard to recreate';
+      }
+      return { blueprint, stopped: false };
+    });
   } catch (error) {
     if (stoppedBy(options)) {
       return { blueprint: emptyBlueprint(), stopped: true };
     }
     throw error;
   }
+  if (typeof read === 'string') throw new Error(read);
+  return read;
 }
 
 /**
@@ -197,34 +227,34 @@ export async function mapDataWithModel(
   options: StepModelOptions,
 ): Promise<{ mapping: DataMapping; stopped: boolean }> {
   const request = mapDataRequest(input);
+  const guard = { label: 'Map data' };
   try {
-    const result = await dataMapperAgent.generate(request, {
-      ...(await tunedOptions(options, MAP_OUTPUT_TOKENS)),
-      structuredOutput: {
-        schema: dataMappingSchema,
-        jsonPromptInjection: 'inline',
-        // A reply off the schema is read leniently (`mappingOf`).
-        errorStrategy: 'warn',
-      },
+    return await guardedCall(options, guard, async (call) => {
+      const result = await dataMapperAgent.generate(request, {
+        ...(await tunedOptions(call, MAP_OUTPUT_TOKENS)),
+        structuredOutput: {
+          schema: dataMappingSchema,
+          jsonPromptInjection: 'inline',
+          // A reply off the schema is read leniently (`mappingOf`).
+          errorStrategy: 'warn',
+        },
+      });
+      const reply = result as ModelReply;
+      if (stoppedBy(call)) return { mapping: emptyMapping(), stopped: true };
+      const failure = replyFailure(reply.error);
+      if (failure) throw failure;
+      throwIfCut(reply, guard.label, MAP_OUTPUT_TOKENS);
+      await noteExchange(call, request, replyText(reply.object, reply.text));
+      return {
+        mapping: mappingOf(
+          reply.object ?? reply.text,
+          input.blueprint,
+          input.catalog,
+          input.columns,
+        ),
+        stopped: false,
+      };
     });
-    const reply = result as {
-      object?: unknown;
-      text?: string;
-      error?: unknown;
-    };
-    if (stoppedBy(options)) return { mapping: emptyMapping(), stopped: true };
-    const failure = replyFailure(reply.error);
-    if (failure) throw failure;
-    await noteExchange(options, request, replyText(reply.object, reply.text));
-    return {
-      mapping: mappingOf(
-        reply.object ?? reply.text,
-        input.blueprint,
-        input.catalog,
-        input.columns,
-      ),
-      stopped: false,
-    };
   } catch (error) {
     if (stoppedBy(options)) return { mapping: emptyMapping(), stopped: true };
     throw error;

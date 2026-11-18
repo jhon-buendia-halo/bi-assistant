@@ -571,6 +571,117 @@ describe('review-website workflow (agents.md 5.19)', () => {
       expect(given.reviewTemplate).not.toHaveBeenCalled();
     });
 
+    /** Iris's review of one template, as the default runtime gives it. */
+    const IRIS_REVIEW = {
+      review: {
+        findings: [
+          {
+            mark: 1,
+            screen: 'mobile',
+            severity: 'major',
+            category: 'hierarchy',
+            title: 'Title competes with the banner',
+            observed: 'The banner is bigger than the page title.',
+            suggestion: 'Make the title the largest text.',
+          },
+        ],
+        summary: 'Busy header.',
+      },
+      stopped: false,
+    };
+
+    it('a template whose review fails is recorded as not reviewed, and the run goes on', async () => {
+      const given = reviewRuntime(3, {
+        reviewTemplate: jest.fn(({ template }: { template: { id: string } }) =>
+          template.id === '/section-1'
+            ? Promise.reject(
+                new Error(
+                  'Iris did not answer within two minutes while reviewing /section-1.',
+                ),
+              )
+            : Promise.resolve(IRIS_REVIEW),
+        ),
+      });
+      const { result } = await start(given, { visualReview: true });
+      expect(result.status).toBe('success');
+      expect(given.reviewTemplate).toHaveBeenCalledTimes(3);
+      const saved = (given.saveReport.mock.calls as unknown[][])[0][0] as {
+        findings: string;
+        answer: string;
+      };
+      const stored = JSON.parse(saved.findings) as {
+        findings: Finding[];
+        reviewed: {
+          template: string;
+          summary: string;
+          findingCount: number;
+          notReviewed?: string;
+        }[];
+      };
+      expect(stored.reviewed).toEqual([
+        { template: '/section-0', summary: 'Busy header.', findingCount: 1 },
+        {
+          template: '/section-1',
+          summary: '',
+          findingCount: 0,
+          notReviewed:
+            'Iris did not answer within two minutes while reviewing /section-1.',
+        },
+        { template: '/section-2', summary: 'Busy header.', findingCount: 1 },
+      ]);
+      expect(
+        stored.findings.filter(
+          (f) => f.source === 'iris' && f.group === '/section-1',
+        ),
+      ).toEqual([]);
+      expect(saved.answer).toContain(
+        'Iris reviewed 2 of 3 templates and found 2 visual issues.',
+      );
+      expect(given.progress).toHaveBeenCalledWith(
+        expect.stringContaining('Could not review /section-1'),
+      );
+    });
+
+    it('the other worker goes on with its own templates after a failure', async () => {
+      const given = reviewRuntime(4, {
+        reviewTemplate: jest.fn(({ template }: { template: { id: string } }) =>
+          template.id === '/section-0'
+            ? Promise.reject(new Error('fetch failed'))
+            : Promise.resolve(IRIS_REVIEW),
+        ),
+      });
+      const { result } = await start(given, { visualReview: true });
+      expect(result.status).toBe('success');
+      expect(given.reviewTemplate).toHaveBeenCalledTimes(4);
+      const saved = (given.saveReport.mock.calls as unknown[][])[0][0] as {
+        findings: string;
+      };
+      const stored = JSON.parse(saved.findings) as {
+        reviewed: { template: string; notReviewed?: string }[];
+      };
+      expect(stored.reviewed.map((r) => [r.template, r.notReviewed])).toEqual([
+        ['/section-0', 'fetch failed'],
+        ['/section-1', undefined],
+        ['/section-2', undefined],
+        ['/section-3', undefined],
+      ]);
+    });
+
+    it('fails the step with the first error only when no template was reviewed', async () => {
+      let calls = 0;
+      const given = reviewRuntime(2, {
+        reviewTemplate: jest.fn(() =>
+          Promise.reject(new Error(`model down ${++calls}`)),
+        ),
+      });
+      const { events, result } = await start(given, { visualReview: true });
+      expect(result.status).toBe('failed');
+      expect(events).toContain('review-templates:failed');
+      expect(String(result.error)).toContain('model down 1');
+      expect(given.reviewTemplate).toHaveBeenCalledTimes(2);
+      expect(given.saveReport).not.toHaveBeenCalled();
+    });
+
     it('a stopped review saves nothing (the stop is passed on through the branch)', async () => {
       const given = reviewRuntime(2, {
         reviewTemplate: jest.fn(() =>

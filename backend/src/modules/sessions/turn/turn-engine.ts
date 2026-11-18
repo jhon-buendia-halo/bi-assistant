@@ -54,11 +54,13 @@ import {
 import {
   REVIEW_WEBSITE_RUNTIME_KEY,
   REVIEW_WEBSITE_WORKFLOW_ID,
-  IrisTimeoutError,
   reviewWebsiteInputOf,
-  withIrisTimeout,
   type ReviewWebsiteRuntime,
 } from '../../../mastra/workflows/review-website.steps';
+import {
+  ModelTimeoutError,
+  streamIdleWatch,
+} from '../../../mastra/workflows/model-call';
 import type { ReviewWebsiteInput } from '../../../mastra/workflows/review-website.schemas';
 import type {
   SiteReviewRunIo,
@@ -696,8 +698,11 @@ export class TurnEngine {
       // 5.1, ADR-0040). Its agent step streams the agent through `consume`:
       // v2's Analyse step (5.11, ADR-0034) or a one-step workflow's Answer.
       // The model error a step reports, in the chat stream's words.
-      const stepError = (error: unknown) =>
-        chatTurnError(error, () => this.deps.llmService.getView());
+      // A model timeout (Iris's included) is thrown as it is (workflows R43).
+      const stepError = async (error: unknown) =>
+        error instanceof ModelTimeoutError
+          ? error
+          : chatTurnError(error, () => this.deps.llmService.getView());
       const stepModelBase = {
         abortSignal: turn.signal,
         providerOptions: options.providerOptions as
@@ -707,8 +712,11 @@ export class TurnEngine {
       // A step agent of its own runs without memory; its exchange is
       // recorded in its thread on this host (agents.md 5.14), and a
       // failure to record never fails the step.
+      // A retry of its call (workflows R43) is a reasoning line of the step.
       const stepModelOf = (stepAgentKey: string) => ({
         ...stepModelBase,
+        onRetry: (line: string) =>
+          emit({ type: 'reasoning', content: `${line}\n` }),
         onExchange: async (exchange: AgentExchange) => {
           try {
             await this.deps.mastra.recordAgentExchange(
@@ -791,37 +799,47 @@ export class TurnEngine {
             attemptStop = stop;
             notes = '';
             let attemptNotes = '';
+            // No chunk for five minutes while no tool executes fails the
+            // step (workflows R43); the attempt's stop is never a timeout.
+            const idle = streamIdleWatch(stop.signal);
             try {
               await consume(
-                await agent.stream(
-                  answers.length
-                    ? (answeredTurnInput(input, trimmed, answers) as never)
-                    : input,
-                  {
-                    ...attemptOptions,
-                    abortSignal: stop.signal,
-                    // The catalog and plan blocks, then Zoe's notes only
-                    // when the run has images (agents.md 5.11).
-                    context: [
-                      ...options.context,
-                      ...analyseSystemBlocks({
-                        catalogBlock,
-                        planBlock,
-                        imageNotes,
-                      }).map((content) => ({
-                        role: 'system' as const,
-                        content,
-                      })),
-                    ],
-                  },
+                idle.watch(
+                  await agent.stream(
+                    answers.length
+                      ? (answeredTurnInput(input, trimmed, answers) as never)
+                      : input,
+                    {
+                      ...attemptOptions,
+                      abortSignal: idle.signal,
+                      // The catalog and plan blocks, then Zoe's notes only
+                      // when the run has images (agents.md 5.11).
+                      context: [
+                        ...options.context,
+                        ...analyseSystemBlocks({
+                          catalogBlock,
+                          planBlock,
+                          imageNotes,
+                        }).map((content) => ({
+                          role: 'system' as const,
+                          content,
+                        })),
+                      ],
+                    },
+                  ),
                 ),
               );
+            } catch (error) {
+              // What the timeout's abort threw is the timeout, below.
+              if (!idle.timedOut()) throw error;
             } finally {
+              idle.dispose();
               attemptNotes = notes ?? '';
               notes = undefined;
               attemptStop = undefined;
               turn.signal.removeEventListener('abort', stopAttempt);
             }
+            idle.check('Analyse');
             // The agent asked the user: the step waits for the answer.
             const asked = turn.signal.aborted ? null : clarification;
             clarification = null;
@@ -1023,7 +1041,23 @@ export class TurnEngine {
             }
           },
           answer: async () => {
-            await consume(await agent.stream(input, options));
+            // The idle deadline (workflows R43): a Stop is never a timeout.
+            const idle = streamIdleWatch(turn.signal);
+            try {
+              await consume(
+                idle.watch(
+                  await agent.stream(input, {
+                    ...options,
+                    abortSignal: idle.signal,
+                  }),
+                ),
+              );
+            } catch (error) {
+              if (!idle.timedOut()) throw error;
+            } finally {
+              idle.dispose();
+            }
+            idle.check('Answer');
             if (streamError !== undefined && !turn.signal.aborted) {
               // A custom endpoint's failure fails the turn in R50's words
               // (R51); any other keeps today's handling.
@@ -1138,21 +1172,33 @@ export class TurnEngine {
             // Zoe's notes follow the report block only when the run has
             // images (agents.md 2.15, 5.13).
             const notes = imageNotesBlock(imageNotes);
-            await consume(
-              await agent.stream(input, {
-                ...options,
-                context: [
-                  ...options.context,
-                  {
-                    role: 'system' as const,
-                    content: explainReportBlock({ dataset, reportId }),
-                  },
-                  ...(notes
-                    ? [{ role: 'system' as const, content: notes }]
-                    : []),
-                ],
-              }),
-            );
+            // The idle deadline (workflows R43): a Stop is never a timeout.
+            const idle = streamIdleWatch(turn.signal);
+            try {
+              await consume(
+                idle.watch(
+                  await agent.stream(input, {
+                    ...options,
+                    abortSignal: idle.signal,
+                    context: [
+                      ...options.context,
+                      {
+                        role: 'system' as const,
+                        content: explainReportBlock({ dataset, reportId }),
+                      },
+                      ...(notes
+                        ? [{ role: 'system' as const, content: notes }]
+                        : []),
+                    ],
+                  }),
+                ),
+              );
+            } catch (error) {
+              if (!idle.timedOut()) throw error;
+            } finally {
+              idle.dispose();
+            }
+            idle.check('Explain report');
             if (streamError !== undefined && !turn.signal.aborted) {
               throw await chatTurnError(streamError, () =>
                 this.deps.llmService.getView(),
@@ -1291,31 +1337,22 @@ export class TurnEngine {
               }));
               const images = await work.shotImages(shots);
               try {
-                // At most two minutes per call: a rate-limited model would
-                // otherwise hold the run with no word (agents.md 5.19).
-                const reviewed = await withIrisTimeout(
-                  template.id,
-                  turn.signal,
-                  (signal) =>
-                    this.deps.mastra.reviewTemplate(
-                      {
-                        url: template.representative,
-                        template,
-                        shots: images,
-                        measured,
-                      },
-                      {
-                        ...stepModelOf(SITE_REVIEWER_AGENT_KEY),
-                        abortSignal: signal,
-                      },
-                    ),
+                // Iris's call has its one deadline, two minutes per try, in
+                // her guarded call (agents.md 5.19; workflows R43).
+                const reviewed = await this.deps.mastra.reviewTemplate(
+                  {
+                    url: template.representative,
+                    template,
+                    shots: images,
+                    measured,
+                  },
+                  stepModelOf(SITE_REVIEWER_AGENT_KEY),
                 );
                 return {
                   ...reviewed,
                   stopped: reviewed.stopped || turn.signal.aborted,
                 };
               } catch (error) {
-                if (error instanceof IrisTimeoutError) throw error;
                 throw await stepError(error);
               }
             },

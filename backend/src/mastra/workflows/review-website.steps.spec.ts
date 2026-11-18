@@ -1,7 +1,6 @@
 import {
   IrisTimeoutError,
   REVIEW_WEBSITE_DEFAULT_EXCLUDE,
-  withIrisTimeout,
   ReviewWebsiteInputError,
   looksSignedIn,
   preparedSessionOf,
@@ -9,6 +8,7 @@ import {
   signInQuestion,
 } from './review-website.steps';
 import type { ReviewWebsiteInput } from './review-website.schemas';
+import { ModelTimeoutError } from './model-call';
 
 const INPUT: ReviewWebsiteInput = {
   url: ' https://shop.example.com/start ',
@@ -129,49 +129,14 @@ describe('Review a Website pure step code (agents.md 5.19)', () => {
     });
   });
 
-  describe('withIrisTimeout', () => {
-    it('passes the result on when the call answers in time', async () => {
-      const result = await withIrisTimeout(
-        '/claims/:id',
-        new AbortController().signal,
-        () => Promise.resolve('ok'),
-        50,
+  // Iris's deadline itself is proven with her call (review-website.agents.spec.ts).
+  describe('IrisTimeoutError', () => {
+    it('is a model timeout in her own words', () => {
+      const error = new IrisTimeoutError('/claims/:id');
+      expect(error).toBeInstanceOf(ModelTimeoutError);
+      expect(error.message).toBe(
+        'Iris did not answer within two minutes while reviewing /claims/:id. The model may be busy or rate limited: run again later, or untick Visual review with Iris to keep to the measured checks.',
       );
-      expect(result).toBe('ok');
-    });
-
-    it('aborts a slow call and fails with a clear message', async () => {
-      let seen: AbortSignal | undefined;
-      const slow = (signal: AbortSignal) => {
-        seen = signal;
-        return new Promise<string>((resolve) =>
-          signal.addEventListener('abort', () => resolve('stopped')),
-        );
-      };
-      await expect(
-        withIrisTimeout('/claims/:id', new AbortController().signal, slow, 20),
-      ).rejects.toThrow(IrisTimeoutError);
-      expect(seen?.aborted).toBe(true);
-      await expect(
-        withIrisTimeout('/claims/:id', new AbortController().signal, slow, 20),
-      ).rejects.toThrow(
-        'Iris did not answer within two minutes while reviewing /claims/:id',
-      );
-    });
-
-    it('a stopped run aborts the call and is no timeout', async () => {
-      const parent = new AbortController();
-      const pending = withIrisTimeout(
-        '/x',
-        parent.signal,
-        (signal) =>
-          new Promise<string>((resolve) =>
-            signal.addEventListener('abort', () => resolve('stopped')),
-          ),
-        5_000,
-      );
-      parent.abort();
-      await expect(pending).resolves.toBe('stopped');
     });
   });
 });
