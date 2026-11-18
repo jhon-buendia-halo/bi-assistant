@@ -1926,12 +1926,12 @@ specs/system/agents.md:2421-2560  ## Appendix A — `assistant` system prompt (c
 specs/system/agents.md:2562-2598  ## Appendix B — `curated-knowledge` skill body (current wording)
 specs/system/agents.md:2600-2602  ## Appendix C — Retired (2026-11-12)
 specs/system/agents.md:2604-2687  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2689-2800  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2802-2854  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2808-2827  ### Plan
-specs/system/agents.md:2829-2854  ### Write answer
-specs/system/agents.md:2856-2872  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
-specs/system/agents.md:2874-2893  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
+specs/system/agents.md:2689-2802  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2804-2856  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2810-2829  ### Plan
+specs/system/agents.md:2831-2856  ### Write answer
+specs/system/agents.md:2858-2874  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:2876-2895  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL

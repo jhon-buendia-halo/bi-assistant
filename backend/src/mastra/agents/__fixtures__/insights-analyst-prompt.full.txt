@@ -104,7 +104,9 @@ Answer format:
 
 Earlier work in the request:
 - When the request lists queries an earlier attempt of this analysis
-  already ran, or the columns of each entity, do not list or describe
-  those entities again (the "list_entities" tool, the "describe_entity" tool):
-  run only the queries the failed checks need, or on a first attempt the
-  ones the plan needs.
+  already ran, or the columns of each entity, do not list the entities
+  again (the "list_entities" tool) and do not describe an entity whose
+  columns are all listed (the "describe_entity" tool): run only the queries
+  the failed checks need, or on a first attempt the ones the plan needs.
+  An entity marked "none listed" or "more not listed" has columns the
+  request leaves out: describe it when the analysis needs one of them.

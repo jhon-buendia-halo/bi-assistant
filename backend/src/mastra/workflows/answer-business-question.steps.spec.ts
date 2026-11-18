@@ -1864,7 +1864,7 @@ describe('the carry-forward retry of the analysis (agents.md 5.11; workflows R27
       .join(' ')
       .replace(/\s+/g, ' ');
     expect(rule).toBe(
-      '- When the request lists queries an earlier attempt of this analysis already ran, or the columns of each entity, do not list or describe those entities again ([[tool:list_entities]], [[tool:describe_entity]]): run only the queries the failed checks need, or on a first attempt the ones the plan needs.',
+      '- When the request lists queries an earlier attempt of this analysis already ran, or the columns of each entity, do not list the entities again ([[tool:list_entities]]) and do not describe an entity whose columns are all listed ([[tool:describe_entity]]): run only the queries the failed checks need, or on a first attempt the ones the plan needs. An entity marked "none listed" or "more not listed" has columns the request leaves out: describe it when the analysis needs one of them.',
     );
     // Its cues are the words of the blocks Analyse's request carries.
     expect(EARLIER_BLOCK_HEADER.toLowerCase()).toContain(
@@ -1890,5 +1890,38 @@ describe('the carry-forward retry of the analysis (agents.md 5.11; workflows R27
         ],
       ).toLowerCase(),
     ).toContain('columns of each entity');
+    // An entity past the column caps carries the words the rule's
+    // exception names, so the Analyst may still describe it.
+    const capped = planCatalogBlock(
+      [
+        {
+          entity: 'wc.wide',
+          dataset: 'World Cup',
+          datasourceId: null,
+          datasourceKind: null,
+          columnCount: 41,
+        },
+        {
+          entity: 'wc.unlisted',
+          dataset: 'World Cup',
+          datasourceId: null,
+          datasourceKind: null,
+          columnCount: 40,
+        },
+      ],
+      [
+        {
+          entity: 'wc.wide',
+          columns: [{ name: 'player', type: '' }],
+          more: 40,
+        },
+        { entity: 'wc.unlisted', columns: [], more: 40 },
+      ],
+    );
+    expect(capped).toContain('- wc.wide: player (+40 more not listed)');
+    expect(capped).toContain(
+      '- wc.unlisted: (none listed) (+40 more not listed)',
+    );
+    expect(rule).toContain('"none listed" or "more not listed"');
   });
 });

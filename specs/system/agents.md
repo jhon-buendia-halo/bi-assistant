@@ -766,7 +766,7 @@ Its streamed turn is a workflow defined in code, not one agent call (5.11, ADR-0
   - *SQL practice*: fully-qualified names, the entity's datasource dialect and `datasourceId`, one datasource per query; names, not ids; retry a failed query simpler; a result at the row limit is partial; act on a result warning.
   - *Say why*: the `rationale` of `run_readonly_sql` and `sample_rows` in the first person, for a business reader, never naming SQL.
   - *Answer format*: a one-line headline with the key number; a compact Markdown table with three or more values; `How I got this` in 1-3 plain bullets, no SQL; `Assumptions` and `Caveats` only when there are some; never a schema dump; "what data do I have" answered from the context and `describe_entity` without a query.
-  - *Earlier work in the request*, last, firing only on a cue the request carries (the earlier-queries block or the columns of each entity, 5.11): do not list or describe those entities again; run only the queries the failed checks need (on a first attempt, the ones the plan needs).
+  - *Earlier work in the request*, last, firing only on a cue the request carries (the earlier-queries block or the columns of each entity, 5.11): do not list the entities again, and do not describe an entity whose columns are all listed (one Load catalog's caps cut, marked "none listed" or "more not listed", may still be described); run only the queries the failed checks need (on a first attempt, the ones the plan needs).
 - **Overrides** (ADR-0026) follow the assistant's rules: the editable text and Reset leave out `## Tools`, and an override must start with the identity line.
 - **Links** (`linksAllowed: true`). The shipped text links five of its tools (all but `explore_result`) and its three skills. An override may link only the agent's own tools, as `[[tool:<name>]]`, and its own skills, as `[[skill:<name>]]`.
   - A skill that is not one of its own is refused with `Only Insights Analyst's own skills can be linked here: this prompt is shared by every user`.
@@ -2793,10 +2793,12 @@ Answer format:
 
 Earlier work in the request:
 - When the request lists queries an earlier attempt of this analysis
-  already ran, or the columns of each entity, do not list or describe
-  those entities again ([[tool:list_entities]], [[tool:describe_entity]]):
-  run only the queries the failed checks need, or on a first attempt the
-  ones the plan needs.
+  already ran, or the columns of each entity, do not list the entities
+  again ([[tool:list_entities]]) and do not describe an entity whose
+  columns are all listed ([[tool:describe_entity]]): run only the queries
+  the failed checks need, or on a first attempt the ones the plan needs.
+  An entity marked "none listed" or "more not listed" has columns the
+  request leaves out: describe it when the analysis needs one of them.
 ```
 
 ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
