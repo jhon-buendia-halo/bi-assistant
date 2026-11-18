@@ -308,13 +308,14 @@ const INSIGHTS_ANALYST_EVAL_CASES: AssistantEvalCase[] = [
       'WHERE t.tournament_year = 2022 GROUP BY goal.goal_type ' +
       'ORDER BY goals DESC',
     judgeRubric:
-      'The 2022 data holds 24 goals. Score pass=true only if the final ' +
-      'answer says 24 goals were scored at the 2022 World Cup, any ' +
-      'breakdown it gives comes from its queries, and it does not present ' +
-      'a query of an earlier attempt that timed out as a problem with the ' +
-      'data. Score pass=false if it gives another total, a figure or ' +
-      'breakdown no query returned, or says the data is incomplete or ' +
-      'unreadable because of that timeout.' +
+      'The data holds 24 goals for the 2022 World Cup. Score pass=true only ' +
+      'if the final answer gives 24 as the number of goals of the 2022 ' +
+      'World Cup in the data. It may say which part of the tournament the ' +
+      'data covers when its queries show it, and any breakdown it gives ' +
+      'must come from its queries. Score pass=false if it gives no figure ' +
+      'or another figure for the goals in the data, a breakdown no query ' +
+      'returned, or presents a query of an earlier attempt that timed out ' +
+      'as a problem with the data.' +
       ANSWER_FORMAT,
   },
 ];

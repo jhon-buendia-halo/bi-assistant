@@ -163,6 +163,22 @@ describe('insights-analyst-edge checks (story 1.29.6)', () => {
       ),
     ).toBeUndefined();
     expect(avg([{ avg: 25.18 }], ctx('The average is NaN.'))).toBeDefined();
+    // A real answer of 2026-11-17 the check failed: its table names what it
+    // left out ("Excluded: NaN ..."), which is no reported value.
+    expect(
+      avg(
+        [{ avg: 25.17 }],
+        ctx(
+          '**The average product weight is about 25.17 kg.**\n' +
+            '| Measure | Value |\n|---|---|\n' +
+            '| Excluded: NaN (not-a-number) weights | 5 |\n' +
+            '| Excluded: infinite weights | 1 |',
+        ),
+      ),
+    ).toBeUndefined();
+    expect(
+      avg([{ avg: 25.17 }], ctx('Excluding nothing, the average is NaN.')),
+    ).toBeDefined();
   });
 });
 

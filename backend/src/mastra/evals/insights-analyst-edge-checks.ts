@@ -92,6 +92,9 @@ const NON_FINITE_VALUE =
   /(?:\bis|\bwas|=|:|\bof|\bat)\s*\**\s*-?(?:NaN|Infinity|inf)\b/i;
 const NON_FINITE_EXPLAINED =
   /\b(nan|not a number|infinity|infinite|non-finite|invalid|unusable|excluded?|exclud\w+|ignor\w+|filter\w+|skipp\w+|omit\w+)\b/i;
+/** "Excluded: NaN weights", "ignoring the Infinity": what was left out, no value. */
+const NON_FINITE_LEFT_OUT =
+  /\b(?:exclud\w+|ignor\w+|filter\w+|skipp\w+|omit\w+|remov\w+|dropp\w+)\s*:?\s*(?:the\s+|all\s+|\d+\s+)?(?:NaN|Infinity|inf)\b/gi;
 
 /**
  * The comparator of the average weight: the answer never reports NaN or
@@ -100,7 +103,8 @@ const NON_FINITE_EXPLAINED =
  */
 export function averageHandlesNonFinite(column = 'avg'): SqlTruthComparator {
   return (rows, { answer }) => {
-    if (NON_FINITE_VALUE.test(answer)) {
+    // A label naming what was left out is no reported value.
+    if (NON_FINITE_VALUE.test(answer.replace(NON_FINITE_LEFT_OUT, ''))) {
       return 'the answer reports NaN or Infinity as the average';
     }
     const expected = Number(rows[0]?.[column]);
