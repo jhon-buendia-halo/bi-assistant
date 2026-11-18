@@ -201,7 +201,8 @@ A `copilot` config is never swapped: rules 2 and 3 do not apply to it, so the de
 - **Provider retries:** every outbound HTTP request of the backend process (which includes all LLM calls) is retried on status 429, 500, 502, 503, 504 or 529, up to 3 retries (4 requests total), waiting `Retry-After` (seconds or HTTP date) when present, else 1 s, 2 s, 4 s; no wait is longer than 30 s, and the wait ends at once, rejecting with the signal's reason, when the request's abort signal fires. The body of a retried response is cancelled to free its connection; the last response is returned untouched. Any other status, a 2xx, or a thrown network error passes through at once. Retries only inspect status and headers, never the body, so a streamed response is never duplicated. Installed once, idempotently. GitHub Copilot calls go through the local Copilot runtime, not the backend's `fetch`, so this retry does not apply to them; the runtime handles its own retries.
 - **Designer timeout:** 120 s per designer call (6.7).
 - **Connection test timeout:** 30 s.
-- No other agent call has its own timeout; chat turns are bounded by the client's abort.
+- **Run watchdog:** a workflow run is detached from its connection (ADR-0048), so the server bounds it: a turn of a run (api.md 118, 119, 138 and Try it) that reports no event for 15 minutes (`WORKFLOW_RUN_IDLE_MINUTES`; 0 turns it off) is aborted and the run is stored `failed` ([workflows](../capabilities/workflows/spec.md), *Edge cases and errors*).
+- No other agent call has its own timeout; a step's chat is bounded by the client's abort.
 
 > Implementation note: `modules/llm/retry-fetch.ts` patches `globalThis.fetch`, because Mastra rebuilds its OpenAI-compatible client without forwarding a caller-supplied `fetch`.
 
