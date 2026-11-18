@@ -5,9 +5,14 @@ jest.mock('../tool-services', () => ({
 
 import { checkWorkflowContract } from './workflow-contract';
 import {
+  ANALYSE_RETRY_MAX_STEPS,
   ANSWER_BUSINESS_QUESTION_EDGES,
   ANSWER_BUSINESS_QUESTION_STEPS,
+  VALIDATION_CHECKS,
   analysisLoopDone,
+  flaggedQueries,
+  keptQueryOrigins,
+  mergeAttempts,
   answerDeltas,
   answerOf,
   answerWithRowTables,
@@ -34,11 +39,15 @@ import {
   type AnswerBusinessQuestionRuntime,
 } from './answer-business-question.steps';
 import type { ExplorableQuery } from '../../modules/sessions/query-evidence/explorable-queries';
+import { INSIGHTS_ANALYST_PROMPT } from '../agents/system-prompts';
 import type { ExplorerSpec } from '../agents/result-explorer.prompts';
 import {
   ANALYSE_VISUAL_LINE,
   ANSWER_REQUEST_CAP,
   ANSWER_ROWS_CAP,
+  EARLIER_BLOCK_CAP,
+  EARLIER_BLOCK_HEADER,
+  EARLIER_ROWS_SHOWN,
   PLAN_FIRST_LINE,
   PLAN_INSTRUCTIONS,
   WRITE_ANSWER_FIRST_LINE,
@@ -46,10 +55,18 @@ import {
   WRITE_ANSWER_VISUAL_LINE,
   analysePlanBlock,
   analyseSystemBlocks,
+  earlierQueriesBlock,
+  findingStatus,
   planMessages,
   visualCued,
   writeAnswerRequest,
 } from './answer-business-question.prompts';
+import {
+  analyseInputSchema,
+  analyseOutcomeSchema,
+  plannedQuestionSchema,
+  validateOutcomeSchema,
+} from './answer-business-question.schemas';
 
 const PLAN: AnalysisPlan = {
   question: 'Who scored the most goals in 2018?',
@@ -339,6 +356,8 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
             datasourceId: 'ds-pg',
             datasourceKind: 'postgres',
             columnCount: 3,
+            // No dated column: no date the data ends on.
+            dataEndsAt: null,
           },
           {
             entity: 'n.public.notes',
@@ -346,6 +365,7 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
             datasourceId: null,
             datasourceKind: null,
             columnCount: null,
+            dataEndsAt: null,
           },
         ],
         // Plan's columns: the entities whose columns are known.
@@ -1497,5 +1517,781 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
         expect(request.length).toBe(without.length);
       });
     });
+  });
+});
+
+describe('the carry-forward retry of the analysis (agents.md 5.11; workflows R27)', () => {
+  /** A query that kept an arbitrary sample: its own LIMIT reached, no sort. */
+  const sampled = (partial: Partial<AnalyseQuery> = {}): AnalyseQuery =>
+    query({
+      sql: 'SELECT player, minute FROM world_cup.goals LIMIT 2',
+      rationale: 'I look at a few goals.',
+      rows: [
+        { player: 'Kane', minute: 3 },
+        { player: 'Mbappe', minute: 9 },
+      ],
+      rowCount: 2,
+      ...partial,
+    });
+  const ranked = (partial: Partial<AnalyseQuery> = {}): AnalyseQuery =>
+    query({
+      sql: 'SELECT player, minute FROM world_cup.goals ORDER BY minute LIMIT 2',
+      rationale: 'I take the two earliest goals.',
+      rows: [
+        { player: 'Kane', minute: 3 },
+        { player: 'Mbappe', minute: 9 },
+      ],
+      rowCount: 2,
+      ...partial,
+    });
+  const sql = (failed = false) => ({
+    tool: 'run_readonly_sql',
+    rowCount: 1,
+    failed,
+  });
+  /** Attempt 1: a whole count, then a sample nothing read again. */
+  const FIRST_QUERIES = [query(), sampled()];
+  const FIRST_CALLS = [{ tool: 'list_entities', failed: false }, sql(), sql()];
+  const firstFindings = () =>
+    validateAttempt({ plan: PLAN, calls: FIRST_CALLS, queries: FIRST_QUERIES })
+      .findings;
+
+  describe('the schemas keep what the retry needs', () => {
+    const COLUMNS = [
+      {
+        entity: 'world_cup.goals',
+        columns: [{ name: 'player', type: 'text' }],
+        more: 0,
+      },
+    ];
+    it("carries the columns on Plan's output and Analyse's input", () => {
+      const planned = plannedQuestionSchema.parse({
+        question: 'q',
+        catalog: [],
+        plan: PLAN,
+        imageNotes: '',
+        columns: COLUMNS,
+      });
+      expect(planned.columns).toEqual(COLUMNS);
+      expect(
+        analyseInputSchema.parse({ ...planned, extra: 1 }).columns,
+      ).toEqual(COLUMNS);
+      // A run stored before the columns were carried reads none.
+      expect(
+        analyseInputSchema.parse({ question: 'q', catalog: [], plan: PLAN })
+          .columns,
+      ).toEqual([]);
+    });
+
+    it("keeps attempt 1's calls, queries and findings in the loop's input (Validate's output to Analyse)", () => {
+      const validated = validateOutcomeSchema.parse({
+        ok: false,
+        attempt: 1,
+        findings: firstFindings(),
+        question: 'q',
+        catalog: [],
+        columns: COLUMNS,
+        plan: PLAN,
+        calls: FIRST_CALLS,
+        queries: FIRST_QUERIES,
+        imageNotes: '',
+      });
+      const next = analyseInputSchema.parse(validated);
+      expect(next.calls).toEqual(FIRST_CALLS);
+      expect(next.queries).toEqual(FIRST_QUERIES);
+      expect(next.findings).toEqual(firstFindings());
+      expect(next.columns).toEqual(COLUMNS);
+      expect(next.attempt).toBe(1);
+    });
+
+    it("keeps the earlier attempt and the retry's error on Analyse's output, and the kept set on Validate's", () => {
+      const outcome = analyseOutcomeSchema.parse({
+        question: 'q',
+        catalog: [],
+        plan: PLAN,
+        attempt: 2,
+        calls: [],
+        queries: [],
+        text: '',
+        stopped: false,
+        imageNotes: '',
+        earlier: {
+          calls: FIRST_CALLS,
+          queries: FIRST_QUERIES,
+          findings: firstFindings(),
+        },
+        retryError: 'The model failed.',
+      });
+      expect(outcome.earlier?.queries).toEqual(FIRST_QUERIES);
+      expect(outcome.retryError).toBe('The model failed.');
+      expect(outcome.columns).toEqual([]);
+      expect(
+        validateOutcomeSchema.parse({
+          ok: false,
+          attempt: 2,
+          findings: [],
+          question: 'q',
+          catalog: [],
+          plan: PLAN,
+          calls: [],
+          queries: [],
+          imageNotes: '',
+          kept: 'first',
+        }).kept,
+      ).toBe('first');
+    });
+  });
+
+  describe('flaggedQueries', () => {
+    it('names the failed check that flagged each query, and nothing when its check passed', () => {
+      expect(flaggedQueries(FIRST_QUERIES, firstFindings())).toEqual([
+        undefined,
+        VALIDATION_CHECKS.sample,
+      ]);
+      // The same queries with every check passed flag nothing.
+      expect(
+        flaggedQueries(
+          FIRST_QUERIES,
+          firstFindings().map((f) => ({ ...f, passed: true })),
+        ),
+      ).toEqual([undefined, undefined]);
+      const failed = query({ error: 'boom', rows: [], rowCount: 0 });
+      const { findings } = validateAttempt({
+        plan: PLAN,
+        calls: [sql(true)],
+        queries: [failed],
+      });
+      expect(flaggedQueries([failed], findings)).toEqual([
+        VALIDATION_CHECKS.ranQuery,
+      ]);
+    });
+  });
+
+  describe('earlierQueriesBlock', () => {
+    it('lists each query on one line: number, rationale, SQL, coverage, row count and the first 5 rows, the flagged ones first', () => {
+      const many = Array.from({ length: 8 }, (_, n) => ({ n }));
+      const block = earlierQueriesBlock(
+        [query({ rows: many, rowCount: 8 }), sampled()],
+        firstFindings(),
+      );
+      const lines = block.split('\n');
+      expect(lines[0]).toBe(EARLIER_BLOCK_HEADER);
+      expect(lines).toHaveLength(3);
+      // The sample a failed check flagged comes first, under its number.
+      expect(lines[1]).toBe(
+        `2. [flagged: ${VALIDATION_CHECKS.sample}] I look at a few goals. | SQL: SELECT player, minute FROM world_cup.goals LIMIT 2 | coverage: sample | 2 rows | first rows: [{"player":"Kane","minute":3},{"player":"Mbappe","minute":9}]`,
+      );
+      expect(lines[2]).toBe(
+        `1. I count the goals of each player. | SQL: SELECT player, count(*) AS goals FROM world_cup.goals GROUP BY player | coverage: whole-table | 8 rows | first rows: ${JSON.stringify(many.slice(0, EARLIER_ROWS_SHOWN))}`,
+      );
+    });
+
+    it('keeps a multi-line statement on one line and says why a query failed', () => {
+      const block = earlierQueriesBlock(
+        [
+          query({
+            sql: 'SELECT *\n  FROM nope',
+            error: 'relation "nope" does not exist',
+            rows: [],
+            rowCount: 0,
+          }),
+        ],
+        [],
+      );
+      expect(block.split('\n')[1]).toBe(
+        '1. I count the goals of each player. | SQL: SELECT * FROM nope | failed: relation "nope" does not exist',
+      );
+    });
+
+    it(`is at most ${8_000} characters, and says how many queries it left out`, () => {
+      expect(EARLIER_BLOCK_CAP).toBe(8_000);
+      const wide = Array.from({ length: 5 }, () => ({ note: 'x'.repeat(400) }));
+      const queries = Array.from({ length: 12 }, (_, n) =>
+        query({ sql: `SELECT ${n} AS n`, rows: wide, rowCount: 5 }),
+      );
+      const block = earlierQueriesBlock(queries, []);
+      expect(block.length).toBeLessThanOrEqual(EARLIER_BLOCK_CAP);
+      expect(block).toContain('SELECT 0 AS n');
+      expect(block).not.toContain('SELECT 11 AS n');
+      expect(block.split('\n').at(-1)).toMatch(
+        /^\(\d+ more quer(y|ies) not listed to fit\.\)$/,
+      );
+      // One query longer than the cap is cut, never the cap broken.
+      const huge = earlierQueriesBlock(
+        [query({ sql: `SELECT '${'y'.repeat(9_000)}'` })],
+        [],
+      );
+      expect(huge.length).toBeLessThanOrEqual(EARLIER_BLOCK_CAP);
+    });
+
+    it("lists a resumed attempt's own queries after the earlier attempt's, under one header, one numbering and one cap", () => {
+      const own = query({ sql: 'SELECT 42 AS own', rows: [], rowCount: 0 });
+      const lines = earlierQueriesBlock(FIRST_QUERIES, firstFindings(), [
+        own,
+      ]).split('\n');
+      expect(
+        lines.filter((line) => line === EARLIER_BLOCK_HEADER),
+      ).toHaveLength(1);
+      expect(lines.map((line) => line.split('.')[0])).toEqual([
+        EARLIER_BLOCK_HEADER.split('.')[0],
+        '2',
+        '1',
+        '3',
+      ]);
+      // The resumed attempt's queries are never flagged by attempt 1's checks.
+      expect(lines[3]).not.toContain('[flagged');
+      const wide = Array.from({ length: 5 }, () => ({ note: 'x'.repeat(400) }));
+      const many = (from: number) =>
+        Array.from({ length: 12 }, (_, n) =>
+          query({ sql: `SELECT ${from + n} AS n`, rows: wide, rowCount: 5 }),
+        );
+      const capped = earlierQueriesBlock(many(0), [], many(100));
+      expect(capped.length).toBeLessThanOrEqual(EARLIER_BLOCK_CAP);
+      expect(earlierQueriesBlock([], [], [own])).toContain('1. ');
+    });
+
+    it('is empty with no earlier query', () => {
+      expect(earlierQueriesBlock([], firstFindings())).toBe('');
+      expect(earlierQueriesBlock([], firstFindings(), [])).toBe('');
+    });
+  });
+
+  describe('analyseSystemBlocks with the earlier block', () => {
+    it('puts it after the plan block, and is unchanged without one', () => {
+      expect(
+        analyseSystemBlocks({ catalogBlock: 'CAT', planBlock: 'PLAN' }),
+      ).toEqual(['CAT', 'PLAN']);
+      expect(
+        analyseSystemBlocks({
+          catalogBlock: 'CAT',
+          planBlock: 'PLAN',
+          earlierBlock: '',
+        }),
+      ).toEqual(['CAT', 'PLAN']);
+      expect(
+        analyseSystemBlocks({
+          catalogBlock: 'CAT',
+          planBlock: 'PLAN',
+          earlierBlock: 'EARLIER',
+          imageNotes: '## Reference images\nA chart.',
+        }),
+      ).toEqual(['CAT', 'PLAN', 'EARLIER', '## Reference images\nA chart.']);
+    });
+  });
+
+  describe('mergeAttempts', () => {
+    const first = () => ({
+      calls: FIRST_CALLS,
+      queries: FIRST_QUERIES,
+      findings: firstFindings(),
+    });
+
+    it("puts attempt 2's queries first, then attempt 1's that no failed check flagged", () => {
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: first(),
+        second: { calls: [sql()], queries: [ranked()] },
+      });
+      expect(merged.kept).toBe('merged');
+      expect(merged.ok).toBe(true);
+      expect(merged.queries).toEqual([ranked(), query()]);
+      // The calls follow the queries: attempt 2's, then the kept SQL call.
+      expect(merged.calls).toEqual([sql(), sql()]);
+      expect(merged.findings.every((f) => f.passed)).toBe(true);
+    });
+
+    it("checks the merged set in the order it ran: attempt 1's kept queries never resolve a problem attempt 2 left", () => {
+      // The retry takes a sample again; attempt 1's whole count ran before
+      // it, so it reads no whole data after the sample.
+      const again = sampled({
+        sql: "SELECT player, minute FROM world_cup.goals WHERE player <> '' LIMIT 2",
+      });
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: first(),
+        second: { calls: [sql()], queries: [again] },
+      });
+      expect(merged.ok).toBe(false);
+      expect(
+        merged.findings.find((f) => f.check === VALIDATION_CHECKS.sample)
+          ?.passed,
+      ).toBe(false);
+      // Write answer still reads attempt 2's queries first.
+      expect(merged.queries).toEqual([again, query()]);
+      // The same for a retry query cut at its row limit, and for a failed
+      // retry call that only attempt 1's earlier calls follow.
+      const cut = mergeAttempts({
+        plan: PLAN,
+        first: first(),
+        second: {
+          calls: [sql(), sql(true)],
+          queries: [
+            query({ truncated: true }),
+            query({ error: 'boom', rows: [], rowCount: 0 }),
+          ],
+        },
+      });
+      expect(cut.ok).toBe(false);
+    });
+
+    it("drops attempt 1's failed queries from the merged set", () => {
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: {
+          calls: [sql(true), sql(), sql()],
+          queries: [
+            query({ error: 'boom', rows: [], rowCount: 0 }),
+            query(),
+            sampled(),
+          ],
+          findings: firstFindings(),
+        },
+        second: { calls: [sql()], queries: [ranked()] },
+      });
+      expect(merged.queries).toEqual([ranked(), query()]);
+      expect(merged.calls).toEqual([sql(), sql()]);
+    });
+
+    it('keeps attempt 1 alone when the merged set fails a check attempt 1 passed', () => {
+      // Attempt 1: one result cut at its row limit (flagged), no tool error.
+      const cutQueries = [query({ truncated: true })];
+      const cutAttempt = {
+        calls: [sql()],
+        queries: cutQueries,
+        findings: validateAttempt({
+          plan: PLAN,
+          calls: [sql()],
+          queries: cutQueries,
+        }).findings,
+      };
+      // Attempt 2 fixes the cut but leaves a failed query unresolved.
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: cutAttempt,
+        second: {
+          calls: [sql(), sql(true)],
+          queries: [query(), query({ error: 'boom', rows: [], rowCount: 0 })],
+        },
+      });
+      expect(merged.kept).toBe('first');
+      expect(merged.queries).toEqual(cutQueries);
+      expect(merged.calls).toEqual([sql()]);
+      expect(merged.findings).toEqual(cutAttempt.findings);
+      expect(merged.ok).toBe(false);
+    });
+
+    it('keeps attempt 1 alone when attempt 2 ran nothing successfully', () => {
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: first(),
+        second: { calls: [], queries: [] },
+      });
+      expect(merged.kept).toBe('first');
+      expect(merged.queries).toEqual(FIRST_QUERIES);
+    });
+
+    it("keeps attempt 1 on the retry's error, with the warning-only check that never becomes a caveat", () => {
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: first(),
+        second: {
+          calls: [sql()],
+          queries: [ranked()],
+          retryError: 'the model failed',
+        },
+      });
+      expect(merged.kept).toBe('first');
+      expect(merged.queries).toEqual(FIRST_QUERIES);
+      const retry = merged.findings.at(-1)!;
+      expect(retry).toEqual({
+        check: 'Retry completed (warning only)',
+        passed: false,
+        detail:
+          "Attempt 2 stopped on an error (the model failed); the answer rests on attempt 1's queries.",
+      });
+      expect(VALIDATION_CHECKS.retry).toBe(retry.check);
+      expect(findingStatus(retry)).toBe('warning');
+      // It is never a failed check the next attempt is told to fix.
+      expect(merged.findings.slice(0, -1)).toEqual(firstFindings());
+    });
+
+    it("lets Write answer's 40,000-character cut drop attempt 1's queries before attempt 2's", () => {
+      const rows = Array.from({ length: 50 }, (_, n) => ({
+        n,
+        note: 'z'.repeat(900),
+      }));
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: {
+          calls: [sql()],
+          queries: [query({ sql: 'SELECT first_attempt', rows, rowCount: 50 })],
+          findings: [
+            {
+              check: VALIDATION_CHECKS.rowLimit,
+              passed: false,
+              detail: 'cut',
+            },
+          ],
+        },
+        second: {
+          calls: [sql()],
+          queries: [
+            query({ sql: 'SELECT second_attempt', rows, rowCount: 50 }),
+          ],
+        },
+      });
+      expect(merged.kept).toBe('merged');
+      const request = writeAnswerRequest({
+        question: 'q',
+        plan: PLAN,
+        queries: merged.queries,
+        findings: merged.findings,
+      });
+      // The cap holds the queries' room; their heading and the shortening
+      // note come on top, as before.
+      expect(request.length).toBeLessThanOrEqual(ANSWER_REQUEST_CAP + 80);
+      expect(request).toContain('1. I count the goals of each player.');
+      expect(request).toContain('SQL: SELECT second_attempt');
+      expect(request).not.toContain('SQL: SELECT first_attempt');
+    });
+  });
+
+  describe('keptQueryOrigins (workflows R41)', () => {
+    const first = () => ({
+      calls: FIRST_CALLS,
+      queries: FIRST_QUERIES,
+      findings: firstFindings(),
+    });
+    /** The kept set as Build visual receives it: through the workflow's state. */
+    const carried = (queries: readonly AnalyseQuery[]) =>
+      JSON.parse(JSON.stringify(queries)) as AnalyseQuery[];
+
+    it("finds the merged set's queries in their attempts: attempt 2's, then attempt 1's unflagged ones", () => {
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: first(),
+        second: { calls: [sql()], queries: [ranked()] },
+      });
+      expect(merged.kept).toBe('merged');
+      expect(
+        keptQueryOrigins([FIRST_QUERIES, [ranked()]], carried(merged.queries)),
+      ).toEqual([
+        { attempt: 2, index: 0 },
+        { attempt: 1, index: 0 },
+      ]);
+    });
+
+    it('finds attempt 1 alone when the merge kept it', () => {
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: first(),
+        second: { calls: [sql()], queries: [ranked()], retryError: 'down' },
+      });
+      expect(merged.kept).toBe('first');
+      expect(
+        keptQueryOrigins([FIRST_QUERIES, [ranked()]], carried(merged.queries)),
+      ).toEqual([
+        { attempt: 1, index: 0 },
+        { attempt: 1, index: 1 },
+      ]);
+    });
+
+    it('tells two queries with the same SQL apart by what they returned', () => {
+      const SQL = 'SELECT player FROM world_cup.goals';
+      const cut = query({
+        sql: SQL,
+        rows: [{ player: 'Kane' }],
+        rowCount: 1,
+        truncated: true,
+      });
+      const whole = query({
+        sql: SQL,
+        rows: [{ player: 'Kane' }, { player: 'Mbappe' }],
+        rowCount: 2,
+      });
+      // The retry ran it again whole; the cut one was flagged and dropped.
+      expect(keptQueryOrigins([[cut], [whole]], carried([whole]))).toEqual([
+        { attempt: 2, index: 0 },
+      ]);
+      // Attempt 1 alone kept: its own run, not the retry's same SQL.
+      expect(keptQueryOrigins([[cut], [whole]], carried([cut]))).toEqual([
+        { attempt: 1, index: 0 },
+      ]);
+      // Within one attempt: the second run of the SQL, not the first.
+      expect(
+        keptQueryOrigins(
+          [[cut, whole], [ranked()]],
+          carried([ranked(), whole]),
+        ),
+      ).toEqual([
+        { attempt: 2, index: 0 },
+        { attempt: 1, index: 1 },
+      ]);
+    });
+
+    it('is undefined without a retry or when the set is not one the merge keeps', () => {
+      expect(keptQueryOrigins([FIRST_QUERIES], FIRST_QUERIES)).toBeUndefined();
+      expect(
+        keptQueryOrigins([FIRST_QUERIES, [ranked()]], [query({ sql: 'x' })]),
+      ).toBeUndefined();
+    });
+  });
+
+  it('gives the retry a step budget of 8', () => {
+    expect(ANALYSE_RETRY_MAX_STEPS).toBe(8);
+  });
+
+  it("ends the Analyst's instructions with the rule that fires on the earlier block or the columns (agents.md Appendix E)", () => {
+    const rules = INSIGHTS_ANALYST_PROMPT.split('\n');
+    const start = rules.findIndex((line) =>
+      line.startsWith('Earlier work in the request:'),
+    );
+    expect(start).toBeGreaterThan(0);
+    // Late: the rules before it read as they always did; only the data-dates
+    // rule (agents.md 4.1 *Data dates*) follows it.
+    const dates = rules.findIndex((line) => line.startsWith('Data dates:'));
+    expect(dates).toBeGreaterThan(start);
+    const rule = rules
+      .slice(start + 1, dates)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    expect(rule).toBe(
+      '- When the request lists queries an earlier attempt of this analysis already ran, or the columns of each entity, do not list the entities again ([[tool:list_entities]]) and do not describe an entity whose columns are all listed ([[tool:describe_entity]]): run only the queries the failed checks need, or on a first attempt the ones the plan needs. An entity marked "none listed" or "more not listed" has columns the request leaves out: describe it when the analysis needs one of them.',
+    );
+    // Its cues are the words of the blocks Analyse's request carries.
+    expect(EARLIER_BLOCK_HEADER.toLowerCase()).toContain(
+      'queries an earlier attempt of this analysis already ran',
+    );
+    expect(
+      planCatalogBlock(
+        [
+          {
+            entity: 'wc.goals',
+            dataset: 'World Cup',
+            datasourceId: null,
+            datasourceKind: null,
+            columnCount: 1,
+          },
+        ],
+        [
+          {
+            entity: 'wc.goals',
+            columns: [{ name: 'player', type: '' }],
+            more: 0,
+          },
+        ],
+      ).toLowerCase(),
+    ).toContain('columns of each entity');
+    // An entity past the column caps carries the words the rule's
+    // exception names, so the Analyst may still describe it.
+    const capped = planCatalogBlock(
+      [
+        {
+          entity: 'wc.wide',
+          dataset: 'World Cup',
+          datasourceId: null,
+          datasourceKind: null,
+          columnCount: 41,
+        },
+        {
+          entity: 'wc.unlisted',
+          dataset: 'World Cup',
+          datasourceId: null,
+          datasourceKind: null,
+          columnCount: 40,
+        },
+      ],
+      [
+        {
+          entity: 'wc.wide',
+          columns: [{ name: 'player', type: '' }],
+          more: 40,
+        },
+        { entity: 'wc.unlisted', columns: [], more: 40 },
+      ],
+    );
+    expect(capped).toContain('- wc.wide: player (+40 more not listed)');
+    expect(capped).toContain(
+      '- wc.unlisted: (none listed) (+40 more not listed)',
+    );
+    expect(rule).toContain('"none listed" or "more not listed"');
+  });
+});
+
+describe('data dates in the analysis (agents.md 4.1 *Data dates*, 5.11 Validate)', () => {
+  const NOW = new Date('2026-11-17T12:00:00Z');
+  const CENSUS = 'file.demo_census_prod.demographics_data';
+  const PLAN: AnalysisPlan = {
+    question: 'How many employees fall in each tenure band?',
+    measures: ['employees per tenure band'],
+    entities: [CENSUS],
+    scope: 'All employees.',
+    assumptions: [],
+    needsClarification: false,
+    clarification: null,
+  };
+  const catalog = (dataEndsAt: string | null) => [
+    {
+      entity: CENSUS,
+      dataset: 'Census',
+      datasourceId: 'ds-1',
+      datasourceKind: 'file',
+      columnCount: 97,
+      dataEndsAt,
+    },
+  ];
+  const query = (sql: string): AnalyseQuery => ({
+    sql,
+    rows: [{ band: '3-5', n: 484 }],
+    rowCount: 6,
+    truncated: false,
+  });
+  const TODAY = query(
+    `SELECT band, COUNT(*) n FROM ${CENSUS} WHERE date_diff('day', "Date of Hire", CURRENT_DATE) > 0 GROUP BY band`,
+  );
+  const AS_OF = query(
+    `SELECT band, COUNT(*) n FROM ${CENSUS} WHERE date_diff('day', "Date of Hire", DATE '2024-01-01') > 0 GROUP BY band`,
+  );
+  const calls = [{ tool: 'run_readonly_sql', rowCount: 6, failed: false }];
+  const check = VALIDATION_CHECKS.dataDate;
+
+  it('loads the date the data ends from the dated columns', async () => {
+    getDatasets.mockResolvedValueOnce([
+      {
+        name: 'Census',
+        datasourceId: 'ds-1',
+        datasourceKind: 'file',
+        tables: [CENSUS],
+        entities: [
+          {
+            key: CENSUS,
+            columns: [
+              {
+                name: 'Date of Hire',
+                type: 'DATE',
+                range: { min: '2004-01-01', max: '2023-07-02' },
+              },
+              { name: 'Age', type: 'DOUBLE' },
+            ],
+          },
+        ],
+      },
+    ]);
+    const { catalog: loaded } = await loadCatalog(['Census']);
+    expect(loaded[0].dataEndsAt).toBe('2023-07-02');
+  });
+
+  it('says in the catalog where the data ends when the question has a time cue, and is as before otherwise', () => {
+    const question = 'How many employees fall in each tenure band?';
+    const block = catalogBlock(catalog('2023-07-02'), { question, now: NOW });
+    expect(block).toBe(
+      [
+        'Catalog loaded for this turn: 1 entity.',
+        `- ${CENSUS} (dataset: Census; 97 columns)`,
+        'The Census data ends 2023-07-02: a figure that depends on the current date (tenure, age, time since) is measured from that date, not from today, unless the question asks about today.',
+      ].join('\n'),
+    );
+    const plain = `Catalog loaded for this turn: 1 entity.\n- ${CENSUS} (dataset: Census; 97 columns)`;
+    // Current data, a question with no time cue, or no question: as before.
+    expect(catalogBlock(catalog('2026-11-10'), { question, now: NOW })).toBe(
+      plain,
+    );
+    expect(
+      catalogBlock(catalog('2023-07-02'), {
+        question: 'Which plan is the most popular?',
+        now: NOW,
+      }),
+    ).toBe(plain);
+    expect(catalogBlock(catalog('2023-07-02'), { now: NOW })).toBe(plain);
+  });
+
+  it('fails an attempt that measured against today on data that ends well before it', () => {
+    const checked = validateAttempt(
+      {
+        plan: PLAN,
+        calls,
+        queries: [TODAY],
+        catalog: catalog('2023-07-02'),
+        question: PLAN.question,
+      },
+      NOW,
+    );
+    expect(checked.ok).toBe(false);
+    expect(checked.findings.find((f) => f.check === check)).toEqual({
+      check,
+      passed: false,
+      detail:
+        '1 query measured against today on data that ends well before it (the Census data ends 2023-07-02): measure from the date the data ends, and say which date you used.',
+    });
+    expect(flaggedQueries([TODAY], checked.findings)).toEqual([check]);
+  });
+
+  it('passes when the data date is used, a later query re-read it, or the question asks about today', () => {
+    const base = { plan: PLAN, calls, catalog: catalog('2023-07-02') };
+    expect(
+      validateAttempt(
+        { ...base, queries: [AS_OF], question: PLAN.question },
+        NOW,
+      ).ok,
+    ).toBe(true);
+    expect(
+      validateAttempt(
+        { ...base, queries: [TODAY, AS_OF], question: PLAN.question },
+        NOW,
+      ).ok,
+    ).toBe(true);
+    const today = validateAttempt(
+      {
+        ...base,
+        queries: [TODAY],
+        question: 'How many employees have under 1 year of tenure as of today?',
+      },
+      NOW,
+    );
+    expect(today.ok).toBe(true);
+    expect(today.findings.find((f) => f.check === check)?.detail).toBe(
+      'The question asks about today.',
+    );
+  });
+
+  it('adds no finding over current data or without a catalog, so other runs read as before', () => {
+    for (const input of [
+      {
+        plan: PLAN,
+        calls,
+        queries: [TODAY],
+        catalog: catalog('2026-11-10'),
+        question: PLAN.question,
+      },
+      { plan: PLAN, calls, queries: [TODAY] },
+    ]) {
+      const checked = validateAttempt(input, NOW);
+      expect(checked.ok).toBe(true);
+      expect(checked.findings.map((f) => f.check)).not.toContain(check);
+      expect(checked.findings).toHaveLength(5);
+    }
+  });
+
+  it('drops the query measured against today when a retry measures from the data date', () => {
+    const first = validateAttempt(
+      {
+        plan: PLAN,
+        calls,
+        queries: [TODAY],
+        catalog: catalog('2023-07-02'),
+        question: PLAN.question,
+      },
+      NOW,
+    );
+    const merged = mergeAttempts({
+      plan: PLAN,
+      first: { calls, queries: [TODAY], findings: first.findings },
+      second: { calls, queries: [AS_OF] },
+      catalog: catalog('2023-07-02'),
+      question: PLAN.question,
+    });
+    expect(merged.ok).toBe(true);
+    expect(merged.queries).toEqual([AS_OF]);
   });
 });

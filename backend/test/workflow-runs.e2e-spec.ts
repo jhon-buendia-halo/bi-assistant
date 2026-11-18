@@ -727,8 +727,15 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(orientation).toBeLessThan(metrics);
     expect(metrics).toBeLessThan(knowledge);
     expect(knowledge).toBeLessThan(catalog);
-    // Then the plan (agents.md 5.11).
+    // The catalog lists the columns Load catalog loaded, as Plan's does.
+    expect(system[catalog]).toContain(
+      'Columns of each entity (name type):\n- world_cup.world_cup.goals: goal_id integer',
+    );
+    // Then the plan (agents.md 5.11); a first attempt has no earlier block.
     expect(plan).toBe(catalog + 1);
+    expect(
+      system.some((text) => text.startsWith('Queries an earlier attempt')),
+    ).toBe(false);
     // Its on-demand skills reach the model through the framework's catalog.
     const all = system.join('\n');
     for (const skill of [

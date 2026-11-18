@@ -299,4 +299,29 @@ export const INSIGHTS_ANALYST_PROMPT = [
   '- Never dump schemas or column lists unless the user asks for them. When',
   '  the user asks what data they have, describe the datasets from the',
   '  session context and [[tool:describe_entity]] without running a query.',
+  // Last, so the rules above read as they always did; it fires only on a
+  // cue the request carries: Analyse's earlier-queries block or its
+  // columns of each entity (agents.md 5.11, Appendix E). An entity past
+  // Load catalog's column caps reads "none listed" or "more not listed",
+  // so the Analyst may still describe it.
+  '',
+  'Earlier work in the request:',
+  '- When the request lists queries an earlier attempt of this analysis',
+  '  already ran, or the columns of each entity, do not list the entities',
+  '  again ([[tool:list_entities]]) and do not describe an entity whose',
+  '  columns are all listed ([[tool:describe_entity]]): run only the queries',
+  '  the failed checks need, or on a first attempt the ones the plan needs.',
+  '  An entity marked "none listed" or "more not listed" has columns the',
+  '  request leaves out: describe it when the analysis needs one of them.',
+  // Last again; it fires only on the "data ends" cue the catalog block and
+  // the dataset orientation carry for a table whose data ends well before
+  // today (agents.md 5.11 *Data dates*, Appendix E).
+  '',
+  'Data dates:',
+  '- When the request says a table\'s data ends on a date ("data ends …")',
+  '  and a figure depends on the current date (tenure, age, time since,',
+  "  recency), measure it from that date, or from the date the data's own",
+  '  columns imply (an age computed as of a date), never from CURRENT_DATE,',
+  '  and say under "Assumptions" which date you used. Use today only when',
+  '  the question asks about today.',
 ].join('\n');

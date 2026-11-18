@@ -229,9 +229,15 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ).not.toContain('read-images');
     });
 
-    it('runs Read images first, on Zoe, the Image Reader, in all three', () => {
+    it('runs Read images on Zoe, the Image Reader, in all three: first, or after Score readiness in Assess Data Readiness', () => {
       for (const id of WITH_IMAGES) {
-        expect([id, byId(id).steps[0].id]).toEqual([id, 'read-images']);
+        const ids = byId(id).steps.map((step) => step.id);
+        expect([id, ids.indexOf('read-images')]).toEqual([
+          id,
+          id === 'data-readiness-assessment'
+            ? ids.indexOf('score-readiness') + 1
+            : 0,
+        ]);
         expect([id, stepAgentKey(byId(id), 'read-images')]).toEqual([
           id,
           'image-reader',
@@ -256,10 +262,11 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         datasets: ['receive-question'],
         buildVisual: [],
       });
+      // Resolve dataset starts Zoe's reading of the images (agents.md 5.13).
       expect(usedBy('data-readiness-assessment')).toEqual({
         dataset: ['resolve-dataset'],
-        question: ['read-images', 'resolve-dataset'],
-        images: ['read-images'],
+        question: ['resolve-dataset'],
+        images: ['resolve-dataset'],
       });
       expect(usedBy('map-dashboard-data')).toEqual({
         artifact: ['load-dashboard'],
@@ -338,10 +345,12 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
           ]),
         ),
       ).toEqual({
-        datasets: ['read-dashboards'],
-        question: ['read-dashboards'],
-        images: ['read-dashboards'],
-        artifact: ['read-dashboards'],
+        // Resolve layers runs first and passes the run's input on
+        // (agents.md 5.20).
+        datasets: ['resolve-layers'],
+        question: ['resolve-layers'],
+        images: ['resolve-layers'],
+        artifact: ['resolve-layers'],
       });
     });
   });

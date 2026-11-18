@@ -24,6 +24,7 @@ import { getDatasetToolServices } from '../../../mastra/tool-services';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
 import { pageExplorableQuery } from '../../../mastra/tools/explore-result.tool';
+import { readinessModelOutput } from '../../../mastra/tools/readiness.tools';
 import {
   ASSESSED_REPORT_CONTEXT_KEY,
   READINESS_REPORT_EVENT,
@@ -38,6 +39,7 @@ import {
   CONSUMPTION_GAP_RUNTIME_KEY,
   CONSUMPTION_GAP_WORKFLOW_ID,
   type ConsumptionGapRuntime,
+  type GapQuery,
 } from '../../../mastra/workflows/consumption-gap-analysis.steps';
 import {
   MAP_DASHBOARD_DATA_RUNTIME_KEY,
@@ -54,11 +56,13 @@ import {
 import {
   REVIEW_WEBSITE_RUNTIME_KEY,
   REVIEW_WEBSITE_WORKFLOW_ID,
-  IrisTimeoutError,
   reviewWebsiteInputOf,
-  withIrisTimeout,
   type ReviewWebsiteRuntime,
 } from '../../../mastra/workflows/review-website.steps';
+import {
+  ModelTimeoutError,
+  streamIdleWatch,
+} from '../../../mastra/workflows/model-call';
 import type { ReviewWebsiteInput } from '../../../mastra/workflows/review-website.schemas';
 import type {
   SiteReviewRunIo,
@@ -66,12 +70,15 @@ import type {
 } from '../../site-review/site-review.service';
 import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
+  ANALYSE_RETRY_MAX_STEPS,
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
   ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   clarifyingQuestionOf,
+  keptQueryOrigins,
   planOf,
   turnSummaryOf,
   validateAttempt,
+  type AnalyseQuery,
   type AnsweredClarification,
   type AnswerBusinessQuestionInput,
   type AnswerBusinessQuestionRuntime,
@@ -135,8 +142,10 @@ import {
   EXPLORABLE_QUERIES_CONTEXT_KEY,
   explorableQueryOf,
   sessionExplorableQueries,
+  withRefs,
   type ExplorableQuery,
 } from '../query-evidence/explorable-queries';
+import { earlyWork, memoisedBy } from './early-work';
 import {
   QUERY_FACTS_CONTEXT_KEY,
   queryFactsKey,
@@ -180,6 +189,7 @@ import {
   analyseOutcomeOf,
   analyseQueriesOf,
   answeredTurnInput,
+  attemptEarlierBlock,
   catalogStepId,
   clarificationOptionText,
   turnWorkflowOf,
@@ -208,11 +218,15 @@ export interface TurnEngineDeps {
   /** The workflow view of a stored session, for the `workflow` event. */
   workflowOf(session: SessionDoc): Promise<WorkflowView | undefined>;
   effectiveWorkflowFor(session: SessionDoc): WorkflowPhase[];
-  /** Careful mode's cross-check of the answer's SQL (agents.md 5.4). */
+  /**
+   * Careful mode's cross-check of the answer's SQL (agents.md 5.4); `signal`
+   * is the turn's stop, for the verifier call and its statement.
+   */
   crossCheckAnswer(
     session: SessionDoc,
     question: string,
     data: ToolDataRecord[],
+    signal?: AbortSignal,
   ): Promise<CrossCheck | undefined>;
   /** The readiness tools' bridge, once installed (agents.md 3.13). */
   readinessBridge(): ReadinessBridge | undefined;
@@ -249,6 +263,7 @@ export interface TurnEngineDeps {
       instruction?: string;
       reference?: string;
     },
+    abortSignal?: AbortSignal,
   ): Promise<SessionVisualization>;
   /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
   saveMock(
@@ -321,7 +336,10 @@ export class TurnEngine {
     // client having disconnected.
     const turn = new AbortController();
     const forwardAbort = () => turn.abort();
-    abortSignal?.addEventListener('abort', forwardAbort, { once: true });
+    // A listener added to an aborted signal never fires: a Stop that landed
+    // while the question was stored or the input built aborts the turn now.
+    if (abortSignal?.aborted) forwardAbort();
+    else abortSignal?.addEventListener('abort', forwardAbort, { once: true });
     const options = await this.deps.options.agentOptions(
       session,
       trimmed,
@@ -387,6 +405,9 @@ export class TurnEngine {
     // Where v2's current analysis attempt's records start: a resumed
     // attempt keeps the queries it ran before it asked.
     let attemptStart = 0;
+    // Where each of v2's analysis attempts started, by attempt number: after
+    // a retry, Build visual takes the records of the kept queries.
+    const attemptStarts = new Map<number, number>();
     // The agent's clarifying questions this turn, each with the answer:
     // every later attempt goes on with them.
     const answers: AnsweredClarification[] = [];
@@ -662,10 +683,26 @@ export class TurnEngine {
         if (!turn.signal.aborted && !attemptStop?.signal.aborted) throw error;
       }
     };
+    // Work a step starts and a later step takes (agents.md 5.13, 5.20):
+    // Zoe's notes and the rows behind findings in Assess Data Readiness,
+    // the lineage checks in Consumption Gap Analysis. Settled when the run
+    // ends, fails or is stopped, before the answer is persisted.
+    const early = earlyWork(turn.signal);
+    // Whether Resolve dataset started Zoe's notes (Read images' condition).
+    let readingImages = false;
+    // Where the rows behind findings go: the answer's records and the
+    // explorable queries as Save report left them, ahead of the agent's.
+    let findingSlot: { data: number; explorable: number } | undefined;
+    // How many lineage checks Load layer catalogs started (Infer lineage's
+    // progress lines).
+    let lineageCount = 0;
     // Assess Data Readiness's assessment, once Resolve dataset started it.
     let assessment: ReadinessAssessment | undefined;
     // Its stored report, once Save report stored it (roadmap 1.28.11).
     let savedReport: ReadinessReport | undefined;
+    // What get_readiness_report hands the model for it: Explain report's
+    // block carries it (data-readiness R4, agents.md 5.13).
+    let savedSummary: unknown;
     const startedAssessment = (): ReadinessAssessment => {
       if (!assessment) throw new Error('No assessment has been started');
       return assessment;
@@ -694,8 +731,11 @@ export class TurnEngine {
       // 5.1, ADR-0040). Its agent step streams the agent through `consume`:
       // v2's Analyse step (5.11, ADR-0034) or a one-step workflow's Answer.
       // The model error a step reports, in the chat stream's words.
-      const stepError = (error: unknown) =>
-        chatTurnError(error, () => this.deps.llmService.getView());
+      // A model timeout (Iris's included) is thrown as it is (workflows R43).
+      const stepError = async (error: unknown) =>
+        error instanceof ModelTimeoutError
+          ? error
+          : chatTurnError(error, () => this.deps.llmService.getView());
       const stepModelBase = {
         abortSignal: turn.signal,
         providerOptions: options.providerOptions as
@@ -705,8 +745,11 @@ export class TurnEngine {
       // A step agent of its own runs without memory; its exchange is
       // recorded in its thread on this host (agents.md 5.14), and a
       // failure to record never fails the step.
+      // A retry of its call (workflows R43) is a reasoning line of the step.
       const stepModelOf = (stepAgentKey: string) => ({
         ...stepModelBase,
+        onRetry: (line: string) =>
+          emit({ type: 'reasoning', content: `${line}\n` }),
         onExchange: async (exchange: AgentExchange) => {
           try {
             await this.deps.mastra.recordAgentExchange(
@@ -728,6 +771,90 @@ export class TurnEngine {
       const planInput = session.continuesThreads
         ? this.deps.options.transcriptInput(session)
         : input;
+      // Read images (agents.md 2.15): the run's stored images, loaded from
+      // its workspace in order, described by Zoe in one model call recorded
+      // in her thread, stopped with `signal` (the turn's, or an early job's
+      // own). A model error fails the step with its own message.
+      const readImagesOn = async (
+        { question, images }: { question: string; images: string[] },
+        signal: AbortSignal,
+      ) => {
+        const loaded: StepImage[] = [];
+        for (const path of images) {
+          const { data, mediaType } = await this.deps.readImage(id, path);
+          loaded.push({ data, mediaType });
+        }
+        try {
+          const read = await this.deps.mastra.readImages(
+            { question, images: loaded },
+            { ...stepModelOf(IMAGE_READER_AGENT_KEY), abortSignal: signal },
+          );
+          return { ...read, stopped: read.stopped || signal.aborted };
+        } catch (error) {
+          throw await stepError(error);
+        }
+      };
+      // Resolve layers and Load layer catalogs both read the datasets'
+      // layers: fetched once per run (agents.md 5.20).
+      const datasetLayers = memoisedBy(
+        async ({ datasets }: { datasets: string[] }) =>
+          (await getDatasetToolServices().getDatasets(datasets)).map(
+            (dataset) => ({
+              dataset: dataset.name,
+              datasourceId: dataset.datasourceId ?? null,
+              datasourceKind: dataset.datasourceKind ?? null,
+              schemas: (dataset.schemas ?? []).map((note) => ({
+                ...note,
+              })),
+              entities: dataset.tables.map((key) => {
+                const known = dataset.entities?.find(
+                  (entity) => entity.key === key,
+                )?.columns;
+                return {
+                  key,
+                  columns: known
+                    ? known.map((column) => ({
+                        name: column.name,
+                        type: column.type ?? '',
+                      }))
+                    : null,
+                };
+              }),
+            }),
+          ),
+        ({ datasets }) => JSON.stringify(datasets),
+      );
+      // Infer lineage and Probe evidence (ADR-0051): each statement on the
+      // guarded read-only path with `signal`, four at a time, recorded in
+      // query order through `hold` (at once, or held for the step that
+      // takes them) as a `run_readonly_sql` source, as Rows behind findings
+      // does (agent-answers R67-R78). A failed one is a result.
+      const gapQueriesOn = (
+        queries: GapQuery[],
+        signal: AbortSignal,
+        hold: (replay: () => void) => void,
+      ) =>
+        runGapQueries({
+          queries,
+          run: (datasourceId, sql, limit, sqlOptions) =>
+            this.deps.sql.runBuiltSql(datasourceId, sql, limit, sqlOptions),
+          signal,
+          record: (args, result, facts) =>
+            hold(() => {
+              emit({
+                type: 'tool',
+                content: JSON.stringify({
+                  name: 'run_readonly_sql',
+                  rationale: args.rationale,
+                  input: toolCallInput('run_readonly_sql', args),
+                }),
+              });
+              const callId = `gap-query-${randomUUID()}`;
+              queryFacts.set(callId, facts);
+              const record = toolDataRecord('run_readonly_sql', args, result);
+              if (record) captureRecord(record, callId);
+            }),
+        });
       ran = await this.runTurnWorkflow(
         session,
         workflow,
@@ -767,22 +894,39 @@ export class TurnEngine {
           analyse: async ({
             catalogBlock,
             planBlock,
+            earlierBlock,
+            earlier: earlierAttempt,
             attempt,
             answered,
             imageNotes,
             visualFollows,
           }) => {
-            // A resumed attempt keeps the records it made before it asked.
+            // A resumed attempt keeps the records it made before it asked,
+            // and is shown their queries after the earlier attempt's, in
+            // one block under one cap (agents.md 5.11).
             if (answered) answers.push(answered);
             else attemptStart = data.length;
+            attemptStarts.set(attempt, attemptStart);
+            const earlier = answered
+              ? attemptEarlierBlock(earlierAttempt, data.slice(attemptStart))
+              : earlierBlock;
             // A retry, and an attempt after the user answered the agent,
             // run without the memory thread, so the question is not stored
             // twice; the plan block and the answered questions carry what
-            // they need.
+            // they need. A retry runs with its own, smaller step budget.
             const attemptOptions: typeof options = { ...options };
             if (attempt > 1 || answers.length) {
               delete (attemptOptions as { memory?: unknown }).memory;
             }
+            if (attempt > 1) attemptOptions.maxSteps = ANALYSE_RETRY_MAX_STEPS;
+            // A retry's failure that is not a Stop (a model error, the idle
+            // deadline) keeps attempt 1 (agents.md 5.11): the step ends with
+            // `retryError`, never failed. Attempt 1's still fails the step.
+            let retryFailure: unknown;
+            const failRetry = (error: unknown): void => {
+              if (attempt > 1 && !turn.signal.aborted) retryFailure ??= error;
+              else throw error;
+            };
             // A clarifying question stops this attempt's stream only.
             const stop = new AbortController();
             const stopAttempt = () => stop.abort();
@@ -790,47 +934,82 @@ export class TurnEngine {
             attemptStop = stop;
             notes = '';
             let attemptNotes = '';
+            // No chunk for five minutes while no tool executes fails the
+            // step (workflows R43); the attempt's stop is never a timeout.
+            const idle = streamIdleWatch(stop.signal);
             try {
               await consume(
-                await agent.stream(
-                  answers.length
-                    ? (answeredTurnInput(input, trimmed, answers) as never)
-                    : input,
-                  {
-                    ...attemptOptions,
-                    abortSignal: stop.signal,
-                    // The catalog and plan blocks, then Zoe's notes only
-                    // when the run has images (agents.md 5.11), and last
-                    // the line saying a visual follows, only when one does.
-                    context: [
-                      ...options.context,
-                      ...analyseSystemBlocks({
-                        catalogBlock,
-                        planBlock,
-                        imageNotes,
-                        visualFollows,
-                      }).map((content) => ({
-                        role: 'system' as const,
-                        content,
-                      })),
-                    ],
-                  },
+                idle.watch(
+                  await agent.stream(
+                    answers.length
+                      ? (answeredTurnInput(input, trimmed, answers) as never)
+                      : input,
+                    {
+                      ...attemptOptions,
+                      abortSignal: idle.signal,
+                      // The catalog and plan blocks, the earlier-queries
+                      // block on a retry or a resume, then Zoe's notes
+                      // only when the run has images (agents.md 5.11), and
+                      // last the line saying a visual follows, only when
+                      // one does.
+                      context: [
+                        ...options.context,
+                        ...analyseSystemBlocks({
+                          catalogBlock,
+                          planBlock,
+                          earlierBlock: earlier,
+                          imageNotes,
+                          visualFollows,
+                        }).map((content) => ({
+                          role: 'system' as const,
+                          content,
+                        })),
+                      ],
+                    },
+                  ),
                 ),
               );
+            } catch (error) {
+              // What the timeout's abort threw is the timeout, below.
+              if (!idle.timedOut()) failRetry(error);
             } finally {
+              idle.dispose();
               attemptNotes = notes ?? '';
               notes = undefined;
               attemptStop = undefined;
               turn.signal.removeEventListener('abort', stopAttempt);
             }
+            try {
+              idle.check('Analyse');
+            } catch (error) {
+              failRetry(error);
+            }
             // The agent asked the user: the step waits for the answer.
             const asked = turn.signal.aborted ? null : clarification;
             clarification = null;
             // Stopping the stream for the question is no model error.
-            if (asked) streamError = undefined;
-            // Any model error fails the step (agents.md 5.11).
+            if (asked) {
+              streamError = undefined;
+              retryFailure = undefined;
+            }
+            // Any model error fails the step (agents.md 5.11), but a
+            // retry's: the turn-scoped error is cleared, its records kept.
             if (streamError !== undefined && !turn.signal.aborted) {
-              throw await stepError(streamError);
+              failRetry(await stepError(streamError));
+            }
+            if (retryFailure !== undefined) {
+              streamError = undefined;
+              return {
+                ...analyseAttemptOf(
+                  data.slice(attemptStart),
+                  false,
+                  attemptNotes,
+                ),
+                retryError:
+                  retryFailure instanceof Error
+                    ? retryFailure.message
+                    : JSON.stringify(retryFailure),
+              };
             }
             return {
               ...analyseAttemptOf(
@@ -856,29 +1035,67 @@ export class TurnEngine {
           // Asked alone (agents.md 5.21), Ryan designs from the earlier
           // question and answer, the follow-up as his instruction.
           // Zoe's notes, when the run has some, are Ryan's reference.
+          // After a retry Ryan is given only the kept queries' records, in
+          // the kept set's order (keptRecords); the answer's sources stay
+          // every record of both attempts.
           buildVisual: async ({
             question,
             answer,
+            queries,
             instruction,
             imageNotes,
           }: {
             question: string;
             answer: string;
+            queries?: readonly AnalyseQuery[];
             instruction?: string;
             imageNotes?: string;
           }) => {
             const stop = () => ({ visual: {}, stopped: true });
             if (turn.signal.aborted) return stop();
             answerAt ??= new Date().toISOString();
+            // A kept query is its attempt's n-th `run_readonly_sql` record,
+            // as `analyseAttemptOf` built it from that attempt's records.
+            // No retry, or a set no merge keeps: every record, as before.
+            const keptRecords = (
+              kept: readonly AnalyseQuery[] | undefined,
+            ): ToolDataRecord[] => {
+              const first = attemptStarts.get(1);
+              const second = attemptStarts.get(2);
+              if (!kept || first === undefined || second === undefined) {
+                return data;
+              }
+              const attempts = [
+                data.slice(first, second),
+                data.slice(second),
+              ].map((records) =>
+                records.filter((record) => record.tool === 'run_readonly_sql'),
+              );
+              const origins = keptQueryOrigins(
+                attempts.map((records) => analyseQueriesOf(records)),
+                kept,
+              );
+              return origins
+                ? origins.map(
+                    ({ attempt, index }) => attempts[attempt - 1][index],
+                  )
+                : data;
+            };
             try {
-              const metadata = await this.deps.buildVisual(id, {
-                question,
-                answer,
-                at: answerAt,
-                data,
-                ...(instruction !== undefined ? { instruction } : {}),
-                ...(imageNotes?.trim() ? { reference: imageNotes } : {}),
-              });
+              // The turn's stop reaches the designer: a call in flight is
+              // aborted and no further attempt starts (the catch below).
+              const metadata = await this.deps.buildVisual(
+                id,
+                {
+                  question,
+                  answer,
+                  at: answerAt,
+                  data: keptRecords(queries),
+                  ...(instruction !== undefined ? { instruction } : {}),
+                  ...(imageNotes?.trim() ? { reference: imageNotes } : {}),
+                },
+                turn.signal,
+              );
               // Stored before the stop: the step still names it, so the run
               // logs it and it stays one click away.
               return {
@@ -1023,7 +1240,23 @@ export class TurnEngine {
             }
           },
           answer: async () => {
-            await consume(await agent.stream(input, options));
+            // The idle deadline (workflows R43): a Stop is never a timeout.
+            const idle = streamIdleWatch(turn.signal);
+            try {
+              await consume(
+                idle.watch(
+                  await agent.stream(input, {
+                    ...options,
+                    abortSignal: idle.signal,
+                  }),
+                ),
+              );
+            } catch (error) {
+              if (!idle.timedOut()) throw error;
+            } finally {
+              idle.dispose();
+            }
+            idle.check('Answer');
             if (streamError !== undefined && !turn.signal.aborted) {
               // A custom endpoint's failure fails the turn in R50's words
               // (R51); any other keeps today's handling.
@@ -1051,11 +1284,25 @@ export class TurnEngine {
               tableCount: assessment.tableCount,
             };
           },
+          // Its progress goes out as the readiness tool's does, a
+          // `tool-progress` event (never to the model, never stored), so
+          // a long profile is not taken for a stalled run (workflows spec).
           profile: async () => {
             const started = startedAssessment();
+            let profiling = true;
             try {
               return {
-                ...(await started.profile({ signal: turn.signal })),
+                ...(await started.profile({
+                  signal: turn.signal,
+                  onProgress: (progress) => {
+                    if (!profiling || turn.signal.aborted) return;
+                    const event = readinessProgressEvent({
+                      type: 'data-readiness-progress',
+                      data: progress,
+                    });
+                    if (event) emit(event);
+                  },
+                })),
                 stopped: false,
               };
             } catch (error) {
@@ -1066,6 +1313,9 @@ export class TurnEngine {
                 notProfiledCount: 0,
                 stopped: true,
               };
+            } finally {
+              // Nothing is reported once the step ended.
+              profiling = false;
             }
           },
           score: () => {
@@ -1085,6 +1335,7 @@ export class TurnEngine {
           save: async () => {
             const saved = await startedAssessment().save();
             savedReport = saved.report;
+            savedSummary = readinessModelOutput(saved);
             // The answer carries the report: its card, and the scorecard
             // (data-readiness R5).
             const shown = await this.showReadinessReport(id, saved, emit);
@@ -1095,63 +1346,135 @@ export class TurnEngine {
           // rows behind each top finding become the answer's first sources,
           // each shown as a SQL call and its result. Nothing reaches the
           // agent's prompt: the records only add sources to the answer.
-          findingRows: async () => {
+          // Save report starts the queries, which run while the agent
+          // explains the report; their records are held until Rows behind
+          // findings takes them (agents.md 5.13).
+          startFindingRows: () => {
             if (!savedReport) throw new Error('The report has not been saved');
-            return recordFindingSources({
-              report: savedReport,
-              run: (datasourceId, sql, limit) =>
-                this.deps.sql.runBuiltSql(datasourceId, sql, limit),
-              signal: turn.signal,
-              record: (args, result, facts) => {
-                emit({
-                  type: 'tool',
-                  content: JSON.stringify({
-                    name: 'run_readonly_sql',
-                    rationale: args.rationale,
-                    input: toolCallInput('run_readonly_sql', args),
+            const report = savedReport;
+            findingSlot = { data: data.length, explorable: explorable.length };
+            early.start('finding-rows', (signal, hold) =>
+              recordFindingSources({
+                report,
+                // Each statement gets the turn's stop (datasources R38).
+                run: (datasourceId, sql, limit, sqlOptions) =>
+                  this.deps.sql.runBuiltSql(
+                    datasourceId,
+                    sql,
+                    limit,
+                    sqlOptions,
+                  ),
+                signal,
+                record: (args, result, facts) =>
+                  hold(() => {
+                    emit({
+                      type: 'tool',
+                      content: JSON.stringify({
+                        name: 'run_readonly_sql',
+                        rationale: args.rationale,
+                        input: toolCallInput('run_readonly_sql', args),
+                      }),
+                    });
+                    const callId = `finding-rows-${randomUUID()}`;
+                    queryFacts.set(callId, facts);
+                    const record = toolDataRecord(
+                      'run_readonly_sql',
+                      args,
+                      result,
+                    );
+                    if (record) {
+                      // Only its count links a figure (agent-answers R69):
+                      // the raw cells would match the report's numbers by
+                      // chance.
+                      const counts = (record.columns ?? []).filter((c) =>
+                        FINDING_COUNT_COLUMNS.has(c),
+                      );
+                      captureRecord(
+                        record.error
+                          ? record
+                          : { ...record, figureColumns: counts },
+                        callId,
+                      );
+                    }
                   }),
-                });
-                const callId = `finding-rows-${randomUUID()}`;
-                queryFacts.set(callId, facts);
-                const record = toolDataRecord('run_readonly_sql', args, result);
-                if (record) {
-                  // Only its count links a figure (agent-answers R69): the
-                  // raw cells would match the report's numbers by chance.
-                  const counts = (record.columns ?? []).filter((c) =>
-                    FINDING_COUNT_COLUMNS.has(c),
-                  );
-                  captureRecord(
-                    record.error
-                      ? record
-                      : { ...record, figureColumns: counts },
-                    callId,
-                  );
-                }
-              },
-            });
+              }),
+            );
+          },
+          // The rows Save report started: replayed, then placed first
+          // among the answer's records and explorable queries (where Save
+          // report left them, ahead of the agent's), refs numbered again.
+          // While the step waits, each query done is a reasoning line of
+          // the step (agents.md 5.13), so the run is never silent.
+          findingRows: async () => {
+            const slot = findingSlot;
+            const before = { data: data.length, explorable: explorable.length };
+            try {
+              return await early.take<
+                Awaited<ReturnType<typeof recordFindingSources>>
+              >('finding-rows', (done) =>
+                emit({
+                  type: 'reasoning',
+                  content: `Read the rows behind ${done} finding${done === 1 ? '' : 's'}\n`,
+                }),
+              );
+            } finally {
+              if (slot) {
+                data.splice(slot.data, 0, ...data.splice(before.data));
+                explorable.splice(
+                  slot.explorable,
+                  0,
+                  ...explorable.splice(before.explorable),
+                );
+                explorable.splice(
+                  0,
+                  explorable.length,
+                  ...withRefs(explorable),
+                );
+              }
+            }
           },
           explain: async ({ dataset, reportId, imageNotes }) => {
-            // The run has assessed: the agent reads the stored report and
-            // `assess_data_readiness` refuses (agents.md 3.13, 5.13).
+            // The run has assessed: the block carries the stored report's
+            // summary and `assess_data_readiness` refuses (agents.md 3.13,
+            // 5.13).
+            if (savedSummary === undefined) {
+              throw new Error('The report has not been saved');
+            }
             options.requestContext.set(ASSESSED_REPORT_CONTEXT_KEY, reportId);
             // Zoe's notes follow the report block only when the run has
             // images (agents.md 2.15, 5.13).
             const notes = imageNotesBlock(imageNotes);
-            await consume(
-              await agent.stream(input, {
-                ...options,
-                context: [
-                  ...options.context,
-                  {
-                    role: 'system' as const,
-                    content: explainReportBlock({ dataset, reportId }),
-                  },
-                  ...(notes
-                    ? [{ role: 'system' as const, content: notes }]
-                    : []),
-                ],
-              }),
-            );
+            // The idle deadline (workflows R43): a Stop is never a timeout.
+            const idle = streamIdleWatch(turn.signal);
+            try {
+              await consume(
+                idle.watch(
+                  await agent.stream(input, {
+                    ...options,
+                    abortSignal: idle.signal,
+                    context: [
+                      ...options.context,
+                      {
+                        role: 'system' as const,
+                        content: explainReportBlock({
+                          dataset,
+                          reportId,
+                          summary: savedSummary,
+                        }),
+                      },
+                      ...(notes
+                        ? [{ role: 'system' as const, content: notes }]
+                        : []),
+                    ],
+                  }),
+                ),
+              );
+            } catch (error) {
+              if (!idle.timedOut()) throw error;
+            } finally {
+              idle.dispose();
+            }
+            idle.check('Explain report');
             if (streamError !== undefined && !turn.signal.aborted) {
               throw await chatTurnError(streamError, () =>
                 this.deps.llmService.getView(),
@@ -1228,25 +1551,16 @@ export class TurnEngine {
           // to Data: the run's stored images, loaded from its workspace in
           // order, described by Zoe in one model call recorded in her
           // thread. A model error fails the step with its own message.
-          readImages: async ({ question, images }) => {
-            const loaded: StepImage[] = [];
-            for (const path of images) {
-              const { data, mediaType } = await this.deps.readImage(id, path);
-              loaded.push({ data, mediaType });
-            }
-            try {
-              const read = await this.deps.mastra.readImages(
-                { question, images: loaded },
-                stepModelOf(IMAGE_READER_AGENT_KEY),
-              );
-              return {
-                ...read,
-                stopped: read.stopped || turn.signal.aborted,
-              };
-            } catch (error) {
-              throw await stepError(error);
-            }
+          readImages: (input) => readImagesOn(input, turn.signal),
+          // Assess Data Readiness: Zoe reads the images from Resolve
+          // dataset on, on her own stop; Read images takes her notes.
+          startImageNotes: (input) => {
+            readingImages = true;
+            early.start('image-notes', (signal) => readImagesOn(input, signal));
           },
+          readsImages: () => readingImages,
+          imageNotes: () =>
+            early.take<Awaited<ReturnType<typeof readImagesOn>>>('image-notes'),
           saveMappedDashboard: async ({ bundle, answer }) => {
             const metadata = await this.deps.saveMock(id, bundle, trimmed);
             showVisual(metadata);
@@ -1290,31 +1604,22 @@ export class TurnEngine {
               }));
               const images = await work.shotImages(shots);
               try {
-                // At most two minutes per call: a rate-limited model would
-                // otherwise hold the run with no word (agents.md 5.19).
-                const reviewed = await withIrisTimeout(
-                  template.id,
-                  turn.signal,
-                  (signal) =>
-                    this.deps.mastra.reviewTemplate(
-                      {
-                        url: template.representative,
-                        template,
-                        shots: images,
-                        measured,
-                      },
-                      {
-                        ...stepModelOf(SITE_REVIEWER_AGENT_KEY),
-                        abortSignal: signal,
-                      },
-                    ),
+                // Iris's call has its one deadline, two minutes per try, in
+                // her guarded call (agents.md 5.19; workflows R43).
+                const reviewed = await this.deps.mastra.reviewTemplate(
+                  {
+                    url: template.representative,
+                    template,
+                    shots: images,
+                    measured,
+                  },
+                  stepModelOf(SITE_REVIEWER_AGENT_KEY),
                 );
                 return {
                   ...reviewed,
                   stopped: reviewed.stopped || turn.signal.aborted,
                 };
               } catch (error) {
-                if (error instanceof IrisTimeoutError) throw error;
                 throw await stepError(error);
               }
             },
@@ -1324,15 +1629,21 @@ export class TurnEngine {
           // Consumption Gap Analysis (agents.md 5.20): its model steps on
           // their own agents, its read-only queries recorded as sources.
           consumptionGap: {
-            // Read dashboards: Grace over each stored image, one call each.
-            readDashboard: async ({ image }) => {
+            // Read dashboards: Grace over each stored image, one call each,
+            // all at the same time; `signal` ends one when another failed.
+            readDashboard: async ({ image, signal }) => {
               try {
                 const read = await this.deps.mastra.readDashboard(
                   {
                     question: 'Read this reference dashboard',
                     image: await this.deps.readImage(id, image),
                   },
-                  stepModelOf(DASHBOARD_READER_AGENT_KEY),
+                  {
+                    ...stepModelOf(DASHBOARD_READER_AGENT_KEY),
+                    abortSignal: signal
+                      ? AbortSignal.any([turn.signal, signal])
+                      : turn.signal,
+                  },
                 );
                 return {
                   blueprint: read.blueprint,
@@ -1345,60 +1656,29 @@ export class TurnEngine {
             loadDashboard: ({ artifact }) => this.deps.artifact(artifact),
             // Resolve layers and Load layer catalogs: the dataset tools'
             // own services (names, types and schema notes; no rows).
-            datasetLayers: async ({ datasets }) =>
-              (await getDatasetToolServices().getDatasets(datasets)).map(
-                (dataset) => ({
-                  dataset: dataset.name,
-                  datasourceId: dataset.datasourceId ?? null,
-                  datasourceKind: dataset.datasourceKind ?? null,
-                  schemas: (dataset.schemas ?? []).map((note) => ({
-                    ...note,
-                  })),
-                  entities: dataset.tables.map((key) => {
-                    const known = dataset.entities?.find(
-                      (entity) => entity.key === key,
-                    )?.columns;
-                    return {
-                      key,
-                      columns: known
-                        ? known.map((column) => ({
-                            name: column.name,
-                            type: column.type ?? '',
-                          }))
-                        : null,
-                    };
-                  }),
-                }),
-              ),
-            // Infer lineage and Probe evidence (ADR-0051): each statement
-            // on the guarded read-only path, one after the other, recorded
-            // as a `run_readonly_sql` source as Rows behind findings does
-            // (agent-answers R67-R78). A failed one is a result.
+            datasetLayers,
+            // Probe evidence: recorded at once.
             runQueries: ({ queries }) =>
-              runGapQueries({
-                queries,
-                run: (datasourceId, sql, limit) =>
-                  this.deps.sql.runBuiltSql(datasourceId, sql, limit),
-                signal: turn.signal,
-                record: (args, result, facts) => {
+              gapQueriesOn(queries, turn.signal, (replay) => replay()),
+            // Infer lineage: started at Load layer catalogs, on its own
+            // stop, its sources held until Infer lineage takes them; while
+            // it waits, each statement done is a reasoning line of the step
+            // (agents.md 5.20), so a slow warehouse is never a silent run.
+            startLineage: ({ queries }) => {
+              lineageCount = queries.length;
+              early.start('lineage', (signal, hold) =>
+                gapQueriesOn(queries, signal, hold),
+              );
+            },
+            takeLineage: () =>
+              early.take<Awaited<ReturnType<typeof gapQueriesOn>>>(
+                'lineage',
+                (done) =>
                   emit({
-                    type: 'tool',
-                    content: JSON.stringify({
-                      name: 'run_readonly_sql',
-                      rationale: args.rationale,
-                      input: toolCallInput('run_readonly_sql', args),
-                    }),
-                  });
-                  const callId = `gap-query-${randomUUID()}`;
-                  queryFacts.set(callId, facts);
-                  const record = toolDataRecord(
-                    'run_readonly_sql',
-                    args,
-                    result,
-                  );
-                  if (record) captureRecord(record, callId);
-                },
-              }),
+                    type: 'reasoning',
+                    content: `Checked ${done} of ${lineageCount} lineage queries\n`,
+                  }),
+              ),
             deriveRequirements: async (input) => {
               try {
                 const derived = await this.deps.mastra.deriveRequirements(
@@ -1474,6 +1754,9 @@ export class TurnEngine {
         (event) => onStepEvent?.(event),
       );
     } finally {
+      // The run ended, failed, was stopped or waits: work no step took is
+      // aborted and awaited, its records dropped, before anything persists.
+      await early.settle();
       abortSignal?.removeEventListener('abort', forwardAbort);
     }
     // The workflow run waits for the user (ADR-0043). A run host's turn
@@ -1494,13 +1777,17 @@ export class TurnEngine {
               emit = io.emit;
               abortSignal = io.abortSignal;
               onStepEvent = io.onStepEvent;
-              abortSignal?.addEventListener('abort', forwardAbort, {
-                once: true,
-              });
+              // A resume stopped before it got here is aborted at once.
+              if (abortSignal?.aborted) forwardAbort();
+              else
+                abortSignal?.addEventListener('abort', forwardAbort, {
+                  once: true,
+                });
               let next: TurnRunOutcome;
               try {
                 next = await resumeRun(answer);
               } finally {
+                await early.settle();
                 abortSignal?.removeEventListener('abort', forwardAbort);
               }
               return settle(next);
@@ -1611,7 +1898,12 @@ export class TurnEngine {
         // The assistant's only: another agent runs no SQL to cross-check.
         const crossChecked =
           careful && isAssistant && !turn.signal.aborted
-            ? await this.deps.crossCheckAnswer(session, trimmed, data)
+            ? await this.deps.crossCheckAnswer(
+                session,
+                trimmed,
+                data,
+                turn.signal,
+              )
             : undefined;
         messages.push({
           role: 'assistant',
@@ -1766,7 +2058,13 @@ export class TurnEngine {
             throw error;
           }
         },
+        // Early work (agents.md 5.13): a start is no step's failure; the
+        // step that takes the work reports its error.
+        startImageNotes: (input) => runtime.startImageNotes(input),
+        readsImages: () => runtime.readsImages(),
+        imageNotes: () => captured(() => runtime.imageNotes()),
         save: () => captured(() => runtime.save()),
+        startFindingRows: () => runtime.startFindingRows(),
         findingRows: () => captured(() => runtime.findingRows()),
         explain: (input) => captured(() => runtime.explain(input)),
       } satisfies DataReadinessAssessmentRuntime);
@@ -1784,6 +2082,30 @@ export class TurnEngine {
           captured(() => runtime.saveMappedDashboard(input)),
       } satisfies MapDashboardDataRuntime);
     } else if (review) {
+      // Review templates handles each template's failure itself and fails,
+      // with the first, only when no template was reviewed (workflows R43;
+      // agents.md 5.19): the turn keeps that first one, and lets it go once
+      // a template is reviewed, so a handled failure is never the turn's.
+      let templateError: unknown;
+      let templateReviewed = false;
+      const reviewTemplate: ReviewWebsiteRuntime['reviewTemplate'] = async (
+        input,
+      ) => {
+        try {
+          const reviewed = await runtime.reviewTemplate(input);
+          templateReviewed = true;
+          if (templateError !== undefined && stepError === templateError) {
+            stepError = undefined;
+          }
+          return reviewed;
+        } catch (error) {
+          if (!templateReviewed && templateError === undefined) {
+            templateError = error;
+            stepError = error;
+          }
+          throw error;
+        }
+      };
       requestContext.set(REVIEW_WEBSITE_RUNTIME_KEY, {
         checkSignIn: (input) => captured(() => runtime.checkSignIn(input)),
         openSignIn: (input) => captured(() => runtime.openSignIn(input)),
@@ -1795,18 +2117,29 @@ export class TurnEngine {
           captured(() => runtime.loadReportImages(paths)),
         saveReport: (input) => captured(() => runtime.saveReport(input)),
         showAnswer: (text) => captured(() => runtime.showAnswer(text)),
-        reviewTemplate: (input) =>
-          captured(() => runtime.reviewTemplate(input)),
+        reviewTemplate,
         // Synchronous and never throws: a progress line only.
         progress: (line) => runtime.progress(line),
       } satisfies ReviewWebsiteRuntime);
     } else if (gap) {
       const parts = runtime.consumptionGap;
       requestContext.set(CONSUMPTION_GAP_RUNTIME_KEY, {
-        readDashboard: (input) => captured(() => parts.readDashboard(input)),
+        // The reads run together: the first failure is the step's, not a
+        // read its abort then ended (its signal is aborted by then).
+        readDashboard: async (input) => {
+          try {
+            return await parts.readDashboard(input);
+          } catch (error) {
+            if (!input.signal?.aborted) stepError = error;
+            throw error;
+          }
+        },
         loadDashboard: (input) => captured(() => parts.loadDashboard(input)),
         datasetLayers: (input) => captured(() => parts.datasetLayers(input)),
         runQueries: (input) => captured(() => parts.runQueries(input)),
+        // Early work (agents.md 5.20): Infer lineage reports its error.
+        startLineage: (input) => parts.startLineage(input),
+        takeLineage: () => captured(() => parts.takeLineage()),
         deriveRequirements: (input) =>
           captured(() => parts.deriveRequirements(input)),
         reviseRequirements: (input) =>

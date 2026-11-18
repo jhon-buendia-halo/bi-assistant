@@ -800,6 +800,46 @@ describe('VisualizationService.createFromAnswer (Build visual)', () => {
     expect(session.messages).toHaveLength(1);
   });
 
+  it('passes the stop to the designer, aborts the call in flight and starts no further attempt', async () => {
+    const { service, agent } = build();
+    const stop = new AbortController();
+    agent.generate.mockImplementationOnce(
+      (_prompt: string, options: { abortSignal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          options.abortSignal.addEventListener('abort', () =>
+            reject(new Error('aborted')),
+          );
+          setTimeout(() => stop.abort(), 0);
+        }),
+    );
+
+    await expect(
+      service.createFromAnswer(
+        emptySession(),
+        { question: 'Q?', answer: 'A.', at: AT, data: [record] },
+        stop.signal,
+      ),
+    ).rejects.toThrow('aborted');
+
+    expect(agent.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts no designer call when the stop is already set', async () => {
+    const { service, agent } = build();
+    const stop = new AbortController();
+    stop.abort();
+
+    await expect(
+      service.createFromAnswer(
+        emptySession(),
+        { question: 'Q?', answer: 'A.', at: AT, data: [record] },
+        stop.signal,
+      ),
+    ).rejects.toBeDefined();
+
+    expect(agent.generate).not.toHaveBeenCalled();
+  });
+
   it('follows an instruction (a follow-up that asks Ryan alone): the earlier question is the question, the follow-up the instruction, kept on v1', async () => {
     const { service, agent } = build();
     const session = emptySession();

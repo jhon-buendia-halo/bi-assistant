@@ -2,6 +2,26 @@
 
 Running log of every meaningful change, newest first. One entry per epic, written when its PR opens; see step 10 of the `workflow-gate` skill. Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-17
+
+### Fixed
+- **A workflow run no longer hangs, loses its progress on a restart, or ignores Stop** (free style, no roadmap story, PR #138; rules in [workflows](specs/capabilities/workflows/spec.md) R16, R18 and *Edge cases and errors*, ADR-0048 amended).
+  - A run that reports nothing for 15 minutes is ended as failed (`WORKFLOW_RUN_IDLE_MINUTES`; 0 turns it off). Stop always ends the run: after 10 seconds it is stored stopped even when its work has not unwound.
+  - A run's steps are stored at each step change, so a restart no longer leaves a failed run with no steps.
+  - Stop reaches a running SQL statement (Postgres, Databricks, files), Build visual's designer calls and Review a Website's browser.
+  - The LLM retry also covers status 504, 520 to 524 and 529, never waits more than 30 seconds and ends its wait on Stop. Every event stream sends a heartbeat every 15 seconds.
+  - Start-up deletes the leftover suspended snapshots of every workflow, nested ones included.
+- **A workflow step survives a slow, failed or cut model call** (free style, PR #140; [workflows](specs/capabilities/workflows/spec.md) R43, [agents.md](specs/system/agents.md) 1.6). Every single model call of a step has a deadline (5 minutes; 10 for Map requirements) and is tried once more after a network error or a reply cut at the output cap; a cut reply is no longer read as an empty result. A streamed agent turn fails when the model sends nothing for 5 minutes while no tool runs.
+- **Review a Website keeps its report when a template's review fails** (PR #140): the template is shown as not reviewed with the reason, and the step fails only when none was reviewed.
+
+### Changed
+- **The analysis retry of Answer a Business Question reuses its first attempt** (PR #140; workflows R27, agents.md 5.11). The retry is shown the earlier queries and runs only what the failed checks need; the answer and the visual rest on the kept queries, and attempt 1 is kept when the retry is worse or fails. Analyse is given each entity's columns, so the Analyst no longer describes entities before it queries.
+  - Evals, three runs per set on `main` (v0.83.0) and on the branch, `claude-sonnet-5-5`: `insights-analyst` 10/10, 10/10, 9/10 on `main` and 11/11, 10/11, 10/11 on the branch; `insights-analyst-edge` 8/8, 8/8, 7/8 on both; `readiness-workflow` 6/6 three times on both. The three failures on the branch were faults of the eval harness with correct answers (the new retry case's rubric, and a check that read "Excluded: NaN" as a value); each case passed 3 of 3 when re-run after the fix. The judge is now given the catalogue the Analyst was given.
+- **Independent work runs at the same time in Consumption Gap Analysis and Assess Data Readiness** (PR #140; agents.md 5.13, 5.20). The step order of both changes: the free refusal comes before any paid call, the lineage checks and the finding rows start early and are collected later, and the dashboard images are read together. A step that waits reports a progress line per finished query.
+- **Explain report is given the readiness report's summary** (PR #140; data-readiness R4), so the agent calls `get_readiness_report` only for what the summary lacks: 12 calls across the readiness eval set, down from 20.
+- **At most 8 runs run at a time** (`WORKFLOW_MAX_LIVE_RUNS`, PR #138): a streamed start beyond that answers 429; a resume is never refused.
+- **SQL batches run four at a time, in query order** (PR #138): the lineage checks and probes of Consumption Gap Analysis and the finding rows of Assess Data Readiness. Postgres and Databricks no longer hold a whole result in memory: a 2,000,000-row result peaks at about 231 MB, down from about 526 MB.
+
 ## 2026-11-15
 
 ### Added

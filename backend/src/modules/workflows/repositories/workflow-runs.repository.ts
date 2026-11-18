@@ -8,7 +8,8 @@ import type { WorkflowRunDoc } from '../workflow-run-steps';
 
 /**
  * Stored workflow runs, collection `workflow_runs` (data-model 3.16): one
- * document per run, written when it starts and updated when it ends.
+ * document per run, written when it starts, its `steps` updated at each step
+ * change while it runs, and the whole run updated when it ends.
  */
 @Injectable()
 export class WorkflowRunsRepository {

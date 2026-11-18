@@ -169,6 +169,52 @@ describe('DatasetsService.save', () => {
     expect(savedEntities(repository)).toEqual([claims]);
   });
 
+  it("reads each date column's range over the whole table, and still saves when it cannot (agents.md 5.11 Data dates)", async () => {
+    const census = {
+      key: 'main.hr.census',
+      columns: [
+        { name: 'hired', type: 'date', nullable: true },
+        { name: 'age', type: 'double', nullable: true },
+      ],
+    };
+    const sampleRows = jest.fn().mockResolvedValue({ columns: [], rows: [] });
+    const { service, repository, datasources } = build(sampleRows);
+    const runReadOnlySql = jest.fn().mockResolvedValue({
+      columns: ['min_0', 'max_0'],
+      rows: [{ min_0: '2004-01-01', max_0: '2023-07-02' }],
+    });
+    Object.assign(datasources, { runReadOnlySql });
+
+    await service.save({
+      name: 'hr',
+      tables: ['main.hr.census'],
+      entities: [census],
+      datasourceId: 'ds-1',
+    });
+
+    expect(runReadOnlySql).toHaveBeenCalledWith(
+      'ds-1',
+      'SELECT CAST(MIN(`hired`) AS STRING) AS min_0, CAST(MAX(`hired`) AS STRING) AS max_0 FROM `main`.`hr`.`census`',
+      1,
+    );
+    expect(savedEntities(repository)[0].columns).toEqual([
+      { ...census.columns[0], range: { min: '2004-01-01', max: '2023-07-02' } },
+      census.columns[1],
+    ]);
+
+    runReadOnlySql.mockRejectedValueOnce(new Error('no access'));
+    await service.save({
+      name: 'hr',
+      tables: ['main.hr.census'],
+      entities: [census],
+      datasourceId: 'ds-1',
+    });
+    const resaved = (repository.save.mock.calls as unknown[][]).at(
+      -1,
+    )![2] as DatasetEntitySnapshot[];
+    expect(resaved[0].columns).toEqual(census.columns);
+  });
+
   it('rejects a kind that disagrees with the saved datasource', async () => {
     const { service } = build(jest.fn());
 

@@ -160,6 +160,93 @@ describe('run_readonly_sql: facts beside the result (plan m1-25 1.25.1)', () => 
   });
 });
 
+describe('the turn stop signal reaches each statement (agents.md 3.3, 3.4)', () => {
+  const runSql = runReadOnlySqlTool.execute as unknown as (
+    input: Record<string, unknown>,
+    context: { requestContext: RequestContext; abortSignal?: AbortSignal },
+  ) => Promise<unknown>;
+  const sample = sampleRowsTool.execute as unknown as typeof runSql;
+
+  it('run_readonly_sql hands the tool call its abort signal', async () => {
+    const runReadOnlySql = jest
+      .fn()
+      .mockResolvedValue({ columns: ['name'], rows: [{ name: 'a' }] });
+    setDatasetToolServices(services({ runReadOnlySql }));
+    const stop = new AbortController();
+    await runSql(
+      { sql: SQL, limit: 2, rationale: 'r' },
+      {
+        requestContext: turnContext().requestContext,
+        abortSignal: stop.signal,
+      },
+    );
+    expect(runReadOnlySql).toHaveBeenCalledWith('ds-1', SQL, 2, ['shop'], {
+      signal: stop.signal,
+    });
+  });
+
+  it('sample_rows hands the tool call its abort signal', async () => {
+    const sampleRows = jest
+      .fn()
+      .mockResolvedValue({ columns: ['name'], rows: [{ name: 'a' }] });
+    setDatasetToolServices(services({ sampleRows }));
+    const stop = new AbortController();
+    await sample(
+      { entity: 'shop.public.products', rationale: 'r' },
+      {
+        requestContext: turnContext().requestContext,
+        abortSignal: stop.signal,
+      },
+    );
+    expect(sampleRows).toHaveBeenCalledWith(
+      'ds-1',
+      'shop.public.products',
+      10,
+      { signal: stop.signal },
+    );
+  });
+
+  it('a statement cut by the stop ends the call, not as a failed query result', async () => {
+    const stop = new AbortController();
+    setDatasetToolServices(
+      services({
+        runReadOnlySql: jest.fn(() => {
+          stop.abort(new Error('The run was stopped'));
+          return Promise.reject(new Error('The run was stopped'));
+        }),
+      }),
+    );
+    await expect(
+      runSql(
+        { sql: SQL, rationale: 'r' },
+        {
+          requestContext: turnContext().requestContext,
+          abortSignal: stop.signal,
+        },
+      ),
+    ).rejects.toThrow('The run was stopped');
+  });
+
+  it('a statement that fails without a stop is still a result with its error', async () => {
+    setDatasetToolServices(
+      services({
+        runReadOnlySql: jest
+          .fn()
+          .mockRejectedValue(new Error('column "x" does not exist')),
+      }),
+    );
+    await expect(
+      runSql(
+        { sql: SQL, rationale: 'r' },
+        {
+          requestContext: turnContext().requestContext,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+    ).resolves.toEqual({ error: 'column "x" does not exist' });
+  });
+});
+
 describe('sample_rows: facts beside the result', () => {
   const execute = sampleRowsTool.execute as unknown as Execute;
 
@@ -203,15 +290,17 @@ describe('run_readonly_sql usage sink (agents-evals R219)', () => {
   const run = () =>
     execute({ sql: 'select 1', rationale: 'because' }, { requestContext });
 
-  it("hands the attempt's sink to the SQL service as the last argument", async () => {
+  it("hands the attempt's sink to the SQL service in its options", async () => {
     const sink = jest.fn();
     requestContext.set(USAGE_SINK_CONTEXT_KEY, sink);
 
     await run();
 
-    const passed = (runReadOnlySql.mock.calls as unknown[][])[0][4] as (
-      ...args: unknown[]
-    ) => void;
+    const passed = (
+      (runReadOnlySql.mock.calls as unknown[][])[0][4] as {
+        usageSink: (...args: unknown[]) => void;
+      }
+    ).usageSink;
     passed('sql-fixer', { usage: {} }, 'm');
     expect(sink).toHaveBeenCalledWith('sql-fixer', { usage: {} }, 'm');
   });
@@ -227,7 +316,10 @@ describe('run_readonly_sql usage sink (agents-evals R219)', () => {
       throw new Error('boom');
     });
     runReadOnlySql.mockImplementation((...args: unknown[]) => {
-      (args[4] as (...a: unknown[]) => void)('sql-fixer', {});
+      (args[4] as { usageSink: (...a: unknown[]) => void }).usageSink(
+        'sql-fixer',
+        {},
+      );
       return Promise.resolve({ columns: ['n'], rows: [{ n: 1 }] });
     });
 

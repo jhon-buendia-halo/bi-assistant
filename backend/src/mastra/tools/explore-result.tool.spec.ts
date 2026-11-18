@@ -24,6 +24,7 @@ type Execute = (
   context: {
     requestContext: RequestContext;
     agent?: { toolCallId: string };
+    abortSignal?: AbortSignal;
   },
 ) => Promise<Record<string, unknown>>;
 type ToModelOutput = (output: unknown) => { type: string; value: unknown };
@@ -291,6 +292,57 @@ describe('explore_result (agents.md 3.15; plan 0.4)', () => {
       { requestContext },
     );
     expect(result).toEqual({ error: 'Unknown column "nope"' });
+  });
+
+  it("hands the tool call's stop to result-explorer and to the page (agents.md 3.15)", async () => {
+    interpretResult.mockResolvedValue({
+      action: 'explore',
+      query: 0,
+      interpretation: { request: { page: 2 }, understood: 'Page 2' },
+    });
+    const { requestContext } = turnContext();
+    const stop = new AbortController();
+    await execute(
+      { filterText: 'next page', rationale: 'Next page.' },
+      { requestContext, abortSignal: stop.signal },
+    );
+    expect((interpretResult.mock.calls as unknown[][])[0][1]).toEqual({
+      abortSignal: stop.signal,
+    });
+    expect((pageQuery.mock.calls as unknown[][])[0][3]).toEqual({
+      signal: stop.signal,
+    });
+  });
+
+  it('ends the call on a stop during the page: no { error } for the model', async () => {
+    const stop = new AbortController();
+    pageQuery.mockImplementation(() => {
+      stop.abort(new Error('The run was stopped'));
+      return Promise.reject(new Error('The run was stopped'));
+    });
+    const { requestContext } = turnContext();
+    await expect(
+      execute(
+        { page: 2, rationale: 'x' },
+        { requestContext, abortSignal: stop.signal },
+      ),
+    ).rejects.toThrow('The run was stopped');
+  });
+
+  it('ends the call on a stop while result-explorer reads the words', async () => {
+    const stop = new AbortController();
+    interpretResult.mockImplementation(() => {
+      stop.abort(new Error('The run was stopped'));
+      return Promise.reject(new Error('The run was stopped'));
+    });
+    const { requestContext } = turnContext();
+    await expect(
+      execute(
+        { filterText: 'only Brazil', rationale: 'x' },
+        { requestContext, abortSignal: stop.signal },
+      ),
+    ).rejects.toThrow('The run was stopped');
+    expect(pageQuery).not.toHaveBeenCalled();
   });
 
   it('writes its facts (datasource, matched rows, page size, view) beside the result', async () => {

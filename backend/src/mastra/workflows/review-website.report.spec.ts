@@ -1,3 +1,4 @@
+import { Script } from 'node:vm';
 import {
   discoveredSiteSchema,
   findingSchema,
@@ -436,7 +437,51 @@ describe('renderReportBundle', () => {
     expect(bundle.javascript).not.toContain('crops/missing.jpg"]');
     expect(bundle.javascript).toContain('crops/missing.jpg');
   });
+
+  // A template whose review failed (workflows R43).
+  it('shows "not reviewed: <reason>" on that template\'s row, and how many Iris reviewed', () => {
+    const failed = renderReportBundle({
+      site: withNotReviewed(),
+      images: IMAGES,
+      generatedAt: 'now',
+    });
+    expect(failed.javascript).toContain(
+      '"notReviewed":"Iris did not answer within two minutes while reviewing /claims/new."',
+    );
+    expect(failed.javascript).toContain("text: 'not reviewed: ' + failed");
+    expect(failed.javascript).toContain(
+      "'Iris reviewed ' + irisReviewed + ' of ' + plural(site.reviewed.length, 'template') + '.'",
+    );
+    // A template not reviewed has no Iris tag and no Iris quote.
+    expect(failed.javascript).toContain(
+      "return r && typeof r.notReviewed !== 'string' ? r : null;",
+    );
+    expect(() => new Script(failed.javascript)).not.toThrow();
+  });
+
+  it('renders a stored run from before as before: no reason in its data', () => {
+    expect(bundle.javascript).not.toContain('"notReviewed"');
+  });
 });
+
+/** The fixture with a second template Iris could not review. */
+function withNotReviewed(): ReviewedSite {
+  const site = fixture();
+  return {
+    ...site,
+    reviewTemplates: ['/claims/:id', '/claims/new'],
+    reviewed: [
+      ...site.reviewed,
+      {
+        template: '/claims/new',
+        summary: '',
+        findingCount: 0,
+        notReviewed:
+          'Iris did not answer within two minutes while reviewing /claims/new.',
+      },
+    ],
+  };
+}
 
 describe('reviewAnswer', () => {
   it('summarises the findings and the coverage', () => {
@@ -455,6 +500,13 @@ describe('reviewAnswer', () => {
         '',
         'Open the report in full screen to see each element framed in its page.',
       ].join('\n'),
+    );
+  });
+
+  it('says how many of the templates Iris reviewed when one was not reviewed', () => {
+    const answer = reviewAnswer(withNotReviewed());
+    expect(answer).toContain(
+      'Iris reviewed 1 of 2 templates and found 1 visual issue.',
     );
   });
 

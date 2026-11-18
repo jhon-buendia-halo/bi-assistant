@@ -8,6 +8,7 @@ import { z } from 'zod';
 import {
   analysePlanBlock,
   visualCued,
+  earlierQueriesBlock,
 } from './answer-business-question.prompts';
 import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
@@ -28,6 +29,7 @@ import {
   clarifyingQuestionOf,
   interpretFollowUp,
   loadCatalog,
+  mergeAttempts,
   pageAnswer,
   planAfterAnswer,
   planCatalogBlock,
@@ -281,13 +283,17 @@ const planStep = createStep({
         catalog: inputData.catalog,
         // Plan sees each entity's columns, so its measures and its
         // clarifying options rest on what the data can compute.
-        catalogBlock: planCatalogBlock(inputData.catalog, inputData.columns),
+        catalogBlock: planCatalogBlock(inputData.catalog, inputData.columns, {
+          question: inputData.question,
+        }),
         ...(answered ? { clarification: answered } : {}),
         imageNotes: inputData.imageNotes,
       });
       const output = {
         question: inputData.question,
         catalog: inputData.catalog,
+        // Analyse lists the columns too (agents.md 5.11).
+        columns: inputData.columns,
         // After an answer, Plan never asks again.
         plan: planAfterAnswer(plan, answered),
         imageNotes: inputData.imageNotes,
@@ -350,13 +356,33 @@ const analyseStep = createStep({
         ? clarifyingQuestionOf(params.suspendData)
         : undefined;
       const answer = params.resumeData?.answer?.trim();
+      // A retry carries the earlier attempt forward (Validate's output): it
+      // is shown its queries, and Validate merges them with its own.
+      const earlier =
+        previous && inputData.queries
+          ? {
+              calls: inputData.calls ?? [],
+              queries: inputData.queries,
+              findings: inputData.findings ?? [],
+            }
+          : undefined;
+      const earlierBlock = earlier
+        ? earlierQueriesBlock(earlier.queries, earlier.findings)
+        : '';
       const { clarification, ...attemptResult } = await runtimeOf(
         params,
         STEP.analyse.title,
       ).analyse({
         question: inputData.question,
         catalog: inputData.catalog,
-        catalogBlock: catalogBlock(inputData.catalog),
+        // The columns Load catalog loaded, as Plan got them: the agent
+        // need not describe the entities again. With none known, the
+        // catalog block alone, as before.
+        catalogBlock: inputData.columns.length
+          ? planCatalogBlock(inputData.catalog, inputData.columns, {
+              question: inputData.question,
+            })
+          : catalogBlock(inputData.catalog, { question: inputData.question }),
         plan: inputData.plan,
         attempt,
         planBlock: analysePlanBlock(
@@ -365,6 +391,12 @@ const analyseStep = createStep({
             ? { attempt: previous, findings: inputData.findings }
             : undefined,
         ),
+        ...(earlier && earlierBlock
+          ? {
+              earlierBlock,
+              earlier: { queries: earlier.queries, findings: earlier.findings },
+            }
+          : {}),
         ...(asked && answer ? { answered: { ...asked, answer } } : {}),
         imageNotes: inputData.imageNotes,
         ...visualFollows(params.requestContext, inputData),
@@ -379,9 +411,11 @@ const analyseStep = createStep({
       const outcome = {
         question: inputData.question,
         catalog: inputData.catalog,
+        columns: inputData.columns,
         plan: inputData.plan,
         attempt,
         ...attemptResult,
+        ...(earlier ? { earlier } : {}),
         imageNotes: inputData.imageNotes,
       };
       // A stopped turn ends the attempt: the loop ends, no answer is written.
@@ -399,16 +433,32 @@ const validateStep = createStep({
     STEP.validate.title,
     SCHEMAS.validate,
     async ({ inputData }: StepParams<(typeof SCHEMAS)['validate']>) => {
-      const { ok, findings } = validateAttempt(inputData);
+      // On a retry the kept set is checked: the merged queries, or attempt
+      // 1's alone when the retry did worse or ended on a model error.
+      const checked = inputData.earlier
+        ? mergeAttempts({
+            plan: inputData.plan,
+            first: inputData.earlier,
+            second: inputData,
+            catalog: inputData.catalog,
+            question: inputData.question,
+          })
+        : {
+            ...validateAttempt(inputData),
+            calls: inputData.calls,
+            queries: inputData.queries,
+          };
       return Promise.resolve({
-        ok,
+        ok: checked.ok,
         attempt: inputData.attempt,
-        findings,
+        findings: checked.findings,
         question: inputData.question,
         catalog: inputData.catalog,
+        columns: inputData.columns,
         plan: inputData.plan,
-        calls: inputData.calls,
-        queries: inputData.queries,
+        calls: checked.calls,
+        queries: checked.queries,
+        ...('kept' in checked ? { kept: checked.kept } : {}),
         imageNotes: inputData.imageNotes,
       });
     },
@@ -567,7 +617,8 @@ const analysisAttemptWorkflow = createWorkflow({
   .then(validateStep)
   .commit();
 
-// The answer: written from the last attempt, then summed up.
+// The answer: written from the kept queries (the last attempt's, or after a
+// retry the merged set or attempt 1's), then summed up.
 const answerPathWorkflow = createWorkflow({
   id: 'answer-path',
   // Write answer's input and the catalog of the run's datasets.

@@ -294,11 +294,14 @@ export const sampleRowsTool = createTool({
       };
     }
     const rowLimit = limit ?? 10;
-    const result = await getDatasetToolServices().sampleRows(
-      access.datasourceId,
-      entity,
-      rowLimit,
-    );
+    const { abortSignal } = context;
+    const services = getDatasetToolServices();
+    // The turn's stop ends the call (agents.md 3.3).
+    const result = await (abortSignal
+      ? services.sampleRows(access.datasourceId, entity, rowLimit, {
+          signal: abortSignal,
+        })
+      : services.sampleRows(access.datasourceId, entity, rowLimit));
     return withoutFacts(
       result,
       {
@@ -344,14 +347,31 @@ export const runReadOnlySqlTool = createTool({
     const target = resolveDatasource(datasets, datasourceId);
     if ('error' in target) return { error: target.error };
     const rowLimit = limit ?? 100;
+    // The tool call's abort signal is the turn's stop (agents.md 3.4): it
+    // cancels the statement and its repair at the source.
+    const { abortSignal } = context;
+    const services = getDatasetToolServices();
     try {
-      const result = await getDatasetToolServices().runReadOnlySql(
-        target.id,
-        sql,
-        rowLimit,
-        datasetNames(requestContext),
-        usageSinkFrom(requestContext),
-      );
+      // The eval's usage sink, when set, hears the fixer calls (R219).
+      const usageSink = usageSinkFrom(requestContext);
+      const options = {
+        ...(abortSignal ? { signal: abortSignal } : {}),
+        ...(usageSink ? { usageSink } : {}),
+      };
+      const result = await (abortSignal || usageSink
+        ? services.runReadOnlySql(
+            target.id,
+            sql,
+            rowLimit,
+            datasetNames(requestContext),
+            options,
+          )
+        : services.runReadOnlySql(
+            target.id,
+            sql,
+            rowLimit,
+            datasetNames(requestContext),
+          ));
       // Inspect the statement that actually ran — the fixer may have repaired
       // the one the model wrote. Warnings ride back on the tool result so the
       // agent has to face them before it writes an answer, instead of the
@@ -395,6 +415,8 @@ export const runReadOnlySqlTool = createTool({
       );
       return warnings.length ? { ...shown, warnings } : shown;
     } catch (err) {
+      // A statement the stop cut short is no failed query: the call ends.
+      if (abortSignal?.aborted) throw err;
       return { error: err instanceof Error ? err.message : String(err) };
     }
   },

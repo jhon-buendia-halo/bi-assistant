@@ -23,9 +23,12 @@ import {
 import {
   imagesMessage,
   replyFailure,
+  throwIfCut,
   tunedOptions,
+  type ModelReply,
   type StepImage,
 } from './recreate-dashboard.agents';
+import { guardedCall } from './model-call';
 
 /** The most tokens the Image Reader's reply takes. */
 const READ_IMAGES_OUTPUT_TOKENS = 4000;
@@ -43,7 +46,9 @@ function noNotes(stopped: boolean): ReadImagesOutcome {
  * image's bytes. A model error rejects with the model's own error, which
  * fails the step and the run. A stopped turn reads nothing and records
  * nothing (`{ imageNotes: '', imageCount: 0, stopped: true }`). Without
- * images no model is called.
+ * images no model is called. The call is guarded (`guardedCall`, workflows
+ * R43): a five-minute deadline per try, one retry of a transient failure or
+ * a cut reply; cut twice, the step fails with `ReplyCutError`.
  */
 export async function readImagesWithModel(
   input: { question: string; images: readonly StepImage[] },
@@ -54,37 +59,38 @@ export async function readImagesWithModel(
     question: input.question,
     imageCount: input.images.length,
   });
+  const guard = { label: 'Read images' };
   try {
-    const result = await imageReaderAgent.generate(
-      imagesMessage(request, input.images),
-      {
-        ...(await tunedOptions(options, READ_IMAGES_OUTPUT_TOKENS)),
-        structuredOutput: {
-          schema: imageDescriptionsSchema,
-          jsonPromptInjection: 'inline',
-          // A reply off the schema is read leniently (`imageDescriptionsOf`).
-          errorStrategy: 'warn',
+    return await guardedCall(options, guard, async (call) => {
+      const result = await imageReaderAgent.generate(
+        imagesMessage(request, input.images),
+        {
+          ...(await tunedOptions(call, READ_IMAGES_OUTPUT_TOKENS)),
+          structuredOutput: {
+            schema: imageDescriptionsSchema,
+            jsonPromptInjection: 'inline',
+            // A reply off the schema is read leniently (`imageDescriptionsOf`).
+            errorStrategy: 'warn',
+          },
         },
-      },
-    );
-    const reply = result as {
-      object?: unknown;
-      text?: string;
-      error?: unknown;
-    };
-    if (stoppedBy(options)) return noNotes(true);
-    const failure = replyFailure(reply.error);
-    if (failure) throw failure;
-    await noteExchange(options, request, replyText(reply.object, reply.text));
-    const descriptions = imageDescriptionsOf(
-      reply.object ?? reply.text,
-      input.images.length,
-    );
-    return {
-      imageNotes: renderImageNotes(descriptions),
-      imageCount: descriptions.length,
-      stopped: false,
-    };
+      );
+      const reply = result as ModelReply;
+      if (stoppedBy(call)) return noNotes(true);
+      const failure = replyFailure(reply.error);
+      if (failure) throw failure;
+      // A cut reply is no off-shape reply: it is not read leniently.
+      throwIfCut(reply, guard.label, READ_IMAGES_OUTPUT_TOKENS);
+      await noteExchange(call, request, replyText(reply.object, reply.text));
+      const descriptions = imageDescriptionsOf(
+        reply.object ?? reply.text,
+        input.images.length,
+      );
+      return {
+        imageNotes: renderImageNotes(descriptions),
+        imageCount: descriptions.length,
+        stopped: false,
+      };
+    });
   } catch (error) {
     if (stoppedBy(options)) return noNotes(true);
     throw error;

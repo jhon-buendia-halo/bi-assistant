@@ -24,8 +24,12 @@ import { READINESS_WORKFLOW_EVAL_TARGET } from './readiness-workflow-target';
  * workflow on the Edge Cases sample (target
  * `data-readiness:assessment-workflow`). The workflow has already assessed
  * and saved the report, so each case's question is the workflow's question
- * and the checks compare the answer with the saved report (`details.report`)
- * and the planted problems of the sample (testing-data R29).
+ * and the checks compare the answer with the saved report's summary
+ * (`details.report`, the one Explain report's prompt carries) and the
+ * planted problems of the sample (testing-data R29). Since the prompt
+ * carries that summary (data-readiness R4), no case requires a
+ * `get_readiness_report` call; only the drill-down into every completeness
+ * finding does, for a part the summary does not hold.
  *
  * `rw-stale-tables` is the known-issue-C probe: the explain runtime streams
  * the turn input and may drop the workflow's own question, so Sarah answers
@@ -43,8 +47,8 @@ const READINESS_WORKFLOW_EVAL_CASES: AssistantEvalCase[] = [
     id: 'rw-ready-for-analysis',
     question: 'Is this dataset ready for analysis?',
     intent:
-      'D2, D9, D15 inside the workflow: lead with the saved report’s overall score and maturity, quote only numbers the report holds, read the report and never assess again or recount findings with SQL.',
-    scorers: [...BASE, checks.calledTool('get_readiness_report')],
+      'D2, D9, D15 inside the workflow: lead with the saved report’s overall score and maturity, quote only numbers the report holds (its summary is in the prompt: no call is needed to read it), and never assess again or recount findings with SQL.',
+    scorers: [...BASE],
     customChecks: [
       quotesReportScoreAndMaturity(),
       numbersFromReport(),
@@ -71,7 +75,7 @@ const READINESS_WORKFLOW_EVAL_CASES: AssistantEvalCase[] = [
     question: 'Are there orphan order lines?',
     intent:
       'A planted problem (R24): 20 order_lines rows whose order_id has no order. The answer names order_lines and the 20 rows from the report or its finding sources, without a new count.',
-    scorers: [...BASE, checks.calledTool('get_readiness_report')],
+    scorers: [...BASE],
     customChecks: [
       namesPlantedFinding('order_lines', 20),
       numbersFromReport(),
@@ -112,7 +116,7 @@ const READINESS_WORKFLOW_EVAL_CASES: AssistantEvalCase[] = [
     question: 'Explain the validity score.',
     intent:
       'The validity figures come from the report: the dimension’s score, and the invalid emails (customers.email 1,000, payments.payer_email 750) when the report holds them.',
-    scorers: [...BASE, checks.calledTool('get_readiness_report')],
+    scorers: [...BASE],
     customChecks: [
       quotesValidityFigures([1000, 750]),
       numbersFromReport(),

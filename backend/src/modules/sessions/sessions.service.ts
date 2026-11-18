@@ -40,6 +40,7 @@ import type {
 import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
+import { raceAbort } from '../datasources/connectors/connector';
 import { LlmService } from '../llm/llm.service';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { MetricsService } from '../metrics/metrics.service';
@@ -282,8 +283,8 @@ export class SessionsService implements OnModuleInit {
       toView: (session) => this.toView(session),
       workflowOf: (session) => this.workflowOf(session),
       effectiveWorkflowFor: (session) => this.effectiveWorkflowFor(session),
-      crossCheckAnswer: (session, question, data) =>
-        this.crossCheckAnswer(session, question, data),
+      crossCheckAnswer: (session, question, data, signal) =>
+        this.crossCheckAnswer(session, question, data, signal),
       readinessBridge: () => this.readinessBridge,
       readImage: (sessionId, path) => readWorkspaceImage(sessionId, path),
       artifact: async (artifactId) => {
@@ -317,11 +318,12 @@ export class SessionsService implements OnModuleInit {
       },
       writeFile: (sessionId, path, data) =>
         writeWorkspaceFile(sessionId, path, data),
-      buildVisual: async (sessionId, source) => {
+      buildVisual: async (sessionId, source, abortSignal) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.createFromAnswer(
           session,
           source,
+          abortSignal,
         );
         await this.saveVisualMetadata(session, metadata);
         return metadata;
@@ -357,20 +359,41 @@ export class SessionsService implements OnModuleInit {
     // Install the DI bridge the Mastra tools use (they load with no Nest DI).
     setDatasetToolServices({
       getDatasets: (names) => this.turnDatasets.bound(names),
-      sampleRows: (datasourceId, entity, limit) =>
-        this.datasourcesService.sampleRows(datasourceId, entity, limit),
-      runReadOnlySql: (datasourceId, sql, limit, datasets, usageSink) =>
-        this.sqlChecks.runSqlWithRepair(
+      // The tool call's stop (agents.md 3.3): `sampleRows` takes no signal,
+      // so the call ends at once and the capped sample is left to finish.
+      sampleRows: (datasourceId, entity, limit, options) => {
+        const sample = this.datasourcesService.sampleRows(
           datasourceId,
-          sql,
+          entity,
           limit,
-          datasets,
-          usageSink,
-        ),
+        );
+        return options?.signal ? raceAbort(sample, options.signal) : sample;
+      },
+      // The statement and its repair get the tool call's stop (agents.md 3.4)
+      // and, inside an eval attempt, its usage sink (R219).
+      runReadOnlySql: (datasourceId, sql, limit, datasets, options) =>
+        options
+          ? this.sqlChecks.runSqlWithRepair(
+              datasourceId,
+              sql,
+              limit,
+              datasets,
+              options,
+            )
+          : this.sqlChecks.runSqlWithRepair(datasourceId, sql, limit, datasets),
       // `explore_result` (agents.md 3.15): the inspector's own page path.
-      pageQuery: (source, datasets, request) =>
-        this.queryEvidence.pageOf(source, datasets, request),
-      interpretResult: (input) => this.mastra.interpretResult(input),
+      // `pageOf` takes no signal, so the tool call's stop ends the call at
+      // once and the page statement is left to finish (agents.md 3.3).
+      pageQuery: (source, datasets, request, options) => {
+        const page = this.queryEvidence.pageOf(source, datasets, request);
+        return options?.signal ? raceAbort(page, options.signal) : page;
+      },
+      interpretResult: (input, options) =>
+        options?.abortSignal
+          ? this.mastra.interpretResult(input, {
+              abortSignal: options.abortSignal,
+            })
+          : this.mastra.interpretResult(input),
       createVisual: async (
         sessionId,
         sourceMessageAt,
@@ -462,14 +485,15 @@ export class SessionsService implements OnModuleInit {
 
   /**
    * Careful mode's cross-check (agents.md 5.4), the seam the turn engine
-   * reaches it through.
+   * reaches it through; `signal` is the turn's stop.
    */
   private crossCheckAnswer(
     session: SessionDoc,
     question: string,
     data: ToolDataRecord[],
+    signal?: AbortSignal,
   ): Promise<CrossCheck | undefined> {
-    return this.sqlChecks.crossCheckAnswer(session, question, data);
+    return this.sqlChecks.crossCheckAnswer(session, question, data, signal);
   }
 
   list(): Promise<SessionDoc[]> {

@@ -36,7 +36,7 @@ Capability-local vocabulary:
     - the Tools tab lists its own tools.
 - R2. Since 2026-11-13 the **Assess Data Readiness** workflow (`data-readiness-assessment`; [workflows](../workflows/spec.md) R1, R29; [agents.md](../../system/agents.md) 5.13) SHALL run an assessment of one dataset from its page (**Execute workflow**, the Run panel; [workflows](../workflows/spec.md) R21), one run per assessment ([workflows](../workflows/spec.md) R18-R20). (From 1.23.16 to 2026-11-12 the agent's own one-step workflow did this; ADR-0042 removed it.)
   - Its input is `dataset`, a list of the datasets bound to a PostgreSQL or Databricks datasource (required), and `question`, a text area that starts as `Assess the readiness of this dataset` (an empty question means that text). The three starter questions of R2a are example chips under it.
-  - Its code steps profile the dataset's tables, score them with the deterministic engine and store the report with the run's id (R6-R33, R24), then look up the rows behind its top findings (R34); its **Explain report** step runs the Data Readiness Agent on the stored report, which reads it with `get_readiness_report` and SHALL NOT run a second assessment (while the step runs, `assess_data_readiness` answers an error naming the stored report).
+  - Its code steps profile the dataset's tables, score them with the deterministic engine and store the report with the run's id (R6-R33, R24); its **Explain report** step runs the Data Readiness Agent on the stored report, whose summary its prompt carries (R4), and which SHALL NOT run a second assessment (while the step runs, `assess_data_readiness` answers an error naming the stored report), while the rows behind the report's top findings are looked up; its **Rows behind findings** step then takes them (R34).
   - The run host covers that one dataset only, so the agent never asks which dataset.
   - A dataset that is not PostgreSQL or Databricks SHALL be refused before the run with `Dataset "<name>" is not a PostgreSQL or Databricks dataset`.
   - The run's answer, its readiness card and its files show in the Run panel (R5; [synthetic-data](../synthetic-data/spec.md) R43). **Follow up** asks a further question as a new run with this run as its context, which assesses again; **Stop** cancels a running assessment (R33) and stores no report.
@@ -62,7 +62,7 @@ Capability-local vocabulary:
   - `describe_entity` and `run_readonly_sql`, the assistant's shared dataset tools, to show the records behind a finding (R4, ADR-0035). They are session-scoped, read-only and guarded as in [agents.md](../../system/agents.md) 3.2 and 3.4.
 
   It SHALL have no workspace tool and no other dataset-browsing tool. A tool SHALL never fail the turn: errors reach the model as `{ error }` text ([agents.md](../../system/agents.md) 3.13).
-- R4. The agent SHALL quote a score, a band or a finding only from a tool result in the conversation. It SHALL never estimate, round differently, re-weight or "adjust" a score. Asked to change one, it SHALL say in one sentence that scores come from the deterministic engine and cannot be changed in chat. With more than one dataset in the session and none named, it SHALL ask which one with `ask_clarification`. The prompt and its rules are in [agents.md](../../system/agents.md) 2.10.
+- R4. The agent SHALL quote a score, a band or a finding only from a tool result in the conversation or, in the Explain report step of Assess Data Readiness, from the stored report's summary that step's prompt carries. Since 2026-11-17 that prompt holds the summary exactly as `get_readiness_report` returns it to the model for that report, so the agent calls `get_readiness_report` there only for a part the summary does not hold (for example every finding of one dimension, R35), not first on every run ([agents.md](../../system/agents.md) 5.13). It SHALL never estimate, round differently, re-weight or "adjust" a score. Asked to change one, it SHALL say in one sentence that scores come from the deterministic engine and cannot be changed in chat. With more than one dataset in the session and none named, it SHALL ask which one with `ask_clarification`. The prompt and its rules are in [agents.md](../../system/agents.md) 2.10.
   - **Scope.** It SHALL run SQL only to show the records behind a finding, and to answer data-quality questions about the session's data (which rows are null, invalid, inconsistent, duplicated, orphaned, stale or unreasonable). It SHALL decline anything else in one sentence. General analysis (totals, trends, rankings) is declined with a pointer to Questions to Insights.
   - **Drill-down.** To show records it SHALL load the `readiness-drilldown` skill, call `describe_entity`, then `run_readonly_sql`. The answer SHALL lead with the count and show up to 20 rows in a table.
   - A query result SHALL never change, recompute or replace a score or a finding. When a query's count differs from a finding's, the agent SHALL give both and say the data may have changed since the report was generated.
@@ -227,7 +227,7 @@ These rules refine R6 to R11 without changing any statistic, check or score form
 
 ### The rows behind a finding
 
-- R34. **Each top finding carries the rows behind it** (since 2026-11-16, roadmap 1.28.11). After Save report, the Assess Data Readiness run's **Rows behind findings** step ([agents.md](../../system/agents.md) 5.13) SHALL run, for each of the report's top findings (at most 20, most severe first, the order of the agent's summary), one read-only query of the rows behind it, on the report's datasource, through the guarded read-only path with no repair and no model call, keeping at most 200 rows. Each query SHALL be a source of the run's answer (`run_readonly_sql`, with a business sentence such as `Rows where constructor is empty in formula1.results`), ahead of the agent's own, so the query inspector opens, pages and filters its whole result ([agent-answers](../agent-answers/spec.md)).
+- R34. **Each top finding carries the rows behind it** (since 2026-11-16, roadmap 1.28.11). From Save report on, while the agent explains the report (since 2026-11-17), the Assess Data Readiness run SHALL run, for each of the report's top findings (at most 20, most severe first, the order of the agent's summary), one read-only query of the rows behind it, on the report's datasource, through the guarded read-only path with no repair and no model call, keeping at most 200 rows; its **Rows behind findings** step ([agents.md](../../system/agents.md) 5.13), after Explain report, SHALL take them. Each query SHALL be a source of the run's answer (`run_readonly_sql`, with a business sentence such as `Rows where constructor is empty in formula1.results`), ahead of the agent's own and in finding order, even when the agent ran queries while they ran, so the query inspector opens, pages and filters its whole result ([agent-answers](../agent-answers/spec.md)).
   - The query follows the finding's check, in the datasource's dialect (PostgreSQL `"…"`, Databricks backticks with the catalog), as one `SELECT` with no CTE and no `LIMIT`:
     - completeness: the rows where the column is empty;
     - uniqueness: the key's values that repeat, with their `occurrences`, most repeated first (an id-like column's empty values left out, as the check counts them);
@@ -238,7 +238,7 @@ These rules refine R6 to R11 without changing any statistic, check or score form
     - validity: the values that fail the column's format, with the profiler's own pattern.
   - Where the finding is a count of rows (completeness, integrity, validity, negatives, swapped ranges) the result SHALL carry that count as `matching_rows`.
   - Accessibility findings, findings with no table or column, and a timeliness finding read from the table's last change SHALL have no query.
-  - A query that fails SHALL be a failed source of the answer, with its error; it SHALL NOT fail the run. A stop SHALL end the run at that step.
+  - A query that fails SHALL be a failed source of the answer, with its error; it SHALL NOT fail the run. A stop SHALL end the run at that step; a run stopped at Explain report keeps none of these sources.
   - The Data Readiness Agent's input SHALL NOT change: the sources reach no prompt.
 
 ### Every finding of a dimension
@@ -304,7 +304,7 @@ Feature: Data readiness
   Scenario: Assess Data Readiness profiles, scores and explains one dataset
     Given the World Cup PostgreSQL dataset
     When I run "Assess Data Readiness" on it with no question
-    Then Resolve dataset, Profile source, Score readiness, Save report, Rows behind findings, Explain report and Wrap up end successfully, in that order
+    Then Resolve dataset, Profile source, Score readiness, Save report, Explain report, Rows behind findings and Wrap up end successfully, in that order
     And one readiness report is stored with the run's id
     And the run's answer explains it and carries its readiness card
 

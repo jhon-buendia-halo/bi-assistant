@@ -40,15 +40,19 @@ import { readinessEvalOrientation } from './data-readiness.evals';
  * - Resolve dataset, Profile source, Score readiness and Save report run
  *   the deterministic engine through the readiness bridge
  *   (`startAssessment`, on the run's throwaway host bound to the agent);
- * - Rows behind findings runs one read-only query per top finding
+ * - Rows behind findings (after Explain report; here the work Save report
+ *   starts in a session runs when its step takes it) runs one read-only
+ *   query per top finding
  *   (`recordFindingSources`, through `runReadOnlySql`) — recorded as the
  *   run's sources in `details.findingSources`, not as Sarah's tool calls;
  * - Explain report is the agent's own `generate` with the case's options
- *   (Block D1, step budget, scorer data) plus the report block, and the
- *   assessed report on the context (`assess_data_readiness` refuses).
+ *   (Block D1, step budget, scorer data) plus the report block (the turn
+ *   engine's, the saved report's summary in it), and the assessed report
+ *   on the context (`assess_data_readiness` refuses).
  * The scored answer is Explain report's answer; the tool calls are
  * Explain report's. `details.steps` holds every step's output,
- * `details.report` the saved report's summary. A failed step fails the case
+ * `details.report` the summary the report block carried (what
+ * `get_readiness_report` hands the model). A failed step fails the case
  * with its error.
  */
 
@@ -198,10 +202,17 @@ export function readinessWorkflowTurnAgent(
           })),
         };
       },
+      // A case has no images, and the early work runs one step after the
+      // other here: the rows behind findings when their step takes them.
+      startImageNotes: () => undefined,
+      readsImages: () => false,
+      imageNotes: () =>
+        Promise.resolve({ imageNotes: '', imageCount: 0, stopped: false }),
       save: async () => {
         saved = await started().save();
         return { reportId: saved.report.id };
       },
+      startFindingRows: () => undefined,
       findingRows: () => {
         if (!saved) throw new Error('The report has not been saved');
         return parts.recordFindingSources({
@@ -220,8 +231,10 @@ export function readinessWorkflowTurnAgent(
         });
       },
       explain: async ({ dataset: name, reportId }) => {
-        // The run has assessed: the agent reads the stored report and
-        // `assess_data_readiness` refuses (agents.md 3.13, 5.13).
+        // The run has assessed: the block carries the stored report's
+        // summary, as the turn engine's does, and `assess_data_readiness`
+        // refuses (agents.md 3.13, 5.13).
+        if (!saved) throw new Error('The report has not been saved');
         requestContext.set(ASSESSED_REPORT_CONTEXT_KEY, reportId);
         explained = await agent.generate(
           input as never,
@@ -231,7 +244,11 @@ export function readinessWorkflowTurnAgent(
               ...(options.context ?? []),
               {
                 role: 'system',
-                content: explainReportBlock({ dataset: name, reportId }),
+                content: explainReportBlock({
+                  dataset: name,
+                  reportId,
+                  summary: readinessModelOutput(saved),
+                }),
               },
             ],
           } as never,
@@ -262,7 +279,14 @@ export function readinessWorkflowTurnAgent(
     }
     const details: EvalRunDetails = {
       steps,
-      ...(saved ? { report: { ...saved.summary } } : {}),
+      // The summary Explain report's prompt carried (its block above).
+      ...(saved
+        ? {
+            report: {
+              ...(readinessModelOutput(saved) as Record<string, unknown>),
+            },
+          }
+        : {}),
       findingSources,
     };
     return { ...explained, text: answer, [EVAL_DETAILS_KEY]: details };

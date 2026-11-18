@@ -26,6 +26,7 @@ import {
   type ContractStepEntry,
 } from './answer-business-question.steps';
 import type { WorkflowEdge } from './workflow-contract';
+import { ModelTimeoutError } from './model-call';
 
 /** The workflow's registry key and id. */
 export const REVIEW_WEBSITE_WORKFLOW_ID = 'review-website';
@@ -295,49 +296,22 @@ export function reviewWebsiteInputOf(
 /** A run's input that cannot be used, said in the form's words. */
 export class ReviewWebsiteInputError extends Error {}
 
-/** How long one of Iris's calls may take, rate-limit retries included. */
+/**
+ * How long one try of Iris's call may take, rate-limit retries included:
+ * her one deadline, which her guarded call uses (`reviewTemplateWithModel`;
+ * workflows R43).
+ */
 export const IRIS_CALL_TIMEOUT_MS = 2 * 60 * 1000;
 
-/** Iris's call took longer than `IRIS_CALL_TIMEOUT_MS`. */
-export class IrisTimeoutError extends Error {
-  constructor(template: string) {
-    super(
-      `Iris did not answer within two minutes while reviewing ${template}. The model may be busy or rate limited: run again later, or untick Visual review with Iris to keep to the measured checks.`,
-    );
-  }
-}
-
 /**
- * Runs `call` with a signal that aborts when `parent` does (the run is
- * stopped) or after `ms`. A timeout rejects with `IrisTimeoutError`, even
- * when the call returns normally after the abort (a stopped model call
- * resolves rather than throws); a stop resolves as the call does.
+ * Iris's call took longer than `IRIS_CALL_TIMEOUT_MS`: a model timeout in
+ * her own words, so it is never retried and never read as a Stop.
  */
-export async function withIrisTimeout<T>(
-  template: string,
-  parent: AbortSignal,
-  call: (signal: AbortSignal) => Promise<T>,
-  ms = IRIS_CALL_TIMEOUT_MS,
-): Promise<T> {
-  const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, ms);
-  const stop = () => controller.abort();
-  if (parent.aborted) controller.abort();
-  else parent.addEventListener('abort', stop, { once: true });
-  try {
-    const result = await call(controller.signal);
-    if (timedOut && !parent.aborted) throw new IrisTimeoutError(template);
-    return result;
-  } catch (error) {
-    if (timedOut && !parent.aborted) throw new IrisTimeoutError(template);
-    throw error;
-  } finally {
-    clearTimeout(timer);
-    parent.removeEventListener('abort', stop);
+export class IrisTimeoutError extends ModelTimeoutError {
+  constructor(template: string) {
+    super('Review templates', IRIS_CALL_TIMEOUT_MS);
+    this.name = 'IrisTimeoutError';
+    this.message = `Iris did not answer within two minutes while reviewing ${template}. The model may be busy or rate limited: run again later, or untick Visual review with Iris to keep to the measured checks.`;
   }
 }
 

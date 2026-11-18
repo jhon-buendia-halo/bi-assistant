@@ -38,7 +38,13 @@ import type {
   RequirementAssessment,
 } from './consumption-gap-analysis.schemas';
 import { checkedFixes, checkedMappings } from './consumption-gap.gaps';
-import { replyFailure, tunedOptions } from './recreate-dashboard.agents';
+import {
+  replyFailure,
+  throwIfCut,
+  tunedOptions,
+  type ModelReply,
+} from './recreate-dashboard.agents';
+import { deadlineFor, guardedCall } from './model-call';
 
 /** The most tokens each call's reply takes. */
 const REQUIREMENTS_OUTPUT_TOKENS = 8000;
@@ -52,9 +58,12 @@ interface CallableAgent {
 /**
  * One call: the request to the agent with its schema, the exchange noted,
  * the raw reply handed to `read`. A stopped turn returns `empty` with
- * `stopped` true; a model error is thrown.
+ * `stopped` true; a model error is thrown. The call is guarded
+ * (`guardedCall`, workflows R43): a deadline by its output cap, one retry
+ * of a transient failure or a cut reply; cut twice, `ReplyCutError`.
  */
 async function callOnce<T>(
+  label: string,
   agent: unknown,
   request: string,
   schema: z.ZodType,
@@ -63,26 +72,27 @@ async function callOnce<T>(
   read: (reply: unknown) => T,
   empty: T,
 ): Promise<{ result: T; stopped: boolean }> {
+  const guard = { label, deadlineMs: deadlineFor(maxOutputTokens) };
   try {
-    const result = await (agent as CallableAgent).generate(request, {
-      ...(await tunedOptions(options, maxOutputTokens)),
-      structuredOutput: {
-        schema,
-        jsonPromptInjection: 'inline',
-        // A reply off the schema is read leniently.
-        errorStrategy: 'warn',
-      },
-    } as never);
-    const reply = result as {
-      object?: unknown;
-      text?: string;
-      error?: unknown;
-    };
-    if (stoppedBy(options)) return { result: empty, stopped: true };
-    const failure = replyFailure(reply.error);
-    if (failure) throw failure;
-    await noteExchange(options, request, replyText(reply.object, reply.text));
-    return { result: read(reply.object ?? reply.text), stopped: false };
+    return await guardedCall(options, guard, async (call) => {
+      const result = await (agent as CallableAgent).generate(request, {
+        ...(await tunedOptions(call, maxOutputTokens)),
+        structuredOutput: {
+          schema,
+          jsonPromptInjection: 'inline',
+          // A reply off the schema is read leniently.
+          errorStrategy: 'warn',
+        },
+      } as never);
+      const reply = result as ModelReply;
+      if (stoppedBy(call)) return { result: empty, stopped: true };
+      const failure = replyFailure(reply.error);
+      if (failure) throw failure;
+      // A reply cut at the output cap is never read as an empty result.
+      throwIfCut(reply, label, maxOutputTokens);
+      await noteExchange(call, request, replyText(reply.object, reply.text));
+      return { result: read(reply.object ?? reply.text), stopped: false };
+    });
   } catch (error) {
     if (stoppedBy(options)) return { result: empty, stopped: true };
     throw error;
@@ -101,6 +111,7 @@ export async function deriveRequirementsWithModel(
   options: StepModelOptions,
 ): Promise<{ requirements: Requirement[]; stopped: boolean }> {
   const { result, stopped } = await callOnce(
+    'Derive requirements',
     requirementsAnalystAgent,
     deriveRequirementsRequest(input),
     derivedRequirementsReplySchema,
@@ -123,6 +134,7 @@ export async function reviseRequirementsWithModel(
   options: StepModelOptions,
 ): Promise<{ requirements: Requirement[]; stopped: boolean }> {
   const { result, stopped } = await callOnce(
+    'Confirm requirements',
     requirementsAnalystAgent,
     reviseRequirementsRequest(input),
     revisedRequirementsReplySchema,
@@ -140,6 +152,7 @@ export async function mapRequirementsWithModel(
   options: StepModelOptions,
 ): Promise<{ mappings: FieldMapping[]; stopped: boolean }> {
   const { result, stopped } = await callOnce(
+    'Map requirements',
     layerMapperAgent,
     mapRequirementsRequest(input),
     layerMappingsReplySchema,
@@ -162,6 +175,7 @@ export async function recommendFixesWithModel(
   options: StepModelOptions,
 ): Promise<{ fixes: GapFix[]; stopped: boolean }> {
   const { result, stopped } = await callOnce(
+    'Recommend fixes',
     gapAdvisorAgent,
     recommendFixesRequest(input),
     gapFixesReplySchema,

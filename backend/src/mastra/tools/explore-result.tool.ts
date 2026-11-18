@@ -157,7 +157,9 @@ function withExplicit(base: PageRequest, input: ExploreInput): PageRequest {
  * makes, shared with Answer a Business Question's Page result step
  * (roadmap 1.28.8). Its view is written beside the result as facts (under
  * `callId` when the call has one, and under the source SQL), never into
- * it. A refusal or failure comes back as `{ error }`, never thrown.
+ * it. A refusal or failure comes back as `{ error }`, never thrown; a page
+ * `signal` (the turn's stop, agents.md 3.15) cut short throws instead: the
+ * call ends, as a stopped `run_readonly_sql` does.
  */
 export async function pageExplorableQuery(
   target: ExplorableQuery,
@@ -165,24 +167,27 @@ export async function pageExplorableQuery(
   understood: string,
   requestContext: RequestContextLike,
   callId?: string,
+  signal?: AbortSignal,
 ): Promise<ExploreResultOutput | { error: string }> {
   const services = getDatasetToolServices();
   if (!services.pageQuery) {
     return { error: 'Exploring an earlier result is not available here' };
   }
+  const source = {
+    sql: target.sql,
+    ...(target.datasourceId ? { datasourceId: target.datasourceId } : {}),
+    columns: target.columns,
+    kinds: target.kinds,
+  };
   let page: PageResult & { datasourceId: string };
   try {
-    page = await services.pageQuery(
-      {
-        sql: target.sql,
-        ...(target.datasourceId ? { datasourceId: target.datasourceId } : {}),
-        columns: target.columns,
-        kinds: target.kinds,
-      },
-      datasetNames(requestContext),
-      request,
-    );
+    page = await (signal
+      ? services.pageQuery(source, datasetNames(requestContext), request, {
+          signal,
+        })
+      : services.pageQuery(source, datasetNames(requestContext), request));
   } catch (error) {
+    if (signal?.aborted) throw error;
     return { error: runErrorMessage(error) };
   }
 
@@ -244,7 +249,9 @@ export const exploreResultTool = createTool({
     value: exploreModelOutput(output),
   }),
   execute: async (input, context) => {
-    const { requestContext } = context;
+    // The tool call's abort signal is the turn's stop (agents.md 3.15): it
+    // ends the model call and the page at once.
+    const { requestContext, abortSignal } = context;
     const queries = explorableQueries(requestContext);
     if (!queries.length) return { error: NO_QUERY_ERROR };
     const named = input.query?.trim();
@@ -270,16 +277,19 @@ export const exploreResultTool = createTool({
         return { error: 'Reading a filter in words is not available here' };
       }
       let spec: ExplorerSpec;
+      const reading = {
+        text: words,
+        candidates: (pinned ? [pinned] : queries).map(explorerCandidateOfQuery),
+        view: target.view ?? null,
+        pageCount: pageCountOf(target.view ?? null),
+      };
       try {
-        spec = await services.interpretResult({
-          text: words,
-          candidates: (pinned ? [pinned] : queries).map(
-            explorerCandidateOfQuery,
-          ),
-          view: target.view ?? null,
-          pageCount: pageCountOf(target.view ?? null),
-        });
+        spec = await (abortSignal
+          ? services.interpretResult(reading, { abortSignal })
+          : services.interpretResult(reading));
       } catch (error) {
+        // A reading the stop cut short is no failed filter: the call ends.
+        if (abortSignal?.aborted) throw error;
         return {
           error: `The filter could not be understood: ${runErrorMessage(error)}`,
         };
@@ -308,6 +318,7 @@ export const exploreResultTool = createTool({
       understood,
       requestContext,
       callId,
+      abortSignal,
     );
   },
 });

@@ -23,6 +23,14 @@ import {
 } from '../agents/result-explorer.prompts';
 import { getDatasetToolServices } from '../tool-services';
 import {
+  asksAboutToday,
+  asksTimeRelative,
+  dataEnd,
+  isSnapshot,
+  readsNow,
+  sqlReadsTable,
+} from '../data-dates';
+import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
   answerSchema,
   planSchema,
@@ -363,6 +371,13 @@ export const ANSWER_BUSINESS_QUESTION_EDGES: readonly WorkflowEdge[] = [
 /** The most attempts of the analysis loop: the first and one retry. */
 export const ANALYSE_MAX_ATTEMPTS = 2;
 
+/**
+ * The agent's step budget on a retry of Analyse (agents.md 2.11, 5.11):
+ * the retry is shown the earlier attempt's queries and runs only the ones
+ * the failed checks need; the first attempt keeps the agent's 15.
+ */
+export const ANALYSE_RETRY_MAX_STEPS = 8;
+
 /** The run's RequestContext key holding the per-run `AnswerBusinessQuestionRuntime`. */
 export const ANSWER_BUSINESS_QUESTION_RUNTIME_KEY =
   'answer-business-question-runtime';
@@ -437,12 +452,14 @@ export interface FollowUpRequest {
 /**
  * What one analysis attempt of the agent turn gives back; `clarification`
  * when the agent asked the user a clarifying question (`ask_clarification`):
- * the Analyse step then waits for the answer (api.md 138).
+ * the Analyse step then waits for the answer (api.md 138). `retryError`
+ * when a retry ended on a model error (not a Stop): the records it made are
+ * kept, and Validate keeps the earlier attempt (agents.md 5.11).
  */
 export type AnalyseAttempt = Pick<
   AnalyseOutcome,
   'calls' | 'queries' | 'text' | 'stopped'
-> & { clarification?: ClarifyingQuestion };
+> & { clarification?: ClarifyingQuestion; retryError?: string };
 
 /**
  * What the session code (or the eval runner) hands the run, on its
@@ -465,7 +482,10 @@ export interface AnswerBusinessQuestionRuntime {
   /**
    * One attempt of the Analyse step: the agent turn with its tools. When
    * the step resumes after the agent's clarifying question, `answered`
-   * holds it with the user's answer: the agent goes on from there.
+   * holds it with the user's answer: the agent goes on from there. On a
+   * retry, `earlierBlock` lists the earlier attempt's queries; a retry runs
+   * with `ANALYSE_RETRY_MAX_STEPS`, and a model error on it comes back as
+   * `retryError` instead of failing the step.
    */
   analyse(input: {
     question: string;
@@ -474,6 +494,14 @@ export interface AnswerBusinessQuestionRuntime {
     plan: AnalysisPlan;
     attempt: number;
     planBlock: string;
+    /** On a retry: the earlier attempt's queries (`earlierQueriesBlock`). */
+    earlierBlock?: string;
+    /**
+     * On a retry: the earlier attempt's queries and findings the block was
+     * built from, so an attempt resumed after the agent's question rebuilds
+     * one block with its own queries after them.
+     */
+    earlier?: Pick<CheckedAttempt, 'queries' | 'findings'>;
     answered?: AnsweredClarification;
     /** Read images' notes (agents.md 2.15); absent or `''` without images. */
     imageNotes?: string;
@@ -571,6 +599,18 @@ export async function loadCatalog(datasets: readonly string[]): Promise<{
   columns: EntityColumns[];
 }> {
   const snapshots = await getDatasetToolServices().getDatasets([...datasets]);
+  // Where each dataset's data ends (*Data dates*, agents.md 5.11).
+  const ends = new Map(
+    snapshots.map((dataset) => [
+      dataset.name,
+      dataEnd(
+        dataset.tables.map((key) => ({
+          key,
+          columns: dataset.entities?.find((e) => e.key === key)?.columns ?? [],
+        })),
+      )?.date ?? null,
+    ]),
+  );
   const catalog: CatalogEntity[] = [];
   const columns: EntityColumns[] = [];
   let room = PLAN_COLUMNS_TOTAL;
@@ -584,6 +624,8 @@ export async function loadCatalog(datasets: readonly string[]): Promise<{
         datasourceId: dataset.datasourceId ?? null,
         datasourceKind: dataset.datasourceKind ?? null,
         columnCount: known ? known.length : null,
+        // The dataset's own end, the same for each of its entities.
+        dataEndsAt: ends.get(dataset.name) ?? null,
       });
       if (!known) continue;
       const listed = known
@@ -609,6 +651,7 @@ export async function loadCatalog(datasets: readonly string[]): Promise<{
 export function planCatalogBlock(
   catalog: readonly CatalogEntity[],
   columns: readonly EntityColumns[],
+  options: CatalogBlockOptions = {},
 ): string {
   const lines = columns.map((entry) => {
     const listed = entry.columns
@@ -618,23 +661,55 @@ export function planCatalogBlock(
     return `- ${entry.entity}: ${listed || '(none listed)'}${more}`;
   });
   return [
-    catalogBlock(catalog),
+    catalogBlock(catalog, options),
     ...(lines.length
       ? ['', 'Columns of each entity (name type):', ...lines]
       : ['', 'No columns are known for these entities.']),
   ].join('\n');
 }
 
-/** The catalog as the Plan and Analyse steps' system message (agents.md 5.11). */
-export function catalogBlock(catalog: readonly CatalogEntity[]): string {
+/** What the catalog block reads besides the catalog. */
+export interface CatalogBlockOptions {
+  /** The run's question: its time cue adds the data-dates line. */
+  question?: string;
+  /** Today (tests pass a fixed date). */
+  now?: Date;
+}
+
+/**
+ * The catalog as the Plan and Analyse steps' system message (agents.md
+ * 5.11). When the question asks for a figure that depends on the current
+ * date or recency (`asksTimeRelative`) and a dataset's data ends well
+ * before today (*Data dates*), one last line per such dataset says where it
+ * ends and what to measure from; any other request is as before.
+ */
+export function catalogBlock(
+  catalog: readonly CatalogEntity[],
+  options: CatalogBlockOptions = {},
+): string {
   if (!catalog.length) return 'Catalog loaded for this turn: no entities.';
+  const now = options.now ?? new Date();
+  const ended = new Map<string, string>();
+  if (options.question && asksTimeRelative(options.question)) {
+    for (const e of catalog) {
+      if (e.dataEndsAt && isSnapshot(e.dataEndsAt, now)) {
+        ended.set(e.dataset, e.dataEndsAt);
+      }
+    }
+  }
   return [
     `Catalog loaded for this turn: ${catalog.length} ${catalog.length === 1 ? 'entity' : 'entities'}.`,
     ...catalog.map(
       (e) =>
         `- ${e.entity} (dataset: ${e.dataset}; ${e.columnCount ?? '?'} columns)`,
     ),
+    ...[...ended].map(([dataset, date]) => snapshotCatalogLine(dataset, date)),
   ].join('\n');
+}
+
+/** The catalog's line for a dataset whose data ends well before today. */
+export function snapshotCatalogLine(dataset: string, date: string): string {
+  return `The ${dataset} data ends ${date}: a figure that depends on the current date (tenure, age, time since) is measured from that date, not from today, unless the question asks about today.`;
 }
 
 function strings(value: unknown): string[] {
@@ -916,14 +991,86 @@ function words(value: string): string[] {
   return found.map((word) => (word.endsWith('s') ? word.slice(0, -1) : word));
 }
 
-/** The check names Validate reports, in order. */
+/**
+ * The check names Validate reports, in order; `retry` only after a retry
+ * that ended on a model error (a warning: it never fails the attempt).
+ */
 export const VALIDATION_CHECKS = {
   ranQuery: 'Ran a query',
   noToolError: 'No unresolved tool error',
   rowLimit: 'No result cut at its row limit',
   sample: 'No answer from a sample',
   measures: 'Measures covered (warning only)',
+  dataDate: "Measured from the data's date",
+  retry: 'Retry completed (warning only)',
 } as const;
+
+/** Whether a check is a warning only: it never fails the attempt. */
+function isWarningCheck(check: string): boolean {
+  return /\(warning only\)/i.test(check);
+}
+
+/** Whether a query kept an arbitrary sample (`coverageOf`, plan 1.25.7). */
+function isSampleQuery(query: AnalyseQuery): boolean {
+  return (
+    coverageOf({
+      tool: 'run_readonly_sql',
+      sql: query.sql,
+      rowCount: query.rowCount,
+      truncated: query.truncated,
+    }) === 'sample'
+  );
+}
+
+/** Each query cut at its row limit that no later successful query re-read. */
+function unresolvedCuts(queries: readonly AnalyseQuery[]): boolean[] {
+  return queries.map(
+    (query, index) =>
+      !query.error &&
+      query.truncated &&
+      !queries
+        .slice(index + 1)
+        .some((later) => !later.error && !later.truncated),
+  );
+}
+
+/** Each sample that no later successful query read the whole data after. */
+function unresolvedSamples(queries: readonly AnalyseQuery[]): boolean[] {
+  return queries.map(
+    (query, index) =>
+      !query.error &&
+      isSampleQuery(query) &&
+      !queries
+        .slice(index + 1)
+        .some((later) => !later.error && !isSampleQuery(later)),
+  );
+}
+
+/**
+ * Each successful query that measured against today on a table whose data
+ * ends well before it (*Data dates*), and that no later successful query on
+ * that table re-read without today.
+ */
+function unresolvedNow(
+  queries: readonly AnalyseQuery[],
+  snapshots: readonly string[],
+): boolean[] {
+  const tablesOf = (sql: string) =>
+    snapshots.filter((key) => sqlReadsTable(sql, key));
+  return queries.map((query, index) => {
+    if (query.error || !readsNow(query.sql)) return false;
+    const tables = tablesOf(query.sql);
+    if (!tables.length) return false;
+    return !queries
+      .slice(index + 1)
+      .some(
+        (later) =>
+          !later.error &&
+          !readsNow(later.sql) &&
+          tablesOf(later.sql).some((key) => tables.includes(key)),
+      );
+  });
+}
 
 /**
  * The Validate step (agents.md 5.11): code checks over one analysis
@@ -936,13 +1083,21 @@ export const VALIDATION_CHECKS = {
  * plan's measures are
  * looked for (best effort: a word of each in some successful query's SQL,
  * rationale or columns) and reported as a warning that never fails the
- * attempt.
+ * attempt. When the catalog has a table whose data ends well before today
+ * (*Data dates*), one more check fails an attempt that measured against
+ * today on it (`CURRENT_DATE`, `NOW()`, …) unless the question asks about
+ * today; without such a table the findings are as before.
  */
-export function validateAttempt(input: {
-  plan: AnalysisPlan;
-  calls: readonly AnalyseCall[];
-  queries: readonly AnalyseQuery[];
-}): { ok: boolean; findings: ValidationFinding[] } {
+export function validateAttempt(
+  input: {
+    plan: AnalysisPlan;
+    calls: readonly AnalyseCall[];
+    queries: readonly AnalyseQuery[];
+    catalog?: readonly CatalogEntity[];
+    question?: string;
+  },
+  now: Date = new Date(),
+): { ok: boolean; findings: ValidationFinding[] } {
   const { plan, calls, queries } = input;
   const succeeded = queries.filter((query) => !query.error);
   const ranQuery: ValidationFinding = {
@@ -970,14 +1125,8 @@ export function validateAttempt(input: {
         ? 'Every failed call was followed by a successful one.'
         : 'No tool call failed.',
   };
-  const cut = queries.filter(
-    (query, index) =>
-      !query.error &&
-      query.truncated &&
-      !queries
-        .slice(index + 1)
-        .some((later) => !later.error && !later.truncated),
-  );
+  const cuts = unresolvedCuts(queries);
+  const cut = queries.filter((_query, index) => cuts[index]);
   const rowLimit: ValidationFinding = {
     check: VALIDATION_CHECKS.rowLimit,
     passed: cut.length === 0,
@@ -985,21 +1134,8 @@ export function validateAttempt(input: {
       ? `${cut.length} ${cut.length === 1 ? 'result was' : 'results were'} cut at the row limit and not aggregated again.`
       : 'No result the answer reads was cut.',
   };
-  const isSample = (query: AnalyseQuery) =>
-    coverageOf({
-      tool: 'run_readonly_sql',
-      sql: query.sql,
-      rowCount: query.rowCount,
-      truncated: query.truncated,
-    }) === 'sample';
-  const sampled = queries.filter(
-    (query, index) =>
-      !query.error &&
-      isSample(query) &&
-      !queries
-        .slice(index + 1)
-        .some((later) => !later.error && !isSample(later)),
-  );
+  const samples = unresolvedSamples(queries);
+  const sampled = queries.filter((_query, index) => samples[index]);
   const sample: ValidationFinding = {
     check: VALIDATION_CHECKS.sample,
     passed: sampled.length === 0,
@@ -1029,11 +1165,275 @@ export function validateAttempt(input: {
         ? `Not found in any query: ${missing.join('; ')}.`
         : 'Every planned measure appears in a query.',
   };
+  const dataDate = dataDateFinding(input, now);
   return {
     ok:
-      ranQuery.passed && noToolError.passed && rowLimit.passed && sample.passed,
-    findings: [ranQuery, noToolError, rowLimit, sample, measures],
+      ranQuery.passed &&
+      noToolError.passed &&
+      rowLimit.passed &&
+      sample.passed &&
+      (dataDate?.passed ?? true),
+    findings: [
+      ranQuery,
+      noToolError,
+      rowLimit,
+      sample,
+      measures,
+      ...(dataDate ? [dataDate] : []),
+    ],
   };
+}
+
+/**
+ * The *Measured from the data's date* check, or undefined when no table of
+ * the catalog ends well before today (the findings are then as before).
+ */
+function dataDateFinding(
+  input: {
+    queries: readonly AnalyseQuery[];
+    catalog?: readonly CatalogEntity[];
+    question?: string;
+  },
+  now: Date,
+): ValidationFinding | undefined {
+  const snapshots = (input.catalog ?? []).filter((e) =>
+    isSnapshot(e.dataEndsAt, now),
+  );
+  if (!snapshots.length) return undefined;
+  const check = VALIDATION_CHECKS.dataDate;
+  if (asksAboutToday(input.question ?? '')) {
+    return { check, passed: true, detail: 'The question asks about today.' };
+  }
+  const flags = unresolvedNow(
+    input.queries,
+    snapshots.map((e) => e.entity),
+  );
+  const flagged = input.queries.filter((_query, index) => flags[index]);
+  if (!flagged.length) {
+    return {
+      check,
+      passed: true,
+      detail: 'No query measured against today on data that ends before it.',
+    };
+  }
+  const ends = [
+    ...new Map(
+      snapshots
+        .filter((e) => flagged.some((q) => sqlReadsTable(q.sql, e.entity)))
+        .map((e) => [e.dataset, `the ${e.dataset} data ends ${e.dataEndsAt}`]),
+    ).values(),
+  ].join('; ');
+  return {
+    check,
+    passed: false,
+    detail: `${flagged.length} ${flagged.length === 1 ? 'query measured' : 'queries measured'} against today on data that ends well before it (${ends}): measure from the date the data ends, and say which date you used.`,
+  };
+}
+
+/**
+ * The failed check that flagged each query of an attempt (agents.md 5.11),
+ * by Validate's own rules, or undefined: a failed query no later query
+ * replaced (`Ran a query` or `No unresolved tool error` failed), a result
+ * cut at its row limit (`No result cut at its row limit` failed), an
+ * arbitrary sample (`No answer from a sample` failed). A query whose check
+ * passed is never flagged.
+ */
+export function flaggedQueries(
+  queries: readonly AnalyseQuery[],
+  findings: readonly ValidationFinding[],
+): (string | undefined)[] {
+  const failed = new Set(
+    findings
+      .filter((f) => !f.passed && !isWarningCheck(f.check))
+      .map((f) => f.check),
+  );
+  const errorCheck = [
+    VALIDATION_CHECKS.ranQuery,
+    VALIDATION_CHECKS.noToolError,
+  ].find((check) => failed.has(check));
+  const cuts = unresolvedCuts(queries);
+  const samples = unresolvedSamples(queries);
+  return queries.map((query, index) => {
+    if (
+      query.error &&
+      errorCheck &&
+      !queries.slice(index + 1).some((later) => !later.error)
+    ) {
+      return errorCheck;
+    }
+    if (cuts[index] && failed.has(VALIDATION_CHECKS.rowLimit)) {
+      return VALIDATION_CHECKS.rowLimit;
+    }
+    if (samples[index] && failed.has(VALIDATION_CHECKS.sample)) {
+      return VALIDATION_CHECKS.sample;
+    }
+    // Measured against today on a snapshot: the check names no table, so
+    // any successful query that read the current date carries it.
+    if (
+      failed.has(VALIDATION_CHECKS.dataDate) &&
+      !query.error &&
+      readsNow(query.sql)
+    ) {
+      return VALIDATION_CHECKS.dataDate;
+    }
+    return undefined;
+  });
+}
+
+/** One analysis attempt's calls, queries and Validate's findings. */
+export interface CheckedAttempt {
+  calls: readonly AnalyseCall[];
+  queries: readonly AnalyseQuery[];
+  findings: readonly ValidationFinding[];
+}
+
+/** What Validate keeps after a retry (agents.md 5.11): the set Write answer reads. */
+export interface MergedAttempts {
+  ok: boolean;
+  findings: ValidationFinding[];
+  calls: AnalyseCall[];
+  queries: AnalyseQuery[];
+  kept: 'merged' | 'first';
+}
+
+/**
+ * Validate on a retry (agents.md 5.11; workflows R27): the merged set is
+ * attempt 2's queries first, then attempt 1's that ran and that no failed
+ * check flagged (`flaggedQueries`), so Write answer's cut drops attempt 1's
+ * first; the calls follow (attempt 2's, then the kept queries' SQL calls:
+ * a data record's call and its query come in the same order). The merged
+ * set is checked in the order it ran (attempt 1's kept queries, then
+ * attempt 2's), so a query attempt 1 ran never resolves a sample, a cut or
+ * a failed call attempt 2 left. Attempt 1
+ * alone is kept (`first`) when attempt 2 ended on a model error (with the
+ * warning-only `Retry completed` check), ran nothing successfully, or the
+ * merged set fails a check attempt 1 passed: a retry never scores below
+ * attempt 1.
+ */
+export function mergeAttempts(input: {
+  plan: AnalysisPlan;
+  first: CheckedAttempt;
+  second: Pick<CheckedAttempt, 'calls' | 'queries'> & { retryError?: string };
+  /** The run's catalog and question, for the data-date check (*Data dates*). */
+  catalog?: readonly CatalogEntity[];
+  question?: string;
+}): MergedAttempts {
+  const { plan, first, second } = input;
+  const keepFirst = (extra: ValidationFinding[] = []): MergedAttempts => ({
+    ok: first.findings.every((f) => f.passed || isWarningCheck(f.check)),
+    findings: [...first.findings, ...extra],
+    calls: [...first.calls],
+    queries: [...first.queries],
+    kept: 'first',
+  });
+  if (second.retryError !== undefined) {
+    return keepFirst([
+      {
+        check: VALIDATION_CHECKS.retry,
+        passed: false,
+        detail: `Attempt 2 stopped on an error (${second.retryError}); the answer rests on attempt 1's queries.`,
+      },
+    ]);
+  }
+  if (!second.queries.some((query) => !query.error)) return keepFirst();
+  const flagged = flaggedQueries(first.queries, first.findings);
+  const keeps = first.queries.map(
+    (query, index) => !query.error && flagged[index] === undefined,
+  );
+  let sqlIndex = 0;
+  const firstCalls = first.calls.filter((call) =>
+    call.tool === 'run_readonly_sql' ? keeps[sqlIndex++] === true : false,
+  );
+  const calls = [...second.calls, ...firstCalls];
+  const queries = [
+    ...second.queries,
+    ...first.queries.filter((_query, index) => keeps[index]),
+  ];
+  // Validate's "resolved by a later query" rules read the order the queries
+  // ran: attempt 1's kept ones, then attempt 2's. The display order above
+  // is for Write answer only, so an earlier query never resolves a later one.
+  const checked = validateAttempt({
+    plan,
+    catalog: input.catalog,
+    question: input.question,
+    calls: [...firstCalls, ...second.calls],
+    queries: [
+      ...first.queries.filter((_query, index) => keeps[index]),
+      ...second.queries,
+    ],
+  });
+  const worse = first.findings.some(
+    (before) =>
+      before.passed &&
+      !isWarningCheck(before.check) &&
+      checked.findings.some(
+        (after) => after.check === before.check && !after.passed,
+      ),
+  );
+  if (worse) return keepFirst();
+  return { ...checked, calls, queries, kept: 'merged' };
+}
+
+/** Where one kept query ran: its attempt (1 or 2) and its place among that attempt's queries. */
+export interface KeptQueryOrigin {
+  attempt: 1 | 2;
+  index: number;
+}
+
+/**
+ * Where each query of the set Validate kept after a retry ran (agents.md
+ * 5.11; workflows R41), so Build visual is given the records the answer
+ * rests on: `attempts` are attempt 1's and attempt 2's queries, each in the
+ * order it ran. The kept set is one `mergeAttempts` makes: attempt 2's
+ * queries, then some of attempt 1's in order (`merged`), or attempt 1's
+ * alone (`first`). A query is matched on everything it carries (its SQL,
+ * rationale, rows, row count, cut and error), so two runs of the same SQL
+ * that returned different rows are told apart; runs equal in all of that
+ * are interchangeable. Undefined without a retry, or when the set is
+ * neither shape.
+ */
+export function keptQueryOrigins(
+  attempts: readonly (readonly AnalyseQuery[])[],
+  kept: readonly AnalyseQuery[],
+): KeptQueryOrigin[] | undefined {
+  if (attempts.length !== 2) return undefined;
+  const [first, second] = attempts.map((queries) => queries.map(queryKey));
+  const keys = kept.map(queryKey);
+  // Attempt 2's queries, all of them first, then attempt 1's in order.
+  if (second.every((key, index) => keys[index] === key)) {
+    const origins: KeptQueryOrigin[] = second.map((_key, index) => ({
+      attempt: 2,
+      index,
+    }));
+    let from = 0;
+    for (const key of keys.slice(second.length)) {
+      const index = first.indexOf(key, from);
+      if (index < 0) break;
+      origins.push({ attempt: 1, index });
+      from = index + 1;
+    }
+    if (origins.length === keys.length) return origins;
+  }
+  // Attempt 1's alone.
+  if (
+    keys.length === first.length &&
+    first.every((key, index) => keys[index] === key)
+  ) {
+    return first.map((_key, index) => ({ attempt: 1, index }));
+  }
+  return undefined;
+}
+
+/** A query as one string of everything it carries (`keptQueryOrigins`). */
+function queryKey(query: AnalyseQuery): string {
+  return JSON.stringify([
+    query.sql,
+    query.rationale ?? '',
+    query.rowCount,
+    query.truncated,
+    query.error ?? '',
+    query.rows,
+  ]);
 }
 
 /**
@@ -1090,7 +1490,10 @@ export function analysisLoopDone(outcome: {
   );
 }
 
-/** Wrap up: the last attempt's `run_readonly_sql` calls, their rows, the answer. */
+/**
+ * Wrap up: the kept queries' `run_readonly_sql` calls (the last attempt's,
+ * or after a retry the merged set's or attempt 1's), their rows, the answer.
+ */
 export function wrapUp(
   calls: readonly AnalyseCall[],
   answer: string,

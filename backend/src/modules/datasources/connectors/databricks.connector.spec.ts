@@ -16,16 +16,69 @@ type Responder = (sql: string) => Record<string, unknown>[];
 
 let respond: Responder = () => [];
 
+/** A statement that runs until it is cancelled. */
+const HANG = Symbol('hang');
+let hanging = (sql: string) => sql.includes('sleep');
+
+/**
+ * The operation as the driver hands it out: `fetchAll`, or `fetchChunk`
+ * (one result batch of at most `maxRows`) while `hasMoreRows`.
+ */
+class FakeOperation {
+  cancelled = false;
+  /** The most rows any single fetch has handed out. */
+  largestFetch = 0;
+  private cursor = 0;
+  private stop?: (err: Error) => void;
+
+  constructor(private readonly rows: Record<string, unknown>[] | typeof HANG) {}
+
+  fetchAll() {
+    if (this.rows === HANG) return this.hang();
+    this.largestFetch = this.rows.length;
+    return Promise.resolve(this.rows);
+  }
+
+  fetchChunk(options: { maxRows?: number } = {}) {
+    if (this.rows === HANG) return this.hang();
+    const batch = this.rows.slice(
+      this.cursor,
+      this.cursor + (options.maxRows ?? 100_000),
+    );
+    this.cursor += batch.length;
+    this.largestFetch = Math.max(this.largestFetch, batch.length);
+    return Promise.resolve(batch);
+  }
+
+  hasMoreRows() {
+    return Promise.resolve(
+      this.rows !== HANG && this.cursor < this.rows.length,
+    );
+  }
+
+  cancel() {
+    this.cancelled = true;
+    this.stop?.(new Error('The operation was canceled by a client'));
+    return Promise.resolve();
+  }
+
+  private hang(): Promise<never> {
+    return new Promise((_, reject) => (this.stop = reject));
+  }
+}
+
 class FakeSession {
   readonly statements: string[] = [];
   readonly options: (Record<string, unknown> | undefined)[] = [];
+  readonly operations: FakeOperation[] = [];
   closed = false;
 
   executeStatement(sql: string, options?: Record<string, unknown>) {
     this.statements.push(sql);
     this.options.push(options);
-    const rows = respond(sql);
-    return Promise.resolve({ fetchAll: () => Promise.resolve(rows) });
+    const op = new FakeOperation(hanging(sql) ? HANG : respond(sql));
+    this.operations.push(op);
+    return Promise.resolve(op);
   }
 
   close() {
@@ -87,6 +140,7 @@ function statements(): string[] {
 beforeEach(() => {
   clients.length = 0;
   respond = () => [];
+  hanging = (sql) => sql.includes('sleep');
   mockUcFetch();
   jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
   jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
@@ -424,5 +478,82 @@ describe('DatabricksConnector runPagedSql (datasources R52)', () => {
       new DatabricksConnector().runPagedSql(config, { ...stmt, filters: [] }),
     ).rejects.toThrow('TABLE_OR_VIEW_NOT_FOUND');
     expect(clients[0].sessions[0].options[0]).toEqual({});
+  });
+});
+
+describe('DatabricksConnector runReadOnlySql rows past the cap', () => {
+  it('keeps the first rows in order, counts the rest, fetching batch by batch', async () => {
+    const all = Array.from({ length: 25_000 }, (_, i) => ({
+      id: i + 1,
+      at: new Date(Date.UTC(2026, 0, 1 + (i % 28))),
+      big: BigInt(i),
+    }));
+    respond = (sql) => (sql.startsWith('SELECT') ? all : []);
+
+    const result = await new DatabricksConnector().runReadOnlySql(
+      config,
+      'SELECT id, at, big FROM sales.public.big',
+      3,
+    );
+
+    expect(result).toEqual({
+      columns: ['id', 'at', 'big'],
+      rows: all.slice(0, 3),
+      totalRows: 25_000,
+    });
+    // Never the whole result in one fetch.
+    const op = clients[0].sessions[0].operations[0];
+    expect(op.largestFetch).toBeLessThan(25_000);
+    expect(clients[0].sessions[0].closed).toBe(true);
+    expect(clients[0].closed).toBe(true);
+  });
+});
+
+describe('DatabricksConnector runReadOnlySql cancellation', () => {
+  it('cancels the operation, closes the session and rejects with the reason', async () => {
+    const controller = new AbortController();
+    const reason = new Error('Stopped by the user');
+
+    const run = new DatabricksConnector().runReadOnlySql(
+      config,
+      'SELECT sleep(20)',
+      10,
+      undefined,
+      { signal: controller.signal },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    controller.abort(reason);
+
+    await expect(run).rejects.toBe(reason);
+    const session = clients[0].sessions[0];
+    expect(session.operations[0].cancelled).toBe(true);
+    expect(session.closed).toBe(true);
+    expect(clients[0].closed).toBe(true);
+  });
+
+  it('rejects before connecting when the signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      new DatabricksConnector().runReadOnlySql(config, 'SELECT 1', 10, 500, {
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(clients).toHaveLength(0);
+  });
+
+  it('answers as before when the signal never aborts', async () => {
+    respond = () => [{ n: 1 }];
+
+    const result = await new DatabricksConnector().runReadOnlySql(
+      config,
+      'SELECT 1 AS n',
+      10,
+      undefined,
+      { signal: new AbortController().signal },
+    );
+
+    expect(result).toEqual({ columns: ['n'], rows: [{ n: 1 }], totalRows: 1 });
   });
 });

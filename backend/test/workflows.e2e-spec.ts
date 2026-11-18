@@ -212,7 +212,9 @@ describe('The workflow catalogue (API)', () => {
             placeholder: 'Assess the readiness of this dataset',
             default: 'Assess the readiness of this dataset',
             maxLength: 4000,
-            usedBy: ['read-images', 'resolve-dataset'],
+            // Resolve dataset runs first and starts Read images (agents.md
+            // 5.13), so it is the step that takes the run's input.
+            usedBy: ['resolve-dataset'],
           },
           {
             name: 'images',
@@ -221,7 +223,7 @@ describe('The workflow catalogue (API)', () => {
             required: false,
             max: 4,
             help: 'Paste, drop or attach up to 4 PNG, JPEG or WebP images, 5 MB each.',
-            usedBy: ['read-images'],
+            usedBy: ['resolve-dataset'],
           },
         ],
         datasets: [],

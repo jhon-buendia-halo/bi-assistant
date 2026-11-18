@@ -1278,10 +1278,17 @@ describe('SessionsService streaming', () => {
 
       await run(service, true);
 
+      // The statement and the verifier call get the turn's stop.
+      const signal = expect.any(AbortSignal) as AbortSignal;
       expect(datasources.runReadOnlySql).toHaveBeenCalledWith(
         'ds-1',
         'SELECT COUNT(1) AS total FROM main.football.matches',
         200,
+        undefined,
+        { signal },
+      );
+      expect((verifier.generate.mock.calls as unknown[][])[0][1]).toMatchObject(
+        { abortSignal: signal },
       );
       expect(session.messages.at(-1)?.crossCheck).toEqual({
         status: 'agree',
@@ -1458,9 +1465,11 @@ describe('SessionsService SQL self-correction', () => {
   /** The `run_readonly_sql` bridge SessionsService installs for the tools. */
   async function bridge(overrides: {
     runs: jest.Mock;
+    samples?: jest.Mock;
     fixerReplies?: ({ sql: string } | undefined)[];
   }) {
     const fixer = { generate: jest.fn() };
+    const interpretResult = jest.fn();
     for (const reply of overrides.fixerReplies ?? []) {
       fixer.generate.mockResolvedValueOnce({ object: reply });
     }
@@ -1481,9 +1490,13 @@ describe('SessionsService SQL self-correction', () => {
       {
         getAgent: jest.fn().mockReturnValue(fixer),
         ensureSessionWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
+        interpretResult,
       } as never,
       { getByNames: jest.fn().mockResolvedValue([dataset]) } as never,
-      { runReadOnlySql: overrides.runs } as never,
+      {
+        runReadOnlySql: overrides.runs,
+        sampleRows: overrides.samples,
+      } as never,
       {} as never,
       {} as never,
       {} as never,
@@ -1496,12 +1509,107 @@ describe('SessionsService SQL self-correction', () => {
       .calls as unknown[][];
     const installed = calls.at(-1)![0] as DatasetToolServices;
     return {
-      run: (sql: string) =>
-        installed.runReadOnlySql('ds-1', sql, 100, ['claims']),
+      service,
       installed,
+      interpretResult,
+      sample: (signal: AbortSignal) =>
+        installed.sampleRows('ds-1', 'main.health.claims', 10, { signal }),
+      run: (sql: string, signal?: AbortSignal) =>
+        signal
+          ? installed.runReadOnlySql('ds-1', sql, 100, ['claims'], { signal })
+          : installed.runReadOnlySql('ds-1', sql, 100, ['claims']),
       fixer,
     };
   }
+
+  it('hands the tool call stop signal to each run and to the fixer', async () => {
+    const runs = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('Column claimid cannot be resolved'))
+      .mockResolvedValueOnce({ columns: ['n'], rows: [{ n: 3 }] });
+    const { run, fixer } = await bridge({
+      runs,
+      fixerReplies: [
+        { sql: 'SELECT count(claim_id) AS n FROM main.health.claims' },
+      ],
+    });
+    const stop = new AbortController();
+
+    await run(
+      'SELECT count(claimid) AS n FROM main.health.claims',
+      stop.signal,
+    );
+
+    expect((runs.mock.calls as unknown[][]).map((call) => call[4])).toEqual([
+      { signal: stop.signal },
+      { signal: stop.signal },
+    ]);
+    const options = (fixer.generate.mock.calls as unknown[][])[0][1] as {
+      abortSignal?: AbortSignal;
+    };
+    expect(options.abortSignal).toBe(stop.signal);
+  });
+
+  it('ends a sample_rows call at once on the stop', async () => {
+    const samples = jest.fn(() => new Promise(() => undefined));
+    const { sample } = await bridge({ runs: jest.fn(), samples });
+    const stop = new AbortController();
+    const call = sample(stop.signal);
+    stop.abort(new Error('The run was stopped'));
+
+    await expect(call).rejects.toThrow('The run was stopped');
+    expect(samples).toHaveBeenCalledWith('ds-1', 'main.health.claims', 10);
+  });
+
+  it('ends an explore_result page at once on the stop (agents.md 3.15)', async () => {
+    const { service, installed } = await bridge({ runs: jest.fn() });
+    const pageOf = jest.fn(() => new Promise(() => undefined));
+    (
+      service as unknown as { queryEvidence: { pageOf: jest.Mock } }
+    ).queryEvidence.pageOf = pageOf;
+    const stop = new AbortController();
+    const source = { sql: 'SELECT 1', columns: [], kinds: {} };
+    const call = installed.pageQuery!(
+      source,
+      ['claims'],
+      { page: 2 },
+      {
+        signal: stop.signal,
+      },
+    );
+    stop.abort(new Error('The run was stopped'));
+
+    await expect(call).rejects.toThrow('The run was stopped');
+    expect(pageOf).toHaveBeenCalledWith(source, ['claims'], { page: 2 });
+  });
+
+  it("hands the tool call's stop to result-explorer", async () => {
+    const { installed, interpretResult } = await bridge({ runs: jest.fn() });
+    const stop = new AbortController();
+    const input = { text: 'x', candidates: [], view: null, pageCount: null };
+    await installed.interpretResult!(input, { abortSignal: stop.signal });
+
+    expect(interpretResult).toHaveBeenCalledWith(input, {
+      abortSignal: stop.signal,
+    });
+  });
+
+  it('does not repair a statement the stop cut short: the stop ends the call', async () => {
+    const stop = new AbortController();
+    const runs = jest.fn(() => {
+      stop.abort(new Error('The run was stopped'));
+      return Promise.reject(
+        new Error('canceling statement due to user request'),
+      );
+    });
+    const { run, fixer } = await bridge({ runs });
+
+    await expect(
+      run('SELECT count(claimid) AS n FROM main.health.claims', stop.signal),
+    ).rejects.toThrow('The run was stopped');
+    expect(runs).toHaveBeenCalledTimes(1);
+    expect(fixer.generate).not.toHaveBeenCalled();
+  });
 
   it('repairs a failed statement and reports the SQL that ran', async () => {
     const runs = jest
@@ -1548,7 +1656,9 @@ describe('SessionsService SQL self-correction', () => {
     });
     const sink = jest.fn();
 
-    await installed.runReadOnlySql('ds-1', 'SELECT bad', 100, ['claims'], sink);
+    await installed.runReadOnlySql('ds-1', 'SELECT bad', 100, ['claims'], {
+      usageSink: sink,
+    });
 
     expect(sink).toHaveBeenCalledTimes(2);
     expect(sink).toHaveBeenNthCalledWith(

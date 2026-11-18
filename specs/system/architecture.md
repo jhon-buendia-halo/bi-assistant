@@ -1239,7 +1239,7 @@ flowchart LR
   - **Backend job queue for every operation:** rejected for now; the requests already complete if the client keeps the connection, so a queue would add endpoints and storage for no visible gain.
 
 #### ADR-0048 — A workflow run runs detached from its connection: a live-run registry with a numbered event log, re-attach and a Stop endpoint
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-11-17 (a no-progress watchdog and a forced stop, last Consequences bullet)
 - **Date:** 2026-11-15
 - **Context:**
   - A run's stream (api.md 119, 138) was its lifetime: the backend aborted the run when the connection closed, and the workflow page closed it when it was left (the renderer has no router, ADR-0047). Leaving the page, reloading or closing the window stopped the run; the user asked for runs to keep going and show in Background tasks (roadmap 1.26.5).
@@ -1257,6 +1257,7 @@ flowchart LR
   - The stream's frames gain `seq` (api.md 3.6); a stopped run's stream ends with `done` rather than nothing; a client must call 150 to stop.
   - Memory: one log per live run and per run ended in the last 10 minutes, bounded by the cap.
   - **Stack-neutral:** a rebuild needs a server-side run that outlives its request, a replayable event log per run, a follow endpoint and a stop endpoint.
+  - **Amendment 2026-11-17: no client abort bounds a detached run, so the server does.** Every turn the service drives (119, 118, 138, Try it) has a no-progress watchdog: no event for 15 minutes (`WORKFLOW_RUN_IDLE_MINUTES`, `0` off; never while the run waits for the user) aborts its work with the no-progress error as the abort's reason, and the run is stored `failed` with `The run made no progress for <n> minutes and was stopped`, not `stopped`. Stop (150), and a stalled run, end the run without its work when that work has not unwound 10 seconds after the abort: stored `stopped` (or `failed`) with its steps as last tracked, the log ended; the work's late unwind keeps that status, releases the host, sends nothing, and stores nothing for a run deleted meanwhile (its workspace and memory thread deleted then). Making each call honour the abort is separate work.
 - **Alternatives considered:**
   - **B — Mastra's `watch`/`cancel` on the workflow run:** rejected; internal API, every agent step would be rewritten off the session turn path, and the evals would change.
   - **C — Keep the stream open from a root frontend service:** rejected; a reload or closed window still stops the run, and each background run holds one of 6 connections per origin.
@@ -1307,7 +1308,7 @@ flowchart LR
   - **Page only on the client:** rejected; limited to the 200 stored rows.
 
 #### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-11-17 (the value checks run four at a time, committed in query order, and a stop cancels the running ones; [agents.md](agents.md) 5.20)
 - **Date:** 2026-11-16
 - **Context:**
   - Consumption Gap Analysis ([agents.md](agents.md) 5.20; workflows R37) must say, for every gap of the Consumption layer, whether the data sits in Normalized or Landing, so the fix starts in the right layer (roadmap 1.30).
@@ -1322,7 +1323,7 @@ flowchart LR
   - A gap is traced through lineage the run can show and re-run, never through a model's guess; the report and the answer never name a column the catalogs lack.
   - A renamed or reshaped column (a split, a pivot, a code mapped to a label) can be missed; the mapper's `mapped` edges cover some of it, and the report shows the method so a reader can weigh it.
   - Pairs on different datasources and REST datasets are never value-checked: their edges stay name edges.
-  - The checks add up to 40 queries to a run, one after another, each with the datasource's timeout; a stop ends the step between two queries.
+  - The checks add up to 40 queries to a run, four at a time ([agents.md](agents.md) 5.20, `SQL_BATCH_CONCURRENCY`), each with the datasource's timeout, committed in query order; a stop starts no new query and cancels the ones running.
   - **Stack-neutral:** a rebuild needs the schema notes, the column catalog and a guarded read-only query path; no lineage store.
 - **Alternatives considered:**
   - **Declared lineage (dbt manifest, catalog lineage, user hints):** rejected for this version; no source is common to the models users bring. Hints are a follow-up.

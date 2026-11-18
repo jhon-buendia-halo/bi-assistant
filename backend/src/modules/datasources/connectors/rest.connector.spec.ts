@@ -596,6 +596,79 @@ describe('RestConnector runReadOnlySql', () => {
   });
 });
 
+describe('RestConnector runReadOnlySql cancellation (datasources R38)', () => {
+  const paged: RestEndpointDef = {
+    name: 'customers',
+    path: '/customers',
+    pagination: { style: 'page', pageSize: 1 },
+  };
+
+  it('aborts the fetch in flight, fetches no more pages and rejects with the reason', async () => {
+    const controller = new AbortController();
+    const reason = new Error('Stopped by the user');
+    fetchMock.mockImplementation((_input, init?: RequestInit) => {
+      if (fetchMock.mock.calls.length === 1) {
+        return Promise.resolve(
+          new Response(JSON.stringify([{ id: 1 }]), { status: 200 }),
+        );
+      }
+      // The second page hangs until its signal aborts.
+      return new Promise((_, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('aborted', 'AbortError')),
+        );
+      });
+    });
+
+    const run = new RestConnector().runReadOnlySql(
+      build([paged]),
+      'SELECT id FROM api.default.customers',
+      10,
+      undefined,
+      { signal: controller.signal },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    controller.abort(reason);
+
+    await expect(run).rejects.toBe(reason);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects before fetching when the signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      new RestConnector().runReadOnlySql(
+        build([customers]),
+        'SELECT 1',
+        10,
+        500,
+        { signal: controller.signal },
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('answers as before when the signal never aborts', async () => {
+    respond = () => [{ id: 1 }, { id: 2 }];
+
+    const result = await new RestConnector().runReadOnlySql(
+      build([customers]),
+      'SELECT id FROM api.default.customers ORDER BY id',
+      1,
+      undefined,
+      { signal: new AbortController().signal },
+    );
+
+    expect(result).toEqual({
+      columns: ['id'],
+      rows: [{ id: 1 }],
+      totalRows: 2,
+    });
+  });
+});
+
 describe('RestConnector mask and summary', () => {
   it('masks token and password without mutating the input', () => {
     const config = build([customers], {

@@ -11,6 +11,7 @@ import {
   assertReadOnlySql,
   clampRows,
   DatasourceConnector,
+  RunSqlOptions,
   splitEntity,
   SQL_ROWS_MAX,
 } from './connector';
@@ -71,17 +72,25 @@ export async function withFileDatabase<T>(
   });
 }
 
-/** Interrupt the running statement once `ms` have passed. */
+/**
+ * Interrupt the running statement once `ms` have passed, or as soon as
+ * `signal` aborts (the statement then fails with an INTERRUPT error).
+ */
 async function withTimeout<T>(
   connection: DuckDBConnection,
   ms: number,
   run: () => Promise<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
-  const timer = setTimeout(() => connection.interrupt(), ms);
+  const interrupt = () => connection.interrupt();
+  const timer = setTimeout(interrupt, ms);
+  signal?.addEventListener('abort', interrupt, { once: true });
   try {
+    signal?.throwIfAborted();
     return await run();
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', interrupt);
   }
 }
 
@@ -169,24 +178,36 @@ export class FileConnector implements DatasourceConnector<FileConnectorConfig> {
   /**
    * The R33 guard first; the engine is the authoritative guard (read-only
    * attach, no external access). Every row is counted for `totalRows`, only
-   * the first `rowLimit` are converted.
+   * the first `rowLimit` are converted. An abort of `options.signal`
+   * interrupts the statement, as the timeout does (datasources R38).
    */
   async runReadOnlySql(
     config: FileConnectorConfig,
     sql: string,
     rowLimit: number,
     maxRows = SQL_ROWS_MAX,
+    options: RunSqlOptions = {},
   ): Promise<QueryResult> {
+    const { signal } = options;
     const safeSql = assertReadOnlySql(sql);
     const lim = clampRows(rowLimit, 100, maxRows);
-    return this.run(config, (connection) =>
-      withTimeout(connection, STATEMENT_TIMEOUT_MS, async () => {
-        const reader = await connection.streamAndReadUntil(safeSql, lim);
-        const columns = reader.deduplicatedColumnNames();
-        const rows = plainRows(columns, reader.getRowsJS().slice(0, lim));
-        await reader.readAll();
-        return { columns, rows, totalRows: reader.currentRowCount };
-      }),
+    signal?.throwIfAborted();
+    return this.run(
+      config,
+      (connection) =>
+        withTimeout(
+          connection,
+          STATEMENT_TIMEOUT_MS,
+          async () => {
+            const reader = await connection.streamAndReadUntil(safeSql, lim);
+            const columns = reader.deduplicatedColumnNames();
+            const rows = plainRows(columns, reader.getRowsJS().slice(0, lim));
+            await reader.readAll();
+            return { columns, rows, totalRows: reader.currentRowCount };
+          },
+          signal,
+        ),
+      signal,
     );
   }
 
@@ -207,13 +228,16 @@ export class FileConnector implements DatasourceConnector<FileConnectorConfig> {
     );
   }
 
+  /** `fn` in the R35 sandbox; an abort of `signal` rejects with its reason. */
   private async run<T>(
     config: FileConnectorConfig,
     fn: (connection: DuckDBConnection) => Promise<T>,
+    signal?: AbortSignal,
   ): Promise<T> {
     try {
       return await withFileDatabase(config.databasePath, fn);
     } catch (err) {
+      signal?.throwIfAborted();
       if (err instanceof BadRequestException) throw err;
       const message = duckDbMessage(err);
       this.logger.warn(`DuckDB call failed: ${message}`);

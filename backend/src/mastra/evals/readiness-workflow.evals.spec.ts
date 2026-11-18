@@ -52,6 +52,7 @@ import {
   completenessTotalEqualsReport,
   namesPlantedFinding,
   noMoneyAmount,
+  numbersFromReport,
   quotesReportScoreAndMaturity,
 } from './readiness-workflow-eval-checks';
 import { READINESS_WORKFLOW_EVAL_SET } from './readiness-workflow.evals';
@@ -134,6 +135,41 @@ describe('readiness-workflow checks (story 1.29.7)', () => {
     ).toMatch(/41/);
   });
 
+  // Explain report's prompt carries the summary (data-readiness R4): with no
+  // get_readiness_report call, the counts of its complete topFindings list
+  // still ground the answer, and a number it does not hold still fails.
+  it('numbersFromReport reads the summary the prompt carried, without a get_readiness_report call', async () => {
+    const check = numbersFromReport();
+    const summary = {
+      overallScore: 90,
+      maturity: 'Managed',
+      findingCount: 4,
+      topFindings: [
+        { dimension: 'integrity', severity: 'high', measured: 11 },
+        { dimension: 'integrity', severity: 'high', measured: 12 },
+        { dimension: 'integrity', severity: 'high', measured: 13 },
+        { dimension: 'completeness', severity: 'low', measured: 0.3 },
+      ],
+    };
+    const details = { report: summary };
+    expect(
+      await verdict(
+        check,
+        ctx('Overall 90 (Managed): 3 integrity findings are high.', {
+          details,
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      await verdict(
+        check,
+        ctx('Overall 90 (Managed): 6 integrity findings are high.', {
+          details,
+        }),
+      ),
+    ).toMatch(/6 in/);
+  });
+
   it('namesPlantedFinding wants the table and a count the report holds', async () => {
     const check = namesPlantedFinding('order_lines', 20);
     expect(
@@ -184,5 +220,25 @@ describe('readiness-workflow set', () => {
     expect(evalTargetFor('data-readiness', ids).agentKey).toBe(
       'data-readiness',
     );
+  });
+
+  // data-readiness R4: Explain report's prompt carries the summary, so no
+  // case requires a call to read it; only the drill-down into every
+  // completeness finding still names get_readiness_report.
+  it('requires no get_readiness_report call to read the summary', () => {
+    for (const evalCase of READINESS_WORKFLOW_EVAL_SET.cases) {
+      const ids = (evalCase.scorers ?? []).map(
+        (scorer) => (scorer as { id?: string }).id,
+      );
+      expect(ids).not.toContain('check-called-tool');
+    }
+    const drillDown = READINESS_WORKFLOW_EVAL_SET.cases
+      .filter((c) =>
+        (c.customChecks ?? []).some((check) =>
+          check.description.includes('get_readiness_report'),
+        ),
+      )
+      .map((c) => c.id);
+    expect(drillDown).toEqual(['rw-all-completeness-issues']);
   });
 });
