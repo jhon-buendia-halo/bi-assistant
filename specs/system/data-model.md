@@ -788,7 +788,7 @@ A visual's files for version N live in `visuals/<visual-id>/v<N>/` (N starts at 
 | `description.md` | every version | `# <title>`, blank line, the takeaway text, newline. |
 | `manifest.json` | every version | JSON, 2-space indent, see 4.3. |
 | `answer.md` | when the source answer exists | Markdown: `# <title>`; `**Question:** …` when known; `## Takeaway` + description; `## Analysis` + the assistant answer; `## How this was worked out` (numbered reasoning steps with `(<n> rows)` / `(failed — <error>)`); `## Data used` (numbered records with tool, row count or `failed`, and the SQL in a ```sql fence); a final `---` line with `Session: <name> · Version <N> · Generated <ISO>`. |
-| `data.json` | when there is at least one data record | `ToolDataRecord[]` (3.4.2) pretty-printed (2-space): the result sets the visual renders from. Newly created versions merge the turn's freshly captured records onto the source answer's `data` (deduped by SQL text, fresh wins); a tailoring turn merges onto the current version's stored `data.json` (falling back to the answer's `data`). A refresh replaces it (re-running each successful `run_readonly_sql` statement with a 500-row ceiling, keeping 200 rows per record; records that cannot be re-run keep their rows, and a failing query stores its `error`; an unresolvable or ambiguous datasource stores an error per query). |
+| `data.json` | when there is at least one data record | `ToolDataRecord[]` (3.4.2) pretty-printed (2-space): the result sets the visual renders from (a spec visual is drawn from every stored row of up to 8 of them; the designer's prompt sees a row sample of the same sets). Newly created versions merge the turn's freshly captured records onto the source answer's `data` (deduped by SQL text, fresh wins); a tailoring turn merges onto the current version's stored `data.json` (falling back to the answer's `data`). A refresh replaces it (re-running each successful `run_readonly_sql` statement with a 500-row ceiling, keeping 200 rows per record; records that cannot be re-run keep their rows, and a failing query stores its `error`; an unresolvable or ambiguous datasource stores an error per query). |
 | `spec.json` | spec visuals only | The visual spec (4.4), pretty-printed. The source of truth for a spec visual; `body.html`, `styles.css` and `script.js` are synthetic there. Its presence (and validity) is what makes a version a spec visual. |
 | `qti-chart.js` | spec visuals only | The fixed chart runtime source (a self-contained browser script exposing `window.qtiChart.mount()`), an editable copy of what `index.html` inlines. |
 
@@ -820,9 +820,12 @@ Top level `VisualSpec`:
 | Field | Type | Req | Constraint / meaning |
 |---|---|---|---|
 | `spec` | number | yes | Literal `1`. |
-| `kpis` | `KpiSpec[]` | no | At most 4. |
-| `chart` | `ChartSpec` | yes | |
+| `kpis` | `KpiSpec[]` | no | At most 6. |
+| `chart` | `ChartSpec` or `null` | one of `chart`, `panels` | A single visual. |
+| `panels` | `PanelSpec[]` or `null` | one of `chart`, `panels` | A dashboard: 1..8 panels, in reading order. Data validation rejects a spec with both or neither. |
 | `table` | `TableSpec` | no | Companion data table. |
+
+`PanelSpec`: `title` (string, 1..120 chars, req), `span` (integer 3..12 or `null`; width in a 12-column grid, 6 when absent), `chart` (`ChartSpec`, req).
 
 `select` (used by kpis, chart and table): `string[]`, 1..20 column names, each 1..128 chars. **Semantics:** the part reads the FIRST data record (in `data.json` order) whose columns contain every listed name (a record's columns are its `columns` list, else the keys of its first row). Validation and runtime use the same rule.
 
@@ -836,28 +839,30 @@ Top level `VisualSpec`:
 | `agg` | enum | yes | `sum` \| `avg` \| `min` \| `max` \| `count` \| `value`. |
 | `format` | enum | no | `number` \| `compact` \| `percent` \| `currency`. |
 | `unit` | string | no | ≤16 chars, short suffix such as `%`. |
+| `category` | string or `null` | no | Only with `agg` `max`, `min` or `value`: the column (1..128 chars) that names the row the figure comes from, shown before it (`FL · 262`). |
 
 `ChartSpec`:
 
 | Field | Type | Req | Constraint / meaning |
 |---|---|---|---|
-| `form` | enum | yes | `bar` \| `line` \| `scatter` \| `heatmap` \| `metric-cards` \| `table` \| `donut`. |
+| `form` | enum | yes | `bar` \| `line` \| `scatter` \| `heatmap` \| `metric-cards` \| `table` \| `donut` \| `pivot` \| `us-map`. |
 | `select` | string[] | yes | As above. |
-| `x` | string or `null` | no | Category / time axis column (1..128 chars). `null` is accepted and treated as absent. Required for `bar`, `line`, `scatter`, `heatmap`, `donut`; for `scatter` it must be numeric. |
-| `y` | string, or string[] (1..8), or `null` | no | Measure column(s); `null` = absent. Required for `bar`, `line`, `scatter`, `heatmap`, `donut`; must be numeric-ish in the sampled rows. |
-| `series` | string or `null` | no | Column that splits the data into series. Required for `heatmap` (its second axis). |
+| `x` | string or `null` | no | Category / time axis column (1..128 chars). `null` is accepted and treated as absent. Required for `bar`, `line`, `scatter`, `heatmap`, `donut`, `pivot`, `us-map`; for `scatter` it must be numeric; for `us-map` it must name US states. For `pivot` it is the row dimension. |
+| `y` | string, or string[] (1..8), or `null` | no | Measure column(s); `null` = absent. Required for `bar`, `line`, `scatter`, `heatmap`, `donut`, `pivot`, `us-map`; must be numeric-ish in the sampled rows. A `pivot` without `series` lists its column measures here; a `us-map` shades by the first. |
+| `series` | string or `null` | no | Column that splits the data into series. Required for `heatmap` (its second axis); for a `pivot` it is the column dimension (one `y` then). |
 | `sort` | object | no | `{by, dir}`: `by` is `"x"`, `"y"` or a column name (the x column resolves to `"x"`, a plotted measure to `"y"`; anything else is a data-validation problem), `dir` is `asc` \| `desc`. A malformed `sort` (including `null`) is silently dropped rather than failing the spec. |
 | `topN` | integer | no | 1..200. |
 | `stacked` | boolean | no | |
 | `labels` | boolean | no | Draw value labels on marks. |
 | `format` | object | no | `{y?: number \| compact \| percent \| currency \| null}`; `null` = default. |
 | `xLabel`, `yLabel` | string | no | ≤120 chars each. |
+| `totals` | boolean or `null` | no | `pivot` only: draw the Total row (and the Total column when `series` is set); absent reads as true. |
 
-After parsing, `null`s are folded to absent and `sort.by` is resolved as above, so stored `spec.json` files never contain `null` for `x`/`y`/`series`.
+After parsing, `null`s are folded to absent and `sort.by` is resolved as above, so stored `spec.json` files never contain `null` for `x`/`y`/`series`. A spec stored with `null` for `chart`, `panels`, `span`, `category` or `totals` reads as absent.
 
 `TableSpec`: `select` (string[], as above, req), `columns` (string[] 1..40 names, or `null` meaning every column; stored as absent), `collapsed` (boolean, no; start collapsed).
 
-Data validation (plain-language problems, empty = renderable): each `select` must match a record; every referenced column (`x`, each `y`, `series`, `kpis[].column`, `table.columns`) must exist in the selected record; `y` measures, a scatter `x`, and KPI columns (except `agg = count`) must be numeric over the first 50 rows, where numeric allows the coercions the runtime applies (strings like `"1,204"`, `"$4"`, `"12%"`; booleans are not numeric; blanks ignored); the x/y/series requirements per form above; an unresolvable `sort.by`.
+Data validation (plain-language problems, empty = renderable): the spec has a `chart` or `panels`, not both and not neither; every rule applies to each chart of the spec; each `select` must match a record; every referenced column (`x`, each `y`, `series`, `kpis[].column`, `kpis[].category`, `table.columns`) must exist in the selected record; `y` measures, a scatter `x`, and KPI columns (except `agg = count`) must be numeric over the first 50 rows, where numeric allows the coercions the runtime applies (strings like `"1,204"`, `"$4"`, `"12%"`; booleans are not numeric; blanks ignored); the x/y/series requirements per form above; an unresolvable `sort.by`.
 
 A spec visual's synthetic bundle is: body `<div id="qti-chart-root"></div>`, empty CSS, script `window.qtiChart.mount();`; the spec is inlined in `index.html` in an inert `<script id="qti-spec" type=…>` JSON block and the runtime renders into `#qti-chart-root`.
 

@@ -30,7 +30,8 @@ const SKILL_TAG = '<interactive-visuals-skill>';
 const SPEC_MODE_TEXT = [
   '## The spec',
   '- **`select` picks the result set.** The `<data>` block is a list of separate',
-  '- **Never invent a column.** Every `column`, `x`, `y`, `series` and table column',
+  '- **Never invent a column.** Every `column`, `category`, `x`, `y`, `series` and',
+  '## One chart or a dashboard',
 ];
 /** Lines only `reference/freeform.md` of the interactive-visuals skill has. */
 const FREEFORM_TEXT = [

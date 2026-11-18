@@ -30,21 +30,30 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
   - the answer text;
   - the instruction, if any;
   - the current visual when tailoring;
-  - a bounded data block: up to the 3 largest successful result sets in run order, sharing a budget of about 100 rows (never below 20 per set), shrunk until the block is under 40,000 characters;
-  - a deterministic recommended-form block computed from the same rows;
+  - the reference, when there is one: the notes that describe the image the user attached to the run, as a `<reference>` block after the answer (a run's Build visual passes the Image Reader's notes; blank notes mean no block);
+  - a bounded data block: up to 8 successful result sets with rows, in run order (when more, the 8 with the most rows), sharing a budget of 120 rows (never below 12 per set), shrunk until the block is under 40,000 characters. The block is a sample for reading the columns and the shape; the visual is not drawn from it (R11);
+  - a deterministic recommended-form block computed from the same result sets: one recommendation for a single result set, and, when two or more sets each have two or more rows, a dashboard recommendation that names a panel form for each set and the single-row sets as the source of the KPI tiles;
   - the `interactive-visuals` skill for the mode it runs: the router with the spec-mode reference for a spec, with the freeform reference for the fallback, never both ([agents.md](../../system/agents.md) section 7.2).
 
   When rows were cut, the prompt says so.
 - R6. When there are rows, the designer SHALL first produce a visual spec, unless it is tailoring a freeform visual (see R9). A spec has:
-  - up to 4 KPI tiles: label, columns that select a result set, column, aggregation (sum, avg, min, max, count or value), format (number, compact, percent or currency) and unit;
-  - one chart: bar, line, scatter, heatmap, metric-cards, table or donut, with select, x, y (one or several measures), series, sort, top N (≤200), stacked, labels, y format and axis labels;
+  - up to 6 KPI tiles: label, columns that select a result set, column, aggregation (sum, avg, min, max, count or value), format (number, compact, percent or currency), unit and, with `max`, `min` or `value`, an optional category: the column that names the row the figure comes from, so the tile reads `FL · 262`;
+  - **either one `chart` or `panels`, never both.** A chart is one of bar, line, scatter, heatmap, metric-cards, table, donut, pivot or us-map, with select, x, y (one or several measures), series, sort, top N (≤200), stacked, labels, y format, axis labels and, for a pivot, totals. `panels` is a dashboard of 1 to 8 panels, each a title, a span (3 to 12 of a 12-column grid, 6 when omitted) and a chart of the same shape. A stored spec may hold `null` for `chart`, `panels`, `span`, `category` or `totals`, which reads as absent;
   - an optional table with columns and a collapsed flag.
-- R7. Before anything is written, the system SHALL validate the spec against the exact rows it will render:
+
+  A **pivot** is a crosstab of exact figures: `x` is the row dimension. In the long shape (one row per pair) `series` is the column dimension and `y` one measure; in the wide shape (one row per `x`, a measure per column) there is no `series` and `y` lists the measures that are the columns. Rows keep the order of the data unless `sort` is set (by the row label or by the row total). A pivot has a Total row and, in the long shape, a Total column; `totals: false` drops both. A **US state map** shades one tile per state by the first measure of `y`; `x` is a column of state codes or names.
+
+  A dashboard visual holds the query results it was drawn from, not the table behind them: it has no filters and no measure, row or column pickers. A reference that shows such controls is followed by drawing the view they produce.
+- R7. Before anything is written, the system SHALL validate the spec against the exact rows it will render (the stored result sets of R11), every rule applying to each chart of the spec (the `chart`, or each panel's chart; a problem names the panel it is in):
+  - the spec has a `chart` or `panels`, one of the two and not both;
   - every `select` must match a result set;
   - every named column must exist;
   - measures, and the x axis of a scatter, must be numeric in the sampled rows;
-  - x/y forms need both x and y;
+  - x/y forms (bar, line, scatter, heatmap, donut, pivot, us-map) need both x and y;
   - a heatmap needs a series;
+  - a pivot with a series takes one y measure; to show several measures as the columns it has no series;
+  - a us-map needs an `x` column in which most sampled values (at least 60%) are US state codes or names;
+  - a KPI `category` goes only with `max`, `min` or `value`, and must be a column of the KPI's result set;
   - `sort.by` must be x, y, the x column or a plotted measure.
 
   Problems go back to the designer in plain language. After 2 failed spec attempts, or when there are no rows at all, the freeform pipeline takes over.
@@ -52,10 +61,14 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
 - R9. Tailoring a freeform visual SHALL stay freeform. Tailoring a spec visual SHALL produce a spec, and freeform remains the fallback.
 - R10. Each designer call SHALL time out after 120 seconds with "interactive visual generation timed out; please try again". A timeout is never retried as a spec problem.
 - R11. A spec visual SHALL be drawn by one fixed, hand-written chart runtime, never by model-written code. The runtime:
-  - reads rows from the embedded data;
+  - reads every stored row of the result sets (at most 8, R5) from the embedded data, not the row sample the designer prompt carries; over 400,000 characters of embedded data, the largest set is halved (never under 20 rows) until it fits;
   - shows "No data for this view." for an empty selection;
   - shows an em dash for any value that is not a finite number;
-  - folds categories beyond top N into "Other";
+  - draws a spec with `panels` as a grid of 12 columns: each panel is a titled card whose width is its span, panels wrap in order, and the grid collapses to one column when the frame is narrower than 720 px. A spec with panels uses a wider frame (up to 1280 px; a single chart stays at 920 px);
+  - draws a pivot as a table of exact figures with a Total row and, in the long shape, a Total column; a long-shape pivot shows at most 12 column values and folds the rest into one "Other" column;
+  - draws a us-map as one tile per US state in a state tile map, shaded by the measure; a state with no value is drawn empty;
+  - shows a KPI tile with a `category` as the category, a middle dot and the figure (`FL · 262`);
+  - folds categories beyond top N into "Other", drawn last (bar and donut);
   - offers legend toggles for series and hover/focus tooltips;
   - respects reduced motion.
 
@@ -64,7 +77,7 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
 - R12. Tailoring (from chat or the panel) SHALL require a non-blank instruction ("instruction is required"). It always produces a new version. The tailored design gets the current version's bundle, the current version's stored data (merged with the current turn's records when tailoring from chat) and the instruction. It is told to preserve everything the instruction does not ask to change.
 - R13. In chat, the assistant SHALL tailor the visual open in the panel by default, or another visual by id. If no visual is open and none is named, the tool reports "No visual is open and none was specified — ask which visual to change or create one with create_visual". The assistant confirms the change in one short sentence.
 - R14. The panel's Tailor form SHALL turn its fields into one plain-English instruction, skipping defaults:
-  - Chart type (Auto, Bar, Line, Scatter, Heatmap, Metric cards, Table, Donut) → "Change the visual to a bar chart." / "…a line chart." / "…a scatter plot." / "…a heatmap." / "…metric cards." / "…a compact sortable table." / "…a donut chart.";
+  - Chart type (Auto, Bar, Line, Scatter, Heatmap, Metric cards, Table, Donut, Pivot table, US state map) → "Change the visual to a bar chart." / "…a line chart." / "…a scatter plot." / "…a heatmap." / "…metric cards." / "…a compact sortable table." / "…a donut chart." / "Change the visual to a pivot table." / "Change the visual to a US state map.";
   - Sort (None, Ascending, Descending) → "Sort ascending by the main measure." / "Sort descending by the main measure.";
   - Top N (integer 3–50, optional) → `Show only the top <N> items and group the rest as "Other".`;
   - Describe the change (optional multi-line free text, placeholder "e.g. Show it as a stacked bar by year and highlight France") → the trimmed text, added last. It alone is a valid instruction.

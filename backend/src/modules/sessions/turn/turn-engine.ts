@@ -240,6 +240,8 @@ export interface TurnEngineDeps {
    * stored yet; `at` is the time the answer message is stored with. With
    * an `instruction` (a follow-up that asks Build visual alone, 5.21),
    * `question` is the earlier run's and the instruction is the follow-up's.
+   * `reference` is the run's image notes, the design to follow; absent
+   * when the run has none.
    */
   buildVisual(
     sessionId: string,
@@ -249,6 +251,7 @@ export interface TurnEngineDeps {
       at: string;
       data: ToolDataRecord[];
       instruction?: string;
+      reference?: string;
     },
     abortSignal?: AbortSignal,
   ): Promise<SessionVisualization>;
@@ -772,6 +775,7 @@ export class TurnEngine {
             attempt,
             answered,
             imageNotes,
+            visualFollows,
           }) => {
             // A resumed attempt keeps the records it made before it asked.
             if (answered) answers.push(answered);
@@ -801,13 +805,15 @@ export class TurnEngine {
                     ...attemptOptions,
                     abortSignal: stop.signal,
                     // The catalog and plan blocks, then Zoe's notes only
-                    // when the run has images (agents.md 5.11).
+                    // when the run has images (agents.md 5.11), and last
+                    // the line saying a visual follows, only when one does.
                     context: [
                       ...options.context,
                       ...analyseSystemBlocks({
                         catalogBlock,
                         planBlock,
                         imageNotes,
+                        visualFollows,
                       }).map((content) => ({
                         role: 'system' as const,
                         content,
@@ -854,14 +860,17 @@ export class TurnEngine {
           // visual that cannot be built is reported, never a failed run.
           // Asked alone (agents.md 5.21), Ryan designs from the earlier
           // question and answer, the follow-up as his instruction.
+          // Zoe's notes, when the run has some, are Ryan's reference.
           buildVisual: async ({
             question,
             answer,
             instruction,
+            imageNotes,
           }: {
             question: string;
             answer: string;
             instruction?: string;
+            imageNotes?: string;
           }) => {
             const stop = () => ({ visual: {}, stopped: true });
             if (turn.signal.aborted) return stop();
@@ -877,6 +886,7 @@ export class TurnEngine {
                   at: answerAt,
                   data,
                   ...(instruction !== undefined ? { instruction } : {}),
+                  ...(imageNotes?.trim() ? { reference: imageNotes } : {}),
                 },
                 turn.signal,
               );
@@ -997,6 +1007,7 @@ export class TurnEngine {
               question: earlier?.question || trimmed,
               answer: earlier?.answer ?? '',
               queries: analyseQueriesOf(carryEarlierRecords()),
+              imageNotes: earlier?.imageNotes ?? '',
             };
           },
           writeAnswer: async (written) => {

@@ -2,7 +2,7 @@
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) answer-business-question's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "45f9aa85499a",
+  "contractHash": "f681204f35d4",
   "edges": [
     {
       "from": "start",
@@ -2495,6 +2495,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "One line that answers the question with the key figure.",
             "type": "string",
           },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
+          },
           "queries": {
             "description": "The SQL queries of the last attempt, with their rows.",
             "items": {
@@ -2552,6 +2556,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "calls",
           "question",
           "queries",
+          "imageNotes",
         ],
         "type": "object",
       },

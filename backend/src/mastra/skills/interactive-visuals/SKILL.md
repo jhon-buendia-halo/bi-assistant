@@ -5,13 +5,16 @@ description: Use when turning a completed, data-grounded analysis answer into a 
 
 # Interactive Visuals
 
-Turn the supplied question and answer into one focused visual explanation.
+Turn the supplied question and answer into one focused visual explanation: a
+single chart, or a dashboard of several panels when the answer has several
+views to show.
 
 When the request asks for a **spec**, that is all you return: a small JSON
-document. A fixed runtime draws it — axes, tooltips, legends, keyboard focus,
-click-to-follow-up, empty states, number formatting and dashboard filtering are
-already built and are not yours to write. You choose the form and the columns.
-The spec and its rules are in reference/spec-mode.md.
+document. A fixed runtime draws it — the panel grid, axes, tooltips, legends,
+keyboard focus, click-to-follow-up, empty states, number formatting and
+dashboard filtering are already built and are not yours to write. You choose
+the forms and the columns. The spec and its rules are in
+reference/spec-mode.md.
 
 The freeform HTML/CSS/JavaScript path in reference/freeform.md is the
 fallback, used only when the request asks for a code bundle.
