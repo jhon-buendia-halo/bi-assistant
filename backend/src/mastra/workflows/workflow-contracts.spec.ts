@@ -218,7 +218,12 @@ const FIXTURES: Record<string, ContractFixture> = {
             },
           ],
         }),
+        // The sample input has no images: Zoe never starts.
+        startImageNotes: () => undefined,
+        readsImages: () => false,
+        imageNotes: () => Promise.reject(new Error('not used')),
         save: () => Promise.resolve({ reportId: 'r-1' }),
+        startFindingRows: () => undefined,
         findingRows: () =>
           Promise.resolve({
             sourceCount: 1,
@@ -307,6 +312,17 @@ const FIXTURES: Record<string, ContractFixture> = {
     requestContext: () => {
       const context = new RequestContext();
       const unused = () => Promise.reject(new Error('not used'));
+      const failedAll = (queries: { id: string }[]) => ({
+        results: queries.map((query) => ({
+          id: query.id,
+          columns: [],
+          rows: [],
+          error: 'not run in this test',
+        })),
+        stopped: false,
+      });
+      // The lineage checks Load layer catalogs started, for Infer lineage.
+      let lineage: { id: string }[] = [];
       // The stubbed run: two tagged schemas, every query failed (a failed
       // query is a result, never a failed run), one question requirement
       // mapped to a Consumption column, no fix, and the stored report.
@@ -314,16 +330,11 @@ const FIXTURES: Record<string, ContractFixture> = {
         readDashboard: unused,
         loadDashboard: unused,
         datasetLayers: () => Promise.resolve([GAP_DATASET]),
-        runQueries: ({ queries }) =>
-          Promise.resolve({
-            results: queries.map((query) => ({
-              id: query.id,
-              columns: [],
-              rows: [],
-              error: 'not run in this test',
-            })),
-            stopped: false,
-          }),
+        runQueries: ({ queries }) => Promise.resolve(failedAll(queries)),
+        startLineage: ({ queries }) => {
+          lineage = queries;
+        },
+        takeLineage: () => Promise.resolve(failedAll(lineage)),
         deriveRequirements: ({ questions }) =>
           Promise.resolve({
             requirements: questions.map((title, index) => ({

@@ -34,9 +34,12 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
   it.each(['insights-analyst', 'data-readiness'])(
     "gives %s's Read images to Zoe, in one model call without tools",
     (key) => {
-      const steps = agentWorkflow(key)!.steps;
-      expect(steps[0].id).toBe('read-images');
-      expect(steps[0].agent).toEqual({
+      // First in Answer a Business Question; after Score readiness in
+      // Assess Data Readiness, whose Zoe starts at Resolve dataset.
+      const step = agentWorkflow(key)!.steps.find(
+        (candidate) => candidate.id === 'read-images',
+      );
+      expect(step?.agent).toEqual({
         key: 'image-reader',
         name: 'Zoe',
         role: 'Image Analyst',

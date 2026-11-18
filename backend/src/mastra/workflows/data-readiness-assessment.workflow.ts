@@ -20,24 +20,30 @@ import {
 } from './data-readiness-assessment.steps';
 import {
   READ_IMAGES_OUTCOME_ID,
-  hasReferenceImages,
-  readImagesOutcome,
-  readImagesStep,
-} from './read-images.workflow';
+  READ_IMAGES_STEP_ID,
+  READ_IMAGES_STEP_TITLE,
+} from './read-images.steps';
 import { engineInputSchema, withContract } from './workflow-contract';
 
 // The Assess Data Readiness workflow, defined in code (agents.md 5.13;
 // data-readiness R2), on Mastra's sequential control flow
 // (https://mastra.ai/docs/workflows/control-flow):
 //
-//   resolve-dataset → profile-source → score-readiness → save-report
-//   → finding-rows → explain-report → wrap-up
+//   resolve-dataset → profile-source → score-readiness
+//   → [read-images, only with images] → save-report → explain-report
+//   → finding-rows → wrap-up
 //
-// The first five steps are code: the deterministic engine owns every score
-// (data-readiness R4), and Rows behind findings runs one read-only query
-// per top finding, recorded as a source of the answer (roadmap 1.28.11).
-// Explain report runs the Data Readiness Agent over the stored report. A stopped run bails at the step it was stopped in,
-// which ends the run as a success with that step's output (`stopped`).
+// The code steps own every score (data-readiness R4). Independent work runs
+// at the same time on this linear graph, one step at a time: Resolve
+// dataset starts Zoe's reading of the reference images (after its free
+// refusal), which runs while the dataset is profiled and scored, and Read
+// images awaits it, so a model error fails the run before anything is
+// stored. Save report starts the rows behind findings, one read-only query
+// per top finding (roadmap 1.28.11), which run while Explain report runs
+// the Data Readiness Agent over the stored report; Rows behind findings
+// takes them, and the turn puts their sources ahead of the agent's. A
+// stopped run bails at the step it was stopped in, which ends the run as a
+// success with that step's output (`stopped`).
 //
 // The run's runtime (functions on the RequestContext) holds the profile
 // and the scored report between steps, so no snapshot is ever written:
@@ -88,14 +94,13 @@ const resolveDatasetStep = createStep({
     SCHEMAS['resolve-dataset'],
     async (params: StepParams<(typeof SCHEMAS)['resolve-dataset']>) => {
       const runtime = runtimeOf(params, STEP['resolve-dataset'].title);
-      const target = await runtime.resolve({
-        dataset: params.inputData.dataset,
-      });
-      return {
-        question: assessmentQuestion(params.inputData.question),
-        ...target,
-        imageNotes: params.inputData.imageNotes,
-      };
+      const { question, dataset, images } = params.inputData;
+      // The free refusal first: a dataset that cannot be assessed costs
+      // no model call.
+      const target = await runtime.resolve({ dataset });
+      // Zoe reads the images meanwhile, with the run's own question.
+      if (images?.length) runtime.startImageNotes({ question, images });
+      return { question: assessmentQuestion(question), ...target };
     },
   ),
 });
@@ -127,26 +132,88 @@ const scoreReadinessStep = createStep({
     SCHEMAS['score-readiness'],
     async (params: StepParams<(typeof SCHEMAS)['score-readiness']>) => {
       const runtime = runtimeOf(params, STEP['score-readiness'].title);
-      const {
-        question,
-        dataset,
-        datasourceName,
-        datasourceKind,
-        tableCount,
-        imageNotes,
-      } = params.inputData;
+      const { question, dataset, datasourceName, datasourceKind, tableCount } =
+        params.inputData;
       return Promise.resolve({
         question,
         dataset,
         datasourceName,
         datasourceKind,
         tableCount,
-        imageNotes,
         ...runtime.score(),
       });
     },
   ),
 });
+
+/** Read images' schemas in this workflow (agents.md 2.15, 5.13). */
+const IMAGES_SCHEMAS = SCHEMAS[READ_IMAGES_STEP_ID];
+
+/**
+ * Read images' input schema as the engine sees it, typed as any input:
+ * Mastra 1.66 types a branch step's input as the whole output before it.
+ * At run time it is the declared (empty) schema.
+ */
+const readinessImagesInput = engineInputSchema(
+  IMAGES_SCHEMAS.input,
+) as unknown as z.ZodType<any>;
+
+/**
+ * Read images, this workflow's own (agents.md 2.15, 5.13): it awaits the
+ * notes Zoe has been writing since Resolve dataset. A model error fails
+ * the step and the run, before Save report stores anything. A stop passes
+ * `stopped` on without a bail (a bail inside a branch ends only this
+ * step): Save report then bails, storing nothing.
+ */
+const readinessImagesStep = createStep({
+  id: READ_IMAGES_STEP_ID,
+  description: READ_IMAGES_STEP_TITLE,
+  inputSchema: readinessImagesInput,
+  outputSchema: IMAGES_SCHEMAS.output,
+  execute: withContract(
+    READ_IMAGES_STEP_TITLE,
+    IMAGES_SCHEMAS,
+    async (params: StepParams<typeof IMAGES_SCHEMAS>) => {
+      const read = await runtimeOf(params, READ_IMAGES_STEP_TITLE).imageNotes();
+      return {
+        imageNotes: read.stopped ? '' : read.imageNotes,
+        imageCount: read.stopped ? 0 : read.imageCount,
+        stopped: read.stopped,
+      };
+    },
+  ),
+});
+
+/** The branch's condition: Resolve dataset started Zoe's notes. */
+function readsImages(params: {
+  requestContext: { get(key: string): unknown };
+}): Promise<boolean> {
+  const runtime = params.requestContext.get(
+    DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
+  ) as DataReadinessAssessmentRuntime | undefined;
+  return Promise.resolve(runtime?.readsImages() ?? false);
+}
+
+/**
+ * The `.map()` after the branch (`READ_IMAGES_OUTCOME_ID`): Score
+ * readiness's output with Read images' notes and stop, or `''` and `false`
+ * when the branch was not taken (its `inputData` is then `{}`).
+ */
+function readinessImagesOutcome(params: {
+  inputData: unknown;
+  getStepResult: (step: unknown) => unknown;
+}): Promise<Record<string, unknown>> {
+  const read = (params.inputData as Record<string, unknown> | undefined)?.[
+    READ_IMAGES_STEP_ID
+  ] as { imageNotes?: unknown; stopped?: unknown } | undefined;
+  const scored = params.getStepResult(scoreReadinessStep) as
+    Record<string, unknown> | undefined;
+  return Promise.resolve({
+    ...(scored ?? {}),
+    imageNotes: typeof read?.imageNotes === 'string' ? read.imageNotes : '',
+    stopped: read?.stopped === true,
+  });
+}
 
 const saveReportStep = createStep({
   id: STEP['save-report'].id,
@@ -157,9 +224,16 @@ const saveReportStep = createStep({
     STEP['save-report'].title,
     SCHEMAS['save-report'],
     async (params: StepParams<(typeof SCHEMAS)['save-report']>) => {
+      const { stopped, ...scored } = params.inputData;
+      // Stopped while Read images waited: nothing is stored.
+      if (stopped) {
+        return params.bail({ ...scored, reportId: '', stopped: true });
+      }
       const runtime = runtimeOf(params, STEP['save-report'].title);
       const { reportId } = await runtime.save();
-      return { ...params.inputData, reportId };
+      // The rows behind its findings, looked up while the agent explains.
+      runtime.startFindingRows();
+      return { ...scored, reportId, stopped: false };
     },
   ),
 });
@@ -239,15 +313,16 @@ export const dataReadinessAssessmentWorkflow = createWorkflow({
     shouldPersistSnapshot: () => false,
   },
 })
-  // Reference images (agents.md 2.15, 5.13): Read images runs first only
-  // when the run has images; the map passes the input on with its notes.
-  .branch([[hasReferenceImages, readImagesStep]])
-  .map(readImagesOutcome, { id: READ_IMAGES_OUTCOME_ID })
   .then(resolveDatasetStep)
   .then(profileSourceStep)
   .then(scoreReadinessStep)
+  // Reference images (agents.md 2.15, 5.13): Read images awaits Zoe's
+  // notes only when Resolve dataset started them; the map passes the
+  // scores on with the notes.
+  .branch([[readsImages, readinessImagesStep]])
+  .map(readinessImagesOutcome, { id: READ_IMAGES_OUTCOME_ID })
   .then(saveReportStep)
-  .then(findingRowsStep)
   .then(explainReportStep)
+  .then(findingRowsStep)
   .then(wrapUpStep)
   .commit();

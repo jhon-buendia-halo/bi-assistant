@@ -21,7 +21,10 @@ import {
   type ContractStepEntry,
   type WorkflowStepExit,
 } from './answer-business-question.steps';
-import { readImagesEdges, readImagesStepEntry } from './read-images.steps';
+import {
+  READ_IMAGES_STEP_ID,
+  READ_IMAGES_STEP_TITLE,
+} from './read-images.steps';
 import type { WorkflowEdge } from './workflow-contract';
 
 /** The workflow's registry key and id. */
@@ -51,19 +54,22 @@ const SOURCE_EXITS: readonly WorkflowStepExit[] = [
 ];
 
 /**
- * The steps, in catalogue order. Their field names and JSON Schemas come
- * from ./data-readiness-assessment.schemas.ts; how they connect is
- * `DATA_READINESS_ASSESSMENT_EDGES`.
+ * The steps, in catalogue order: the order they run in. Their field names
+ * and JSON Schemas come from ./data-readiness-assessment.schemas.ts; how
+ * they connect is `DATA_READINESS_ASSESSMENT_EDGES`. Zoe reads the images
+ * from Resolve dataset on, while the dataset is profiled and scored; Read
+ * images waits for her notes before anything is stored. The rows behind
+ * findings are looked up from Save report on, while the agent explains
+ * the report (agents.md 5.13).
  */
 export const DATA_READINESS_ASSESSMENT_STEPS: readonly ContractStepEntry[] = [
-  readImagesStepEntry(),
   contractStepEntry(
     {
       id: 'resolve-dataset',
       title: 'Resolve dataset',
       kind: 'code',
       summary:
-        "Finds the dataset's PostgreSQL or Databricks datasource and its tables, the assessment's scope. No LLM.",
+        "Finds the dataset's PostgreSQL or Databricks datasource and its tables, the assessment's scope. With reference images, then starts Zoe's reading of them. No LLM.",
       exits: [
         {
           label: 'the dataset is not PostgreSQL or Databricks',
@@ -97,25 +103,29 @@ export const DATA_READINESS_ASSESSMENT_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
+      id: READ_IMAGES_STEP_ID,
+      title: READ_IMAGES_STEP_TITLE,
+      kind: 'agent',
+      summary:
+        'Optional: waits for the notes Zoe, the Image Reader, has been writing on the reference images since Resolve dataset (one model call). Explain report gets them as text, never the images.',
+      exits: [
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
+      ],
+      modelOnly: true,
+    },
+    SCHEMAS['read-images'],
+  ),
+  contractStepEntry(
+    {
       id: 'save-report',
       title: 'Save report',
       kind: 'code',
       summary:
-        "Stores the report with the run's id and shows its readiness card. No LLM.",
+        "Stores the report with the run's id and shows its readiness card, then starts looking up the rows behind its findings. No LLM.",
       exits: [],
     },
     SCHEMAS['save-report'],
-  ),
-  contractStepEntry(
-    {
-      id: 'finding-rows',
-      title: 'Rows behind findings',
-      kind: 'code',
-      summary:
-        "Runs a read-only query of the rows behind each of the report's top findings (at most 20) and adds each as a source of the answer. A query that fails stays a failed source. No LLM.",
-      exits: [{ label: 'you stop it', outcome: 'stops' }],
-    },
-    SCHEMAS['finding-rows'],
   ),
   contractStepEntry(
     {
@@ -133,6 +143,17 @@ export const DATA_READINESS_ASSESSMENT_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
+      id: 'finding-rows',
+      title: 'Rows behind findings',
+      kind: 'code',
+      summary:
+        "A read-only query of the rows behind each of the report's top findings (at most 20), run while the agent explains the report; each is a source of the answer, ahead of the agent's own. A query that fails stays a failed source. No LLM.",
+      exits: [{ label: 'you stop it', outcome: 'stops' }],
+    },
+    SCHEMAS['finding-rows'],
+  ),
+  contractStepEntry(
+    {
       id: 'wrap-up',
       title: 'Wrap up',
       kind: 'code',
@@ -146,19 +167,34 @@ export const DATA_READINESS_ASSESSMENT_STEPS: readonly ContractStepEntry[] = [
 
 /** The edges of the workflow (api.md 117), from Start to End. */
 export const DATA_READINESS_ASSESSMENT_EDGES: readonly WorkflowEdge[] = [
-  ...readImagesEdges('resolve-dataset'),
+  { from: 'start', to: 'resolve-dataset', kind: 'next' },
   { from: 'resolve-dataset', to: 'profile-source', kind: 'next' },
   { from: 'profile-source', to: 'score-readiness', kind: 'next' },
-  { from: 'score-readiness', to: 'save-report', kind: 'next' },
-  { from: 'save-report', to: 'finding-rows', kind: 'next' },
-  { from: 'finding-rows', to: 'explain-report', kind: 'next' },
-  { from: 'explain-report', to: 'wrap-up', kind: 'next' },
+  // Read images dominates no step: Save report defaults its notes.
+  {
+    from: 'score-readiness',
+    to: 'save-report',
+    kind: 'next',
+    label: 'No images',
+    note: 'The run has no reference images, so the report is stored straight away.',
+  },
+  {
+    from: 'score-readiness',
+    to: READ_IMAGES_STEP_ID,
+    kind: 'branch',
+    label: 'Reference images',
+    note: "The run has images: Zoe's notes, read meanwhile, are awaited first.",
+  },
+  { from: READ_IMAGES_STEP_ID, to: 'save-report', kind: 'next' },
+  { from: 'save-report', to: 'explain-report', kind: 'next' },
+  { from: 'explain-report', to: 'finding-rows', kind: 'next' },
+  { from: 'finding-rows', to: 'wrap-up', kind: 'next' },
   { from: 'wrap-up', to: 'end', kind: 'next' },
 ];
 
 export type AssessmentTarget = Omit<
   z.output<typeof assessmentTargetSchema>,
-  'question' | 'imageNotes'
+  'question'
 >;
 export type ProfileOutcome = Pick<
   z.output<typeof profiledSourceSchema>,
@@ -187,13 +223,36 @@ export interface DataReadinessAssessmentRuntime {
   profile(): Promise<ProfileOutcome>;
   /** Score readiness: the deterministic engine over the profile. */
   score(): ScoreOutcome;
+  /**
+   * Resolve dataset, once the dataset is resolved and the run has images:
+   * start Zoe's one model call over them (agents.md 2.15), while the
+   * dataset is profiled and scored. `question` is the run's own.
+   */
+  startImageNotes(input: { question: string; images: string[] }): void;
+  /** The condition of Read images: whether Zoe's notes were started. */
+  readsImages(): boolean;
+  /**
+   * Read images: the notes started at Resolve dataset; rethrows a model
+   * error, so the run fails before Save report stores anything.
+   */
+  imageNotes(): Promise<{
+    imageNotes: string;
+    imageCount: number;
+    stopped: boolean;
+  }>;
   /** Save report: stores it and shows its readiness card. */
   save(): Promise<{ reportId: string }>;
   /**
-   * Rows behind findings (roadmap 1.28.11): one read-only query per top
-   * finding of the saved report, each recorded as a source of the answer;
-   * a failed query is a failed source, never a failed run. `stopped` when
-   * the run was stopped meanwhile.
+   * Save report, once stored: start the rows behind findings, which run
+   * while the agent explains the report.
+   */
+  startFindingRows(): void;
+  /**
+   * Rows behind findings (roadmap 1.28.11): the queries Save report
+   * started, one read-only query per top finding of the saved report, each
+   * recorded as a source of the answer ahead of the agent's own; a failed
+   * query is a failed source, never a failed run. `stopped` when the run
+   * was stopped meanwhile.
    */
   findingRows(): Promise<FindingRowsOutcome>;
   /** Explain report: the agent's turn over the stored report. */

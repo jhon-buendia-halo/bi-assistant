@@ -6,11 +6,12 @@
  * step catalogue (./consumption-gap-analysis.steps.ts) derives each step's
  * field names and JSON Schema from it. Zod only, no framework import.
  *
- * The flow: Read dashboards → Resolve layers → Load layer catalogs → Infer
- * lineage → Derive requirements → Confirm requirements (waits) → Map
+ * The flow: Resolve layers → Load layer catalogs → Read dashboards → Derive
+ * requirements → Infer lineage → Confirm requirements (waits) → Map
  * requirements → Trace gaps → Probe evidence → Recommend fixes → Render
  * report. A step passes on what the steps after it read, since the engine
- * hands a step only its previous step's output.
+ * hands a step only its previous step's output: Resolve layers and Load
+ * layer catalogs pass the run's input on to Read dashboards.
  */
 import { z } from 'zod';
 import { dashboardBlueprintSchema } from './recreate-dashboard.schemas';
@@ -46,27 +47,6 @@ export const gapRunInputSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Read dashboards
-
-/** One reference dashboard, read from an image or loaded from an artifact. */
-export const referenceDashboardSchema = z.object({
-  id: z.string().describe("'D1', 'D2', … in reading order."),
-  source: z.enum(['image', 'artifact']),
-  name: z.string().describe("The dashboard's title, or the artifact's name."),
-  blueprint: dashboardBlueprintSchema,
-});
-
-/** What Read dashboards hands on. */
-export const dashboardsReadSchema = z.object({
-  questions: z
-    .array(z.string())
-    .describe('The business questions, parsed from the input lines.'),
-  datasets: z.array(z.string()),
-  dashboards: z.array(referenceDashboardSchema),
-  stopped: z.boolean(),
-});
-
-// ---------------------------------------------------------------------------
 // Resolve layers
 
 /** One tagged schema of the run's datasets. */
@@ -77,15 +57,14 @@ export const layerSchemaNoteSchema = z.object({
   description: z.string(),
 });
 
-export const layersResolvedSchema = dashboardsReadSchema
-  .omit({ stopped: true })
-  .extend({
-    layers: z
-      .array(layerSchemaNoteSchema)
-      .describe(
-        'Every tagged schema, Landing first, then Normalized, then Consumption.',
-      ),
-  });
+/** What Resolve layers hands on: the run's input, and the tagged schemas. */
+export const layersResolvedSchema = gapRunInputSchema.extend({
+  layers: z
+    .array(layerSchemaNoteSchema)
+    .describe(
+      'Every tagged schema, Landing first, then Normalized, then Consumption.',
+    ),
+});
 
 // ---------------------------------------------------------------------------
 // Load layer catalogs
@@ -113,47 +92,27 @@ export const catalogsLoadedSchema = layersResolvedSchema.extend({
 });
 
 // ---------------------------------------------------------------------------
-// Infer lineage
+// Read dashboards
 
-/** How an edge was found. */
-export const lineageMethodSchema = z.enum([
-  /** The normalised names are equal. */
-  'name',
-  /** The normalised names share most tokens. */
-  'similar-name',
-  /** A query found the target's values in the source. */
-  'values',
-  /** The mapper named the same field in both layers (Trace gaps). */
-  'mapped',
-]);
-
-/** One inferred column-to-column edge, from a lower layer to a higher one. */
-export const lineageEdgeSchema = z.object({
-  from: columnRefSchema,
-  to: columnRefSchema,
-  method: lineageMethodSchema,
-  confidence: z.number().describe('0 to 1.'),
-  overlap: z
-    .number()
-    .nullable()
-    .describe(
-      "Share of the target's distinct values found in the source; null when not checked.",
-    ),
-  expression: z
+/** One reference dashboard, read from an image or loaded from an artifact. */
+export const referenceDashboardSchema = z.object({
+  id: z
     .string()
-    .describe(
-      "How the target is computed from the source ('mapped' edges); '' otherwise.",
-    ),
+    .describe("'D1', 'D2', … in image order, the saved dashboard last."),
+  source: z.enum(['image', 'artifact']),
+  name: z.string().describe("The dashboard's title, or the artifact's name."),
+  blueprint: dashboardBlueprintSchema,
 });
 
-export const lineageSchema = z.object({
-  edges: z.array(lineageEdgeSchema),
-  checkedPairs: z.number().describe('Candidate pairs checked by a query.'),
-  failedChecks: z.number().describe('Checks whose query failed.'),
-});
-
-export const lineageInferredSchema = catalogsLoadedSchema.extend({
-  lineage: lineageSchema,
+/** What Read dashboards hands on. */
+export const dashboardsReadSchema = z.object({
+  questions: z
+    .array(z.string())
+    .describe('The business questions, parsed from the input lines.'),
+  datasets: z.array(z.string()),
+  layers: catalogsLoadedSchema.shape.layers,
+  tables: catalogsLoadedSchema.shape.tables,
+  dashboards: z.array(referenceDashboardSchema),
   stopped: z.boolean(),
 });
 
@@ -195,10 +154,57 @@ export const requirementSchema = z.object({
     ),
 });
 
-export const requirementsDerivedSchema = lineageInferredSchema
+export const requirementsDerivedSchema = dashboardsReadSchema
   .omit({ stopped: true })
   .extend({
     requirements: z.array(requirementSchema),
+    stopped: z.boolean(),
+  });
+
+// ---------------------------------------------------------------------------
+// Infer lineage
+
+/** How an edge was found. */
+export const lineageMethodSchema = z.enum([
+  /** The normalised names are equal. */
+  'name',
+  /** The normalised names share most tokens. */
+  'similar-name',
+  /** A query found the target's values in the source. */
+  'values',
+  /** The mapper named the same field in both layers (Trace gaps). */
+  'mapped',
+]);
+
+/** One inferred column-to-column edge, from a lower layer to a higher one. */
+export const lineageEdgeSchema = z.object({
+  from: columnRefSchema,
+  to: columnRefSchema,
+  method: lineageMethodSchema,
+  confidence: z.number().describe('0 to 1.'),
+  overlap: z
+    .number()
+    .nullable()
+    .describe(
+      "Share of the target's distinct values found in the source; null when not checked.",
+    ),
+  expression: z
+    .string()
+    .describe(
+      "How the target is computed from the source ('mapped' edges); '' otherwise.",
+    ),
+});
+
+export const lineageSchema = z.object({
+  edges: z.array(lineageEdgeSchema),
+  checkedPairs: z.number().describe('Candidate pairs checked by a query.'),
+  failedChecks: z.number().describe('Checks whose query failed.'),
+});
+
+export const lineageInferredSchema = requirementsDerivedSchema
+  .omit({ stopped: true })
+  .extend({
+    lineage: lineageSchema,
     stopped: z.boolean(),
   });
 
@@ -216,7 +222,7 @@ export const confirmResumeSchema = z.object({
   answer: z.string(),
 });
 
-export const requirementsConfirmedSchema = requirementsDerivedSchema
+export const requirementsConfirmedSchema = lineageInferredSchema
   .omit({ stopped: true })
   .extend({
     feedback: z.string().describe("The user's edits; '' when confirmed as is."),
@@ -375,25 +381,28 @@ export const gapResultSchema = gapReportRenderedSchema
 
 /** Every step's input and output schema, by step id, in catalogue order. */
 export const CONSUMPTION_GAP_STEP_SCHEMAS = {
-  'read-dashboards': { input: gapRunInputSchema, output: dashboardsReadSchema },
   'resolve-layers': {
-    input: dashboardsReadSchema,
+    input: gapRunInputSchema,
     output: layersResolvedSchema,
   },
   'load-layer-catalogs': {
     input: layersResolvedSchema,
     output: catalogsLoadedSchema,
   },
-  'infer-lineage': {
+  'read-dashboards': {
     input: catalogsLoadedSchema,
-    output: lineageInferredSchema,
+    output: dashboardsReadSchema,
   },
   'derive-requirements': {
-    input: lineageInferredSchema,
+    input: dashboardsReadSchema,
     output: requirementsDerivedSchema,
   },
-  'confirm-requirements': {
+  'infer-lineage': {
     input: requirementsDerivedSchema,
+    output: lineageInferredSchema,
+  },
+  'confirm-requirements': {
+    input: lineageInferredSchema,
     output: requirementsConfirmedSchema,
     suspend: confirmSuspendSchema,
     resume: confirmResumeSchema,

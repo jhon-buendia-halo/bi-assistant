@@ -411,8 +411,9 @@ test('Assess Data Readiness profiles, scores and explains one dataset @demo', as
     'profile-source',
     'score-readiness',
     'save-report',
-    'finding-rows',
+    // The rows behind findings run while the agent explains (agents.md 5.13).
     'explain-report',
+    'finding-rows',
     'wrap-up',
   ];
 

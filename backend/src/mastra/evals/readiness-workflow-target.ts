@@ -40,7 +40,9 @@ import { readinessEvalOrientation } from './data-readiness.evals';
  * - Resolve dataset, Profile source, Score readiness and Save report run
  *   the deterministic engine through the readiness bridge
  *   (`startAssessment`, on the run's throwaway host bound to the agent);
- * - Rows behind findings runs one read-only query per top finding
+ * - Rows behind findings (after Explain report; here the work Save report
+ *   starts in a session runs when its step takes it) runs one read-only
+ *   query per top finding
  *   (`recordFindingSources`, through `runReadOnlySql`) — recorded as the
  *   run's sources in `details.findingSources`, not as Sarah's tool calls;
  * - Explain report is the agent's own `generate` with the case's options
@@ -198,10 +200,17 @@ export function readinessWorkflowTurnAgent(
           })),
         };
       },
+      // A case has no images, and the early work runs one step after the
+      // other here: the rows behind findings when their step takes them.
+      startImageNotes: () => undefined,
+      readsImages: () => false,
+      imageNotes: () =>
+        Promise.resolve({ imageNotes: '', imageCount: 0, stopped: false }),
       save: async () => {
         saved = await started().save();
         return { reportId: saved.report.id };
       },
+      startFindingRows: () => undefined,
       findingRows: () => {
         if (!saved) throw new Error('The report has not been saved');
         return parts.recordFindingSources({
