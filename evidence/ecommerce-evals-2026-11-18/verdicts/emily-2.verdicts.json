@@ -1,0 +1,308 @@
+[
+ {
+  "id": "ec-b-recent-sales-trend",
+  "target": "emily",
+  "category": "fuzzy-scope",
+  "verdict": "question-debatable",
+  "cause": "used last 4 weeks vs prior 4 (up 4.2%) instead of monthly view",
+  "fix": "question",
+  "evidence": "Weekly figures are correct (last 4 full weeks 3.21M/wk, +4.2%) but the reference monthly view shows July peak 14.35M easing to Oct 12.81M; a 4-week window is a defensible reading though the check wants July."
+ },
+ {
+  "id": "ec-b-returns-lately",
+  "target": "emily",
+  "category": "fuzzy-scope",
+  "verdict": "check-too-strict",
+  "cause": "answer right but compared 3-month blocks, not monthly rows",
+  "fix": "check",
+  "evidence": "Emily says returns down 6.79% (453 Jul-Sep vs 486 Apr-Jun) and excludes partial October, matching the intent; result-set-match wants the monthly 2026 rows."
+ },
+ {
+  "id": "ec-b-ratings-lately",
+  "target": "emily",
+  "category": "fuzzy-scope",
+  "verdict": "wrong-answer",
+  "cause": "did not exclude invalid ratings 0 and 6",
+  "fix": "data-context",
+  "evidence": "Her averages 2.974/2.992 include ratings 0 and 6 (min 0, max 6 in her own output) over 12-month windows, so she never filtered invalid ratings; conclusion (flat) is still right but figures are contaminated."
+ },
+ {
+  "id": "ec-c-quote-in-product-name",
+  "target": "emily",
+  "category": "encoding",
+  "verdict": "check-too-strict",
+  "cause": "result lacks id column / extra cost column",
+  "fix": "check",
+  "evidence": "Emily found the one product 12\" Vinyl \"Deluxe\" at 428.30, correct, but the reference row includes id 15 which she did not select."
+ },
+ {
+  "id": "ec-c-vip-customers-split",
+  "target": "emily",
+  "category": "null",
+  "verdict": "check-too-strict",
+  "cause": "first query errored, retry correct; extra column",
+  "fix": "check",
+  "evidence": "Final answer 15,000 / 30,000 / 5,000 matches NOTES; failed only for a recovered GROUP BY error and an extra total column."
+ },
+ {
+  "id": "ec-c-products-marked-selected",
+  "target": "emily",
+  "category": "null",
+  "verdict": "check-too-strict",
+  "cause": "extra total column and long-form shape",
+  "fix": "check",
+  "evidence": "Answer 1,428 / 2,858 / 714 matches NOTES exactly; reference is one wide row, hers is three rows plus a total column."
+ },
+ {
+  "id": "ec-c-legacy-distinct-orders",
+  "target": "emily",
+  "category": "aggregate",
+  "verdict": "check-too-strict",
+  "cause": "answer also mentions 5,250 as context",
+  "fix": "check",
+  "evidence": "Emily states 5,000 different orders (correct) and adds that there are 5,250 total rows, which the not-matches regex /5,?250/ rejects."
+ },
+ {
+  "id": "ec-c-legacy-closed-orders",
+  "target": "emily",
+  "category": "aggregate",
+  "verdict": "wrong-answer",
+  "cause": "matched LOWER(status)='closed' only, missed 'Closed ' trailing space, counted rows not distinct",
+  "fix": "data-context",
+  "evidence": "She answered 2,080 versus the expected 3,000 distinct closed orders; no TRIM and no DISTINCT on legacy_order_id."
+ },
+ {
+  "id": "ec-c-brazil-customers",
+  "target": "emily",
+  "category": "aggregate",
+  "verdict": "wrong-answer",
+  "cause": "did not merge country spellings",
+  "fix": "data-context",
+  "evidence": "She answered 5,000 with country = 'Brazil' versus expected 10,000 (brazil and ' BRAZIL ' missed)."
+ },
+ {
+  "id": "ec-c-euro-orders",
+  "target": "emily",
+  "category": "aggregate",
+  "verdict": "wrong-answer",
+  "cause": "did not merge currency spellings",
+  "fix": "data-context",
+  "evidence": "She answered 42,856 with currency = 'EUR' versus expected 85,710 (missed 'eur ')."
+ },
+ {
+  "id": "ec-c-classic-mug-products",
+  "target": "emily",
+  "category": "aggregate",
+  "verdict": "check-too-strict",
+  "cause": "row-per-product shape with window totals",
+  "fix": "check",
+  "evidence": "Answer 5 products and 1,131,103.31 revenue matches NOTES; her result is 5 rows plus window columns, not the single aggregate row."
+ },
+ {
+  "id": "ec-c-gift-card-revenue",
+  "target": "emily",
+  "category": "lookup",
+  "verdict": "run-error",
+  "cause": "no final response produced",
+  "fix": "prompt-rule",
+  "evidence": "Attempt ended with 'could not produce a final response', run_readonly_sql never called (0 calls), so no answer about the empty gift-card table."
+ },
+ {
+  "id": "ec-c-discover-customer-info",
+  "target": "emily",
+  "category": "discovery",
+  "verdict": "wrong-answer",
+  "cause": "ran SQL for a schema/discovery question",
+  "fix": "prompt-rule",
+  "evidence": "She ran 5 run_readonly_sql calls and reported live figures (50,000 customers, tier table, top LTV customers) instead of listing the customer areas from the catalog without SQL."
+ },
+ {
+  "id": "ec-c-discover-order-info",
+  "target": "emily",
+  "category": "discovery",
+  "verdict": "check-too-strict",
+  "cause": "schema-dump regex false positive on a natural list",
+  "fix": "check",
+  "evidence": "The answer lists order fields in business words ('Order identifiers: numeric id...'), correct and complete; check-no-html flagged the phrase 'identifiers: numeric, order timestamp'."
+ },
+ {
+  "id": "ec-c-discover-product-catalogue",
+  "target": "emily",
+  "category": "discovery",
+  "verdict": "check-too-strict",
+  "cause": "schema-dump regex false positive",
+  "fix": "check",
+  "evidence": "Answer covers products, 3-level categories, inventory and reviews as intended; flagged only for the phrase 'launch timestamp, a boolean, Creation timestamp' (mild type leakage)."
+ },
+ {
+  "id": "ec-d-oos-revenue-2019",
+  "target": "emily",
+  "category": "out-of-scope",
+  "verdict": "check-too-strict",
+  "cause": "correct refusal; number checks reject the 2020 figure",
+  "fix": "check",
+  "evidence": "Emily says no 2019 data and reports only 117,058.61 for 31 Dec 2020 (grounded, 34 orders before 2021 per NOTES); regexes reject the 3+ digit number and the date '31'."
+ },
+ {
+  "id": "ec-d-oos-marketing-spend",
+  "target": "emily",
+  "category": "out-of-scope",
+  "verdict": "check-too-strict",
+  "cause": "correct refusal; extra context numbers and one SQL repair",
+  "fix": "check",
+  "evidence": "She says no ad-spend data and cannot name a best ROAS; flagged for the year 2025 and the sales table she added, plus one auto-repaired query."
+ },
+ {
+  "id": "ec-d-oos-website-visits",
+  "target": "emily",
+  "category": "out-of-scope",
+  "verdict": "check-too-strict",
+  "cause": "correct refusal; year 2025 trips regex",
+  "fix": "check",
+  "evidence": "She says no visitor or session data exists and asks for a proxy denominator; fails only because the answer contains '2025'."
+ },
+ {
+  "id": "ec-d-oos-stock-march-2026",
+  "target": "emily",
+  "category": "out-of-scope",
+  "verdict": "check-too-strict",
+  "cause": "date number '31' flagged as ungrounded",
+  "fix": "check",
+  "evidence": "She correctly says snapshots only cover 2 Aug-31 Oct 2026 and gives no March figure; failed on the number 31."
+ },
+ {
+  "id": "ec-d-nonexistent-product",
+  "target": "emily",
+  "category": "non-existent",
+  "verdict": "check-too-strict",
+  "cause": "correct answer; first SQL needed auto-repair",
+  "fix": "check",
+  "evidence": "She says Quantum Blender X9 is not in the catalog and gives no sales figure; only check-no-repairs failed (1 of 3 queries rewritten)."
+ },
+ {
+  "id": "ec-d-nonexistent-warehouse",
+  "target": "emily",
+  "category": "non-existent",
+  "verdict": "check-too-strict",
+  "cause": "date numbers flagged as ungrounded",
+  "fix": "check",
+  "evidence": "She says LAX-09 does not exist and lists BOG-01, MAD-03, MIA-02; failed on the numbers in the date range (31, 2026)."
+ },
+ {
+  "id": "ec-d-visual-monthly-orders-2025",
+  "target": "emily",
+  "category": "visual",
+  "verdict": "check-too-strict",
+  "cause": "extra columns and month label shape",
+  "fix": "check",
+  "evidence": "Her monthly counts match NOTES (Jan 3,022, Feb 2,728, Nov 3,030, total 35,329) with a chart; result-set-match fails on column shape (month_start, 'Jan' labels, total column)."
+ },
+ {
+  "id": "ec-d-visual-returns-by-reason",
+  "target": "emily",
+  "category": "visual",
+  "verdict": "check-too-strict",
+  "cause": "title-case labels and 'Not specified' vs lower-case 'unknown'",
+  "fix": "check",
+  "evidence": "Her merged counts Damaged 7,500, Changed Mind 2,500, Wrong Size 2,500, Not specified 2,500 equal NOTES; only label text differs."
+ },
+ {
+  "id": "ec-d-visual-payment-method-value",
+  "target": "emily",
+  "category": "visual",
+  "verdict": "wrong-answer",
+  "cause": "did not merge payment-method spellings",
+  "fix": "data-context",
+  "evidence": "She listed 7 variants (CARD , Card, card, PayPal, paypal...) each about 37M instead of merged card 112.7M and paypal 74.8M, saying variants were preserved as stored."
+ },
+ {
+  "id": "ec-d-fedex-delivery-days",
+  "target": "emily",
+  "category": "aggregate",
+  "verdict": "check-too-strict",
+  "cause": "correct 5.50 days; unrounded extra columns and one repair",
+  "fix": "check",
+  "evidence": "She answered 5.50 days over 89,000 shipments, matching NOTES; failures are the auto-repair and extra columns."
+ },
+ {
+  "id": "ec-d-fedex-delivery-days-reworded",
+  "target": "emily",
+  "category": "paraphrase",
+  "verdict": "check-too-strict",
+  "cause": "correct 5.503 days; extra columns, unrounded",
+  "fix": "check",
+  "evidence": "She answered 5.503 (about 5.5) over 89,000 parcels matching NOTES; result-set-match fails on column shape and unrounded value."
+ },
+ {
+  "id": "ec-d-cancel-rate-by-channel",
+  "target": "emily",
+  "category": "ratio",
+  "verdict": "check-too-strict",
+  "cause": "case-sensitive regex vs 'Marketplace'",
+  "fix": "check",
+  "evidence": "Answer Marketplace 12.66% is correct; the check pattern is lower-case 'marketplace' without the i flag so it cannot match."
+ },
+ {
+  "id": "ec-d-cancel-rate-by-channel-reworded",
+  "target": "emily",
+  "category": "paraphrase",
+  "verdict": "check-too-strict",
+  "cause": "case-sensitive regex vs 'Marketplace'",
+  "fix": "check",
+  "evidence": "Answer Marketplace 12.66% (5,426 of 42,857) is correct; same case-sensitive pattern bug."
+ },
+ {
+  "id": "ec-d-top-brands-units",
+  "target": "emily",
+  "category": "ranking",
+  "verdict": "check-too-strict",
+  "cause": "case-sensitive regex vs 'ACME'",
+  "fix": "check",
+  "evidence": "Final answer ACME 1,687,528, Initech 577,379, Umbrella 574,871 matches NOTES; pattern expects 'Acme' so 'ACME' fails (first SQL draft split on trailing space, retry fixed)."
+ },
+ {
+  "id": "ec-d-top-brands-units-reworded",
+  "target": "emily",
+  "category": "paraphrase",
+  "verdict": "check-too-strict",
+  "cause": "case-sensitive regex and '0' in '<= 0' flagged",
+  "fix": "check",
+  "evidence": "Answer acme 1,687,528, initech 577,379, umbrella 574,871 is correct; lower-case names fail the /Acme/ pattern and the 0 in 'quantity <= 0' is flagged as ungrounded."
+ },
+ {
+  "id": "ec-d-warehouse-low-stock",
+  "target": "emily",
+  "category": "ranking",
+  "verdict": "check-too-strict",
+  "cause": "date numbers flagged as ungrounded",
+  "fix": "check",
+  "evidence": "BOG-01 with 369 on 31 Oct 2026 is correct; failed only on number grounding of the date."
+ },
+ {
+  "id": "ec-d-warehouse-low-stock-reworded",
+  "target": "emily",
+  "category": "paraphrase",
+  "verdict": "check-too-strict",
+  "cause": "returned only the top row, reference has 3 rows",
+  "fix": "check",
+  "evidence": "BOG-01 with 369 items is correct; result-set-match fails because her SQL returns one row while the reference lists all 3 warehouses."
+ },
+ {
+  "id": "ec-d-return-rate-2023",
+  "target": "emily",
+  "category": "ratio",
+  "verdict": "question-debatable",
+  "cause": "added returned_at > ordered_at filter for 'later returned'",
+  "fix": "question",
+  "evidence": "She reported 0.69% (1,352 of 196,923) by counting only returns dated after the order, versus 1.51% (2,970 or 2,966 returned lines) without that filter; her first retry query had given 1.51%; also one statement-timeout error."
+ },
+ {
+  "id": "ec-d-return-rate-2023-reworded",
+  "target": "emily",
+  "category": "paraphrase",
+  "verdict": "question-debatable",
+  "cause": "used quantity-weighted share, 1.52% vs line share 1.507%",
+  "fix": "question",
+  "evidence": "She computed returned items 15,335 / 1,008,541 = 1.52% (quantity basis) versus reference 1.51% by order lines; 'items sold' allows the quantity reading and the figure is nearly identical."
+ }
+]

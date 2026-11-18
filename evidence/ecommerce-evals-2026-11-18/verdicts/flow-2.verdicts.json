@@ -1,0 +1,353 @@
+[
+ {
+  "id": "ec-b-returns-by-top-category-2025",
+  "target": "workflow",
+  "category": "join",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked how to measure 'most returns' (count/amount/units)",
+  "fix": "plan-step",
+  "evidence": "Olivia asked a measure question and ran no SQL; returned lines count (Apparel 268) is the natural default and the other measures give the same winner type."
+ },
+ {
+  "id": "ec-b-recent-sales-trend",
+  "target": "workflow",
+  "category": "fuzzy-scope",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked which sales measure (revenue/orders/units) for a trend",
+  "fix": "plan-step",
+  "evidence": "Ended on a clarifying question with no SQL; the intent accepts any stated recent window and revenue/orders by month (Jul peak 14.35M)."
+ },
+ {
+  "id": "ec-b-ratings-lately",
+  "target": "workflow",
+  "category": "fuzzy-scope",
+  "verdict": "wrong-answer",
+  "cause": "averaged all ratings including invalid 0 and 6 and NULLs",
+  "fix": "data-context",
+  "evidence": "Reported 3.08 to 2.87 over 30-day windows with raw AVG although MIN rating 0 and MAX 6 were visible; valid-only 90-day figures are 3.02 vs 2.98."
+ },
+ {
+  "id": "ec-c-legacy-closed-orders",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "wrong-answer",
+  "cause": "exact-match status='closed' missed CLOSED/'Closed '",
+  "fix": "data-context",
+  "evidence": "Answered 1,040 (and total 5,250, counting rows) instead of 3,000 distinct closed orders across three spellings."
+ },
+ {
+  "id": "ec-c-revenue-by-top-category",
+  "target": "workflow",
+  "category": "join",
+  "verdict": "question-debatable",
+  "cause": "excluded cancelled orders; total not requested",
+  "fix": "question",
+  "evidence": "Rollup correct but Electronics 188.69M vs 214.93M because cancelled orders were excluded (a stated assumption); 'total sales value' does not say to exclude them."
+ },
+ {
+  "id": "ec-c-discover-order-info",
+  "target": "workflow",
+  "category": "discovery",
+  "verdict": "check-too-strict",
+  "cause": "discovery answered with SQL counts; schema-dump regex hit prose",
+  "fix": "check",
+  "evidence": "Ran 3 SQL calls (check expects none) and 'order timestamp, cancellation timestamp...' tripped the raw-schema regex; answer is reasonable though it omits status, channel, returns and one query's join counts (266,703) are nonsense."
+ },
+ {
+  "id": "ec-d-ambiguous-products-doing-badly",
+  "target": "workflow",
+  "category": "ambiguous",
+  "verdict": "check-too-strict",
+  "cause": "correctly asked back but not via ask_clarification tool",
+  "fix": "check",
+  "evidence": "Plan step asked 'what measure defines doing badly' with 4 options and ran no SQL, which is the desired behaviour; check requires the tool call."
+ },
+ {
+  "id": "ec-d-ambiguous-key-market",
+  "target": "workflow",
+  "category": "ambiguous",
+  "verdict": "check-too-strict",
+  "cause": "correctly asked back but not via ask_clarification tool",
+  "fix": "check",
+  "evidence": "Asked which measure defines most important market (revenue/orders/customers/LTV) and ran no SQL; only the tool-call check failed."
+ },
+ {
+  "id": "ec-d-visual-returns-by-reason",
+  "target": "workflow",
+  "category": "visual",
+  "verdict": "wrong-answer",
+  "cause": "spelling variants not merged and no chart built",
+  "fix": "data-context",
+  "evidence": "Listed 6 reasons at 2,500 each (Damaged/damaged/'DAMAGED ') instead of damaged 7,500; create_visual never called."
+ },
+ {
+  "id": "ec-d-fedex-delivery-days-reworded",
+  "target": "workflow",
+  "category": "paraphrase",
+  "verdict": "check-too-strict",
+  "cause": "answer right; result set has extra columns",
+  "fix": "check",
+  "evidence": "Answer 5.5 days over 89,000 parcels matches the reference; only result-set-match failed because the SQL returned extra columns/counts."
+ },
+ {
+  "id": "ec-d-top-brands-units",
+  "target": "workflow",
+  "category": "ranking",
+  "verdict": "check-too-strict",
+  "cause": "answer right; case-sensitive regex and headline-only text",
+  "fix": "check",
+  "evidence": "Table has acme 1,687,528, initech 577,379, umbrella 574,871 (all correct) but regex needs capitalised Acme and saw only the headline."
+ },
+ {
+  "id": "ec-d-warehouse-low-stock-reworded",
+  "target": "workflow",
+  "category": "paraphrase",
+  "verdict": "check-too-strict",
+  "cause": "date digits flagged as ungrounded numbers",
+  "fix": "check",
+  "evidence": "BOG-01 369 correct with MAD-03 354 and MIA-02 352; numbers-grounded failed on date parts 2026, 10, 31."
+ },
+ {
+  "id": "ec-a-avg-rating-by-department",
+  "target": "workflow",
+  "category": "join",
+  "verdict": "wrong-answer",
+  "cause": "used category 'group' column (A/B) instead of rolling up the category tree",
+  "fix": "data-context",
+  "evidence": "Reported departments A/B/(Unassigned) around 3.00 rather than 8 top departments (Books 3.017 ... Sports 2.978); agents were not told departments are the top level of the category tree."
+ },
+ {
+  "id": "ec-a-top-brands-delivered",
+  "target": "workflow",
+  "category": "ranking",
+  "verdict": "wrong-answer",
+  "cause": "brand spellings not merged and 'delivered' taken from shipments",
+  "fix": "data-context",
+  "evidence": "Answered Initech 489,577 / ACME 488,675 / Umbrella 483,707 with ACME split from Acme spellings; expected acme 140,580 first by far."
+ },
+ {
+  "id": "ec-a-best-subcategory-per-department",
+  "target": "workflow",
+  "category": "ranking",
+  "verdict": "question-debatable",
+  "cause": "counted quantity on non-cancelled orders vs reference order lines",
+  "fix": "question",
+  "evidence": "Answer is consistent under units: Apparel Sub-category 17 (137,884 units) edges Sub-category 9 (136,811) which wins on lines; 'sells the most items' is ambiguous and the extra sub-sub-category column is noise."
+ },
+ {
+  "id": "ec-a-cancellation-rate-by-channel",
+  "target": "workflow",
+  "category": "ratio",
+  "verdict": "wrong-answer",
+  "cause": "grouped raw channel spellings, 7 channels",
+  "fix": "data-context",
+  "evidence": "Answered Mobile 12.8% across 7 unmerged channels (web/WEB /Web, mobile/Mobile) instead of marketplace 12.66% among 4."
+ },
+ {
+  "id": "ec-a-gbp-aov-by-tier",
+  "target": "workflow",
+  "category": "ratio",
+  "verdict": "check-too-strict",
+  "cause": "winner and 3 of 4 rows right; Silver off by one order",
+  "fix": "check",
+  "evidence": "Platinum 4,698.14 / 9,290 matches; Silver 4,526.63 over 9,203 vs 4,527.12 over 9,202 because order_total view vs line sums, plus extra column."
+ },
+ {
+  "id": "ec-a-is-damage-top-return-reason",
+  "target": "workflow",
+  "category": "reasoning",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked what 'biggest reason' means",
+  "fix": "plan-step",
+  "evidence": "Ran no SQL and asked count vs refund vs units; question was clear (reason by returns, damaged 7,500 of 15,000 = 50%)."
+ },
+ {
+  "id": "ec-a-damage-by-carrier",
+  "target": "workflow",
+  "category": "reasoning",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked how 'more goods' is measured",
+  "fix": "plan-step",
+  "evidence": "Ran no SQL and asked count/units/refund; the expected answer names DHL at 5.0% and needs a rate, which a plan could choose itself."
+ },
+ {
+  "id": "ec-b-median-transit-days-2025",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "wrong-answer",
+  "cause": "kept 353 delivered-before-shipped rows",
+  "fix": "data-context",
+  "evidence": "Median 5 days over 26,041 parcels (min -3) instead of 6 over 25,688; it saw negatives and only flagged them."
+ },
+ {
+  "id": "ec-b-refunds-2025",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "check-too-strict",
+  "cause": "answer right; result set shape differs",
+  "fix": "check",
+  "evidence": "Answer 437,408.33 over 1,754 returns presented positive matches; result-set-match failed on a monthly breakdown query (passed 2/3)."
+ },
+ {
+  "id": "ec-b-line-return-rate-2024-vs-2025",
+  "target": "workflow",
+  "category": "ratio",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked unit vs line return rate",
+  "fix": "plan-step",
+  "evidence": "No SQL; the question is answerable by order lines (1.46% vs 1.51%) and would have been fine stating the assumption."
+ },
+ {
+  "id": "ec-b-biggest-mom-jump-2026",
+  "target": "workflow",
+  "category": "ranking",
+  "verdict": "check-too-strict",
+  "cause": "answer right; result set shape differs",
+  "fix": "check",
+  "evidence": "March 2026, 3,067 vs 2,709, +358 matches; only result-set-match failed (11-row reference vs single-row answer)."
+ },
+ {
+  "id": "ec-b-shipped-before-ordered",
+  "target": "workflow",
+  "category": "reasoning",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked mean vs median for 'typical'",
+  "fix": "plan-step",
+  "evidence": "No SQL, so the key finding (125,620 of 250,000 shipments before their order) was never surfaced."
+ },
+ {
+  "id": "ec-b-discount-vs-order-value",
+  "target": "workflow",
+  "category": "reasoning",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked what 'bigger' means",
+  "fix": "plan-step",
+  "evidence": "No SQL; average order total by discount rate (4,585 / 4,666 / 4,880) is the obvious reading."
+ },
+ {
+  "id": "ec-b-returns-lately",
+  "target": "workflow",
+  "category": "fuzzy-scope",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked how 'returns' are measured",
+  "fix": "plan-step",
+  "evidence": "No SQL; return count by month with the partial October flagged was expected (Oct 87 ends on 16 Oct)."
+ },
+ {
+  "id": "ec-c-quote-in-product-name",
+  "target": "workflow",
+  "category": "encoding",
+  "verdict": "question-debatable",
+  "cause": "used cost column for 'what do they cost'",
+  "fix": "question",
+  "evidence": "Found the right product but gave 123.16 (cost) not 428.30 (unit_price); a shopper asking what products cost likely means price."
+ },
+ {
+  "id": "ec-c-products-marked-selected",
+  "target": "workflow",
+  "category": "null",
+  "verdict": "check-too-strict",
+  "cause": "answer right; result set shape differs",
+  "fix": "check",
+  "evidence": "1,428 / 2,858 / 714 correct and total 5,000; only result-set-match failed (long-form rows vs single-row reference), passed 2/3."
+ },
+ {
+  "id": "ec-c-brazil-customers",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "wrong-answer",
+  "cause": "headline used exact 'Brazil' (5,000), ignored spelling variants",
+  "fix": "data-context",
+  "evidence": "Headline 5,000 and a 7,500 alternative; never trimmed ' BRAZIL ' so missed 10,000."
+ },
+ {
+  "id": "ec-c-gift-card-revenue",
+  "target": "workflow",
+  "category": "lookup",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked how gift-card revenue is defined",
+  "fix": "plan-step",
+  "evidence": "No SQL; the table is empty so every definition gives zero, and a query would show that (passed 2/3)."
+ },
+ {
+  "id": "ec-c-discover-product-catalogue",
+  "target": "workflow",
+  "category": "discovery",
+  "verdict": "check-too-strict",
+  "cause": "discovery answered with 13 SQL calls",
+  "fix": "check",
+  "evidence": "The answer describes 5,000 products and the 8-department tree but check wants no SQL; also includes odd average price 200,253.66 across currencies."
+ },
+ {
+  "id": "ec-d-ambiguous-best-channel",
+  "target": "workflow",
+  "category": "ambiguous",
+  "verdict": "check-too-strict",
+  "cause": "correctly asked back but not via ask_clarification tool",
+  "fix": "check",
+  "evidence": "Asked what 'works best' means (revenue/orders/units/AOV) with no SQL; only the tool-call check failed."
+ },
+ {
+  "id": "ec-d-oos-revenue-2019",
+  "target": "workflow",
+  "category": "out-of-scope",
+  "verdict": "check-too-strict",
+  "cause": "correct refusal; regexes hit CTE name, '31' and 117,058.61",
+  "fix": "check",
+  "evidence": "Says 2019 not available and 2020 has only 31 Dec; failed qualified-names (VALUES CTE), numbers-grounded (31) and a big-number regex (2020 figure 117,058.61), passed 1/3."
+ },
+ {
+  "id": "ec-d-oos-stock-march-2026",
+  "target": "workflow",
+  "category": "out-of-scope",
+  "verdict": "check-too-strict",
+  "cause": "correct refusal; date digit flagged as ungrounded",
+  "fix": "check",
+  "evidence": "Says no March 2026 snapshot (data Aug 2 to Oct 31) and gives no figure; only numbers-grounded failed on '31'."
+ },
+ {
+  "id": "ec-d-nonexistent-warehouse",
+  "target": "workflow",
+  "category": "non-existent",
+  "verdict": "check-too-strict",
+  "cause": "correct answer; date digits flagged as ungrounded",
+  "fix": "check",
+  "evidence": "Says LAX-09 does not exist and lists BOG-01/MAD-03/MIA-02; only numbers-grounded failed on 2026-10-31 (passed 2/3)."
+ },
+ {
+  "id": "ec-d-visual-payment-method-value",
+  "target": "workflow",
+  "category": "visual",
+  "verdict": "wrong-answer",
+  "cause": "no chart built though asked to plot",
+  "fix": "write-step",
+  "evidence": "Figures are right (card 112,698,295.93 etc.) but create_visual was never called; also shows 'Bank_Transfer' label."
+ },
+ {
+  "id": "ec-d-cancel-rate-by-channel",
+  "target": "workflow",
+  "category": "ratio",
+  "verdict": "check-too-strict",
+  "cause": "answer right; case-sensitive regex and headline-only text",
+  "fix": "check",
+  "evidence": "Marketplace 12.66% with web 12.6/mobile 12.6/store 12.5 all correct; regex needs lowercase 'marketplace' and saw only the capitalised headline."
+ },
+ {
+  "id": "ec-d-top-brands-units-reworded",
+  "target": "workflow",
+  "category": "paraphrase",
+  "verdict": "check-too-strict",
+  "cause": "answer right; case-sensitive regex, a tool error and an ungrounded number",
+  "fix": "check",
+  "evidence": "acme 1,687,528 / initech 577,379 / umbrella 574,871 correct; failures are regex case, one tool error in 5 calls and ungrounded 2,839,778 in the answer."
+ },
+ {
+  "id": "ec-d-return-rate-2023",
+  "target": "workflow",
+  "category": "ratio",
+  "verdict": "wrong-answer",
+  "cause": "required return strictly after order date, dropping half the returns",
+  "fix": "analyse-step",
+  "evidence": "Answered 0.68% (1,348 of 196,854) instead of 1.51% (2,966 lines); dates are out of order in the data so 'later returned' was read too literally."
+ }
+]

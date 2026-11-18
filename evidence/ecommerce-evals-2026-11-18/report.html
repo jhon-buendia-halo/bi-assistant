@@ -1,0 +1,182 @@
+<title>E-commerce Evals Report</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-column report. Summary first, then where it fails, then the plan; verdict colours only on verdicts. */
+:root{
+  --bg:#f4f6f8; --surface:#ffffff; --sunk:#e9edf1; --fg:#17202a; --muted:#56616d; --line:#d3dae1;
+  --accent:#1f5fa8; --accent-soft:#dde8f5;
+  --pass:#1e7a49; --pass-bg:#dcf1e4; --flaky:#94600a; --flaky-bg:#f8ecd4; --fail:#a83636; --fail-bg:#f7dfdf;
+  --display:"Space Grotesk","Helvetica Neue",Arial,sans-serif;
+  --body:"Public Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10161c; --surface:#18212a; --sunk:#1f2a35; --fg:#e4eaf0; --muted:#9aa8b5; --line:#2c3a47;
+  --accent:#7fb2ec; --accent-soft:#1c3049;
+  --pass:#71d39d; --pass-bg:#173527; --flaky:#efbd62; --flaky-bg:#3a2d12; --fail:#f09a9a; --fail-bg:#3d1f22; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10161c; --surface:#18212a; --sunk:#1f2a35; --fg:#e4eaf0; --muted:#9aa8b5; --line:#2c3a47;
+  --accent:#7fb2ec; --accent-soft:#1c3049;
+  --pass:#71d39d; --pass-bg:#173527; --flaky:#efbd62; --flaky-bg:#3a2d12; --fail:#f09a9a; --fail-bg:#3d1f22; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:17px;line-height:1.6;margin:0;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:0 72px}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{max-width:980px;margin:0 auto;padding-top:44px;display:grid;gap:8px}
+h1,h2,h3{font-family:var(--display);margin:0;line-height:1.15;text-wrap:balance}
+h1{font-size:clamp(30px,5vw,44px);font-weight:700;letter-spacing:-.01em}
+h2{font-size:26px;font-weight:600}
+h3{font-size:18px;font-weight:600}
+p,ul,ol{margin:0}
+.prose{max-width:68ch}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.lede{font-size:20px;color:var(--muted);max-width:64ch}
+header{display:grid;gap:14px;padding-bottom:28px;border-bottom:1px solid var(--line)}
+.meta{font-family:var(--mono);font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 18px}
+section{padding-block:40px 6px;display:grid;gap:16px}
+.sec-head{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:baseline}
+.num{font-family:var(--mono);font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:2px 8px}
+ul,ol{padding-left:22px}
+li+li{margin-top:4px}
+code{font-family:var(--mono);font-size:.84em;background:var(--sunk);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:grid;gap:6px;align-content:start;min-width:0}
+.card .k{font-family:var(--mono);font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.big{font-family:var(--display);font-size:30px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:15px;min-width:600px}
+th,td{text-align:left;vertical-align:top;padding:9px 13px;border-bottom:1px solid var(--line)}
+th{font-family:var(--display);font-weight:600;font-size:14px;background:var(--sunk)}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.total td{font-weight:700;background:var(--sunk)}
+.v{display:inline-block;font-family:var(--mono);font-size:11.5px;font-weight:500;padding:1px 7px;border-radius:4px;white-space:nowrap}
+.v-pass{color:var(--pass);background:var(--pass-bg)} .v-flaky{color:var(--flaky);background:var(--flaky-bg)} .v-fail{color:var(--fail);background:var(--fail-bg)}
+.cap{font-size:14.5px;color:var(--muted);max-width:72ch}
+.src{font-family:var(--mono);font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.plan{list-style:none;padding:0;display:grid;gap:12px;counter-reset:p}
+.plan li{counter-increment:p;margin:0;display:grid;grid-template-columns:40px minmax(0,1fr);gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.plan li::before{content:"P" counter(p);font-family:var(--display);font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:8px;display:grid;place-items:center;height:34px;font-size:15px}
+.plan .body{display:grid;gap:6px;min-width:0}
+.plan .why{font-size:14.5px;color:var(--muted)}
+footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);font-size:14px;color:var(--muted);display:grid;gap:6px}
+@media (max-width:760px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.grid2,.grid4{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<main>
+<header>
+  <span class="eyebrow">Halo Workbench · e-commerce evals · 2026-11-18</span>
+  <h1>E-commerce Evals Report</h1>
+  <p class="lede">100 new, harder questions over the Edge Cases store, each asked 3 times to Emily (one agent) and to the Answer a Business Question workflow. Every failure was read and sorted: real app errors, checks that rejected right answers, and questions open to another reading. The improvement plan comes from that sorting.</p>
+  <div class="meta"><span>Branch feat/ecommerce-evals-100 (commits 660f7808, 494d813e)</span><span>Model gpt-5.6-luna, effort low</span><span>600 attempts · $1.67</span></div>
+</header>
+
+<section>
+  <div class="sec-head"><span class="num">1</span><h2>The questions</h2></div>
+  <p class="prose">Written today with four AI helpers, 25 each, on the <strong>Edge Cases</strong> sample: a synthetic online store (300,000 orders, 1,000,000 order lines, 50,000 customers, shipments, payments, returns, reviews, a 3-level category tree) built with planted problems: the same value spelled several ways ("FedEx" and "FEDEX "), blanks next to NULLs, a legacy orders table with no key, an empty gift-card table, shipment dates before order dates, swapped promotion dates.</p>
+  <div class="grid4">
+    <div class="card"><span class="k">A · analytics</span><p>Multi-step joins up the category tree, rankings with ties, rates with a real denominator choice.</p></div>
+    <div class="card"><span class="k">B · time and operations</span><p>Month and year comparisons, customer cohorts, delivery times, returns windows.</p></div>
+    <div class="card"><span class="k">C · data traps</span><p>Business questions that need one planted problem handled to be right.</p></div>
+    <div class="card"><span class="k">D · ask, refuse, chart</span><p>Ambiguous, out-of-scope and non-existent questions, charts, and five reworded pairs.</p></div>
+  </div>
+  <p class="cap">67 dev and 33 held-out, 15 categories. All 85 reference queries run and pass the repo's validator; the other 15 (ask, refuse, describe the data) are checked by behaviour. No person has reviewed the questions yet. File: <span class="src">backend/src/mastra/evals/sets/ecommerce.json</span></p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">2</span><h2>Results</h2></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Target</th><th class="n">Right 3 of 3 (raw)</th><th class="n">Adjusted*</th><th class="n">Dev / held-out (raw)</th><th class="n">Attempts right</th><th class="n">Median seconds</th><th class="n">Cost per question</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Emily</strong>, one agent</td><td class="n">27</td><td class="n">≈ 67</td><td class="n">16/67 · 11/33</td><td class="n">118/300</td><td class="n">9.4</td><td class="n">$0.0063</td></tr>
+      <tr><td><strong>Workflow</strong>, plan · query · check · write</td><td class="n">21</td><td class="n">≈ 54</td><td class="n">14/67 · 7/33</td><td class="n">85/300</td><td class="n">22.7</td><td class="n">$0.0104</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">* Adjusted adds the questions whose failure was the check, not the answer (40 for Emily, 33 for the workflow; section 3). It is an estimate from one failed attempt read per question; the real figure comes from re-running after the checks are fixed (P1).</p>
+  <p class="prose">On these questions <strong>Emily is ahead of the workflow</strong> in raw and adjusted score, is <strong>2.4 times faster</strong> and costs about <strong>60% as much</strong>. The workflow's largest own problem is that its plan step asks the user a question on 14 questions that had a clear default reading.</p>
+
+  <h3>By category: questions right 3 of 3 (raw)</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Category</th><th class="n">Questions</th><th class="n">Emily</th><th class="n">Workflow</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td><code>join</code></td><td class="n">13</td><td class="n">6</td><td class="n">4</td><td></td></tr>
+      <tr><td><code>aggregate</code></td><td class="n">16</td><td class="n">2</td><td class="n">4</td><td></td></tr>
+      <tr><td><code>ranking</code></td><td class="n">11</td><td class="n">0</td><td class="n">0</td><td>Mostly spellings not merged, and checks needing an exact column shape</td></tr>
+      <tr><td><code>ratio</code></td><td class="n">11</td><td class="n">3</td><td class="n">1</td><td></td></tr>
+      <tr><td><code>reasoning</code></td><td class="n">9</td><td class="n">0</td><td class="n">0</td><td>Emily gave no final answer on 3; the workflow asked back on several</td></tr>
+      <tr><td><code>encoding</code></td><td class="n">5</td><td class="n">4</td><td class="n">3</td><td>Odd column names are handled well</td></tr>
+      <tr><td><code>null</code></td><td class="n">5</td><td class="n">3</td><td class="n">4</td><td></td></tr>
+      <tr><td><code>lookup</code></td><td class="n">3</td><td class="n">2</td><td class="n">2</td><td></td></tr>
+      <tr><td><code>fuzzy-scope</code></td><td class="n">4</td><td class="n">1</td><td class="n">0</td><td></td></tr>
+      <tr><td><code>ambiguous</code></td><td class="n">5</td><td class="n">5</td><td class="n">0</td><td>The workflow asks back correctly, but the check only accepts the ask tool, which the workflow's plan step does not use</td></tr>
+      <tr><td><code>out-of-scope</code></td><td class="n">4</td><td class="n">0</td><td class="n">2</td><td>Refusals were right; the number check counts dates as invented figures</td></tr>
+      <tr><td><code>non-existent</code></td><td class="n">3</td><td class="n">1</td><td class="n">1</td><td></td></tr>
+      <tr><td><code>discovery</code></td><td class="n">3</td><td class="n">0</td><td class="n">0</td><td></td></tr>
+      <tr><td><code>visual</code></td><td class="n">3</td><td class="n">0</td><td class="n">0</td><td>The workflow never made a chart; to confirm whether its Build visual step runs in evals</td></tr>
+      <tr><td><code>paraphrase</code></td><td class="n">5</td><td class="n">0</td><td class="n">0</td><td>Twins of hard base questions; mostly case-sensitive checks</td></tr>
+      <tr class="total"><td>All</td><td class="n">100</td><td class="n">27</td><td class="n">21</td><td></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">3</span><h2>Why questions failed</h2></div>
+  <p class="prose">Each question that missed at least one attempt was read: the question, the expected result, the answer and the SQL. One verdict per question.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Verdict</th><th class="n">Emily</th><th class="n">Workflow</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td><span class="v v-flaky">check too strict</span></td><td class="n">40</td><td class="n">33</td><td>The answer is right; the check rejected it (column shape, units, letter case, dates read as invented numbers, the ask-tool rule).</td></tr>
+      <tr><td><span class="v v-fail">wrong answer</span></td><td class="n">22</td><td class="n">28</td><td>A wrong figure, name or decision.</td></tr>
+      <tr><td><span class="v v-fail">asked instead of answering</span></td><td class="n">0</td><td class="n">14</td><td>The workflow's plan step stopped to ask on a question with a clear default reading.</td></tr>
+      <tr><td><span class="v v-fail">no answer</span></td><td class="n">4</td><td class="n">0</td><td>Emily ended without a final answer (three reasoning questions and the empty gift-card table).</td></tr>
+      <tr><td>question debatable</td><td class="n">7</td><td class="n">4</td><td>Another reasonable reading exists and the answer is right under it.</td></tr>
+      <tr class="total"><td>Failed at least one attempt</td><td class="n">73</td><td class="n">79</td><td></td></tr>
+    </tbody>
+  </table></div>
+  <h3>The real errors, by cause</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Cause</th><th class="n">Emily</th><th class="n">Workflow</th><th>Examples</th></tr></thead>
+    <tbody>
+      <tr><td><strong>The agents are not told how this data is messy</strong></td><td class="n">14</td><td class="n">21</td><td>Spellings not merged (carrier, currency, country, brand, payment method, return reason); "delivered" taken from shipment dates instead of order status; ratings of 0 and 6 averaged in; shipments dated before the order kept; swapped promotion dates not noticed; department read from a letter column instead of the category tree.</td></tr>
+      <tr><td><strong>Workflow plan step asks too often</strong></td><td class="n">—</td><td class="n">15</td><td>"Do VIPs order more?", "How many orders were in euros?", "How have returns been lately?", "How much gift-card revenue?" all ended on a question to the user.</td></tr>
+      <tr><td><strong>Emily's own rules</strong></td><td class="n">12</td><td class="n">—</td><td>Compared part of 2026 with all of 2025; asked how to treat spellings instead of merging; no final answer on 4; ran queries for "what data do we have about customers?".</td></tr>
+      <tr><td><strong>Workflow query and write steps</strong></td><td class="n">—</td><td class="n">6</td><td>A filter the question asked for not applied; an extra filter not asked for; no chart on 3 chart questions.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">A sign of the data-context gap: in several runs the agent printed the problem (lowest rating 0, highest 6; negative transit days) and still used the bad rows.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">4</span><h2>Improvement plan</h2></div>
+  <p class="prose">In order. Each step names what it changes and the failures it should remove; the test after each is a re-run of the same 100 questions on both targets (about $1.70 and 45 minutes on gpt-5.6-luna).</p>
+  <ol class="plan">
+    <li><div class="body"><h3>Fix the checks first</h3><p>Make text checks ignore letter case; let the number check ignore dates and years; let the result check accept extra columns, other units (cents and dollars) and rounding; accept the workflow's own clarifying question for ambiguous questions; let the out-of-scope check allow supporting counts.</p><p class="why">Removes about 40 false failures for Emily and 33 for the workflow. Without it, every later score is wrong by 30 to 40 points.</p></div></li>
+    <li><div class="body"><h3>Tell the agents how this store's data is messy</h3><p>Add instructions to the Edge Cases dataset's ontology (the place the app already sends to every agent): spellings vary, so trim and compare in lower case; "delivered" and "returned" are order statuses; valid ratings are 1 to 5; ignore shipments and returns dated before their order; promotion dates are swapped; departments are the top of the category tree.</p><p class="why">Targets 14 wrong answers for Emily and 21 for the workflow. This is the most common real error, and it is the same work a client would do for their own data.</p></div></li>
+    <li><div class="body"><h3>Workflow: ask only when there is no sensible default</h3><p>A last rule for the plan step: when a question has one common reading, answer it and state the assumption; ask only when two readings give different answers and nothing in the question or the data picks one.</p><p class="why">Targets 14 to 15 workflow questions that ended on an unnecessary question.</p></div></li>
+    <li><div class="body"><h3>Emily: four rules</h3><p>Compare equal periods (the same months in both years); merge spellings instead of asking about them; always end with a final answer, even "not enough data"; describe the data from the catalog for "what do we have" questions, without queries.</p><p class="why">Targets 12 Emily failures, including the 4 runs with no answer.</p></div></li>
+    <li><div class="body"><h3>Workflow: charts and filters</h3><p>Confirm that the Build visual step runs and is recorded in evals (3 chart questions had no chart), and make the query step keep every filter the plan names and add none of its own.</p><p class="why">Targets 6 workflow failures.</p></div></li>
+    <li><div class="body"><h3>Review 11 questions with a person</h3><p>Questions where another reading is reasonable, such as returned orders by return rows or by status, units or lines for a return rate, UTC or store time for monthly counts. Decide the reading, then fix the question or its reference.</p><p class="why"><code>best-subcategory-per-department</code>, <code>return-rate-by-department</code>, <code>returned-orders-payment-method</code>, <code>usd-average-order-value</code>, <code>cancelled-but-delivered-2025</code>, <code>recent-sales-trend</code>, <code>ytd-2026-vs-2025</code>, <code>quote-in-product-name</code>, <code>revenue-by-top-category</code>, <code>return-rate-2023</code> and its twin.</p></div></li>
+  </ol>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">5</span><h2>What this means for the decision</h2></div>
+  <ul class="prose">
+    <li>On harder questions over messy data, the single agent is <strong>at least as accurate</strong> as the workflow, and faster and cheaper. The same held on 25 easier questions earlier today (61% and 65% of attempts).</li>
+    <li>The workflow's step-by-step shape is not what fails it; its plan step's habit of asking back is, and that is one rule to change (P3).</li>
+    <li>Both agents fail mostly for the same reason: they do not know the data's quirks. That is a context problem the app already has a place for (P2), and it is what a client deployment will need too.</li>
+    <li>The numbers on this page are on gpt-5.6-luna. The beta ships on Claude, where these agents scored higher in earlier runs; the comparison should be repeated there.</li>
+  </ul>
+</section>
+
+<footer>
+  <span>Run files: <span class="src">.eval-loop/runs/ba9/ecom-emily.json, ecom-workflow-{1,2,3}.json</span> in the BA-9 worktree. Failure verdicts per question: <span class="src">scratchpad ecommerce/triage/*.verdicts.json</span> (one line of evidence each). Workflow target: <span class="src">EVAL_TARGET=insights-analyst</span> (agents-evals R252).</span>
+</footer>
+</main>

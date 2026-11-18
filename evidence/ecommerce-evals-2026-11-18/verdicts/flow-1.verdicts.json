@@ -1,0 +1,362 @@
+[
+ {
+  "id": "ec-a-units-by-top-department",
+  "target": "workflow",
+  "category": "join",
+  "verdict": "check-too-strict",
+  "cause": "correct 8 department totals; extra all_departments_units column and missing order_lines column",
+  "fix": "check",
+  "evidence": "Answer figures match expected exactly (Electronics 661,815 ... Books 475,204); result-set-match fails on column shape."
+ },
+ {
+  "id": "ec-a-vip-shipments-by-carrier",
+  "target": "workflow",
+  "category": "join",
+  "verdict": "wrong-answer",
+  "cause": "carrier spellings not merged",
+  "fix": "data-context",
+  "evidence": "Answered FEDEX and UPS tied at 15,048 instead of FedEx 29,981 because 'FEDEX ' and 'FedEx' were left as separate groups."
+ },
+ {
+  "id": "ec-a-most-five-star-products-ties",
+  "target": "workflow",
+  "category": "ranking",
+  "verdict": "check-too-strict",
+  "cause": "all six tied products named; regex requires ascending id order",
+  "fix": "check",
+  "evidence": "Answer lists 1129,1133,3194,3352,499,740 (sorted by name text) with 7 each, correct, but regex expects 499 before 740 before 1129."
+ },
+ {
+  "id": "ec-a-top-customers-delivered-orders",
+  "target": "workflow",
+  "category": "ranking",
+  "verdict": "wrong-answer",
+  "cause": "delivered defined as shipment delivered_at not null instead of orders.status='delivered'",
+  "fix": "data-context",
+  "evidence": "Got Ana Pe\u00f1a 15 and nine tied at 14 vs expected Ana de la Cruz 11 and three at 10; wrong definition of delivered (cancelled orders also carry delivery dates)."
+ },
+ {
+  "id": "ec-a-refunds-by-reason",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "wrong-answer",
+  "cause": "reason spellings not merged, NULL labelled unknown",
+  "fix": "data-context",
+  "evidence": "Listed Damaged/damaged/DAMAGED  separately (634k, 622k, 620k) instead of one Damaged 1,876,020.29."
+ },
+ {
+  "id": "ec-a-units-delivered-clean",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "wrong-answer",
+  "cause": "delivered-status filter dropped",
+  "fix": "analyse-step",
+  "evidence": "Answered 5,119,117 over all orders; SQL only filtered quantity>0, never restricted to delivered orders (expected 1,917,558)."
+ },
+ {
+  "id": "ec-a-do-vips-order-more",
+  "target": "workflow",
+  "category": "reasoning",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked how to measure 'order more often'",
+  "fix": "plan-step",
+  "evidence": "Plan ended on a clarifying question (3 measure options) though avg orders per customer is the obvious default; no SQL ran."
+ },
+ {
+  "id": "ec-a-undelivered-in-transit",
+  "target": "workflow",
+  "category": "reasoning",
+  "verdict": "check-too-strict",
+  "cause": "conclusion right (not in transit), result-set-match too rigid for a reasoning question",
+  "fix": "check",
+  "evidence": "Answer says No: 30,000 undelivered, only 236 shipped in last 30 days, 29,959 past promised date; matches the gap conclusion but not the expected SQL shape."
+ },
+ {
+  "id": "ec-b-late-delivery-rate-2025",
+  "target": "workflow",
+  "category": "ratio",
+  "verdict": "check-too-strict",
+  "cause": "correct 15.2% (3,958/25,995); shape mismatch",
+  "fix": "check",
+  "evidence": "Answer states 3,958 late of 25,995 = 15.2%, identical to expected; result-set-match failed on columns."
+ },
+ {
+  "id": "ec-b-low-rating-share-yoy",
+  "target": "workflow",
+  "category": "ratio",
+  "verdict": "wrong-answer",
+  "cause": "invalid ratings (0,6,NULL) kept in denominator",
+  "fix": "data-context",
+  "evidence": "Reported 39.7% vs 39.7% using all reviews instead of valid 1-5 ratings (40.36% / 40.67%)."
+ },
+ {
+  "id": "ec-b-top-carrier-2025",
+  "target": "workflow",
+  "category": "ranking",
+  "verdict": "wrong-answer",
+  "cause": "carrier spellings not merged",
+  "fix": "data-context",
+  "evidence": "Named Servientrega first at 6,116 with FedEx and 'FEDEX ' split; merged FedEx is 11,755."
+ },
+ {
+  "id": "ec-b-promotions-running-on-date",
+  "target": "workflow",
+  "category": "reasoning",
+  "verdict": "wrong-answer",
+  "cause": "swapped start/end dates not noticed; zero rows accepted",
+  "fix": "analyse-step",
+  "evidence": "Said 0 promotions running; expected Promo 3-7 after reading the reversed dates; empty result was not investigated."
+ },
+ {
+  "id": "ec-b-cancelled-but-delivered-2025",
+  "target": "workflow",
+  "category": "join",
+  "verdict": "check-too-strict",
+  "cause": "correct 3,170; result-set shape",
+  "fix": "check",
+  "evidence": "Answer 3,170 matches expected; expected result also has the 4,299 cancelled column."
+ },
+ {
+  "id": "ec-b-cancellation-rate-this-year",
+  "target": "workflow",
+  "category": "fuzzy-scope",
+  "verdict": "check-too-strict",
+  "cause": "correct 3,706/29,318 = 12.6%; extra columns",
+  "fix": "check",
+  "evidence": "Answer matches expected figures; passed 2 of 3, the failing run only on result-set-match shape."
+ },
+ {
+  "id": "ec-c-emoji-product-price",
+  "target": "workflow",
+  "category": "encoding",
+  "verdict": "wrong-answer",
+  "cause": "used cost column instead of unit_price",
+  "fix": "data-context",
+  "evidence": "Found Rocket Lamp but answered cost 254.17 instead of list price 265.18; question word 'cost' read as products.cost."
+ },
+ {
+  "id": "ec-c-legacy-distinct-orders",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "check-too-strict",
+  "cause": "correct 5,000; not-match regex hits supporting 5,250 row count",
+  "fix": "check",
+  "evidence": "Headline says 5,000 distinct orders, but the table also shows 5,250 rows, tripping check-not-matches."
+ },
+ {
+  "id": "ec-c-euro-orders",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked exact EUR vs normalized",
+  "fix": "plan-step",
+  "evidence": "Ended on a clarifying question (42,856 vs 85,710) although variants of the same currency should be merged; no answer."
+ },
+ {
+  "id": "ec-c-lines-for-missing-products",
+  "target": "workflow",
+  "category": "join",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked missing record vs inactive product",
+  "fix": "plan-step",
+  "evidence": "Asked back on 'no longer in the catalogue'; the literal reading (no matching product, 25 lines, 32,006.51) was answerable with the assumption stated."
+ },
+ {
+  "id": "ec-c-discover-customer-info",
+  "target": "workflow",
+  "category": "discovery",
+  "verdict": "wrong-answer",
+  "cause": "ran data queries and dumped customer rows instead of describing schema",
+  "fix": "plan-step",
+  "evidence": "Ran SQL twice and returned a 50,000-customer record table rather than listing customer fields; check-did-not-call correctly flags it."
+ },
+ {
+  "id": "ec-d-ambiguous-best-customers",
+  "target": "workflow",
+  "category": "ambiguous",
+  "verdict": "check-too-strict",
+  "cause": "correctly asked back; check expects ask_clarification tool",
+  "fix": "check",
+  "evidence": "Plan asked which measure defines best (4 options) and ran no SQL, the intended behaviour; workflow never calls the ask_clarification tool."
+ },
+ {
+  "id": "ec-d-ambiguous-problem-orders",
+  "target": "workflow",
+  "category": "ambiguous",
+  "verdict": "check-too-strict",
+  "cause": "correctly asked back; check expects ask_clarification tool",
+  "fix": "check",
+  "evidence": "Plan asked what a problem order is (4 options), no SQL, correct; only the tool-call check failed."
+ },
+ {
+  "id": "ec-d-nonexistent-product",
+  "target": "workflow",
+  "category": "non-existent",
+  "verdict": "check-too-strict",
+  "cause": "correct refusal; dates in caveat flagged as ungrounded numbers",
+  "fix": "check",
+  "evidence": "Answer says product not in catalogue, no sales figure; numbers-grounded flagged 2020 and 2026 from the data-range caveat."
+ },
+ {
+  "id": "ec-d-visual-monthly-orders-2025",
+  "target": "workflow",
+  "category": "visual",
+  "verdict": "wrong-answer",
+  "cause": "no chart produced; monthly counts shifted by local time zone",
+  "fix": "write-step",
+  "evidence": "Returned a table only (create_visual never called); counts also differ slightly (Jan 3,016 vs 3,022) due to America/Bogota conversion."
+ },
+ {
+  "id": "ec-d-fedex-delivery-days",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "check-too-strict",
+  "cause": "correct 5.5 days over 89,000; numbers-grounded and shape",
+  "fix": "check",
+  "evidence": "Answer 5.5 days on 89,000 shipments matches expected; failed on number grounding (11,000) and result-set shape."
+ },
+ {
+  "id": "ec-d-cancel-rate-by-channel-reworded",
+  "target": "workflow",
+  "category": "paraphrase",
+  "verdict": "check-too-strict",
+  "cause": "correct marketplace 12.66%; regex case-sensitive on 'marketplace'",
+  "fix": "check",
+  "evidence": "Headline 'Marketplace ... 12.66%' is right but the regex wants lowercase marketplace in the checked text."
+ },
+ {
+  "id": "ec-d-warehouse-low-stock",
+  "target": "workflow",
+  "category": "ranking",
+  "verdict": "check-too-strict",
+  "cause": "correct BOG-01 369; snapshot date flagged as ungrounded",
+  "fix": "check",
+  "evidence": "Answer BOG-01 369 on 2026-10-31 matches expected; numbers-grounded flagged the date parts 2026, 10, 31."
+ },
+ {
+  "id": "ec-d-return-rate-2023-reworded",
+  "target": "workflow",
+  "category": "paraphrase",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked how to measure returned items",
+  "fix": "plan-step",
+  "evidence": "Ended on a clarifying question with 3 measures although return rate by order lines (1.507%) is the natural default; no SQL."
+ },
+ {
+  "id": "ec-a-electronics-customers-delivered",
+  "target": "workflow",
+  "category": "join",
+  "verdict": "wrong-answer",
+  "cause": "delivered defined by shipment delivered_at, not order status",
+  "fix": "data-context",
+  "evidence": "Answered 41,382 customers instead of 29,439 because delivered was inferred from shipments rather than orders.status='delivered'."
+ },
+ {
+  "id": "ec-a-returned-orders-payment-method",
+  "target": "workflow",
+  "category": "join",
+  "verdict": "wrong-answer",
+  "cause": "returned defined via returns table instead of orders.status='returned'",
+  "fix": "data-context",
+  "evidence": "Card 5,624 / 15,000 total vs expected card 14,247 (orders with status returned); also kept an unknown group."
+ },
+ {
+  "id": "ec-a-top-customer-countries-tie",
+  "target": "workflow",
+  "category": "ranking",
+  "verdict": "wrong-answer",
+  "cause": "country spellings not merged",
+  "fix": "data-context",
+  "evidence": "Said Brazil alone at 5,000 with 19 countries; merged data has Brazil and United States tied at 10,000."
+ },
+ {
+  "id": "ec-a-return-rate-by-department",
+  "target": "workflow",
+  "category": "ratio",
+  "verdict": "wrong-answer",
+  "cause": "used categories.group column, not the category tree",
+  "fix": "data-context",
+  "evidence": "Ranked (unknown)/A/B groups at 0.3% instead of the 8 departments (Home 1.544%); also used quantities."
+ },
+ {
+  "id": "ec-a-usd-average-order-value",
+  "target": "workflow",
+  "category": "ratio",
+  "verdict": "wrong-answer",
+  "cause": "excluded extra orders and missed currency variants",
+  "fix": "data-context",
+  "evidence": "Gave USD 4,625.62 over 61,081 orders vs 4,634.27 over 96,245; also dropped orders with returned lines and used an order-total view."
+ },
+ {
+  "id": "ec-a-eur-delivered-revenue",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "wrong-answer",
+  "cause": "currency 'eur ' variant missed, delivered via shipments",
+  "fix": "data-context",
+  "evidence": "Gave EUR 144,008,173.57 over 31,426 orders vs 148,659,642.12 over 32,080; filtered currency = 'EUR' and delivered by shipment date."
+ },
+ {
+  "id": "ec-a-orders-spanning-3-departments",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "wrong-answer",
+  "cause": "used categories.group instead of rolling up the tree",
+  "fix": "data-context",
+  "evidence": "Answered 88,384 vs 214,466; counted distinct categories.group values."
+ },
+ {
+  "id": "ec-a-is-2026-volume-down",
+  "target": "workflow",
+  "category": "reasoning",
+  "verdict": "check-too-strict",
+  "cause": "right like-for-like comparison (29,318 vs 29,154); result-set shape",
+  "fix": "check",
+  "evidence": "Answer states +164 for Jan 1-Oct 29 and notes the calendar-year drop is partial data; matches expected figures."
+ },
+ {
+  "id": "ec-b-returns-within-30-days",
+  "target": "workflow",
+  "category": "aggregate",
+  "verdict": "asked-instead-of-answering",
+  "cause": "asked how to count returned items",
+  "fix": "plan-step",
+  "evidence": "Plan asked records vs units, no SQL ran; expected a direct count of 206 return records."
+ },
+ {
+  "id": "ec-b-cohort-2024-repeat-90d",
+  "target": "workflow",
+  "category": "ratio",
+  "verdict": "wrong-answer",
+  "cause": "cohort changed by excluding cancelled orders and local time zone",
+  "fix": "analyse-step",
+  "evidence": "Answered 15.54% (108/695) vs 18.22% (82/450); added an unrequested non-cancelled filter and time-zone shift."
+ },
+ {
+  "id": "ec-b-weakest-month-2025",
+  "target": "workflow",
+  "category": "ranking",
+  "verdict": "check-too-strict",
+  "cause": "correct February 12,309,752.62; result-set shape",
+  "fix": "check",
+  "evidence": "Answer names February at 12,309,752.62, equal to the expected all-orders reading, with gaps to each month; passed 2 of 3."
+ },
+ {
+  "id": "ec-b-warehouse-stock-drop",
+  "target": "workflow",
+  "category": "ranking",
+  "verdict": "check-too-strict",
+  "cause": "correct BOG-01 -39,673; result-set shape",
+  "fix": "check",
+  "evidence": "Answer figures (1,264,121 to 1,224,448, 39,673; MAD-03 16,071) match expected; only column shape differs."
+ },
+ {
+  "id": "ec-b-ytd-2026-vs-2025",
+  "target": "workflow",
+  "category": "reasoning",
+  "verdict": "question-debatable",
+  "cause": "time-zone conversion shifts counts (29,297 vs 29,161)",
+  "fix": "question",
+  "evidence": "Answer says 2026 ahead by 136 (+0.5%) using America/Bogota local dates; expected UTC figures 29,318 vs 29,154, same conclusion."
+ }
+]
