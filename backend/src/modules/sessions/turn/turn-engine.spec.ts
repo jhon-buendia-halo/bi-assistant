@@ -5,8 +5,9 @@ jest.mock('../../data-readiness/data-readiness.service', () => ({
 }));
 
 // The idle deadline of a streamed agent turn (workflows R43; agents.md 1.6):
-// Analyse and the one-step Answer fail with ModelTimeoutError when the model
-// sends nothing for five minutes while no tool executes; a Stop and a
+// Analyse, the one-step Answer and Explain report fail with ModelTimeoutError
+// when the model sends nothing for five minutes while no tool executes; a
+// Stop and a
 // clarifying question are never a timeout. A retry of a step's call is a
 // reasoning line of the running step. Fake timers: no test waits for real.
 jest.mock('@mastra/core/request-context', () => ({
@@ -102,6 +103,7 @@ import { streamStored } from '../testing/stream-stored';
 import type { SessionDoc } from '../entities/session.entity';
 import { answerBusinessQuestionWorkflow } from '../../../mastra/workflows/answer-business-question.workflow';
 import { planOf } from '../../../mastra/workflows/answer-business-question.steps';
+import { dataReadinessAssessmentWorkflow } from '../../../mastra/workflows/data-readiness-assessment.workflow';
 import { ModelTimeoutError } from '../../../mastra/workflows/model-call';
 import { streamTurnWorkflow } from '../../../mastra/testing/turn-workflow.stub';
 
@@ -113,6 +115,12 @@ type StubRun = {
 const v2Workflow = answerBusinessQuestionWorkflow as unknown as {
   createRun(): Promise<StubRun>;
 };
+const readinessWorkflow = dataReadinessAssessmentWorkflow as unknown as {
+  createRun(): Promise<StubRun>;
+};
+/** The code workflow a turn streams, by its key. */
+const codeWorkflowOf = (key: string) =>
+  key === 'data-readiness-assessment' ? readinessWorkflow : v2Workflow;
 
 /** One chunk of a stream, sent after `after` ms (fake time). */
 interface Timed {
@@ -150,12 +158,58 @@ const SQL_RESULT = {
 };
 const WRITTEN = 'The written answer.';
 
+/** The report the fake readiness engine scores: no finding, so no SQL. */
+const READINESS_REPORT = {
+  id: 'r-wc',
+  datasourceId: 'ds-pg',
+  datasourceName: 'World Cup DB',
+  datasourceKind: 'postgres',
+  generatedAt: '2026-11-13T10:00:00.000Z',
+  entityCount: 1,
+  overallScore: 84,
+  maturity: 'Managed',
+  dimensionScores: [],
+  findings: [],
+};
+
+/** The data-readiness service of an Assess Data Readiness run. */
+function readinessService() {
+  return {
+    prepare: jest.fn().mockResolvedValue({
+      datasource: { id: 'ds-pg', name: 'World Cup DB' },
+      kind: 'postgres',
+    }),
+    profileSource: jest.fn().mockResolvedValue({
+      sourceId: 'ds-pg',
+      sourceType: 'postgres',
+      entities: [{ namespace: 'public', name: 'matches' }],
+      relationships: [],
+    }),
+    scoreProfile: jest.fn(() => ({ ...READINESS_REPORT })),
+    saveReport: jest.fn((report: unknown) => Promise.resolve(report)),
+    get: jest.fn().mockResolvedValue(READINESS_REPORT),
+    list: jest.fn().mockResolvedValue({ reports: [] }),
+    assess: jest.fn(),
+  };
+}
+
+/** The registry key of the agent each kind of turn streams. */
+const AGENT_KEYS = {
+  v2: 'insights-analyst',
+  assistant: 'assistant',
+  readiness: 'data-readiness',
+} as const;
+
 /**
- * A turn of an Insights Analyst session (v2: Analyse streams) or of an
- * assistant session (the one-step Answer streams); each agent stream sends
+ * A turn of an Insights Analyst session (v2: Analyse streams), of an
+ * assistant session (the one-step Answer streams) or of an Assess Data
+ * Readiness session (Explain report streams); each agent stream sends
  * `steps` (a function of the call, to give a retry its own).
  */
-function build(kind: 'v2' | 'assistant', steps: (call: number) => Timed[]) {
+function build(
+  kind: 'v2' | 'assistant' | 'readiness',
+  steps: (call: number) => Timed[],
+) {
   const session: SessionDoc = {
     id: 's-1',
     name: 'Goals',
@@ -164,7 +218,13 @@ function build(kind: 'v2' | 'assistant', steps: (call: number) => Timed[]) {
     visualizations: [],
     ...(kind === 'v2'
       ? { agentKey: 'insights-analyst', agentName: 'Insights Analyst' }
-      : {}),
+      : kind === 'readiness'
+        ? {
+            workflowId: 'data-readiness-assessment',
+            agentKey: 'data-readiness',
+            agentName: 'Data Readiness Agent',
+          }
+        : {}),
   };
   const repository = {
     get: jest.fn().mockResolvedValue(session),
@@ -172,6 +232,8 @@ function build(kind: 'v2' | 'assistant', steps: (call: number) => Timed[]) {
       Object.assign(session, patch);
       return Promise.resolve(session);
     }),
+    // Read once at start-up (onModuleInit), to restore workspaces.
+    listAll: jest.fn().mockResolvedValue([]),
   };
   const signals: AbortSignal[] = [];
   let calls = 0;
@@ -191,10 +253,8 @@ function build(kind: 'v2' | 'assistant', steps: (call: number) => Timed[]) {
     }),
     generate: jest.fn().mockResolvedValue({ text: 'Synthesized.' }),
   });
-  const agent = agentFor(kind === 'v2' ? 'insights-analyst' : 'assistant');
-  const registry: Record<string, unknown> = {
-    [kind === 'v2' ? 'insights-analyst' : 'assistant']: agent,
-  };
+  const agent = agentFor(AGENT_KEYS[kind]);
+  const registry: Record<string, unknown> = { [AGENT_KEYS[kind]]: agent };
   const mastra = {
     getAgent: jest.fn((key: string) => registry[key]),
     listAgents: () => registry,
@@ -202,11 +262,15 @@ function build(kind: 'v2' | 'assistant', steps: (call: number) => Timed[]) {
       async (key: string, inputData: unknown, requestContext: unknown) =>
         key === 'agent-turn'
           ? streamTurnWorkflow(key, inputData, requestContext)
-          : (await v2Workflow.createRun()).stream({
+          : (await codeWorkflowOf(key).createRun()).stream({
               inputData,
               requestContext,
             }),
     ),
+    // Read images' model call: no reference image, so no note.
+    readImages: jest
+      .fn()
+      .mockResolvedValue({ imageNotes: '', imageCount: 0, stopped: false }),
     planAnalysis: jest.fn(({ question }: { question: string }) =>
       Promise.resolve({ plan: planOf({}, question), stopped: false }),
     ),
@@ -257,6 +321,7 @@ function build(kind: 'v2' | 'assistant', steps: (call: number) => Timed[]) {
       skillsFor: jest.fn().mockResolvedValue([]),
       datasetNames: jest.fn().mockResolvedValue(new Set(['World Cup'])),
     } as never,
+    (kind === 'readiness' ? readinessService() : undefined) as never,
   );
   return { service, session, mastra, agent, signals };
 }
@@ -422,6 +487,43 @@ describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
     await jest.advanceTimersByTimeAsync(9 * MINUTE);
     expect(await outcome).toBe('done');
     expect(ctx.session.messages.at(-1)?.content).toBe('Hello there.');
+  });
+
+  it('fails Explain report with ModelTimeoutError when no chunk comes for five minutes', async () => {
+    const ctx = build('readiness', () => [
+      { after: 6 * MINUTE, chunk: text('late') },
+    ]);
+    await ctx.service.onModuleInit();
+    const events: StreamEvent[] = [];
+    const outcome = startTurn(ctx, events);
+    await jest.advanceTimersByTimeAsync(5 * MINUTE);
+    const error = await outcome;
+    expect(error).toBeInstanceOf(ModelTimeoutError);
+    expect((error as Error).message).toBe(
+      'Explain report failed: the model sent nothing for 5 minutes. The model may be busy or rate limited: run again later.',
+    );
+    // The steps before it ran (the report was saved and shown); Explain
+    // report's one stream was aborted, never retried, and wrote no answer.
+    expect(events.map((event) => event.type)).toEqual(['readiness-report']);
+    expect(ctx.signals[0].aborted).toBe(true);
+    expect(ctx.agent.stream).toHaveBeenCalledTimes(1);
+    expect(
+      ctx.session.messages.filter((message) => message.role === 'assistant'),
+    ).toEqual([]);
+  });
+
+  it('explains the report as before while chunks come every four minutes', async () => {
+    const ctx = build('readiness', () => [
+      { after: 4 * MINUTE, chunk: text('World Cup ') },
+      { after: 4 * MINUTE, chunk: text('is Managed.') },
+    ]);
+    await ctx.service.onModuleInit();
+    const events: StreamEvent[] = [];
+    const outcome = startTurn(ctx, events);
+    await jest.advanceTimersByTimeAsync(9 * MINUTE);
+    expect(await outcome).toBe('done');
+    expect(ctx.signals[0].aborted).toBe(false);
+    expect(ctx.session.messages.at(-1)?.content).toBe('World Cup is Managed.');
   });
 });
 

@@ -196,6 +196,12 @@ async function finishReasonOf(stream: unknown): Promise<unknown> {
 /** The line Write answer adds when its reply was cut after text was shown. */
 export const ANSWER_CUT_NOTE = 'The answer was cut at the output limit.';
 
+/** What puts `ANSWER_CUT_NOTE` after a blank line, the shown text kept as it is. */
+function cutNoteGap(shown: string): string {
+  if (shown.endsWith('\n\n')) return '';
+  return shown.endsWith('\n') ? '\n' : '\n\n';
+}
+
 /**
  * The Write answer step's call (agents.md 5.11): the answer read from the
  * reply (`answerOf`), its row markers expanded into tables of the queries'
@@ -228,6 +234,9 @@ export async function writeAnswerWithModel(
     // Retried only while nothing was shown: a retry never repeats text.
     const guard = { label: 'Write answer', canRetry: () => !deltas.sent() };
     return await guardedCall(options, guard, async (call) => {
+      // The try's deadline fired while the run goes on: the step has failed
+      // already (`guardedCall`), so the aborted stream's rest is not shown.
+      const expired = () => stoppedBy(call) && !stoppedBy(options);
       const stream = await writeAnswerAgent.stream(request, {
         ...callOptions(call),
         structuredOutput: {
@@ -240,6 +249,7 @@ export async function writeAnswerWithModel(
       let headline = '';
       if (options.onText) {
         for await (const partial of stream.objectStream as AsyncIterable<unknown>) {
+          if (expired()) break;
           deltas.update(partialAnswer(partial));
           headline = partialHeadline(partial) || headline;
         }
@@ -251,16 +261,19 @@ export async function writeAnswerWithModel(
         // A reply that is no JSON object is read as the answer text below.
       }
       const text = await stream.text;
+      // Its result is never read: the step failed with the timeout.
+      if (expired()) return { answer: answerOf(deltas.sent()), stopped: false };
       // The model's own failure fails the step (agents.md 5.11).
       if (stream.error && !stoppedBy(call)) throw stream.error;
       if (!stoppedBy(call) && cutReply(await finishReasonOf(stream))) {
         // Cut before anything was shown: tried once more, then a failure.
         if (!deltas.sent()) throw new ReplyCutError('Write answer');
-        // Cut after text was shown: the text stays, with a note.
-        const shown = answerOf(deltas.sent());
+        // Cut after text was shown: the text stays as it was shown, so the
+        // note streams too, and the note follows it after a blank line.
+        const sent = deltas.sent();
         const answer = {
-          headline: headline || shown.headline,
-          answer: `${shown.answer}\n\n${ANSWER_CUT_NOTE}`,
+          headline: headline || answerOf(sent).headline,
+          answer: `${sent}${cutNoteGap(sent)}${ANSWER_CUT_NOTE}`,
         };
         deltas.finish(answer.answer);
         await noteExchange(call, request, replyText(object, text));

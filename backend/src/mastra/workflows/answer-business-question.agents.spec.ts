@@ -282,6 +282,90 @@ describe('Plan and Write answer under the guarded call (workflows R43)', () => {
     expect(stream).toHaveBeenCalledTimes(1);
   });
 
+  // The note streams as the stored answer carries it: the shown text is
+  // kept as it is, whatever whitespace it ends or starts with.
+  it.each([
+    ['a row marker and a blank line', 'Intro\n[[rows:1]]\n\n'],
+    ['trailing spaces', 'Line one.  \nLine two.  \n'],
+    ['a leading newline', '\nLewis leads.\n'],
+  ])(
+    'streams the note after a cut reply whose shown text ends in %s',
+    async (_case, shown) => {
+      stream.mockResolvedValueOnce({
+        objectStream: (async function* () {
+          yield await Promise.resolve({ headline: 'H.', answer: shown });
+        })(),
+        object: Promise.resolve(undefined),
+        text: Promise.resolve(JSON.stringify({ answer: shown })),
+        error: undefined,
+        finishReason: Promise.resolve('length'),
+      });
+      const deltas: string[] = [];
+      const { answer } = await writeAnswerWithModel(INPUT, {
+        onText: (delta) => deltas.push(delta),
+      });
+      expect(deltas.join('')).toBe(answer.answer);
+      expect(answer.answer.endsWith(`\n\n${ANSWER_CUT_NOTE}`)).toBe(true);
+      expect(deltas.at(-1)).toContain(ANSWER_CUT_NOTE);
+    },
+  );
+
+  it('shows nothing more and records no exchange once Write answer timed out', async () => {
+    const onExchange = jest.fn();
+    stream.mockImplementationOnce((_request, options) => {
+      const signal = (options as { abortSignal: AbortSignal }).abortSignal;
+      const aborted = new Promise<void>((resolve) =>
+        signal.addEventListener('abort', () => resolve()),
+      );
+      const full = 'Lewis leads.\nThen Michael.\n';
+      // Mastra ends an aborted stream: the rest of the partial resolves.
+      return Promise.resolve({
+        objectStream: (async function* () {
+          yield await Promise.resolve({ answer: 'Lewis leads.\n' });
+          await aborted;
+          yield { answer: full };
+        })(),
+        object: aborted.then(() => ({ headline: 'H.', answer: full })),
+        text: aborted.then(() => JSON.stringify({ answer: full })),
+        error: undefined,
+        finishReason: aborted.then(() => 'stop'),
+      });
+    });
+    const deltas: string[] = [];
+    const pending = writeAnswerWithModel(INPUT, {
+      abortSignal: new AbortController().signal,
+      onText: (delta) => deltas.push(delta),
+      onExchange,
+    }).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+    expect(await pending).toBeInstanceOf(ModelTimeoutError);
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(deltas.join('')).toBe('Lewis leads.\n');
+    expect(onExchange).not.toHaveBeenCalled();
+    expect(stream).toHaveBeenCalledTimes(1);
+  });
+
+  it('records no Plan exchange once Plan timed out, though the call then resolves', async () => {
+    const onExchange = jest.fn();
+    generate.mockImplementationOnce((_messages, options) => {
+      const signal = (options as { abortSignal: AbortSignal }).abortSignal;
+      return new Promise((resolve) =>
+        signal.addEventListener('abort', () =>
+          resolve({ object: PLAN, text: JSON.stringify(PLAN) }),
+        ),
+      );
+    });
+    const pending = planWithModel(PLAN_INPUT, {
+      abortSignal: new AbortController().signal,
+      onExchange,
+    }).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+    expect(await pending).toBeInstanceOf(ModelTimeoutError);
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(onExchange).not.toHaveBeenCalled();
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
   it('retries a cut reply when nothing was shown, and fails when it is cut again', async () => {
     stream.mockImplementation(() =>
       Promise.resolve(finished('{"answer": "Lewis', 'length')),
