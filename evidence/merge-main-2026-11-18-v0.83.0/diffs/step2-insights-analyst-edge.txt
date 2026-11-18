@@ -1,0 +1,22 @@
+Before: b0a5b256 (8 questions, openai/gpt-5.6-luna, repeats 3, judge on)
+After:  3eeb316c (8 questions, openai/gpt-5.6-luna, repeats 3, judge on)
+
+Split     Category       Before        After         Change   95% interval of change  Flag
+dev       uncategorised  7/8 (53–98%)  6/8 (41–93%)  −12 pts  −48 to +26 pts          within
+dev       all            7/8 (53–98%)  6/8 (41–93%)  −12 pts  −48 to +26 pts          within
+held-out  all            —             —             —        —                       —
+
+Flips, dev:
+  Now passing: iae-empty-gift-cards (uncategorised)
+  Now failing: iae-top-five-tie (uncategorised), iae-legacy-orders-mixed-case (uncategorised)
+Flips, held-out:
+  Now passing: none
+  Now failing: none
+Only before: none
+Only after: none
+
+Cost before: $0.0666 · $0.0083 per question
+Cost after: $0.0749 · $0.0094 per question
+Cost per question: +12.5%
+
+Draft change log: Round <…>: <…>. <…> Dev 7/8 → 6/8, held-out — → —; <…>; cost per question $0.0083 → $0.0094. Runs b0a5b256 → 3eeb316c.
