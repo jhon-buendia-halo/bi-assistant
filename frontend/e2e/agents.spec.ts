@@ -638,7 +638,7 @@ async function downloadReport(page: Page, jobId: string): Promise<string> {
 async function openAssistantExecutions(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -796,7 +796,9 @@ test('shows the stateless, no-tool agents accurately', async ({ page }) => {
 
   await page.getByTestId('agent-tab-memory').click();
   await expect(
-    page.getByText('This agent persona is stateless — no memory is configured.'),
+    page.getByText(
+      'This agent persona is stateless — no memory is configured.',
+    ),
   ).toBeVisible();
 
   await page.getByTestId('agent-tab-evals').click();
@@ -1046,7 +1048,8 @@ const EVAL_SETS: ReadonlyArray<[id: string, name: string, questions: number]> =
     ['memory-world-cup', 'Memory (World Cup)', 30],
     ['memory-finance', 'Memory (Finance)', 3],
     ['memory-marketing-analytics', 'Memory (Marketing Analytics)', 3],
-    // Defined in code after the file sets (agents-evals R11, BA-318).
+    // Defined in code after the file sets (agents-evals R11, M1-31, BA-318).
+    ['world-cup-excel', 'World Cup Excel', 8],
     ['schema-notes', 'Schema notes', 1],
   ];
 
@@ -1055,7 +1058,7 @@ test('lists every question set, the former golden set inside the World Cup sets'
 }) => {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -1100,7 +1103,7 @@ test('runs with the judge off by default', async ({ page, appDataDir }) => {
 
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -1157,7 +1160,7 @@ test('reports pass rate by category', async ({ page, appDataDir }) => {
 
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -1253,7 +1256,7 @@ test('runs every question three times when Repeats is 3', async ({ page }) => {
 
     await page
       .getByRole('complementary', { name: 'Navigation rail' })
-      .getByRole('button', { name: 'Agents' })
+      .getByRole('button', { name: 'Agent personas' })
       .click();
     await page.getByTestId('agent-assistant').click();
     await page.getByTestId('agent-tab-evals').click();
@@ -1301,7 +1304,7 @@ test('shows dev and held-out side by side, with repeats, flaky questions and cos
 
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -1401,7 +1404,7 @@ test('says "Not priced" for a model with no price', async ({
 
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -1448,7 +1451,7 @@ test("shows a memory run's arm and a question's recall time", async ({
 
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -1503,7 +1506,7 @@ test('shows which attempt of a question is running when Repeats is 3', async ({
 
     await page
       .getByRole('complementary', { name: 'Navigation rail' })
-      .getByRole('button', { name: 'Agents' })
+      .getByRole('button', { name: 'Agent personas' })
       .click();
     await page.getByTestId('agent-assistant').click();
     await page.getByTestId('agent-tab-evals').click();
