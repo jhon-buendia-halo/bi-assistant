@@ -12,6 +12,11 @@
  * - a job's `record` calls (the sources it adds to the answer) are buffered:
  *   `take` awaits the job, replays them in order, then returns its value or
  *   rethrows its error, so the step that takes the job reports it;
+ * - while a step waits in `take`, each record the job makes calls the
+ *   step's `progress` with the count recorded so far, so the turn reports
+ *   every committed statement and the run's no-progress watchdog sees the
+ *   wait as work, never the whole batch as silence. Nothing is reported
+ *   before the take, for a dropped job, or once the turn was stopped;
  * - `settle` aborts the jobs no step took (a run stopped or failed before
  *   it reached them), awaits them and drops their buffers. The turn calls it
  *   when its run ends, fails or is stopped, before the answer is persisted.
@@ -29,8 +34,11 @@ export type EarlyJob<T> = (
 export interface EarlyWork {
   /** Start `job` under `key`; throws when `key` is already held. */
   start<T>(key: string, job: EarlyJob<T>): void;
-  /** The job's records replayed, then its value; rethrows its error. */
-  take<T>(key: string): Promise<T>;
+  /**
+   * The job's records replayed, then its value; rethrows its error. While
+   * it waits, `progress` is called at each record with the count so far.
+   */
+  take<T>(key: string, progress?: (recorded: number) => void): Promise<T>;
   /** Abort and await the jobs no step took, and drop their records. */
   settle(): Promise<void>;
 }
@@ -43,6 +51,10 @@ interface Held {
   buffer: (() => void)[];
   dropped: boolean;
   taken: boolean;
+  /** Every record the job made, buffered or replayed. */
+  recorded: number;
+  /** The taking step's progress, until the job ended. */
+  progress?: (recorded: number) => void;
 }
 
 /** The holder of one turn's early work, its jobs stopped with `turnSignal`. */
@@ -62,10 +74,14 @@ export function earlyWork(turnSignal: AbortSignal): EarlyWork {
         buffer: [],
         dropped: false,
         taken: false,
+        recorded: 0,
         outcome: Promise.resolve({ ok: false, error: undefined }),
       };
       const record = (replay: () => void) => {
-        if (!entry.dropped) entry.buffer.push(replay);
+        if (entry.dropped) return;
+        entry.buffer.push(replay);
+        entry.recorded += 1;
+        if (!turnSignal.aborted) entry.progress?.(entry.recorded);
       };
       entry.outcome = (async (): Promise<Outcome> => {
         try {
@@ -79,14 +95,19 @@ export function earlyWork(turnSignal: AbortSignal): EarlyWork {
       held.set(key, entry);
     },
 
-    async take<T>(key: string): Promise<T> {
+    async take<T>(
+      key: string,
+      progress?: (recorded: number) => void,
+    ): Promise<T> {
       const entry = held.get(key);
       if (!entry) throw new Error(`No early work "${key}" is held`);
       if (entry.taken) {
         throw new Error(`The early work "${key}" was already taken`);
       }
       entry.taken = true;
+      entry.progress = progress;
       const outcome = await entry.outcome;
+      entry.progress = undefined;
       const replays = entry.buffer.splice(0);
       for (const replay of replays) replay();
       if (!outcome.ok) throw outcome.error;

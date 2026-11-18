@@ -157,6 +157,101 @@ describe('earlyWork: work a step starts and a later step takes (agents.md 5.13, 
     );
   });
 
+  describe('progress while a step waits (the no-progress watchdog)', () => {
+    const MINUTE = 60_000;
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    /** A job of `count` statements, each committed two minutes after the last. */
+    const slowJob =
+      (count: number, recorded: number[]) =>
+      async (signal: AbortSignal, record: (replay: () => void) => void) => {
+        for (let at = 1; at <= count; at++) {
+          await new Promise((done) => setTimeout(done, 2 * MINUTE));
+          if (signal.aborted) throw new Error('stopped');
+          record(() => recorded.push(at));
+        }
+        return count;
+      };
+
+    it('reports each commit while a step waits, none before the take, and replays the records in order at the end', async () => {
+      const work = earlyWork(new AbortController().signal);
+      const recorded: number[] = [];
+      const progress: number[] = [];
+      work.start('lineage', slowJob(40, recorded));
+      // Ten minutes before the step takes it: five commits, nothing shown.
+      await jest.advanceTimersByTimeAsync(10 * MINUTE);
+      expect(progress).toEqual([]);
+      expect(recorded).toEqual([]);
+      const taken = work.take<number>('lineage', (count) =>
+        progress.push(count),
+      );
+      // Each later commit is reported when it is made, so the longest
+      // silence is one statement, never the whole batch.
+      for (let at = 6; at <= 40; at++) {
+        await jest.advanceTimersByTimeAsync(2 * MINUTE);
+        expect(progress).toEqual(
+          Array.from({ length: at - 5 }, (_v, i) => i + 6),
+        );
+      }
+      await expect(taken).resolves.toBe(40);
+      // The records themselves are replayed as before: in order, once.
+      expect(recorded).toEqual(Array.from({ length: 40 }, (_v, i) => i + 1));
+      expect(progress).toHaveLength(35);
+    });
+
+    it('reports nothing for a job no step took, and nothing after the turn was stopped', async () => {
+      const turn = new AbortController();
+      const work = earlyWork(turn.signal);
+      const progress: number[] = [];
+      const recorded: number[] = [];
+      work.start('lineage', async (_signal, record) => {
+        for (let at = 1; at <= 4; at++) {
+          await new Promise((done) => setTimeout(done, 2 * MINUTE));
+          // Statements that finish after the stop still record.
+          record(() => recorded.push(at));
+        }
+        return 'ended';
+      });
+      work.start('untaken', async (_signal, record) => {
+        await new Promise((done) => setTimeout(done, MINUTE));
+        record(() => recorded.push(-1));
+      });
+      const taken = work.take<string>('lineage', (count) =>
+        progress.push(count),
+      );
+      await jest.advanceTimersByTimeAsync(4 * MINUTE);
+      expect(progress).toEqual([1, 2]);
+      turn.abort();
+      await jest.advanceTimersByTimeAsync(4 * MINUTE);
+      expect(progress).toEqual([1, 2]);
+      await expect(taken).resolves.toBe('ended');
+      // As before: the records the job made are replayed at take.
+      expect(recorded).toEqual([1, 2, 3, 4]);
+      await work.settle();
+      expect(recorded).toEqual([1, 2, 3, 4]);
+    });
+
+    it('rethrows a job that fails while a step waits, after the progress it made', async () => {
+      const work = earlyWork(new AbortController().signal);
+      const progress: number[] = [];
+      const recorded: string[] = [];
+      work.start('rows', async (_signal, record) => {
+        await new Promise((done) => setTimeout(done, 2 * MINUTE));
+        record(() => recorded.push('first'));
+        await new Promise((done) => setTimeout(done, 2 * MINUTE));
+        throw new Error('warehouse down');
+      });
+      const taken = work.take('rows', (count) => progress.push(count));
+      const failed = expect(taken).rejects.toThrow('warehouse down');
+      await jest.advanceTimersByTimeAsync(4 * MINUTE);
+      await failed;
+      expect(progress).toEqual([1]);
+      // The statement that finished stays, as a serial run kept it.
+      expect(recorded).toEqual(['first']);
+    });
+  });
+
   it('refuses to start a job whose key is already held', () => {
     const work = earlyWork(new AbortController().signal);
     work.start('twice', () => Promise.resolve());

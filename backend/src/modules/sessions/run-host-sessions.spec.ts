@@ -1724,6 +1724,65 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
     jest.mocked(writeWorkspaceFile).mockReset();
     jest.mocked(readWorkspaceImage).mockReset();
   });
+
+  // agents.md 5.13: Rows behind findings waits for queries Save report
+  // started; each one done while it waits is a progress line, so a slow
+  // warehouse never trips the run's no-progress watchdog (15 minutes).
+  it('reports each finding query done while Rows behind findings waits, so a slow warehouse never ends the run as stalled', async () => {
+    jest.useFakeTimers({
+      doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
+    });
+    try {
+      const readiness = readinessService();
+      const fields = Array.from({ length: 20 }, (_v, at) => `field_${at}`);
+      readiness.scoreProfile.mockReturnValue({
+        ...READINESS_REPORT,
+        findings: fields.map((field) => ({
+          ...READINESS_REPORT.findings[0],
+          field,
+          severity: 'high' as const,
+          description: `${field} is null`,
+        })),
+      });
+      // Each statement takes four minutes; four run at a time, so the
+      // twenty take twenty minutes in all.
+      const runReadOnlySql = jest.fn(
+        () =>
+          new Promise((done) =>
+            setTimeout(
+              () =>
+                done({
+                  columns: ['matching_rows'],
+                  rows: [{ matching_rows: 1 }],
+                  totalRows: 1,
+                }),
+              4 * 60_000,
+            ),
+          ),
+      );
+      const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness, runReadOnlySql });
+      const ran = readinessRun(ctx, { dataset: 'World Cup' });
+      for (let minute = 0; minute < 24; minute++) {
+        await jest.advanceTimersByTimeAsync(60_000);
+      }
+      const { events, run } = await ran;
+      expect(run.status).toBe('success');
+      expect(runReadOnlySql).toHaveBeenCalledTimes(20);
+      const lines = events
+        .filter((e) => e.type === 'reasoning')
+        .map((e) => (e as { content: string }).content);
+      expect(lines).toContain('Read the rows behind 4 findings\n');
+      expect(lines.at(-1)).toBe('Read the rows behind 20 findings\n');
+      // The sources are the answer's first records, in query order.
+      expect(
+        run.answer?.data?.slice(0, 20).map((record) => record.rationale),
+      ).toEqual(
+        fields.map((field) => expect.stringContaining(field) as unknown),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 /** Read images' notes as a stand-in model returns them (agents.md 2.15). */
