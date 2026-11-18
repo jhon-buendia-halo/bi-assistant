@@ -102,6 +102,31 @@ describe('Read dashboard and Map data under the guarded call (workflows R43)', (
     expect(exchanges).toHaveLength(1);
   });
 
+  it('fails Read dashboard at once, with no retry, when the image shows no dashboard', async () => {
+    readDashboard.mockResolvedValue({
+      object: {
+        summary: 'The image shows a network switch with its socket ports',
+        widgets: [],
+      },
+      text: '',
+      finishReason: 'stop',
+    });
+    const lines: string[] = [];
+    const pending = readDashboardWithModel(READ_INPUT, {
+      onRetry: (line) => lines.push(line),
+    }).then(
+      () => undefined,
+      (error: Error) => error,
+    );
+    await jest.advanceTimersByTimeAsync(2_000);
+    const error = await pending;
+    expect(error?.message).toBe(
+      'The image shows no dashboard to recreate: The image shows a network switch with its socket ports',
+    );
+    expect(readDashboard).toHaveBeenCalledTimes(1);
+    expect(lines).toEqual([]);
+  });
+
   it('fails Map data with ReplyCutError when its reply is cut twice, never an empty mapping', async () => {
     mapData.mockResolvedValue({
       object: undefined,

@@ -163,13 +163,19 @@ export async function withDeadline<T>(
   });
   // Only ever awaited in the race below.
   expired.catch(() => undefined);
+  // A Stop clears the deadline, and a deadline never fires on a stopped
+  // run: the Stop settles as the call does, however long that takes.
   const timer = setTimeout(() => {
+    if (parent?.aborted) return;
     timedOut = true;
     controller.abort();
     expire?.();
   }, ms);
-  const stop = () => controller.abort();
-  if (parent?.aborted) controller.abort();
+  const stop = () => {
+    clearTimeout(timer);
+    controller.abort();
+  };
+  if (parent?.aborted) stop();
   else parent?.addEventListener('abort', stop, { once: true });
   try {
     const result = await Promise.race([call(controller.signal), expired]);

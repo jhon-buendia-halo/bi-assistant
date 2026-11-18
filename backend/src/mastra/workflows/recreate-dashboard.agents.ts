@@ -155,8 +155,11 @@ export async function readDashboardWithModel(
 ): Promise<{ blueprint: DashboardBlueprint; stopped: boolean }> {
   const request = readDashboardRequest(input);
   const guard = { label: 'Read dashboard' };
+  // A reply with no dashboard is thrown only after the guarded call: it is
+  // the model's answer, not a failed call, and is never retried.
+  let read: { blueprint: DashboardBlueprint; stopped: boolean } | string;
   try {
-    return await guardedCall(options, guard, async (call) => {
+    read = await guardedCall(options, guard, async (call) => {
       const result = await dashboardReaderAgent.generate(
         imageMessage(request, input.image),
         {
@@ -185,11 +188,9 @@ export async function readDashboardWithModel(
             { summary?: unknown } | undefined
         )?.summary;
         const why = typeof summary === 'string' ? summary.trim() : '';
-        throw new Error(
-          why
-            ? `The image shows no dashboard to recreate: ${why}`
-            : 'The image shows no dashboard to recreate',
-        );
+        return why
+          ? `The image shows no dashboard to recreate: ${why}`
+          : 'The image shows no dashboard to recreate';
       }
       return { blueprint, stopped: false };
     });
@@ -199,6 +200,8 @@ export async function readDashboardWithModel(
     }
     throw error;
   }
+  if (typeof read === 'string') throw new Error(read);
+  return read;
 }
 
 /**

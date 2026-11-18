@@ -176,6 +176,42 @@ describe('withDeadline', () => {
     // The deadline was cleared: nothing fires later.
     await jest.advanceTimersByTimeAsync(2 * MINUTE);
   });
+
+  it('a Stop is no timeout when the call settles after the deadline', async () => {
+    const run = new AbortController();
+    let finish: (value: string) => void = () => undefined;
+    const pending = settled(
+      withDeadline(
+        run.signal,
+        MINUTE,
+        () => new Promise<string>((resolve) => (finish = resolve)),
+        () => new ModelTimeoutError('Plan', MINUTE),
+      ),
+    );
+    await jest.advanceTimersByTimeAsync(MINUTE - 1000);
+    run.abort();
+    // The provider is slow to tear down: the call settles past the deadline.
+    await jest.advanceTimersByTimeAsync(2 * MINUTE);
+    finish('stopped');
+    expect(await pending).toBe('stopped');
+  });
+
+  it('a run already stopped is no timeout when the call settles after the deadline', async () => {
+    const run = new AbortController();
+    run.abort();
+    let finish: (value: string) => void = () => undefined;
+    const pending = settled(
+      withDeadline(
+        run.signal,
+        MINUTE,
+        () => new Promise<string>((resolve) => (finish = resolve)),
+        () => new ModelTimeoutError('Plan', MINUTE),
+      ),
+    );
+    await jest.advanceTimersByTimeAsync(2 * MINUTE);
+    finish('stopped');
+    expect(await pending).toBe('stopped');
+  });
 });
 
 describe('guardedCall', () => {

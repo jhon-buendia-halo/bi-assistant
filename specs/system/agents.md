@@ -207,7 +207,7 @@ A `copilot` config is never swapped: rules 2 and 3 do not apply to it, so the de
 - **Streamed agent turns** (Analyse, the one-step Answer, Explain report): an **idle deadline**, no total cap and no retry. When the model sends no chunk for 5 minutes while no tool call of the turn is executing (the time between a tool call and its result does not count), the stream is aborted and the step fails with `<step> failed: the model sent nothing for 5 minutes. …`. A Stop, and a clarifying question that stops only Analyse's attempt, are never a timeout.
 - **Designer timeout:** 120 s per designer call (6.7).
 - **Connection test timeout:** 30 s.
-- Any other agent call has no timeout of its own; a chat turn is bounded by the client's abort.
+- A chat turn streams through the one-step Answer, so it has the idle deadline above and no total timeout; otherwise it is bounded by the client's abort. Any other agent call has no timeout of its own.
 
 > Implementation note: `modules/llm/retry-fetch.ts` patches `globalThis.fetch`, because Mastra rebuilds its OpenAI-compatible client without forwarding a caller-supplied `fetch`.
 
