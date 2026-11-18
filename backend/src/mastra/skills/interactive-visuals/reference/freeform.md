@@ -65,9 +65,11 @@ of a spec — for example when a spec cannot express the visual.
 
 ### Data access
 
-The frame injects the exact query results the `<data>` block above described
-into the rendered document, at `window.qti.data` — same shape (array of
-`{ tool, input, columns, rowCount, rows }`). Your script MUST read every
+The frame injects the query results the `<data>` block above described into
+the rendered document, at `window.qti.data` — same result sets, same shape
+(array of `{ tool, input, columns, rowCount, rows }`), with every stored row,
+where the `<data>` block may show only the first rows of each. Your script
+MUST read every
 value, label, and precomputed aggregate it renders from `window.qti.data` —
 never hardcode data values, labels, or aggregates as JavaScript literals
 (chart/axis/section titles may still be literal strings). This is the same

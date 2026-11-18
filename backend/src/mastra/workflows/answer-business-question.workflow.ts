@@ -5,7 +5,10 @@ import {
   type ExecuteFunctionParams,
 } from '@mastra/core/workflows';
 import { z } from 'zod';
-import { analysePlanBlock } from './answer-business-question.prompts';
+import {
+  analysePlanBlock,
+  visualCued,
+} from './answer-business-question.prompts';
 import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
   analyseInputSchema,
@@ -364,6 +367,7 @@ const analyseStep = createStep({
         ),
         ...(asked && answer ? { answered: { ...asked, answer } } : {}),
         imageNotes: inputData.imageNotes,
+        ...visualFollows(params.requestContext, inputData),
       });
       // The agent asked the user: the run waits for the answer (api.md 138).
       if (clarification && !attemptResult.stopped) {
@@ -430,6 +434,7 @@ const writeAnswerStep = createStep({
         queries: inputData.queries,
         findings: inputData.findings,
         imageNotes: inputData.imageNotes,
+        ...visualFollows(params.requestContext, inputData),
       });
       const output = { ...answer, calls: inputData.calls };
       // A stopped turn ends here: Wrap up does not run.
@@ -444,6 +449,21 @@ function buildsVisual(requestContext: unknown): boolean {
   const runtime = context?.get(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY) as
     AnswerBusinessQuestionRuntime | undefined;
   return runtime?.buildsVisual === true;
+}
+
+/**
+ * `{ visualFollows: true }` for Analyse and Write answer when Build visual
+ * runs after them and the request cues a visual (`visualCued`), so neither
+ * says it cannot draw one; otherwise nothing, and their input is as before.
+ */
+function visualFollows(
+  requestContext: unknown,
+  input: { question: string; imageNotes: string },
+): { visualFollows?: true } {
+  return buildsVisual(requestContext) &&
+    visualCued(input.question, input.imageNotes)
+    ? { visualFollows: true }
+    : {};
 }
 
 // On unless the run turns it off (workflows R41): Ryan designs an
@@ -475,10 +495,14 @@ const buildVisualStep = createStep({
       if (!runtime.buildVisual) {
         throw new Error('The Build visual step has no designer to run');
       }
+      // The notes are the designer's reference, only when there are some.
       const { visual, stopped } = await runtime.buildVisual({
         question: inputData.question,
         answer: inputData.answer,
         queries: inputData.queries,
+        ...(inputData.imageNotes.trim()
+          ? { imageNotes: inputData.imageNotes }
+          : {}),
       });
       const output = { ...written, visual };
       return stopped ? params.bail(output) : output;
@@ -556,13 +580,14 @@ const answerPathWorkflow = createWorkflow({
   // from the answer and the queries' rows; Wrap up sums up either way.
   .map(
     async (params) => {
-      const { question, queries } = answerPathInputSchema.parse(
+      const { question, queries, imageNotes } = answerPathInputSchema.parse(
         params.getInitData(),
       );
       return Promise.resolve({
         ...(params.inputData as Record<string, unknown>),
         question,
         queries,
+        imageNotes,
       });
     },
     { id: 'visual-input' },
