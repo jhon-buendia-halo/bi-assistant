@@ -24,6 +24,7 @@ import { getDatasetToolServices } from '../../../mastra/tool-services';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
 import { pageExplorableQuery } from '../../../mastra/tools/explore-result.tool';
+import { readinessModelOutput } from '../../../mastra/tools/readiness.tools';
 import {
   ASSESSED_REPORT_CONTEXT_KEY,
   READINESS_REPORT_EVENT,
@@ -641,6 +642,9 @@ export class TurnEngine {
     let assessment: ReadinessAssessment | undefined;
     // Its stored report, once Save report stored it (roadmap 1.28.11).
     let savedReport: ReadinessReport | undefined;
+    // What get_readiness_report hands the model for it: Explain report's
+    // block carries it (data-readiness R4, agents.md 5.13).
+    let savedSummary: unknown;
     const startedAssessment = (): ReadinessAssessment => {
       if (!assessment) throw new Error('No assessment has been started');
       return assessment;
@@ -1131,6 +1135,7 @@ export class TurnEngine {
           save: async () => {
             const saved = await startedAssessment().save();
             savedReport = saved.report;
+            savedSummary = readinessModelOutput(saved);
             // The answer carries the report: its card, and the scorecard
             // (data-readiness R5).
             const shown = await this.showReadinessReport(id, saved, emit);
@@ -1222,8 +1227,12 @@ export class TurnEngine {
             }
           },
           explain: async ({ dataset, reportId, imageNotes }) => {
-            // The run has assessed: the agent reads the stored report and
-            // `assess_data_readiness` refuses (agents.md 3.13, 5.13).
+            // The run has assessed: the block carries the stored report's
+            // summary and `assess_data_readiness` refuses (agents.md 3.13,
+            // 5.13).
+            if (savedSummary === undefined) {
+              throw new Error('The report has not been saved');
+            }
             options.requestContext.set(ASSESSED_REPORT_CONTEXT_KEY, reportId);
             // Zoe's notes follow the report block only when the run has
             // images (agents.md 2.15, 5.13).
@@ -1235,7 +1244,11 @@ export class TurnEngine {
                   ...options.context,
                   {
                     role: 'system' as const,
-                    content: explainReportBlock({ dataset, reportId }),
+                    content: explainReportBlock({
+                      dataset,
+                      reportId,
+                      summary: savedSummary,
+                    }),
                   },
                   ...(notes
                     ? [{ role: 'system' as const, content: notes }]
