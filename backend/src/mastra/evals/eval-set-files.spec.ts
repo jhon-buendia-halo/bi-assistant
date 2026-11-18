@@ -311,6 +311,7 @@ describe('eval set files', () => {
       'marketing-analytics',
       'marketing-analytics-rest',
       'marketing-analytics-databricks',
+      'ecommerce',
       'memory-world-cup',
       'memory-finance',
       'memory-marketing-analytics',
@@ -429,6 +430,7 @@ describe('eval set files', () => {
       'genomics.json',
       'supply-chain.json',
       'marketing-analytics.json',
+      'ecommerce.json',
     ];
     const domains = loadEvalSets().filter((set) =>
       DOMAIN_FILES.includes(set.file),
