@@ -2,6 +2,20 @@
 
 Running log of every meaningful change, newest first. One entry per epic, written when its PR opens; see step 10 of the `workflow-gate` skill. Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-17
+
+### Fixed
+- **A workflow run no longer hangs, loses its progress on a restart, or ignores Stop** (free style, no roadmap story, PR #138; rules in [workflows](specs/capabilities/workflows/spec.md) R16, R18 and *Edge cases and errors*, ADR-0048 amended).
+  - A run that reports nothing for 15 minutes is ended as failed (`WORKFLOW_RUN_IDLE_MINUTES`; 0 turns it off). Stop always ends the run: after 10 seconds it is stored stopped even when its work has not unwound.
+  - A run's steps are stored at each step change, so a restart no longer leaves a failed run with no steps.
+  - Stop reaches a running SQL statement (Postgres, Databricks, files), Build visual's designer calls and Review a Website's browser.
+  - The LLM retry also covers status 504, 520 to 524 and 529, never waits more than 30 seconds and ends its wait on Stop. Every event stream sends a heartbeat every 15 seconds.
+  - Start-up deletes the leftover suspended snapshots of every workflow, nested ones included.
+
+### Changed
+- **At most 8 runs run at a time** (`WORKFLOW_MAX_LIVE_RUNS`, PR #138): a streamed start beyond that answers 429; a resume is never refused.
+- **SQL batches run four at a time, in query order** (PR #138): the lineage checks and probes of Consumption Gap Analysis and the finding rows of Assess Data Readiness. Postgres and Databricks no longer hold a whole result in memory: a 2,000,000-row result peaks at about 231 MB, down from about 526 MB.
+
 ## 2026-11-15
 
 ### Added

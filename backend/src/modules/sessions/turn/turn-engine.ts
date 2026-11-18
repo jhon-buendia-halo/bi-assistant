@@ -208,11 +208,15 @@ export interface TurnEngineDeps {
   /** The workflow view of a stored session, for the `workflow` event. */
   workflowOf(session: SessionDoc): Promise<WorkflowView | undefined>;
   effectiveWorkflowFor(session: SessionDoc): WorkflowPhase[];
-  /** Careful mode's cross-check of the answer's SQL (agents.md 5.4). */
+  /**
+   * Careful mode's cross-check of the answer's SQL (agents.md 5.4); `signal`
+   * is the turn's stop, for the verifier call and its statement.
+   */
   crossCheckAnswer(
     session: SessionDoc,
     question: string,
     data: ToolDataRecord[],
+    signal?: AbortSignal,
   ): Promise<CrossCheck | undefined>;
   /** The readiness tools' bridge, once installed (agents.md 3.13). */
   readinessBridge(): ReadinessBridge | undefined;
@@ -249,6 +253,7 @@ export interface TurnEngineDeps {
       instruction?: string;
       reference?: string;
     },
+    abortSignal?: AbortSignal,
   ): Promise<SessionVisualization>;
   /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
   saveMock(
@@ -321,7 +326,10 @@ export class TurnEngine {
     // client having disconnected.
     const turn = new AbortController();
     const forwardAbort = () => turn.abort();
-    abortSignal?.addEventListener('abort', forwardAbort, { once: true });
+    // A listener added to an aborted signal never fires: a Stop that landed
+    // while the question was stored or the input built aborts the turn now.
+    if (abortSignal?.aborted) forwardAbort();
+    else abortSignal?.addEventListener('abort', forwardAbort, { once: true });
     const options = await this.deps.options.agentOptions(
       session,
       trimmed,
@@ -871,14 +879,20 @@ export class TurnEngine {
             if (turn.signal.aborted) return stop();
             answerAt ??= new Date().toISOString();
             try {
-              const metadata = await this.deps.buildVisual(id, {
-                question,
-                answer,
-                at: answerAt,
-                data,
-                ...(instruction !== undefined ? { instruction } : {}),
-                ...(imageNotes?.trim() ? { reference: imageNotes } : {}),
-              });
+              // The turn's stop reaches the designer: a call in flight is
+              // aborted and no further attempt starts (the catch below).
+              const metadata = await this.deps.buildVisual(
+                id,
+                {
+                  question,
+                  answer,
+                  at: answerAt,
+                  data,
+                  ...(instruction !== undefined ? { instruction } : {}),
+                  ...(imageNotes?.trim() ? { reference: imageNotes } : {}),
+                },
+                turn.signal,
+              );
               // Stored before the stop: the step still names it, so the run
               // logs it and it stays one click away.
               return {
@@ -1051,11 +1065,25 @@ export class TurnEngine {
               tableCount: assessment.tableCount,
             };
           },
+          // Its progress goes out as the readiness tool's does, a
+          // `tool-progress` event (never to the model, never stored), so
+          // a long profile is not taken for a stalled run (workflows spec).
           profile: async () => {
             const started = startedAssessment();
+            let profiling = true;
             try {
               return {
-                ...(await started.profile({ signal: turn.signal })),
+                ...(await started.profile({
+                  signal: turn.signal,
+                  onProgress: (progress) => {
+                    if (!profiling || turn.signal.aborted) return;
+                    const event = readinessProgressEvent({
+                      type: 'data-readiness-progress',
+                      data: progress,
+                    });
+                    if (event) emit(event);
+                  },
+                })),
                 stopped: false,
               };
             } catch (error) {
@@ -1066,6 +1094,9 @@ export class TurnEngine {
                 notProfiledCount: 0,
                 stopped: true,
               };
+            } finally {
+              // Nothing is reported once the step ended.
+              profiling = false;
             }
           },
           score: () => {
@@ -1099,8 +1130,9 @@ export class TurnEngine {
             if (!savedReport) throw new Error('The report has not been saved');
             return recordFindingSources({
               report: savedReport,
-              run: (datasourceId, sql, limit) =>
-                this.deps.sql.runBuiltSql(datasourceId, sql, limit),
+              // Each statement gets the turn's stop (datasources R38).
+              run: (datasourceId, sql, limit, sqlOptions) =>
+                this.deps.sql.runBuiltSql(datasourceId, sql, limit, sqlOptions),
               signal: turn.signal,
               record: (args, result, facts) => {
                 emit({
@@ -1371,14 +1403,20 @@ export class TurnEngine {
                 }),
               ),
             // Infer lineage and Probe evidence (ADR-0051): each statement
-            // on the guarded read-only path, one after the other, recorded
-            // as a `run_readonly_sql` source as Rows behind findings does
-            // (agent-answers R67-R78). A failed one is a result.
+            // on the guarded read-only path with the turn's stop, four at a
+            // time, recorded in query order as a `run_readonly_sql` source
+            // as Rows behind findings does (agent-answers R67-R78). A failed
+            // one is a result.
             runQueries: ({ queries }) =>
               runGapQueries({
                 queries,
-                run: (datasourceId, sql, limit) =>
-                  this.deps.sql.runBuiltSql(datasourceId, sql, limit),
+                run: (datasourceId, sql, limit, sqlOptions) =>
+                  this.deps.sql.runBuiltSql(
+                    datasourceId,
+                    sql,
+                    limit,
+                    sqlOptions,
+                  ),
                 signal: turn.signal,
                 record: (args, result, facts) => {
                   emit({
@@ -1494,9 +1532,12 @@ export class TurnEngine {
               emit = io.emit;
               abortSignal = io.abortSignal;
               onStepEvent = io.onStepEvent;
-              abortSignal?.addEventListener('abort', forwardAbort, {
-                once: true,
-              });
+              // A resume stopped before it got here is aborted at once.
+              if (abortSignal?.aborted) forwardAbort();
+              else
+                abortSignal?.addEventListener('abort', forwardAbort, {
+                  once: true,
+                });
               let next: TurnRunOutcome;
               try {
                 next = await resumeRun(answer);
@@ -1611,7 +1652,12 @@ export class TurnEngine {
         // The assistant's only: another agent runs no SQL to cross-check.
         const crossChecked =
           careful && isAssistant && !turn.signal.aborted
-            ? await this.deps.crossCheckAnswer(session, trimmed, data)
+            ? await this.deps.crossCheckAnswer(
+                session,
+                trimmed,
+                data,
+                turn.signal,
+              )
             : undefined;
         messages.push({
           role: 'assistant',

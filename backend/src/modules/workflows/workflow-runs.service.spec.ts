@@ -603,11 +603,12 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       buildVisual: true,
     });
     // Careful is no field of v2's input: the turn runs without it.
+    // The turn runs on its own signal: the no-progress watchdog's.
     expect(ctx.sessions.streamRunTurn).toHaveBeenCalledWith(
       `run-${run.id}`,
       'Who won in 2002?',
       expect.any(Function),
-      undefined,
+      expect.any(AbortSignal),
       false,
       expect.any(Function),
     );
@@ -954,7 +955,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         story: notReached,
       },
     ]);
-    expect(ctx.sessions.streamRunTurn.mock.calls[0][3]).toBe(abort.signal);
+    // The turn's own signal aborts with the request's.
+    expect(ctx.sessions.streamRunTurn.mock.calls[0][3]?.aborted).toBe(true);
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
   });
 
@@ -2293,7 +2295,7 @@ describe('WorkflowRunsService: a draft run (api.md R12; agents-evals R60)', () =
       `run-${run.id}`,
       'Who won?',
       expect.any(Function),
-      undefined,
+      expect.any(AbortSignal),
       false,
       expect.any(Function),
     );
@@ -3060,5 +3062,895 @@ describe('WorkflowRunsService: a follow-up that asks one agent (workflows R40; a
         context: { askStep: 'plan' },
       }),
     ).rejects.toThrow('Asking one agent needs an earlier run');
+  });
+});
+
+describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; workflows R20)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+  const TOOL_FRAME = {
+    type: 'tool',
+    content: JSON.stringify({ name: 'run_readonly_sql', input: 'select 1' }),
+  };
+
+  /** Let every pending write land. */
+  const settled = async () => {
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  };
+
+  const launch = async () =>
+    ctx.service.launch(
+      await ctx.service.prepare('answer-business-question', { input: ASK }),
+    );
+
+  /** The stored run's steps as `<id>:<status>`. */
+  const storedTrail = async (id: string) =>
+    ((await ctx.repository.get(id))?.steps ?? []).map(
+      (step) => `${step.id}:${step.status}`,
+    );
+
+  /** A second repository over the test's store: the real writes under a spy. */
+  const sameStore = () =>
+    new WorkflowRunsRepository(new SqliteDocStore(ctx.db, 'workflow_runs'));
+
+  /** The writes that carried only `steps`: the checkpoints. */
+  const checkpoints = (
+    update: jest.SpyInstance<
+      Promise<WorkflowRunDoc | null>,
+      [string, Partial<WorkflowRunDoc>]
+    >,
+  ) =>
+    update.mock.calls.filter(
+      ([, patch]) => Object.keys(patch).join() === 'steps',
+    );
+
+  /**
+   * The next turn reports the steps before Analyse and a tool call, waits
+   * for `next`, ends Analyse and starts Validate, then waits for `end`.
+   */
+  function stagedTurn() {
+    let next!: () => void;
+    let end!: () => void;
+    const nextGate = new Promise<void>((resolve) => (next = resolve));
+    const endGate = new Promise<void>((resolve) => (end = resolve));
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, _question, emit, _signal, _careful, onStep) => {
+        for (const step of V2_STEPS_BEFORE) onStep(step);
+        emit(TOOL_FRAME);
+        await nextGate;
+        onStep(stepResult('analyse', ANALYSE_OUTPUT));
+        onStep(stepStart('validate', ANALYSE_OUTPUT));
+        await endGate;
+      },
+    );
+    return { next, end };
+  }
+
+  it('stores each step change while the run runs, the running step included; a tool call rides along with the next step change', async () => {
+    ctx = build();
+    const update = jest.spyOn(ctx.repository, 'update');
+    const turn = stagedTurn();
+    const id = await launch();
+    await settled();
+    expect(await storedTrail(id)).toEqual([
+      'receive-question:success',
+      'load-catalog:success',
+      'interpret-follow-up:success',
+      'plan:success',
+      'analyse:running',
+    ]);
+    // Nine step changes, coalesced: one write in flight, one queued.
+    expect(checkpoints(update)).toHaveLength(2);
+    // The tool call alone wrote nothing.
+    const analyse = (await ctx.repository.get(id))?.steps.at(-1);
+    expect(analyse).not.toHaveProperty('toolCalls');
+    turn.next();
+    await settled();
+    // Two more step changes: one write, then the newer state.
+    expect(checkpoints(update)).toHaveLength(4);
+    const steps = (await ctx.repository.get(id))?.steps ?? [];
+    expect(steps.slice(-2)).toEqual([
+      expect.objectContaining({
+        id: 'analyse',
+        status: 'success',
+        toolCalls: [{ tool: 'run_readonly_sql', input: 'select 1' }],
+      }),
+      expect.objectContaining({ id: 'validate', status: 'running' }),
+    ]);
+    turn.end();
+    await ctx.service.live.whenEnded(id);
+    expect((await ctx.repository.get(id))?.status).toBe('success');
+  });
+
+  it('a failed checkpoint write is logged and the run still ends success', async () => {
+    ctx = build();
+    const real = sameStore();
+    jest
+      .spyOn(ctx.repository, 'update')
+      .mockImplementation((id, patch) =>
+        Object.keys(patch).join() === 'steps'
+          ? Promise.reject(new Error('disk full'))
+          : real.update(id, patch),
+      );
+    const id = await launch();
+    await ctx.service.live.whenEnded(id);
+    expect((await ctx.repository.get(id))?.status).toBe('success');
+  });
+
+  it('the write that ends the run lands after a slow checkpoint, and no checkpoint overwrites it', async () => {
+    ctx = build();
+    const real = sameStore();
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const order: string[] = [];
+    let slowed = false;
+    jest
+      .spyOn(ctx.repository, 'update')
+      .mockImplementation(async (id, patch) => {
+        const checkpoint = Object.keys(patch).join() === 'steps';
+        if (checkpoint && !slowed) {
+          slowed = true;
+          await gate;
+        }
+        order.push(checkpoint ? 'checkpoint' : String(patch.status));
+        return real.update(id, patch);
+      });
+    const id = await launch();
+    await settled();
+    // The turn is over, but its end waits for the checkpoint in flight.
+    expect(order).toEqual([]);
+    expect((await ctx.repository.get(id))?.status).toBe('running');
+    open();
+    await ctx.service.live.whenEnded(id);
+    expect(order).toEqual(['checkpoint', 'success']);
+    const stored = await ctx.repository.get(id);
+    expect(stored?.status).toBe('success');
+    expect(stored?.steps.find((step) => step.id === 'wrap-up')?.status).toBe(
+      'success',
+    );
+  });
+
+  it('after a restart a run cut off mid-way is failed, keeps its finished steps, and its running step is failed', async () => {
+    ctx = build();
+    stagedTurn();
+    const id = await launch();
+    await settled();
+    const fresh = ctx.restarted();
+    await fresh.onModuleInit();
+    const stored = await ctx.repository.get(id);
+    expect(stored).toMatchObject({
+      status: 'failed',
+      error: 'The app stopped before the run finished',
+    });
+    expect(stored?.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
+      'receive-question:success',
+      'load-catalog:success',
+      'interpret-follow-up:success',
+      'plan:success',
+      'analyse:failed',
+    ]);
+    expect(stored?.steps.at(-1)?.error).toBe(
+      'The app stopped before the run finished',
+    );
+  });
+
+  it('after a restart a run whose checkpoint stored its step suspended, before the run was stored suspended, is failed with that step failed', async () => {
+    ctx = build();
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+        for (const step of V2_STEPS_BEFORE.slice(0, -1)) onStep(step);
+        onStep(stepStart('clarify', PLAN_OUTPUT));
+        onStep({
+          type: 'workflow-step-suspended',
+          payload: {
+            id: 'clarify',
+            status: 'suspended',
+            suspendPayload: { question: 'Which measure?' },
+          },
+        });
+        // The app stops here, before the end write stores `suspended`.
+        await new Promise<void>(() => undefined);
+      },
+    );
+    const id = await launch();
+    await settled();
+    expect((await storedTrail(id)).at(-1)).toBe('clarify:suspended');
+    expect((await ctx.repository.get(id))?.status).toBe('running');
+    const fresh = ctx.restarted();
+    await fresh.onModuleInit();
+    const stored = await ctx.repository.get(id);
+    expect(stored).toMatchObject({
+      status: 'failed',
+      error: 'The app stopped before the run finished',
+    });
+    expect(stored?.steps.at(-1)).toMatchObject({
+      id: 'clarify',
+      status: 'failed',
+      error: 'The app stopped before the run finished',
+    });
+    expect(stored?.steps.some((step) => step.status === 'suspended')).toBe(
+      false,
+    );
+  });
+
+  it('a run that throws while suspending is stored failed with its suspended step failed, not left suspended', async () => {
+    ctx = build();
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+        for (const step of V2_STEPS_BEFORE.slice(0, -1)) onStep(step);
+        onStep(stepStart('clarify', PLAN_OUTPUT));
+        onStep({
+          type: 'workflow-step-suspended',
+          payload: {
+            id: 'clarify',
+            status: 'suspended',
+            suspendPayload: { question: 'Which measure?' },
+          },
+        });
+        await settled();
+        return {
+          stepId: 'clarify',
+          question: 'Which measure?',
+          options: ['Goals', 'Wins'],
+          resume: jest.fn(() => Promise.resolve(undefined)),
+          discard: jest.fn(() => Promise.resolve()),
+        } as never;
+      },
+    );
+    Object.assign(ctx.sessions, {
+      runHostView: jest.fn(() => Promise.reject(new Error('host lost'))),
+    });
+    const id = await launch();
+    await ctx.service.live.whenEnded(id);
+    const stored = await ctx.repository.get(id);
+    expect(stored).toMatchObject({ status: 'failed', error: 'host lost' });
+    expect(stored?.steps.at(-1)).toMatchObject({
+      id: 'clarify',
+      status: 'failed',
+      error: 'host lost',
+    });
+    expect(
+      stored?.steps.some(
+        (step) => step.status === 'suspended' || step.status === 'running',
+      ),
+    ).toBe(false);
+  });
+
+  it('a run that throws while ending is stored failed with no step left running', async () => {
+    ctx = build();
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+        for (const step of V2_STEPS_BEFORE) onStep(step);
+        await settled();
+      },
+    );
+    ctx.sessions.finishRunHost.mockImplementationOnce(() =>
+      Promise.reject(new Error('host lost')),
+    );
+    const id = await launch();
+    await ctx.service.live.whenEnded(id);
+    const stored = await ctx.repository.get(id);
+    expect(stored).toMatchObject({ status: 'failed', error: 'host lost' });
+    expect(stored?.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
+      'receive-question:success',
+      'load-catalog:success',
+      'interpret-follow-up:success',
+      'plan:success',
+      // The turn ended with Analyse unfinished, so the tracker closed it;
+      // the checkpoint had stored it running.
+      'analyse:stopped',
+    ]);
+  });
+});
+
+describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+  const FULL =
+    'Too many runs are in progress (1). Wait for one to finish, or stop one.';
+
+  /** A service whose live runs hold one slot. */
+  function buildCapped() {
+    ctx = build();
+    Object.assign(ctx.service, { live: new LiveRuns(undefined, undefined, 1) });
+  }
+
+  const prepared = () =>
+    ctx.service.prepare('answer-business-question', { input: ASK });
+
+  /** The next turn waits until released or stopped. */
+  function holdTurn(): () => void {
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, _question, _emit, signal) => {
+        await Promise.race([
+          released,
+          new Promise<void>((resolve) =>
+            signal?.addEventListener('abort', () => resolve()),
+          ),
+        ]);
+      },
+    );
+    return release;
+  }
+
+  const refusal = (failure: unknown) => ({
+    status: (failure as { getStatus?: () => number }).getStatus?.(),
+    message: (failure as Error).message,
+  });
+
+  it('two launches together with one slot free: one run, one 429, and nothing stored for the refused one', async () => {
+    buildCapped();
+    holdTurn();
+    const [a, b] = [await prepared(), await prepared()];
+    const results = await Promise.allSettled([
+      ctx.service.launch(a),
+      ctx.service.launch(b),
+    ]);
+    const started = results.filter((result) => result.status === 'fulfilled');
+    const refused = results.filter((result) => result.status === 'rejected');
+    expect(started).toHaveLength(1);
+    expect(refused).toHaveLength(1);
+    expect(refusal(refused[0]?.reason)).toEqual({
+      status: 429,
+      message: FULL,
+    });
+    expect(await ctx.repository.list()).toHaveLength(1);
+    expect(ctx.sessions.createRunHost).toHaveBeenCalledTimes(1);
+  });
+
+  it('the slot frees when the run ends, fails or is stopped', async () => {
+    buildCapped();
+    const ended = await ctx.service.launch(await prepared());
+    await ctx.service.live.whenEnded(ended);
+    holdTurn();
+    const stopped = await ctx.service.launch(await prepared());
+    await expect(ctx.service.launch(await prepared())).rejects.toThrow(FULL);
+    await ctx.service.stop(stopped);
+    ctx.sessions.streamRunTurn.mockImplementationOnce(() =>
+      Promise.reject(new Error('The provider failed')),
+    );
+    const failed = await ctx.service.launch(await prepared());
+    await ctx.service.live.whenEnded(failed);
+    expect((await ctx.service.get(failed)).status).toBe('failed');
+    const next = await ctx.service.launch(await prepared());
+    await ctx.service.live.whenEnded(next);
+  });
+
+  it('a run waiting for the user holds no slot, and its resume is never refused', async () => {
+    buildCapped();
+    const suspension = {
+      stepId: 'clarify',
+      question: 'Which measure?',
+      options: ['Goals', 'Wins'],
+      resume: jest.fn(() => Promise.resolve(undefined)),
+      discard: jest.fn(() => Promise.resolve()),
+    };
+    ctx.sessions.streamRunTurn.mockImplementationOnce(() =>
+      Promise.resolve(suspension as never),
+    );
+    Object.assign(ctx.sessions, {
+      runHostView: jest.fn(() =>
+        Promise.resolve({ datasets: ['World Cup Core'] }),
+      ),
+    });
+    const waiting = await ctx.service.launch(await prepared());
+    await ctx.service.live.whenEnded(waiting);
+    expect((await ctx.service.get(waiting)).status).toBe('suspended');
+    const release = holdTurn();
+    const other = await ctx.service.launch(await prepared());
+    const resume = await ctx.service.prepareResume(waiting, {
+      stepId: 'clarify',
+      answer: 'Goals',
+    });
+    expect(ctx.service.resumeDetached(resume)).toBe(waiting);
+    await ctx.service.live.whenEnded(waiting);
+    release();
+    await ctx.service.live.whenEnded(other);
+  });
+
+  it('a draft run (Try it) holds no slot', async () => {
+    buildCapped();
+    holdTurn();
+    await ctx.service.launch(await prepared());
+    const draft = await ctx.service.prepareDraft('sales-helper', {
+      input: { question: 'Who won?' },
+    });
+    await expect(ctx.service.stream(draft, () => undefined)).resolves.toEqual(
+      expect.objectContaining({ status: 'success' }),
+    );
+  });
+});
+
+/** The shared set-up of the watchdog and forced-stop specs below. */
+function hangingRuns() {
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+  const MINUTE = 60_000;
+  const state: { ctx?: ReturnType<typeof build> } = {};
+  const ctx = () => state.ctx!;
+
+  /**
+   * The next turn reports the steps up to Analyse and "Bra", then waits for
+   * `release` or, when it honours the abort, its abort; released, it ends
+   * Analyse and returns. Its host then answers "Bra" (the partial answer).
+   */
+  function hangingTurn(honoursAbort = true) {
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const handle = {
+      release: () => release(),
+      emit: (() => undefined) as (event: unknown) => void,
+      signal: undefined as AbortSignal | undefined,
+    };
+    ctx().sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, question, emit, signal, _careful, onStep) => {
+        handle.emit = emit;
+        handle.signal = signal;
+        for (const step of V2_STEPS_BEFORE) onStep(step);
+        emit({ type: 'text', content: 'Bra' });
+        await Promise.race([
+          released,
+          ...(honoursAbort
+            ? [
+                new Promise<void>((resolve) =>
+                  signal?.addEventListener('abort', () => resolve()),
+                ),
+              ]
+            : []),
+        ]);
+        if (!signal?.aborted) onStep(stepResult('analyse', ANALYSE_OUTPUT));
+        void question;
+      },
+    );
+    const view = ctx().sessions.finishRunHost.getMockImplementation()!;
+    ctx().sessions.finishRunHost.mockImplementationOnce(async () => ({
+      ...(await view()),
+      messages: [
+        { role: 'user', content: ASK.question, at: 't' },
+        { role: 'assistant', content: 'Bra', at: 't' },
+      ],
+    }));
+    return handle;
+  }
+
+  /** What a follower from seq 0 gets: `<type>[:<content>]`, and its end. */
+  function follow(id: string) {
+    const got: string[] = [];
+    const ended = { value: false };
+    ctx().service.live.subscribe(id, 0, {
+      event: ({ event }) =>
+        got.push(
+          typeof event['content'] === 'string'
+            ? `${event.type}:${event['content']}`
+            : event.type,
+        ),
+      end: () => (ended.value = true),
+    });
+    return { got, ended };
+  }
+
+  const launch = async () =>
+    ctx().service.launch(
+      await ctx().service.prepare('answer-business-question', { input: ASK }),
+    );
+
+  /** Let pending promise work (sqlite writes, the drive's awaits) land. */
+  const flush = async () => {
+    for (let i = 0; i < 10; i += 1) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    state.ctx?.db.close();
+  });
+
+  return { ASK, MINUTE, state, ctx, hangingTurn, follow, launch, flush };
+}
+
+describe('WorkflowRunsService: a run that makes no progress is ended (workflows spec; ADR-0048 amendment)', () => {
+  const t = hangingRuns();
+  const STALLED = 'The run made no progress for 15 minutes and was stopped';
+
+  it('a launched run that reports nothing for 15 minutes is failed: its work aborted, its running step failed, its partial answer kept, its host released; a follower sees error { content } and the end', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn();
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE - 1);
+    expect(turn.signal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    await t.ctx().service.live.whenEnded(id);
+    expect(turn.signal?.aborted).toBe(true);
+    // Told apart from a Stop by the abort's reason.
+    expect((turn.signal?.reason as Error).message).toBe(STALLED);
+    const stored = await t.ctx().repository.get(id);
+    expect(stored).toMatchObject({ status: 'failed', error: STALLED });
+    expect(stored?.finishedAt).toBeDefined();
+    expect(stored?.steps.find((step) => step.id === 'analyse')).toMatchObject({
+      status: 'failed',
+      error: STALLED,
+    });
+    expect(stored?.answer?.content).toBe('Bra');
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledWith(`run-${id}`);
+    expect(watcher.got.at(-1)).toBe(`error:${STALLED}`);
+    expect(watcher.got).not.toContain('done');
+    expect(watcher.ended.value).toBe(true);
+  });
+
+  it('an event at minute 14 resets the clock', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn();
+    const id = await t.launch();
+    await t.flush();
+    await jest.advanceTimersByTimeAsync(14 * t.MINUTE);
+    turn.emit({ type: 'reasoning', content: 'thinking' });
+    await jest.advanceTimersByTimeAsync(14 * t.MINUTE);
+    expect((await t.ctx().repository.get(id))?.status).toBe('running');
+    expect(turn.signal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(t.MINUTE);
+    await t.ctx().service.live.whenEnded(id);
+    expect((await t.ctx().repository.get(id))?.status).toBe('failed');
+  });
+
+  it('a run waiting for the user is never timed, and its resumed turn is', async () => {
+    t.state.ctx = build();
+    let resumedSignal: AbortSignal | undefined;
+    const suspension = {
+      stepId: 'clarify',
+      question: 'Which measure?',
+      options: ['Goals', 'Wins'],
+      resume: jest.fn(
+        (_answer: string, io: { abortSignal?: AbortSignal }) =>
+          new Promise<undefined>((resolve) => {
+            resumedSignal = io.abortSignal;
+            io.abortSignal?.addEventListener('abort', () => resolve(undefined));
+          }),
+      ),
+      discard: jest.fn(() => Promise.resolve()),
+    };
+    t.ctx().sessions.streamRunTurn.mockImplementationOnce(() =>
+      Promise.resolve(suspension as never),
+    );
+    Object.assign(t.ctx().sessions, {
+      runHostView: jest.fn(() =>
+        Promise.resolve({ datasets: ['World Cup Core'] }),
+      ),
+    });
+    // What the watchdog calls when its clock runs out.
+    const stall = jest.spyOn(
+      t.ctx().service as unknown as { stall: () => void },
+      'stall',
+    );
+    const id = await t.launch();
+    await t.ctx().service.live.whenEnded(id);
+    // Less than the 30-minute wait, more than the no-progress limit.
+    await jest.advanceTimersByTimeAsync(20 * t.MINUTE);
+    expect((await t.ctx().repository.get(id))?.status).toBe('suspended');
+    // The clock was stopped when the run suspended, not merely ignored.
+    expect(stall).not.toHaveBeenCalled();
+    const prepared = await t.ctx().service.prepareResume(id, {
+      stepId: 'clarify',
+      answer: 'Goals',
+    });
+    t.ctx().service.resumeDetached(prepared);
+    await t.flush();
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    await t.ctx().service.live.whenEnded(id);
+    expect(resumedSignal?.aborted).toBe(true);
+    expect(await t.ctx().repository.get(id)).toMatchObject({
+      status: 'failed',
+      error: STALLED,
+    });
+  });
+
+  it('a Stop during the wait stays stopped', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn();
+    const id = await t.launch();
+    await t.flush();
+    await jest.advanceTimersByTimeAsync(5 * t.MINUTE);
+    const run = await t.ctx().service.stop(id);
+    expect(run.status).toBe('stopped');
+    expect(run.error).toBeUndefined();
+    await jest.advanceTimersByTimeAsync(30 * t.MINUTE);
+    expect(turn.signal?.aborted).toBe(true);
+    expect((await t.ctx().repository.get(id))?.status).toBe('stopped');
+  });
+
+  it('the progress checkpoints still land before the final write', async () => {
+    t.state.ctx = build();
+    const update = jest.spyOn(t.ctx().repository, 'update');
+    t.hangingTurn();
+    const id = await t.launch();
+    await t.flush();
+    expect(
+      update.mock.calls.some(
+        ([, patch]) => Object.keys(patch).join() === 'steps',
+      ),
+    ).toBe(true);
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    await t.ctx().service.live.whenEnded(id);
+    const kinds = update.mock.calls.map(([, patch]) =>
+      Object.keys(patch).join() === 'steps' ? 'checkpoint' : patch.status,
+    );
+    expect(kinds.at(-1)).toBe('failed');
+    expect(kinds.slice(0, -1).every((kind) => kind === 'checkpoint')).toBe(
+      true,
+    );
+  });
+
+  it("Try it's streamed draft and the non-streamed 118 are watched too", async () => {
+    t.state.ctx = build();
+    t.hangingTurn();
+    const draft = await t.ctx().service.prepareDraft('sales-helper', {
+      input: { question: 'Who won?' },
+    });
+    const events: RunStreamEvent[] = [];
+    const tried = t.ctx().service.stream(draft, (event) => events.push(event));
+    await t.flush();
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    await expect(tried).resolves.toMatchObject({
+      status: 'failed',
+      error: STALLED,
+    });
+    expect(events.at(-1)).toEqual({ type: 'error', content: STALLED });
+
+    t.hangingTurn();
+    const answered = t.ctx().service.run('answer-business-question', {
+      input: t.ASK,
+    });
+    await t.flush();
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    await expect(answered).resolves.toMatchObject({
+      status: 'failed',
+      error: STALLED,
+    });
+  });
+
+  it('a stalled run whose work does not unwind is stored failed 10 s later, and its late unwind leaves it failed', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn(false);
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    expect((await t.ctx().repository.get(id))?.status).toBe('running');
+    await jest.advanceTimersByTimeAsync(10_000);
+    await t.ctx().service.live.whenEnded(id);
+    expect(await t.ctx().repository.get(id)).toMatchObject({
+      status: 'failed',
+      error: STALLED,
+    });
+    expect(watcher.got.at(-1)).toBe(`error:${STALLED}`);
+    expect(watcher.ended.value).toBe(true);
+    turn.release();
+    await t.flush();
+    const stored = await t.ctx().repository.get(id);
+    expect(stored).toMatchObject({ status: 'failed', error: STALLED });
+    expect(stored?.answer?.content).toBe('Bra');
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledTimes(1);
+  });
+
+  it("a Stop during a stalled run's 10-second grace wins: the run ends stopped, not failed, and its log ends with done { run }", async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn(false);
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    await jest.advanceTimersByTimeAsync(5_000);
+    const answer = t.ctx().service.stop(id);
+    await jest.advanceTimersByTimeAsync(10_000);
+    const run = await answer;
+    expect(run.status).toBe('stopped');
+    expect(run.error).toBeUndefined();
+    expect(await t.ctx().repository.get(id)).toMatchObject({
+      status: 'stopped',
+    });
+    expect(watcher.got.at(-1)).toBe('done');
+    expect(watcher.got).not.toContain(`error:${STALLED}`);
+    expect(watcher.ended.value).toBe(true);
+    turn.release();
+    await t.flush();
+    const stored = await t.ctx().repository.get(id);
+    expect(stored?.status).toBe('stopped');
+    expect(stored?.error).toBeUndefined();
+  });
+});
+
+describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 amendment)', () => {
+  const t = hangingRuns();
+
+  /** Stop a run and let its 10-second wait pass. */
+  async function stopAfterWait(id: string) {
+    const answer = t.ctx().service.stop(id);
+    await jest.advanceTimersByTimeAsync(10_000);
+    return answer;
+  }
+
+  it('Stop whose work does not unwind stores the run stopped itself after 10 s: finishedAt set, its running step stopped, its log ended with done { run }; never running; a second Stop answers it as it is', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn(false);
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    const run = await stopAfterWait(id);
+    expect(turn.signal?.aborted).toBe(true);
+    expect(run.status).toBe('stopped');
+    expect(run.finishedAt).toBeDefined();
+    expect(run.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
+      'receive-question:success',
+      'load-catalog:success',
+      'interpret-follow-up:success',
+      'plan:success',
+      'analyse:stopped',
+    ]);
+    expect(watcher.got.at(-1)).toBe('done');
+    expect(watcher.ended.value).toBe(true);
+    expect(t.ctx().service.live.isRunning(id)).toBe(false);
+    expect((await t.ctx().service.stop(id)).status).toBe('stopped');
+  });
+
+  it('the late unwind keeps it stopped, adds the partial answer, releases the host and sends nothing to the ended log', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn(false);
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    await stopAfterWait(id);
+    const before = [...watcher.got];
+    expect(t.ctx().sessions.finishRunHost).not.toHaveBeenCalled();
+    turn.release();
+    await t.flush();
+    const stored = await t.ctx().repository.get(id);
+    expect(stored?.status).toBe('stopped');
+    expect(stored?.answer?.content).toBe('Bra');
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledWith(`run-${id}`);
+    expect(watcher.got).toEqual(before);
+    expect(t.follow(id).got).toEqual(before);
+  });
+
+  it('a force-stopped run can be deleted; its late unwind stores nothing again and deletes its host resources', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn(false);
+    const id = await t.launch();
+    await t.flush();
+    await stopAfterWait(id);
+    await t.ctx().service.delete(id);
+    expect(await t.ctx().repository.get(id)).toBeNull();
+    const deletes = t.ctx().sessions.deleteRunHostResources.mock.calls.length;
+    turn.release();
+    await t.flush();
+    expect(await t.ctx().repository.get(id)).toBeNull();
+    expect(t.ctx().sessions.deleteRunHostResources).toHaveBeenCalledTimes(
+      deletes + 1,
+    );
+    expect(t.ctx().sessions.deleteRunHostResources).toHaveBeenLastCalledWith(
+      `run-${id}`,
+    );
+  });
+
+  it('Stop whose work unwinds in time is stored by the work, as before', async () => {
+    t.state.ctx = build();
+    t.hangingTurn();
+    const id = await t.launch();
+    await t.flush();
+    const run = await t.ctx().service.stop(id);
+    expect(run.status).toBe('stopped');
+    expect(run.answer?.content).toBe('Bra');
+  });
+
+  /**
+   * The next run host is made only when `release` is called, so a test can
+   * Stop (or stall) the run while it is being made.
+   */
+  function slowHost() {
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const make = t.ctx().sessions.createRunHost.getMockImplementation()!;
+    t.ctx().sessions.createRunHost.mockImplementationOnce(async (spec) => {
+      await released;
+      return make(spec);
+    });
+    return { release: () => release() };
+  }
+
+  it('a Stop while the run host is being made ends the run stopped through the normal path, its turn never started, without the 10-second wait', async () => {
+    t.state.ctx = build();
+    const host = slowHost();
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    const answer = t.ctx().service.stop(id);
+    host.release();
+    await t.flush();
+    // No timer advanced: the run ended on its own, not by the forced stop.
+    const run = await answer;
+    expect(run.status).toBe('stopped');
+    expect(run.finishedAt).toBeDefined();
+    expect(t.ctx().sessions.streamRunTurn).not.toHaveBeenCalled();
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledWith(`run-${id}`);
+    expect(watcher.got.at(-1)).toBe('done');
+    expect(watcher.ended.value).toBe(true);
+    expect(t.ctx().service.live.isRunning(id)).toBe(false);
+  });
+
+  it("a stall while the run host is being made ends the run failed with the watchdog's error, its turn never started", async () => {
+    t.state.ctx = build();
+    const host = slowHost();
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    host.release();
+    await t.flush();
+    await t.ctx().service.live.whenEnded(id);
+    expect(await t.ctx().repository.get(id)).toMatchObject({
+      status: 'failed',
+      error: 'The run made no progress for 15 minutes and was stopped',
+    });
+    expect(t.ctx().sessions.streamRunTurn).not.toHaveBeenCalled();
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledWith(`run-${id}`);
+    expect(watcher.ended.value).toBe(true);
+  });
+
+  it('a Stop before a resume starts ends the run stopped without resuming its turn, the waiting turn dropped', async () => {
+    t.state.ctx = build();
+    const suspension = {
+      stepId: 'clarify',
+      question: 'Which measure?',
+      options: ['Goals', 'Wins'],
+      resume: jest.fn(() => Promise.resolve(undefined)),
+      discard: jest.fn(() => Promise.resolve()),
+    };
+    t.ctx().sessions.streamRunTurn.mockImplementationOnce(() =>
+      Promise.resolve(suspension as never),
+    );
+    Object.assign(t.ctx().sessions, {
+      runHostView: jest.fn(() =>
+        Promise.resolve({ datasets: ['World Cup Core'] }),
+      ),
+    });
+    const id = await t.launch();
+    await t.ctx().service.live.whenEnded(id);
+    const prepared = await t.ctx().service.prepareResume(id, {
+      stepId: 'clarify',
+      answer: 'Goals',
+    });
+    // The Stop lands while the resume stores the run running again.
+    let stored!: () => void;
+    const storing = new Promise<void>((resolve) => (stored = resolve));
+    const repository = t.ctx().repository;
+    const update = jest
+      .spyOn(repository, 'update')
+      .mockImplementationOnce(async (...args) => {
+        await storing;
+        update.mockRestore();
+        return repository.update(...args);
+      });
+    t.ctx().service.resumeDetached(prepared);
+    const answer = t.ctx().service.stop(id);
+    await t.flush();
+    stored();
+    await t.flush();
+    const run = await answer;
+    expect(run.status).toBe('stopped');
+    expect(suspension.resume).not.toHaveBeenCalled();
+    expect(suspension.discard).toHaveBeenCalledTimes(1);
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledWith(`run-${id}`);
+    expect(t.ctx().service.live.isRunning(id)).toBe(false);
   });
 });

@@ -13,7 +13,37 @@ import {
   SessionsApiService,
   parseReadinessReportEvent,
   parseToolEvent,
+  readEventStream,
 } from './sessions-api.service';
+
+describe('readEventStream heartbeat (api.md 3.1)', () => {
+  const streamOf = (chunks: string[]) =>
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const c of chunks) controller.enqueue(new TextEncoder().encode(c));
+        controller.close();
+      },
+    });
+
+  it('ignores a ": ping" comment frame between two events', async () => {
+    const frames: unknown[] = [];
+    const how = await readEventStream(
+      streamOf(['data: {"n":1}\n\n: ping\n\ndata: {"n":2}\n\n']),
+      (f) => frames.push(f),
+    );
+    expect(how).toBe('ended');
+    expect(frames).toEqual([{ n: 1 }, { n: 2 }]);
+  });
+
+  it('ignores a ping split across two chunks', async () => {
+    const frames: unknown[] = [];
+    await readEventStream(
+      streamOf(['data: {"n":1}\n\n: pi', 'ng\n\ndata: {"n":2}\n\n']),
+      (f) => frames.push(f),
+    );
+    expect(frames).toEqual([{ n: 1 }, { n: 2 }]);
+  });
+});
 
 describe('SessionsApiService past chat reads', () => {
   let service: SessionsApiService;

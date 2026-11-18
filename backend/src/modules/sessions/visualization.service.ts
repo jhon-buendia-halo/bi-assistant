@@ -117,6 +117,11 @@ interface DesignContext {
    * does not thread a turn through keeps today's behavior unchanged.
    */
   mergedData?: ToolDataRecord[];
+  /**
+   * The caller's stop (a run's Stop, agents.md 6.7): aborts the designer call
+   * in flight and starts no further attempt. Absent for every other caller.
+   */
+  abortSignal?: AbortSignal;
 }
 
 /** The records a design pass should read: the merged set, or the answer's own. */
@@ -230,6 +235,7 @@ export class VisualizationService {
     turnRecords?: ToolDataRecord[],
     question?: string,
     reference?: string,
+    abortSignal?: AbortSignal,
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const answer = this.findSourceAnswer(session, sourceMessageAt);
     const asked: ChatMessage | undefined =
@@ -249,6 +255,7 @@ export class VisualizationService {
       instruction,
       mergedData,
       ...(reference?.trim() ? { reference: reference.trim() } : {}),
+      abortSignal,
     });
 
     const visualId = randomUUID();
@@ -307,6 +314,7 @@ export class VisualizationService {
       /** The run's image notes: the designer's `<reference>` block. */
       reference?: string;
     },
+    abortSignal?: AbortSignal,
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const asked = session.messages.at(-1);
     const messages: ChatMessage[] = [
@@ -331,6 +339,7 @@ export class VisualizationService {
       undefined,
       instructed ? source.question : undefined,
       source.reference,
+      abortSignal,
     );
   }
 
@@ -687,6 +696,7 @@ export class VisualizationService {
     // A spec is validated against the rows the runtime will draw, not the
     // prompt's sample: a set or a row the prompt only samples still counts.
     const records = toolData?.length ? chartRecords(toolData) : [];
+    context.abortSignal?.throwIfAborted();
     // No rows means nothing for a spec to select from; the freeform designer
     // can still build something from the answer text alone.
     const specEligible =
@@ -709,6 +719,7 @@ export class VisualizationService {
   ): Promise<Bundle | undefined> {
     let feedback: DesignerFeedback | undefined = context.feedback;
     for (let attempt = 0; attempt < SPEC_ATTEMPTS; attempt++) {
+      context.abortSignal?.throwIfAborted();
       let output: SpecOutput;
       try {
         output = await this.runDesigner(
@@ -721,6 +732,8 @@ export class VisualizationService {
         // A timeout is not a spec problem — a second full-length attempt would
         // only make the caller wait twice as long.
         if (error instanceof RequestTimeoutException) throw error;
+        // A stop starts no further attempt.
+        if (context.abortSignal?.aborted) throw error;
         const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(`Visual spec attempt failed: ${message}`);
         // Mastra's own structured-output validation throws before the response
@@ -761,6 +774,7 @@ export class VisualizationService {
     let feedback: DesignerFeedback | undefined =
       context.feedback?.kind === 'spec' ? undefined : context.feedback;
     for (let attempt = 0; attempt < 2; attempt++) {
+      context.abortSignal?.throwIfAborted();
       const bundle = await this.runDesigner(
         requestContext,
         context,
@@ -953,7 +967,9 @@ export class VisualizationService {
       result = await agent.generate(prompt, {
         maxSteps: 1,
         requestContext,
-        abortSignal: abortController.signal,
+        abortSignal: context.abortSignal
+          ? AbortSignal.any([abortController.signal, context.abortSignal])
+          : abortController.signal,
         toolChoice: 'none',
         modelSettings: tuning.modelSettings,
         ...(Object.keys(tuning.providerOptions).length
@@ -977,6 +993,8 @@ export class VisualizationService {
         },
       });
     } catch (error) {
+      // The caller's stop is not a timeout: it surfaces as the original error.
+      if (context.abortSignal?.aborted) throw error;
       if (abortController.signal.aborted) {
         throw new RequestTimeoutException(
           'interactive visual generation timed out; please try again',

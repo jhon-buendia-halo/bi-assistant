@@ -8,6 +8,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { startSseHeartbeat } from '../../common/sse-heartbeat';
 import type { LiveRuns } from './live-runs';
 import type { WorkflowRun } from './workflow-run-steps';
 import { WorkflowRunsService, type PreparedRun } from './workflow-runs.service';
@@ -39,6 +40,7 @@ export async function streamSse(
   const controller = new AbortController();
   const abort = () => controller.abort();
   res.once('close', abort);
+  const stopHeartbeat = startSseHeartbeat(res);
   try {
     await work(send, controller.signal);
   } catch (err) {
@@ -47,6 +49,7 @@ export async function streamSse(
       send({ type: 'error', content: message });
     }
   }
+  stopHeartbeat();
   res.off('close', abort);
   if (!res.writableEnded) res.end();
 }
@@ -72,9 +75,11 @@ export function followSse(
     // Set once subscribed; `finish` may run before that (a run that ended).
     const following: { leave?: () => void } = {};
     let done = false;
+    const stopHeartbeat = startSseHeartbeat(res);
     const finish = () => {
       if (done) return;
       done = true;
+      stopHeartbeat();
       res.off('close', finish);
       following.leave?.();
       if (!res.writableEnded) res.end();

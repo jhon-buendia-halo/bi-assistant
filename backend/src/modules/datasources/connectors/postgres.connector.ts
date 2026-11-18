@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { Client } from 'pg';
+import { Client, Query } from 'pg';
 import type {
   CatalogInfo,
   PostgresConfig,
@@ -12,6 +12,7 @@ import {
   DatasourceConnector,
   ForeignKeyEdge,
   MASKED,
+  RunSqlOptions,
   splitEntity,
   SQL_ROWS_MAX,
 } from './connector';
@@ -223,30 +224,34 @@ export class PostgresConnector implements DatasourceConnector<PostgresConfig> {
 
   /**
    * The authoritative guard is the READ ONLY transaction — Postgres itself
-   * rejects any write the syntactic guard missed.
+   * rejects any write the syntactic guard missed. Rows are consumed as they
+   * arrive (`readCapped`): the first `rowLimit` kept, the rest only counted
+   * for `totalRows`. An abort of `options.signal` cancels the backend query
+   * (datasources R38).
    */
   async runReadOnlySql(
     config: PostgresConfig,
     sql: string,
     rowLimit: number,
     maxRows = SQL_ROWS_MAX,
+    options: RunSqlOptions = {},
   ): Promise<QueryResult> {
     const safeSql = assertReadOnlySql(sql);
     const lim = clampRows(rowLimit, 100, maxRows);
-    return this.withClient(config, 30_000, async (client) => {
-      await client.query('BEGIN READ ONLY');
-      try {
-        const result = await client.query(safeSql);
-        const all = result.rows as Record<string, unknown>[];
-        return {
-          columns: result.fields.map((f) => f.name),
-          rows: all.slice(0, lim),
-          totalRows: all.length,
-        };
-      } finally {
-        await client.query('ROLLBACK').catch(() => undefined);
-      }
-    });
+    options.signal?.throwIfAborted();
+    return this.withClient(
+      config,
+      30_000,
+      async (client) => {
+        await client.query('BEGIN READ ONLY');
+        try {
+          return await readCapped(client, safeSql, lim);
+        } finally {
+          await client.query('ROLLBACK').catch(() => undefined);
+        }
+      },
+      options.signal,
+    );
   }
 
   /**
@@ -275,32 +280,108 @@ export class PostgresConnector implements DatasourceConnector<PostgresConfig> {
     });
   }
 
+  /**
+   * Run `run` on a fresh client, always ended after. When `signal` aborts,
+   * the backend query is cancelled (`cancelBackend`) and the call rejects
+   * with `signal.reason` instead of the Postgres error the cancel causes.
+   */
   private async withClient<T>(
     config: PostgresConfig,
     statementTimeoutMs: number,
     run: (client: Client) => Promise<T>,
+    signal?: AbortSignal,
   ): Promise<T> {
-    const client = new Client({
-      host: config.host,
-      port: Number(config.port) || 5432,
-      database: config.database,
-      user: config.user,
-      password: config.password,
-      ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
-      connectionTimeoutMillis: 5_000,
-      statement_timeout: statementTimeoutMs,
-    });
+    const client = new Client(clientConfig(config, statementTimeoutMs));
+    let grace: NodeJS.Timeout | undefined;
+    const onAbort = () => {
+      // Closing the socket is the fallback: when the cancel request cannot
+      // be sent, or the statement has not stopped a moment after it.
+      const close = () => void client.end().catch(() => undefined);
+      grace = setTimeout(close, CANCEL_GRACE_MS);
+      void this.cancelBackend(config, client).catch(close);
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
     try {
       await client.connect();
+      signal?.throwIfAborted();
       return await run(client);
     } catch (err) {
+      signal?.throwIfAborted();
       const message = describeError(err);
       this.logger.warn(`Postgres call failed: ${message}`);
       throw new Error(`Postgres — ${message}`);
     } finally {
+      signal?.removeEventListener('abort', onAbort);
+      clearTimeout(grace);
       await client.end().catch(() => undefined);
     }
   }
+
+  /**
+   * Cancel what `client` is running, as psql's Ctrl-C does: a second
+   * connection with the same credentials asks for `pg_cancel_backend` of the
+   * client's backend process (allowed for one's own role, and over the same
+   * TLS settings, unlike pg's raw cancel request). The statement then fails
+   * with 57014. Throws when the request cannot be sent.
+   */
+  private async cancelBackend(
+    config: PostgresConfig,
+    client: Client,
+  ): Promise<void> {
+    const pid = (client as unknown as { processID?: number | null }).processID;
+    if (!pid) throw new Error('not connected yet');
+    const canceller = new Client(clientConfig(config, 5_000));
+    try {
+      await canceller.connect();
+      await canceller.query('SELECT pg_cancel_backend($1)', [pid]);
+    } finally {
+      await canceller.end().catch(() => undefined);
+    }
+  }
+}
+
+/** How long a cancelled statement may take to stop before its socket is closed. */
+const CANCEL_GRACE_MS = 2_000;
+
+function clientConfig(config: PostgresConfig, statementTimeoutMs: number) {
+  return {
+    host: config.host,
+    port: Number(config.port) || 5432,
+    database: config.database,
+    user: config.user,
+    password: config.password,
+    ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
+    connectionTimeoutMillis: 5_000,
+    statement_timeout: statementTimeoutMs,
+  };
+}
+
+/**
+ * Run `sql` and consume its rows one by one as the wire delivers them: pg's
+ * `Query` keeps no rows of its own once a `row` listener is attached, so
+ * only the first `limit` rows are ever held, however many the statement
+ * produces. `totalRows` counts them all; rows, their order, the column
+ * names and the value parsing are what `client.query(sql)` gives.
+ */
+function readCapped(
+  client: Client,
+  sql: string,
+  limit: number,
+): Promise<QueryResult> {
+  return new Promise((resolve, reject) => {
+    const rows: Record<string, unknown>[] = [];
+    let totalRows = 0;
+    const query = new Query<Record<string, unknown>>(sql);
+    query.on('row', (row) => {
+      totalRows += 1;
+      if (rows.length < limit) rows.push(row);
+    });
+    query.on('error', reject);
+    query.on('end', (result) =>
+      resolve({ columns: result.fields.map((f) => f.name), rows, totalRows }),
+    );
+    client.query(query);
+  });
 }
 
 /**

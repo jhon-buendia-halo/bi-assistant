@@ -11,6 +11,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { startSseHeartbeat } from '../../common/sse-heartbeat';
 import { OntologyService } from './ontology.service';
 import type { OntologyQuery } from './ontology.service';
 import { OntologyBootstrapService } from './ontology-bootstrap.service';
@@ -115,6 +116,7 @@ export class OntologyController {
       closed = true;
     };
     res.once('close', onClose);
+    const stopHeartbeat = startSseHeartbeat(res);
     try {
       const created = await this.bootstrapper.bootstrap(name, (progress) => {
         if (!closed) send({ type: 'progress', ...progress });
@@ -126,6 +128,7 @@ export class OntologyController {
         send({ type: 'error', message });
       }
     }
+    stopHeartbeat();
     res.off('close', onClose);
     if (!res.writableEnded) res.end();
   }

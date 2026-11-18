@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { Agent } from '@mastra/core/agent';
 import {
   agentThreadId,
@@ -244,7 +244,18 @@ export class MastraService {
             ...(context ? { requestContext: context } : {}),
           }),
         ),
-      discard: () => workflow.deleteWorkflowRunById(run.runId),
+      // The workflow's own delete removes the top row and drops the suspended
+      // Run from its in-memory map; the nested rows share the run id.
+      discard: async () => {
+        try {
+          await workflow.deleteWorkflowRunById(run.runId);
+        } catch (failure) {
+          new Logger(MastraService.name).warn(
+            `Could not delete the run's snapshot: ${failure instanceof Error ? failure.message : String(failure)}`,
+          );
+        }
+        await this.deleteSnapshotRows(undefined, run.runId);
+      },
     });
     return wrap(
       run.stream({
@@ -258,21 +269,110 @@ export class MastraService {
   }
 
   /**
-   * Delete every suspended run snapshot of a registered workflow (ADR-0043):
-   * at start-up nothing can resume them, as their runtime lived in memory.
-   * Answers how many were deleted.
+   * Delete the suspended run snapshots of a registered workflow, or with no
+   * `key` of every one in the workflows store (ADR-0043; workflows R20): at
+   * start-up nothing can resume them, as their runtime lived in memory. A
+   * suspended run stores one row per nested workflow on its path, under the
+   * nested workflow's own id, and `Mastra.listWorkflows` lists only the
+   * top-level ones, so the keyless form lists the store directly. A keyed
+   * call throws as before. Answers how many were deleted.
    */
-  async discardSuspendedWorkflowRuns(key: string): Promise<number> {
-    const workflow = this.mastra.getWorkflow(
-      key as Parameters<typeof mastra.getWorkflow>[0],
-    );
-    const listed = (await workflow.listWorkflowRuns({
-      status: 'suspended',
-    })) as { runs: { runId: string }[] };
-    for (const run of listed.runs) {
-      await workflow.deleteWorkflowRunById(run.runId);
+  async discardSuspendedWorkflowRuns(key?: string): Promise<number> {
+    if (key !== undefined) {
+      type Discardable = {
+        listWorkflowRuns(args: { status: 'suspended' }): Promise<unknown>;
+        deleteWorkflowRunById(runId: string): Promise<unknown>;
+      };
+      const workflow = this.mastra.getWorkflow(
+        key as Parameters<typeof mastra.getWorkflow>[0],
+      ) as unknown as Discardable;
+      const listed = (await workflow.listWorkflowRuns({
+        status: 'suspended',
+      })) as { runs: { runId: string }[] };
+      for (const run of listed.runs) {
+        await workflow.deleteWorkflowRunById(run.runId);
+      }
+      return listed.runs.length;
     }
-    return listed.runs.length;
+    return this.deleteSnapshotRows('suspended');
+  }
+
+  /**
+   * List the workflows store with no workflow name, page by page until a
+   * short page, and delete the rows that match `status` and `runId` by their
+   * run id and workflow name (workflows R20). The pages are read in full
+   * before any delete, so a row that fails to delete (and stays) cannot make
+   * the paging loop. A failing row or page is logged and the rest still go. A
+   * storage with no workflows store, or a stand-in without the two methods,
+   * deletes nothing and logs once. Answers how many rows were deleted.
+   */
+  private async deleteSnapshotRows(
+    status?: 'suspended',
+    runId?: string,
+  ): Promise<number> {
+    type Row = { runId: string; workflowName: string };
+    type Store = {
+      listWorkflowRuns(args: {
+        status?: 'suspended';
+        perPage: number;
+        page: number;
+      }): Promise<{ runs: Row[] }>;
+      deleteWorkflowRunById(args: {
+        runId: string;
+        workflowName: string;
+      }): Promise<void>;
+    };
+    const logger = new Logger(MastraService.name);
+    const failed = (what: string, failure: unknown) =>
+      logger.warn(
+        `Could not ${what}: ${failure instanceof Error ? failure.message : String(failure)}`,
+      );
+    let store: Store | undefined;
+    try {
+      store = await this.mastra.getStorage()?.getStore('workflows');
+    } catch (failure) {
+      failed('open the workflows store', failure);
+      return 0;
+    }
+    if (
+      typeof store?.listWorkflowRuns !== 'function' ||
+      typeof store.deleteWorkflowRunById !== 'function'
+    ) {
+      logger.warn('No workflows store to clean: no snapshots were deleted');
+      return 0;
+    }
+    const perPage = 100;
+    const rows: Row[] = [];
+    try {
+      for (let page = 0; ; page += 1) {
+        const listed = await store.listWorkflowRuns({
+          ...(status ? { status } : {}),
+          perPage,
+          page,
+        });
+        rows.push(...listed.runs);
+        if (listed.runs.length < perPage) break;
+      }
+    } catch (failure) {
+      failed('list the workflow snapshots', failure);
+    }
+    let deleted = 0;
+    for (const row of rows) {
+      if (runId !== undefined && row.runId !== runId) continue;
+      try {
+        await store.deleteWorkflowRunById({
+          runId: row.runId,
+          workflowName: row.workflowName,
+        });
+        deleted += 1;
+      } catch (failure) {
+        failed(
+          `delete snapshot ${row.runId} of workflow ${row.workflowName}`,
+          failure,
+        );
+      }
+    }
+    return deleted;
   }
 
   /** Create or restore a session-scoped workspace and register it with Mastra. */

@@ -180,6 +180,53 @@ describe('FileConnector.sampleRows and runReadOnlySql', () => {
   });
 });
 
+describe('FileConnector.runReadOnlySql cancellation (datasources R38)', () => {
+  /** About 10^10 rows of work: runs far past any test's budget. */
+  const endless =
+    'SELECT sum(a.range * b.range) AS s FROM range(100000) a, range(100000) b';
+
+  it('interrupts the running statement and rejects with the reason', async () => {
+    const controller = new AbortController();
+    const reason = new Error('Stopped by the user');
+    const started = Date.now();
+
+    const run = connector.runReadOnlySql(config, endless, 10, undefined, {
+      signal: controller.signal,
+    });
+    setTimeout(() => controller.abort(reason), 100);
+
+    await expect(run).rejects.toBe(reason);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it('rejects before opening the database when the signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      connector.runReadOnlySql(
+        { ...config, databasePath: join(dir, 'missing.duckdb') },
+        'SELECT 1',
+        10,
+        500,
+        { signal: controller.signal },
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('answers as before when the signal never aborts', async () => {
+    const result = await connector.runReadOnlySql(
+      config,
+      'SELECT count(*) AS n FROM file.players.players',
+      10,
+      undefined,
+      { signal: new AbortController().signal },
+    );
+
+    expect(result).toEqual({ columns: ['n'], rows: [{ n: 2 }], totalRows: 1 });
+  });
+});
+
 describe('FileConnector.runPagedSql (datasources R52)', () => {
   const stmt = (overrides: Partial<PagedStatement>): PagedStatement => ({
     sql: 'SELECT "Region", "Units", "Revenue" FROM file.sales_2026.region_sales',

@@ -4,6 +4,7 @@ import { BadRequestException, type Logger } from '@nestjs/common';
 import type { MastraService } from '../../../mastra/mastra.service';
 import type {
   DatasetSnapshot,
+  SqlCallOptions,
   SqlRunResult,
 } from '../../../mastra/tool-services';
 import { sqlFixOutputSchema } from '../../../mastra/agents/sql-fixer.agent';
@@ -74,17 +75,33 @@ export class SqlChecks {
     datasourceId: string,
     sql: string,
     limit: number,
+    options?: SqlCallOptions,
   ): Promise<SqlRunResult> {
-    const result = await this.deps.datasourcesService.runReadOnlySql(
-      datasourceId,
-      sql,
-      limit,
-    );
+    const result = await this.runReadOnly(datasourceId, sql, limit, options);
     const truncated =
       typeof result.totalRows === 'number'
         ? result.totalRows > result.rows.length
         : result.rows.length >= limit;
     return { ...result, ...(truncated ? { truncated: true } : {}) };
+  }
+
+  /**
+   * `DatasourcesService.runReadOnlySql` with the turn's stop signal when
+   * there is one (datasources R38): an abort cancels the statement at the
+   * source and rejects with the signal's reason.
+   */
+  private runReadOnly(
+    datasourceId: string,
+    sql: string,
+    limit: number,
+    options?: SqlCallOptions,
+  ) {
+    const { datasourcesService } = this.deps;
+    return options?.signal
+      ? datasourcesService.runReadOnlySql(datasourceId, sql, limit, undefined, {
+          signal: options.signal,
+        })
+      : datasourcesService.runReadOnlySql(datasourceId, sql, limit);
   }
 
   // ----------------------------------------------------- SQL self-correction
@@ -94,22 +111,27 @@ export class SqlChecks {
    * the engine error and the schema in scope to the `sql-fixer` agent and
    * re-run, up to `SQL_REPAIR_ATTEMPTS` times. Empty result sets are not
    * errors — they get a note, never an LLM call. The last error propagates so
-   * the tool reports it to the agent as before.
+   * the tool reports it to the agent as before. `options.signal` (the turn's
+   * stop) reaches every run and the fixer call; a statement it cut short is
+   * not repaired, the stop's reason propagates.
    */
   async runSqlWithRepair(
     datasourceId: string,
     sql: string,
     limit: number,
     datasetNames: string[],
+    options?: SqlCallOptions,
   ): Promise<SqlRunResult> {
+    const signal = options?.signal;
     let statement = sql;
     let fixerContext: { dialect: string; schema: string } | undefined;
     for (let attempt = 0; ; attempt++) {
       try {
-        const result = await this.deps.datasourcesService.runReadOnlySql(
+        const result = await this.runReadOnly(
           datasourceId,
           statement,
           limit,
+          options,
         );
         const repaired = statement !== sql;
         // The connector says how many rows the statement produced before
@@ -134,6 +156,8 @@ export class SqlChecks {
           ...(notes.length ? { note: notes.join('; ') } : {}),
         };
       } catch (error) {
+        // Stopped: no repair, the stop's reason ends the call.
+        signal?.throwIfAborted();
         if (attempt >= SQL_REPAIR_ATTEMPTS) throw error;
         // Guard rejections (statement never reached the engine) and
         // transport/auth failures aren't a formatting problem a rewrite can
@@ -145,7 +169,9 @@ export class SqlChecks {
           statement,
           message,
           fixerContext,
+          signal,
         );
+        signal?.throwIfAborted();
         if (!corrected || corrected === statement) throw error;
         // `statement`, not `sql`: attempt 2 is repairing the fixer's own
         // rewrite from attempt 1. Message and SQL both flattened/capped — this ships in
@@ -186,11 +212,15 @@ export class SqlChecks {
     return { dialect, schema: lines.join('\n') };
   }
 
-  /** One fixer pass; returns undefined when it produced nothing usable. */
+  /**
+   * One fixer pass; returns undefined when it produced nothing usable. The
+   * turn's stop aborts the model call.
+   */
   private async repairSql(
     sql: string,
     error: string,
     context: { dialect: string; schema: string },
+    abortSignal?: AbortSignal,
   ): Promise<string | undefined> {
     try {
       const result = await this.deps.mastra
@@ -222,6 +252,7 @@ export class SqlChecks {
               schema: sqlFixOutputSchema,
               jsonPromptInjection: 'inline',
             },
+            ...(abortSignal ? { abortSignal } : {}),
           },
         );
       const parsed = sqlFixOutputSchema.safeParse(
@@ -247,12 +278,15 @@ export class SqlChecks {
    * is therefore corroboration, not an echo of the first answer.
    *
    * Never throws — a check that cannot run reports `error`, because failing to
-   * verify must not lose the answer it was verifying.
+   * verify must not lose the answer it was verifying. `signal`, the turn's
+   * stop, reaches the verifier call and the statement; a check the stop cut
+   * short has no verdict, as one the stop came before.
    */
   async crossCheckAnswer(
     session: SessionDoc,
     question: string,
     data: ToolDataRecord[],
+    signal?: AbortSignal,
   ): Promise<CrossCheck | undefined> {
     const record = successfulSqlRuns(data).at(-1);
     // Nothing was executed — there is no result set to corroborate.
@@ -273,7 +307,8 @@ export class SqlChecks {
           'no datasource is bound to this session, so the query could not be re-run',
         );
       }
-      const sql = await this.deriveIndependentSql(question, context);
+      const sql = await this.deriveIndependentSql(question, context, signal);
+      if (signal?.aborted) return undefined;
       if (!sql) {
         this.deps.logger.warn(
           'Cross-check skipped: verifier produced no usable query',
@@ -283,10 +318,11 @@ export class SqlChecks {
           'the independent check did not produce a usable query',
         );
       }
-      const result = await this.deps.datasourcesService.runReadOnlySql(
+      const result = await this.runReadOnly(
         context.datasourceId,
         sql,
         CROSS_CHECK_ROW_LIMIT,
+        { signal },
       );
       // Width tolerance matters here: the verifier is told to project nothing
       // beyond the question while the analysis agent selects the figures its
@@ -314,6 +350,7 @@ export class SqlChecks {
         `${CROSS_CHECK_DISAGREE_NOTE} — ${reason || 'the independent query returned something else'}`,
       );
     } catch (error) {
+      if (signal?.aborted) return undefined;
       const detail = error instanceof Error ? error.message : String(error);
       this.deps.logger.warn(`Cross-check failed: ${detail}`);
       return crossCheck('error', `the check could not complete — ${detail}`);
@@ -352,6 +389,7 @@ export class SqlChecks {
   private async deriveIndependentSql(
     question: string,
     context: { dialect: string; schema: string },
+    abortSignal?: AbortSignal,
   ): Promise<string | undefined> {
     let verified: string | undefined;
     try {
@@ -391,6 +429,7 @@ export class SqlChecks {
             schema: sqlVerifyOutputSchema,
             jsonPromptInjection: 'inline',
           },
+          ...(abortSignal ? { abortSignal } : {}),
         },
       );
     const parsed = sqlVerifyOutputSchema.safeParse(
