@@ -441,6 +441,25 @@ describe('runResultSetCheck', () => {
     });
   });
 
+  describe('an amount in cents stated in currency units (changed 2026-11-18)', () => {
+    const check = (rows: Record<string, unknown>[]) =>
+      runResultSetCheck('SELECT reference', ['World Cup'], snapshot, [
+        sql(rows),
+      ]);
+
+    it('accepts the cents reference written as dollars with two decimals', async () => {
+      reference([{ net_paid_cents: '29127007' }]);
+      const result = await check([{ net_paid_usd: '291270.07' }]);
+      expect(result?.passed).toBe(true);
+    });
+
+    it('still rejects a wrong amount, and a whole number for the cents', async () => {
+      reference([{ net_paid_cents: 29127007 }]);
+      expect((await check([{ net_paid_usd: 291270.17 }]))?.passed).toBe(false);
+      expect((await check([{ net_paid_usd: 291270 }]))?.passed).toBe(false);
+    });
+  });
+
   it('rejects a leaderboard whose row for the answer holds the wrong figure', async () => {
     reference([{ player: 'Lionel Messi', goals: 4 }]);
     const result = await runResultSetCheck(

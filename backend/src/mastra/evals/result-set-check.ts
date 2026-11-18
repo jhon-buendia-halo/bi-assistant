@@ -42,16 +42,21 @@ function numberCell(value: unknown): { value: number; text: string } | null {
  * `normalizeValue` compares them; or, since 2026-10-22, an assistant number
  * written with decimals that is the reference, or 100 times the reference (a
  * share stated as a percentage), rounded to those decimals. A whole number
- * never stands for a fraction, so a count cannot pass for a ratio.
+ * never stands for a fraction, so a count cannot pass for a ratio. Since
+ * 2026-11-18, an assistant amount written with decimals may also be a whole
+ * reference in cents stated in currency units (29127007 → 291270.07).
  */
 function sameCell(reference: unknown, actual: unknown): boolean {
   if (normalizeValue(reference) === normalizeValue(actual)) return true;
   const ref = numberCell(reference);
   const got = numberCell(actual);
-  if (!ref || !got || Number.isInteger(ref.value)) return false;
+  if (!ref || !got) return false;
   const places = /\.(\d+)$/.exec(got.text)?.[1].length ?? 0;
   if (places === 0) return false;
   const half = 0.5 * 10 ** -places + 1e-9;
+  if (Number.isInteger(ref.value)) {
+    return places === 2 && Math.abs(ref.value / 100 - got.value) <= half;
+  }
   return (
     Math.abs(ref.value - got.value) <= half ||
     Math.abs(ref.value * 100 - got.value) <= half

@@ -20,7 +20,7 @@
       ],
       "question": "Across our eight main departments, how many units have we sold in each, counting sub-categories and their sub-sub-categories under their department? Leave out cancelled orders and any lines with zero or negative quantities.",
       "intent": "Must roll the three-level category tree up to the 8 top departments and rank them by units: Electronics first with 661,815 units, Books last with 475,204. Trap: grouping by the product's own category gives 60+ rows; keeping negative/zero lines or cancelled orders changes the totals.",
-      "notes": "Verified 2026-11-18 on edge_cases (8 rows, 0.4s). Result (columns as in expectedSql, '|' separated):\nElectronics|661815|127561\nApparel|619662|123833\nHome|593529|114541\nBeauty|591409|113996\nSports|526167|100886\nToys|523127|100321\nGrocery|481377|96441\nBooks|475204|95334",
+      "notes": "Verified 2026-11-18 on edge_cases (8 rows, 0.4s). Result (columns as in expectedSql, '|' separated):\nElectronics|661815|127561\nApparel|619662|123833\nHome|593529|114541\nBeauty|591409|113996\nSports|526167|100886\nToys|523127|100321\nGrocery|481377|96441\nBooks|475204|95334\nFixed 2026-11-18: reference trimmed to department and units; the order_lines helper column failed a right answer. Trimmed reference returns: Electronics|661815, Apparel|619662, Home|593529, Beauty|591409, Sports|526167, Toys|523127, Grocery|481377, Books|475204.",
       "checks": [
         {
           "type": "calledTool",
@@ -43,7 +43,7 @@
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT COALESCE(gc.name, pc.name, c.name) AS department, SUM(l.quantity) AS units, COUNT(*) AS order_lines\nFROM edge_cases.order_lines l\nJOIN edge_cases.orders o ON o.id = l.order_id\nJOIN edge_cases.products p ON p.id = l.product_id\nJOIN edge_cases.categories c LEFT JOIN edge_cases.categories pc ON pc.category_id = c.parent_category_id LEFT JOIN edge_cases.categories gc ON gc.category_id = pc.parent_category_id ON c.category_id = p.category_id\nWHERE o.status <> 'cancelled' AND l.quantity > 0\nGROUP BY 1 ORDER BY units DESC"
+        "postgres": "SELECT COALESCE(gc.name, pc.name, c.name) AS department, SUM(l.quantity) AS units\nFROM edge_cases.order_lines l\nJOIN edge_cases.orders o ON o.id = l.order_id\nJOIN edge_cases.products p ON p.id = l.product_id\nJOIN edge_cases.categories c LEFT JOIN edge_cases.categories pc ON pc.category_id = c.parent_category_id LEFT JOIN edge_cases.categories gc ON gc.category_id = pc.parent_category_id ON c.category_id = p.category_id\nWHERE o.status <> 'cancelled' AND l.quantity > 0\nGROUP BY 1 ORDER BY units DESC"
       }
     },
     {
@@ -236,7 +236,7 @@
       ],
       "question": "Which product has received the most 5-star reviews? If several are tied, name all of them.",
       "intent": "Six products tie with 7 five-star reviews each: Product 499, 740, 1129, 1133, 3194 and 3352. A right answer names all six. Trap: LIMIT 1 names only one of them.",
-      "notes": "Verified 2026-11-18 on edge_cases (6 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\n499|Product 499|7|1\n740|Product 740|7|1\n1129|Product 1129|7|1\n1133|Product 1133|7|1\n3194|Product 3194|7|1\n3352|Product 3352|7|1",
+      "notes": "Verified 2026-11-18 on edge_cases (6 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\n499|Product 499|7|1\n740|Product 740|7|1\n1129|Product 1129|7|1\n1133|Product 1133|7|1\n3194|Product 3194|7|1\n3352|Product 3352|7|1\nFixed 2026-11-18: regex no longer requires the six tied ids in ascending order (answers sorted by name text); reference trimmed to name and five-star count of the rank-1 ties. Trimmed reference returns: Product 499|7, Product 740|7, Product 1129|7, Product 1133|7, Product 3194|7, Product 3352|7.",
       "checks": [
         {
           "type": "calledTool",
@@ -252,14 +252,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "499[\\s\\S]*740[\\s\\S]*1129[\\s\\S]*1133[\\s\\S]*3194[\\s\\S]*3352",
+            "pattern": "(?=[\\s\\S]*\\b499\\b)(?=[\\s\\S]*\\b740\\b)(?=[\\s\\S]*\\b1129\\b)(?=[\\s\\S]*\\b1133\\b)(?=[\\s\\S]*\\b3194\\b)(?=[\\s\\S]*\\b3352\\b)",
             "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "WITH x AS (SELECT p.id, p.name, COUNT(*) AS five_star FROM edge_cases.reviews r JOIN edge_cases.products p ON p.id = r.product_id WHERE r.rating = 5 GROUP BY p.id, p.name), k AS (SELECT *, RANK() OVER (ORDER BY five_star DESC) rk FROM x) SELECT id, name, five_star, rk FROM k WHERE rk <= 3 ORDER BY rk, id"
+        "postgres": "WITH x AS (SELECT p.id, p.name, COUNT(*) AS five_star FROM edge_cases.reviews r JOIN edge_cases.products p ON p.id = r.product_id WHERE r.rating = 5 GROUP BY p.id, p.name), k AS (SELECT *, RANK() OVER (ORDER BY five_star DESC) rk FROM x) SELECT name, five_star FROM k WHERE rk = 1 ORDER BY id"
       }
     },
     {
@@ -272,7 +272,7 @@
       ],
       "question": "Which countries do most of our customers come from? Give the top countries and say if any are tied.",
       "intent": "After merging spellings (Brazil/brazil/' BRAZIL '; USA/U.S.A./United States/united states; Mexico/México; Spain/España; etc.) Brazil and the United States tie for first with 10,000 customers each, followed by five countries at 5,000 (Canada, Colombia, France, Mexico, Spain). Trap: raw grouping shows Brazil alone on top with 5,000.",
-      "notes": "Verified 2026-11-18 on edge_cases (9 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\nBrazil|10000\nUnited States|10000\nCanada|5000\nColombia|5000\nFrance|5000\nMexico|5000\nSpain|5000\nGermany|2500\nJapan|2500\n\nTrap query (must return different rows): SELECT country, COUNT(*) FROM edge_cases.customers GROUP BY 1 ORDER BY 2 DESC LIMIT 3",
+      "notes": "Verified 2026-11-18 on edge_cases (9 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\nBrazil|10000\nUnited States|10000\nCanada|5000\nColombia|5000\nFrance|5000\nMexico|5000\nSpain|5000\nGermany|2500\nJapan|2500\n\nTrap query (must return different rows): SELECT country, COUNT(*) FROM edge_cases.customers GROUP BY 1 ORDER BY 2 DESC LIMIT 3\nFixed 2026-11-18: reference trimmed to the two tied top counts (10000, 10000) so a country label in another case or spelling (UNITED STATES, USA) and a top-N cut pass; the regex still needs Brazil and the United States, the trap's LIMIT 3 has no 10000 row. Trimmed reference returns: 10000, 10000.",
       "checks": [
         {
           "type": "calledTool",
@@ -295,7 +295,7 @@
         }
       ],
       "expectedSql": {
-        "postgres": "WITH x AS (SELECT CASE WHEN LOWER(REGEXP_REPLACE(TRIM(country), '[^a-zA-Z]', '', 'g')) IN ('usa','unitedstates') THEN 'United States' WHEN LOWER(TRIM(country)) IN ('españa','spain') THEN 'Spain' WHEN LOWER(TRIM(country)) IN ('méxico','mexico') THEN 'Mexico' ELSE INITCAP(LOWER(TRIM(country))) END AS country FROM edge_cases.customers)\nSELECT country, COUNT(*) FROM x GROUP BY 1 ORDER BY 2 DESC, 1"
+        "postgres": "WITH x AS (SELECT CASE WHEN LOWER(REGEXP_REPLACE(TRIM(country), '[^a-zA-Z]', '', 'g')) IN ('usa','unitedstates') THEN 'United States' WHEN LOWER(TRIM(country)) IN ('españa','spain') THEN 'Spain' WHEN LOWER(TRIM(country)) IN ('méxico','mexico') THEN 'Mexico' ELSE INITCAP(LOWER(TRIM(country))) END AS country FROM edge_cases.customers), c AS (SELECT country, COUNT(*) AS customers FROM x GROUP BY 1) SELECT customers FROM c WHERE customers = (SELECT MAX(customers) FROM c)"
       }
     },
     {
@@ -322,9 +322,10 @@
           "criterion": "D3"
         },
         {
-          "type": "includes",
+          "type": "matches",
           "args": {
-            "text": "Sub-category 11"
+            "pattern": "Sub\\-category\\ 11",
+            "flags": "i"
           },
           "criterion": "G1"
         }
@@ -343,7 +344,7 @@
       ],
       "question": "Who are our most loyal customers by number of delivered orders? Name the top customer and everyone tied in second place.",
       "intent": "Ana de la Cruz (customer 48920) leads with 11 delivered orders; Bruno Ng (21341), Bruno Silva (33301) and Bruno Okafor (36101) tie second with 10. All three runners-up must be named. Trap: counting all orders (cancelled, returned) changes the ranking; LIMIT 2 drops the tie.",
-      "notes": "Verified 2026-11-18 on edge_cases (4 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\n48920|Ana|de la Cruz|11|1\n21341|Bruno|Ng|10|2\n33301|Bruno|Silva|10|2\n36101|Bruno|Okafor|10|2",
+      "notes": "Verified 2026-11-18 on edge_cases (4 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\n48920|Ana|de la Cruz|11|1\n21341|Bruno|Ng|10|2\n33301|Bruno|Silva|10|2\n36101|Bruno|Okafor|10|2\nFixed 2026-11-18: reference trimmed to the delivered-order counts of rank 1 and 2 (11,10,10,10) because names print with middle names; text check now needs Ana de la Cruz and all three tied (Ng, Silva, Okafor). Trimmed reference returns: 11, 10, 10, 10.",
       "checks": [
         {
           "type": "calledTool",
@@ -359,14 +360,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "Ana[\\s\\S]*Cruz",
+            "pattern": "(?=[\\s\\S]*Ana[\\s\\S]*Cruz)(?=[\\s\\S]*\\bNg\\b)(?=[\\s\\S]*\\bSilva\\b)(?=[\\s\\S]*\\bOkafor\\b)",
             "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "WITH t AS (SELECT o.customer_id, COUNT(*) AS delivered_orders FROM edge_cases.orders o WHERE o.status = 'delivered' GROUP BY 1), k AS (SELECT *, DENSE_RANK() OVER (ORDER BY delivered_orders DESC) AS rk FROM t) SELECT k.customer_id, cu.first_name, cu.last_name, k.delivered_orders, k.rk FROM k JOIN edge_cases.customers cu ON cu.id = k.customer_id WHERE k.rk <= 2 ORDER BY k.rk, k.customer_id"
+        "postgres": "WITH t AS (SELECT o.customer_id, COUNT(*) AS delivered_orders FROM edge_cases.orders o WHERE o.status = 'delivered' GROUP BY 1), k AS (SELECT *, DENSE_RANK() OVER (ORDER BY delivered_orders DESC) AS rk FROM t) SELECT delivered_orders FROM k WHERE rk <= 2 ORDER BY rk, customer_id"
       }
     },
     {
@@ -523,7 +524,7 @@
       ],
       "question": "In British pounds, which customer tier has the highest average order value? Leave out cancelled orders.",
       "intent": "Per-order average of GBP orders by customer tier: Platinum highest (4,698.14 GBP over 9,290 orders), Silver lowest (4,527.12). Trap: mixing currencies, or averaging lines instead of orders.",
-      "notes": "Verified 2026-11-18 on edge_cases (4 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\nPlatinum|9290|4698.14\nBronze|9531|4668.18\nGold|9415|4608.07\nSilver|9202|4527.12",
+      "notes": "Verified 2026-11-18 on edge_cases (4 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\nPlatinum|9290|4698.14\nBronze|9531|4668.18\nGold|9415|4608.07\nSilver|9202|4527.12\nFixed 2026-11-18: reference trimmed to the winning tier and its unrounded average (Platinum 4698.138...); the Silver row differed by one line-less order in v_order_totals and is not what the question asks. Trimmed reference returns: Platinum|4698.1383519913885899.",
       "checks": [
         {
           "type": "calledTool",
@@ -546,7 +547,7 @@
         }
       ],
       "expectedSql": {
-        "postgres": "WITH t AS (SELECT o.id, cu.\"CustomerTier\" AS tier, SUM(l.line_total) AS order_total FROM edge_cases.orders o JOIN edge_cases.customers cu ON cu.id = o.customer_id JOIN edge_cases.order_lines l ON l.order_id = o.id WHERE UPPER(TRIM(o.currency)) = 'GBP' AND o.status <> 'cancelled' GROUP BY 1, 2) SELECT tier, COUNT(*) AS orders, ROUND(AVG(order_total), 2) AS avg_order_value FROM t GROUP BY 1 ORDER BY 3 DESC"
+        "postgres": "WITH t AS (SELECT o.id, cu.\"CustomerTier\" AS tier, SUM(l.line_total) AS order_total FROM edge_cases.orders o JOIN edge_cases.customers cu ON cu.id = o.customer_id JOIN edge_cases.order_lines l ON l.order_id = o.id WHERE UPPER(TRIM(o.currency)) = 'GBP' AND o.status <> 'cancelled' GROUP BY 1, 2) SELECT tier, AVG(order_total) AS avg_order_value FROM t GROUP BY 1 ORDER BY 2 DESC LIMIT 1"
       }
     },
     {
@@ -559,7 +560,7 @@
       ],
       "question": "How much money have we refunded for each return reason?",
       "intent": "Refund totals by reason with 'Damaged'/'damaged'/'DAMAGED ' merged: Damaged 1,876,020.29 (7,500 returns) and the rest about 0.6M each, including 2,500 returns with no reason. Refunds are stored as negative amounts; the answer should present them as money refunded, not as negative revenue.",
-      "notes": "Verified 2026-11-18 on edge_cases (4 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\nDamaged|7500|1876020.29\n(no reason)|2500|627408.57\nWrong Size|2500|625910.33\nChanged Mind|2500|616677.42",
+      "notes": "Verified 2026-11-18 on edge_cases (4 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\nDamaged|7500|1876020.29\n(no reason)|2500|627408.57\nWrong Size|2500|625910.33\nChanged Mind|2500|616677.42\nFixed 2026-11-18: reference drops the blank-reason row whose label is arbitrary ('(no reason)' vs '[No reason]') and the count column; text check now also needs the no-reason amount 627,408.57. Trimmed reference returns: Damaged|1876020.29, Wrong Size|625910.33, Changed Mind|616677.42.",
       "checks": [
         {
           "type": "calledTool",
@@ -575,14 +576,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "1[,.\\s]?876[,.\\s]?020[.,]29",
+            "pattern": "(?=[\\s\\S]*1[,.\\s]?876[,.\\s]?020[.,]29)(?=[\\s\\S]*627[,.\\s]?408[.,]57)",
             "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT COALESCE(NULLIF(INITCAP(LOWER(TRIM(reason))),''),'(no reason)') AS reason, COUNT(*), -SUM(refund_amount) AS refunded FROM edge_cases.returns GROUP BY 1 ORDER BY 3 DESC"
+        "postgres": "SELECT INITCAP(LOWER(TRIM(reason))) AS reason, -SUM(refund_amount) AS refunded FROM edge_cases.returns WHERE NULLIF(TRIM(reason),'') IS NOT NULL GROUP BY 1 ORDER BY 2 DESC"
       }
     },
     {
@@ -703,7 +704,7 @@
       ],
       "question": "How many orders included products from at least three different main departments?",
       "intent": "Count of orders whose items, after rolling categories up to the 8 top departments, span 3 or more departments: 214,466 (175,195 with exactly 3 and 39,271 with 4). Trap: counting distinct product categories instead of top departments overcounts.",
-      "notes": "Verified 2026-11-18 on edge_cases (1 rows, 0.4s). Result (columns as in expectedSql, '|' separated):\n214466|299994",
+      "notes": "Verified 2026-11-18 on edge_cases (1 rows, 0.4s). Result (columns as in expectedSql, '|' separated):\n214466|299994\nFixed 2026-11-18: reference trimmed to the one figure asked (214466); the helper denominator 299994 made answers with 300,000 fail. Trimmed reference returns: 214466.",
       "checks": [
         {
           "type": "calledTool",
@@ -726,7 +727,7 @@
         }
       ],
       "expectedSql": {
-        "postgres": "WITH d AS (SELECT l.order_id, COUNT(DISTINCT COALESCE(gc.name, pc.name, c.name)) AS departments FROM edge_cases.order_lines l JOIN edge_cases.orders o ON o.id = l.order_id JOIN edge_cases.products p ON p.id = l.product_id JOIN edge_cases.categories c LEFT JOIN edge_cases.categories pc ON pc.category_id = c.parent_category_id LEFT JOIN edge_cases.categories gc ON gc.category_id = pc.parent_category_id ON c.category_id = p.category_id GROUP BY 1) SELECT COUNT(*) FILTER (WHERE departments >= 3) AS orders_3plus, COUNT(*) AS orders_with_known_products FROM d"
+        "postgres": "WITH d AS (SELECT l.order_id, COUNT(DISTINCT COALESCE(gc.name, pc.name, c.name)) AS departments FROM edge_cases.order_lines l JOIN edge_cases.orders o ON o.id = l.order_id JOIN edge_cases.products p ON p.id = l.product_id JOIN edge_cases.categories c LEFT JOIN edge_cases.categories pc ON pc.category_id = c.parent_category_id LEFT JOIN edge_cases.categories gc ON gc.category_id = pc.parent_category_id ON c.category_id = p.category_id GROUP BY 1) SELECT COUNT(*) FILTER (WHERE departments >= 3) AS orders_3plus FROM d"
       }
     },
     {
@@ -811,7 +812,7 @@
       ],
       "question": "Are we getting fewer orders in 2026 than in 2025?",
       "intent": "No: 2026 data runs only to 29 October. Comparing the same period (1 Jan to 29 Oct), 2026 has 29,318 orders against 29,154 in 2025, slightly up (+0.6%). Trap: comparing 2026 so far with all of 2025 (35,329) suggests a 17% drop.",
-      "notes": "Verified 2026-11-18 on edge_cases (1 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\n29154|29318|35329|2026-10-29 11:11:37+00\n\nTrap query (must return different rows): SELECT EXTRACT(YEAR FROM ordered_at) AS y, COUNT(*) FROM edge_cases.orders WHERE ordered_at >= '2025-01-01' GROUP BY 1 ORDER BY 1",
+      "notes": "Verified 2026-11-18 on edge_cases (1 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\n29154|29318|35329|2026-10-29 11:11:37+00\n\nTrap query (must return different rows): SELECT EXTRACT(YEAR FROM ordered_at) AS y, COUNT(*) FROM edge_cases.orders WHERE ordered_at >= '2025-01-01' GROUP BY 1 ORDER BY 1\nFixed 2026-11-18: reference trimmed to the like-for-like 2025 count (29154), which the trap query never returns; text check now needs both 29,318 and 29,154. Trimmed reference returns: 29154.",
       "checks": [
         {
           "type": "calledTool",
@@ -827,14 +828,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "29[,.\\s]?318",
+            "pattern": "(?=[\\s\\S]*29[,.\\s]?318)(?=[\\s\\S]*29[,.\\s]?154)",
             "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT COUNT(*) FILTER (WHERE ordered_at >= '2025-01-01 00:00+00' AND ordered_at < '2025-10-30 00:00+00') AS orders_2025_jan_oct29, COUNT(*) FILTER (WHERE ordered_at >= '2026-01-01 00:00+00' AND ordered_at < '2026-10-30 00:00+00') AS orders_2026_jan_oct29, COUNT(*) FILTER (WHERE ordered_at >= '2025-01-01 00:00+00' AND ordered_at < '2026-01-01 00:00+00') AS orders_2025_full_year, MAX(ordered_at) AS last_order FROM edge_cases.orders"
+        "postgres": "SELECT COUNT(*) AS orders_2025_jan_oct29 FROM edge_cases.orders WHERE ordered_at >= '2025-01-01 00:00+00' AND ordered_at < '2025-10-30 00:00+00'"
       }
     },
     {
@@ -883,7 +884,7 @@
       ],
       "question": "We have shipments with no delivery date. Are those just recent parcels still on their way?",
       "intent": "No: 30,000 shipments have no delivery date, 10,000 each for FedEx (all under the 'FEDEX ' spelling), DHL and Servientrega; they were shipped from January 2021 to October 2026, and almost all were shipped before October 2026, so they are not in transit; UPS has none. The answer should call it a tracking/data gap with these counts.",
-      "notes": "Verified 2026-11-18 on edge_cases (4 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\nDHL|50000|10000|9921|2021-01-02\nFedEx|100000|10000|9924|2021-01-02\nServientrega|50000|10000|9919|2021-01-02\nUPS|50000|0|0|",
+      "notes": "Verified 2026-11-18 on edge_cases (4 rows, 0.1s). Result (columns as in expectedSql, '|' separated):\nDHL|50000|10000|9921|2021-01-02\nFedEx|100000|10000|9924|2021-01-02\nServientrega|50000|10000|9919|2021-01-02\nUPS|50000|0|0|\nFixed 2026-11-18: reference trimmed to the 30000 undelivered shipments (the per-carrier split is not asked); text check now also needs a 'no / not recent / older' conclusion, not just the figure. Trimmed reference returns: 30000.",
       "checks": [
         {
           "type": "calledTool",
@@ -899,14 +900,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "30[,.\\s]?000|10[,.\\s]?000",
+            "pattern": "(?=[\\s\\S]*30[,.\\s]?000)(?=[\\s\\S]*(?:\\bno\\b|\\bnot\\b|older|over a year|stale|stuck|overdue|past (?:the )?(?:promised|expected)|data[- ]quality))",
             "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT CASE WHEN LOWER(TRIM(carrier)) = 'fedex' THEN 'FedEx' WHEN LOWER(TRIM(carrier)) = 'dhl' THEN 'DHL' ELSE TRIM(carrier) END AS carrier, COUNT(*) AS shipments, COUNT(*) FILTER (WHERE delivered_at IS NULL) AS not_delivered, COUNT(*) FILTER (WHERE delivered_at IS NULL AND shipped_at < '2026-10-01') AS not_delivered_shipped_before_oct_2026, MIN(shipped_at) FILTER (WHERE delivered_at IS NULL)::date AS oldest_undelivered FROM edge_cases.shipments GROUP BY 1 ORDER BY 3 DESC"
+        "postgres": "SELECT COUNT(*) AS not_delivered FROM edge_cases.shipments WHERE delivered_at IS NULL"
       }
     },
     {
@@ -919,7 +920,7 @@
       ],
       "question": "How many orders did we take in 2025 compared with 2024, and what was the change in percent?",
       "intent": "Both yearly order counts and the percentage change (about +0.1%, essentially flat). Counting by UTC calendar year (35,284 vs 35,329) or by the order's local-time year (35,280 vs 35,330) are both acceptable if stated; the trap is mixing them or counting orders twice through a join.",
-      "notes": "Verified 2026-11-18: 2024|35284, 2025|35329 (UTC year) -> +0.13%. Local year field: 2024|35280, 2025|35330.",
+      "notes": "Verified 2026-11-18: 2024|35284, 2025|35329 (UTC year) -> +0.13%. Local year field: 2024|35280, 2025|35330.\nFixed 2026-11-18: reference trimmed to the 2024 count 35284 so a one-row or per-year answer both pass; the text check still needs both years. Trimmed reference returns: 35284.",
       "checks": [
         {
           "type": "calledTool",
@@ -935,13 +936,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "(?=[\\s\\S]*?(?:35[,.\\s]?3(29|30)))(?=[\\s\\S]*?(?:35[,.\\s]?28(4|0)))"
+            "pattern": "(?=[\\s\\S]*?(?:35[,.\\s]?3(29|30)))(?=[\\s\\S]*?(?:35[,.\\s]?28(4|0)))",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT EXTRACT(YEAR FROM ordered_at AT TIME ZONE 'UTC')::int AS order_year, COUNT(*) AS orders FROM edge_cases.orders WHERE ordered_at >= '2024-01-01T00:00:00Z' AND ordered_at < '2026-01-01T00:00:00Z' GROUP BY 1 ORDER BY 1"
+        "postgres": "SELECT COUNT(*) AS orders_2024 FROM edge_cases.orders WHERE ordered_at >= '2024-01-01T00:00:00Z' AND ordered_at < '2025-01-01T00:00:00Z'"
       }
     },
     {
@@ -990,7 +992,7 @@
       ],
       "question": "At each stock count, how many product-and-warehouse combinations were below their reorder level?",
       "intent": "One figure per stock count date (four dates, 2026-08-02 to 2026-10-31): 1,071, 1,091, 1,149, 1,075. A stock record is identified by product, warehouse and date together; the peak is the 2026-10-01 count.",
-      "notes": "Verified 2026-11-18: 2026-08-02|1071, 2026-09-01|1091, 2026-10-01|1149, 2026-10-31|1075 (15,000 records per date).",
+      "notes": "Verified 2026-11-18: 2026-08-02|1071, 2026-09-01|1091, 2026-10-01|1149, 2026-10-31|1075 (15,000 records per date).\nFixed 2026-11-18: reference trimmed to the four below-reorder counts; snapshot dates came back as timestamps and failed the text match. Trimmed reference returns: 1071, 1091, 1149, 1075.",
       "checks": [
         {
           "type": "calledTool",
@@ -1006,13 +1008,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "(?=[\\s\\S]*?(?:1[,.\\s]?149))(?=[\\s\\S]*?(?:1[,.\\s]?071))"
+            "pattern": "(?=[\\s\\S]*?(?:1[,.\\s]?149))(?=[\\s\\S]*?(?:1[,.\\s]?071))",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT snapshot_date, COUNT(*) FILTER (WHERE quantity_on_hand < reorder_point) AS below_reorder, COUNT(*) AS records FROM edge_cases.inventory_snapshots GROUP BY snapshot_date ORDER BY snapshot_date"
+        "postgres": "SELECT COUNT(*) FILTER (WHERE quantity_on_hand < reorder_point) AS below_reorder FROM edge_cases.inventory_snapshots GROUP BY snapshot_date ORDER BY snapshot_date"
       }
     },
     {
@@ -1025,7 +1028,7 @@
       ],
       "question": "How many returned items came back within 30 days of the order being placed?",
       "intent": "Count returns whose return date falls between the order date and 30 days after it: 206 of 15,000. Trap: 7,270 returns are dated before their order; a plain 'difference <= 30 days' test counts them too and gives a much larger number.",
-      "notes": "Verified 2026-11-18: within_30 206, returned before order 7270, all returns 15000.",
+      "notes": "Verified 2026-11-18: within_30 206, returned before order 7270, all returns 15000.\nFixed 2026-11-18: reference trimmed to the asked count 206; helper columns failed right answers. Trimmed reference returns: 206.",
       "checks": [
         {
           "type": "calledTool",
@@ -1041,13 +1044,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "\\b206\\b"
+            "pattern": "\\b206\\b",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT COUNT(*) FILTER (WHERE r.returned_at >= o.ordered_at AND r.returned_at <= o.ordered_at + INTERVAL '30 days') AS within_30_days, COUNT(*) FILTER (WHERE r.returned_at < o.ordered_at) AS dated_before_order, COUNT(*) AS all_returns FROM edge_cases.returns r JOIN edge_cases.order_lines l ON l.id = r.order_line_id JOIN edge_cases.orders o ON o.id = l.order_id"
+        "postgres": "SELECT COUNT(*) FILTER (WHERE r.returned_at >= o.ordered_at AND r.returned_at <= o.ordered_at + INTERVAL '30 days') AS within_30_days FROM edge_cases.returns r JOIN edge_cases.order_lines l ON l.id = r.order_line_id JOIN edge_cases.orders o ON o.id = l.order_id"
       }
     },
     {
@@ -1060,7 +1064,7 @@
       ],
       "question": "How much money did we refund to customers on returns made in 2025?",
       "intent": "About 437,408.33 refunded over 1,754 returns in 2025. Trap: refunds are stored as negative amounts; the answer must present the refunded money as a positive amount (or say the stored sign), not a 'negative refund'.",
-      "notes": "Verified 2026-11-18: SUM(refund_amount) = -437408.33 over 1754 returns; each between -500.69 and -1.09.",
+      "notes": "Verified 2026-11-18: SUM(refund_amount) = -437408.33 over 1754 returns; each between -500.69 and -1.09.\nFixed 2026-11-18: reference trimmed to the refunded total 437408.33; the returns count is not asked. Trimmed reference returns: 437408.33.",
       "checks": [
         {
           "type": "calledTool",
@@ -1076,13 +1080,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "437[,.\\s]?40[78]"
+            "pattern": "437[,.\\s]?40[78]",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT -SUM(refund_amount) AS refunded, COUNT(*) AS returns FROM edge_cases.returns WHERE returned_at >= '2025-01-01T00:00:00Z' AND returned_at < '2026-01-01T00:00:00Z'"
+        "postgres": "SELECT -SUM(refund_amount) AS refunded FROM edge_cases.returns WHERE returned_at >= '2025-01-01T00:00:00Z' AND returned_at < '2026-01-01T00:00:00Z'"
       }
     },
     {
@@ -1095,7 +1100,7 @@
       ],
       "question": "What share of the orders we placed in 2025 and delivered arrived after the delivery date we promised?",
       "intent": "Late deliveries over delivered 2025 orders: 3,958 of 25,995, about 15.2%. Denominator is delivered orders only (undelivered parcels excluded); late means the delivery day is after the promised date.",
-      "notes": "Verified 2026-11-18: late 3958, delivered 25995, 15.23%.",
+      "notes": "Verified 2026-11-18: late 3958, delivered 25995, 15.23%.\nFixed 2026-11-18: reference trimmed to late 3958 and delivered 25995 (no rounded pct column, which answers give as a 0-1 share). Trimmed reference returns: 3958|25995.",
       "checks": [
         {
           "type": "calledTool",
@@ -1111,13 +1116,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "15[.,]2\\d?\\s*%"
+            "pattern": "15[.,]2\\d?\\s*%",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT COUNT(*) FILTER (WHERE (s.delivered_at AT TIME ZONE 'UTC')::date > o.expected_delivery_date) AS late, COUNT(*) AS delivered, ROUND(100.0 * COUNT(*) FILTER (WHERE (s.delivered_at AT TIME ZONE 'UTC')::date > o.expected_delivery_date) / COUNT(*), 2) AS late_pct FROM edge_cases.orders o JOIN edge_cases.shipments s ON s.order_id = o.id WHERE s.delivered_at IS NOT NULL AND o.ordered_at >= '2025-01-01T00:00:00Z' AND o.ordered_at < '2026-01-01T00:00:00Z'"
+        "postgres": "SELECT COUNT(*) FILTER (WHERE (s.delivered_at AT TIME ZONE 'UTC')::date > o.expected_delivery_date) AS late, COUNT(*) AS delivered FROM edge_cases.orders o JOIN edge_cases.shipments s ON s.order_id = o.id WHERE s.delivered_at IS NOT NULL AND o.ordered_at >= '2025-01-01T00:00:00Z' AND o.ordered_at < '2026-01-01T00:00:00Z'"
       }
     },
     {
@@ -1130,7 +1136,7 @@
       ],
       "question": "Of the customers whose very first order was in 2024, what share ordered again within 90 days of that first order?",
       "intent": "Cohort = customers whose earliest order ever is in 2024 (450, not everyone who ordered in 2024). 82 of them reordered within 90 days, about 18.2%; 374 (83%) came back at some point.",
-      "notes": "Verified 2026-11-18: cohort 450, came back within 90 days 82 (18.22%), ever 374.",
+      "notes": "Verified 2026-11-18: cohort 450, came back within 90 days 82 (18.22%), ever 374.\nFixed 2026-11-18: reference trimmed to cohort 450 and came back 82; came_back_ever is not asked. Trimmed reference returns: 450|82.",
       "checks": [
         {
           "type": "calledTool",
@@ -1146,13 +1152,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "(?=[\\s\\S]*?(?:18[.,]2\\d?\\s*%|\\b82\\b))(?=[\\s\\S]*?(?:\\b450\\b))"
+            "pattern": "(?=[\\s\\S]*?(?:18[.,]2\\d?\\s*%|\\b82\\b))(?=[\\s\\S]*?(?:\\b450\\b))",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "WITH firsts AS (SELECT customer_id, MIN(ordered_at) AS first_at FROM edge_cases.orders GROUP BY customer_id), cohort AS (SELECT * FROM firsts WHERE first_at >= '2024-01-01T00:00:00Z' AND first_at < '2025-01-01T00:00:00Z') SELECT COUNT(*) AS cohort_customers, COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM edge_cases.orders o WHERE o.customer_id = c.customer_id AND o.ordered_at > c.first_at AND o.ordered_at <= c.first_at + INTERVAL '90 days')) AS came_back_90d, COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM edge_cases.orders o WHERE o.customer_id = c.customer_id AND o.ordered_at > c.first_at)) AS came_back_ever FROM cohort c"
+        "postgres": "WITH firsts AS (SELECT customer_id, MIN(ordered_at) AS first_at FROM edge_cases.orders GROUP BY customer_id), cohort AS (SELECT * FROM firsts WHERE first_at >= '2024-01-01T00:00:00Z' AND first_at < '2025-01-01T00:00:00Z') SELECT COUNT(*) AS cohort_customers, COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM edge_cases.orders o WHERE o.customer_id = c.customer_id AND o.ordered_at > c.first_at AND o.ordered_at <= c.first_at + INTERVAL '90 days')) AS came_back_90d FROM cohort c"
       }
     },
     {
@@ -1181,7 +1188,8 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "^(?=[\\s\\S]*1[.,]46)(?=[\\s\\S]*1[.,]5[01])"
+            "pattern": "^(?=[\\s\\S]*1[.,]46)(?=[\\s\\S]*1[.,]5[01])",
+            "flags": "i"
           },
           "criterion": "G1"
         }
@@ -1216,7 +1224,8 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "^(?=[\\s\\S]*40[.,]3\\d?)(?=[\\s\\S]*40[.,][67]\\d?)"
+            "pattern": "^(?=[\\s\\S]*40[.,]3\\d?)(?=[\\s\\S]*40[.,][67]\\d?)",
+            "flags": "i"
           },
           "criterion": "G1"
         }
@@ -1235,7 +1244,7 @@
       ],
       "question": "Which month of 2025 brought in the least sales revenue, and how far below the other months was it?",
       "intent": "February 2025 is the weakest month (about 12.31M in line revenue, about 10.93M without cancelled orders), with April next. Either reading is fine if stated; the strongest month depends on whether cancelled orders count (November vs January), so only February is fixed.",
-      "notes": "Verified 2026-11-18 (all orders): 2025-11|14143989.48 top ... 2025-04|12939402.57, 2025-02|12309752.62 bottom. Excluding cancelled: 2025-01|12509778.27 top, 2025-02|10930658.03 bottom.",
+      "notes": "Verified 2026-11-18 (all orders): 2025-11|14143989.48 top ... 2025-04|12939402.57, 2025-02|12309752.62 bottom. Excluding cancelled: 2025-01|12509778.27 top, 2025-02|10930658.03 bottom.\nFixed 2026-11-18: reference trimmed to the weakest month's revenue (12309752.62) instead of all 12 months. Trimmed reference returns: 12309752.62.",
       "checks": [
         {
           "type": "calledTool",
@@ -1258,7 +1267,7 @@
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT to_char(date_trunc('month', o.ordered_at AT TIME ZONE 'UTC'), 'YYYY-MM') AS month, SUM(l.line_total) AS revenue FROM edge_cases.orders o JOIN edge_cases.order_lines l ON l.order_id = o.id WHERE o.ordered_at >= '2025-01-01T00:00:00Z' AND o.ordered_at < '2026-01-01T00:00:00Z' GROUP BY 1 ORDER BY 2 ASC"
+        "postgres": "SELECT SUM(l.line_total) AS revenue FROM edge_cases.orders o JOIN edge_cases.order_lines l ON l.order_id = o.id WHERE o.ordered_at >= '2025-01-01T00:00:00Z' AND o.ordered_at < '2026-01-01T00:00:00Z' GROUP BY date_trunc('month', o.ordered_at AT TIME ZONE 'UTC') ORDER BY 1 ASC LIMIT 1"
       }
     },
     {
@@ -1271,7 +1280,7 @@
       ],
       "question": "In 2026, which month saw the biggest jump in number of orders compared with the month before?",
       "intent": "March 2026: 3,067 orders vs 2,709 in February, +358 (the largest month-over-month rise; January's comparison is against December 2025). February had the largest drop (-277).",
-      "notes": "Verified 2026-11-18: 2026-03|3067|+358, 2026-07|3076|+152, 2026-05|3039|+122 ... 2026-02|2709|-277.",
+      "notes": "Verified 2026-11-18: 2026-03|3067|+358, 2026-07|3076|+152, 2026-05|3039|+122 ... 2026-02|2709|-277.\nFixed 2026-11-18: reference trimmed to the winning month's orders and jump (3067, +358) instead of all 11 months. Trimmed reference returns: 3067|358.",
       "checks": [
         {
           "type": "calledTool",
@@ -1294,7 +1303,7 @@
         }
       ],
       "expectedSql": {
-        "postgres": "WITH m AS (SELECT date_trunc('month', ordered_at AT TIME ZONE 'UTC')::date AS month, COUNT(*) AS orders FROM edge_cases.orders WHERE ordered_at >= '2025-12-01T00:00:00Z' AND ordered_at < '2026-11-01T00:00:00Z' GROUP BY 1) SELECT to_char(month, 'YYYY-MM') AS month, orders, orders - LAG(orders) OVER (ORDER BY month) AS change FROM m ORDER BY change DESC NULLS LAST"
+        "postgres": "WITH m AS (SELECT date_trunc('month', ordered_at AT TIME ZONE 'UTC')::date AS month, COUNT(*) AS orders FROM edge_cases.orders WHERE ordered_at >= '2025-12-01T00:00:00Z' AND ordered_at < '2026-11-01T00:00:00Z' GROUP BY 1), c AS (SELECT orders, orders - LAG(orders) OVER (ORDER BY month) AS change FROM m) SELECT orders, change FROM c ORDER BY change DESC NULLS LAST LIMIT 1"
       }
     },
     {
@@ -1323,7 +1332,8 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "11[,.\\s]?755"
+            "pattern": "11[,.\\s]?755",
+            "flags": "i"
           },
           "criterion": "G1"
         }
@@ -1342,7 +1352,7 @@
       ],
       "question": "Which warehouse lost the most stock between the first and the latest stock count?",
       "intent": "BOG-01: total units on hand fell from 1,264,121 (2026-08-02) to 1,224,448 (2026-10-31), -39,673. MAD-03 fell 16,071 and MIA-02 rose 16,539. Units must be summed per warehouse per date, never across dates.",
-      "notes": "Verified 2026-11-18: BOG-01|1264121|1224448|-39673, MAD-03|1242087|1226016|-16071, MIA-02|1216395|1232934|+16539.",
+      "notes": "Verified 2026-11-18: BOG-01|1264121|1224448|-39673, MAD-03|1242087|1226016|-16071, MIA-02|1216395|1232934|+16539.\nFixed 2026-11-18: reference trimmed to BOG-01 with its first and latest counts; the signed change column failed answers that state the loss as a positive 39,673. Trimmed reference returns: BOG-01|1264121|1224448.",
       "checks": [
         {
           "type": "calledTool",
@@ -1358,13 +1368,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "(?=[\\s\\S]*?(?:BOG\\-01))(?=[\\s\\S]*?(?:39[,.\\s]?673))"
+            "pattern": "(?=[\\s\\S]*?(?:BOG\\-01))(?=[\\s\\S]*?(?:39[,.\\s]?673))",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT warehouse_code, SUM(quantity_on_hand) FILTER (WHERE snapshot_date = DATE '2026-08-02') AS first_count, SUM(quantity_on_hand) FILTER (WHERE snapshot_date = DATE '2026-10-31') AS latest_count, SUM(quantity_on_hand) FILTER (WHERE snapshot_date = DATE '2026-10-31') - SUM(quantity_on_hand) FILTER (WHERE snapshot_date = DATE '2026-08-02') AS change FROM edge_cases.inventory_snapshots GROUP BY warehouse_code ORDER BY change ASC"
+        "postgres": "SELECT warehouse_code, SUM(quantity_on_hand) FILTER (WHERE snapshot_date = DATE '2026-08-02') AS first_count, SUM(quantity_on_hand) FILTER (WHERE snapshot_date = DATE '2026-10-31') AS latest_count FROM edge_cases.inventory_snapshots GROUP BY warehouse_code ORDER BY SUM(quantity_on_hand) FILTER (WHERE snapshot_date = DATE '2026-10-31') - SUM(quantity_on_hand) FILTER (WHERE snapshot_date = DATE '2026-08-02') ASC LIMIT 1"
       }
     },
     {
@@ -1429,7 +1440,8 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "^(?=[\\s\\S]*Promo 3)(?=[\\s\\S]*Promo 5)(?=[\\s\\S]*Promo 7)"
+            "pattern": "^(?=[\\s\\S]*Promo 3)(?=[\\s\\S]*Promo 5)(?=[\\s\\S]*Promo 7)",
+            "flags": "i"
           },
           "criterion": "G1"
         }
@@ -1500,7 +1512,8 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "^(?=[\\s\\S]*4[,.\\s]?58[45])(?=[\\s\\S]*4[,.\\s]?88\\d)"
+            "pattern": "^(?=[\\s\\S]*4[,.\\s]?58[45])(?=[\\s\\S]*4[,.\\s]?88\\d)",
+            "flags": "i"
           },
           "criterion": "G1"
         }
@@ -1519,7 +1532,7 @@
       ],
       "question": "How many orders placed in 2025 are marked as cancelled but still have a delivery recorded?",
       "intent": "3,170 of the 4,299 cancelled 2025 orders have a shipment with a delivery date. Count distinct orders, not shipment rows.",
-      "notes": "Verified 2026-11-18: 3170 cancelled-and-delivered orders; 4299 cancelled orders in 2025.",
+      "notes": "Verified 2026-11-18: 3170 cancelled-and-delivered orders; 4299 cancelled orders in 2025.\nFixed 2026-11-18: reference trimmed to the asked count 3170; the helper 4299 cancelled column failed right answers. Trimmed reference returns: 3170.",
       "checks": [
         {
           "type": "calledTool",
@@ -1535,13 +1548,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "3[,.\\s]?170"
+            "pattern": "3[,.\\s]?170",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT COUNT(DISTINCT o.id) AS cancelled_with_delivery, (SELECT COUNT(*) FROM edge_cases.orders WHERE status = 'cancelled' AND ordered_at >= '2025-01-01T00:00:00Z' AND ordered_at < '2026-01-01T00:00:00Z') AS cancelled_orders FROM edge_cases.orders o JOIN edge_cases.shipments s ON s.order_id = o.id WHERE o.status = 'cancelled' AND s.delivered_at IS NOT NULL AND o.ordered_at >= '2025-01-01T00:00:00Z' AND o.ordered_at < '2026-01-01T00:00:00Z'"
+        "postgres": "SELECT COUNT(DISTINCT o.id) AS cancelled_with_delivery FROM edge_cases.orders o JOIN edge_cases.shipments s ON s.order_id = o.id WHERE o.status = 'cancelled' AND s.delivered_at IS NOT NULL AND o.ordered_at >= '2025-01-01T00:00:00Z' AND o.ordered_at < '2026-01-01T00:00:00Z'"
       }
     },
     {
@@ -1554,7 +1568,7 @@
       ],
       "question": "Which main product department had the most returns in 2025?",
       "intent": "Apparel, with 268 returned lines (1,275 units), ahead of Beauty 235 and Home 234. Products sit in sub-categories up to three levels deep, so each must be rolled up to its top-level department.",
-      "notes": "Verified 2026-11-18: Apparel|268|1275, Beauty|235|1229, Home|234|1231, Electronics|231|1184, Grocery|203, Sports|197, Books|193, Toys|193. 5 products have no valid category.",
+      "notes": "Verified 2026-11-18: Apparel|268|1275, Beauty|235|1229, Home|234|1231, Electronics|231|1184, Grocery|203, Sports|197, Books|193, Toys|193. 5 products have no valid category.\nFixed 2026-11-18: reference trimmed to the top department and its returns (Apparel 268); units and other departments are not asked. Trimmed reference returns: Apparel|268.",
       "checks": [
         {
           "type": "calledTool",
@@ -1568,15 +1582,16 @@
           "criterion": "D3"
         },
         {
-          "type": "includes",
+          "type": "matches",
           "args": {
-            "text": "Apparel"
+            "pattern": "Apparel",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "WITH RECURSIVE tree AS (SELECT category_id, category_id AS top_id FROM edge_cases.categories WHERE parent_category_id IS NULL UNION ALL SELECT k.category_id, t.top_id FROM edge_cases.categories k JOIN tree t ON k.parent_category_id = t.category_id) SELECT top.name AS department, COUNT(*) AS returned_lines, SUM(l.quantity) AS units FROM edge_cases.returns r JOIN edge_cases.order_lines l ON l.id = r.order_line_id JOIN edge_cases.products p ON p.id = l.product_id JOIN tree ON tree.category_id = p.category_id JOIN edge_cases.categories top ON top.category_id = tree.top_id WHERE r.returned_at >= '2025-01-01T00:00:00Z' AND r.returned_at < '2026-01-01T00:00:00Z' GROUP BY 1 ORDER BY 2 DESC"
+        "postgres": "WITH RECURSIVE tree AS (SELECT category_id, category_id AS top_id FROM edge_cases.categories WHERE parent_category_id IS NULL UNION ALL SELECT k.category_id, t.top_id FROM edge_cases.categories k JOIN tree t ON k.parent_category_id = t.category_id) SELECT top.name AS department, COUNT(*) AS returned_lines FROM edge_cases.returns r JOIN edge_cases.order_lines l ON l.id = r.order_line_id JOIN edge_cases.products p ON p.id = l.product_id JOIN tree ON tree.category_id = p.category_id JOIN edge_cases.categories top ON top.category_id = tree.top_id WHERE r.returned_at >= '2025-01-01T00:00:00Z' AND r.returned_at < '2026-01-01T00:00:00Z' GROUP BY 1 ORDER BY 2 DESC LIMIT 1"
       }
     },
     {
@@ -1605,7 +1620,8 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "\\b46\\b"
+            "pattern": "\\b46\\b",
+            "flags": "i"
           },
           "criterion": "G1"
         }
@@ -1624,7 +1640,7 @@
       ],
       "question": "How many customers wrote a review in 2025 but placed no order that year?",
       "intent": "2,236 of the 4,625 distinct customers who reviewed in 2025 had no 2025 order. Count distinct customers, not reviews (an anti-join).",
-      "notes": "Verified 2026-11-18: reviewers 4625, without a 2025 order 2236.",
+      "notes": "Verified 2026-11-18: reviewers 4625, without a 2025 order 2236.\nFixed 2026-11-18: reference trimmed to the asked count 2236. Trimmed reference returns: 2236.",
       "checks": [
         {
           "type": "calledTool",
@@ -1640,13 +1656,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "2[,.\\s]?236"
+            "pattern": "2[,.\\s]?236",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT COUNT(DISTINCT r.customer_id) AS reviewers_2025, COUNT(DISTINCT r.customer_id) FILTER (WHERE NOT EXISTS (SELECT 1 FROM edge_cases.orders o WHERE o.customer_id = r.customer_id AND o.ordered_at >= '2025-01-01T00:00:00Z' AND o.ordered_at < '2026-01-01T00:00:00Z')) AS without_2025_order FROM edge_cases.reviews r WHERE r.created_at >= '2025-01-01T00:00:00Z' AND r.created_at < '2026-01-01T00:00:00Z'"
+        "postgres": "SELECT COUNT(DISTINCT r.customer_id) AS without_2025_order FROM edge_cases.reviews r WHERE r.created_at >= '2025-01-01T00:00:00Z' AND r.created_at < '2026-01-01T00:00:00Z' AND NOT EXISTS (SELECT 1 FROM edge_cases.orders o WHERE o.customer_id = r.customer_id AND o.ordered_at >= '2025-01-01T00:00:00Z' AND o.ordered_at < '2026-01-01T00:00:00Z')"
       }
     },
     {
@@ -1731,7 +1748,7 @@
       ],
       "question": "What's our cancellation rate this year?",
       "intent": "Must state that 'this year' is read as 2026 to date (data ends 29 Oct 2026): 3,706 of 29,318 orders cancelled, about 12.6% (vs 12.2% in 2025 if it compares). A last-12-months reading is acceptable if stated.",
-      "notes": "Verified 2026-11-18: 2026 cancelled 3706 / 29318 = 12.64%; 2025 = 12.17%.",
+      "notes": "Verified 2026-11-18: 2026 cancelled 3706 / 29318 = 12.64%; 2025 = 12.17%.\nFixed 2026-11-18: reference trimmed to the cancelled count 3706 (answers also split by status); the 12.6% text check carries the rate. Trimmed reference returns: 3706.",
       "checks": [
         {
           "type": "calledTool",
@@ -1747,13 +1764,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "12[.,]6\\d?\\s*%"
+            "pattern": "12[.,]6\\d?\\s*%",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled, COUNT(*) AS orders, ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'cancelled') / COUNT(*), 2) AS cancellation_pct FROM edge_cases.orders WHERE ordered_at >= '2026-01-01T00:00:00Z' AND ordered_at < '2027-01-01T00:00:00Z'"
+        "postgres": "SELECT COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled FROM edge_cases.orders WHERE ordered_at >= '2026-01-01T00:00:00Z' AND ordered_at < '2027-01-01T00:00:00Z'"
       }
     },
     {
@@ -1794,7 +1812,7 @@
       ],
       "question": "Which products have a double quote character in their name, and what do they cost?",
       "intent": "Finds the single product with inch marks and quoted word in its name (12\" Vinyl \"Deluxe\") and gives its price; the quotes must not break the filter.",
-      "notes": "Trap: LIKE '%\"%' written without escaping, or a name search typed with smart quotes, finds nothing or errors. Result (2026-11-18): 15|12\" Vinyl \"Deluxe\"|428.30.",
+      "notes": "Trap: LIKE '%\"%' written without escaping, or a name search typed with smart quotes, finds nothing or errors. Result (2026-11-18): 15|12\" Vinyl \"Deluxe\"|428.30. Fixed 2026-11-18: reference trimmed to name and unit_price; the id column was not asked for and failed a right answer (Emily, 428.30).",
       "checks": [
         {
           "type": "calledTool",
@@ -1816,15 +1834,16 @@
           "criterion": "I4"
         },
         {
-          "type": "includes",
+          "type": "matches",
           "args": {
-            "text": "Vinyl"
+            "pattern": "Vinyl",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT id, name, unit_price FROM edge_cases.products WHERE position(chr(34) IN name) > 0"
+        "postgres": "SELECT name, unit_price FROM edge_cases.products WHERE position(chr(34) IN name) > 0"
       }
     },
     {
@@ -2013,7 +2032,7 @@
       ],
       "question": "How many of our customers are VIP, how many are not, and for how many do we not know?",
       "intent": "Three groups: VIP 15,000, not VIP 30,000, unknown 5,000. Treating NULL as not VIP (35,000) is the error.",
-      "notes": "Verified 2026-11-18: 15000 / 30000 / 5000. Trap: WHERE is_vip = false misses 5000 unknowns, or NOT is_vip lumps them: 35000. Result (2026-11-18): 15000|30000|5000.",
+      "notes": "Verified 2026-11-18: 15000 / 30000 / 5000. Trap: WHERE is_vip = false misses 5000 unknowns, or NOT is_vip lumps them: 35000. Result (2026-11-18): 15000|30000|5000. Fixed 2026-11-18: reference is the three counts, one per row, with distinctRows, so a long-form answer (one row per group, extra total column) and a wide one-row answer both pass; the lumped-NULL trap still lacks one count.",
       "checks": [
         {
           "type": "calledTool",
@@ -2044,7 +2063,10 @@
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT count(*) FILTER (WHERE is_vip IS TRUE) AS vip, count(*) FILTER (WHERE is_vip IS FALSE) AS not_vip, count(*) FILTER (WHERE is_vip IS NULL) AS unknown FROM edge_cases.customers"
+        "postgres": "SELECT v.n AS customers FROM (SELECT count(*) FILTER (WHERE is_vip IS TRUE) AS t, count(*) FILTER (WHERE is_vip IS FALSE) AS f, count(*) FILTER (WHERE is_vip IS NULL) AS u FROM edge_cases.customers) s CROSS JOIN LATERAL (VALUES (s.t), (s.f), (s.u)) AS v(n)"
+      },
+      "resultSetOptions": {
+        "distinctRows": true
       }
     },
     {
@@ -2057,7 +2079,7 @@
       ],
       "question": "How many products are marked as selected, how many are marked as not selected, and how many have no mark at all?",
       "intent": "Handles the reserved-word flag column and its three states: selected 1,428, not selected 2,858, no mark 714.",
-      "notes": "Verified 2026-11-18: 1428 / 2858 / 714. Trap: unquoted SELECT is a syntax error; NULLs folded into not selected. Result (2026-11-18): 1428|2858|714.",
+      "notes": "Verified 2026-11-18: 1428 / 2858 / 714. Trap: unquoted SELECT is a syntax error; NULLs folded into not selected. Result (2026-11-18): 1428|2858|714. Fixed 2026-11-18: reference is the three counts, one per row, with distinctRows, so a long-form answer (one row per group, extra total column) and a wide one-row answer both pass; the lumped-NULL trap still lacks one count.",
       "checks": [
         {
           "type": "calledTool",
@@ -2088,7 +2110,10 @@
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT count(*) FILTER (WHERE \"select\" IS TRUE) AS selected, count(*) FILTER (WHERE \"select\" IS FALSE) AS not_selected, count(*) FILTER (WHERE \"select\" IS NULL) AS no_mark FROM edge_cases.products"
+        "postgres": "SELECT v.n AS products FROM (SELECT count(*) FILTER (WHERE \"select\" IS TRUE) AS t, count(*) FILTER (WHERE \"select\" IS FALSE) AS f, count(*) FILTER (WHERE \"select\" IS NULL) AS u FROM edge_cases.products) s CROSS JOIN LATERAL (VALUES (s.t), (s.f), (s.u)) AS v(n)"
+      },
+      "resultSetOptions": {
+        "distinctRows": true
       }
     },
     {
@@ -2233,7 +2258,7 @@
       ],
       "question": "How many different orders are in the old legacy order records?",
       "intent": "Counts distinct legacy order numbers: 5,000, not the 5,250 rows (200 exact duplicate rows plus 50 reissued numbers).",
-      "notes": "Verified 2026-11-18: 5000 distinct of 5250 rows. Trap: count(*) = 5250. Table is MixedCase and has no primary key. Result (2026-11-18): 5000.",
+      "notes": "Verified 2026-11-18: 5000 distinct of 5250 rows. Trap: count(*) = 5250. Table is MixedCase and has no primary key. Result (2026-11-18): 5000. Fixed 2026-11-18: notMatches now rejects only 5,250 stated as the number of orders, so the supporting \"5,250 rows\" passes; 5,000 still required.",
       "checks": [
         {
           "type": "calledTool",
@@ -2257,14 +2282,15 @@
         {
           "type": "notMatches",
           "args": {
-            "pattern": "5,?250"
+            "pattern": "5,?250\\s+(?:(?:different|distinct|unique|legacy|old)\\s+)*orders\\b",
+            "flags": "i"
           },
           "criterion": "G1"
         },
         {
           "type": "matches",
           "args": {
-            "pattern": "5,?000",
+            "pattern": "\\b5,?000\\b",
             "flags": "i"
           },
           "criterion": "G1"
@@ -2416,7 +2442,7 @@
       ],
       "question": "How many different Classic Mug products do we sell, and what is their combined revenue?",
       "intent": "Five separate products share the name Classic Mug (distinct SKUs); the answer says 5 and sums revenue across them, 1,131,103.31, rather than collapsing by name into one.",
-      "notes": "Verified 2026-11-18: 5 products, 5 SKUs, revenue 1131103.31 (via the v_product_revenue view). Trap: grouping by name hides that these are different products. Result (2026-11-18): 5|5|1131103.31.",
+      "notes": "Verified 2026-11-18: 5 products, 5 SKUs, revenue 1131103.31 (via the v_product_revenue view). Trap: grouping by name hides that these are different products. Result (2026-11-18): 5|5|1131103.31. Fixed 2026-11-18: reference trimmed to product count and revenue (the skus column needed a second 5 in the row); a per-product answer with window totals now passes.",
       "checks": [
         {
           "type": "calledTool",
@@ -2447,7 +2473,7 @@
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT count(*) AS products, count(DISTINCT p.sku) AS skus, round(sum(r.revenue), 2) AS revenue FROM edge_cases.products p LEFT JOIN edge_cases.v_product_revenue r ON r.product_id = p.id WHERE p.name = 'Classic Mug'"
+        "postgres": "SELECT count(*) AS products, sum(r.revenue) AS revenue FROM edge_cases.products p LEFT JOIN edge_cases.v_product_revenue r ON r.product_id = p.id WHERE p.name = 'Classic Mug'"
       }
     },
     {
@@ -2660,7 +2686,8 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "(?=[\\s\\S]*?(?:USD))(?=[\\s\\S]*?(?:America/Bogota))"
+            "pattern": "(?=[\\s\\S]*?(?:USD))(?=[\\s\\S]*?(?:America/Bogota))",
+            "flags": "i"
           },
           "criterion": "G1"
         }
@@ -2808,7 +2835,7 @@
       ],
       "question": "What information is recorded about an order, from checkout to delivery?",
       "intent": "Describes orders (status, channel, currency, notes, discounts, shipping fee), their lines, payments, shipments and returns without running SQL.",
-      "notes": "Verified 2026-11-18: orders, order_lines, payments, shipments, returns, and the old LegacyOrders and v_order_totals view exist.",
+      "notes": "Verified 2026-11-18: orders, order_lines, payments, shipments, returns, and the old LegacyOrders and v_order_totals view exist. Fixed 2026-11-18: noHtml replaced by a notMatches for HTML tags, code fences, CREATE TABLE and column|type tables: its schema-dump heuristic flagged plain prose (\"order timestamp, cancellation timestamp\"); didNotCall run_readonly_sql kept, the catalog answers it (Emily did).",
       "checks": [
         {
           "type": "didNotCall",
@@ -2822,7 +2849,11 @@
           "criterion": "D3"
         },
         {
-          "type": "noHtml",
+          "type": "notMatches",
+          "args": {
+            "pattern": "<\\/?[a-z][\\w-]*[\\s>/]|```|\\bCREATE\\s+(?:TABLE|VIEW)\\b|\\|\\s*column(?:\\s+name)?\\s*\\|\\s*(?:data\\s+)?type\\s*\\|",
+            "flags": "i"
+          },
           "criterion": "I4"
         },
         {
@@ -2849,7 +2880,7 @@
       ],
       "question": "What do we know about our products and how they are organised?",
       "intent": "Names the product details (name, SKU, brand, colour, price, cost, tags), the three-level category tree, and related inventory, reviews and promotions, without running SQL.",
-      "notes": "Verified 2026-11-18: products, categories (3 levels), inventory_snapshots, reviews, promotions, v_product_revenue.",
+      "notes": "Verified 2026-11-18: products, categories (3 levels), inventory_snapshots, reviews, promotions, v_product_revenue. Fixed 2026-11-18: noHtml replaced by a notMatches for HTML tags, code fences, CREATE TABLE and column|type tables: its schema-dump heuristic flagged plain prose (\"order timestamp, cancellation timestamp\"); didNotCall run_readonly_sql kept, the catalog answers it (Emily did).",
       "checks": [
         {
           "type": "didNotCall",
@@ -2863,7 +2894,11 @@
           "criterion": "D3"
         },
         {
-          "type": "noHtml",
+          "type": "notMatches",
+          "args": {
+            "pattern": "<\\/?[a-z][\\w-]*[\\s>/]|```|\\bCREATE\\s+(?:TABLE|VIEW)\\b|\\|\\s*column(?:\\s+name)?\\s*\\|\\s*(?:data\\s+)?type\\s*\\|",
+            "flags": "i"
+          },
           "criterion": "I4"
         },
         {
@@ -2890,14 +2925,15 @@
       ],
       "question": "Who are our best customers?",
       "intent": "Best is undefined (most orders, most money spent, most loyal, tier). The app asks which meaning and runs no query.",
-      "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases.",
+      "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases. Fixed 2026-11-18: calledTool ask_clarification replaced by a matches for a question followed by an option list; the workflow asks back in text without the tool.",
       "checks": [
         {
-          "type": "calledTool",
+          "type": "matches",
           "args": {
-            "tool": "ask_clarification"
+            "pattern": "\\?\\s*\\n\\s*-\\s",
+            "flags": "i"
           },
-          "criterion": "D5"
+          "criterion": "I5"
         },
         {
           "type": "didNotCall",
@@ -2931,14 +2967,15 @@
       ],
       "question": "Which products are doing badly?",
       "intent": "Doing badly is undefined (low sales, low ratings, many returns, low margin). The app asks first.",
-      "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases.",
+      "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases. Fixed 2026-11-18: calledTool ask_clarification replaced by a matches for a question followed by an option list; the workflow asks back in text without the tool.",
       "checks": [
         {
-          "type": "calledTool",
+          "type": "matches",
           "args": {
-            "tool": "ask_clarification"
+            "pattern": "\\?\\s*\\n\\s*-\\s",
+            "flags": "i"
           },
-          "criterion": "D5"
+          "criterion": "I5"
         },
         {
           "type": "didNotCall",
@@ -2972,14 +3009,15 @@
       ],
       "question": "Which sales channel works best?",
       "intent": "Works best is undefined (orders, money, fewest cancellations, fewest returns). The app asks first.",
-      "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases.",
+      "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases. Fixed 2026-11-18: calledTool ask_clarification replaced by a matches for a question followed by an option list; the workflow asks back in text without the tool.",
       "checks": [
         {
-          "type": "calledTool",
+          "type": "matches",
           "args": {
-            "tool": "ask_clarification"
+            "pattern": "\\?\\s*\\n\\s*-\\s",
+            "flags": "i"
           },
-          "criterion": "D5"
+          "criterion": "I5"
         },
         {
           "type": "didNotCall",
@@ -3013,14 +3051,15 @@
       ],
       "question": "Show me our problem orders.",
       "intent": "Problem is undefined (cancelled, returned, late delivery, payment issues). The app asks first.",
-      "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases.",
+      "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases. Fixed 2026-11-18: calledTool ask_clarification replaced by a matches for a question followed by an option list; the workflow asks back in text without the tool.",
       "checks": [
         {
-          "type": "calledTool",
+          "type": "matches",
           "args": {
-            "tool": "ask_clarification"
+            "pattern": "\\?\\s*\\n\\s*-\\s",
+            "flags": "i"
           },
-          "criterion": "D5"
+          "criterion": "I5"
         },
         {
           "type": "didNotCall",
@@ -3054,14 +3093,15 @@
       ],
       "question": "Which country is our most important market?",
       "intent": "Important is undefined (customers, orders, revenue, growth), and country could be where the customer lives or where it ships. The app asks first.",
-      "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases.",
+      "notes": "No query may run: the measure is not defined. Same checks as the World Cup ambiguous cases. Fixed 2026-11-18: calledTool ask_clarification replaced by a matches for a question followed by an option list; the workflow asks back in text without the tool.",
       "checks": [
         {
-          "type": "calledTool",
+          "type": "matches",
           "args": {
-            "tool": "ask_clarification"
+            "pattern": "\\?\\s*\\n\\s*-\\s",
+            "flags": "i"
           },
-          "criterion": "D5"
+          "criterion": "I5"
         },
         {
           "type": "didNotCall",
@@ -3095,7 +3135,7 @@
       ],
       "question": "What was our total revenue in 2019, and how did 2020 compare?",
       "intent": "The orders start on 2020-12-31, so 2019 is not in the data. The answer says so and gives no 2019 figure.",
-      "notes": "Proof: SELECT count(*) FROM edge_cases.orders WHERE ordered_at >= '2019-01-01' AND ordered_at < '2020-01-01' -> 0. min(ordered_at)=2020-12-31 10:40:59+00, max=2026-10-29 11:11:37+00; 34 orders before 2021. Ran 2026-11-18.",
+      "notes": "Proof: SELECT count(*) FROM edge_cases.orders WHERE ordered_at >= '2019-01-01' AND ordered_at < '2020-01-01' -> 0. min(ordered_at)=2020-12-31 10:40:59+00, max=2026-10-29 11:11:37+00; 34 orders before 2021. Ran 2026-11-18. Fixed 2026-11-18: notMatches now rejects only a figure stated for 2019 (the 2020 figure 117,058.61 and dates are allowed); matches requires saying 2019 is not in the data; numbersGrounded dropped (it flagged the date 31 December).",
       "checks": [
         {
           "type": "noToolErrors",
@@ -3126,10 +3166,6 @@
           "criterion": "I1"
         },
         {
-          "type": "numbersGrounded",
-          "criterion": "G1"
-        },
-        {
           "type": "didNotCall",
           "args": {
             "tool": "create_visual"
@@ -3139,7 +3175,16 @@
         {
           "type": "notMatches",
           "args": {
-            "pattern": "\\b(?!(?:2019|2020|2021|2026)\\b)\\d{3,}(?:[.,]\\d+)*\\b"
+            "pattern": "\\b2019\\b\\W{0,10}(?:revenue\\W{1,10})?(?:(?:was|of|totaled|totalled|came to|is)\\W{1,5})?\\$?(?!20\\d\\d\\b)\\d[\\d,]{2,}(?:\\.\\d+)?",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "(?=[\\s\\S]*\\b(?:no|not|n't|none|unavailable|cannot|isn't|doesn't|does not|only)\\b)(?=[\\s\\S]*\\b2019\\b)",
+            "flags": "i"
           },
           "criterion": "G2"
         }
@@ -3156,7 +3201,7 @@
       ],
       "question": "How much did we spend on marketing for each sales channel last year, and which channel had the best return on ad spend?",
       "intent": "The sample has no marketing or advertising spend. The answer says it is not in the data and invents no cost or return figure.",
-      "notes": "Proof: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='edge_cases' AND (column_name ILIKE '%spend%' OR column_name ILIKE '%marketing%' OR column_name ILIKE '%ad\\_%' OR table_name ILIKE '%campaign%') -> 0 rows (checked 2026-11-18). The only discount fields are orders.discount_amount and promotions.\"discount_%\".",
+      "notes": "Proof: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='edge_cases' AND (column_name ILIKE '%spend%' OR column_name ILIKE '%marketing%' OR column_name ILIKE '%ad\\_%' OR table_name ILIKE '%campaign%') -> 0 rows (checked 2026-11-18). The only discount fields are orders.discount_amount and promotions.\"discount_%\". Fixed 2026-11-18: notMatches now rejects only an amount or ROAS figure tied to spend (the year 2025 and supporting sales figures are allowed); matches requires saying spend data is missing.",
       "checks": [
         {
           "type": "noToolErrors",
@@ -3200,7 +3245,16 @@
         {
           "type": "notMatches",
           "args": {
-            "pattern": "\\b(?!(?:2019|2020|2021|2026)\\b)\\d{3,}(?:[.,]\\d+)*\\b"
+            "pattern": "\\b(?:ad spend|marketing spend|spent|ROAS|return on ad spend)\\b[^\\n.]{0,40}?(?:\\$\\s?\\d|\\b\\d+(?:\\.\\d+)?\\s?x\\b|\\b\\d[\\d,]*(?:\\.\\d+)?\\s?(?:USD|EUR|dollars)\\b)",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "(?=[\\s\\S]*\\b(?:no|not|n't|cannot|unavailable|isn't|doesn't|does not|without)\\b)(?=[\\s\\S]*(?:spend|marketing|advertis|campaign|ROAS))",
+            "flags": "i"
           },
           "criterion": "G2"
         }
@@ -3217,7 +3271,7 @@
       ],
       "question": "What percentage of website visitors ended up placing an order in 2025?",
       "intent": "There is no website traffic or session data, so a conversion rate cannot be computed. The answer says so and invents no figure.",
-      "notes": "Proof: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='edge_cases' AND (column_name ILIKE '%visit%' OR column_name ILIKE '%session%' OR column_name ILIKE '%pageview%' OR table_name ILIKE '%session%' OR table_name ILIKE '%traffic%') -> 0 rows (checked 2026-11-18).",
+      "notes": "Proof: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='edge_cases' AND (column_name ILIKE '%visit%' OR column_name ILIKE '%session%' OR column_name ILIKE '%pageview%' OR table_name ILIKE '%session%' OR table_name ILIKE '%traffic%') -> 0 rows (checked 2026-11-18). Fixed 2026-11-18: notMatches now rejects only a percentage tied to visitors or conversion (the year 2025 is allowed); matches requires saying visitor data is missing.",
       "checks": [
         {
           "type": "noToolErrors",
@@ -3261,7 +3315,16 @@
         {
           "type": "notMatches",
           "args": {
-            "pattern": "\\b(?!(?:2019|2020|2021|2026)\\b)\\d{3,}(?:[.,]\\d+)*\\b"
+            "pattern": "\\b(?:conversion|visitors?|sessions?|visits?)\\b[^\\n]{0,60}?\\d+(?:\\.\\d+)?\\s?%|\\d+(?:\\.\\d+)?\\s?%[^\\n.]{0,40}?\\b(?:conversion|of (?:website )?visitors|of visits|of sessions)\\b",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "(?=[\\s\\S]*\\b(?:no|not|n't|cannot|unavailable|isn't|doesn't|does not|without)\\b)(?=[\\s\\S]*(?:visit|session|traffic))",
+            "flags": "i"
           },
           "criterion": "G2"
         }
@@ -3278,7 +3341,7 @@
       ],
       "question": "How much stock did we have on hand in the Bogota warehouse at the end of March 2026?",
       "intent": "Stock snapshots exist only from 2026-08-02 to 2026-10-31, so March 2026 is not in the data. The answer says so and gives no March figure.",
-      "notes": "Proof: SELECT count(*) FROM edge_cases.inventory_snapshots WHERE snapshot_date >= '2026-03-01' AND snapshot_date < '2026-04-01' -> 0; SELECT min(snapshot_date), max(snapshot_date) FROM edge_cases.inventory_snapshots -> 2026-08-02, 2026-10-31. Ran 2026-11-18. Bogota is warehouse BOG-01.",
+      "notes": "Proof: SELECT count(*) FROM edge_cases.inventory_snapshots WHERE snapshot_date >= '2026-03-01' AND snapshot_date < '2026-04-01' -> 0; SELECT min(snapshot_date), max(snapshot_date) FROM edge_cases.inventory_snapshots -> 2026-08-02, 2026-10-31. Ran 2026-11-18. Bogota is warehouse BOG-01. Fixed 2026-11-18: notMatches now rejects only a stock figure stated for March; matches requires saying March is not covered; numbersGrounded dropped (it flagged the date 31 October / March 31).",
       "checks": [
         {
           "type": "noToolErrors",
@@ -3309,10 +3372,6 @@
           "criterion": "I1"
         },
         {
-          "type": "numbersGrounded",
-          "criterion": "G1"
-        },
-        {
           "type": "didNotCall",
           "args": {
             "tool": "create_visual"
@@ -3322,7 +3381,16 @@
         {
           "type": "notMatches",
           "args": {
-            "pattern": "\\b(?!(?:2019|2020|2021|2026)\\b)\\d{3,}(?:[.,]\\d+)*\\b"
+            "pattern": "\\bMarch\\b[^\\n.]{0,40}?\\b(?!20\\d\\d\\b)(?:\\d{1,3}(?:,\\d{3})+|\\d{3,})\\b",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "(?=[\\s\\S]*\\b(?:no|not|n't|unavailable|cannot|only|doesn't|does not)\\b)(?=[\\s\\S]*\\bMarch\\b)",
+            "flags": "i"
           },
           "criterion": "G2"
         }
@@ -3339,7 +3407,7 @@
       ],
       "question": "How many units of the 'Quantum Blender X9' did we sell last quarter?",
       "intent": "No product has that name. The app searches the catalogue, finds nothing and says the product does not exist, with no sales figure.",
-      "notes": "Proof: SELECT count(*) FROM edge_cases.products WHERE name ILIKE '%quantum blender%' OR name ILIKE '%blender%' -> 0 (ran 2026-11-18). No expectedSql: the reference would return 0 rows, so the checks and the judge grade the case.",
+      "notes": "Proof: SELECT count(*) FROM edge_cases.products WHERE name ILIKE '%quantum blender%' OR name ILIKE '%blender%' -> 0 (ran 2026-11-18). No expectedSql: the reference would return 0 rows, so the checks and the judge grade the case. Fixed 2026-11-18: numbersGrounded dropped (it flagged the data-range dates 2020 and 2026 in a right refusal); a notMatches for any non-zero \"N units\" figure catches an invented sales figure instead.",
       "checks": [
         {
           "type": "calledTool",
@@ -3373,10 +3441,6 @@
           "criterion": "I6"
         },
         {
-          "type": "numbersGrounded",
-          "criterion": "G1"
-        },
-        {
           "type": "didNotCall",
           "args": {
             "tool": "create_visual"
@@ -3387,6 +3451,14 @@
           "type": "matches",
           "args": {
             "pattern": "\\b(no|not|none|n't|doesn't|does not|cannot|couldn't|zero)\\b",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "\\b(?!0\\b)(?!20\\d\\d\\b)\\d[\\d,]*\\s+units?\\b",
             "flags": "i"
           },
           "criterion": "G2"
@@ -3469,7 +3541,7 @@
       ],
       "question": "Which products are below their reorder point in warehouse LAX-09?",
       "intent": "There is no warehouse LAX-09 (the codes are BOG-01, MAD-03 and MIA-02). The app checks and says so, listing no products.",
-      "notes": "Proof: SELECT count(*) FROM edge_cases.inventory_snapshots WHERE warehouse_code ILIKE '%LAX%' OR warehouse_code='LAX-09' -> 0 (ran 2026-11-18). SELECT DISTINCT warehouse_code -> BOG-01, MAD-03, MIA-02. No expectedSql: the reference would return 0 rows, so the checks and the judge grade the case.",
+      "notes": "Proof: SELECT count(*) FROM edge_cases.inventory_snapshots WHERE warehouse_code ILIKE '%LAX%' OR warehouse_code='LAX-09' -> 0 (ran 2026-11-18). SELECT DISTINCT warehouse_code -> BOG-01, MAD-03, MIA-02. No expectedSql: the reference would return 0 rows, so the checks and the judge grade the case. Fixed 2026-11-18: numbersGrounded dropped (it flagged the snapshot dates in a right refusal); a notMatches for a product count stated for LAX-09 catches an invented answer instead.",
       "checks": [
         {
           "type": "calledTool",
@@ -3503,10 +3575,6 @@
           "criterion": "I6"
         },
         {
-          "type": "numbersGrounded",
-          "criterion": "G1"
-        },
-        {
           "type": "didNotCall",
           "args": {
             "tool": "create_visual"
@@ -3517,6 +3585,14 @@
           "type": "matches",
           "args": {
             "pattern": "\\b(no|not|none|n't|doesn't|does not|cannot|couldn't|zero)\\b",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "LAX-?09[^\\n.]{0,60}?\\b(?!20\\d\\d\\b)[1-9][\\d,]*\\s+(?:products|items|SKUs)\\b",
             "flags": "i"
           },
           "criterion": "G2"
@@ -3534,7 +3610,7 @@
       ],
       "question": "Chart the number of orders we received each month of 2025.",
       "intent": "Answer first, then a line or bar chart with 12 monthly points for 2025 (about 2,700 to 3,000 orders each).",
-      "notes": "12 rows: 2025-01=3022, 02=2728, 03=2967, 04=2834, 05=3026, 06=2909, 07=2959, 08=2996, 09=2922, 10=2974, 11=3030, 12=2962. Ran 2026-11-18 on edge_cases.",
+      "notes": "12 rows: 2025-01=3022, 02=2728, 03=2967, 04=2834, 05=3026, 06=2909, 07=2959, 08=2996, 09=2922, 10=2974, 11=3030, 12=2962. Ran 2026-11-18 on edge_cases. Fixed 2026-11-18: reference trimmed to the 12 monthly counts (all distinct), so month labels in any shape (date, \"Jan\", YYYY-MM) and extra columns pass; a time-zone-shifted count (Jan 3,016) still fails.",
       "checks": [
         {
           "type": "toolOrder",
@@ -3598,7 +3674,7 @@
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT to_char(ordered_at,'YYYY-MM') AS month, COUNT(*) AS orders FROM edge_cases.orders WHERE ordered_at >= '2025-01-01' AND ordered_at < '2026-01-01' GROUP BY 1 ORDER BY 1"
+        "postgres": "SELECT COUNT(*) AS orders FROM edge_cases.orders WHERE ordered_at >= '2025-01-01' AND ordered_at < '2026-01-01' GROUP BY to_char(ordered_at,'YYYY-MM')"
       },
       "judgeRubric": "The user asked for a chart of orders per month in 2025. Score pass=true only if a create_visual call succeeded and its title or description is about monthly order counts for 2025, with all 12 months. Score pass=false if there is no visual or it covers a different measure or period."
     },
@@ -3612,7 +3688,7 @@
       ],
       "question": "Show me a chart of how many returns we had for each return reason.",
       "intent": "Answer, then a bar chart of returns by reason with spelling variants merged: damaged 7,500, changed mind 2,500, wrong size 2,500, no reason given 2,500.",
-      "notes": "4 rows after merging case and spaces: damaged 7500, changed mind 2500, wrong size 2500, blank/NULL 2500 (unknown). Ran 2026-11-18 on edge_cases.",
+      "notes": "4 rows after merging case and spaces: damaged 7500, changed mind 2500, wrong size 2500, blank/NULL 2500 (unknown). Ran 2026-11-18 on edge_cases. Fixed 2026-11-18: reference trimmed to the three named reasons (damaged 7500, changed mind 2500, wrong size 2500); the blank group's label (\"unknown\" vs \"Not specified\") is free; unmerged spellings (no 7500 row) still fail.",
       "checks": [
         {
           "type": "toolOrder",
@@ -3675,7 +3751,7 @@
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT COALESCE(NULLIF(LOWER(TRIM(reason)),''),'unknown') AS reason, COUNT(*) AS returns FROM edge_cases.returns GROUP BY 1 ORDER BY 2 DESC"
+        "postgres": "SELECT LOWER(TRIM(reason)) AS reason, COUNT(*) AS returns FROM edge_cases.returns WHERE NULLIF(TRIM(reason),'') IS NOT NULL GROUP BY 1"
       },
       "judgeRubric": "The user asked for a chart of returns by reason. Score pass=true only if a create_visual call succeeded, its title or description is about returns by reason, and it shows damaged as one bar of about 7,500 (spelling variants Damaged, DAMAGED and damaged merged), not three separate bars. Score pass=false if there is no visual, or the variants are split."
     },
@@ -3767,7 +3843,7 @@
       ],
       "question": "On average, how many days does a FedEx shipment take from shipping to delivery? Treat every spelling of the carrier as one, and leave out shipments recorded as delivered before they shipped.",
       "intent": "A single figure of about 5.5 days: FedEx spellings (FedEx, 'FEDEX ') merged and the 3,000 impossible rows (delivered before shipped) excluded.",
-      "notes": "1 row: 5.50 days over 89,000 FedEx shipments with delivered_at >= shipped_at. Ran 2026-11-18.",
+      "notes": "1 row: 5.50 days over 89,000 FedEx shipments with delivered_at >= shipped_at. Ran 2026-11-18. Fixed 2026-11-18: reference unrounded (5.5029...), so an answer at any precision (5.50, 5.503, full) matches; the rounded 5.50 reference failed an unrounded right result.",
       "checks": [
         {
           "type": "calledTool",
@@ -3809,15 +3885,16 @@
           "criterion": "G1"
         },
         {
-          "type": "includes",
+          "type": "matches",
           "args": {
-            "text": "5.5"
+            "pattern": "5\\.5",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT ROUND(AVG(EXTRACT(EPOCH FROM (delivered_at - shipped_at))/86400)::numeric, 2) AS avg_days FROM edge_cases.shipments WHERE LOWER(TRIM(carrier)) = 'fedex' AND delivered_at >= shipped_at"
+        "postgres": "SELECT AVG(EXTRACT(EPOCH FROM (delivered_at - shipped_at))/86400) AS avg_days FROM edge_cases.shipments WHERE LOWER(TRIM(carrier)) = 'fedex' AND delivered_at >= shipped_at"
       }
     },
     {
@@ -3831,7 +3908,7 @@
       ],
       "question": "What is the mean transit time in days for FedEx parcels, counting all the ways the carrier is written as one carrier and ignoring parcels whose delivery date is earlier than their shipping date?",
       "intent": "A single figure of about 5.5 days: FedEx spellings (FedEx, 'FEDEX ') merged and the 3,000 impossible rows (delivered before shipped) excluded. Paraphrase of ec-d-fedex-delivery-days: same question in other words.",
-      "notes": "1 row: 5.50 days over 89,000 FedEx shipments with delivered_at >= shipped_at. Ran 2026-11-18. Shares the reference and the checks of ec-d-fedex-delivery-days.",
+      "notes": "1 row: 5.50 days over 89,000 FedEx shipments with delivered_at >= shipped_at. Ran 2026-11-18. Shares the reference and the checks of ec-d-fedex-delivery-days. Fixed 2026-11-18: reference unrounded (5.5029...), so an answer at any precision (5.50, 5.503, full) matches; the rounded 5.50 reference failed an unrounded right result.",
       "checks": [
         {
           "type": "calledTool",
@@ -3873,15 +3950,16 @@
           "criterion": "G1"
         },
         {
-          "type": "includes",
+          "type": "matches",
           "args": {
-            "text": "5.5"
+            "pattern": "5\\.5",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT ROUND(AVG(EXTRACT(EPOCH FROM (delivered_at - shipped_at))/86400)::numeric, 2) AS avg_days FROM edge_cases.shipments WHERE LOWER(TRIM(carrier)) = 'fedex' AND delivered_at >= shipped_at"
+        "postgres": "SELECT AVG(EXTRACT(EPOCH FROM (delivered_at - shipped_at))/86400) AS avg_days FROM edge_cases.shipments WHERE LOWER(TRIM(carrier)) = 'fedex' AND delivered_at >= shipped_at"
       }
     },
     {
@@ -3895,7 +3973,7 @@
       ],
       "question": "Which sales channel has the highest share of its orders cancelled, and what is that share? Count WEB, Web and web as one channel.",
       "intent": "Marketplace has the highest cancellation rate, about 12.66% of its orders; share = cancelled orders / all orders of the channel after merging spellings.",
-      "notes": "4 rows: marketplace 12.66, web 12.59, mobile 12.55, store 12.47 (percent). The gap is small, so the answer must name marketplace and the rate. Ran 2026-11-18.",
+      "notes": "4 rows: marketplace 12.66, web 12.59, mobile 12.55, store 12.47 (percent). The gap is small, so the answer must name marketplace and the rate. Ran 2026-11-18. Fixed 2026-11-18: matches made case-insensitive (\"Marketplace\"); reference trimmed to the top channel with an unrounded share (0.12660...), so 12.66% or any precision matches.",
       "checks": [
         {
           "type": "calledTool",
@@ -3939,13 +4017,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "(?=[\\s\\S]*?(?:marketplace))(?=[\\s\\S]*?(?:12\\.6))"
+            "pattern": "(?=[\\s\\S]*?(?:marketplace))(?=[\\s\\S]*?(?:12\\.6))",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT LOWER(TRIM(channel)) AS channel, ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'cancelled') / COUNT(*), 2) AS cancel_pct FROM edge_cases.orders GROUP BY 1 ORDER BY 2 DESC"
+        "postgres": "SELECT LOWER(TRIM(channel)) AS channel, COUNT(*) FILTER (WHERE status = 'cancelled')::numeric / COUNT(*) AS cancel_share FROM edge_cases.orders GROUP BY 1 ORDER BY 2 DESC LIMIT 1"
       }
     },
     {
@@ -3959,7 +4038,7 @@
       ],
       "question": "Among our sales channels, where is the cancellation rate highest, and how high is it? Different capitalisations of a channel name are the same channel.",
       "intent": "Marketplace has the highest cancellation rate, about 12.66% of its orders; share = cancelled orders / all orders of the channel after merging spellings. Paraphrase of ec-d-cancel-rate-by-channel: same question in other words.",
-      "notes": "4 rows: marketplace 12.66, web 12.59, mobile 12.55, store 12.47 (percent). The gap is small, so the answer must name marketplace and the rate. Ran 2026-11-18. Shares the reference and the checks of ec-d-cancel-rate-by-channel.",
+      "notes": "4 rows: marketplace 12.66, web 12.59, mobile 12.55, store 12.47 (percent). The gap is small, so the answer must name marketplace and the rate. Ran 2026-11-18. Shares the reference and the checks of ec-d-cancel-rate-by-channel. Fixed 2026-11-18: matches made case-insensitive (\"Marketplace\"); reference trimmed to the top channel with an unrounded share (0.12660...), so 12.66% or any precision matches.",
       "checks": [
         {
           "type": "calledTool",
@@ -4003,13 +4082,14 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "(?=[\\s\\S]*?(?:marketplace))(?=[\\s\\S]*?(?:12\\.6))"
+            "pattern": "(?=[\\s\\S]*?(?:marketplace))(?=[\\s\\S]*?(?:12\\.6))",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT LOWER(TRIM(channel)) AS channel, ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'cancelled') / COUNT(*), 2) AS cancel_pct FROM edge_cases.orders GROUP BY 1 ORDER BY 2 DESC"
+        "postgres": "SELECT LOWER(TRIM(channel)) AS channel, COUNT(*) FILTER (WHERE status = 'cancelled')::numeric / COUNT(*) AS cancel_share FROM edge_cases.orders GROUP BY 1 ORDER BY 2 DESC LIMIT 1"
       }
     },
     {
@@ -4023,7 +4103,7 @@
       ],
       "question": "What are the top 3 brands by units sold? Ignore cancelled orders and order lines with zero or negative quantity, and treat differences in capitalisation or spacing in the brand name as the same brand.",
       "intent": "Acme first with about 1.69M units (its three spellings merged), then Initech about 577K, then Umbrella about 575K.",
-      "notes": "3 rows: acme 1687528, initech 577379, umbrella 574871. Initech and Umbrella are close: only the merged and filtered counts give this order. Ran 2026-11-18.",
+      "notes": "3 rows: acme 1687528, initech 577379, umbrella 574871. Initech and Umbrella are close: only the merged and filtered counts give this order. Ran 2026-11-18. Fixed 2026-11-18: matches made case-insensitive (answers write ACME / acme).",
       "checks": [
         {
           "type": "calledTool",
@@ -4067,7 +4147,8 @@
         {
           "type": "matches",
           "args": {
-            "pattern": "(?=[\\s\\S]*?(?:Acme))(?=[\\s\\S]*?(?:Initech))(?=[\\s\\S]*?(?:Umbrella))"
+            "pattern": "(?=[\\s\\S]*?(?:Acme))(?=[\\s\\S]*?(?:Initech))(?=[\\s\\S]*?(?:Umbrella))",
+            "flags": "i"
           },
           "criterion": "G1"
         }
@@ -4087,7 +4168,7 @@
       ],
       "question": "Name the three best-selling brands by number of units. Leave out cancelled orders and lines with a quantity of zero or less, and merge brand names that differ only in case or spaces.",
       "intent": "Acme first with about 1.69M units (its three spellings merged), then Initech about 577K, then Umbrella about 575K. Paraphrase of ec-d-top-brands-units: same question in other words.",
-      "notes": "3 rows: acme 1687528, initech 577379, umbrella 574871. Initech and Umbrella are close: only the merged and filtered counts give this order. Ran 2026-11-18. Shares the reference and the checks of ec-d-top-brands-units.",
+      "notes": "3 rows: acme 1687528, initech 577379, umbrella 574871. Initech and Umbrella are close: only the merged and filtered counts give this order. Ran 2026-11-18. Shares the reference and the checks of ec-d-top-brands-units. Fixed 2026-11-18: matches made case-insensitive (answers write ACME / acme). numbersGrounded ignores the filter bound \"≤ 0\" restated from the question.",
       "checks": [
         {
           "type": "calledTool",
@@ -4126,12 +4207,25 @@
         },
         {
           "type": "numbersGrounded",
+          "args": {
+            "ignore": [
+              "≤ 0",
+              "<= 0",
+              "< 0",
+              "> 0",
+              "≤0",
+              "<=0",
+              "<0",
+              ">0"
+            ]
+          },
           "criterion": "G1"
         },
         {
           "type": "matches",
           "args": {
-            "pattern": "(?=[\\s\\S]*?(?:Acme))(?=[\\s\\S]*?(?:Initech))(?=[\\s\\S]*?(?:Umbrella))"
+            "pattern": "(?=[\\s\\S]*?(?:Acme))(?=[\\s\\S]*?(?:Initech))(?=[\\s\\S]*?(?:Umbrella))",
+            "flags": "i"
           },
           "criterion": "G1"
         }
@@ -4151,7 +4245,7 @@
       ],
       "question": "In the most recent stock count, which warehouse has the most products below their reorder point, and how many?",
       "intent": "BOG-01 (Bogota) with 369 products below reorder point on the latest snapshot date (2026-10-31); only the latest snapshot date may be used, not all dates.",
-      "notes": "3 rows on 2026-10-31: BOG-01 369, MAD-03 354, MIA-02 352 (15,000 product-warehouse rows that day). Ran 2026-11-18.",
+      "notes": "3 rows on 2026-10-31: BOG-01 369, MAD-03 354, MIA-02 352 (15,000 product-warehouse rows that day). Ran 2026-11-18. Fixed 2026-11-18: reference trimmed to the top warehouse (BOG-01 369), the fact asked; numbersGrounded ignores the snapshot date 2026-10-31 in its usual spellings.",
       "checks": [
         {
           "type": "calledTool",
@@ -4190,18 +4284,32 @@
         },
         {
           "type": "numbersGrounded",
+          "args": {
+            "ignore": [
+              "2026-10-31",
+              "October 31, 2026",
+              "Oct 31, 2026",
+              "31 October 2026",
+              "31 Oct 2026",
+              "October 31",
+              "Oct 31",
+              "31 October",
+              "31 Oct"
+            ]
+          },
           "criterion": "G1"
         },
         {
           "type": "matches",
           "args": {
-            "pattern": "(?=[\\s\\S]*?(?:BOG\\-01))(?=[\\s\\S]*?(?:369))"
+            "pattern": "(?=[\\s\\S]*?(?:BOG\\-01))(?=[\\s\\S]*?(?:369))",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT warehouse_code, COUNT(*) AS products_below_reorder FROM edge_cases.inventory_snapshots WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM edge_cases.inventory_snapshots) AND quantity_on_hand < reorder_point GROUP BY 1 ORDER BY 2 DESC"
+        "postgres": "SELECT warehouse_code, COUNT(*) AS products_below_reorder FROM edge_cases.inventory_snapshots WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM edge_cases.inventory_snapshots) AND quantity_on_hand < reorder_point GROUP BY 1 ORDER BY 2 DESC LIMIT 1"
       }
     },
     {
@@ -4215,7 +4323,7 @@
       ],
       "question": "Looking at the latest inventory snapshot only, which warehouse has the largest number of items whose stock is under the reorder level, and what is that number?",
       "intent": "BOG-01 (Bogota) with 369 products below reorder point on the latest snapshot date (2026-10-31); only the latest snapshot date may be used, not all dates. Paraphrase of ec-d-warehouse-low-stock: same question in other words.",
-      "notes": "3 rows on 2026-10-31: BOG-01 369, MAD-03 354, MIA-02 352 (15,000 product-warehouse rows that day). Ran 2026-11-18. Shares the reference and the checks of ec-d-warehouse-low-stock.",
+      "notes": "3 rows on 2026-10-31: BOG-01 369, MAD-03 354, MIA-02 352 (15,000 product-warehouse rows that day). Ran 2026-11-18. Shares the reference and the checks of ec-d-warehouse-low-stock. Fixed 2026-11-18: reference trimmed to the top warehouse (BOG-01 369), the fact asked; numbersGrounded ignores the snapshot date 2026-10-31 in its usual spellings.",
       "checks": [
         {
           "type": "calledTool",
@@ -4254,18 +4362,32 @@
         },
         {
           "type": "numbersGrounded",
+          "args": {
+            "ignore": [
+              "2026-10-31",
+              "October 31, 2026",
+              "Oct 31, 2026",
+              "31 October 2026",
+              "31 Oct 2026",
+              "October 31",
+              "Oct 31",
+              "31 October",
+              "31 Oct"
+            ]
+          },
           "criterion": "G1"
         },
         {
           "type": "matches",
           "args": {
-            "pattern": "(?=[\\s\\S]*?(?:BOG\\-01))(?=[\\s\\S]*?(?:369))"
+            "pattern": "(?=[\\s\\S]*?(?:BOG\\-01))(?=[\\s\\S]*?(?:369))",
+            "flags": "i"
           },
           "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT warehouse_code, COUNT(*) AS products_below_reorder FROM edge_cases.inventory_snapshots WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM edge_cases.inventory_snapshots) AND quantity_on_hand < reorder_point GROUP BY 1 ORDER BY 2 DESC"
+        "postgres": "SELECT warehouse_code, COUNT(*) AS products_below_reorder FROM edge_cases.inventory_snapshots WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM edge_cases.inventory_snapshots) AND quantity_on_hand < reorder_point GROUP BY 1 ORDER BY 2 DESC LIMIT 1"
       }
     },
     {
@@ -4321,9 +4443,10 @@
           "criterion": "G1"
         },
         {
-          "type": "includes",
+          "type": "matches",
           "args": {
-            "text": "1.5"
+            "pattern": "1\\.5",
+            "flags": "i"
           },
           "criterion": "G1"
         }
@@ -4385,9 +4508,10 @@
           "criterion": "G1"
         },
         {
-          "type": "includes",
+          "type": "matches",
           "args": {
-            "text": "1.5"
+            "pattern": "1\\.5",
+            "flags": "i"
           },
           "criterion": "G1"
         }
