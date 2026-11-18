@@ -47,6 +47,13 @@ export interface EvalRunDetails {
    * Sarah's tool calls, so they are not in `toolCalls`.
    */
   findingSources?: EvalDetailsToolCall[];
+  /**
+   * The context the agent was given before its tool calls, as text (the
+   * Insights Analyst target: the catalogue block of Analyse's first request).
+   * The judge's prompt holds it in a section of its own, before the tool
+   * calls, so it can see the schema the agent worked from (agents.md 8.1).
+   */
+  judgeContext?: string;
 }
 
 /** The key of a target result's details (`runAssistantEvalCase` reads it). */

@@ -278,6 +278,8 @@ export function workflowTurnAgent(
     };
     let analysis: Record<string, unknown> | undefined;
     let answer = '';
+    // Attempt 1's catalogue block, as its request held it, for the judge.
+    let judgeContext: string | undefined;
     // Each attempt's tool names, for the checks (`analyse-attempts`).
     const attemptTools: string[][] = [];
     // Every case is a single-turn first question: the runtime holds no
@@ -293,6 +295,7 @@ export function workflowTurnAgent(
         attempt,
         imageNotes,
       }) => {
+        if (attempt <= 1) judgeContext ??= catalogBlock;
         const records: ToolDataRecord[] = [];
         let result: Record<string, unknown>;
         try {
@@ -397,7 +400,10 @@ export function workflowTurnAgent(
         scoringData: { input, output: [] },
       }),
       text: clarified ? clarificationAnswer(clarified) : answer,
-      [EVAL_DETAILS_KEY]: { steps } satisfies EvalRunDetails,
+      [EVAL_DETAILS_KEY]: {
+        steps,
+        ...(judgeContext ? { judgeContext } : {}),
+      } satisfies EvalRunDetails,
     };
   };
   return new Proxy(agent, {
