@@ -1,7 +1,7 @@
 # Experiment: a shared run context for Answer a business question
 
 **Date:** 2026-11-17/18. **Status:** concluded, not adopted. **Code:** not merged. It lives on branch
-`jhon-buendia-halo/dske6`, commit `9fed4439`.
+`jhon-buendia-halo/global-state-workflow-review`, commit `9fed4439`.
 
 ## Question
 
