@@ -15,6 +15,7 @@ import { analyseAttemptOf } from '../../modules/sessions/turn/turn-workflow';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
 import { captureStepRecords, type EvalCustomCheck } from './assistant.evals';
 import {
+  EVAL_CASE_CONTEXT_KEY,
   EVAL_DETAILS_KEY,
   recordStepOutput,
   type EvalRunDetails,
@@ -157,11 +158,15 @@ function askedInResult(result: unknown): ClarifyingQuestion | undefined {
  */
 export const ANALYSE_ATTEMPTS_KEY = 'analyse-attempts';
 
+/** The error of the query a case's `forceRetryWith` adds to attempt 1. */
+const FORCED_RETRY_ERROR = 'canceling statement due to statement timeout';
+
 /**
  * The retry case's check (agents.md 8.1, 5.11): after a retry, the retry
  * itself called neither `list_entities` nor `describe_entity` (its request
  * lists attempt 1's queries and the columns of each entity), read from
- * `ANALYSE_ATTEMPTS_KEY`. A run that did not retry passes.
+ * `ANALYSE_ATTEMPTS_KEY`. A run that did not retry fails: the case proves
+ * nothing then (the target forces the retry, `forceRetryWith`).
  */
 export function retryDoesNotRediscover(): EvalCustomCheck {
   return {
@@ -169,7 +174,9 @@ export function retryDoesNotRediscover(): EvalCustomCheck {
     description: 'The retry of Analyse lists and describes no entity again',
     run: ({ details }) => {
       const attempts = details?.steps?.[ANALYSE_ATTEMPTS_KEY];
-      if (!Array.isArray(attempts) || attempts.length < 2) return undefined;
+      if (!Array.isArray(attempts) || attempts.length < 2) {
+        return 'no retry ran: the case needs two analysis attempts';
+      }
       const again = arrayOf(attempts[1]).filter(
         (tool) => tool === 'list_entities' || tool === 'describe_entity',
       );
@@ -259,6 +266,10 @@ export function workflowTurnAgent(
     const requestContext = options.requestContext;
     if (!requestContext) throw new Error('An eval case runs with a context');
     const datasets = requestContext.get(DATASETS_CONTEXT_KEY);
+    const forcedRetry = (
+      requestContext.get(EVAL_CASE_CONTEXT_KEY) as
+        { forceRetryWith?: string } | undefined
+    )?.forceRetryWith;
     const model = {
       ...(options.providerOptions
         ? { providerOptions: options.providerOptions }
@@ -319,6 +330,18 @@ export function workflowTurnAgent(
           };
         }
         attemptTools.push(toolNamesOf(result));
+        // A case that asks for a retry: attempt 1 also holds a query the
+        // agent did not run, failed by the statement timeout, so Validate's
+        // `No unresolved tool error` fails whatever the model wrote and the
+        // retry is shown it among the earlier queries. Not in the traces.
+        if (attempt <= 1 && forcedRetry) {
+          records.push({
+            tool: 'run_readonly_sql',
+            input: forcedRetry,
+            rationale: 'A check of the same figures.',
+            error: FORCED_RETRY_ERROR,
+          });
+        }
         // The scorers, the checks and the judge read the tool calls and
         // results of every attempt: the runner's trace is `steps`
         // (extractRawToolCalls), the judge's `scoringData.output`.

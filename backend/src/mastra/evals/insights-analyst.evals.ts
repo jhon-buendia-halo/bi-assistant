@@ -294,9 +294,14 @@ const INSIGHTS_ANALYST_EVAL_CASES: AssistantEvalCase[] = [
     question:
       'Show me five goals scored at the 2022 World Cup, with the scorer and the minute.',
     intent:
-      'Drives the retry (agents.md 5.11): a first attempt that keeps an arbitrary five rows (a LIMIT with no sort) fails the sample check, and the retry, shown its queries and the columns of each entity, runs only the query the failed check needs, without listing or describing the entities again.',
+      'Drives the retry (agents.md 5.11, 8.1): the target adds to attempt 1 a query that timed out (`forceRetryWith`), so Validate fails its "No unresolved tool error" check whatever the model wrote and a retry always runs; the retry, shown attempt 1\'s queries and the columns of each entity, runs only the queries it needs, without listing or describing the entities again.',
     scorers: [checks.noToolErrors()],
     customChecks: [ranSuccessfulSql(), retryDoesNotRediscover()],
+    forceRetryWith:
+      'SELECT goal.id, player.full_name, goal.minute FROM world_cup.goals goal ' +
+      'CROSS JOIN world_cup.goals other ' +
+      'JOIN world_cup.players player ON player.id = goal.scorer_player_id ' +
+      'ORDER BY goal.minute, goal.id',
     expectedSql:
       'SELECT player.full_name AS scorer, goal.minute FROM world_cup.goals goal ' +
       'JOIN world_cup.players player ON player.id = goal.scorer_player_id ' +
@@ -309,7 +314,10 @@ const INSIGHTS_ANALYST_EVAL_CASES: AssistantEvalCase[] = [
       'and its minute as the queries returned them, and says how they were ' +
       'chosen (for example the earliest five) or that they are five of the ' +
       '24. Score pass=false if it lists goals of another tournament, fewer ' +
-      'than five, or a scorer or minute no query returned.' +
+      'than five, or a scorer or minute no query returned. A query of an ' +
+      'earlier attempt that timed out is not a data problem: the answer ' +
+      'need not mention it, and score pass=false if it presents that ' +
+      'failure as a limit of the data or says it could not read the goals.' +
       ANSWER_FORMAT,
   },
 ];

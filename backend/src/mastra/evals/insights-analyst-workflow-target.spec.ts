@@ -36,7 +36,7 @@ import type { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
 import { answerBusinessQuestionWorkflow } from '../workflows/answer-business-question.workflow';
 import type { AnalysisPlan } from '../workflows/answer-business-question.steps';
-import { evalDetailsOf } from './eval-details';
+import { EVAL_CASE_CONTEXT_KEY, evalDetailsOf } from './eval-details';
 import { endsOnClarifyingQuestion } from './insights-analyst-eval-checks';
 import {
   clarificationAnswer,
@@ -283,14 +283,67 @@ describe('the v2 eval target runs the whole answer-business-question workflow (a
       await run([['describe_entity', 'run_readonly_sql'], ['describe_entity']]),
     ).toBe('the retry called describe_entity again');
     expect(
+      await run([['run_readonly_sql'], ['list_entities', 'run_readonly_sql']]),
+    ).toBe('the retry called list_entities again');
+    expect(
       await run([
         ['describe_entity', 'run_readonly_sql'],
         ['run_readonly_sql'],
       ]),
     ).toBeUndefined();
-    // No retry: nothing to hold against it.
-    expect(await run([['run_readonly_sql']])).toBeUndefined();
-    expect(await run()).toBeUndefined();
+    // No retry ran: the case proves nothing, so it fails.
+    expect(await run([['run_readonly_sql']])).toBe(
+      'no retry ran: the case needs two analysis attempts',
+    );
+    expect(await run()).toBe(
+      'no retry ran: the case needs two analysis attempts',
+    );
+  });
+
+  it('forces a retry for a case that asks for it: attempt 1 gains a query that timed out, Validate fails it and the retry is shown it', async () => {
+    const { target, generate, parts, options } = setUp(PLAN, [
+      agentResult([{ player: 'Kane', goals: 6 }]),
+      agentResult([{ player: 'Kane', goals: 6 }]),
+    ]);
+    const forced = 'SELECT g.id FROM world_cup.goals g, world_cup.goals h';
+    options.requestContext.set(EVAL_CASE_CONTEXT_KEY, {
+      forceRetryWith: forced,
+    });
+    const result = (await target.generate(
+      'Who scored the most in 2018?',
+      options as never,
+    )) as unknown as Record<string, unknown>;
+    expect(generate).toHaveBeenCalledTimes(2);
+    const retryContext = (
+      generate.mock.calls[1][1]['context'] as { content: string }[]
+    ).map((entry) => entry.content);
+    expect(retryContext.join('\n')).toContain(
+      'Attempt 1 of this analysis failed validation.',
+    );
+    expect(retryContext.join('\n')).toContain(forced);
+    expect(retryContext.join('\n')).toContain(
+      'failed: canceling statement due to statement timeout',
+    );
+    // The injected call is not a call of the agent: no trace holds it.
+    expect(result['toolResults'] as unknown[]).toHaveLength(2);
+    expect(evalDetailsOf(result).steps?.['analyse-attempts']).toEqual([
+      ['run_readonly_sql'],
+      ['run_readonly_sql'],
+    ]);
+    // Write answer reads the retry's queries only: the injected one is not an answer's.
+    const written = (parts.writeAnswer.mock.calls[0] as unknown[])[0] as {
+      queries: { sql: string }[];
+    };
+    expect(written.queries.map((query) => query.sql)).not.toContain(forced);
+  });
+
+  it('adds nothing when the case does not ask for a retry: one attempt, no injected query', async () => {
+    const { target, generate, options } = setUp(PLAN, [
+      agentResult([{ player: 'Kane', goals: 6 }]),
+    ]);
+    options.requestContext.set(EVAL_CASE_CONTEXT_KEY, { id: 'another-case' });
+    await target.generate('Who scored the most in 2018?', options as never);
+    expect(generate).toHaveBeenCalledTimes(1);
   });
 
   it('keeps attempt 1 when the retry throws (agent.generate fails on a model error): the case is scored, not failed', async () => {
