@@ -159,12 +159,19 @@ export function readImagesStepEntry(): ContractStepEntry {
  */
 export function readImagesEdges(firstStepId: string): WorkflowEdge[] {
   return [
-    { from: 'start', to: firstStepId, kind: 'next', label: 'No images' },
+    {
+      from: 'start',
+      to: firstStepId,
+      kind: 'next',
+      label: 'No images',
+      note: 'The run has no reference images, so it starts straight away.',
+    },
     {
       from: 'start',
       to: READ_IMAGES_STEP_ID,
       kind: 'branch',
       label: 'Reference images',
+      note: 'The run has images: Zoe describes them first, for every later step.',
     },
     { from: READ_IMAGES_STEP_ID, to: firstStepId, kind: 'next' },
   ];

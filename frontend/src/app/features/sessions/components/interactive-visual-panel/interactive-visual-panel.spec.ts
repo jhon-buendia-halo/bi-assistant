@@ -18,6 +18,42 @@ import {
 } from './interactive-visual-panel';
 
 describe('buildTailorInstruction', () => {
+  it('accepts free text alone as the instruction', () => {
+    expect(
+      buildTailorInstruction({
+        chartType: 'auto',
+        sort: 'none',
+        topN: null,
+        freeText: '  Highlight France  ',
+      }),
+    ).toBe('Highlight France');
+  });
+
+  it('puts the free text after the field sentences', () => {
+    expect(
+      buildTailorInstruction({
+        chartType: 'bar',
+        sort: 'asc',
+        topN: 5,
+        freeText: 'Highlight France.',
+      }),
+    ).toBe(
+      'Change the visual to a bar chart. Sort ascending by the main measure. ' +
+        'Show only the top 5 items and group the rest as "Other". Highlight France.',
+    );
+  });
+
+  it('treats whitespace-only free text as empty', () => {
+    expect(
+      buildTailorInstruction({
+        chartType: 'auto',
+        sort: 'none',
+        topN: null,
+        freeText: ' \n\t ',
+      }),
+    ).toBe('');
+  });
+
   it('is empty when every control is Auto/None/empty', () => {
     expect(
       buildTailorInstruction({ chartType: 'auto', sort: 'none', topN: null }),
@@ -272,6 +308,83 @@ describe('InteractiveVisualPanel tailoring', () => {
     expect(panel.tailorChartType()).toBe('auto');
     expect(panel.tailorTopN()).toBeNull();
     expect(panel.tailorMenuOpen()).toBeFalse();
+  });
+
+  it('applies free text alone and resets it on success', () => {
+    panel.setTailorFreeText('  Stack it by year  ');
+    expect(panel.tailorInstruction()).toBe('Stack it by year');
+    panel.applyTailoring();
+    const req = http.expectOne(
+      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
+    );
+    expect(req.request.body).toEqual({ instruction: 'Stack it by year' });
+    req.flush({
+      ok: true,
+      message: 'Visual updated',
+      session,
+      visualization: visual({ version: 3, currentVersion: 3 }),
+    } satisfies SessionActionResult);
+    expect(panel.tailorFreeText()).toBe('');
+    expect(panel.tailorMenuOpen()).toBeFalse();
+  });
+
+  it('keeps the free text when the tailoring fails', () => {
+    panel.setTailorFreeText('Make it pop');
+    panel.applyTailoring();
+    http
+      .expectOne(
+        `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
+      )
+      .flush({ ok: false, message: 'Nope' });
+    expect(panel.tailorFreeText()).toBe('Make it pop');
+  });
+
+  it('applies on Cmd/Ctrl+Enter in the field, and not on plain Enter', () => {
+    panel.toggleTailorMenu();
+    fixture.detectChanges();
+    const field: HTMLTextAreaElement = fixture.nativeElement.querySelector(
+      'textarea[aria-label="Describe the change"]',
+    );
+    expect(field).toBeTruthy();
+    field.value = 'Highlight France';
+    field.dispatchEvent(new Event('input'));
+    field.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+    http.expectNone(
+      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
+    );
+    field.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        metaKey: true,
+        bubbles: true,
+      }),
+    );
+    const req = http.expectOne(
+      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
+    );
+    expect(req.request.body).toEqual({ instruction: 'Highlight France' });
+    req.flush({ ok: false, message: 'x' });
+  });
+
+  it('does not apply on Ctrl+Enter when the instruction is empty', () => {
+    panel.toggleTailorMenu();
+    fixture.detectChanges();
+    const field: HTMLTextAreaElement = fixture.nativeElement.querySelector(
+      'textarea[aria-label="Describe the change"]',
+    );
+    field.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        ctrlKey: true,
+        bubbles: true,
+      }),
+    );
+    http.expectNone(
+      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
+    );
+    expect(panel.tailoring()).toBeFalse();
   });
 
   it('does nothing when no control was changed', () => {

@@ -28,7 +28,7 @@ Capability-local vocabulary:
 - R1. The Data Readiness Agent SHALL be a built-in agent shown on the Agent Hub in the **Official** section.
   - Registry key `data-readiness`, `Owner: Official`.
   - Description: "Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings."
-  - Since 2026-11-12 (ADR-0042) the agent is a library entry, not a workflow: its card and detail view offer no **Start chat** and no **Run**, and it has no workflow of its own (`agent:data-readiness` no longer exists, [workflows](../workflows/spec.md) R2). Since 2026-11-13 it runs the Explain report step of the **Assess Data Readiness** workflow (R2) and the optional **Check data quality** step of **Answer a Business Question** ([workflows](../workflows/spec.md) R27: it judges which engine findings on the tables an analysis read affect its answer), so its detail's **Used in** line shows both workflows (agents-evals R109). Reports already stored stay viewable wherever they were (a stored run or past chat, a stored report). The agent's evals still run it on its own agent turn.
+  - Since 2026-11-12 (ADR-0042) the agent is a library entry, not a workflow: its card and detail view offer no **Start chat** and no **Run**, and it has no workflow of its own (`agent:data-readiness` no longer exists, [workflows](../workflows/spec.md) R2). Since 2026-11-13 it runs the Explain report step of the **Assess Data Readiness** workflow (R2); from 2026-11-13 to 2026-11-17 it also ran the optional Check data quality step of **Answer a Business Question**, which Build visual replaced ([workflows](../workflows/spec.md) R41), so its detail's **Used in** line shows Assess Data Readiness (agents-evals R109). Reports already stored stay viewable wherever they were (a stored run or past chat, a stored report). The agent's evals still run it on its own agent turn.
   - While no dataset bound to a PostgreSQL or Databricks datasource exists, that Start chat SHALL be disabled, and its title SHALL read `Add a PostgreSQL or Databricks dataset first`.
   - Its detail view SHALL have the Official agent's tabs ([agents-evals](../agents-evals/spec.md) R5), with no Chat Box, opening on System Prompt:
     - the System Prompt tab shows the prompt as served and allows the built-in prompt edit; an edited prompt SHALL still start with `You are the Data Readiness Agent`;
@@ -36,7 +36,7 @@ Capability-local vocabulary:
     - the Tools tab lists its own tools.
 - R2. Since 2026-11-13 the **Assess Data Readiness** workflow (`data-readiness-assessment`; [workflows](../workflows/spec.md) R1, R29; [agents.md](../../system/agents.md) 5.13) SHALL run an assessment of one dataset from its page (**Execute workflow**, the Run panel; [workflows](../workflows/spec.md) R21), one run per assessment ([workflows](../workflows/spec.md) R18-R20). (From 1.23.16 to 2026-11-12 the agent's own one-step workflow did this; ADR-0042 removed it.)
   - Its input is `dataset`, a list of the datasets bound to a PostgreSQL or Databricks datasource (required), and `question`, a text area that starts as `Assess the readiness of this dataset` (an empty question means that text). The three starter questions of R2a are example chips under it.
-  - Its code steps profile the dataset's tables, score them with the deterministic engine and store the report with the run's id (R6-R33, R24); its **Explain report** step runs the Data Readiness Agent on the stored report, which reads it with `get_readiness_report` and SHALL NOT run a second assessment (while the step runs, `assess_data_readiness` answers an error naming the stored report).
+  - Its code steps profile the dataset's tables, score them with the deterministic engine and store the report with the run's id (R6-R33, R24), then look up the rows behind its top findings (R34); its **Explain report** step runs the Data Readiness Agent on the stored report, which reads it with `get_readiness_report` and SHALL NOT run a second assessment (while the step runs, `assess_data_readiness` answers an error naming the stored report).
   - The run host covers that one dataset only, so the agent never asks which dataset.
   - A dataset that is not PostgreSQL or Databricks SHALL be refused before the run with `Dataset "<name>" is not a PostgreSQL or Databricks dataset`.
   - The run's answer, its readiness card and its files show in the Run panel (R5; [synthetic-data](../synthetic-data/spec.md) R43). **Follow up** asks a further question as a new run with this run as its context, which assesses again; **Stop** cancels a running assessment (R33) and stores no report.
@@ -72,12 +72,12 @@ Capability-local vocabulary:
   - in a chat, show that report's **scorecard** in the right panel and open the panel (R25);
   - in a run, show the scorecard, with Past assessments, in the Run tab under the answer when **Open scorecard** on the card is clicked, with a Close button. A new run closes it.
 
-  The model sees only a compact summary (overall score, band, the ten dimension scores, the finding count and up to 20 findings, most severe first, and the not-profiled entities, R31), never the full finding list.
+  The model sees only a compact summary (overall score, band, the ten dimension scores, the finding count and up to 20 findings, most severe first, and the not-profiled entities, R31), never the full finding list. Every finding of one dimension reaches it only when it asks for that dimension, a page at a time (R35).
 
 ### Profiling
 
 - R6. An assessment SHALL build a source profile from aggregate, read-only queries against the datasource only: counts, distinct counts, minimum and maximum, grouped duplicate counts, orphan counts through a left join, pattern-mismatch counts, and privilege lookups.
-  - It SHALL read no row values, and every statement SHALL pass the read-only guard ([datasources](../datasources/spec.md)). This is the profiler's rule; the chat's drill-down queries (R4) read rows through the user SQL path.
+  - It SHALL read no row values, and every statement SHALL pass the read-only guard ([datasources](../datasources/spec.md)). This is the profiler's rule; the chat's drill-down queries (R4) read rows through the user SQL path, and the Rows behind findings step (R34) through the same guarded read-only path.
   - Each statement SHALL time out after 15 s.
   - A statement that fails or times out SHALL leave the statistic it measures absent. The checks that need that statistic then skip it, and the assessment carries on.
 - R7. Per entity in scope, the profile SHALL hold:
@@ -225,9 +225,32 @@ These rules refine R6 to R11 without changing any statistic, check or score form
   - Progress is sent to the browser only. The model never sees it, and it is not stored: after a reload the tool row shows its final state.
 - R33. **Stop and reload cancel the assessment.** Stopping the turn or reloading SHALL cancel every in-flight statement and stop scheduling tables. No report is stored for an assessment that did not finish.
 
+### The rows behind a finding
+
+- R34. **Each top finding carries the rows behind it** (since 2026-11-16, roadmap 1.28.11). After Save report, the Assess Data Readiness run's **Rows behind findings** step ([agents.md](../../system/agents.md) 5.13) SHALL run, for each of the report's top findings (at most 20, most severe first, the order of the agent's summary), one read-only query of the rows behind it, on the report's datasource, through the guarded read-only path with no repair and no model call, keeping at most 200 rows. Each query SHALL be a source of the run's answer (`run_readonly_sql`, with a business sentence such as `Rows where constructor is empty in formula1.results`), ahead of the agent's own, so the query inspector opens, pages and filters its whole result ([agent-answers](../agent-answers/spec.md)).
+  - The query follows the finding's check, in the datasource's dialect (PostgreSQL `"…"`, Databricks backticks with the catalog), as one `SELECT` with no CTE and no `LIMIT`:
+    - completeness: the rows where the column is empty;
+    - uniqueness: the key's values that repeat, with their `occurrences`, most repeated first (an id-like column's empty values left out, as the check counts them);
+    - integrity: the child rows whose value has no parent, through the relationship the check measured;
+    - reasonability: the negative values, the rows whose end comes before their start, or the rows ordered from the implausible end (earliest, latest, lowest or highest first);
+    - timeliness: the rows ordered newest first by the column the check read;
+    - consistency: the values that differ only by case or spaces, with their `occurrences`;
+    - validity: the values that fail the column's format, with the profiler's own pattern.
+  - Where the finding is a count of rows (completeness, integrity, validity, negatives, swapped ranges) the result SHALL carry that count as `matching_rows`.
+  - Accessibility findings, findings with no table or column, and a timeliness finding read from the table's last change SHALL have no query.
+  - A query that fails SHALL be a failed source of the answer, with its error; it SHALL NOT fail the run. A stop SHALL end the run at that step.
+  - The Data Readiness Agent's input SHALL NOT change: the sources reach no prompt.
+
+### Every finding of a dimension
+
+- R35. **The agent lists a dimension's findings from the stored report** (since 2026-11-16, roadmap 1.28.12). Asked for all, every or the full list of the findings or issues of a dimension ("what are all the completeness issues"), the agent SHALL call `get_readiness_report` with that `dimension` and read every page, 1 to `pageCount` ([agents.md](../../system/agents.md) 2.10 D15, 3.13).
+  - The tool SHALL return every finding of that dimension from the stored report, most severe first, then in report order, 50 a page, with the dimension's `total`. It SHALL never recompute a finding; without `dimension` its result is unchanged.
+  - The agent SHALL list them from the report and give the total the report states. It SHALL never recount findings with `run_readonly_sql` (no null counts, no `information_schema` scan): the engine profiles views as well as base tables, so a recount over base tables gives another number.
+  - An unknown dimension, or a page past the last, SHALL come back as `{ error }` text the agent can fix.
+
 ## Edge cases and errors
 
-- A datasource that is neither PostgreSQL nor Databricks: the API answers 400 `Data readiness supports PostgreSQL and Databricks datasources only`, and the tool returns the same text as `{ error }`.
+- A datasource that is neither PostgreSQL nor Databricks: the gate is an allow-list (never a deny-list, so a new kind is refused until opted in); the API answers 400 `Data Readiness supports PostgreSQL and Databricks datasources; "<name>" is an Excel / CSV datasource.` (or `… is a REST API datasource.`), and the tool returns the same text as `{ error }`.
 - An unknown datasource: 404 `Datasource "<id>" not found`. An unknown report: 404 `Readiness report "<id>" not found`.
 - An entity in scope that no longer exists: it is left out, and the report's entity count says how many were assessed. When no entity in scope exists, including a whole-datasource assessment of a datasource with no entity, the assessment is refused with 400 `None of the entities to assess exist`.
 - A table the connection cannot read: it is counted by accessibility (R17). Its rows are not profiled, so it adds no completeness, validity or consistency checks.
@@ -271,9 +294,9 @@ Feature: Data readiness
 
   Scenario: the Data Readiness Agent is an Official library agent used by Assess Data Readiness
     Given the app runs with the LLM stub as its provider
-    When I open "Agents"
+    When I open "Agent personas"
     Then the "Official" section shows "Data Readiness Agent" with "Owner: Official" and no "Start chat" or "Run"
-    When I open "Workflows"
+    When I open "User journeys"
     Then I see "Assess Data Readiness" and do not see "Data Readiness Agent"
     When I open the "Data Readiness Agent" agent
     Then its "Used in" line shows "Assess Data Readiness"
@@ -281,9 +304,11 @@ Feature: Data readiness
   Scenario: Assess Data Readiness profiles, scores and explains one dataset
     Given the World Cup PostgreSQL dataset
     When I run "Assess Data Readiness" on it with no question
-    Then Resolve dataset, Profile source, Score readiness, Save report, Explain report and Wrap up end successfully, in that order
+    Then Resolve dataset, Profile source, Score readiness, Save report, Rows behind findings, Explain report and Wrap up end successfully, in that order
     And one readiness report is stored with the run's id
     And the run's answer explains it and carries its readiness card
+
+  Scenario: Each readiness finding opens the rows behind it
 
   Scenario: A table too large to profile is listed as not profiled
     Given a table in the dataset has more than 100,000,000 rows

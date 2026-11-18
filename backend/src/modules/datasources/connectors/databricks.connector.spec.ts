@@ -18,10 +18,12 @@ let respond: Responder = () => [];
 
 class FakeSession {
   readonly statements: string[] = [];
+  readonly options: (Record<string, unknown> | undefined)[] = [];
   closed = false;
 
-  executeStatement(sql: string) {
+  executeStatement(sql: string, options?: Record<string, unknown>) {
     this.statements.push(sql);
+    this.options.push(options);
     const rows = respond(sql);
     return Promise.resolve({ fetchAll: () => Promise.resolve(rows) });
   }
@@ -360,5 +362,67 @@ describe('DatabricksConnector sampleRowsMany', () => {
 
     expect(clients).toHaveLength(0);
     expect(results.size).toBe(0);
+  });
+});
+
+describe('DatabricksConnector runPagedSql (datasources R52)', () => {
+  const stmt = {
+    sql: 'SELECT country, goals FROM sales.public.scorers',
+    columns: ['country', 'goals'],
+    filters: [
+      { column: 'country', op: 'in' as const, values: ['Brazil', 'Italy'] },
+      { column: 'goals', op: 'gte' as const, value: 3 },
+    ],
+    sort: [],
+    limit: 50,
+    offset: 0,
+    kinds: { country: 'text' as const, goals: 'number' as const },
+  };
+
+  it('binds the filter values as named parameters, never inline', async () => {
+    respond = () => [{ country: 'Brazil', goals: 8, __qti_total: 1 }];
+
+    const page = await new DatabricksConnector().runPagedSql(config, stmt);
+
+    expect(page).toEqual({
+      columns: ['country', 'goals'],
+      rows: [{ country: 'Brazil', goals: 8 }],
+      matchedRows: 1,
+    });
+    const session = clients[0].sessions[0];
+    expect(session.statements[0]).toContain(
+      'WHERE LOWER(CAST(`country` AS STRING)) IN (LOWER(:p1), LOWER(:p2)) AND `goals` >= :p3',
+    );
+    expect(session.statements[0]).not.toContain('Brazil');
+    expect(session.options[0]).toEqual({
+      namedParameters: { p1: 'Brazil', p2: 'Italy', p3: 3 },
+    });
+    expect(session.closed).toBe(true);
+    expect(clients[0].closed).toBe(true);
+  });
+
+  it('answers 400 when the warehouse refuses parameter markers', async () => {
+    respond = () => {
+      throw new Error(
+        '[UNBOUND_SQL_PARAMETER] Found the unbound parameter: p1.',
+      );
+    };
+
+    await expect(
+      new DatabricksConnector().runPagedSql(config, stmt),
+    ).rejects.toThrow(
+      'This warehouse does not support query parameters; filtering is unavailable',
+    );
+  });
+
+  it('passes other failures through, and sends no parameters without filters', async () => {
+    respond = () => {
+      throw new Error('TABLE_OR_VIEW_NOT_FOUND');
+    };
+
+    await expect(
+      new DatabricksConnector().runPagedSql(config, { ...stmt, filters: [] }),
+    ).rejects.toThrow('TABLE_OR_VIEW_NOT_FOUND');
+    expect(clients[0].sessions[0].options[0]).toEqual({});
   });
 });

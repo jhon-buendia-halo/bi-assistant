@@ -14,6 +14,7 @@ const KIND_LABELS: Readonly<
   postgres: 'PostgreSQL',
   rest: 'REST API',
   databricks: 'Databricks',
+  file: 'Excel / CSV',
 };
 
 /**
@@ -66,7 +67,9 @@ export function assistantEvalDatasetError(
       ? 'scripts/setup-worldcup-rest.ts'
       : kind === 'databricks'
         ? databricksSetup(sample)
-        : 'docker/postgres/README.md';
+        : kind === 'file'
+          ? 'Settings → Testing Data (load the sample; no database needed)'
+          : 'docker/postgres/README.md';
   const setup =
     `These evals require the bundled ${sample.name} sample: ${sample.description} ` +
     `Select its ${kindLabel} datasource and save a dataset containing the ` +

@@ -33,13 +33,16 @@ describe('turnWorkflowOf (agents.md 5.11, 5.16)', () => {
         'read-images',
         'receive-question',
         'load-catalog',
+        'interpret-follow-up',
         'plan',
         'clarify',
         'analyse',
         'validate',
-        'check-data-quality',
         'write-answer',
+        'build-visual',
         'wrap-up',
+        'page-result',
+        'page-answer',
       ],
     });
   });
@@ -48,6 +51,24 @@ describe('turnWorkflowOf (agents.md 5.11, 5.16)', () => {
     expect(
       turnWorkflowOf(session({ run: true, contextBlock: 'NODE CHAT' })),
     ).toMatchObject({ engineId: 'agent-turn', bar: 'agent' });
+  });
+
+  it('runs a follow-up that asks one agent on ask-agent, its one step the asked one (agents.md 5.21)', () => {
+    expect(
+      turnWorkflowOf(
+        session({
+          run: true,
+          ask: { step: 'write-answer' },
+          contextBlock: 'STEP',
+        }),
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        engineId: 'ask-agent',
+        bar: 'agent',
+        stepIds: ['write-answer'],
+      }),
+    );
   });
 });
 

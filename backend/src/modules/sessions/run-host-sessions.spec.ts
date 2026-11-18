@@ -26,6 +26,8 @@ jest.mock('../../mastra/model-resolver', () => ({
     typeof c === 'object' && c !== null && 'kind' in c,
   resolveAgentModelConfig: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
 }));
+// The query inspector's page path a follow-up pages through (roadmap 1.28.8).
+const mockPageQuery = jest.fn();
 jest.mock('../../mastra/tool-services', () => ({
   setDatasetToolServices: jest.fn(),
   // v2's Load catalog step reads the datasets as the dataset tools do.
@@ -41,6 +43,7 @@ jest.mock('../../mastra/tool-services', () => ({
           },
         ].filter((d) => names.includes(d.name)),
       ),
+    pageQuery: (...args: unknown[]) => mockPageQuery(...args) as unknown,
   }),
 }));
 jest.mock('../../mastra/tools/dataset.tools', () => ({
@@ -114,6 +117,7 @@ import {
   planOf,
 } from '../../mastra/workflows/answer-business-question.steps';
 import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
+import { askAgentWorkflow } from '../../mastra/workflows/ask-agent.workflow';
 import { DATA_READINESS_ASSESSMENT_STEPS } from '../../mastra/workflows/data-readiness-assessment.steps';
 import { dataReadinessAssessmentWorkflow } from '../../mastra/workflows/data-readiness-assessment.workflow';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
@@ -172,6 +176,7 @@ const V2_WORKFLOW = {
   agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
   steps: ANSWER_BUSINESS_QUESTION_STEPS,
   edges: CODE_WORKFLOWS[0].edges,
+  contractHash: CODE_WORKFLOWS[0].contractHash,
 };
 
 /** The workflow detail the fake catalogue answers for Assess Data Readiness. */
@@ -242,7 +247,16 @@ const SESSIONS: Record<Workflow, Partial<SessionDoc>> = {
 };
 
 /** The v2 run input that asks what the chat message asks. */
-const V2_INPUT = { question: 'Who won?', datasets: ['World Cup'] };
+// Build visual is on unless the run turns it off (workflows R41): the runs
+// below turn it off; the Build visual runs set it.
+const V2_INPUT = {
+  question: 'Who won?',
+  datasets: ['World Cup'],
+  buildVisual: false,
+};
+// What the engine is given: the flag only picks the branch (the runtime's
+// `buildsVisual`), it is not an input of the workflow's steps.
+const V2_ENGINE_INPUT = { question: 'Who won?', datasets: ['World Cup'] };
 
 interface StreamCall {
   input: unknown;
@@ -264,6 +278,10 @@ interface BuildOptions {
   session?: Partial<SessionDoc>;
   /** The data-readiness service, for Assess Data Readiness runs. */
   readiness?: object;
+  /** The visualization service's designer (`createFromAnswer`), for Build visual. */
+  visuals?: object;
+  /** The datasources service's guarded read-only SQL (roadmap 1.28.11). */
+  runReadOnlySql?: jest.Mock;
 }
 
 /** v2's Analyse turn: one successful query, then its note. */
@@ -380,7 +398,9 @@ function build(options: BuildOptions = {}) {
                 inputData,
                 requestContext,
               )
-            : streamTurnWorkflow(key, inputData, requestContext),
+            : key === 'ask-agent'
+              ? streamStubWorkflow(askAgentWorkflow, inputData, requestContext)
+              : streamTurnWorkflow(key, inputData, requestContext),
     ),
     discardSuspendedWorkflowRuns: jest.fn().mockResolvedValue(0),
     ensureSessionWorkspace: jest.fn((id: string) =>
@@ -404,6 +424,20 @@ function build(options: BuildOptions = {}) {
         return Promise.resolve({ plan: planOf({}, question), stopped: false });
       },
     ),
+    // Nathan's reading of a follow-up (roadmap 1.28.8): a new question
+    // unless a test says otherwise.
+    interpretResult: jest.fn((input: unknown, opts?: unknown) => {
+      void input;
+      void opts;
+      return Promise.resolve({
+        action: 'new-question',
+        query: 0,
+        interpretation: {
+          request: {},
+          understood: '',
+        },
+      });
+    }),
     writeAnswer: jest.fn(
       (_input: unknown, opts: { onText?: (delta: string) => void }) => {
         opts.onText?.('Brazil won.');
@@ -454,11 +488,16 @@ function build(options: BuildOptions = {}) {
     repository as never,
     mastra as never,
     datasetsRepository as never,
-    { get: jest.fn().mockResolvedValue({ id: 'ds', name: 'DS' }) } as never,
+    {
+      get: jest.fn().mockResolvedValue({ id: 'ds', name: 'DS' }),
+      runReadOnlySql:
+        options.runReadOnlySql ??
+        jest.fn().mockResolvedValue({ columns: [], rows: [], totalRows: 0 }),
+    } as never,
     {
       getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
     } as never,
-    {} as never,
+    (options.visuals ?? {}) as never,
     {
       referenceBlock: jest.fn().mockResolvedValue(undefined),
       isVerifiedSql: jest.fn().mockResolvedValue(false),
@@ -1010,6 +1049,8 @@ describe('the run host (agents.md 5.14)', () => {
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
+      'interpret-follow-up:running',
+      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -1024,19 +1065,24 @@ describe('the run host (agents.md 5.14)', () => {
       'read-images:skipped',
       'clarify:skipped',
       // Not asked for (agents.md 5.11).
-      'check-data-quality:skipped',
+      'build-visual:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
       'read-images:skipped',
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success',
       'clarify:skipped',
       'analyse:success',
       'validate:success',
-      'check-data-quality:skipped',
       'write-answer:success',
+      'build-visual:skipped',
       'wrap-up:success',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     // The loops' steps carry their attempt (api.md 3.6): Plan (Clarify
     // loops back to it) and the analysis's.
@@ -1120,114 +1166,165 @@ function readinessService() {
   };
 }
 
-describe('a v2 run that checks data quality (agents.md 5.11)', () => {
-  /** v2's Analyse turn: one query on a fully named table. */
-  const QUALIFIED_ANALYSE_CHUNKS = [
-    {
-      type: 'tool-call',
-      payload: {
-        toolCallId: 'q0',
-        toolName: 'run_readonly_sql',
-        args: {
-          sql: 'SELECT winner, count(*) FROM wc.public.matches GROUP BY winner',
-          rationale: 'Wins per team.',
-        },
-      },
-    },
-    {
-      type: 'tool-result',
-      payload: {
-        toolCallId: 'q0',
-        toolName: 'run_readonly_sql',
-        result: { columns: ['winner'], rows: [{ winner: 'Brazil' }] },
-      },
-    },
-    { type: 'text-delta', payload: { text: 'A note.' } },
-  ];
+describe('a v2 run that builds a visual (agents.md 5.11, workflows R41)', () => {
+  const BUILT = {
+    id: 'v-1',
+    title: 'Wins per team',
+    description: 'Wins',
+    path: 'visuals/v-1',
+    sourceMessageAt: '2026-01-01T00:00:00.000Z',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    currentVersion: 1,
+    versions: [],
+  };
 
-  it('assesses the tables the queries read, lets Sarah pick what affects the answer, and hands it to Write answer with the report card', async () => {
-    const readiness = readinessService();
-    const ctx = build({ chunks: QUALIFIED_ANALYSE_CHUNKS, readiness });
+  it('designs the visual from the written answer and the rows, stores it with the session and logs its creation beside the answer', async () => {
+    const createFromAnswer = jest
+      .fn()
+      .mockResolvedValue({ metadata: BUILT, bundle: {} });
+    const ctx = build({ visuals: { createFromAnswer } });
     await ctx.sessions.onModuleInit();
-    const checkDataQuality = jest.fn().mockResolvedValue({
-      issues: [{ finding: 1, impact: 'Some wins may be missing.' }],
-      stopped: false,
-    });
-    (ctx.mastra as Record<string, unknown>)['checkDataQuality'] =
-      checkDataQuality;
-    const { run } = await runOf(ctx, { ...V2_INPUT, checkDataQuality: true });
+    const { run } = await runOf(ctx, { ...V2_INPUT, buildVisual: true });
 
     expect(run.status).toBe('success');
-    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toContain(
-      'check-data-quality:success',
+    const stepLines = run.steps.map((s) => `${s.id}:${s.status}`);
+    expect(stepLines.indexOf('build-visual:success')).toBe(
+      stepLines.indexOf('write-answer:success') + 1,
     );
-    // Only the table the SQL read, recorded with the run.
-    expect(readiness.prepare).toHaveBeenCalledWith({
-      datasourceId: 'ds-pg',
-      entities: ['wc.public.matches'],
-      runId: run.id,
-    });
-    expect(readiness.saveReport).toHaveBeenCalledTimes(1);
-    // Sarah reads the SQL and the engine's findings, numbered.
-    expect(checkDataQuality).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sql: ['SELECT winner, count(*) FROM wc.public.matches GROUP BY winner'],
-        tables: ['wc.public.matches'],
-        findings: [
-          expect.objectContaining({
-            entity: 'public.matches',
-            field: 'winner',
-            severity: 'low',
-          }),
-        ],
-      }),
-      expect.anything(),
+    expect(createFromAnswer).toHaveBeenCalledTimes(1);
+    const [, source] = createFromAnswer.mock.calls[0] as [
+      unknown,
+      { question: string; answer: string; at: string; data: unknown[] },
+    ];
+    expect(source.question).toBe('Who won?');
+    expect(source.answer).toBe(run.answer?.content);
+    expect(source.data.length).toBeGreaterThan(0);
+    // The answer is stored at the time the visual names as its source.
+    expect(run.answer?.at).toBe(source.at);
+    expect((run.visualizations ?? []).map((v) => v.id)).toEqual(['v-1']);
+    expect(
+      run.steps.find((s) => s.id === 'build-visual')?.output,
+    ).toMatchObject({ visual: { visualId: 'v-1', title: 'Wins per team' } });
+    expect(run.events?.at(-1)?.content).toContain(
+      'Created interactive visual "Wins per team" (v1).',
     );
-    // Jessica gets the issue as a finding, after Validate's.
-    const written = ctx.mastra.writeAnswer.mock.calls[0][0] as {
-      findings: { check: string; passed: boolean; detail: string }[];
-    };
-    expect(written.findings.at(-1)).toEqual({
-      check: 'Data quality: public.matches.winner (completeness, low)',
-      passed: false,
-      detail: '2% of winner is null Some wins may be missing.',
-    });
-    // The answer carries the scoped report's card.
-    expect(run.answer).toMatchObject({
-      readinessReport: { reportId: 'r-wc' },
+  });
+
+  it('keeps the answer when the design fails, saying why in the step', async () => {
+    const createFromAnswer = jest
+      .fn()
+      .mockRejectedValue(new Error('The designer is down'));
+    const ctx = build({ visuals: { createFromAnswer } });
+    await ctx.sessions.onModuleInit();
+    const { run } = await runOf(ctx, { ...V2_INPUT, buildVisual: true });
+    expect(run.status).toBe('success');
+    expect(run.answer?.content).toBe('Brazil won.');
+    expect(run.visualizations ?? []).toEqual([]);
+    expect(
+      run.steps.find((s) => s.id === 'build-visual')?.output,
+    ).toMatchObject({
+      visual: {
+        error: expect.stringContaining('The designer is down') as unknown,
+      },
     });
   });
 
-  it('skips Check data quality when the run does not ask for it', async () => {
-    const readiness = readinessService();
-    const ctx = build({ chunks: QUALIFIED_ANALYSE_CHUNKS, readiness });
+  it('skips Build visual when the run turns it off', async () => {
+    const createFromAnswer = jest.fn();
+    const ctx = build({ visuals: { createFromAnswer } });
     await ctx.sessions.onModuleInit();
     const { run } = await runOf(ctx, V2_INPUT);
     expect(run.steps.map((s) => `${s.id}:${s.status}`)).toContain(
-      'check-data-quality:skipped',
+      'build-visual:skipped',
     );
-    expect(readiness.prepare).not.toHaveBeenCalled();
-    expect(run.answer?.readinessReport).toBeUndefined();
+    expect(createFromAnswer).not.toHaveBeenCalled();
+    expect(run.visualizations ?? []).toEqual([]);
   });
 
-  it('writes the answer anyway when the check cannot run, saying so in a finding', async () => {
-    const readiness = readinessService();
-    readiness.profileSource.mockRejectedValue(
-      new BadGatewayException('connect ECONNREFUSED'),
-    );
-    const ctx = build({ chunks: QUALIFIED_ANALYSE_CHUNKS, readiness });
+  it("asked alone (agents.md 5.21), Ryan designs a new visual from the earlier answer's rows, the follow-up as his instruction, and no query runs", async () => {
+    const createFromAnswer = jest
+      .fn()
+      .mockResolvedValue({ metadata: BUILT, bundle: {} });
+    const ctx = build({ visuals: { createFromAnswer } });
     await ctx.sessions.onModuleInit();
-    const { run } = await runOf(ctx, { ...V2_INPUT, checkDataQuality: true });
+    const first = await runOf(ctx, V2_INPUT);
+    const earlierRecords = first.run.answer?.data ?? [];
+    expect(earlierRecords).toHaveLength(1);
+
+    const { run } = await runOf(
+      ctx,
+      { question: 'As a bar chart', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id, askStep: 'build-visual' } },
+    );
+
     expect(run.status).toBe('success');
-    const written = ctx.mastra.writeAnswer.mock.calls[0][0] as {
-      findings: { check: string; passed: boolean; detail: string }[];
-    };
-    expect(written.findings.at(-1)).toEqual({
-      check: 'Data quality',
-      passed: false,
-      detail:
-        'The data quality of the tables used could not be checked: Could not reach "World Cup DB": connect ECONNREFUSED',
+    expect(
+      run.steps
+        .filter((step) => step.status !== 'skipped')
+        .map((step) => `${step.id}:${step.status}`),
+    ).toEqual(['build-visual:success']);
+    // One designer call, no new query or model step.
+    expect(createFromAnswer).toHaveBeenCalledTimes(1);
+    expect(ctx.calls['insights-analyst']).toHaveLength(1);
+    expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(1);
+    expect(ctx.mastra.writeAnswer).toHaveBeenCalledTimes(1);
+    const [, source] = createFromAnswer.mock.calls[0] as [
+      unknown,
+      {
+        question: string;
+        answer: string;
+        at: string;
+        data: unknown[];
+        instruction?: string;
+      },
+    ];
+    expect(source).toMatchObject({
+      question: 'Who won?',
+      answer: first.run.answer?.content,
+      instruction: 'As a bar chart',
     });
+    expect(source.data).toEqual(earlierRecords);
+    // The code-written answer carries the earlier records once, with their
+    // evidence, at the time the visual names as its source.
+    expect(run.answer?.content).toBe(
+      `Here's a new visual of the earlier answer: "Wins per team".`,
+    );
+    expect(run.answer?.visual).toBeUndefined();
+    expect(run.answer?.data).toEqual(earlierRecords);
+    expect(run.answer?.evidence).toHaveLength(1);
+    expect(run.answer?.at).toBe(source.at);
+    expect(
+      run.steps.find((s) => s.id === 'build-visual')?.output,
+    ).toMatchObject({ visual: { visualId: 'v-1', title: 'Wins per team' } });
+    expect(run.events?.at(-1)?.content).toContain(
+      'Created interactive visual "Wins per team" (v1).',
+    );
+  });
+
+  it("asked alone, a design that fails is the answer's news and the step still ends done", async () => {
+    const createFromAnswer = jest
+      .fn()
+      .mockRejectedValue(new Error('The designer is down'));
+    const ctx = build({ visuals: { createFromAnswer } });
+    await ctx.sessions.onModuleInit();
+    const first = await runOf(ctx, V2_INPUT);
+    const { run } = await runOf(
+      ctx,
+      { question: 'As a bar chart', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id, askStep: 'build-visual' } },
+    );
+    expect(run.status).toBe('success');
+    expect(run.answer?.content).toContain(
+      "I couldn't build a new visual: The designer is down",
+    );
+    expect(
+      run.steps.find((s) => s.id === 'build-visual')?.output,
+    ).toMatchObject({
+      visual: {
+        error: expect.stringContaining('The designer is down') as unknown,
+      },
+    });
+    expect(run.events ?? []).toEqual([]);
   });
 });
 
@@ -1278,6 +1375,7 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       'profile-source:success',
       'score-readiness:success',
       'save-report:success',
+      'finding-rows:success',
       'explain-report:success',
       'wrap-up:success',
     ]);
@@ -1316,6 +1414,116 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       findingCount: 1,
       answer: 'World Cup is Managed (84).',
     });
+  });
+
+  // Roadmap 1.28.11; data-readiness R34: the rows behind each top finding
+  // are a source of the answer, ahead of the agent's own records.
+  it("records the rows behind each top finding as the answer's sources, a failed query as a failed one, and leaves the agent's input as it was", async () => {
+    const readiness = readinessService();
+    const report: ReadinessReport = {
+      ...READINESS_REPORT,
+      findings: [
+        ...READINESS_REPORT.findings,
+        {
+          dimension: 'uniqueness',
+          level: 'entity',
+          namespace: 'public',
+          entity: 'matches',
+          field: 'match_id',
+          severity: 'high',
+          measured: '2 duplicate row(s)',
+          description: 'The primary key (match_id) has 2 duplicate row(s).',
+          recommendation: 'De-duplicate.',
+        },
+        {
+          dimension: 'accessibility',
+          level: 'source',
+          severity: 'medium',
+          measured: '1 of 2 table(s) not readable',
+          description: 'One table cannot be read.',
+          recommendation: 'Grant access.',
+        },
+      ],
+    };
+    readiness.scoreProfile.mockReturnValue({ ...report });
+    const runReadOnlySql = jest.fn((datasourceId: string, sql: string) =>
+      sql.includes('IS NULL')
+        ? Promise.resolve({
+            columns: ['winner', 'matching_rows'],
+            rows: [{ winner: null, matching_rows: 1 }],
+            totalRows: 1,
+          })
+        : Promise.reject(new Error('relation "public.matches" is locked')),
+    );
+    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness, runReadOnlySql });
+    const { events, run } = await readinessRun(ctx, { dataset: 'World Cup' });
+
+    expect(run.status).toBe('success');
+    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toContain(
+      'finding-rows:success',
+    );
+    // Most severe first (the summary's order), at most 20; nothing for
+    // accessibility. Each on the report's datasource, capped at 200 rows.
+    expect(runReadOnlySql.mock.calls.map((call) => call[0])).toEqual([
+      'ds-pg',
+      'ds-pg',
+    ]);
+    expect((runReadOnlySql.mock.calls as unknown[][]).map((c) => c[2])).toEqual(
+      [200, 200],
+    );
+    expect(run.answer?.data?.slice(0, 2)).toEqual([
+      {
+        tool: 'run_readonly_sql',
+        input:
+          'SELECT "match_id", COUNT(*) AS occurrences FROM "public"."matches" GROUP BY "match_id" HAVING COUNT(*) > 1 ORDER BY occurrences DESC, "match_id"',
+        error: 'relation "public.matches" is locked',
+        rationale: 'Values of match_id that repeat in public.matches',
+      },
+      {
+        tool: 'run_readonly_sql',
+        input:
+          'SELECT *, CAST(COUNT(*) OVER () AS INTEGER) AS matching_rows FROM "public"."matches" WHERE "winner" IS NULL',
+        columns: ['winner', 'matching_rows'],
+        rows: [{ winner: null, matching_rows: 1 }],
+        rowCount: 1,
+        rationale: 'Rows where winner is empty in public.matches',
+        // Only its count links a figure (agent-answers R69).
+        figureColumns: ['matching_rows'],
+      },
+    ]);
+    expect(run.answer?.evidence?.slice(0, 2)).toEqual([
+      { index: 0, datasourceId: 'ds-pg', rowLimit: 200 },
+      expect.objectContaining({
+        index: 1,
+        datasourceId: 'ds-pg',
+        totalRows: 1,
+        rowLimit: 200,
+        coverage: expect.any(String) as unknown,
+      }),
+    ]);
+    // Each source shows in the run's stream as a SQL call and its result.
+    const shown = events
+      .filter((e) => e.type === 'tool-result')
+      .map((e) => JSON.parse((e as { content: string }).content) as object);
+    expect(shown).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tool: 'run_readonly_sql',
+          rationale: 'Rows where winner is empty in public.matches',
+          rowCount: 1,
+        }),
+      ]),
+    );
+    // The agent's input is unchanged: the same question and no block that
+    // carries the finding queries (out of scope of 1.28.11).
+    const [call] = ctx.calls['data-readiness'];
+    expect(call.input).toEqual([
+      { role: 'user', content: 'Assess the readiness of this dataset' },
+    ]);
+    expect(
+      call.options.context.some((block) => block.content.includes('SELECT')),
+    ).toBe(false);
+    expect(run.answer?.content).toBe('World Cup is Managed (84).');
   });
 
   it('fails at Profile source with the datasource named when it cannot be reached, storing nothing', async () => {
@@ -1468,6 +1676,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(run.steps.map(stepLine)).toEqual([
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success#1',
       'clarify:suspended#1',
     ]);
@@ -1492,6 +1701,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     const started = await runOf(ctx, {
       question: 'Which team was the most dominant?',
       datasets: ['World Cup'],
+      buildVisual: false,
     });
     const { events, run } = await resumeOf(ctx, started.run.id, {
       stepId: 'clarify',
@@ -1519,7 +1729,9 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'wrap-up:running',
       'wrap-up:success',
       'read-images:skipped',
-      'check-data-quality:skipped',
+      'build-visual:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     expect(events.at(-1)).toMatchObject({ type: 'done' });
     expect(events.some((e) => e.type === 'input-required')).toBe(false);
@@ -1531,14 +1743,17 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'read-images:skipped',
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success#1',
       'plan:success#2',
       'clarify:success#1',
       'analyse:success#1',
       'validate:success#1',
-      'check-data-quality:skipped',
       'write-answer:success',
+      'build-visual:skipped',
       'wrap-up:success',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     // Plan planned again with its question and the trimmed answer.
     expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(2);
@@ -1583,6 +1798,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(started.run.steps.map(stepLine)).toEqual([
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success#1',
       'analyse:suspended#1',
     ]);
@@ -1612,7 +1828,9 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'wrap-up:success',
       'read-images:skipped',
       'clarify:skipped',
-      'check-data-quality:skipped',
+      'build-visual:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     // The agent runs again (no memory thread) with the conversation so far:
     // the question, its clarifying question and the user's answer.
@@ -1717,6 +1935,35 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     }
   });
 
+  it('answers 410 to a run stored under another contract (the Clarify path moved, roadmap 1.28.8): stopped with waitingFor expired, its turn dropped', async () => {
+    const ctx = build();
+    ctx.mastra.planAnalysis.mockResolvedValueOnce({
+      plan: ASKING_PLAN,
+      stopped: false,
+    });
+    const waiting = await runOf(ctx, V2_INPUT);
+    await ctx.runsRepository.update(waiting.run.id, {
+      contractHash: 'before-1278',
+    });
+    await expect(
+      ctx.runs.prepareResume(waiting.run.id, {
+        stepId: 'clarify',
+        answer: 'Matches won',
+      }),
+    ).rejects.toMatchObject({
+      status: 410,
+      message:
+        'This run can no longer continue — run it again with your answer',
+    });
+    const stored = await ctx.runs.get(waiting.run.id);
+    expect(stored.status).toBe('stopped');
+    expect(stored.waitingFor).toMatchObject({
+      stepId: 'clarify',
+      expired: true,
+    });
+    expect(ctx.discards.count).toBe(1);
+  });
+
   it('"Run again with my answer": a run whose context is the expired run plans with its question and clarifying question', async () => {
     const ctx = build();
     ctx.mastra.planAnalysis.mockResolvedValueOnce({
@@ -1805,6 +2052,110 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
   });
 });
 
+describe('a follow-up run over an earlier result (roadmap 1.28.8; workflows R36)', () => {
+  const PAGE_2 = {
+    columns: ['winner'],
+    columnKinds: { winner: 'text' },
+    rows: [{ winner: 'Italy' }],
+    page: 2,
+    pageSize: 1,
+    pageCount: 3,
+    matchedRows: 3,
+    capped: false,
+    view: { filters: [], sort: [], page: 2, pageSize: 1, matchedRows: 3 },
+    ranAt: '2026-11-16T10:00:00.000Z',
+    datasourceId: 'ds-pg',
+  };
+
+  beforeEach(() => mockPageQuery.mockReset());
+
+  it("pages the earlier answer's query instead of planning: one result-explorer call, the page recorded as explore_result with its view, the answer written by code", async () => {
+    const ctx = build();
+    const first = await runOf(ctx, V2_INPUT);
+    // A first run has no earlier result: no extra model call.
+    expect(ctx.mastra.interpretResult).not.toHaveBeenCalled();
+    ctx.mastra.interpretResult.mockResolvedValueOnce({
+      action: 'explore',
+      query: 0,
+      interpretation: { request: { page: 2 }, understood: 'page 2' },
+    });
+    mockPageQuery.mockResolvedValueOnce(PAGE_2);
+    const { events, run } = await runOf(
+      ctx,
+      { question: 'next page', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id } },
+    );
+    expect(ctx.mastra.interpretResult).toHaveBeenCalledTimes(1);
+    expect(ctx.mastra.interpretResult.mock.calls[0][0]).toMatchObject({
+      text: 'next page',
+      candidates: [
+        { ref: 'Q1', columns: [{ name: 'winner', values: ['Brazil'] }] },
+      ],
+      view: null,
+    });
+    expect(mockPageQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: 'SELECT winner FROM matches',
+        columns: ['winner'],
+      }),
+      ['World Cup'],
+      { page: 2 },
+    );
+    // No planning, no analysis, no Write answer on the follow-up.
+    expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(1);
+    expect(ctx.calls['insights-analyst']).toHaveLength(1);
+    expect(ctx.mastra.writeAnswer).toHaveBeenCalledTimes(1);
+    expect(run.status).toBe('success');
+    expect(
+      run.steps
+        .filter((step) => step.status !== 'skipped')
+        .map((step) => step.id),
+    ).toEqual([
+      'receive-question',
+      'load-catalog',
+      'interpret-follow-up',
+      'page-result',
+      'page-answer',
+    ]);
+    expect(run.answer?.content.split('\n')[0]).toBe('Rows 2–2 of 3');
+    expect(run.answer?.content).toContain('| Italy |');
+    // The page is the answer's query: its source SQL and the page's rows,
+    // its view as evidence, so the inspector opens on page 2.
+    expect(run.answer?.data).toEqual([
+      expect.objectContaining({
+        tool: 'explore_result',
+        input: 'SELECT winner FROM matches',
+        rows: [{ winner: 'Italy' }],
+        truncated: true,
+      }),
+    ]);
+    expect(run.answer?.evidence?.[0]).toMatchObject({
+      index: 0,
+      view: PAGE_2.view,
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'tool',
+        content: expect.stringContaining('"name":"explore_result"') as string,
+      }),
+    );
+  });
+
+  it('plans the follow-up as a new question when result-explorer reads one', async () => {
+    const ctx = build();
+    const first = await runOf(ctx, V2_INPUT);
+    const { run } = await runOf(
+      ctx,
+      { question: 'And in 2014?', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id } },
+    );
+    expect(ctx.mastra.interpretResult).toHaveBeenCalledTimes(1);
+    expect(mockPageQuery).not.toHaveBeenCalled();
+    expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(2);
+    expect(run.answer?.content).toBe('Brazil won.');
+  });
+});
+
 describe('run host workspaces at start-up (data-model 3.16; agents.md 5.14)', () => {
   const workspaceIds = listSessionWorkspaceIds as jest.Mock;
   afterEach(() => workspaceIds.mockReset().mockReturnValue([]));
@@ -1867,7 +2218,7 @@ describe('a v2 run with reference images (workflows R35; agents.md 2.15, 5.11)',
     const paths = ['inputs/images/1.png', 'inputs/images/2.png'];
     expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
       'answer-business-question',
-      { ...V2_INPUT, images: paths },
+      { ...V2_ENGINE_INPUT, images: paths },
       expect.anything(),
     );
     // Each stored image is loaded from the run's workspace, in order, and
@@ -1915,7 +2266,7 @@ describe('a v2 run with reference images (workflows R35; agents.md 2.15, 5.11)',
     // The engine's input has no images field at all.
     expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
       'answer-business-question',
-      V2_INPUT,
+      V2_ENGINE_INPUT,
       expect.anything(),
     );
     expect(ctx.mastra.readImages).not.toHaveBeenCalled();

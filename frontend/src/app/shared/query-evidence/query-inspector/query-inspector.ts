@@ -30,7 +30,8 @@ import {
   QueryStep,
   QueryStepVerb,
 } from '../query-evidence.model';
-import { coverageChip, formatCount, queryLabel } from '../query-labels';
+import { coverageChip, formatCount, sourceLabel } from '../query-labels';
+import { QueryResult } from '../query-result/query-result';
 import { csvBlob, saveBlob } from '../rows-csv';
 
 export type InspectorTab = 'steps' | 'result' | 'sql';
@@ -84,7 +85,7 @@ function rowsLabel(count: number): string {
  */
 @Component({
   selector: 'app-query-inspector',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, QueryResult],
   templateUrl: './query-inspector.html',
   host: {
     class: 'flex h-full min-h-0 flex-col bg-surface',
@@ -149,9 +150,9 @@ export class QueryInspector {
     () => this.message().evidence?.find((e) => e.index === this.index()) ?? null,
   );
   protected readonly failed = computed(() => !!this.record()?.error);
-  protected readonly label = computed(() => queryLabel(this.index()));
+  protected readonly label = computed(() => sourceLabel(this.index()));
   protected readonly position = computed(
-    () => `Query ${this.index() + 1} of ${this.total()}`,
+    () => `${sourceLabel(this.index())} of ${this.total()}`,
   );
   readonly title = computed(
     () => this.record()?.rationale?.trim() || `Query ${this.index() + 1}`,
@@ -203,6 +204,20 @@ export class QueryInspector {
     if (total === null || shown >= total) return null;
     return `Showing the first ${formatCount(shown)} of ${formatCount(total)} rows. Download all rows for the rest.`;
   });
+  /** A sample has no full result to page; the others do. */
+  protected readonly pageable = computed(
+    () => this.record()?.tool !== 'sample_rows' && this.sql() !== '',
+  );
+  /** The stored result's size for the pager before the first page is asked. */
+  protected readonly pagingTotal = computed(() =>
+    this.showRerun() && this.rerun() !== null ? null : this.storedTotal(),
+  );
+  /** The row count of a top-n query: the page view says it pages past it. */
+  protected readonly topN = computed(() =>
+    this.evidence()?.coverage === 'top-n'
+      ? (this.evidence()?.outerLimit ?? this.record()?.rowCount ?? null)
+      : null,
+  );
   protected readonly rerunBanner = computed(() => {
     const rerun = this.rerun();
     if (!this.showRerun() || rerun === null) return null;
@@ -382,7 +397,7 @@ export class QueryInspector {
   protected download(): void {
     const record = this.record();
     if (record === null) return;
-    const fileName = `query-${this.label()}.csv`;
+    const fileName = `query-${this.index() + 1}.csv`;
     const rows = record.rows ?? [];
     const complete =
       this.evidence()?.coverage === 'whole-table' &&

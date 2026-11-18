@@ -19,7 +19,7 @@ import {
 async function openAgent(page: Page, key: string): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   // Every card shows in its domain section (agents-evals R3).
   await page.getByTestId(`agent-${key}`).click();
@@ -32,7 +32,7 @@ async function openSkillsTab(page: Page): Promise<Locator> {
   await expect(
     page
       .locator('[data-testid^="agent-skill-"]')
-      .or(page.getByText('This agent has no skills.'))
+      .or(page.getByText('This agent persona has no skills.'))
       .first(),
   ).toBeVisible();
   return page.getByTestId('agent-tab-skills');
@@ -74,7 +74,7 @@ test('an agent without skills says so', async ({ app: { page } }) => {
   const tab = await openSkillsTab(page);
 
   await expect(tab).toHaveText('Skills (0)');
-  await expect(page.getByText('This agent has no skills.')).toBeVisible();
+  await expect(page.getByText('This agent persona has no skills.')).toBeVisible();
 });
 
 test('the assistant gets only its built-in skills, and an old skills folder is ignored', async ({
@@ -128,7 +128,7 @@ test("a user agent's Skills tab is its inline library, not the read-only list", 
 
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId(`agent-${id}`).click();
   await page.getByTestId('agent-tab-skills').click();

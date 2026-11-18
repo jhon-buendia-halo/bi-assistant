@@ -1075,6 +1075,9 @@ describe('a register-only fixture (no bundled SQL)', () => {
       'formula-1',
       'intellify',
       'us-health',
+      'edge-cases',
+      'world-cup-medallion',
+      'world-cup-excel',
       'world-cup-rest',
       'finance',
       'health-insurance',
@@ -1288,7 +1291,11 @@ describe('TestingDataService.describe', () => {
         id: fixture.id,
         name: fixture.name,
         description: fixture.description,
-        seedable: Boolean(fixture.seedFile),
+        seedable:
+          Boolean(fixture.seedFile) || fixture.datasourceKind === 'file',
+        ...(fixture.datasourceKind === 'file'
+          ? { datasourceKind: 'file', selfRegistering: true }
+          : {}),
         schema: fixture.schema,
         defaults: fixture.defaults,
         status: {
@@ -1318,5 +1325,89 @@ describe('the removed Intellify RFP API sample', () => {
     expect(datasets.save).not.toHaveBeenCalled();
     // The Postgres Intellify sample stays.
     expect(findFixture('intellify')?.datasourceKind).toBeUndefined();
+  });
+});
+
+describe('a multi-schema fixture (World Cup Medallion)', () => {
+  const MEDALLION = findFixture('world-cup-medallion') as SampleFixture;
+
+  /** An inventory with the three layer schemas, every required table in place. */
+  function medallionInventory(): CatalogInfo[] {
+    const bySchema = new Map<string, string[]>();
+    for (const entry of MEDALLION.requiredTables) {
+      const [schema, table] = entry.split('.');
+      bySchema.set(schema, [...(bySchema.get(schema) ?? []), table]);
+    }
+    return [
+      {
+        name: 'world_cup',
+        schemas: [...bySchema].map(([name, tables]) => ({
+          name,
+          tables: tables.map((table) => ({
+            name: table,
+            columns: [{ name: 'id', type: 'integer', nullable: false }],
+          })),
+        })),
+      },
+    ];
+  }
+
+  it('drops every owned schema, registers every entity and saves the schema notes', async () => {
+    const { service, datasets } = build({ catalogs: medallionInventory() });
+
+    const result = await service.load('world-cup-medallion', DEFAULT_INPUT);
+
+    expect(result.ok).toBe(true);
+    const seeded = queriesOn('world_cup');
+    expect(seeded.slice(0, 3)).toEqual([
+      'DROP SCHEMA IF EXISTS "wc_landing" CASCADE',
+      'DROP SCHEMA IF EXISTS "wc_normalized" CASCADE',
+      'DROP SCHEMA IF EXISTS "wc_consumption" CASCADE',
+    ]);
+    const [saved] = datasets.save.mock.calls[0] as [
+      {
+        tables: string[];
+        schemas: { key: string; layer: string; description: string }[];
+      },
+    ];
+    expect(saved.tables).toEqual(
+      MEDALLION.requiredTables.map((entry) => `world_cup.${entry}`),
+    );
+    expect(saved.tables).toContain(
+      'world_cup.wc_consumption.fct_match_results',
+    );
+    expect(saved.schemas.map(({ key, layer }) => [key, layer])).toEqual([
+      ['world_cup.wc_landing', 'landing'],
+      ['world_cup.wc_normalized', 'normalized'],
+      ['world_cup.wc_consumption', 'consumption'],
+    ]);
+    expect(saved.schemas.every((note) => note.description.length > 0)).toBe(
+      true,
+    );
+  });
+
+  it('reports a missing entity of any layer', async () => {
+    const catalogs = medallionInventory();
+    catalogs[0].schemas = (catalogs[0].schemas ?? []).filter(
+      (schema) => schema.name !== 'wc_landing',
+    );
+    const { service } = build({ catalogs });
+
+    const result = await service.load('world-cup-medallion', DEFAULT_INPUT);
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('world_cup.wc_landing.raw_matches');
+  });
+
+  it('leaves single-schema fixtures with one DROP and no schema notes', async () => {
+    const { service, datasets } = build({});
+
+    await service.load('world-cup', DEFAULT_INPUT);
+
+    expect(
+      queriesOn('world_cup').filter((sql) => sql.startsWith('DROP SCHEMA')),
+    ).toEqual(['DROP SCHEMA IF EXISTS "world_cup" CASCADE']);
+    const [saved] = datasets.save.mock.calls[0] as [object];
+    expect(saved).not.toHaveProperty('schemas');
   });
 });

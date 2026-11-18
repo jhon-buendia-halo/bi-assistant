@@ -8,7 +8,7 @@
  * import, so Jest and the catalogue can load it without Mastra.
  *
  * The flow: Resolve dataset → Profile source → Score readiness → Save
- * report → Explain report → Wrap up. The deterministic engine owns every
+ * report → Rows behind findings → Explain report → Wrap up. The deterministic engine owns every
  * number (data-readiness R4): the code steps profile, score and store; the
  * Data Readiness Agent only explains the stored report. A step passes on
  * what the steps after it read, since the engine hands a step only its
@@ -91,6 +91,20 @@ export const savedReportSchema = scoredSourceSchema.extend({
   reportId: z.string().describe("The stored report's id."),
 });
 
+/**
+ * What Rows behind findings added (roadmap 1.28.11): the stored report, and
+ * how many of its top findings became a source of the answer.
+ */
+export const findingRowsSchema = savedReportSchema.extend({
+  sourceCount: z
+    .number()
+    .describe('Findings whose rows were looked up: one source each.'),
+  failedSourceCount: z
+    .number()
+    .describe('Of those, the queries that failed (kept as failed sources).'),
+  stopped: z.boolean().describe('Whether the run was stopped.'),
+});
+
 /** What Explain report hands Wrap up. */
 export const explainedReportSchema = z.object({
   reportId: z.string().describe("The stored report's id."),
@@ -134,6 +148,7 @@ export const DATA_READINESS_ASSESSMENT_STEP_SCHEMAS = {
     output: scoredSourceSchema,
   },
   'save-report': { input: scoredSourceSchema, output: savedReportSchema },
+  'finding-rows': { input: savedReportSchema, output: findingRowsSchema },
   'explain-report': {
     input: savedReportSchema,
     output: explainedReportSchema,

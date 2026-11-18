@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   ElementRef,
+  TemplateRef,
   computed,
   inject,
   input,
@@ -49,6 +50,11 @@ import {
   questionNumbers,
   sampleQueriesOf,
 } from '../../../../shared/query-evidence/figure-refs';
+import {
+  SourceInfo,
+  sourceInfos,
+  sourceLabel,
+} from '../../../../shared/query-evidence/query-labels';
 import { QueryEvidenceSummary } from '../../../../shared/query-evidence/query-evidence-summary/query-evidence-summary';
 import {
   MarkdownPipe,
@@ -68,6 +74,19 @@ export const SKIP_CLARIFICATION_ANSWER =
  * backend is an output, so the chat, a run result and a past chat can host
  * it alike.
  */
+let nextCardId = 0;
+
+/** What the hover card of a source chip shows. */
+export interface SourceCard {
+  label: string;
+  purpose: string;
+  detail: string;
+  sample: boolean;
+  also: string;
+  left: number;
+  top: number;
+}
+
 @Component({
   selector: 'app-answer-view',
   imports: [
@@ -133,6 +152,14 @@ export class AnswerView {
    * answer repeats from it ("the top 100") gets no figure chip.
    */
   readonly question = input<string | null>(null);
+  /**
+   * How the host shows a visual this message created (visuals R42): a run's
+   * host gives its artifact card, with a live preview and Open; without one,
+   * the compact Created / View strip.
+   */
+  readonly visualCard = input<TemplateRef<{ $implicit: VisualEvent }> | null>(
+    null,
+  );
 
   /** The answer body with a chip after each figure (inspector mode only). */
   readonly inspectorBody = computed<SafeHtml>(() => {
@@ -142,6 +169,7 @@ export class AnswerView {
       figureIndex(msg.data),
       sampleQueriesOf(msg.evidence),
       questionNumbers(this.question()),
+      sourceInfos(msg),
     );
     // Sanitized first; only code-made integers and labels were added after.
     return this.sanitizer.bypassSecurityTrustHtml(html);
@@ -156,13 +184,72 @@ export class AnswerView {
   /** A figure chip or a query row was picked: the index into the message's `data`. */
   readonly inspectQuery = output<number>();
 
-  /** One handler on the prose element catches the figure chips. */
+  /** One handler on the prose element catches the figure chips and table source lines. */
   onProseClick(event: Event): void {
     const target = event.target;
     if (!(target instanceof Element)) return;
-    const chip = target.closest('button.figure-ref');
+    const chip = target.closest('button.figure-ref, button.table-source');
     const index = Number(chip?.getAttribute('data-query-index'));
     if (chip && Number.isInteger(index)) this.inspectQuery.emit(index);
+  }
+
+  /** The one card, reused for every chip: what the chip's source is. */
+  readonly card = signal<SourceCard | null>(null);
+  readonly cardId = `figure-ref-card-${nextCardId++}`;
+  private cardChip: Element | null = null;
+
+  onProseOver(event: Event): void {
+    this.showCard(event.target);
+  }
+
+  onProseOut(event: Event): void {
+    const target = event.target;
+    if (target instanceof Element && target.closest('button.figure-ref') === this.cardChip) {
+      this.hideCard();
+    }
+  }
+
+  onProseKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && this.card() !== null) this.hideCard();
+  }
+
+  private showCard(target: EventTarget | null): void {
+    if (!(target instanceof Element)) return;
+    const chip = target.closest('button.figure-ref');
+    if (!chip || chip === this.cardChip) return;
+    const index = Number(chip.getAttribute('data-query-index'));
+    if (!Number.isInteger(index)) return;
+    this.hideCard();
+    const info: SourceInfo | undefined = sourceInfos(this.message())[index];
+    const wrap = chip.closest('[data-testid="answer-prose"]');
+    if (!wrap) return;
+    const at = chip.getBoundingClientRect();
+    const box = wrap.getBoundingClientRect();
+    const also = (chip.getAttribute('data-also') ?? '')
+      .split(',')
+      .filter((part) => part !== '')
+      .map((part) => Number(part))
+      .filter((n) => Number.isInteger(n));
+    const left = Math.max(0, Math.min(at.left - box.left, box.width - 288));
+    this.cardChip = chip;
+    chip.setAttribute('aria-describedby', this.cardId);
+    this.card.set({
+      label: info?.label ?? sourceLabel(index),
+      purpose: info?.purpose ?? `Query ${index + 1}`,
+      detail: [info?.rows, info?.coverage].filter((part) => !!part).join(' · '),
+      sample: chip.getAttribute('data-sample') === 'true',
+      also: also.length
+        ? `Also in ${also.length > 1 ? 'sources' : 'source'} ${also.map((q) => q + 1).join(', ')}`
+        : '',
+      left,
+      top: at.bottom - box.top + 4,
+    });
+  }
+
+  private hideCard(): void {
+    this.cardChip?.removeAttribute('aria-describedby');
+    this.cardChip = null;
+    this.card.set(null);
   }
 
   /** Inline custom answer inside the clarification card. */

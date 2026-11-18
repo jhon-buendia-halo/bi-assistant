@@ -169,6 +169,7 @@ function runV2On(page: Page, question: string) {
   return runOk(page, V2_WORKFLOW_ID, {
     question,
     datasets: [WORLD_CUP_DATASET],
+    buildVisual: false,
   });
 }
 
@@ -196,15 +197,19 @@ const STAGE_TURN: TurnScript = {
 
 /** Its steps in catalogue order: Clarify is the other way after Plan. */
 const V2_STEP_TITLES = [
+  'Read images',
   'Receive question',
   'Load catalog',
+  'Interpret follow-up',
   'Plan',
   'Clarify',
   'Analyse',
   'Validate',
-  'Check data quality',
   'Write answer',
+  'Build visual',
   'Wrap up',
+  'Page result',
+  'Page answer',
 ];
 
 // --------------------------------------------------------------- scenarios
@@ -281,6 +286,7 @@ test("a v2 run's workflow never appears among its panel items", async ({
 const V2_STEPS = [
   'receive-question',
   'load-catalog',
+  'interpret-follow-up',
   'plan',
   'analyse',
   'validate',
@@ -294,6 +300,7 @@ const V2_TOOLS = [
   'sample_rows',
   'run_readonly_sql',
   'ask_clarification',
+  'explore_result',
   'skill',
   'skill_search',
   'skill_read',
@@ -340,11 +347,12 @@ test('Insights Analyst shows its code-defined steps advancing', async ({
   expect(run.workflow?.phases.map((phase) => phase.title)).toEqual(
     V2_STEP_TITLES,
   );
-  // Every step but Clarify (4) and Check data quality (7), the branches a
-  // clear question without the data-quality box skips.
-  expect(run.workflow?.done).toEqual([1, 2, 3, 5, 6, 8, 9]);
+  // Every step but Read images (1, no image), Clarify (6), Build visual
+  // (10) and the explore path (12, 13): the branches a first, clear
+  // question without images or the visual (unticked) skips.
+  expect(run.workflow?.done).toEqual([2, 3, 4, 5, 7, 8, 9, 11]);
   expect(stepStatuses(result, 'clarify').at(-1)).toBe('skipped');
-  expect(stepStatuses(result, 'check-data-quality').at(-1)).toBe('skipped');
+  expect(stepStatuses(result, 'build-visual').at(-1)).toBe('skipped');
 });
 
 test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
@@ -356,6 +364,7 @@ test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
   const result = await runWorkflow(page, V2_WORKFLOW_ID, {
     question: V2_QUESTION,
     datasets: [WORLD_CUP_DATASET],
+    buildVisual: false,
   });
   expect(result.status).toBe(200);
   expect(stepStatuses(result, 'receive-question').at(-1)).toBe('success');
@@ -363,8 +372,8 @@ test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
   expect(stepStatuses(result, 'plan').at(-1)).toBe('success');
   expect(stepStatuses(result, 'analyse').at(-1)).toBe('failed');
   expect(stepStatuses(result, 'validate').at(-1)).toBe('skipped');
-  expect(stepStatuses(result, 'check-data-quality').at(-1)).toBe('skipped');
   expect(stepStatuses(result, 'write-answer').at(-1)).toBe('skipped');
+  expect(stepStatuses(result, 'build-visual').at(-1)).toBe('skipped');
   expect(stepStatuses(result, 'wrap-up').at(-1)).toBe('skipped');
   expect(turnRequests(stub, V2_QUESTION).length).toBeGreaterThan(0);
 

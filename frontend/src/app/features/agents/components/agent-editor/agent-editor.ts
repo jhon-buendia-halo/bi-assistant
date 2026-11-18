@@ -27,6 +27,7 @@ import {
 } from '../../services/agent-editor.util';
 import { AgentDomain } from '../../services/agents-api.service';
 import { AGENT_DOMAINS } from '../../services/agent-domains';
+import { DatasetPicker } from '../../../datasets/components/dataset-picker/dataset-picker';
 
 /**
  * The agent editor (agents-evals R54-R59, ui.md 4.5.1): a user agent's draft
@@ -35,7 +36,7 @@ import { AGENT_DOMAINS } from '../../services/agent-domains';
  */
 @Component({
   selector: 'app-agent-editor',
-  imports: [LucideAngularModule, PromptEditor],
+  imports: [DatasetPicker, LucideAngularModule, PromptEditor],
   templateUrl: './agent-editor.html',
 })
 export class AgentEditor implements OnInit, OnDestroy {
@@ -53,9 +54,9 @@ export class AgentEditor implements OnInit, OnDestroy {
   readonly instructionsHint =
     "Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply. Type / to link a skill or a tool.";
   readonly linksHint =
-    'Linked skills and tools decide what the agent gets. Every agent also gets the built-in skills and can always list, describe and query its datasets.';
+    'Linked skills and tools decide what the agent persona gets. Every agent persona also gets the built-in skills and can always list, describe and query its datasets.';
   readonly legacyNotice =
-    'Links were added for what this agent had. Save to keep them.';
+    'Links were added for what this agent persona had. Save to keep them.';
 
   readonly editor = inject(AgentEditorService);
 
@@ -104,9 +105,6 @@ export class AgentEditor implements OnInit, OnDestroy {
     });
   }
 
-  onDataset(name: string, event: Event): void {
-    this.editor.toggleDataset(name, (event.target as HTMLInputElement).checked);
-  }
 
   onStarter(index: number, event: Event): void {
     this.editor.setStarter(index, (event.target as HTMLInputElement).value);

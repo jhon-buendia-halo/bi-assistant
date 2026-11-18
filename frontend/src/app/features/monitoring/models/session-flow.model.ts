@@ -174,7 +174,7 @@ export function toSessionQuery(
 }
 
 export const SPAN_KINDS: { kind: SpanKind; label: string }[] = [
-  { kind: 'agent', label: 'Agent' },
+  { kind: 'agent', label: 'Agent persona' },
   { kind: 'model', label: 'Model' },
   { kind: 'request', label: 'Request' },
   { kind: 'tool', label: 'Tool' },
@@ -183,7 +183,7 @@ export const SPAN_KINDS: { kind: SpanKind; label: string }[] = [
 ];
 
 export const SPAN_KIND_LABELS: Record<SpanKind, string> = {
-  agent: 'Agent',
+  agent: 'Agent persona',
   model: 'Model',
   request: 'Request',
   tool: 'Tool',

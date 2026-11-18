@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { splitSqlStatements } from './sql-statements';
 import { join } from 'node:path';
@@ -8,9 +8,11 @@ import { DatasetsService } from '../datasets/datasets.service';
 import { DatasourcesService } from '../datasources/datasources.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { OntologyService } from '../ontology/ontology.service';
+import { UPLOAD_MAX_BYTES } from '../datasources/connectors/file-storage';
 import type {
   CatalogInfo,
   PostgresConfig,
+  SourceFile,
 } from '../datasources/entities/datasource.entity';
 import type { DatasetEntitySnapshot } from '../datasets/repositories/datasets.repository';
 import type { LoadTestingDataDto } from './dto/testing-data.dto';
@@ -26,6 +28,8 @@ import {
   SAMPLE_FIXTURES,
   databricksSource,
   findFixture,
+  ownedSchemas,
+  qualifiedTable,
   requiredEntityKeys,
   type SampleFixture,
 } from './fixtures/registry';
@@ -37,7 +41,7 @@ const UNDEFINED_DATABASE = '3D000';
 const MAINTENANCE_DATABASE = 'postgres';
 
 /** The seed is a few hundred statements; give it room but not forever. */
-const SEED_TIMEOUT_MS = 120_000;
+export const SEED_TIMEOUT_MS = 120_000;
 const CONNECT_TIMEOUT_MS = 8_000;
 
 /** Connection the panel submits. `password` never leaves the backend again. */
@@ -72,8 +76,15 @@ export interface SampleFixtureView {
   id: string;
   name: string;
   description: string;
-  /** False for register-only samples: they ship no SQL and cannot be seeded. */
+  /**
+   * False for register-only samples: they ship no SQL and cannot be seeded.
+   * True for a `file` sample too: loading it copies its files, no database.
+   */
   seedable: boolean;
+  /** Absent = `'postgres'`. */
+  datasourceKind?: 'postgres' | 'rest' | 'file';
+  /** A sample that takes no connection: the panel shows no form for it. */
+  selfRegistering?: boolean;
   schema: string;
   /** Prefill for the form: the sample's documented coordinates. */
   defaults: TestingDataConnection;
@@ -239,6 +250,7 @@ export class TestingDataService {
           'instead of loading it here (runbook: docs/evals/databricks-vdi.md).',
       };
     }
+    if (fixture.datasourceKind === 'file') return this.loadFiles(fixture);
     const parsed = parseConnection(input);
     if ('message' in parsed) return { ok: false, message: parsed.message };
     const config = parsed.config;
@@ -288,7 +300,9 @@ export class TestingDataService {
           `Seeding ${fixture.schema} on ${target}/${config.database} as "${config.user}"` +
             (createdDatabase ? ' (database created)' : ''),
         );
-        await client.query(`DROP SCHEMA IF EXISTS "${fixture.schema}" CASCADE`);
+        for (const schema of ownedSchemas(fixture)) {
+          await client.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        }
         await seedInBatches(client, readFixtureSql(fixture));
       } else {
         this.logger.log(
@@ -345,6 +359,16 @@ export class TestingDataService {
       tables: entities.map((entity) => entity.key),
       entities,
       datasourceId: datasource.id,
+      // Only a multi-schema sample carries notes; otherwise leave them as they are.
+      ...(fixture.layerSchemas
+        ? {
+            schemas: fixture.layerSchemas.map((entry) => ({
+              key: `${config.database}.${entry.name}`,
+              layer: entry.layer,
+              description: entry.description,
+            })),
+          }
+        : {}),
     });
 
     // The load has succeeded; the seed can only add to the message (R26).
@@ -374,6 +398,96 @@ export class TestingDataService {
   }
 
   /**
+   * Load a `file` sample (datasources R55 to R65): each bundled file goes
+   * through the upload (api.md 156), so detection proposes its table, header
+   * row and total-row exclusion as it does for a user; then one save (18)
+   * imports every included sheet, and the dataset covers the required
+   * entities. Reloading replaces the files of the datasource it finds by name.
+   */
+  private async loadFiles(
+    fixture: SampleFixture,
+  ): Promise<LoadTestingDataResult> {
+    const { dir, names } = fixture.files!;
+    const files: SourceFile[] = [];
+    try {
+      for (const name of names) {
+        const path = join(__dirname, 'fixtures', dir, name);
+        const { file } = await this.datasources.uploadFile(
+          createReadStream(path),
+          name,
+          statSync(path).size,
+          UPLOAD_MAX_BYTES,
+        );
+        files.push(file);
+      }
+    } catch (err) {
+      for (const file of files) {
+        if (file.uploadId) {
+          await this.datasources.deleteUpload(file.uploadId).catch(() => {});
+        }
+      }
+      return {
+        ok: false,
+        message: `Could not read the ${fixture.name} sample files — ${describeError(err)}`,
+      };
+    }
+
+    const existing = await this.findDatasource(fixture);
+    let datasource: { id: string };
+    try {
+      datasource = await this.datasources.save({
+        id: existing?.id,
+        name: fixture.datasourceName,
+        kind: 'file',
+        config: { files },
+      });
+    } catch (err) {
+      for (const file of files) {
+        if (file.uploadId) {
+          await this.datasources.deleteUpload(file.uploadId).catch(() => {});
+        }
+      }
+      return {
+        ok: false,
+        message: `Could not import the ${fixture.name} sample — ${describeError(err)}`,
+      };
+    }
+
+    const { catalogs } = await this.datasources.inventory(datasource.id, true);
+    const { entities, missing } = collectEntities(
+      catalogs,
+      requiredEntityKeys(fixture, 'file'),
+    );
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        message:
+          `Missing entities after importing: ${missing.join(', ')}. ` +
+          'The sample files were read but did not produce everything the evals need.',
+        datasourceId: datasource.id,
+        seeded: false,
+      };
+    }
+    // "with every included sheet": the dataset holds all the sample's tables.
+    await this.datasets.save({
+      name: fixture.datasetName,
+      tables: entities.map((entity) => entity.key),
+      entities,
+      datasourceId: datasource.id,
+    });
+    return {
+      ok: true,
+      message:
+        `Imported ${names.join(' and ')} and loaded ${entities.length} entities ` +
+        `into dataset "${fixture.datasetName}"`,
+      datasourceId: datasource.id,
+      datasetName: fixture.datasetName,
+      entityCount: entities.length,
+      seeded: false,
+    };
+  }
+
+  /**
    * Forget one sample app-side. Deliberately does not touch the database: the
    * user owns that server, and dropping their schema on a "remove" click would
    * be an unpleasant surprise.
@@ -397,7 +511,9 @@ export class TestingDataService {
       ok: true,
       message:
         `Removed the ${fixture.name} datasource and dataset from this app. ` +
-        'The database itself was left untouched.',
+        (fixture.datasourceKind === 'file'
+          ? 'The files it copied went with the datasource.'
+          : 'The database itself was left untouched.'),
     };
   }
 
@@ -619,7 +735,10 @@ function describeFixture(
     id: fixture.id,
     name: fixture.name,
     description: fixture.description,
-    seedable: Boolean(fixture.seedFile),
+    seedable: Boolean(fixture.seedFile) || fixture.datasourceKind === 'file',
+    ...(fixture.datasourceKind === 'file'
+      ? { datasourceKind: fixture.datasourceKind, selfRegistering: true }
+      : {}),
     schema: fixture.schema,
     defaults: { ...fixture.defaults },
     status,
@@ -632,7 +751,7 @@ function describeFixture(
  * `modules/testing-data/fixtures/**` into `dist`), so the same relative path
  * resolves from `src` under ts-jest and from `dist` in a packaged app.
  */
-function readFixtureSql(fixture: SampleFixture): string {
+export function readFixtureSql(fixture: SampleFixture): string {
   const seedFile = fixture.seedFile as string;
   const raw = readFileSync(join(__dirname, 'fixtures', seedFile));
   // Large samples ship gzipped — a full dump is an order of magnitude smaller
@@ -677,7 +796,10 @@ const SEED_BATCH_STATEMENTS = 50;
  * own output with BEGIN/COMMIT, which would nest here — those are dropped and
  * the transaction is managed once, around everything.
  */
-async function seedInBatches(client: Client, sql: string): Promise<void> {
+export async function seedInBatches(
+  client: Client,
+  sql: string,
+): Promise<void> {
   const statements = splitSqlStatements(sql).filter(
     (statement) => !isTransactionControl(statement),
   );
@@ -893,7 +1015,7 @@ function collectEntities(
 function presentTables(fixture: SampleFixture, tables: string[]): string[] {
   const keys = new Set(tables.map((table) => qualify(table)));
   return fixture.requiredTables.filter((table) =>
-    keys.has(qualify(`${fixture.schema}.${table}`)),
+    keys.has(qualify(qualifiedTable(fixture, table))),
   );
 }
 

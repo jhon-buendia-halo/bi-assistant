@@ -14,9 +14,13 @@ import {
   ineffectiveLeftJoinFilters,
   IneffectiveJoinFilter,
 } from './left-join-filter';
+import {
+  DATASETS_CONTEXT_KEY,
+  RATIONALE_DESCRIPTION,
+} from './dataset-tool-context';
+import { exploreResultTool } from './explore-result.tool';
 
-/** requestContext key carrying the session's dataset names. */
-export const DATASETS_CONTEXT_KEY = 'datasets';
+export { DATASETS_CONTEXT_KEY, RATIONALE_DESCRIPTION };
 
 /**
  * Take `totalRows` off a result before the model sees it, and write what the
@@ -147,16 +151,6 @@ function resolveDatasource(
       .join(', ')}`,
   };
 }
-
-/**
- * Every data-gathering call states, in the assistant's own words, why it is
- * being made — so an answer can show the route it took, not just the SQL.
- */
-const RATIONALE_DESCRIPTION = [
-  'One or two sentences of plain business English saying what this step',
-  "checks and why it moves toward answering the user's question. No SQL",
-  'jargon, no restating the statement.',
-].join(' ');
 
 /**
  * A breakdown invites the answer to add its rows up, subtract one from
@@ -411,4 +405,5 @@ export const datasetTools = {
   describe_entity: describeEntityTool,
   sample_rows: sampleRowsTool,
   run_readonly_sql: runReadOnlySqlTool,
+  explore_result: exploreResultTool,
 };

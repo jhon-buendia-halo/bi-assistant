@@ -21,12 +21,41 @@ export const V2_ANSWER_LINE =
 export type V2Step = 'plan' | 'answer' | 'quality';
 
 /**
- * The first line of Check data quality's request to Sarah (the Data
- * Readiness Agent): her system prompt is the agent's own, so the call is
- * recognised by its last user message, before any system-prompt routing.
+ * The first line of the former Check data quality step's request to Sarah
+ * (the Data Readiness Agent; the step was replaced by Build visual): kept
+ * for the stubs that still route a call by it.
  */
 export const V2_QUALITY_LINE =
   'Check the data quality behind an answer from Questions to Insights.';
+
+/**
+ * The first line of `result-explorer`'s instructions (roadmap 1.28.4,
+ * backend `result-explorer.prompts.ts`): the structured call that turns a
+ * reader's words into a view of a query result. Keep it equal to that file.
+ */
+export const RESULT_EXPLORER_LINE =
+  "You turn a user's words about a query's result into a view of that same result: filters, a sort and a page. You never write SQL.";
+
+/** Whether one of these system texts starts `result-explorer`'s instructions. */
+export function isResultExplorerCall(systemTexts: string[]): boolean {
+  return systemTexts.some((text) => firstLine(text) === RESULT_EXPLORER_LINE);
+}
+
+/** `result-explorer`'s reply (plan 1.28, 0.3). */
+export interface ExplorerReply {
+  action: 'explore' | 'new-question';
+  query: number | null;
+  filters: {
+    column: string;
+    op: string;
+    value: string | number | boolean | null;
+    valueTo: string | number | boolean | null;
+    values: (string | number | boolean)[] | null;
+  }[];
+  sort: { column: string; direction: 'asc' | 'desc' }[];
+  page: { move: 'keep' | 'first' | 'next' | 'previous' | 'last' | 'to'; to: number | null };
+  understood: string;
+}
 
 /** Plan's output (`PlanOutput`). */
 export interface V2Plan {
@@ -106,7 +135,7 @@ export function answerFrom(text: string): V2Answer {
 }
 
 /**
- * Sarah's reply to Check data quality: the first listed engine finding
+ * Sarah's reply to the former Check data quality step: the first listed engine finding
  * (`1. [severity] ...` under `Engine findings:`) when there is one, else none.
  */
 export function dataQualityReply(request: string): {

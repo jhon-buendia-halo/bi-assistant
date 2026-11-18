@@ -18,7 +18,7 @@ import {
 import { ToastService } from '../../../core/toast/toast.service';
 import { MessageFeedback } from '../../sessions/models/session.model';
 import {
-  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+  answerHasQueries,
   LiveToolCall,
   NodeChatAvailability,
   RunStepView,
@@ -70,6 +70,27 @@ export type { LiveToolCall, RunStepView, RunView };
 
 /** A step of the run panel: its last attempt, and how many times it ran. */
 export type RunPanelStep = RunStepView & { attempts: number };
+
+/** The only workflow whose follow-up can ask one agent step (api.md 118). */
+const ASK_AGENT_WORKFLOW = 'answer-business-question';
+
+/**
+ * What a follow-up does, under the agent picker (workflows R40; ui.md
+ * 4.4b): the whole workflow, or what each agent does when asked alone.
+ */
+export const ASK_HINTS: Readonly<Record<string, string>> = {
+  '': 'Runs every step again: plans, queries the data, checks and writes a new answer.',
+  'read-images': 'Read images step: reads your reference images again with this question.',
+  'interpret-follow-up':
+    'Interpret follow-up step: pages, filters or sorts the earlier result. Runs no new analysis.',
+  plan: 'Plan step: plans how to answer your question. Reads no data.',
+  analyse:
+    'Analyse step: answers with new queries over the data, with no plan or checks around it.',
+  'write-answer':
+    'Write answer step: rewrites the earlier answer from the same results. Runs no new queries.',
+  'build-visual':
+    "Ryan designs a new visual from the earlier answer's rows, following what you type. No new queries run.",
+};
 
 /** How often, and how many times, a stopped run is read back until it is stored. */
 const STOPPED_POLL_MS = 300;
@@ -132,6 +153,12 @@ export class WorkflowDesigner {
   readonly runDockMaximized = signal(false);
   /** The query open in the inspector sheet (an index into the answer's `data`); null when none is. */
   readonly openQueryIndex = signal<number | null>(null);
+  /**
+   * The run whose answer holds the open query when it is not the shown run:
+   * an earlier turn of the Business view's conversation (workflows R38).
+   * Null for the shown run.
+   */
+  readonly queryRun = signal<WorkflowRun | null>(null);
   /** What opened the sheet, to give the focus back on close. */
   private queryOpener: QueryOpener | null = null;
   /** The runs whose answer evidence was already requested (api.md 139): once per run id. */
@@ -171,7 +198,83 @@ export class WorkflowDesigner {
   /** The shown answer's rating is being saved. */
   readonly ratingPending = signal(false);
   /** The earlier run this one follows up (its context), if any. */
-  readonly contextRun = signal<{ id: string; question: string } | null>(null);
+  readonly contextRun = signal<{
+    id: string;
+    question: string;
+    /** The agent asked alone (a live run started from the picker). */
+    askedAgent?: string;
+  } | null>(null);
+
+  /** The follow-up composer's picked step id; '' is the whole workflow. */
+  readonly askStep = signal('');
+
+  /**
+   * The agent steps a follow-up can ask alone (answer-business-question
+   * only): those that ran in the run shown, last attempt, in step order.
+   */
+  readonly askableSteps = computed<
+    { id: string; agentName: string; label: string }[]
+  >(() => {
+    const workflow = this.workflow();
+    if (workflow === null || workflow.id !== ASK_AGENT_WORKFLOW) return [];
+    const ran = new Map(
+      this.runPanelSteps().map((step) => [step.id, step.status]),
+    );
+    // Build visual works from the earlier answer's query rows (api.md 118):
+    // askable when there are some, even if it was skipped or made no visual.
+    const hasRows = (this.runResult()?.answer?.data ?? []).some(
+      (record) =>
+        record.tool === 'run_readonly_sql' && (record.rows?.length ?? 0) > 0,
+    );
+    return workflow.steps.flatMap((step) => {
+      const status = ran.get(step.id);
+      const buildVisual = step.id === 'build-visual';
+      if (
+        step.kind !== 'agent' ||
+        !step.agent ||
+        status === undefined ||
+        status === null ||
+        status === 'running' ||
+        (buildVisual && !hasRows) ||
+        (status === 'skipped' && !buildVisual)
+      ) {
+        return [];
+      }
+      // The agent's role says what it is responsible for (Olivia · Analysis
+      // Lead); its step's title when it has none.
+      return [
+        {
+          id: step.id,
+          agentName: step.agent.name,
+          label: `${step.agent.name} · ${step.agent.role || step.title}`,
+        },
+      ];
+    });
+  });
+
+  /** What the picked follow-up does (`ASK_HINTS`), shown under the picker. */
+  readonly askHint = computed(() => ASK_HINTS[this.askStep()] ?? '');
+
+  /** The name of the agent picked in the composer; null for the whole workflow. */
+  readonly askedAgentName = computed(
+    () =>
+      this.askableSteps().find((s) => s.id === this.askStep())?.agentName ??
+      null,
+  );
+
+  /**
+   * The agent a stored run asked alone (its `context.askStep`), else the one
+   * a live run was started with; null for a whole-workflow run.
+   */
+  readonly contextAgent = computed<string | null>(() => {
+    const step = this.run()?.context?.askStep;
+    if (step) {
+      return (
+        this.workflow()?.steps.find((s) => s.id === step)?.agent?.name ?? null
+      );
+    }
+    return this.contextRun()?.askedAgent ?? null;
+  });
 
   /** The input of the run started here (Execute, Follow up, Continue); null before one. */
   readonly liveInput = signal<Record<string, WorkflowInputValue> | null>(null);
@@ -199,6 +302,8 @@ export class WorkflowDesigner {
   private pendingRun: WorkflowRun | null = null;
   /** Form values to hold once the workflow has loaded (an artifact's "Use in"). */
   private pendingValues: Record<string, WorkflowInputValue> | null = null;
+  /** Run the workflow on the held values once it has loaded (the home's Ask). */
+  private pendingExecute = false;
 
   /**
    * The run the page showed running (or waiting) when it was left: opening
@@ -499,10 +604,16 @@ export class WorkflowDesigner {
   /**
    * The next workflow opened starts with these form values over its initial
    * ones (an artifact opened in Dashboard Image to Artifact). A name the workflow
-   * has no field for is ignored.
+   * has no field for is ignored. With `execute`, the workflow then runs on
+   * them as Execute would (the home's Ask, app-shell R51), once its datasets
+   * have loaded; not when the page shows a stored or still-running run.
    */
-  prefillOnLoad(values: Record<string, WorkflowInputValue>): void {
+  prefillOnLoad(
+    values: Record<string, WorkflowInputValue>,
+    options: { execute?: boolean } = {},
+  ): void {
     this.pendingValues = values;
+    this.pendingExecute = options.execute === true;
   }
 
   /** Open a workflow: everything of the previous one is discarded. */
@@ -518,6 +629,9 @@ export class WorkflowDesigner {
         const left =
           this.leftRun?.workflowId === workflow.id ? this.leftRun : null;
         if (left !== null) this.leftRun = null;
+        const runNow =
+          this.pendingExecute && this.pendingRun === null && left === null;
+        this.pendingExecute = false;
         if (this.pendingRun !== null) {
           const pending = this.pendingRun;
           this.pendingRun = null;
@@ -548,7 +662,9 @@ export class WorkflowDesigner {
               (field.type === 'datasets' || field.type === 'dataset'),
           )
         ) {
-          this.loadDatasets();
+          this.loadDatasets(runNow);
+        } else if (runNow) {
+          this.execute();
         }
       },
       error: (err) => {
@@ -558,14 +674,21 @@ export class WorkflowDesigner {
     });
   }
 
-  private loadDatasets(): void {
-    this.datasetsSubscription = this.datasetsApi.getDatasets().subscribe({
-      next: (response) => {
-        this.datasets.set(response.datasets ?? []);
-        this.datasetsLoaded.set(true);
-      },
-      error: () => this.datasets.set([]),
-    });
+  /** The datasets a `datasets` field offers; then, with `thenExecute`, the run starts. */
+  private loadDatasets(thenExecute = false): void {
+    this.datasetsSubscription = this.datasetsApi
+      .getDatasetSummaries()
+      .subscribe({
+        next: (response) => {
+          this.datasets.set(response.datasets ?? []);
+          this.datasetsLoaded.set(true);
+          if (thenExecute) this.execute();
+        },
+        error: () => {
+          this.datasets.set([]);
+          if (thenExecute) this.execute();
+        },
+      });
   }
 
   /**
@@ -596,6 +719,7 @@ export class WorkflowDesigner {
     this.selectedStepId.set(null);
     this.openNodeId.set(null);
     this.openQueryIndex.set(null);
+    this.queryRun.set(null);
     this.queryOpener = null;
     this.runDockMaximized.set(false);
     this.runFormRequest.set(0);
@@ -630,9 +754,9 @@ export class WorkflowDesigner {
     this.openNodeId.set(null);
   }
 
-  /** The shown run is of Answer a Business Question: its answers get the query inspector. */
-  readonly inspectsQueries = computed(
-    () => this.workflow()?.id === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+  /** The shown run's answer ran queries (any workflow): it gets the query inspector. */
+  readonly inspectsQueries = computed(() =>
+    answerHasQueries(this.runResult()?.answer),
   );
 
   /**
@@ -640,11 +764,16 @@ export class WorkflowDesigner {
    * maximized Run panel is restored first; another query swaps the one shown.
    * `opener` is the chip or row that was used: Escape returns the focus to it.
    */
-  openQuery(index: number, opener: Element | null = null): void {
+  openQuery(
+    index: number,
+    opener: Element | null = null,
+    run: WorkflowRun | null = null,
+  ): void {
     this.runDockMaximized.set(false);
     if (this.openQueryIndex() === null && opener !== null) {
       this.queryOpener = queryOpenerOf(opener);
     }
+    this.queryRun.set(run);
     this.openQueryIndex.set(index);
   }
 
@@ -653,23 +782,24 @@ export class WorkflowDesigner {
     const opener = this.queryOpener;
     this.queryOpener = null;
     this.openQueryIndex.set(null);
+    this.queryRun.set(null);
     return opener;
   }
 
   /** A call changed the stored answer: show the updated run, when it is still the one shown. */
   applyRun(run: WorkflowRun): void {
     if (this.run()?.id === run.id) this.run.set(run);
+    if (this.queryRun()?.id === run.id) this.queryRun.set(run);
   }
 
   /**
    * Build the evidence of the shown stored answer and size its tables (api.md
-   * 139). Fired once per run id, in the background, when a stored answer of
-   * Answer a Business Question with data is shown; a failure is silent.
+   * 139). Fired once per run id, in the background, when a stored answer
+   * with data is shown; a failure is silent.
    */
   private prepareEvidence(run: WorkflowRun): void {
     if (
-      run.workflowId !== ANSWER_BUSINESS_QUESTION_WORKFLOW_ID ||
-      !run.answer?.data?.length ||
+      !answerHasQueries(run.answer) ||
       run.status === 'running' ||
       run.status === 'suspended' ||
       this.preparedRuns.has(run.id)
@@ -779,10 +909,12 @@ export class WorkflowDesigner {
     if (this.running()) return;
     this.setInput(field, text);
     this.followUpText.set('');
-    const request = followUpRequest(run, field, text, images);
+    const picked = this.askableSteps().find((s) => s.id === this.askStep());
+    const request = followUpRequest(run, field, text, images, picked?.id);
     this.start(workflow, request, {
       id: run.id,
       question: run.question ?? '',
+      ...(picked ? { askedAgent: picked.agentName } : {}),
     });
   }
 
@@ -1043,9 +1175,11 @@ export class WorkflowDesigner {
 
   private resetRun(): void {
     this.openQueryIndex.set(null);
+    this.queryRun.set(null);
     this.runId.set(null);
     this.run.set(null);
     this.contextRun.set(null);
+    this.askStep.set('');
     this.liveInput.set(null);
     this.liveStartedAt.set(null);
     this.liveFinishedAt.set(null);
@@ -1152,7 +1286,7 @@ export class WorkflowDesigner {
   private start(
     workflow: WorkflowDetail,
     request: WorkflowRunRequest,
-    context: { id: string; question: string } | null,
+    context: { id: string; question: string; askedAgent?: string } | null,
   ): void {
     this.cancelStream();
     const generation = this.generation;

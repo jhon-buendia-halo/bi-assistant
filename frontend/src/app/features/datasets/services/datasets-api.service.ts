@@ -56,6 +56,16 @@ export class DatasetsApiService {
     return this.http.get<{ datasets: Dataset[] }>(`${API_BASE_URL}/datasets`);
   }
 
+  /**
+   * Every dataset without its entity snapshot and schema notes (api.md 21,
+   * `view=summary`): enough for a picker, light with hundreds of datasets.
+   */
+  getDatasetSummaries(): Observable<{ datasets: Dataset[] }> {
+    return this.http.get<{ datasets: Dataset[] }>(`${API_BASE_URL}/datasets`, {
+      params: { view: 'summary' },
+    });
+  }
+
   createDataset(
     name: string,
     tables: string[],

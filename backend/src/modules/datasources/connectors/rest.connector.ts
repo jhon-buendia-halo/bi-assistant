@@ -19,6 +19,8 @@ import {
   SQL_ROWS_MAX,
 } from './connector';
 import { discoverFromOpenApi } from './openapi-discovery';
+import { buildPagedSql, readPagedRows } from './paged-sql';
+import type { PagedRows, PagedStatement } from './paged-sql.types';
 
 const CATALOG = 'api';
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -159,8 +161,57 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
   ): Promise<QueryResult> {
     const safeSql = assertReadOnlySql(sql);
     const lim = clampRows(rowLimit, 100, maxRows);
-    const endpoints = this.endpoints(config);
     const { sql: rewritten, refs } = rewriteReferences(safeSql);
+    return this.withDatabase(config, refs, (db) => {
+      const statement = db.prepare(rewritten);
+      const rows = statement.all() as Record<string, unknown>[];
+      return {
+        columns: statement.columns().map((c) => c.name),
+        rows: rows.slice(0, lim),
+        totalRows: rows.length,
+      };
+    });
+  }
+
+  /**
+   * One page of a stored statement's result (datasources R52): the wrapper
+   * from `buildPagedSql` with `?` parameters (booleans as 1/0), run on the
+   * same in-memory SQLite database `runReadOnlySql` materialises.
+   */
+  async runPagedSql(
+    config: RestApiConfig,
+    stmt: PagedStatement,
+  ): Promise<PagedRows> {
+    const built = buildPagedSql('sqlite', stmt);
+    // The wrapper's own text has no unquoted `api.x.y`: only the stored
+    // statement's references are rewritten and loaded.
+    const page = rewriteReferences(built.text);
+    const count = rewriteReferences(built.countText).sql;
+    return this.withDatabase(config, page.refs, (db) =>
+      readPagedRows(
+        { ...built, text: page.sql, countText: count },
+        stmt.offset,
+        (text) => {
+          const statement = db.prepare(text);
+          return Promise.resolve({
+            columns: statement.columns().map((c) => c.name),
+            rows: statement.all(...built.params) as Record<string, unknown>[],
+          });
+        },
+      ),
+    );
+  }
+
+  /**
+   * Fetch the endpoints `refs` names (all of them when it names none) into an
+   * in-memory SQLite database, run `query` on it, and close it.
+   */
+  private async withDatabase<T>(
+    config: RestApiConfig,
+    refs: Set<string>,
+    query: (db: import('better-sqlite3').Database) => T | Promise<T>,
+  ): Promise<T> {
+    const endpoints = this.endpoints(config);
     const referenced = endpoints.filter((e) => refs.has(e.key));
     const toLoad = referenced.length ? referenced : endpoints;
 
@@ -186,13 +237,7 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
       for (const ep of toLoad) {
         materialise(db, ep.key, loaded.get(ep.key) ?? []);
       }
-      const statement = db.prepare(rewritten);
-      const rows = statement.all() as Record<string, unknown>[];
-      return {
-        columns: statement.columns().map((c) => c.name),
-        rows: rows.slice(0, lim),
-        totalRows: rows.length,
-      };
+      return await query(db);
     } finally {
       db.close();
     }

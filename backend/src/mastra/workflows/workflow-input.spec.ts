@@ -13,7 +13,7 @@ import {
 // data contract's check: workflow-contract.spec.ts (`missing`).
 
 describe('usedBy: the steps that read a field from the input (api.md 116)', () => {
-  it("answer-business-question's question and datasets are read by Receive question only, and checkDataQuality by no step (it picks a branch)", () => {
+  it("answer-business-question's question and datasets are read by Receive question only, and buildVisual by no step (it picks a branch)", () => {
     expect(
       inputFieldsWithUsage(CODE_WORKFLOWS[0]).map(({ name, usedBy }) => ({
         name,
@@ -23,7 +23,7 @@ describe('usedBy: the steps that read a field from the input (api.md 116)', () =
       { name: 'question', usedBy: ['read-images', 'receive-question'] },
       { name: 'images', usedBy: ['read-images'] },
       { name: 'datasets', usedBy: ['receive-question'] },
-      { name: 'checkDataQuality', usedBy: [] },
+      { name: 'buildVisual', usedBy: [] },
     ]);
   });
 

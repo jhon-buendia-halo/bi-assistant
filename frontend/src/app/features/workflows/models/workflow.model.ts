@@ -44,7 +44,7 @@ export interface WorkflowInputField {
   /** The value of a field that is missing or empty. */
   default?: string | number | boolean;
   /** 'dataset' / 'datasets': only datasets bound to these kinds. */
-  datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];
+  datasourceKinds?: ('postgres' | 'databricks' | 'rest' | 'file')[];
   /** 'artifact': only artifacts of these kinds are offered. */
   artifactKinds?: ArtifactKind[];
   /**
@@ -83,6 +83,17 @@ export interface WorkflowInputError {
  */
 export const ANSWER_BUSINESS_QUESTION_WORKFLOW_ID = 'answer-business-question';
 
+/**
+ * An answer (or follow-up event answer) that ran queries holds `data` records:
+ * it gets the query inspector, whichever workflow ran it (workflows R31). The
+ * same rule as past chats.
+ */
+export function answerHasQueries(
+  message: Pick<ChatMessage, 'data'> | null | undefined,
+): boolean {
+  return (message?.data?.length ?? 0) > 0;
+}
+
 export type WorkflowInputValue = string | number | boolean | string[];
 
 /**
@@ -92,8 +103,8 @@ export type WorkflowInputValue = string | number | boolean | string[];
  */
 export interface WorkflowSummary {
   /**
-   * `answer-business-question`, the catalogue's only workflow. Agents are a library and
-   * have no workflow of their own.
+   * The workflow id (`answer-business-question`, `assess-data-readiness`, …). Agents are a
+   * library and have no workflow of their own.
    */
   id: string;
   name: string;
@@ -101,8 +112,8 @@ export interface WorkflowSummary {
   /** Defined in code. */
   kind: 'code';
   owner: 'Official';
-  /** The agents its steps call, in step order, each once. */
-  agents: { key: string; name: string }[];
+  /** The agents its steps call, in step order, each once, with their role (api.md 116). */
+  agents: { key: string; name: string; role?: string }[];
   stepCount: number;
   /** Every workflow runs once on a typed input (api.md 118). */
   trigger: 'run';
@@ -130,6 +141,8 @@ export const TRIGGER_LABELS: Record<WorkflowSummary['trigger'], string> = {
 export interface WorkflowAgentDetail {
   key: string;
   name: string;
+  /** The persona's role (job title); '' or absent without one. */
+  role?: string;
   /** `<provider>/<model>` of the agent's LLM; null when no LLM is set. */
   model?: string | null;
   /** The agent's base prompt (api.md 34 `instructions`); each run adds its own context. */
@@ -207,6 +220,8 @@ export interface WorkflowEdge {
   kind: 'next' | 'branch' | 'loop';
   /** `Needs clarification`, `Clear`, `Retry once`, `Valid or retried`. */
   label?: string;
+  /** What happens on this path, in business words (workflows R42); a labelled edge has one. */
+  note?: string;
 }
 
 /**
@@ -264,6 +279,8 @@ export interface WorkflowRunToolCall {
   error?: string;
   /** From the `tool` event to its `tool-result`; absent when no result came. */
   durationMs?: number;
+  /** Why the agent made the call, in its words (the `tool` event's `rationale`). */
+  rationale?: string;
 }
 
 /** One labelled fact under a step story's headline (api.md 3.6 `step.story`). */
@@ -386,7 +403,7 @@ export interface WorkflowInputRequired {
 /** The body of `POST /workflows/:id/runs/stream` (api.md 118, 119). */
 export interface WorkflowRunRequest {
   input: Record<string, WorkflowInputValue>;
-  context?: { fromRunId: string };
+  context?: { fromRunId: string; askStep?: string };
 }
 
 /**
@@ -399,7 +416,7 @@ export interface WorkflowRun {
   workflowId: string;
   workflowName: string;
   input: Record<string, WorkflowInputValue>;
-  context?: { fromRunId: string };
+  context?: { fromRunId: string; askStep?: string };
   status: 'running' | 'success' | 'failed' | 'stopped' | 'suspended';
   /** A suspended run (or an expired one, `expired: true`): the question it waits on. */
   waitingFor?: WorkflowWaitingFor;

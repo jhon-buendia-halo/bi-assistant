@@ -42,6 +42,7 @@ export function toolDataRecord(
   args: Record<string, unknown>,
   result: unknown,
 ): ToolDataRecord | null {
+  if (tool === 'explore_result') return exploreRecord(args, result);
   if (tool !== 'run_readonly_sql' && tool !== 'sample_rows') {
     return tabularRecord(tool, args, result);
   }
@@ -97,6 +98,64 @@ export function toolDataRecord(
     ...(truncated ? { truncated: true } : {}),
     ...(rationale ? { rationale } : {}),
     ...(warnings.length ? { warnings } : {}),
+  };
+}
+
+/**
+ * An `explore_result` call (agents.md 3.15) as a record of its source query:
+ * `input` is the source SQL, so the inspector, a re-run and the CSV act on
+ * that query; the rows are the page's, `truncated` when more pages exist.
+ * Its view is evidence (written beside the result as facts), never a field
+ * here: records are fed to models.
+ */
+function exploreRecord(
+  args: Record<string, unknown>,
+  result: unknown,
+): ToolDataRecord {
+  const value = (result ?? {}) as {
+    sourceSql?: unknown;
+    columns?: unknown;
+    rows?: unknown;
+    page?: unknown;
+    pageCount?: unknown;
+    error?: unknown;
+  };
+  const input =
+    typeof value.sourceSql === 'string'
+      ? value.sourceSql
+      : typeof args['query'] === 'string' && args['query'].trim()
+        ? args['query']
+        : undefined;
+  const rationale = statedRationale(args['rationale']);
+  if (typeof value.error === 'string' || input === undefined) {
+    return {
+      tool: 'explore_result',
+      ...(input !== undefined ? { input } : {}),
+      error:
+        typeof value.error === 'string'
+          ? value.error
+          : 'The result could not be explored',
+      ...(rationale ? { rationale } : {}),
+    };
+  }
+  const rows = Array.isArray(value.rows)
+    ? (value.rows as Record<string, unknown>[])
+    : [];
+  const columns = Array.isArray(value.columns)
+    ? value.columns.map((c) => String(c))
+    : Object.keys(rows[0] ?? {});
+  const morePages =
+    typeof value.page === 'number' &&
+    typeof value.pageCount === 'number' &&
+    value.page < value.pageCount;
+  return {
+    tool: 'explore_result',
+    input,
+    columns,
+    rows: rows.slice(0, STORED_ROWS_CAP),
+    rowCount: rows.length,
+    ...(morePages || rows.length > STORED_ROWS_CAP ? { truncated: true } : {}),
+    ...(rationale ? { rationale } : {}),
   };
 }
 

@@ -1,7 +1,10 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ToastService } from '../../../core/toast/toast.service';
-import { DatasetsApiService } from '../../datasets/services/datasets-api.service';
+import {
+  Dataset,
+  DatasetsApiService,
+} from '../../datasets/services/datasets-api.service';
 import { LlmApiService } from '../../llm/services/llm-api.service';
 import {
   AgentConfig,
@@ -21,7 +24,6 @@ import {
   agentFormFromConfig,
   agentSaveInput,
   canSaveAgent,
-  datasetOptions,
   emptyAgentForm,
   hasExistingDataset,
   legacyInstructions,
@@ -53,8 +55,12 @@ export class AgentEditorService {
   readonly saved = signal<AgentForm>(emptyAgentForm());
   readonly status = signal<AgentStatus | null>(null);
   readonly hasUnpublishedChanges = signal(false);
+  /** The datasets that exist (the light listing, api.md 21). */
+  readonly datasets = signal<Dataset[]>([]);
   /** Names of the datasets that exist. */
-  readonly existingDatasets = signal<string[]>([]);
+  readonly existingDatasets = computed(() =>
+    this.datasets().map((dataset) => dataset.name),
+  );
   /** The user's skills library, sorted by name (R55). */
   readonly librarySkills = signal<SkillSummary[]>([]);
   /** The built-in on-demand skills, linkable as mentions. */
@@ -83,14 +89,7 @@ export class AgentEditorService {
     }),
   );
   readonly title = computed(() =>
-    this.agentId() === null ? 'New agent' : `Edit ${this.saved().name}`,
-  );
-  readonly datasetOptions = computed(() =>
-    datasetOptions(
-      this.existingDatasets(),
-      this.saved().datasets,
-      this.form().datasets,
-    ),
+    this.agentId() === null ? 'New agent persona' : `Edit ${this.saved().name}`,
   );
 
   /** Set when the editor added links for a legacy draft's tools and skills. */
@@ -111,7 +110,7 @@ export class AgentEditorService {
     this.status.set(null);
     this.hasUnpublishedChanges.set(false);
     this.loadError.set(null);
-    this.existingDatasets.set([]);
+    this.datasets.set([]);
     this.librarySkills.set([]);
     this.builtInSkills.set([]);
     this.legacyNotice.set(false);
@@ -125,10 +124,10 @@ export class AgentEditorService {
       },
       error: () => undefined,
     });
-    const datasets = firstValueFrom(this.datasetsApi.getDatasets()).then(
+    const datasets = firstValueFrom(this.datasetsApi.getDatasetSummaries()).then(
       (res) => {
         if (generation !== this.generation) return;
-        this.existingDatasets.set(res.datasets.map((dataset) => dataset.name));
+        this.datasets.set(res.datasets);
       },
       () => undefined,
     );
@@ -158,7 +157,9 @@ export class AgentEditorService {
               if (generation !== this.generation) return;
               const draft = detail.draft ?? detail.live;
               if (detail.kind !== 'user' || !draft) {
-                this.loadError.set(`Agent "${agentId}" cannot be edited`);
+                this.loadError.set(
+                  `Agent persona "${agentId}" cannot be edited`,
+                );
                 return;
               }
               draftConfig = draft;
@@ -200,13 +201,9 @@ export class AgentEditorService {
     this.form.update((form) => ({ ...form, ...patch }));
   }
 
-  toggleDataset(name: string, checked: boolean): void {
-    this.form.update((form) => ({
-      ...form,
-      datasets: checked
-        ? [...form.datasets.filter((item) => item !== name), name]
-        : form.datasets.filter((item) => item !== name),
-    }));
+  /** The agent's datasets as the picker leaves them (a missing one stays until removed). */
+  setDatasets(names: string[]): void {
+    this.form.update((form) => ({ ...form, datasets: names }));
   }
 
   setStarter(index: number, value: string): void {
@@ -240,7 +237,7 @@ export class AgentEditorService {
     if (this.saving()) return false;
     const form = this.form();
     if (!form.name.trim()) {
-      this.toast.error('Agent name is required');
+      this.toast.error('Agent persona name is required');
       return false;
     }
     const generation = this.generation;

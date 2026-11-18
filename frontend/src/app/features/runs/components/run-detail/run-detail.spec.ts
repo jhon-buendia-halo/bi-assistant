@@ -130,7 +130,7 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     expect(generate).toHaveBeenCalledWith(RUN, jasmine.any(Function));
   });
 
-  it('shows the visual cards stored on the run, and View opens that visual', () => {
+  it('shows the visual cards stored on the run as artifact cards, and Open opens that visual (visuals R42)', () => {
     const el = mount({
       ...RUN,
       events: [
@@ -148,10 +148,9 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       ],
     });
     const view = spyOn(TestBed.inject(RunVisualsState), 'view');
-    const card = Array.from(el.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'View',
-    )!;
-    card.click();
+    const card = el.querySelector('[data-testid="run-artifact-card"]')!;
+    expect(card.textContent).toContain('Goals');
+    (card.querySelector('[data-testid="run-artifact-open"]') as HTMLElement).click();
     expect(view).toHaveBeenCalledWith(
       jasmine.objectContaining({ id: 'r1' }),
       jasmine.objectContaining({ visualId: 'vis-1', version: 1 }),
@@ -237,7 +236,7 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       expect(el.querySelector('[data-testid="query-coverage-line"]')).not.toBeNull();
       const row = el.querySelector<HTMLElement>('[data-testid="query-row-0"]')!;
       expect(row.textContent).toContain('Counting the matches.');
-      expect(el.querySelector('[data-testid="figure-ref"]')?.textContent).toBe('Q1');
+      expect(el.querySelector('[data-testid="figure-ref"]')?.textContent).toBe('1');
       expect(el.querySelector('[data-testid="query-inspector"]')).toBeNull();
 
       row.click();
@@ -247,7 +246,7 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       fixture.detectChanges();
       const sheet = el.querySelector('[data-testid="query-inspector-sheet"]')!;
       expect(sheet.querySelector('[data-testid="query-inspector-position"]')?.textContent).toContain(
-        'Query 1 of 1',
+        'Source 1 of 1',
       );
       // Showing the run again builds nothing a second time.
       fixture.detectChanges();
@@ -261,13 +260,28 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       http.verify();
     });
 
-    it('renders a run of another workflow as before: Data used, no query rows, no evidence call', () => {
-      const other: WorkflowRun = { ...WITH_QUERIES, workflowId: 'other-workflow' };
+    it('gives a run of another workflow whose answer ran queries the inspector too', () => {
+      const other: WorkflowRun = {
+        ...WITH_QUERIES,
+        workflowId: 'assess-data-readiness',
+      };
+      const { http, el } = mountWithHttp(other);
+      http.expectOne(evidence).flush({ ok: true, run: other });
+      expect(el.querySelector('[data-testid="query-row-0"]')).not.toBeNull();
+      http.verify();
+    });
+
+    it('renders a run of another workflow with no query as before: no query rows, no Data used, no evidence call', () => {
+      const other: WorkflowRun = {
+        ...WITH_QUERIES,
+        workflowId: 'other-workflow',
+        answer: { ...WITH_QUERIES.answer!, data: undefined },
+      };
       const { http, el } = mountWithHttp(other);
       http.expectNone(evidence);
       expect(el.querySelector('[data-testid="query-row-0"]')).toBeNull();
       expect(el.querySelector('[data-testid="figure-ref"]')).toBeNull();
-      expect(el.textContent).toContain('Data used');
+      expect(el.textContent).not.toContain('Data used');
       http.verify();
     });
   });

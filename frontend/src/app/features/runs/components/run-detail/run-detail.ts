@@ -28,11 +28,12 @@ import {
   runStatusLine,
   runStepStatusLabel,
 } from '../../../workflows/services/workflows.util';
-import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../../workflows/models/workflow.model';
+import { answerHasQueries } from '../../../workflows/models/workflow.model';
 import { RunDetailQueryEvidenceApi } from '../../services/run-detail-query-evidence-api';
 import { RunVisualsState } from '../../services/run-visuals-state';
 import { RunsState } from '../../services/runs-state';
 import { RunVisual } from '../run-visual/run-visual';
+import { RunArtifactCard } from '../run-artifact-card/run-artifact-card';
 import { WorkflowRun } from '../../../workflows/models/workflow.model';
 
 /** One field of a run's input as `run-detail` shows it. */
@@ -67,7 +68,13 @@ export function runInputEntries(
  */
 @Component({
   selector: 'app-run-detail',
-  imports: [LucideAngularModule, AnswerView, QueryInspector, RunVisual],
+  imports: [
+    LucideAngularModule,
+    AnswerView,
+    QueryInspector,
+    RunVisual,
+    RunArtifactCard,
+  ],
   templateUrl: './run-detail.html',
   providers: [
     { provide: QUERY_EVIDENCE_API, useClass: RunDetailQueryEvidenceApi },
@@ -87,11 +94,9 @@ export class RunDetail {
   private readonly prepared = new Set<string>();
   private opener: QueryOpener | null = null;
 
-  /** A run of Answer a Business Question shows its answer with the query inspector (workflows R31). */
-  protected readonly inspectsQueries = computed(
-    () =>
-      this.state.activeRun()?.workflowId ===
-      ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+  /** A run whose answer ran queries shows it with the query inspector, any workflow (workflows R31). */
+  protected readonly inspectsQueries = computed(() =>
+    answerHasQueries(this.state.activeRun()?.answer),
   );
   /** The query open in the sheet: an index into the answer's `data`. */
   private readonly openIndex = signal<number | null>(null);
@@ -118,8 +123,7 @@ export class RunDetail {
         }
         if (
           run === null ||
-          run.workflowId !== ANSWER_BUSINESS_QUESTION_WORKFLOW_ID ||
-          !run.answer?.data?.length ||
+          !answerHasQueries(run.answer) ||
           run.status === 'running' ||
           run.status === 'suspended' ||
           this.prepared.has(run.id)

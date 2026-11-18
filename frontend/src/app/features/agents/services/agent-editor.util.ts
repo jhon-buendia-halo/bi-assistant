@@ -179,37 +179,6 @@ export function showAgentPublish(state: {
   );
 }
 
-export interface DatasetOption {
-  name: string;
-  /** Kept in the saved draft but no longer among the datasets (R55). */
-  missing: boolean;
-  checked: boolean;
-}
-
-/**
- * One checkbox per existing dataset, then the saved draft's datasets that no
- * longer exist, so the user can untick them. A missing one stays listed until
- * a save drops it, so unticking it can be undone.
- */
-export function datasetOptions(
-  existing: string[],
-  saved: string[],
-  selected: string[],
-): DatasetOption[] {
-  const known = new Set(existing);
-  const ticked = new Set(selected);
-  return [
-    ...existing.map((name) => ({
-      name,
-      missing: false,
-      checked: ticked.has(name),
-    })),
-    ...uniqueNonBlank(saved)
-      .filter((name) => !known.has(name))
-      .map((name) => ({ name, missing: true, checked: ticked.has(name) })),
-  ];
-}
-
 /** True when any of `datasets` still exists; a preview needs one (R60). */
 export function hasExistingDataset(
   datasets: string[],

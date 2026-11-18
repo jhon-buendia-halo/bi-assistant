@@ -39,6 +39,8 @@ export interface NodeToolView {
   /** Null when the step names no agent key and no agent detail matches. */
   agentKey: string | null;
   agentName: string;
+  /** The agent persona's role (job title); '' without one. */
+  agentRole: string;
   /** Whether its step started in the run shown. */
   ran: boolean;
   /** This tool's calls in its step in the run shown, live ones included. */

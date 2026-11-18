@@ -43,7 +43,7 @@ describe('AnswerView with the query inspector', () => {
   it('shows chips, the coverage line and one row per query, and hides the old blocks', () => {
     const el = render(base, true);
     const chip = el.querySelector('[data-testid="figure-ref"]');
-    expect(chip?.textContent).toBe('Q1');
+    expect(chip?.textContent).toBe('1');
     expect(el.querySelector('[data-testid="query-coverage-line"]')).not.toBeNull();
     expect(el.querySelector('[data-testid="query-row-0"]')).not.toBeNull();
     expect(el.querySelector('[data-testid="query-row-1"]')).not.toBeNull();
@@ -101,5 +101,47 @@ describe('AnswerView with the query inspector', () => {
     expect(el.querySelector('[data-testid="query-evidence"]')).toBeNull();
     expect(el.textContent).toContain('Data used (2 queries)');
     expect(el.textContent).toContain('How I worked this out');
+  });
+
+  describe('the source card', () => {
+    function chipOf(el: HTMLElement): HTMLElement {
+      return el.querySelector('[data-testid="figure-ref"]') as HTMLElement;
+    }
+    const card = (el: HTMLElement) => el.querySelector('[data-testid="figure-ref-card"]');
+
+    it('shows on focus with the purpose, rows and coverage, and hides on Escape', () => {
+      const el = render(base, true);
+      expect(card(el)).toBeNull();
+      chipOf(el).dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      fixture.detectChanges();
+      const shown = card(el) as HTMLElement;
+      expect(shown.getAttribute('role')).toBe('tooltip');
+      expect(shown.textContent).toContain('Source 1');
+      expect(shown.textContent).toContain('Returns per product');
+      expect(shown.textContent).toContain('1 row · Whole table');
+      expect(shown.textContent).toContain('Click to see how it was computed');
+      expect(chipOf(el).getAttribute('aria-describedby')).toBe(shown.id);
+      chipOf(el).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      expect(card(el)).toBeNull();
+      expect(chipOf(el).hasAttribute('aria-describedby')).toBeFalse();
+    });
+
+    it('shows on hover, hides on leaving, and warns about a sample', () => {
+      const msg: ChatMessage = {
+        ...base,
+        content: 'It was 2025-11-14.',
+        data: [base.data![0], { ...base.data![1], truncated: true, rowCount: 500 }],
+      };
+      const el = render(msg, true);
+      const chip = chipOf(el);
+      chip.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      fixture.detectChanges();
+      expect(card(el)?.textContent).toContain('500+ rows · Sample');
+      expect(card(el)?.textContent).toContain('From a sample: not a reliable figure');
+      chip.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+      fixture.detectChanges();
+      expect(card(el)).toBeNull();
+    });
   });
 });

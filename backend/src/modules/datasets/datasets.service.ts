@@ -33,6 +33,24 @@ const SAMPLE_VALUE_CHARS = 40;
  * warehouse. */
 const ENRICHMENT_CONCURRENCY = 4;
 
+/** A dataset without its entity snapshot and schema notes (api.md 21, `view=summary`). */
+export type DatasetSummary = Omit<DatasetDoc, 'entities' | 'schemas'>;
+
+/**
+ * What a picker needs of a dataset: its name, datasource, table names and dates.
+ * The entity snapshot (columns, sample values) and the schema notes are left out,
+ * so a catalogue of hundreds of datasets stays light.
+ */
+export function toDatasetSummary(doc: DatasetDoc): DatasetSummary {
+  const summary: DatasetSummary = { name: doc.name, tables: doc.tables };
+  if (doc.datasourceId !== undefined) summary.datasourceId = doc.datasourceId;
+  if (doc.datasourceKind !== undefined)
+    summary.datasourceKind = doc.datasourceKind;
+  if (doc.createdAt !== undefined) summary.createdAt = doc.createdAt;
+  if (doc.updatedAt !== undefined) summary.updatedAt = doc.updatedAt;
+  return summary;
+}
+
 export interface SaveDatasetInput {
   name: string;
   tables: string[];

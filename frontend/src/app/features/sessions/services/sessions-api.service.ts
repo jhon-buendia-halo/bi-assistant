@@ -2,7 +2,13 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
-import { QueryRerunResult } from '../../../shared/query-evidence/query-evidence.model';
+import {
+  FilterInterpretation,
+  PageRequest,
+  ResultView,
+  PageResult,
+  QueryRerunResult,
+} from '../../../shared/query-evidence/query-evidence.model';
 import {
   ChatMessage,
   InteractiveVisualization,
@@ -299,6 +305,33 @@ export class SessionsApiService {
     return this.http.post<{ ok: boolean; result: QueryRerunResult }>(
       `${this.answerUrl(id, message)}/queries/${index}/rerun`,
       {},
+    );
+  }
+
+  /** One page of a query's full result, filtered and sorted; stores nothing (api.md 154). */
+  pageQuery(
+    id: string,
+    message: number,
+    index: number,
+    request: PageRequest,
+  ): Observable<{ ok: boolean; result: PageResult }> {
+    return this.http.post<{ ok: boolean; result: PageResult }>(
+      `${this.answerUrl(id, message)}/queries/${index}/page`,
+      request,
+    );
+  }
+
+  /** Words turned into a page request by the result-explorer agent; stores nothing (api.md 155). */
+  interpretFilter(
+    id: string,
+    message: number,
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Observable<{ ok: boolean; interpretation: FilterInterpretation }> {
+    return this.http.post<{ ok: boolean; interpretation: FilterInterpretation }>(
+      `${this.answerUrl(id, message)}/queries/${index}/interpret-filter`,
+      view === null ? { text } : { text, view },
     );
   }
 

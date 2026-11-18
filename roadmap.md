@@ -804,6 +804,218 @@ Brings the goal of the `site-mapping-agent` prototype into the app as a workflow
 - **Intent:** a second review leads with what changed: new, fixed and changed-look findings.
 - **Scope:** findings matched by template, rule and selector; a pixel diff per page against the previous run's `site-review/findings.json` and screenshots.
 
+### Milestone 1.28 — Explore a query's full result: page, filter, sort (M1-28)
+
+A query that returns thousands of rows showed at most 200 of them; the rest was reachable only as a CSV. The query inspector now pages, sorts and filters any agent query's full result on the server, a new auxiliary agent, `result-explorer`, turns the user's words ("only Brazil, newest first", "next page") into that view, chat agents get an `explore_result` tool, and a follow-up of Answer a Business Question over the earlier result pages it instead of planning a new analysis. Requested on 2026-11-15 (Free style); approach B of three picked by the user. Epic spec: [specs/epics/M1-28/spec.md](specs/epics/M1-28/spec.md). Plan and contract: [docs/plans/m1-28-result-explorer.md](docs/plans/m1-28-result-explorer.md). ADR-0050.
+
+#### 1.28.1 — Paged SQL builder and the connectors' paged read  `✅ Done`
+- **Intent:** read any page of a stored query's result, filtered and sorted, without loading the whole result.
+- **Scope:** per plan 1.28.1: `paged-sql.ts` (wrapper, quoting and placeholders per dialect, predicates, default order), `runPagedSql` on the Postgres, Databricks and REST connectors and `DatasourcesService`; datasources R37 and R52; ADR-0050.
+- **Out of scope:** routes and UI; raw dataset browsing (datasets R22).
+- **Acceptance:** `paged-sql.spec.ts`, the REST connector on real SQLite, the Databricks named parameters.
+
+#### 1.28.2 — Page engine and the page routes  `✅ Done`
+- **Intent:** one server endpoint per host kind that answers a `PageRequest` for any stored query.
+- **Scope:** per plan 1.28.2: `result-view.ts`, `page()` in the query-evidence services, api.md 152 and 154; data-model, non-functional (Result paging, N72).
+- **Out of scope:** the natural-language filter (1.28.4).
+- **Acceptance:** Jest tests for validation, default order, samples refused, nothing stored.
+
+#### 1.28.3 — Query inspector: pager, sort and column filters  `✅ Done`
+- **Intent:** the Result tab of the query inspector pages, sorts and filters the full result, on every host.
+- **Scope:** per plan 1.28.3: the `query-result` component, `page()` on both evidence adapters; ui.md 4.12.2; agent-answers R76, R79–R81.
+- **Out of scope:** CSV of a filtered view.
+- **Acceptance:** Karma tests; `frontend/e2e/query-result-paging.spec.ts`.
+
+#### 1.28.4 — The result-explorer agent and the interpret-filter routes  `✅ Done`
+- **Intent:** the user's words become a structured view (filters, sort, page) over the result's known columns, never free SQL.
+- **Scope:** per plan 1.28.4: `result-explorer` (one model call, no tools), `specOf`, api.md 153 and 155; agents.md 1.1, 2.17.
+- **Out of scope:** routing a follow-up (1.28.8).
+- **Acceptance:** `result-explorer.prompts.spec.ts`; route tests with a stubbed model.
+
+#### 1.28.5 — Query inspector: filter in words and explore records  `✅ Done`
+- **Intent:** a "Filter in words" box in the Result tab, and an explore answer's query opening on the view it showed.
+- **Scope:** per plan 1.28.5: `interpretFilter` on both adapters; agent-answers R82, R83; ui.md.
+- **Out of scope:** the chat tool (1.28.7).
+- **Acceptance:** Karma tests; `frontend/e2e/query-result-filter-text.spec.ts`.
+
+#### 1.28.6 — result-explorer evals  `✅ Done`
+- **Intent:** measure that the agent reads paging, filtering and sorting requests right and refuses new questions.
+- **Scope:** per plan 1.28.6: the eval set (13 cases on the World Cup fixture), its checks; agents.md 8.1.
+- **Out of scope:** other agents' sets.
+- **Acceptance:** checks unit-tested on one real reply; a baseline run recorded.
+
+#### 1.28.7 — The explore_result tool for chat agents  `✅ Done`
+- **Intent:** in a chat (node chats, Try it, user agents) "next page" or "only Brazil" over an earlier query answers with that page, linked to the inspector.
+- **Scope:** per plan 1.28.7: `explore_result`, `contextQueries`, the captured record and its evidence `view`; agents.md 2.1, 2.11, 3.15, 4.2; agent-answers R84.
+- **Out of scope:** Answer a Business Question's own follow-up (1.28.8).
+- **Acceptance:** Jest tests; assistant and insights-analyst evals against base.
+
+#### 1.28.8 — A follow-up over an earlier result pages it in Answer a Business Question  `✅ Done`
+- **Intent:** a follow-up run that asks for another page, a filter or an order over the earlier answer's result answers with that page instead of planning a new analysis.
+- **Scope:** per plan 1.28.8: `interpret-follow-up`, the nested `explore-result` (`page-result`, `page-answer`), the catalogue and contract snapshot; workflows R1, R2, R27, R35; agents.md 5.11, 5.12.
+- **Out of scope:** changing `analysis-planner`.
+- **Acceptance:** stub workflow tests for both paths; `frontend/e2e/result-follow-up.spec.ts`; insights-analyst evals against base.
+
+#### 1.28.9 — Sources a reader can understand: numbered, described, one per table  `✅ Done`
+- **Intent:** the `Q1`, `Q3` chips meant nothing to a reader, and every cell of a table carried one. A figure's source now reads like a footnote and says what it is.
+- **Scope:** requested on 2026-11-16 with a screenshot (an answer's table with `Q3` in every cell); the user picked "numbered sources + card + one source per table". The chip becomes a superscript number with a card on hover and focus (the query's purpose, its rows, its coverage, "Click to see how it was computed"); table cells get no chip and each table gets one source line under it; the query list is titled Sources and its rows read `1 · <purpose>`; the coverage line names `Source 2`; `explore_result` and the follow-up use the numbers the reader sees. agent-answers R69–R71; ui.md 4.12.2; agents.md 3.15.
+- **Out of scope:** what the agents write; the inspector itself.
+- **Acceptance:** Karma tests for the chip, the card, the table source line and the labels; the Playwright specs that click a chip updated; a reader's "source 3" pages the query shown as Source 3.
+
+#### 1.28.10 — Every workflow whose answer ran queries gets the query inspector  `✅ Done`
+- **Intent:** exploring a large result was possible only in Answer a Business Question; a run of Assess Data Readiness (screenshot, 2026-11-16) showed no sources. Every run whose answer holds queries, and every follow-up answer, now gets the sources, the inspector, paging and filters.
+- **Scope:** option B of three picked by the user on 2026-11-16 (part 1): drop the Answer a Business Question gate in the Run panel and the run detail page, pass the inspector to follow-up answers, give the Data Readiness agent `explore_result`, and say in the dashboard workflows' specs why they show none (they run no query). workflows R31, agent-answers R67, ui.md, agents.md 2.10, 5.13, 5.18, CLAUDE.md.
+- **Out of scope:** rows behind each readiness finding (1.28.11).
+- **Acceptance:** Karma tests for the gate on any workflow with queries and on follow-ups; data-readiness evals against main; a Playwright check on an Assess Data Readiness run with a drill-down query.
+
+#### 1.28.11 — Each readiness finding opens the rows behind it  `✅ Done`
+- **Intent:** a readiness report says "92% null"; the reader can open and page the rows that make it so.
+- **Scope:** option B part 2; approach A of three picked by the user on 2026-11-16 (rejected: B, rows on demand behind a "See rows" button and a new route; C, a tool the agent calls): a code step `finding-rows` between Save report and Explain report builds, for the top findings (at most 20), a read-only query of the rows behind each one from its check kind (completeness, uniqueness, integrity, reasonability, timeliness, validity where the dialect allows; none for accessibility), with `COUNT(*) OVER ()` as `matching_rows`, runs it with the stored-row cap, and records it as a `run_readonly_sql` source of the answer, so the inspector pages and filters it; workflows spec, agents.md 5.13, data-readiness spec.
+- **Out of scope:** changing how findings are scored; what the Data Readiness agent receives.
+- **Acceptance:** Jest tests of the SQL builder per check kind and dialect and of the step on the stub; a Playwright check that an Assess Data Readiness run lists a source per finding and opens it on its rows.
+
+#### 1.28.12 — The Data Readiness agent lists every finding of a dimension from the report  `✅ Done`
+- **Intent:** asked "what are all the completeness issues" (execution `129ad364`, Formula 1), the agent saw only the report's top 20 of 284 findings, recounted nulls with its own SQL over base tables only, missed the 17 views the engine profiles, and reported a false mismatch (140 vs 284). It now reads every finding of a dimension from the stored report and never recounts.
+- **Scope:** option A of three picked by the user on 2026-11-16 (rejected: B, instructions only; C, A plus a recount rule): `get_readiness_report` takes an optional `dimension` (and `page`) and returns that dimension's findings from the stored report, paged, with their total; the agent's instructions say to use it for "all the … issues" requests; data-readiness evals gain the case. agents.md 2.10, 3.13; data-readiness spec.
+- **Out of scope:** changing scores or the engine.
+- **Acceptance:** Jest tests of the bridge paging and the tool input; the new eval case passes 3 of 3 and the set shows no regression against main.
+
+#### 1.28.13 — An Edge Cases testing dataset  `✅ Done`
+- **Intent:** a Testing Data sample built to break things: a million-row table, awkward names, every awkward value and every data-quality problem the readiness engine scores, so paging, filters, sources, explore_result and readiness can be tried on border cases.
+- **Scope:** requested on 2026-11-16; the user picked a repo fixture, a 1-million-row largest table and an e-commerce domain. Seed `005_edge_cases.sql` generated in SQL (`generate_series`, a fixed seed, so every load is identical), registry entry, the "Edge Cases PostgreSQL" datasource and "Edge Cases" dataset; testing-data spec lists each edge case and where it lives.
+- **Out of scope:** new eval sets on it.
+- **Acceptance:** `registry.spec.ts` passes; the seed loads on the shared Postgres within the seed timeout; a smoke script shows every documented edge case present.
+
+### Milestone 1.29 — Border-case evals for every agent of the two workflows (M1-29)
+
+Each agent of Answer a Business Question and Assess Data Readiness gets its own border-case eval set, run in isolation on frozen inputs, plus two whole-workflow sets on the Edge Cases sample, so an inconsistency is found and traced to the agent that made it. Requested on 2026-11-16; the user asked to go on with the recommendation. Epic spec: [specs/epics/M1-29/spec.md](specs/epics/M1-29/spec.md). Plan: [docs/plans/m1-29-agent-evals.md](docs/plans/m1-29-agent-evals.md).
+
+#### 1.29.1 — Eval infrastructure for isolated agent calls and workflow targets  `✅ Done`
+- **Intent:** an isolated-call target per agent, a live-SQL truth check, edge-cases fixture support, a target that runs Assess Data Readiness whole, and the `dr-no-sql` scorer collision fixed.
+- **Scope:** per plan 1.29.1.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.29.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.29.2 — analysis-planner border-case evals  `✅ Done`
+- **Intent:** Olivia's plan on Edge Cases: when to clarify, measures the data lacks, awkward names spelled exactly, no second question after Clarify.
+- **Scope:** per plan 1.29.2.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.29.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.29.3 — answer-writer border-case evals  `✅ Done`
+- **Intent:** Jessica's answer from frozen rows: ties, NaN, rounding, empty and cut results, caveats only for failed checks, every figure from the rows.
+- **Scope:** per plan 1.29.3.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.29.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.29.4 — Check data quality border-case evals  `✅ Done`
+- **Intent:** Sarah's step call: the findings of the columns used, none else, JSON only, never declining.
+- **Scope:** per plan 1.29.4.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.29.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.29.5 — image-reader border-case evals  `✅ Done`
+- **Intent:** Zoe on generated images: figures copied exactly, injected text reported not obeyed, image order and count.
+- **Scope:** per plan 1.29.5.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.29.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.29.6 — insights-analyst and result-explorer evals on Edge Cases  `✅ Done`
+- **Intent:** Michael through the whole workflow on Edge Cases with live-SQL truth; Nathan on awkward column names.
+- **Scope:** per plan 1.29.6.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.29.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.29.7 — Explain report evals inside Assess Data Readiness  `✅ Done`
+- **Intent:** Sarah's explanation as the workflow runs it: figures from the report, planted problems named, the user's question kept.
+- **Scope:** per plan 1.29.7.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.29.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.29.8 — Baseline, inconsistency report and fixes  `✅ Done`
+- **Intent:** three runs per case, every failure traced to an agent, fixes re-run to green.
+- **Scope:** per plan 1.29.8.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.29.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+### Milestone 1.30 — Consumption Gap Analysis: does the medallion's Consumption layer support the business? (M1-30)
+
+A workflow that takes a medallion model (schemas tagged Landing, Normalized, Consumption in the dataset's schema notes), the business questions and reference dashboards (images and/or a saved dashboard), and tells which requirements the Consumption layer supports, traces every gap through lineage inferred without declared lineage (names, types, value overlap), probes the data with bounded read-only queries, and recommends fixes by the layer they start in. Epic spec: [specs/epics/M1-30/spec.md](specs/epics/M1-30/spec.md). Plan: [docs/plans/m1-30-consumption-gap-analysis.md](docs/plans/m1-30-consumption-gap-analysis.md). Requested on 2026-11-16; the user picked approach C (deterministic lineage, bounded probes, a confirmation step) and approved the prototype (`.context/prototype/gap-analysis.html`). ADR-0051.
+
+#### 1.30.1 — World Cup Medallion sample  `✅ Done`
+- **Intent:** a Testing Data sample with three schemas (`wc_landing`, `wc_normalized`, `wc_consumption`) tagged by layer, with known gaps (a year missing from Consumption, columns only in Normalized, raw text only in Landing, a subject in no layer).
+- **Scope:** seed SQL, multi-schema fixtures in the registry and loader, schema notes saved with the dataset, `setup-local` loads it.
+- **Out of scope:** any other sample.
+- **Acceptance:** the sample loads from the Testing Data panel and `setup-local`; its dataset shows the three layer chips.
+
+#### 1.30.2 — Lineage inference and gap tracing  `✅ Done`
+- **Intent:** pure code that infers column lineage between layers, checks it with value-overlap queries, classifies each requirement (supported, derivable, grain, in Normalized only, in Landing only, missing) and probes the data.
+- **Scope:** `consumption-gap.lineage.ts`, `consumption-gap.gaps.ts`, unit tests on the medallion sample's shapes.
+- **Acceptance:** unit tests cover every status, the grain rule, a coverage probe that downgrades a supported requirement, and both SQL dialects.
+
+#### 1.30.3 — Requirements Analyst, Layer Mapper and Gap Advisor  `✅ Done`
+- **Intent:** the three model steps, each one call with no tools, read leniently and checked in code.
+- **Scope:** agents, prompts (editable in the app), personas, registration, agents.md 2.18 to 2.20.
+- **Acceptance:** unit tests on the readers with real-shaped replies; agents listed in the hub.
+
+#### 1.30.4 — The gap report  `✅ Done`
+- **Intent:** the interactive report of the prototype (summary, matrix, lineage graph that traces a requirement, dashboards with badges, fixes by layer) drawn by a fixed runtime, and the run's answer in Markdown.
+- **Scope:** `consumption-gap.report.ts`, `consumption-gap.report-runtime.ts`.
+- **Acceptance:** unit tests on the bundle and the answer; the report reads in Light and Dark.
+
+#### 1.30.5 — The Consumption Gap Analysis workflow  `✅ Done`
+- **Intent:** the eleven steps in Mastra, the Confirm requirements wait, the run's runtime, the catalogue entry, the probes as sources of the answer (query inspector).
+- **Scope:** workflow, catalogue, turn engine, workflow and contract specs, agents.md 5.20, workflows spec R37, ADR-0051.
+- **Out of scope:** a `gap-analysis` artifact kind (the report lives in the run); several saved dashboards in one run (one artifact field); declared lineage hints.
+- **Acceptance:** a run on the World Cup Medallion sample waits at Confirm requirements, goes on after the answer, and ends with the report and an answer whose probes open in the query inspector.
+
+### Milestone 1.31 — Excel and CSV files as datasources (M1-31)
+
+Users upload Excel workbooks and CSV files as a datasource, confirm how each sheet reads in a review dialog, build datasets from the sheets and ask the agents about them. Each file is imported once into a DuckDB database of its datasource and queried read-only, sandboxed from the rest of the disk; DuckDB's `excel` extension ships with the app, so nothing is downloaded at runtime. Requested on 2026-11-17 (Free style); the user picked DuckDB and option B of three wireframes (the review dialog). Epic spec: [specs/epics/M1-31/spec.md](specs/epics/M1-31/spec.md). Plan and contract: [docs/plans/m1-31-excel-csv-datasources.md](docs/plans/m1-31-excel-csv-datasources.md). ADR-0052.
+
+#### 1.31.1 — DuckDB connector and importer for the `file` kind  `✅ Done`
+- **Intent:** the `file` kind's connector answers inventory, samples, read-only SQL and paged reads from the datasource's DuckDB database, and the importer turns `.xlsx` sheets and `.csv` files into its tables.
+- **Scope:** per plan 1.31.1: `DatasourceKind` and `FileDatasourceConfig`, `file.connector.ts`, `file-import.ts` with the detection of section 5, the `duckdb` entry of `paged-sql.ts`, registration in `datasources.service.ts` and the module; datasources spec R1, R30, R33–R37, R52 and the kind's new rules; data-model 3.1.
+- **Out of scope:** the upload routes (1.31.3), the shipped extension (1.31.2; tests use the host's extension), the agents (1.31.5).
+- **Acceptance:** unit tests import a workbook with a title row, a total row and a formula, and a CSV; the detection proposes the header row, range and warnings of the plan; inventory lists `file.<schema>.<table>` with DuckDB types; a paged read filters and sorts with bound parameters; `read_csv('<path>')`, a second `ATTACH` and a `CREATE` are refused.
+
+#### 1.31.2 — The `excel` extension ships with the app  `🚧 In progress`
+- **Intent:** `.xlsx` import works offline on the installed app, the CLI and in development.
+- **Scope:** per plan 1.31.2: `scripts/fetch-duckdb-extensions.mjs`, `bootstrap.mjs`, `stage-backend.sh`, the npm package's `prepack`, the importer's extension path and its error, the version check test; delivery.md.
+- **Out of scope:** other DuckDB extensions.
+- **Acceptance:** the staged Windows backend holds the extension for the lockfile's DuckDB version; with the network off, the importer reads an `.xlsx`; a version mismatch fails the test; no request to `extensions.duckdb.org` at runtime.
+- **Notes:** built and tested in development and the CLI (2026-11-17); open: confirm on a real Windows installer that `.xlsx` import works with the network off (the staged-backend step has not run yet).
+
+#### 1.31.3 — Upload, preview and storage of files  `✅ Done`
+- **Intent:** files reach the backend in one streamed upload, are previewed with any import options, and live in the data dir for as long as their datasource.
+- **Scope:** per plan 1.31.3: endpoints 156–158, test (16) and save (18) of a `file` config, delete (19) removing the files, the stale-upload sweep at start; api.md 2.2, data-model (data dir layout).
+- **Out of scope:** the form (1.31.4).
+- **Acceptance:** unit and HTTP tests: a 200 MB cap answers 413, `.xls` and other extensions 400 with the plan's messages; a preview with a new header row answers the plan's shape; saving moves the files and builds `data.duckdb`, a failed import keeps the previous database; deleting the datasource removes its folder; an upload older than 24 hours is gone after a restart.
+
+#### 1.31.4 — The Excel / CSV form and the review dialog  `✅ Done`
+- **Intent:** the user uploads files, sees each sheet's proposal and warnings, reviews a sheet in a wide grid, imports and saves, as in wireframe B.
+- **Scope:** per plan 1.31.4: an Angular prototype on mock data first, then the kind option, the drop zone, file cards, sheet rows, Import and check, the review dialog, Replace file, the kind label everywhere; ui.md; the `Datasources` Feature's scenario.
+- **Out of scope:** drag to select a range on the grid (the Range field covers it; a follow-up if users ask).
+- **Acceptance:** the Feature's scenario passes on the web target: upload, review (header row, range, exclude the last row), import, save, edit and Replace file; axe passes on the form and the dialog in Light and Dark.
+
+#### 1.31.5 — The `duckdb` dialect in the agents  `✅ Done`
+- **Intent:** agents write DuckDB SQL for file datasets, and their repair and verification know the dialect.
+- **Scope:** per plan 1.31.5: `sqlDialectOf`, the assistant prompt, the fixer and verifier prompts, the `run_readonly_sql` description, the query explainer's labels, the `sql-analysis` skill, the workflow input kinds; agents.md.
+- **Out of scope:** new eval cases beyond the World Cup Excel set of 1.31.7.
+- **Acceptance:** unit tests name the dialect for a file dataset; the assistant's and the two workflows' eval sets pass on the branch as on the base (3 runs per case).
+
+#### 1.31.6 — Allow-list refusals and no silent fallbacks  `✅ Done`
+- **Intent:** a feature that does not support file datasources says so, and no code path treats an unknown kind as another kind.
+- **Scope:** per plan 1.31.6: Data Readiness, synthetic data (backend and panel), Consumption Gap; `connector()`, `withSecrets`, the form's `startEdit`; the catalog browser's kind label; data-readiness, synthetic-data and workflows specs.
+- **Out of scope:** supporting those features on file datasources.
+- **Acceptance:** unit tests: each feature refuses a `file` datasource with the plan's message; an unknown kind throws instead of using another connector; the catalog browser labels REST and Excel / CSV datasources correctly.
+
+#### 1.31.7 — World Cup Excel sample and E2E  `✅ Done`
+- **Intent:** a realistic sample to try and test the kind end to end.
+- **Scope:** per plan 1.31.7: the sample's files and the script that builds them, the registry and loader, `setup-local`, a World Cup Excel eval set for the assistant, the Playwright spec of the epic acceptance; testing-data spec.
+- **Out of scope:** other samples.
+- **Acceptance:** the sample loads from the Testing Data panel and `setup-local`; the epic's acceptance scenario passes on the web target; the World Cup Excel eval set passes 3 runs.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

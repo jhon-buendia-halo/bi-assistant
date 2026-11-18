@@ -8,15 +8,16 @@
         class="min-w-0 flex-1 truncate py-1 text-[12px] text-fg-muted"
         data-testid="workflow-bar-empty"
       >
-        Workflow ·
-        <span class="font-medium text-fg">No workflow yet</span>
+        User journey ·
+        <span class="font-medium text-fg">No user journey yet</span>
         @if (!narrow()) {
-          · The agent shows its steps here when it guides you through a process.
+          · The agent persona shows its steps here when it guides you through a
+          process.
         }
       </p>
     } @else if (collapsed()) {
       <p class="min-w-0 flex-1 truncate text-[12px] text-fg-muted">
-        Workflow ·
+        User journey ·
         <span class="font-semibold text-fg-strong">{{ currentTitle() }}</span>
         · {{ doneCount() }}/{{ total() }}
       </p>
@@ -24,7 +25,7 @@
       <div
         #list
         role="list"
-        aria-label="Workflow"
+        aria-label="User journey"
         class="flex min-w-0 flex-1 items-center overflow-x-auto py-0.5"
         [class.pr-6]="fade()"
         [attr.data-compact]="compact() ? 'true' : null"
@@ -134,8 +135,10 @@
       <button
         type="button"
         class="btn-icon"
-        [title]="collapsed() ? 'Show workflow' : 'Hide workflow'"
-        [attr.aria-label]="collapsed() ? 'Show workflow' : 'Hide workflow'"
+        [title]="collapsed() ? 'Show user journey' : 'Hide user journey'"
+        [attr.aria-label]="
+          collapsed() ? 'Show user journey' : 'Hide user journey'
+        "
         [attr.aria-expanded]="!collapsed()"
         (click)="toggleCollapsed()"
       >
@@ -151,7 +154,7 @@
     <div
       class="mt-1.5 flex items-center gap-2"
       role="region"
-      aria-label="What the agent needs now"
+      aria-label="What the agent persona needs now"
     >
       <lucide-angular
         [img]="ChevronRight"
@@ -184,7 +187,7 @@
       id="workflow-details"
       class="card absolute inset-x-4 top-full z-30 mt-1 max-h-[60vh] overflow-y-auto p-3"
       role="region"
-      aria-label="Workflow details"
+      aria-label="User journey details"
       data-testid="workflow-details"
       data-details-root
     >
@@ -193,7 +196,7 @@
         class="sticky -top-3 z-10 -mx-3 -mt-3 mb-2 border-b border-border bg-surface px-3 py-2 text-[12px] font-medium text-fg-muted"
         data-testid="workflow-details-header"
       >
-        Workflow · {{ doneCount() }}/{{ total() }} done
+        User journey · {{ doneCount() }}/{{ total() }} done
       </p>
       <ol class="flex flex-col gap-2">
         @for (step of steps(); track step.phase.number) {

@@ -1284,6 +1284,108 @@ flowchart LR
   - **Vision on every page, as the prototype:** rejected for phase 1, the cost and the imprecision above.
   - **Username and password filled by the crawler:** rejected, breaks on SSO and MFA and stores passwords.
 
+#### ADR-0050 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
+- **Status:** Accepted
+- **Date:** 2026-11-15
+- **Context:**
+  - Datasources R37 applies a query's row limit after the statement runs, in memory, so no query showed more than 500 rows and an answer kept 200; past that, the only way was the CSV (api.md 143, 148). Users with thousands of rows asked to page through and filter them (roadmap 1.28).
+  - The read-only guard scans the whole statement, quoted identifiers included, so a wrapper that quotes a column such as `"Last Update"` would be refused if it were checked like the stored SQL.
+- **Decision:**
+  - **A connector method `runPagedSql`** wraps the stored statement as an aliased subquery (its own top-level LIMIT, when it has one, raised to 50,001 as the CSV does; otherwise unlimited, so filters see the whole result): `SELECT _qti.*, COUNT(*) OVER () … FROM (<sql>) AS _qti WHERE … ORDER BY … LIMIT n OFFSET m`. One execution per page.
+  - **Filters are structured only** (`FilterSpec`: a known result column, an operator, values), compiled with bound parameters per driver (`$n`, `:pn`, `?`); identifiers are checked against the result's columns and quoted per dialect; LIMIT and OFFSET are code-checked integers. No model writes SQL for a view: `result-explorer` returns a structured view.
+  - **Only the stored SQL goes through the read-only guard;** the wrapper is the connector's own text.
+  - Order is stable: the requested keys, else the stored query's own outer `ORDER BY` when expressible on its columns, else the first column, then every orderable column as a tie-breaker.
+  - **R37 stays true everywhere else** (agent queries, re-run, samples).
+- **Consequences:**
+  - Every page re-runs the statement under its datasource's timeout; a REST datasource re-fetches its endpoints.
+  - A Databricks warehouse that refuses parameter markers cannot filter (400), never inlined values.
+  - Text filters compare `LOWER(CAST(…))` and do not use indexes; accepted: the database does the work and a page returns at most 100 rows.
+  - **Stack-neutral:** a rebuild needs a parameterised outer query over the stored statement and a column allow-list.
+- **Alternatives considered:**
+  - **Load the result once and page in memory (SQLite):** rejected; memory per open inspector and stale rows.
+  - **Let a model write the filtered SQL:** rejected; an injection surface and no stable evidence link.
+  - **Page only on the client:** rejected; limited to the 200 stored rows.
+
+#### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
+- **Status:** Accepted
+- **Date:** 2026-11-16
+- **Context:**
+  - Consumption Gap Analysis ([agents.md](agents.md) 5.20; workflows R37) must say, for every gap of the Consumption layer, whether the data sits in Normalized or Landing, so the fix starts in the right layer (roadmap 1.30).
+  - No declared lineage can be assumed: the medallion models users bring have no dbt manifest, no catalog lineage and no naming convention shared across teams; the only facts are the datasets' schema notes (which schema is which layer, datasets R40-R47), the entities and columns the dataset tools list, and the rows a read-only query can read.
+  - A model asked for lineage invents plausible edges, and a run cannot afford one query per column pair: a model of 80 entities has thousands of pairs.
+- **Decision:**
+  - **Candidates in code:** pairs of columns in adjacent layers (Landing → Normalized, Normalized → Consumption; Landing → Consumption only when the run has no Normalized table) whose names match once normalised (lower case, layer prefixes such as `raw_`, `stg_`, `fct_`, `agg_` and storage suffixes such as `_str`, `_txt` removed) with a compatible type family, each with a method (`name` or `similar-name`) and a confidence.
+  - **Bounded value checks:** one read-only statement per candidate worth checking whose two entities share a Postgres or Databricks datasource, at most 40 per run, measuring the share of the target's distinct values found in the source; a match upgrades the edge to `values` with its `overlap`, a failed check keeps the name edge. Each check runs on the guarded read-only path and is recorded as a `run_readonly_sql` source of the answer, so the query inspector shows it.
+  - **The mapper's sources as edges:** when the Layer Mapper names the same requirement field in two layers, Trace gaps adds a `mapped` edge between those columns, with the expression that computes it.
+  - **Every edge carries its method and confidence** (`name`, `similar-name`, `values`, `mapped`), so the report says how each was found. `name` (equal normalised names) starts at 0.75 and `similar-name` (token overlap of at least 0.5) at 0.4 + 0.4 × overlap, plus 0.15 when the normalised table names are equal, times a type factor; a checked pair whose target values are at least 80 % found in the source becomes `values` (confidence 0.9 or more), under 20 % is dropped; an unchecked name edge is kept only at 0.7 or more; a `mapped` edge has 0.8.
+- **Consequences:**
+  - A gap is traced through lineage the run can show and re-run, never through a model's guess; the report and the answer never name a column the catalogs lack.
+  - A renamed or reshaped column (a split, a pivot, a code mapped to a label) can be missed; the mapper's `mapped` edges cover some of it, and the report shows the method so a reader can weigh it.
+  - Pairs on different datasources and REST datasets are never value-checked: their edges stay name edges.
+  - The checks add up to 40 queries to a run, one after another, each with the datasource's timeout; a stop ends the step between two queries.
+  - **Stack-neutral:** a rebuild needs the schema notes, the column catalog and a guarded read-only query path; no lineage store.
+- **Alternatives considered:**
+  - **Declared lineage (dbt manifest, catalog lineage, user hints):** rejected for this version; no source is common to the models users bring. Hints are a follow-up.
+  - **Ask a model for the lineage:** rejected; unverifiable edges.
+  - **Check every column pair by query:** rejected; thousands of queries per run.
+  - **Parse the views' and jobs' SQL:** rejected; Landing and Normalized are often loaded by tools outside the database.
+
+#### ADR-0052 — Excel and CSV files are a datasource kind, imported once into a DuckDB database per datasource
+- **Status:** Accepted
+- **Date:** 2026-11-17
+- **Context:**
+  - Users keep much of their data in Excel workbooks and CSV exports and want to ask questions of them as they do of a database (roadmap 1.31). Datasets draw every entity from one datasource and address it as `catalog.schema.table` (datasources R30, datasets R2); the agents, the query inspector and the paged result reader (ADR-0050) all work through a connector's read-only SQL.
+  - The REST connector loads its rows into a throwaway SQLite database on every query (datasources R36). For a workbook that means parsing the file again on every agent query and every inspector page; parsing an 8 MB, 200,000-row sheet takes about 1 s with exceljs (measured 2026-11-17).
+  - DuckDB already ships in the backend (`@duckdb/node-api` 1.5.2 through `@mastra/duckdb`, kept unbundled as a native addon, delivery.md 1). Its built-in `read_csv` reads CSV with type detection; its `excel` extension reads `.xlsx` with a sheet, a range and a header flag (0.44 s for the same sheet, measured). The extension is not built in: by default DuckDB downloads it from `extensions.duckdb.org` on first use, which fails on an offline or proxied Windows machine.
+  - Model-authored SQL that reaches DuckDB could call its file functions (`read_csv('<any path>')`, `read_text`) on the user's disk; the syntactic guard (datasources R33) does not refuse them.
+- **Decision:**
+  - **A fourth datasource kind, `file`** ("Excel / CSV"), whose configuration is a list of files and, per file, its sheets with the import options the user confirmed (include, header row, range, exclude the last row, read every column as text). `.xlsx` and `.csv` only, at most 200 MB per file.
+  - **Import once, query many times.** Uploaded files are copied into the data dir (`files/<datasourceId>/`) and every included sheet becomes a table of that datasource's own DuckDB database (`files/<datasourceId>/data.duckdb`), one schema per file. Replacing a file re-imports it. The originals on the user's disk are never read again or changed.
+  - **Entity keys come from the attach name:** each query opens an in-memory DuckDB, `ATTACH`es the datasource's database `AS file (READ_ONLY)`, so `file.<file>.<sheet>` resolves as written, with no rewriting of the statement.
+  - **A sandboxed, read-only engine:** after the attach the connection sets `enable_external_access = false` (DuckDB refuses to turn it back on while running) and `lock_configuration = true`, and extension autoinstall and autoload are off. A statement can read only the attached tables; a write is refused by the read-only attach. The R33 guard still runs first.
+  - **The `excel` extension ships with the app:** the build fetches the extension for the exact DuckDB version in the lockfile and platform (`windows_amd64` for the installer, the host's for development and the CLI), places it under the backend's resources, and the importer `LOAD`s it from that path. A build check fails when the two versions differ. No request to `extensions.duckdb.org` at runtime.
+  - **A new SQL dialect, `duckdb`,** for the paged reader, the dialect named to the agents, the SQL fixer and verifier, and the `sql-analysis` skill.
+  - **Out of the first version:** Data Readiness, synthetic data and the Consumption Gap Analysis refuse the kind with a clear message, as they refuse REST today; `.xls`, password-protected workbooks, live links to the original file and writing back to a workbook.
+- **Consequences:**
+  - Queries read a columnar database instead of parsing a file: an aggregate over 200,000 rows answers in milliseconds, and the query inspector's pages (ADR-0050) cost one query each.
+  - The data dir grows by the files and their DuckDB copy; deleting the datasource deletes both. A change to the original file reaches the app only through Replace file.
+  - Upgrading `@mastra/duckdb` (and so DuckDB) requires fetching the matching extension; the build check makes a mismatch fail the build instead of breaking Excel import silently.
+  - Type detection is DuckDB's: whole numbers in an `.xlsx` read as `DOUBLE`, and a column's type follows its first data row; the review dialog shows the detected types and offers "Read every column as text". Since 2026-11-17 a cell that does not fit that type no longer fails the import: the sheet is read again as text and each column typed from all its rows (datasources R57).
+  - **Stack-neutral:** a rebuild needs a per-datasource store of the imported tables, queried read-only, with no access to other files; the engine is replaceable.
+- **Alternatives considered:**
+  - **Parse into in-memory SQLite on every query, as REST does:** rejected; a re-parse per query and per page, weak types (dates as text) and slow on large sheets.
+  - **Import into a PostgreSQL database:** rejected; the desktop user has no PostgreSQL of their own.
+  - **Read `.xlsx` with exceljs and append the rows into DuckDB:** kept as the fallback if the extension cannot ship; slower (about 2.5×) and needs our own type detection.
+  - **Query the original file in place (`read_xlsx` on each query):** rejected; the file can move or change under a saved dataset, and the browser build has no file path.
+
+#### ADR-0053 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
+- **Status:** Accepted
+- **Date:** 2026-11-17
+- **Context:**
+  - Every follow-up of Answer a Business Question ran the whole workflow again (Load catalog, Plan, Analyse, Validate, Write answer), so "shorter", "as a table" or "next page" cost about as much as the first question.
+  - The user picked, among three approaches (a smarter router inside the workflow, a picker in the follow-up composer, a supervisor agent over subagents), the picker: the user chooses which agent answers, and the whole workflow stays the default.
+  - Four of the six agents (Olivia, Jessica, Nathan, Zoe) are step agents: one structured call with no tools and no chat of their own. Only the Analyst and Sarah can answer as an agent turn.
+- **Decision:**
+  - **A run of the same workflow, on a second engine.** The follow-up is stored as a run of `answer-business-question` with `context.askStep`; its turn runs on `ask-agent`, an internal Mastra workflow whose one `.branch()` takes the asked step. Each engine step has the asked catalogue step's id, so the run's tracker shows that step and skips the rest, and the Run panel, the Runs tab and the query inspector need nothing new.
+  - **The same calls as the workflow's steps.** The engine's runtime is built in `TurnEngine` beside Answer a Business Question's, from the same closures: the agent stream for the Analyst and Sarah, `writeAnswer`, `plan`, `interpretFollowUp` with `pageResult`, `readImages`. No agent's instructions or tools change.
+  - **Code-written answers for step agents that have no chat:** Olivia's plan and Zoe's notes become the answer through fixed text; Nathan's new-question case answers where to ask instead of planning.
+  - **Jessica's evidence is carried, not recomputed:** the earlier answer's records and their evidence facts become this turn's records, so the new answer's sources open in the query inspector (CLAUDE.md, *query inspector*).
+- **Consequences:**
+  - A single-agent follow-up makes one model call (Jessica, Olivia, Nathan, Zoe) or one agent turn (the Analyst, Sarah) instead of four or more; it gets no Validate, retry or Write answer around it, so its answer carries only that agent's guarantees.
+  - The picker lists only steps that ran in the shown run; a run that asked one agent has only that step, so its own follow-up offers that agent or the whole workflow.
+  - `answer-business-question`'s graph and contract hash are unchanged, so no eval set and no stored suspended run is affected.
+  - **Stack-neutral:** a rebuild needs a run store with a context field, a way to run one step's model call outside its workflow, and the shared answer path.
+- **Alternatives considered:**
+  - **A router inside the workflow (more `.branch()` arms after Interpret follow-up):** automatic, but a wrong route is invisible to the user; not picked.
+  - **A supervisor agent with subagents (`agents:` in Mastra 1.66):** flexible, but the flow would come from a prompt (against ADR-0034), with a supervisor call on top of every subagent call; not picked.
+  - **Mastra's time travel (`run.timeTravel`) from the asked step:** needs snapshots kept after a run ends (ADR-0043 keeps them only while suspended) and runs every step after the target; rejected.
+  - **The node chat path (agents.md 5.16) for every agent:** step agents would answer in their JSON format, and the reply would live in the step's chat, not in the Run panel; rejected.
+- **Amendment (2026-11-17): Build visual is askable.**
+  - Build visual (`build-visual`, Ryan, `visualization`) joins the askable steps, as a fifth step agent with one model call. Why: users want a different visual (another chart type, other measures) without running the whole workflow again; the Tailor form's free-text field covers edits to an existing visual, not a new one from the answer's rows.
+  - Ryan designs a new visual (v1) from the earlier answer's question, text and records, with the follow-up text as his instruction; no query runs. His answer is code-written (`Here's a new visual of the earlier answer: "<title>".`, or `I couldn't build a new visual: <reason>`), so it is not an agent turn.
+  - It is the one askable step whose earlier `skipped` status (Build a visual unticked) or `visual.skipped` does not refuse it: rows are what it needs, and with none the request is refused with `The earlier answer has no query rows to chart`.
+  - The Decision and Consequences above stand; the graph and contract hash of `answer-business-question` are still unchanged.
+
 ## Level 4 — Code
 
 ```mermaid

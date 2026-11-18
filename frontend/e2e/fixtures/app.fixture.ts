@@ -44,6 +44,13 @@ interface AppFixtures {
   page: Page;
   /** Launches another app on `appDataDir`; closed after the test. */
   launchApp: (appDataDir: string, env?: Env) => Promise<RunningApp>;
+  /**
+   * The workflow page's view kept on the device at launch (workflows R38).
+   * Business is the app's default; the suite keeps Builder (the canvas and
+   * the Run panel) because most workflow specs drive the designer. `null`
+   * leaves the app's default: `test.use({ workflowView: null })`.
+   */
+  workflowView: 'builder' | 'business' | null;
 }
 
 interface WorkerFixtures {
@@ -320,7 +327,9 @@ export const test = base.extend<AppFixtures, WorkerFixtures>({
     fs.rmSync(directory, { recursive: true, force: true });
   },
 
-  launchApp: async ({ target, webBrowser }, use, testInfo) => {
+  workflowView: ['builder', { option: true }],
+
+  launchApp: async ({ target, webBrowser, workflowView }, use, testInfo) => {
     const launched: RunningApp[] = [];
     await use(async (appDataDir, env = {}) => {
       const app =
@@ -328,6 +337,15 @@ export const test = base.extend<AppFixtures, WorkerFixtures>({
           ? await launchDesktop(appDataDir, env)
           : await launchWeb(await webBrowser(), appDataDir, env);
       launched.push(app);
+      if (workflowView !== null) {
+        // Read when a workflow page opens, so no reload is needed; a view the
+        // device already keeps (a relaunch on the same profile) stays.
+        await app.page.evaluate((view) => {
+          if (localStorage.getItem('qti.workflow-view') === null) {
+            localStorage.setItem('qti.workflow-view', view);
+          }
+        }, workflowView);
+      }
       return app;
     });
     for (const [index, app] of launched.entries()) {

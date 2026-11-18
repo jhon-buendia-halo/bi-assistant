@@ -17,9 +17,9 @@ export async function openWorkflowPage(
   id: string,
   name: string,
 ): Promise<void> {
-  await railItem(page, 'Workflows').click();
+  await railItem(page, 'User journeys').click();
   await expect(
-    page.getByRole('heading', { name: 'Workflows', exact: true }),
+    page.getByRole('heading', { name: 'User journeys', exact: true }),
   ).toBeVisible();
   await page.getByTestId(`workflow-${id}`).click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(name);
@@ -45,7 +45,13 @@ export function pickedDataset(page: Page, name: string): Locator {
 
 /** Picks a dataset through Add dataset: search it, tick it, Done. */
 export async function pickDataset(page: Page, name: string): Promise<void> {
-  const field = datasetsField(page);
+  await pickDatasetIn(datasetsField(page), name);
+  await expect(pickedDataset(page, name)).toBeVisible();
+}
+
+/** Picks a dataset in any dataset picker held by `field` (a run form, the agent editor). */
+export async function pickDatasetIn(field: Locator, name: string): Promise<void> {
+  const page = field.page();
   await field.getByTestId('dataset-picker-open').click();
   await field.getByTestId('dataset-picker-search').fill(name);
   const exactName = new RegExp(
@@ -56,7 +62,9 @@ export async function pickDataset(page: Page, name: string): Promise<void> {
     .filter({ has: page.locator('.picker-label', { hasText: exactName }) })
     .click();
   await field.getByTestId('dataset-picker-done').click();
-  await expect(pickedDataset(page, name)).toBeVisible();
+  await expect(
+    field.getByRole('button', { name: `Remove ${name}`, exact: true }),
+  ).toBeVisible();
 }
 
 /** Types the question (and picks the dataset, when given) in the Run tab. */

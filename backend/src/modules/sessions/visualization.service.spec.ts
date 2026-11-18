@@ -365,6 +365,106 @@ describe('VisualizationService truncation markers', () => {
   });
 });
 
+describe('VisualizationService.createFromAnswer (Build visual)', () => {
+  const AT = '2024-02-02T00:00:00.000Z';
+  const record: ToolDataRecord = {
+    tool: 'run_readonly_sql',
+    input: 'SELECT month, n FROM main.health.claims',
+    columns: ['month', 'n'],
+    rows: [{ month: 'Mar', n: 9 }],
+    rowCount: 1,
+  };
+  const emptySession = (): SessionDoc => ({
+    id: 'session-1',
+    name: 'Claims',
+    datasets: ['claims'],
+    visualizations: [],
+    messages: [],
+  });
+
+  beforeEach(() => {
+    (storedVisualizationDocument as jest.Mock).mockClear();
+  });
+
+  it('designs from the question and the answer that are not stored yet, naming the answer as the visual source', async () => {
+    const { service, agent } = build();
+
+    const { metadata } = await service.createFromAnswer(emptySession(), {
+      question: 'Claims per month?',
+      answer: 'March is the peak.',
+      at: AT,
+      data: [record],
+    });
+
+    const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
+    expect(prompt).toContain('Claims per month?');
+    expect(prompt).toContain('March is the peak.');
+    expect(prompt).toContain('<data>');
+    expect(metadata.sourceMessageAt).toBe(AT);
+    expect(metadata.currentVersion).toBe(1);
+  });
+
+  it('does not repeat a question the transcript already ends with', async () => {
+    const { service, agent } = build();
+    const session = emptySession();
+    session.messages = [
+      {
+        role: 'user',
+        content: 'Claims per month?',
+        at: '2024-02-01T00:00:00.000Z',
+      },
+    ];
+
+    await service.createFromAnswer(session, {
+      question: 'Claims per month?',
+      answer: 'March is the peak.',
+      at: AT,
+      data: [],
+    });
+
+    const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
+    expect(prompt).toContain('March is the peak.');
+    // The caller's session is left as it was.
+    expect(session.messages).toHaveLength(1);
+  });
+
+  it('follows an instruction (a follow-up that asks Ryan alone): the earlier question is the question, the follow-up the instruction, kept on v1', async () => {
+    const { service, agent } = build();
+    const session = emptySession();
+    // The follow-up's words are the transcript's last message.
+    session.messages = [
+      {
+        role: 'user',
+        content: 'As a line chart, please',
+        at: '2024-02-01T00:00:00.000Z',
+      },
+    ];
+
+    const { metadata } = await service.createFromAnswer(session, {
+      question: 'Claims per month?',
+      answer: 'March is the peak.',
+      at: AT,
+      data: [record],
+      instruction: 'As a line chart, please',
+    });
+
+    const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
+    const block = (tag: string) =>
+      prompt.slice(
+        prompt.indexOf(`<${tag}>`),
+        prompt.indexOf(`</${tag}>`) + tag.length + 3,
+      );
+    expect(block('question')).toContain('Claims per month?');
+    expect(block('question')).not.toContain('As a line chart');
+    expect(block('instruction')).toContain('As a line chart, please');
+    expect(metadata.versions?.[0]).toMatchObject({
+      version: 1,
+      sourceMessageAt: AT,
+      instruction: 'As a line chart, please',
+    });
+  });
+});
+
 describe('VisualizationService contextFor reasoning', () => {
   beforeEach(() => {
     (storedVisualizationDocument as jest.Mock).mockClear();

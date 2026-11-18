@@ -92,7 +92,7 @@
             class="bg-surface"
           >
             {{ datasource.name }} ·
-            {{ datasource.kind === "postgres" ? "PostgreSQL" : "Databricks" }}
+            {{ kindLabel(datasource.kind) }}
           </option>
         }
       </select>

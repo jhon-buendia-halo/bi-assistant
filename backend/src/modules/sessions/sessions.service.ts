@@ -73,6 +73,7 @@ import {
   writeWorkspaceFile,
 } from './workspace-files';
 import {
+  AskedStep,
   ChatMessage,
   CrossCheck,
   FilePanelItem,
@@ -89,6 +90,8 @@ import {
   WorkflowPhase,
   WorkflowView,
 } from './entities/session.entity';
+import { QueryEvidenceService } from './query-evidence/query-evidence.service';
+import type { ExplorableQuery } from './query-evidence/explorable-queries';
 import { SessionDatasets } from './turn/session-datasets';
 import { SqlChecks } from './turn/sql-checks';
 import { TurnEngine } from './turn/turn-engine';
@@ -162,8 +165,14 @@ export interface RunHostSpec {
   transcript?: { role: 'user' | 'assistant'; content: string }[];
   /** A system block every turn of the host gets (agents.md 5.16). */
   contextBlock?: string;
-  /** Answer a Business Question's `checkDataQuality` (agents.md 5.11). */
-  checkDataQuality?: true;
+  /**
+   * The earlier queries the host's turn may explore with `explore_result`
+   * (agents.md 3.15, 4.2): a follow-up run's earlier answer's, a node chat's
+   * run's and earlier turns'.
+   */
+  contextQueries?: ExplorableQuery[];
+  /** Answer a Business Question's `buildVisual` (agents.md 5.11). */
+  buildVisual?: true;
   /**
    * Dashboard Image to Artifact's input image (agents.md 5.17): written to the
    * host's workspace at `path` before the turn.
@@ -185,6 +194,11 @@ export interface RunHostSpec {
    * memory threads the host starts from as copies of its own.
    */
   continuesThreadsOf?: string;
+  /**
+   * A follow-up that asks one agent alone (agents.md 5.21): the host's turn
+   * runs on the `ask-agent` engine. With `agentKey`, that agent is bound.
+   */
+  ask?: AskedStep;
   /**
    * A draft run (agents-evals R60): the user agent whose saved draft the host
    * runs, as a preview does. `workflowId` is then unused.
@@ -229,6 +243,10 @@ export class SessionsService implements OnModuleInit {
     // The turn engine (agents.md 5.1) lives in `./turn/`, built on this
     // service's own dependencies and its session reads and writes.
     this.turnDatasets = new SessionDatasets(
+      datasetsRepository,
+      datasourcesService,
+    );
+    this.queryEvidence = new QueryEvidenceService(
       datasetsRepository,
       datasourcesService,
     );
@@ -299,6 +317,15 @@ export class SessionsService implements OnModuleInit {
       },
       writeFile: (sessionId, path, data) =>
         writeWorkspaceFile(sessionId, path, data),
+      buildVisual: async (sessionId, source) => {
+        const session = await this.get(sessionId);
+        const { metadata } = await this.visuals.createFromAnswer(
+          session,
+          source,
+        );
+        await this.saveVisualMetadata(session, metadata);
+        return metadata;
+      },
       saveMock: async (sessionId, bundle, instruction) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.createFromBundle(
@@ -314,6 +341,8 @@ export class SessionsService implements OnModuleInit {
 
   /** The session's datasets, bound to their datasources. */
   private readonly turnDatasets: SessionDatasets;
+  /** The query inspector's page path, which `explore_result` pages through. */
+  private readonly queryEvidence: QueryEvidenceService;
   /** SQL repair, careful mode's cross-check and the Verified badge. */
   private readonly sqlChecks: SqlChecks;
   /** What reaches the model on a turn. */
@@ -338,6 +367,10 @@ export class SessionsService implements OnModuleInit {
           datasets,
           usageSink,
         ),
+      // `explore_result` (agents.md 3.15): the inspector's own page path.
+      pageQuery: (source, datasets, request) =>
+        this.queryEvidence.pageOf(source, datasets, request),
+      interpretResult: (input) => this.mastra.interpretResult(input),
       createVisual: async (
         sessionId,
         sourceMessageAt,
@@ -564,11 +597,15 @@ export class SessionsService implements OnModuleInit {
             ]
           : [],
       ...(spec.contextBlock ? { contextBlock: spec.contextBlock } : {}),
-      ...(spec.checkDataQuality ? { checkDataQuality: true as const } : {}),
+      ...(spec.contextQueries?.length
+        ? { contextQueries: spec.contextQueries }
+        : {}),
+      ...(spec.buildVisual ? { buildVisual: true as const } : {}),
       ...(spec.image ? { inputImage: spec.image.path } : {}),
       ...(spec.inputImages?.length ? { inputImages: spec.inputImages } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
       ...(spec.inputValues ? { inputValues: { ...spec.inputValues } } : {}),
+      ...(spec.ask ? { ask: spec.ask } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,
@@ -603,14 +640,14 @@ export class SessionsService implements OnModuleInit {
    */
   async draftRunTarget(
     agentId: string,
-  ): Promise<{ name: string; datasets: string[] }> {
+  ): Promise<{ name: string; role: string; datasets: string[] }> {
     const agent = await this.userAgents.get(agentId);
     if (!agent) throw new NotFoundException(`Agent "${agentId}" not found`);
     const datasets = await this.existingDatasets(agent.draft.datasets);
     if (!datasets.length) {
       throw new BadRequestException('Select at least one dataset to preview');
     }
-    return { name: agent.draft.name, datasets };
+    return { name: agent.draft.name, role: agent.draft.role ?? '', datasets };
   }
 
   /**
@@ -636,6 +673,9 @@ export class SessionsService implements OnModuleInit {
       preview: true,
       run: true,
       messages: [],
+      ...(spec.contextQueries?.length
+        ? { contextQueries: spec.contextQueries }
+        : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,

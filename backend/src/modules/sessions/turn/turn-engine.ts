@@ -1,5 +1,6 @@
 // The turn engine (agents.md 5.1): one turn of a session or run host, from
 // the user's question to the persisted answer and the `done` event.
+import { randomUUID } from 'crypto';
 import type { Logger } from '@nestjs/common';
 import { RequestContext } from '@mastra/core/request-context';
 import {
@@ -12,12 +13,17 @@ import {
   ANSWER_WRITER_AGENT_KEY,
   DASHBOARD_READER_AGENT_KEY,
   DATA_MAPPER_AGENT_KEY,
-  DATA_READINESS_AGENT_KEY,
+  GAP_ADVISOR_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
+  LAYER_MAPPER_AGENT_KEY,
+  REQUIREMENTS_ANALYST_AGENT_KEY,
+  RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
+import { getDatasetToolServices } from '../../../mastra/tool-services';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
+import { pageExplorableQuery } from '../../../mastra/tools/explore-result.tool';
 import {
   ASSESSED_REPORT_CONTEXT_KEY,
   READINESS_REPORT_EVENT,
@@ -28,6 +34,11 @@ import {
   explainReportBlock,
   type DataReadinessAssessmentRuntime,
 } from '../../../mastra/workflows/data-readiness-assessment.steps';
+import {
+  CONSUMPTION_GAP_RUNTIME_KEY,
+  CONSUMPTION_GAP_WORKFLOW_ID,
+  type ConsumptionGapRuntime,
+} from '../../../mastra/workflows/consumption-gap-analysis.steps';
 import {
   MAP_DASHBOARD_DATA_RUNTIME_KEY,
   MAP_DASHBOARD_DATA_WORKFLOW_ID,
@@ -55,23 +66,17 @@ import type {
 } from '../../site-review/site-review.service';
 import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
-  DATA_QUALITY_CHECK,
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
   ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
-  assessable,
   clarifyingQuestionOf,
-  dataQualityFailure,
-  dataQualityFindings,
+  planOf,
   turnSummaryOf,
+  validateAttempt,
   type AnsweredClarification,
-  type QualityEngineFinding,
   type AnswerBusinessQuestionInput,
   type AnswerBusinessQuestionRuntime,
 } from '../../../mastra/workflows/answer-business-question.steps';
-import {
-  DATA_QUALITY_FINDINGS_CAP,
-  analyseSystemBlocks,
-} from '../../../mastra/workflows/answer-business-question.prompts';
+import { analyseSystemBlocks } from '../../../mastra/workflows/answer-business-question.prompts';
 import {
   READ_IMAGES_RUNTIME_KEY,
   imageNotesBlock,
@@ -84,6 +89,17 @@ import {
   AGENT_TURN_WORKFLOW_ID,
   type AgentTurnRuntime,
 } from '../../../mastra/workflows/agent-turn.steps';
+import {
+  AGENT_TURN_ASK_STEPS,
+  ASK_AGENT_RUNTIME_KEY,
+  ASK_AGENT_WORKFLOW_ID,
+  type AskAgentInput,
+  type AskAgentRuntime,
+  type AskableStepId,
+  type EarlierAnswerInput,
+  type EarlierVisualInput,
+} from '../../../mastra/workflows/ask-agent.steps';
+import { planSchema } from '../../../mastra/workflows/answer-business-question.schemas';
 import type { LlmService } from '../../llm/llm.service';
 import { chatTurnError } from '../llm-error-message';
 import { sourceEntities } from '../visualization-document';
@@ -99,12 +115,12 @@ import {
   readinessReportIdOf,
   readinessReportOf,
   readinessReportRef,
-  topFindings,
 } from '../readiness-bridge';
 import {
   SYNTHETIC_DATA_TOOLS,
   syntheticPanelItemId,
 } from '../synthetic-data-bridge';
+import { runGapQueries } from '../gap-queries';
 import {
   groundingNudge,
   statedRationale,
@@ -113,6 +129,14 @@ import {
   toolRecords,
 } from '../turn-data';
 import { evidenceOf } from '../query-evidence/query-evidence';
+import { recordFindingSources } from '../finding-sources';
+import type { ReadinessReport } from '../../data-readiness/engine/types';
+import {
+  EXPLORABLE_QUERIES_CONTEXT_KEY,
+  explorableQueryOf,
+  sessionExplorableQueries,
+  type ExplorableQuery,
+} from '../query-evidence/explorable-queries';
 import {
   QUERY_FACTS_CONTEXT_KEY,
   queryFactsKey,
@@ -154,6 +178,7 @@ import {
 import {
   analyseAttemptOf,
   analyseOutcomeOf,
+  analyseQueriesOf,
   answeredTurnInput,
   catalogStepId,
   clarificationOptionText,
@@ -162,6 +187,9 @@ import {
 } from './turn-workflow';
 import type { TurnOptions } from './turn-options';
 import type { SqlChecks } from './sql-checks';
+
+/** The count columns of the rows behind a readiness finding (1.28.11). */
+const FINDING_COUNT_COLUMNS = new Set(['matching_rows', 'occurrences']);
 
 /**
  * What a turn runs on: the session service's dependencies and the session
@@ -203,6 +231,22 @@ export interface TurnEngineDeps {
     blueprint: DashboardBlueprint,
     image: { data: Buffer; mediaType: string } | undefined,
   ): Promise<{ id: string; name: string }>;
+  /**
+   * Build visual (agents.md 5.11): Ryan designs a visual from an answer not
+   * stored yet; `at` is the time the answer message is stored with. With
+   * an `instruction` (a follow-up that asks Build visual alone, 5.21),
+   * `question` is the earlier run's and the instruction is the follow-up's.
+   */
+  buildVisual(
+    sessionId: string,
+    source: {
+      question: string;
+      answer: string;
+      at: string;
+      data: ToolDataRecord[];
+      instruction?: string;
+    },
+  ): Promise<SessionVisualization>;
   /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
   saveMock(
     sessionId: string,
@@ -305,12 +349,25 @@ export class TurnEngine {
     const factsOf = (record: ToolDataRecord) =>
       recordFacts.get(record) ??
       queryFacts.get(queryFactsKey(record.tool, record.input));
+    // What `explore_result` may page (agents.md 3.15, 4.2): the host's
+    // context queries and the session's earlier answers' queries, then each
+    // successful query of this turn as it is captured.
+    const explorable: ExplorableQuery[] = sessionExplorableQueries(
+      session.contextQueries,
+      session.messages,
+    );
+    options.requestContext.set(EXPLORABLE_QUERIES_CONTEXT_KEY, explorable);
+    // What v2's Interpret follow-up may page (roadmap 1.28.8): the earlier
+    // queries as the turn starts, before it runs any of its own.
+    const followUp: readonly ExplorableQuery[] = [...explorable];
     let stream: Awaited<ReturnType<typeof agent.stream>> | undefined;
 
     let text = '';
     // Set inside `consume`, so typed without narrowing to the initial null.
     let clarification = null as ChatMessage['clarification'] | null;
     let visualEvent: VisualEvent | undefined;
+    // The answer's time, fixed early when Build visual names it as the source.
+    let answerAt: string | undefined;
     // The last report a readiness tool returned this turn (Data Readiness Agent).
     let readinessReport: ReadinessReportRef | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
@@ -333,6 +390,62 @@ export class TurnEngine {
     const workflow = turnWorkflowOf(session);
     // v2's answer is its Write answer step's only (agents.md 5.11).
     const v2 = workflow.engineId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID;
+    // A follow-up that asks one agent (agents.md 5.21): only the Analyst
+    // and Sarah answer as an agent turn; every other asked step's answer is
+    // its model call's or the code's, which no synthesis replaces.
+    const asked =
+      workflow.engineId === ASK_AGENT_WORKFLOW_ID
+        ? (session.ask?.step as AskableStepId | undefined)
+        : undefined;
+    const codeAnswer =
+      v2 || (asked !== undefined && !AGENT_TURN_ASK_STEPS.includes(asked));
+    // A query record of the turn: kept for the answer with its facts,
+    // explorable from then on, and shown as its call's result.
+    const captureRecord = (record: ToolDataRecord, callId?: string) => {
+      data.push(record);
+      const facts = callId ? queryFacts.get(callId) : undefined;
+      if (facts) recordFacts.set(record, facts);
+      const known = factsOf(record);
+      const query = explorableQueryOf(record, `Q${explorable.length + 1}`, {
+        datasourceId: known?.datasourceId,
+        view: known?.view,
+      });
+      if (query) explorable.push(query);
+      emit({
+        type: 'tool-result',
+        content: JSON.stringify({
+          tool: record.tool,
+          input: record.input,
+          rowCount: record.rowCount,
+          error: record.error,
+          rationale: record.rationale,
+        }),
+      });
+    };
+    // A follow-up that asks Write answer or Build visual alone (agents.md
+    // 5.21): the earlier answer's records join this turn's, each with the
+    // facts its evidence kept, so the answer's sources keep their coverage
+    // and view. Once per turn, however many times a step reads them.
+    let carried: ToolDataRecord[] | undefined;
+    const carryEarlierRecords = (): ToolDataRecord[] => {
+      if (carried) return carried;
+      const earlier = session.ask?.earlier;
+      carried = earlier?.records ?? [];
+      carried.forEach((record, index) => {
+        data.push(record);
+        const known = earlier?.evidence.find((entry) => entry.index === index);
+        if (!known) return;
+        recordFacts.set(record, {
+          ...(known.datasourceId ? { datasourceId: known.datasourceId } : {}),
+          ...(known.totalRows !== undefined
+            ? { totalRows: known.totalRows }
+            : {}),
+          ...(known.rowLimit !== undefined ? { rowLimit: known.rowLimit } : {}),
+          ...(known.view ? { view: known.view } : {}),
+        });
+      });
+      return carried;
+    };
     // Consume one agent stream (agents.md 5.1 step 3).
     const consume = async (
       agentStream: Awaited<ReturnType<typeof agent.stream>>,
@@ -527,20 +640,16 @@ export class TurnEngine {
               continue;
             }
             const record = toolDataRecord(toolName, args, payload.result);
-            if (record) {
-              data.push(record);
-              const facts = payload.toolCallId
-                ? queryFacts.get(payload.toolCallId)
-                : undefined;
-              if (facts) recordFacts.set(record, facts);
+            if (record) captureRecord(record, payload.toolCallId);
+            else {
+              // Every call ends with its result, so the client never leaves
+              // a lookup (describe_entity, skill…) spinning (api.md 3.1).
+              const error = resultError(payload.result);
               emit({
                 type: 'tool-result',
                 content: JSON.stringify({
-                  tool: record.tool,
-                  input: record.input,
-                  rowCount: record.rowCount,
-                  error: record.error,
-                  rationale: record.rationale,
+                  tool: toolName,
+                  ...(error ? { error } : {}),
                 }),
               });
             }
@@ -552,6 +661,8 @@ export class TurnEngine {
     };
     // Assess Data Readiness's assessment, once Resolve dataset started it.
     let assessment: ReadinessAssessment | undefined;
+    // Its stored report, once Save report stored it (roadmap 1.28.11).
+    let savedReport: ReadinessReport | undefined;
     const startedAssessment = (): ReadinessAssessment => {
       if (!assessment) throw new Error('No assessment has been started');
       return assessment;
@@ -731,110 +842,151 @@ export class TurnEngine {
                 : {}),
             };
           },
-          // v2's optional Check data quality (agents.md 5.11): the engine
-          // assesses the tables the queries read, one assessment per
-          // dataset, stored and shown as the answer's readiness card; then
-          // Sarah's model picks the findings that affect the answer. A
-          // check that cannot run becomes a finding, never a failed run.
-          checkDataQuality: async ({ question, queries, tables }) => {
-            const assessed = tables.filter(assessable);
-            const skipped = tables
-              .filter((table) => !assessable(table))
-              .map((table) => table.entity);
-            const measured = {
-              tables: assessed.map((table) => table.entity),
-              reportIds: [] as string[],
-              findingCount: 0,
-              issues: 0,
-              skipped,
-            };
-            const stop = () => ({
-              findings: [],
-              dataQuality: measured,
-              stopped: true,
-            });
-            if (assessed.length === 0) {
-              return {
-                findings: [
-                  {
-                    check: DATA_QUALITY_CHECK,
-                    passed: true,
-                    detail: tables.length
-                      ? `No table the queries read can be assessed: only PostgreSQL and Databricks tables can (${skipped.join(', ')}).`
-                      : 'The queries read no table of the catalog.',
-                  },
-                ],
-                dataQuality: measured,
-                stopped: false,
-              };
-            }
-            const engineFindings: QualityEngineFinding[] = [];
+          // Build visual (agents.md 5.11, workflows R41): Ryan designs an
+          // interactive visual from the written answer and the rows the
+          // turn's queries returned. The answer message is stored later
+          // with the same time, so the visual's later actions find it. A
+          // visual that cannot be built is reported, never a failed run.
+          // Asked alone (agents.md 5.21), Ryan designs from the earlier
+          // question and answer, the follow-up as his instruction.
+          buildVisual: async ({
+            question,
+            answer,
+            instruction,
+          }: {
+            question: string;
+            answer: string;
+            instruction?: string;
+          }) => {
+            const stop = () => ({ visual: {}, stopped: true });
+            if (turn.signal.aborted) return stop();
+            answerAt ??= new Date().toISOString();
             try {
-              const bridge = this.deps.readinessBridge();
-              if (!bridge) throw new Error('data readiness is not available');
-              const byDataset = new Map<string, string[]>();
-              for (const table of assessed) {
-                byDataset.set(table.dataset, [
-                  ...(byDataset.get(table.dataset) ?? []),
-                  table.entity,
-                ]);
-              }
-              for (const [dataset, entities] of byDataset) {
-                const assessment = await bridge.startAssessment({
-                  sessionId: id,
-                  datasetName: dataset,
-                  tables: entities,
-                });
-                await assessment.profile({ signal: turn.signal });
-                if (turn.signal.aborted) return stop();
-                assessment.score();
-                const saved = await assessment.save();
-                measured.reportIds.push(saved.report.id);
-                measured.findingCount += saved.report.findings.length;
-                const shown = await this.showReadinessReport(id, saved, emit);
-                if (shown && !readinessReport) readinessReport = shown;
-                engineFindings.push(
-                  ...topFindings(saved.report.findings).map((finding) => ({
-                    severity: finding.severity,
-                    dimension: finding.dimension,
-                    entity: finding.namespace
-                      ? `${finding.namespace}.${finding.entity ?? ''}`
-                      : (finding.entity ?? saved.report.datasourceName),
-                    ...(finding.field ? { field: finding.field } : {}),
-                    description: finding.description,
-                  })),
-                );
-              }
-              const shown = engineFindings.slice(0, DATA_QUALITY_FINDINGS_CAP);
-              const reply = shown.length
-                ? await this.deps.mastra.checkDataQuality(
-                    {
-                      question,
-                      sql: queries.map((query) => query.sql),
-                      tables: measured.tables,
-                      findings: shown,
-                    },
-                    stepModelOf(DATA_READINESS_AGENT_KEY),
-                  )
-                : { issues: [], stopped: false };
-              if (reply.stopped || turn.signal.aborted) return stop();
-              const findings = dataQualityFindings({
-                tables: measured.tables,
-                findings: shown,
-                issues: reply.issues,
+              const metadata = await this.deps.buildVisual(id, {
+                question,
+                answer,
+                at: answerAt,
+                data,
+                ...(instruction !== undefined ? { instruction } : {}),
               });
-              measured.issues = findings.filter((f) => !f.passed).length;
-              return { findings, dataQuality: measured, stopped: false };
+              // Stored before the stop: the step still names it, so the run
+              // logs it and it stays one click away.
+              return {
+                visual: { visualId: metadata.id, title: metadata.title },
+                stopped: turn.signal.aborted,
+              };
             } catch (error) {
               if (turn.signal.aborted) return stop();
-              const reason =
-                error instanceof Error ? error.message : String(error);
               return {
-                findings: [dataQualityFailure(reason)],
-                dataQuality: { ...measured, error: reason },
+                visual: {
+                  error: error instanceof Error ? error.message : String(error),
+                },
                 stopped: false,
               };
             }
+          },
+          // v2's follow-up branch (roadmap 1.28.8): the earlier queries,
+          // Nathan's reading of the words, the page and the answer.
+          followUp,
+          interpretFollowUp: async (request) => {
+            try {
+              const spec = await this.deps.mastra.interpretResult(request, {
+                abortSignal: turn.signal,
+                onExchange: stepModelOf(RESULT_EXPLORER_AGENT_KEY).onExchange,
+              });
+              return { spec, stopped: turn.signal.aborted };
+            } catch (error) {
+              if (turn.signal.aborted) return { spec: null, stopped: true };
+              // The step plans the question instead; the reason is logged.
+              this.deps.logger.warn(
+                `Could not read the follow-up of ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
+              );
+              throw error;
+            }
+          },
+          // The page is an `explore_result` call of the turn: its record
+          // (the source SQL, the page's rows) and its view as evidence, so
+          // the answer's query opens the inspector on that view.
+          pageResult: async ({ query, request, understood }) => {
+            const target = followUp[query];
+            if (!target)
+              throw new Error('The earlier query is no longer known');
+            const args = {
+              query: target.sql,
+              // Named as the reader saw it (agent-answers R69): `Source 5`.
+              rationale: `${understood.toLowerCase() === 'all rows' ? 'The rows' : understood} of the earlier answer's ${target.source ? `Source ${target.source}` : 'query'}.`,
+            };
+            calledTools.add('explore_result');
+            emit({
+              type: 'tool',
+              content: JSON.stringify({
+                name: 'explore_result',
+                rationale: args.rationale,
+                input: toolCallInput('explore_result', args),
+              }),
+            });
+            const callId = `follow-up-${randomUUID()}`;
+            const result = await pageExplorableQuery(
+              target,
+              request,
+              understood,
+              options.requestContext,
+              callId,
+            );
+            const record = toolDataRecord('explore_result', args, result);
+            if (record) captureRecord(record, callId);
+            if ('error' in result) throw new Error(result.error);
+            return {
+              title: target.rationale ?? target.ref,
+              columns: result.columns,
+              rows: result.rows,
+              page: result.page,
+              pageCount: result.pageCount,
+              matchedRows: result.matchedRows,
+              capped: result.capped,
+              view: result.view,
+              understood: result.understood,
+            };
+          },
+          deliverAnswer: (answer) => {
+            text = answer;
+            emit({ type: 'text', content: answer });
+            return Promise.resolve();
+          },
+          // A follow-up that asks Write answer alone (agents.md 5.21): the
+          // earlier answer's records come into this answer with their
+          // evidence, so its sources stay one click from its figures; the
+          // checks are those records' own, plus the earlier quality ones.
+          earlierAnswer: (): EarlierAnswerInput => {
+            const earlier = session.ask?.earlier;
+            const records = carryEarlierRecords();
+            const stored = planSchema.safeParse(earlier?.plan);
+            const plan = stored.success
+              ? stored.data
+              : planOf(undefined, trimmed);
+            const queries = analyseQueriesOf(records);
+            const { findings } = validateAttempt({
+              plan,
+              calls: analyseOutcomeOf(records, false).calls,
+              queries,
+            });
+            return {
+              plan,
+              queries,
+              findings: [...findings, ...(earlier?.qualityFindings ?? [])],
+              imageNotes: earlier?.imageNotes ?? '',
+            };
+          },
+          // A follow-up that asks Build visual alone (agents.md 5.21): the
+          // earlier answer's records come into this answer as for Write
+          // answer, and Ryan charts their rows.
+          earlierVisual: (): EarlierVisualInput => {
+            const earlier = session.ask?.earlier;
+            return {
+              question: earlier?.question || trimmed,
+              answer: earlier?.answer ?? '',
+              queries: analyseQueriesOf(carryEarlierRecords()),
+            };
           },
           writeAnswer: async (written) => {
             try {
@@ -921,11 +1073,51 @@ export class TurnEngine {
           },
           save: async () => {
             const saved = await startedAssessment().save();
+            savedReport = saved.report;
             // The answer carries the report: its card, and the scorecard
             // (data-readiness R5).
             const shown = await this.showReadinessReport(id, saved, emit);
             if (shown) readinessReport = shown;
             return { reportId: saved.report.id };
+          },
+          // Rows behind findings (roadmap 1.28.11; data-readiness R34): the
+          // rows behind each top finding become the answer's first sources,
+          // each shown as a SQL call and its result. Nothing reaches the
+          // agent's prompt: the records only add sources to the answer.
+          findingRows: async () => {
+            if (!savedReport) throw new Error('The report has not been saved');
+            return recordFindingSources({
+              report: savedReport,
+              run: (datasourceId, sql, limit) =>
+                this.deps.sql.runBuiltSql(datasourceId, sql, limit),
+              signal: turn.signal,
+              record: (args, result, facts) => {
+                emit({
+                  type: 'tool',
+                  content: JSON.stringify({
+                    name: 'run_readonly_sql',
+                    rationale: args.rationale,
+                    input: toolCallInput('run_readonly_sql', args),
+                  }),
+                });
+                const callId = `finding-rows-${randomUUID()}`;
+                queryFacts.set(callId, facts);
+                const record = toolDataRecord('run_readonly_sql', args, result);
+                if (record) {
+                  // Only its count links a figure (agent-answers R69): the
+                  // raw cells would match the report's numbers by chance.
+                  const counts = (record.columns ?? []).filter((c) =>
+                    FINDING_COUNT_COLUMNS.has(c),
+                  );
+                  captureRecord(
+                    record.error
+                      ? record
+                      : { ...record, figureColumns: counts },
+                    callId,
+                  );
+                }
+              },
+            });
           },
           explain: async ({ dataset, reportId, imageNotes }) => {
             // The run has assessed: the agent reads the stored report and
@@ -1118,6 +1310,155 @@ export class TurnEngine {
             progress: (line) =>
               emit({ type: 'reasoning', content: `${line}\n` }),
           }),
+          // Consumption Gap Analysis (agents.md 5.20): its model steps on
+          // their own agents, its read-only queries recorded as sources.
+          consumptionGap: {
+            // Read dashboards: Grace over each stored image, one call each.
+            readDashboard: async ({ image }) => {
+              try {
+                const read = await this.deps.mastra.readDashboard(
+                  {
+                    question: 'Read this reference dashboard',
+                    image: await this.deps.readImage(id, image),
+                  },
+                  stepModelOf(DASHBOARD_READER_AGENT_KEY),
+                );
+                return {
+                  blueprint: read.blueprint,
+                  stopped: read.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                throw await stepError(error);
+              }
+            },
+            loadDashboard: ({ artifact }) => this.deps.artifact(artifact),
+            // Resolve layers and Load layer catalogs: the dataset tools'
+            // own services (names, types and schema notes; no rows).
+            datasetLayers: async ({ datasets }) =>
+              (await getDatasetToolServices().getDatasets(datasets)).map(
+                (dataset) => ({
+                  dataset: dataset.name,
+                  datasourceId: dataset.datasourceId ?? null,
+                  datasourceKind: dataset.datasourceKind ?? null,
+                  schemas: (dataset.schemas ?? []).map((note) => ({
+                    ...note,
+                  })),
+                  entities: dataset.tables.map((key) => {
+                    const known = dataset.entities?.find(
+                      (entity) => entity.key === key,
+                    )?.columns;
+                    return {
+                      key,
+                      columns: known
+                        ? known.map((column) => ({
+                            name: column.name,
+                            type: column.type ?? '',
+                          }))
+                        : null,
+                    };
+                  }),
+                }),
+              ),
+            // Infer lineage and Probe evidence (ADR-0051): each statement
+            // on the guarded read-only path, one after the other, recorded
+            // as a `run_readonly_sql` source as Rows behind findings does
+            // (agent-answers R67-R78). A failed one is a result.
+            runQueries: ({ queries }) =>
+              runGapQueries({
+                queries,
+                run: (datasourceId, sql, limit) =>
+                  this.deps.sql.runBuiltSql(datasourceId, sql, limit),
+                signal: turn.signal,
+                record: (args, result, facts) => {
+                  emit({
+                    type: 'tool',
+                    content: JSON.stringify({
+                      name: 'run_readonly_sql',
+                      rationale: args.rationale,
+                      input: toolCallInput('run_readonly_sql', args),
+                    }),
+                  });
+                  const callId = `gap-query-${randomUUID()}`;
+                  queryFacts.set(callId, facts);
+                  const record = toolDataRecord(
+                    'run_readonly_sql',
+                    args,
+                    result,
+                  );
+                  if (record) captureRecord(record, callId);
+                },
+              }),
+            deriveRequirements: async (input) => {
+              try {
+                const derived = await this.deps.mastra.deriveRequirements(
+                  input,
+                  stepModelOf(REQUIREMENTS_ANALYST_AGENT_KEY),
+                );
+                return {
+                  ...derived,
+                  stopped: derived.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                throw await stepError(error);
+              }
+            },
+            // Confirm requirements: the same agent applies the user's edits.
+            reviseRequirements: async (input) => {
+              try {
+                const revised = await this.deps.mastra.reviseRequirements(
+                  input,
+                  stepModelOf(REQUIREMENTS_ANALYST_AGENT_KEY),
+                );
+                return {
+                  ...revised,
+                  stopped: revised.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                throw await stepError(error);
+              }
+            },
+            mapRequirements: async (input) => {
+              try {
+                const mapped = await this.deps.mastra.mapRequirements(
+                  input,
+                  stepModelOf(LAYER_MAPPER_AGENT_KEY),
+                );
+                return {
+                  ...mapped,
+                  stopped: mapped.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                throw await stepError(error);
+              }
+            },
+            recommendFixes: async (input) => {
+              try {
+                const advised = await this.deps.mastra.recommendFixes(
+                  input,
+                  stepModelOf(GAP_ADVISOR_AGENT_KEY),
+                );
+                return {
+                  ...advised,
+                  stopped: advised.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                throw await stepError(error);
+              }
+            },
+            // Render report: the drawn report is the run's visual, and the
+            // answer built in code is its answer.
+            saveReport: async ({ bundle, answer, title }) => {
+              const metadata = await this.deps.saveMock(
+                id,
+                { ...bundle, title },
+                trimmed,
+              );
+              showVisual(metadata);
+              text = answer;
+              emit({ type: 'text', content: text });
+              return { visualId: metadata.id, title: metadata.title };
+            },
+          },
         },
         (event) => onStepEvent?.(event),
       );
@@ -1168,11 +1509,17 @@ export class TurnEngine {
     const finishTurn = async (): Promise<void> => {
       // v2's answer is its Write answer step's text only (agents.md 5.11):
       // its Analyse stream's text is a note, and no synthesis replaces it.
-      if (!v2 && !turn.signal.aborted && !clarification && !text && stream) {
+      if (
+        !codeAnswer &&
+        !turn.signal.aborted &&
+        !clarification &&
+        !text &&
+        stream
+      ) {
         text = ((await stream.text) ?? '').trim();
       }
       if (
-        !v2 &&
+        !codeAnswer &&
         !turn.signal.aborted &&
         !clarification &&
         !text.trim() &&
@@ -1262,7 +1609,7 @@ export class TurnEngine {
             (visualEvent
               ? `${visualEvent.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent.title}" (v${visualEvent.version}).`
               : readinessAnswerFallback(readinessReport!)),
-          at: new Date().toISOString(),
+          at: answerAt ?? new Date().toISOString(),
           ...(data.length ? { data } : {}),
           ...(evidence.length ? { evidence } : {}),
           ...(entities.length ? { entities } : {}),
@@ -1332,13 +1679,27 @@ export class TurnEngine {
     question: string,
     emit: (event: StreamEvent) => void,
     runtime: AnswerBusinessQuestionRuntime &
-      Required<Pick<AnswerBusinessQuestionRuntime, 'checkDataQuality'>> &
+      Required<
+        Pick<
+          AnswerBusinessQuestionRuntime,
+          'buildVisual' | 'interpretFollowUp' | 'pageResult' | 'deliverAnswer'
+        >
+      > &
       AgentTurnRuntime &
       DataReadinessAssessmentRuntime &
       RecreateDashboardRuntime &
       MapDashboardDataRuntime &
       ReadImagesRuntime &
-      ReviewWebsiteRuntime,
+      ReviewWebsiteRuntime & {
+        /** Its names overlap the others' (readDashboard, saveReport): kept apart. */
+        consumptionGap: ConsumptionGapRuntime;
+        /** A follow-up that asks Write answer alone (agents.md 5.21). */
+        earlierAnswer: () => EarlierAnswerInput;
+        /** A follow-up that asks Build visual alone (agents.md 5.21). */
+        earlierVisual: () => EarlierVisualInput;
+        /** Its designer call, the follow-up as Ryan's instruction. */
+        buildVisual: AskAgentRuntime['buildVisual'];
+      },
     onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<TurnRunOutcome> {
     // The agent step's own failure, kept so the turn reports it as is.
@@ -1357,7 +1718,27 @@ export class TurnEngine {
     const recreate = workflow.engineId === RECREATE_DASHBOARD_WORKFLOW_ID;
     const mapping = workflow.engineId === MAP_DASHBOARD_DATA_WORKFLOW_ID;
     const review = workflow.engineId === REVIEW_WEBSITE_WORKFLOW_ID;
-    if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
+    const gap = workflow.engineId === CONSUMPTION_GAP_WORKFLOW_ID;
+    const ask = workflow.engineId === ASK_AGENT_WORKFLOW_ID;
+    if (ask) {
+      // A follow-up that asks one agent (agents.md 5.21): the same calls
+      // the workflow's own steps make, on this turn's records.
+      requestContext.set(ASK_AGENT_RUNTIME_KEY, {
+        answer: () => captured(() => runtime.answer()),
+        readImages: (input) => captured(() => runtime.readImages(input)),
+        followUp: runtime.followUp ?? [],
+        interpretFollowUp: (input) =>
+          captured(() => runtime.interpretFollowUp(input)),
+        pageResult: (input) => captured(() => runtime.pageResult(input)),
+        plan: (input) => captured(() => runtime.plan(input)),
+        earlierAnswer: () => runtime.earlierAnswer(),
+        writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
+        earlierVisual: () => runtime.earlierVisual(),
+        buildVisual: (input: Parameters<AskAgentRuntime['buildVisual']>[0]) =>
+          captured(() => runtime.buildVisual(input)),
+        deliverAnswer: (answer) => runtime.deliverAnswer(answer),
+      } satisfies AskAgentRuntime);
+    } else if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
       } satisfies AgentTurnRuntime);
@@ -1375,6 +1756,7 @@ export class TurnEngine {
           }
         },
         save: () => captured(() => runtime.save()),
+        findingRows: () => captured(() => runtime.findingRows()),
         explain: (input) => captured(() => runtime.explain(input)),
       } satisfies DataReadinessAssessmentRuntime);
     } else if (recreate) {
@@ -1407,21 +1789,43 @@ export class TurnEngine {
         // Synchronous and never throws: a progress line only.
         progress: (line) => runtime.progress(line),
       } satisfies ReviewWebsiteRuntime);
+    } else if (gap) {
+      const parts = runtime.consumptionGap;
+      requestContext.set(CONSUMPTION_GAP_RUNTIME_KEY, {
+        readDashboard: (input) => captured(() => parts.readDashboard(input)),
+        loadDashboard: (input) => captured(() => parts.loadDashboard(input)),
+        datasetLayers: (input) => captured(() => parts.datasetLayers(input)),
+        runQueries: (input) => captured(() => parts.runQueries(input)),
+        deriveRequirements: (input) =>
+          captured(() => parts.deriveRequirements(input)),
+        reviseRequirements: (input) =>
+          captured(() => parts.reviseRequirements(input)),
+        mapRequirements: (input) =>
+          captured(() => parts.mapRequirements(input)),
+        recommendFixes: (input) => captured(() => parts.recommendFixes(input)),
+        saveReport: (input) => captured(() => parts.saveReport(input)),
+      } satisfies ConsumptionGapRuntime);
     } else {
       requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
         plan: (input) => captured(() => runtime.plan(input)),
         analyse: (input) => captured(() => runtime.analyse(input)),
         // Only a run host whose input ticked it (agents.md 5.11).
-        checksDataQuality: session.checkDataQuality === true,
-        checkDataQuality: (input) =>
-          captured(() => runtime.checkDataQuality(input)),
+        buildsVisual: session.buildVisual === true,
+        buildVisual: (input) => captured(() => runtime.buildVisual(input)),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
+        // A follow-up over an earlier result (roadmap 1.28.8). Nathan's
+        // failure is no step's: the run plans the question instead.
+        ...(runtime.followUp ? { followUp: runtime.followUp } : {}),
+        interpretFollowUp: (input) => runtime.interpretFollowUp(input),
+        pageResult: (input) => captured(() => runtime.pageResult(input)),
+        deliverAnswer: (answer) => runtime.deliverAnswer(answer),
       } satisfies AnswerBusinessQuestionRuntime);
     }
     // Read images, the optional first step of every workflow but the
-    // agent turn and Dashboard Image to Artifact (agents.md 2.15).
+    // agent turn, Dashboard Image to Artifact and Consumption Gap Analysis,
+    // whose Read dashboards hands its images to Grace (agents.md 2.15, 5.20).
     const readsImages =
-      workflow.engineId !== AGENT_TURN_WORKFLOW_ID && !recreate;
+      workflow.engineId !== AGENT_TURN_WORKFLOW_ID && !recreate && !gap;
     if (readsImages) {
       requestContext.set(READ_IMAGES_RUNTIME_KEY, {
         readImages: (input) => captured(() => runtime.readImages(input)),
@@ -1436,8 +1840,11 @@ export class TurnEngine {
     // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).
     // Dashboard Image to Artifact runs on the run's image (agents.md 5.17); Map a
     // Dashboard to Data on a saved dashboard and the run's datasets (5.18).
+    // Consumption Gap Analysis on the run's questions and datasets, its
+    // saved dashboard ('' when none) and its reference dashboards (5.20).
     const turnInput:
       | AnswerBusinessQuestionInput
+      | AskAgentInput
       | { question: string; dataset: string; images?: string[] }
       | { question: string; image: string }
       | {
@@ -1446,21 +1853,36 @@ export class TurnEngine {
           datasets: string[];
           images?: string[];
         }
-      | ReviewWebsiteInput = review
-      ? // Review a Website reads the whole form (agents.md 5.19).
-        reviewWebsiteInputOf(session.inputValues ?? { url: question })
-      : recreate
-        ? { question, image: session.inputImage ?? '' }
-        : mapping
+      | ReviewWebsiteInput = ask
+      ? // The asked step, over the run's datasets and images (5.21).
+        {
+          question,
+          datasets: session.datasets,
+          askStep: session.ask?.step as AskableStepId,
+          ...images,
+        }
+      : review
+        ? // Review a Website reads the whole form (agents.md 5.19).
+          reviewWebsiteInputOf(session.inputValues ?? { url: question })
+        : gap
           ? {
               question,
-              artifact: session.inputArtifact ?? '',
               datasets: session.datasets,
-              ...images,
+              artifact: session.inputArtifact ?? '',
+              images: [...(session.inputImages ?? [])],
             }
-          : readiness
-            ? { question, dataset: session.datasets[0] ?? '', ...images }
-            : { question, datasets: session.datasets, ...images };
+          : recreate
+            ? { question, image: session.inputImage ?? '' }
+            : mapping
+              ? {
+                  question,
+                  artifact: session.inputArtifact ?? '',
+                  datasets: session.datasets,
+                  ...images,
+                }
+              : readiness
+                ? { question, dataset: session.datasets[0] ?? '', ...images }
+                : { question, datasets: session.datasets, ...images };
     let state = session.workflowState;
     // A new run starts the bar over at its first step event, whichever step
     // that is: Read images, step 1, is optional, so a run without images

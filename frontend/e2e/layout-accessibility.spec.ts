@@ -83,6 +83,17 @@ test('has no automatically detectable accessibility violations on any screen in 
   };
   const screens: [string, () => Promise<void>][] = [
     [
+      // Home has no rail item: a reload opens it (and drops axe, added again).
+      // No model is set here, so its setup notice is scanned too.
+      'Home',
+      async () => {
+        await page.reload();
+        await page.addScriptTag({ content: axe.source });
+        await expect(page.getByTestId('welcome-ask')).toBeVisible();
+        await expect(page.getByTestId('welcome-setup')).toBeVisible();
+      },
+    ],
+    [
       'Datasets',
       async () => {
         await rail('Datasets').click();
@@ -104,18 +115,18 @@ test('has no automatically detectable accessibility violations on any screen in 
     [
       'Agents',
       async () => {
-        await rail('Agents').click();
+        await rail('Agent personas').click();
         await expect(
-          page.getByRole('heading', { name: 'Agents' }),
+          page.getByRole('heading', { name: 'Agent personas' }),
         ).toBeVisible();
       },
     ],
     [
       'Agent detail',
       async () => {
-        await rail('Agents').click();
+        await rail('Agent personas').click();
         await page.getByTestId('agent-assistant').click();
-        await expect(page.getByText('All agents')).toBeVisible();
+        await expect(page.getByText('All agent personas')).toBeVisible();
       },
     ],
     [

@@ -31,11 +31,12 @@ import { engineInputSchema, withContract } from './workflow-contract';
 // (https://mastra.ai/docs/workflows/control-flow):
 //
 //   resolve-dataset → profile-source → score-readiness → save-report
-//   → explain-report → wrap-up
+//   → finding-rows → explain-report → wrap-up
 //
-// The first four steps are code: the deterministic engine owns every score
-// (data-readiness R4). Explain report runs the Data Readiness Agent over
-// the stored report. A stopped run bails at the step it was stopped in,
+// The first five steps are code: the deterministic engine owns every score
+// (data-readiness R4), and Rows behind findings runs one read-only query
+// per top finding, recorded as a source of the answer (roadmap 1.28.11).
+// Explain report runs the Data Readiness Agent over the stored report. A stopped run bails at the step it was stopped in,
 // which ends the run as a success with that step's output (`stopped`).
 //
 // The run's runtime (functions on the RequestContext) holds the profile
@@ -163,6 +164,23 @@ const saveReportStep = createStep({
   ),
 });
 
+const findingRowsStep = createStep({
+  id: STEP['finding-rows'].id,
+  description: STEP['finding-rows'].title,
+  inputSchema: engineInputSchema(SCHEMAS['finding-rows'].input),
+  outputSchema: SCHEMAS['finding-rows'].output,
+  execute: withContract(
+    STEP['finding-rows'].title,
+    SCHEMAS['finding-rows'],
+    async (params: StepParams<(typeof SCHEMAS)['finding-rows']>) => {
+      const runtime = runtimeOf(params, STEP['finding-rows'].title);
+      const found = await runtime.findingRows();
+      const output = { ...params.inputData, ...found };
+      return found.stopped ? params.bail(output) : output;
+    },
+  ),
+});
+
 const explainReportStep = createStep({
   id: STEP['explain-report'].id,
   description: STEP['explain-report'].title,
@@ -209,7 +227,7 @@ const wrapUpStep = createStep({
 export const dataReadinessAssessmentWorkflow = createWorkflow({
   id: DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
   description:
-    'Assess one PostgreSQL or Databricks dataset: profile it, score it with the deterministic engine, store the report and explain it.',
+    'Assess one PostgreSQL or Databricks dataset: profile it, score it with the deterministic engine, store the report, look up the rows behind its findings and explain it.',
   inputSchema: assessmentRunInputSchema,
   outputSchema: assessmentResultSchema,
   options: {
@@ -229,6 +247,7 @@ export const dataReadinessAssessmentWorkflow = createWorkflow({
   .then(profileSourceStep)
   .then(scoreReadinessStep)
   .then(saveReportStep)
+  .then(findingRowsStep)
   .then(explainReportStep)
   .then(wrapUpStep)
   .commit();

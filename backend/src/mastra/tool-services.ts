@@ -1,4 +1,14 @@
 import type { DatasourceKind } from '../modules/datasources/entities/datasource.entity';
+import type {
+  ColumnKind,
+  PageRequest,
+  PageResult,
+  ResultView,
+} from '../modules/datasources/connectors/paged-sql.types';
+import type {
+  ExplorerCandidate,
+  ExplorerSpec,
+} from './agents/result-explorer.prompts';
 import type { UsageSink } from './usage-sink';
 
 // The query facts' side channel (plan m1-25 1.25.1): the data tools write
@@ -134,6 +144,15 @@ export interface WorkflowToolResult {
   skipped: number[];
 }
 
+/** The query `explore_result` pages (agents.md 3.15): its SQL, columns and kinds. */
+export interface ExploredQuerySource {
+  sql: string;
+  /** The datasource it ran on, when known; else the session's only one. */
+  datasourceId?: string;
+  columns: string[];
+  kinds: Record<string, ColumnKind>;
+}
+
 export interface DatasetToolServices {
   /**
    * Create a visual for an answer in the session (latest answer if omitted).
@@ -197,6 +216,26 @@ export interface DatasetToolServices {
     datasets: string[],
     usageSink?: UsageSink,
   ): Promise<SqlRunResult>;
+  /**
+   * One page of an earlier query's full result (`explore_result`, agents.md
+   * 3.15) through the query inspector's own page path (api.md 152, 154):
+   * the same checks and caps. Throws the message the model should see.
+   */
+  pageQuery?(
+    source: ExploredQuerySource,
+    datasets: string[],
+    request: PageRequest,
+  ): Promise<PageResult & { datasourceId: string }>;
+  /**
+   * `result-explorer`'s reading of the user's words as a view of one of the
+   * candidates (api.md 153, 155 use the same call).
+   */
+  interpretResult?(input: {
+    text: string;
+    candidates: ExplorerCandidate[];
+    view: ResultView | null;
+    pageCount: number | null;
+  }): Promise<ExplorerSpec>;
 }
 
 let services: DatasetToolServices | null = null;

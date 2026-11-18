@@ -21,14 +21,14 @@ All terms are defined in [glossary](../../product/glossary.md): **Session** (a s
 
 ### Which workflow a past chat names
 
-- R57. Every session SHALL name the workflow it ran (R65) in the page header's session context (`Workflow` and a chip with the workflow's name, before the datasources) and in its row of the Past chats list (R63), as the row's workflow chip. Both come from the session's `workflowRef` ([api.md](../../system/api.md) 2.1). The name SHALL be the workflow's catalogue name ([workflows](../workflows/spec.md) R1): `Assistant` for a plain session, the built-in agent's workflow (`Answer a Business Question`, `Data Readiness Agent`) for a session bound to it, and the agent's current Live name for a session started from a user agent. A session saved before workflows existed names the workflow derived from its agent binding (R65): one saved with only `agentKey: "data-readiness"` reads `Data Readiness Agent`. A session saved with the removed agent `rfp` reads as a plain session (`Assistant`) and its stored RFP package messages and `rfpId` are ignored.
-- R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets. The page header's Workflow chip and the list row's workflow chip SHALL read `<agent name> · agent deleted`, using the name the agent last had for the session.
+- R57. Every session SHALL name the workflow it ran (R65) in the page header's session context (`User journey` and a chip with the workflow's name, before the datasources) and in its row of the Past chats list (R63), as the row's workflow chip. Both come from the session's `workflowRef` ([api.md](../../system/api.md) 2.1). The name SHALL be the workflow's catalogue name ([workflows](../workflows/spec.md) R1): `Assistant` for a plain session, the built-in agent's workflow (`Answer a Business Question`, `Data Readiness Agent`) for a session bound to it, and the agent's current Live name for a session started from a user agent. A session saved before workflows existed names the workflow derived from its agent binding (R65): one saved with only `agentKey: "data-readiness"` reads `Data Readiness Agent`. A session saved with the removed agent `rfp` reads as a plain session (`Assistant`) and its stored RFP package messages and `rfpId` are ignored.
+- R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets. The page header's User journey chip and the list row's workflow chip SHALL read `<agent name> · agent persona deleted`, using the name the agent last had for the session.
 - R65. A session bound to Answer a Business Question reads its workflow `answer-business-question` ([workflows](../workflows/spec.md) R1, R4). Every other stored session ran a one-step workflow (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`; ADR-0040) that is no longer in the catalogue (ADR-0042, 2026-11-12): it keeps its internal reference and name (a user agent's Live name, marked deleted once the agent is deleted, R59) and reads as a plain past chat with no link to a workflow page. A session stored with `seq-text-demo` or `deep-analysis` reads as a plain Assistant session. Nothing is migrated or deleted.
 
 ### The Past chats list and the read-only chat
 
 - R62. While a past chat is open, the page header's session context SHALL end with the session's id: `ID <first 8 characters>` in monospace, with the full id as its tooltip and a copy icon. Clicking it copies the full id and shows the toast "Session ID copied" ("Copy failed" when the browser refuses). A user shares the id so a session can be found and diagnosed in the app's data (BA-231).
-- R63. In the **Past chats** tab of the Runs page (app-shell R46) the system SHALL list every session of the user in the middle of the page card, newest activity first as the backend returns them, under a "Search sessions by name or ID…" field (a `nav` named "Past chats") that filters by name or session id, ignoring case, **ten sessions per page**. A row SHALL show the name, its datasets, the workflow it ran as a chip (the workflow's name, R57, `<agent name> · agent deleted`, R59, or `Assistant` for a plain session; the full label as tooltip `Workflow: <label>`), the session id as `ID <first 8 characters>` (full id as tooltip; a click copies it and toasts "Session ID copied", as R62), the last activity (`updatedAt`, else `createdAt`) as `just now`, `<n> min ago`, `<n> h ago`, `yesterday` or a short date with the full date as tooltip, and an options menu with **Delete session**. Clicking a row SHALL open the session read-only (R66). The list SHALL read "Loading sessions…" until the first answer, "No past chats." when empty and `No sessions match "<query>".` when the search finds none. Under the list SHALL be `<first>–<last> of <total>` and, when there is more than one page, **Previous page** and **Next page** buttons with `Page <n> of <pages>`; a new search returns to page 1, and a deletion that empties the last page moves to the page before.
+- R63. In the **Past chats** tab of the Runs page (app-shell R46) the system SHALL list every session of the user in the middle of the page card, newest activity first as the backend returns them, under a "Search sessions by name or ID…" field (a `nav` named "Past chats") that filters by name or session id, ignoring case, **ten sessions per page**. A row SHALL show the name, its datasets, the workflow it ran as a chip (the workflow's name, R57, `<agent name> · agent deleted`, R59, or `Assistant` for a plain session; the full label as tooltip `User journey: <label>`), the session id as `ID <first 8 characters>` (full id as tooltip; a click copies it and toasts "Session ID copied", as R62), the last activity (`updatedAt`, else `createdAt`) as `just now`, `<n> min ago`, `<n> h ago`, `yesterday` or a short date with the full date as tooltip, and an options menu with **Delete session**. Clicking a row SHALL open the session read-only (R66). The list SHALL read "Loading sessions…" until the first answer, "No past chats." when empty and `No sessions match "<query>".` when the search finds none. Under the list SHALL be `<first>–<last> of <total>` and, when there is more than one page, **Previous page** and **Next page** buttons with `Page <n> of <pages>`; a new search returns to page 1, and a deletion that empties the last page moves to the page before.
 - R66. A session opened from the **Past chats** tab SHALL open **read-only** as a past chat (no session is lost or migrated): a banner "This is a past chat. You can read it, but not continue it." under the page header, its transcript through the answer view, its workflow bar and its right panel with the visuals viewable (every version) and downloadable and the panel items and files viewable and downloadable. A past chat SHALL show no composer, no starter prompts, no "Careful" or "Deep analysis", no rating or "Save as verified query", no "Generate interactive visuals" and no way to answer a clarification, and its visual panel SHALL offer no Tailor, Refresh data, revert or auto-repair. The reader can copy a question, jump to one from the history strip (one tick per user question; hovering lists the questions, clicking one scrolls to it), open a readiness scorecard, and download or a deep-analysis report. Deleting it stays on the list (R63). Since 1.23.27 the routes that wrote to a session no longer exist ([api.md](../../system/api.md) 2.1), so nothing in the app or its API can change a past chat's conversation except deleting it; the query inspector's cache (R67) is not the conversation.
 
 ### The query inspector on a past chat (backend, 1.25.9)
@@ -71,12 +71,12 @@ Shell placement and tokens are in [ui.md](../../system/ui.md).
 
 - **Past chats list, "Past chats"** (the **Runs** rail item opens the page, its second tab; app-shell R3, R46):
   - A "Search sessions by name or ID…" field above the list, filtering by name or session id, ignoring case; ten sessions per page with `<first>–<last> of <total>` and Previous / Next page buttons (R63).
-  - One entry per session, newest activity first, showing its name and marked when it is the session last opened. Under the name: its datasets. Beside it, the workflow the session ran as a chip with a workflow icon (`row-session-workflow`, tooltip `Workflow: <label>`): the workflow's name (R57), `<agent name> · agent deleted` (R59, warning style), or `Assistant` for a plain session. At the right, the last activity as a relative time (`2 h ago`, `yesterday`, else a short date), with the full date as tooltip.
+  - One entry per session, newest activity first, showing its name and marked when it is the session last opened. Under the name: its datasets. Beside it, the workflow the session ran as a chip with a workflow icon (`row-session-workflow`, tooltip `User journey: <label>`): the workflow's name (R57), `<agent name> · agent persona deleted` (R59, warning style), or `Assistant` for a plain session. At the right, the last activity as a relative time (`2 h ago`, `yesterday`, else a short date), with the full date as tooltip.
   - Each entry has an options button (title "Session options", label "Options for <name>") whose menu holds "Delete session". The confirm dialog reads: `Delete “<name>”?` / `This permanently removes its conversation, agent memory, and workspace files.`
   - An entry is disabled while it is being deleted.
   - Empty: "No past chats." No match: `No sessions match "<query>".` Loading: "Loading sessions…".
 - **Past chat header**: "Datasource" followed by one chip per bound datasource (name and kind label, summary tooltip), a loading placeholder, or "Unavailable".
-- **Page header** (app-shell R49): the session's name as the title, the session context under it (`Workflow` and the workflow chip `session-workflow` first, R57 and R59, then the datasources, then the id, R62). It has no button that starts a conversation.
+- **Page header** (app-shell R49): the session's name as the title, the session context under it (`User journey` and the workflow chip `session-workflow` first, R57 and R59, then the datasources, then the id, R62). It has no button that starts a conversation.
 - **Past chat** (main area): the banner (`past-chat-banner`), the workflow bar, then the transcript with the history strip (R66). There is no composer and no disclaimer.
 - **Message kinds** (read-only): user bubble; answer (Markdown plus the provenance blocks and badges of [agent-answers](../agent-answers/spec.md) R30–R36, without the rating and visual-generation actions); clarification card (disabled); visual event card with **View**; deep-analysis report card with **Download report**; readiness card with **Open scorecard**.
 
@@ -96,16 +96,16 @@ Feature: Session management
     Given a chat of my published agent "Cup historian"
     And the agent "Cup historian" is deleted
     When I click "Runs" on the rail
-    Then the chat's workflow chip reads "Cup historian · agent deleted"
+    Then the chat's workflow chip reads "Cup historian · agent persona deleted"
     When I open the chat
-    Then the page header shows the workflow "Cup historian · agent deleted"
+    Then the page header shows the workflow "Cup historian · agent persona deleted"
 
   Scenario: A chat saved before workflows names the workflow of its agent
     Given a session "Saved readiness chat" saved before workflows existed, bound to the Data Readiness Agent with no workflow
     When I click "Runs" on the rail
     Then the "Saved readiness chat" row's workflow chip reads "Data Readiness Agent"
     When I click "Saved readiness chat"
-    Then the page header shows "Workflow" and "Data Readiness Agent"
+    Then the page header shows "User journey" and "Data Readiness Agent"
 
   Scenario: Deletes a session after confirmation
     Given a "World Cup analysis" session exists and is open
@@ -165,6 +165,21 @@ Feature: Session management
     Then I see 'No sessions match "nothing like this".'
     When I clear the search and click "Cup history"
     Then I see the "Cup history" chat open
+```
+
+### Feature: Chat-history navigation
+
+E2E: `frontend/e2e/chat-history-nav.spec.ts`. The shared control is specified once in [ui.md](../../system/ui.md) 3.8; this Feature covers it on a past chat.
+
+```gherkin
+Feature: Chat-history navigation
+
+  Scenario: a past chat with several questions has a history navigation that scrolls to a question
+    Given a past chat with three questions and long answers
+    When I open it from Past chats
+    Then the chat-history navigation shows three ticks, the last question in view
+    When I hover it and pick the first question
+    Then the chat scrolls to that question and it is marked as in view
 ```
 
 ## Acceptance

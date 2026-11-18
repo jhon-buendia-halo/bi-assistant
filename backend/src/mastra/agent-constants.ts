@@ -54,6 +54,11 @@ export const DATA_MAPPER_AGENT_NAME = 'Data Mapper';
 /** The agent that explains a stored query step by step (agents.md 2.12). */
 export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
 /**
+ * The agent that turns a user's words into a view (filters, sort, page) of
+ * a stored query's result (agents.md 2.17).
+ */
+export const RESULT_EXPLORER_AGENT_KEY = 'result-explorer';
+/**
  * The agent of Read images, the optional first step of Answer a Business
  * Question, Assess Data Readiness and Map a Dashboard to Data (agents.md
  * 2.15; workflows R35): it describes the run's reference images as text.
@@ -67,6 +72,24 @@ export const SITE_REVIEWER_AGENT_KEY = 'site-reviewer';
 /** Its name. */
 export const SITE_REVIEWER_AGENT_NAME = 'Site Reviewer';
 
+/**
+ * The agents of the three model steps of `consumption-gap-analysis`
+ * (agents.md 2.18 to 2.20, 5.20): Derive (and Confirm) requirements, Map
+ * requirements and Recommend fixes. System agents: the workflow calls them.
+ */
+export const REQUIREMENTS_ANALYST_AGENT_KEY = 'requirements-analyst';
+/** Its name: the Derive requirements step's agent. */
+export const REQUIREMENTS_ANALYST_AGENT_NAME = 'Requirements Analyst';
+export const LAYER_MAPPER_AGENT_KEY = 'layer-mapper';
+/** Its name: the Map requirements step's agent. */
+export const LAYER_MAPPER_AGENT_NAME = 'Layer Mapper';
+export const GAP_ADVISOR_AGENT_KEY = 'gap-advisor';
+/** Its name: the Recommend fixes step's agent. */
+export const GAP_ADVISOR_AGENT_NAME = 'Gap Advisor';
+
+/** Ryan, the visual designer: Generate interactive visuals and Build visual (agents.md 5.11). */
+export const VISUALIZATION_AGENT_KEY = 'visualization';
+
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
   ANALYSIS_PLANNER_AGENT_KEY,
@@ -75,8 +98,12 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   DATA_MAPPER_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
   QUERY_EXPLAINER_AGENT_KEY,
+  RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
-  'visualization',
+  REQUIREMENTS_ANALYST_AGENT_KEY,
+  LAYER_MAPPER_AGENT_KEY,
+  GAP_ADVISOR_AGENT_KEY,
+  VISUALIZATION_AGENT_KEY,
   'sql-fixer',
   'sql-verifier',
   'assistant-eval-judge',

@@ -5,24 +5,28 @@ const V2_TOOLS = [
   'describe_entity',
   'sample_rows',
   'run_readonly_sql',
+  'explore_result',
   'ask_clarification',
 ];
 
 describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
-  it("returns v2's turn workflow with its ten steps in catalogue order", () => {
+  it("returns v2's turn workflow with its thirteen steps in catalogue order", () => {
     const workflow = agentWorkflow('insights-analyst');
     expect(workflow?.id).toBe('answer-business-question');
     expect(workflow?.steps.map((step) => [step.title, step.kind])).toEqual([
       ['Read images', 'agent'],
       ['Receive question', 'code'],
       ['Load catalog', 'code'],
+      ['Interpret follow-up', 'agent'],
       ['Plan', 'agent'],
       ['Clarify', 'code'],
       ['Analyse', 'agent'],
       ['Validate', 'code'],
-      ['Check data quality', 'agent'],
       ['Write answer', 'agent'],
+      ['Build visual', 'agent'],
       ['Wrap up', 'code'],
+      ['Page result', 'code'],
+      ['Page answer', 'code'],
     ]);
   });
 
@@ -42,14 +46,12 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     },
   );
 
-  it('gives Check data quality to Sarah, in one model call without tools', () => {
+  it('gives Build visual to Ryan, in one model call without tools', () => {
     const steps = agentWorkflow('insights-analyst')!.steps;
-    expect(
-      steps.find((step) => step.id === 'check-data-quality')?.agent,
-    ).toEqual({
-      key: 'data-readiness',
-      name: 'Sarah',
-      role: 'Data Quality Analyst',
+    expect(steps.find((step) => step.id === 'build-visual')?.agent).toEqual({
+      key: 'visualization',
+      name: 'Ryan',
+      role: expect.any(String) as unknown,
       tools: [],
       maxSteps: 1,
     });
@@ -80,9 +82,25 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
       tools: [],
       maxSteps: 1,
     });
+    // Nathan reads a follow-up over an earlier result (roadmap 1.28.8).
+    expect(agentOf('interpret-follow-up')).toEqual({
+      key: 'result-explorer',
+      name: 'Nathan',
+      role: 'Result Explorer',
+      tools: [],
+      maxSteps: 1,
+    });
     expect(
       steps.filter((step) => step.kind === 'code').map((step) => step.agent),
-    ).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    ).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
     // The catalogue's own flag stays out of the API's step.
     expect(steps.every((step) => !('modelOnly' in step))).toBe(true);
   });
@@ -137,13 +155,13 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
   it('returns a copy the caller can change safely', () => {
     const first = agentWorkflow('insights-analyst')!;
     first.steps[1].input.push('x');
-    first.steps[5].agent!.tools.push('y');
+    first.steps[6].agent!.tools.push('y');
     const second = agentWorkflow('insights-analyst')!;
     expect(second.steps[1].input).toEqual([
       'question',
       'datasets',
       'imageNotes',
     ]);
-    expect(second.steps[5].agent!.tools).toHaveLength(5);
+    expect(second.steps[6].agent!.tools).toHaveLength(6);
   });
 });

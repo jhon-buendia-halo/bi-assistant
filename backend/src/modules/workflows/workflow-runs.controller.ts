@@ -18,6 +18,14 @@ import type {
 import { EXPORT_ROWS } from '../sessions/query-evidence/query-coverage';
 import { csvOf } from '../sessions/query-evidence/query-evidence';
 import type { QueryRerunResult } from '../sessions/query-evidence/query-evidence.service';
+import {
+  parseInterpretRequest,
+  parsePageRequest,
+} from '../sessions/query-evidence/result-view';
+import type {
+  FilterInterpretation,
+  PageResult,
+} from '../datasources/connectors/paged-sql.types';
 import type { NodeChatMessage } from './node-chat-context';
 import { WorkflowNodeChatsService } from './workflow-node-chats.service';
 import type { WorkflowRun, WorkflowRunSummary } from './workflow-run-steps';
@@ -157,6 +165,41 @@ export class WorkflowRunsController {
     return {
       ok: true,
       result: await this.runs.rerunQuery(id, parseQueryIndex(index)),
+    };
+  }
+
+  /**
+   * One page of one of the answer's queries, filtered and sorted (api.md
+   * 152); the body is a `PageRequest`. Nothing is stored.
+   */
+  @Post(':id/answer/queries/:index/page')
+  async pageQuery(
+    @Param('id') id: string,
+    @Param('index') index: string,
+    @Body() body: unknown,
+  ): Promise<{ ok: true; result: PageResult }> {
+    const at = parseQueryIndex(index);
+    return {
+      ok: true,
+      result: await this.runs.pageQuery(id, at, parsePageRequest(body)),
+    };
+  }
+
+  /**
+   * The user's words read as a view of one of the answer's queries (api.md
+   * 153); the body is `{ text, view? }`. Nothing is stored.
+   */
+  @Post(':id/answer/queries/:index/interpret-filter')
+  async interpretFilter(
+    @Param('id') id: string,
+    @Param('index') index: string,
+    @Body() body: unknown,
+  ): Promise<{ ok: true; interpretation: FilterInterpretation }> {
+    const { text, view } = parseInterpretRequest(body);
+    const at = parseQueryIndex(index);
+    return {
+      ok: true,
+      interpretation: await this.runs.interpretFilter(id, at, text, view),
     };
   }
 

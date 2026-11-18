@@ -1,5 +1,12 @@
 import { Observable, map, tap, throwError } from 'rxjs';
-import { QueryEvidenceApi, QueryRerunResult } from './query-evidence.model';
+import {
+  FilterInterpretation,
+  PageRequest,
+  PageResult,
+  QueryEvidenceApi,
+  QueryRerunResult,
+  ResultView,
+} from './query-evidence.model';
 
 /**
  * The five calls of one kind of answer host (a stored run: api.md 139 to 143;
@@ -12,6 +19,17 @@ export interface EvidenceCalls<T, U> {
   countStages(target: T, index: number): Observable<U>;
   rerun(target: T, index: number): Observable<{ result: QueryRerunResult }>;
   downloadCsv(target: T, index: number): Observable<Blob>;
+  page(
+    target: T,
+    index: number,
+    request: PageRequest,
+  ): Observable<{ result: PageResult }>;
+  interpretFilter(
+    target: T,
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Observable<{ interpretation: FilterInterpretation }>;
 }
 
 /**
@@ -47,5 +65,15 @@ export function queryEvidenceApiOver<T, U>(
         calls.rerun(t, i).pipe(map((response) => response.result)),
       ),
     downloadCsv: (i) => withTarget((t) => calls.downloadCsv(t, i)),
+    page: (i, request) =>
+      withTarget((t) =>
+        calls.page(t, i, request).pipe(map((response) => response.result)),
+      ),
+    interpretFilter: (i, text, view) =>
+      withTarget((t) =>
+        calls
+          .interpretFilter(t, i, text, view)
+          .pipe(map((response) => response.interpretation)),
+      ),
   };
 }

@@ -62,20 +62,20 @@ test.afterEach(async () => {
 async function openHub(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents', exact: true })
+    .getByRole('button', { name: 'Agent personas', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
 }
 
 async function openWorkflows(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Workflows', exact: true })
+    .getByRole('button', { name: 'User journeys', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'Workflows', exact: true }),
+    page.getByRole('heading', { name: 'User journeys', exact: true }),
   ).toBeVisible();
 }
 
@@ -155,7 +155,7 @@ test("an Answer a Business Question run can't write: the read-only guard rejects
   for (const index of [0, 1]) {
     await page.getByTestId(`query-row-${index}`).click();
     await expect(page.getByTestId('query-inspector-position')).toHaveText(
-      `Query ${index + 1} of 2`,
+      `Source ${index + 1} of 2`,
     );
     await expect(
       page
@@ -181,6 +181,7 @@ test('an Answer a Business Question run runs v2 on every question', async ({
     'sample_rows',
     'run_readonly_sql',
     'ask_clarification',
+    'explore_result',
     'skill',
     'skill_search',
     'skill_read',

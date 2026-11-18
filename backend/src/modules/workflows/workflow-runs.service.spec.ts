@@ -102,6 +102,8 @@ const V2_STEPS_BEFORE: StepEvent[] = [
   stepResult('receive-question', { question: 'Who won in 2002?' }),
   stepStart('load-catalog', { question: 'Who won in 2002?' }),
   stepResult('load-catalog', { entities: 1 }),
+  stepStart('interpret-follow-up', { question: 'Who won in 2002?' }),
+  stepResult('interpret-follow-up', { followUp: null }),
   stepStart('plan', { question: 'Who won in 2002?' }),
   stepResult('plan', PLAN_OUTPUT),
   stepStart('analyse', { question: 'Who won in 2002?' }),
@@ -128,6 +130,8 @@ interface TurnScript {
   answer?: string;
   /** The answer's data records. */
   data?: unknown[];
+  /** The visual Build visual stored (its step runs after Write answer). */
+  visual?: { visualId: string; title: string };
 }
 
 function build(
@@ -215,6 +219,15 @@ function build(
           onStep(stepResult('validate', VALIDATE_OUTPUT));
           onStep(stepStart('write-answer', VALIDATE_OUTPUT));
           onStep(stepResult('write-answer', ANSWER_OUTPUT));
+          if (script.visual) {
+            onStep(stepStart('build-visual', ANSWER_OUTPUT));
+            onStep(
+              stepResult('build-visual', {
+                ...ANSWER_OUTPUT,
+                visual: script.visual,
+              }),
+            );
+          }
           onStep(stepStart('wrap-up', ANSWER_OUTPUT));
           onStep(stepResult('wrap-up', WRAP_UP_OUTPUT));
         }
@@ -586,6 +599,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       workflowId: 'answer-business-question',
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
+      // Build visual is on unless the run turns it off (workflows R41).
+      buildVisual: true,
     });
     // Careful is no field of v2's input: the turn runs without it.
     expect(ctx.sessions.streamRunTurn).toHaveBeenCalledWith(
@@ -609,6 +624,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
+      'interpret-follow-up:running',
+      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -625,7 +642,9 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       // attached) and the Clarify branch.
       'read-images:skipped',
       'clarify:skipped',
-      'check-data-quality:skipped',
+      'build-visual:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
       'done',
     ]);
     expect(events[0]).toEqual({
@@ -642,7 +661,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
       startedAt: expect.any(String) as string,
     });
-    expect(events[10]).toEqual({
+    expect(events[12]).toEqual({
       type: 'step',
       id: 'analyse',
       title: 'Analyse',
@@ -676,6 +695,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success', output: { entities: 1 } },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success', output: PLAN_OUTPUT },
         { id: 'clarify', title: 'Clarify', status: 'skipped' },
         {
@@ -686,9 +706,11 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
           output: ANALYSE_OUTPUT,
         },
         { id: 'validate', status: 'success', attempt: 1 },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'success', output: ANSWER_OUTPUT },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'success', output: WRAP_UP_OUTPUT },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
       output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
@@ -809,6 +831,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
         { id: 'clarify', status: 'skipped' },
         {
@@ -818,18 +841,22 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
           error: 'The endpoint rejected the API key (401)',
         },
         { id: 'validate', status: 'skipped' },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
     });
-    expect(stepTrail(events).slice(-6)).toEqual([
+    expect(stepTrail(events).slice(-8)).toEqual([
       'clarify:skipped',
       'analyse:failed',
       'validate:skipped',
-      'check-data-quality:skipped',
       'write-answer:skipped',
+      'build-visual:skipped',
       'wrap-up:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     expect(run.answer).toBeUndefined();
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
@@ -858,6 +885,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
+      'interpret-follow-up:running',
+      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -870,7 +899,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       brief: 'Not reached',
       source: 'generic',
     };
-    expect(run.steps.slice(4)).toEqual([
+    expect(run.steps.slice(5)).toEqual([
       {
         id: 'clarify',
         title: 'Clarify',
@@ -899,22 +928,31 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         story: notReached,
       },
       {
-        id: 'check-data-quality',
-        title: 'Check data quality',
-        status: 'skipped',
-        story: {
-          headline: 'Skipped: the data quality check was off for this run.',
-          brief: 'Off for this run',
-          source: 'step',
-        },
-      },
-      {
         id: 'write-answer',
         title: 'Write answer',
         status: 'skipped',
         story: notReached,
       },
+      {
+        id: 'build-visual',
+        title: 'Build visual',
+        status: 'skipped',
+        // On by default: a stopped run did not get there.
+        story: notReached,
+      },
       { id: 'wrap-up', title: 'Wrap up', status: 'skipped', story: notReached },
+      {
+        id: 'page-result',
+        title: 'Page result',
+        status: 'skipped',
+        story: notReached,
+      },
+      {
+        id: 'page-answer',
+        title: 'Page answer',
+        status: 'skipped',
+        story: notReached,
+      },
     ]);
     expect(ctx.sessions.streamRunTurn.mock.calls[0][3]).toBe(abort.signal);
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
@@ -934,6 +972,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       workflowId: 'answer-business-question',
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
+      buildVisual: true,
       context: {
         question: 'Who won in 2002?',
         answer: 'Brazil won in 2002.',
@@ -945,6 +984,54 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     // The answer is this run's, never the context's.
     expect(second.run.answer?.content).toBe('Brazil won in 2002.');
     expect(second.run.question).toBe('And in 2014?');
+  });
+
+  it("hands a later run the earlier answer's queries to explore (agents.md 3.15; plan 2)", async () => {
+    ctx = build(DATASETS, {
+      answer: 'Brazil won in 2002.',
+      data: [
+        {
+          tool: 'run_readonly_sql',
+          input: 'SELECT year, winner FROM wc.public.cups',
+          columns: ['year', 'winner'],
+          rows: [
+            { year: 2002, winner: 'Brazil' },
+            { year: 2006, winner: 'Italy' },
+          ],
+          rowCount: 2,
+          rationale: 'Every winner.',
+        },
+        { tool: 'run_readonly_sql', input: 'SELECT nope', error: 'boom' },
+        {
+          tool: 'sample_rows',
+          input: 'wc.public.cups',
+          columns: ['year'],
+          rows: [{ year: 1930 }],
+        },
+      ],
+    });
+    const first = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
+    await streamed(ctx, 'answer-business-question', {
+      input: { question: 'Only Italy', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.run.id },
+    });
+    const spec = ctx.sessions.createRunHost.mock.lastCall?.[0] as {
+      contextQueries?: unknown[];
+    };
+    expect(spec.contextQueries).toEqual([
+      {
+        ref: 'Q1',
+        sql: 'SELECT year, winner FROM wc.public.cups',
+        columns: ['year', 'winner'],
+        kinds: { year: 'number', winner: 'text' },
+        sampleValues: { year: [2002, 2006], winner: ['Brazil', 'Italy'] },
+        rationale: 'Every winner.',
+        // The number the reader saw it under (agent-answers R69).
+        source: 1,
+      },
+    ]);
   });
 
   it('rates the stored answer of a run (api.md 128)', async () => {
@@ -1147,6 +1234,70 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
   });
 });
 
+describe('WorkflowRunsService: Build visual (agents.md 5.11, workflows R41)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+  const METADATA = {
+    id: 'v-1',
+    title: 'Wins per team',
+    description: '',
+    path: 'visuals/v-1',
+    sourceMessageAt: 't',
+    createdAt: 't',
+    currentVersion: 1,
+    versions: [],
+  };
+
+  it('logs the creation of the visual the step stored beside the answer', async () => {
+    ctx = build(DATASETS, {
+      visual: { visualId: 'v-1', title: 'Wins per team' },
+    });
+    ctx.sessions.finishRunHost.mockImplementationOnce(() =>
+      Promise.resolve({
+        id: 'host',
+        name: 'Insights Analyst',
+        datasets: ['World Cup Core'],
+        messages: [],
+        visualizations: [METADATA],
+        panelItems: [],
+      } as never),
+    );
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
+    expect(run.visualizations?.map((v) => v.id)).toEqual(['v-1']);
+    expect(run.events).toEqual([
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Created interactive visual "Wins per team" (v1).',
+        visual: {
+          visualId: 'v-1',
+          version: 1,
+          title: 'Wins per team',
+          action: 'created',
+        },
+      }),
+    ]);
+  });
+
+  it('logs nothing when the step names a visual the host does not hold', async () => {
+    ctx = build(DATASETS, { visual: { visualId: 'gone', title: 'Gone' } });
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
+    expect(run.events ?? []).toEqual([]);
+  });
+
+  it('logs nothing when the run built no visual', async () => {
+    ctx = build();
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
+    expect(run.events ?? []).toEqual([]);
+  });
+});
+
 describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
@@ -1221,13 +1372,16 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: message },
         { id: 'validate', status: 'skipped' },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
     });
   });
@@ -1282,13 +1436,16 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'success' },
         { id: 'validate', status: 'success' },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'success' },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'success' },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
       output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
@@ -1330,13 +1487,16 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: 'Model error' },
         { id: 'validate', status: 'skipped' },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
     });
     ctx.db.close();
@@ -1354,13 +1514,16 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'stopped' },
         { id: 'validate', status: 'skipped' },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
     });
   });
@@ -2704,5 +2867,198 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
         ctx.service.inputImage(run.id, 'inputs/images/1.png'),
       ).rejects.toThrow(`Run "${run.id}" has no image "inputs/images/1.png"`);
     });
+  });
+});
+
+describe('WorkflowRunsService: a follow-up that asks one agent (workflows R40; api.md 118; agents.md 5.21)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+  const DATA = [
+    {
+      tool: 'run_readonly_sql',
+      input: 'SELECT year, winner FROM wc.public.cups',
+      columns: ['year', 'winner'],
+      rows: [{ year: 2002, winner: 'Brazil' }],
+      rowCount: 1,
+      rationale: 'Every winner.',
+    },
+  ];
+
+  async function earlier() {
+    ctx = build(DATASETS, { answer: 'Brazil won in 2002.', data: DATA });
+    return (await streamed(ctx, 'answer-business-question', { input: ASK }))
+      .run;
+  }
+
+  it('runs Write answer alone on a host given the earlier answer, and stores the asked step', async () => {
+    const first = await earlier();
+    const second = await streamed(ctx, 'answer-business-question', {
+      input: { question: 'Shorter, please', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.id, askStep: 'write-answer' },
+    });
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      ask?: {
+        step: string;
+        earlier?: { plan: unknown; records: { input?: string }[] };
+      };
+    };
+    expect(spec).toMatchObject({
+      runId: second.run.id,
+      workflowId: 'answer-business-question',
+      context: {
+        question: 'Who won in 2002?',
+        answer: 'Brazil won in 2002.',
+      },
+      continuesThreadsOf: `run-${first.id}`,
+    });
+    expect(spec.ask?.step).toBe('write-answer');
+    expect(spec.ask?.earlier?.plan).toEqual(PLAN_OUTPUT.plan);
+    expect(spec.ask?.earlier?.records.map((record) => record.input)).toEqual([
+      DATA[0].input,
+    ]);
+    expect(second.run.context).toEqual({
+      fromRunId: first.id,
+      askStep: 'write-answer',
+    });
+  });
+
+  it('asks the Analyst from copies of the run threads, with its step context block', async () => {
+    const first = await earlier();
+    const second = await streamed(ctx, 'answer-business-question', {
+      input: { question: 'Why Brazil?', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.id, askStep: 'analyse' },
+    });
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(spec).toMatchObject({
+      workflowId: 'answer-business-question',
+      ask: { step: 'analyse' },
+      continuesThreadsOf: `run-${first.id}`,
+    });
+    expect(spec['contextBlock']).toContain('step "Analyse" (analyse)');
+    expect(spec['agentKey']).toBeUndefined();
+    expect(
+      (second.run.context as { askStep?: string } | undefined)?.askStep,
+    ).toBe('analyse');
+  });
+
+  it.each([
+    [{ askStep: 'validate' }, 'Step "validate" has no agent to ask'],
+    [{ askStep: 'read-images' }, 'did not run in run'],
+    // Check data quality left the workflow.
+    [{ askStep: 'check-data-quality' }, 'has no agent to ask'],
+  ])('refuses %j before anything runs', async (extra, message) => {
+    const first = await earlier();
+    ctx.sessions.createRunHost.mockClear();
+    const refusal = ctx.service.prepare('answer-business-question', {
+      input: ASK,
+      context: { fromRunId: first.id, ...extra },
+    });
+    await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
+    await expect(refusal).rejects.toThrow(message);
+    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+  });
+
+  it("asks Ryan alone for a new visual of the earlier answer's rows, and logs the visual it stored", async () => {
+    const script: TurnScript = { answer: 'Brazil won in 2002.', data: DATA };
+    ctx = build(DATASETS, script);
+    const first = (
+      await streamed(ctx, 'answer-business-question', { input: ASK })
+    ).run;
+    // The follow-up's turn: Build visual stores Ryan's new visual.
+    script.visual = { visualId: 'v-2', title: 'Winners by year' };
+    script.answer = `Here's a new visual of the earlier answer: "Winners by year".`;
+    const metadata = {
+      id: 'v-2',
+      title: 'Winners by year',
+      description: '',
+      path: 'visuals/v-2',
+      sourceMessageAt: 't',
+      createdAt: 't',
+      currentVersion: 1,
+      versions: [],
+    };
+    ctx.sessions.finishRunHost.mockImplementationOnce(() =>
+      Promise.resolve({
+        id: 'host',
+        name: 'Insights Analyst',
+        datasets: ['World Cup Core'],
+        messages: [],
+        visualizations: [metadata],
+        panelItems: [],
+      } as never),
+    );
+    const second = await streamed(ctx, 'answer-business-question', {
+      input: { question: 'As a line chart', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.id, askStep: 'build-visual' },
+    });
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      ask?: {
+        step: string;
+        earlier?: {
+          question?: string;
+          answer?: string;
+          records: { input?: string }[];
+        };
+      };
+    };
+    expect(spec.ask?.step).toBe('build-visual');
+    expect(spec.ask?.earlier).toMatchObject({
+      question: 'Who won in 2002?',
+      answer: 'Brazil won in 2002.',
+    });
+    expect(spec.ask?.earlier?.records.map((record) => record.input)).toEqual([
+      DATA[0].input,
+    ]);
+    expect(second.run.context).toEqual({
+      fromRunId: first.id,
+      askStep: 'build-visual',
+    });
+    expect(second.run.events).toEqual([
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Created interactive visual "Winners by year" (v1).',
+        visual: {
+          visualId: 'v-2',
+          version: 1,
+          title: 'Winners by year',
+          action: 'created',
+        },
+      }),
+    ]);
+  });
+
+  it('refuses to ask Ryan when the earlier answer has no query rows to chart', async () => {
+    ctx = build(DATASETS, {
+      answer: 'No match was found.',
+      data: [{ ...DATA[0], rows: [], rowCount: 0 }],
+    });
+    const first = (
+      await streamed(ctx, 'answer-business-question', { input: ASK })
+    ).run;
+    ctx.sessions.createRunHost.mockClear();
+    const refusal = ctx.service.prepare('answer-business-question', {
+      input: ASK,
+      context: { fromRunId: first.id, askStep: 'build-visual' },
+    });
+    await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
+    await expect(refusal).rejects.toThrow(
+      'The earlier answer has no query rows to chart',
+    );
+    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+  });
+
+  it('refuses an asked step with no earlier run', async () => {
+    ctx = build();
+    await expect(
+      ctx.service.prepare('answer-business-question', {
+        input: ASK,
+        context: { askStep: 'plan' },
+      }),
+    ).rejects.toThrow('Asking one agent needs an earlier run');
   });
 });

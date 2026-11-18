@@ -30,7 +30,7 @@ describe('sessionAgentLabel', () => {
   it("shows the agent's name, marked once the agent is deleted", () => {
     expect(sessionAgentLabel(agent)).toBe('Cup historian');
     expect(sessionAgentLabel({ ...agent, deleted: true })).toBe(
-      'Cup historian · agent deleted',
+      'Cup historian · agent persona deleted',
     );
   });
 });
@@ -70,7 +70,7 @@ describe('sessionWorkflowLabel', () => {
 
   it('reads "<name> · agent deleted" once the agent is gone (R59)', () => {
     expect(sessionWorkflowLabel({ ...ref, deleted: true })).toBe(
-      'Cup historian · agent deleted',
+      'Cup historian · agent persona deleted',
     );
   });
 });
@@ -101,7 +101,7 @@ describe('sessionListWorkflow', () => {
           },
         }),
       ),
-    ).toBe('Cup historian · agent deleted');
+    ).toBe('Cup historian · agent persona deleted');
   });
 
   it('falls back to Assistant when the backend sent no workflowRef', () => {

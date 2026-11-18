@@ -24,6 +24,10 @@ import {
   readinessPanelItemId,
   readinessPanelTitle,
 } from '../../models/readiness.model';
+import {
+  ChatHistoryItem,
+  ChatHistoryNav,
+} from '../../../../shared/components/chat-history-nav/chat-history-nav';
 import { AnswerView } from '../answer-view/answer-view';
 import { QUERY_EVIDENCE_API } from '../../../../shared/query-evidence/query-evidence.model';
 import { QueryInspector } from '../../../../shared/query-evidence/query-inspector/query-inspector';
@@ -46,7 +50,7 @@ import { SessionsApiService } from '../../services/sessions-api.service';
  */
 @Component({
   selector: 'app-session-chat',
-  imports: [LucideAngularModule, AnswerView, QueryInspector],
+  imports: [LucideAngularModule, AnswerView, QueryInspector, ChatHistoryNav],
   templateUrl: './session-chat.html',
   styleUrl: './session-chat.scss',
   providers: [
@@ -104,15 +108,19 @@ export class SessionChat {
   private prepared = new Set<number>();
   private opener: QueryOpener | null = null;
 
-  /** Chat-history navigator (Conductor-style tick strip). */
-  readonly historyOpen = signal(false);
-  readonly historyItems = computed(() =>
-    this.messages()
-      .map((message, index) => ({ message, index }))
-      .filter(({ message }) => message.role === 'user'),
+  /** The user messages, for the chat-history navigation (ui.md). */
+  readonly historyItems = computed<ChatHistoryItem[]>(() =>
+    this.messages().flatMap((message, index) =>
+      message.role === 'user'
+        ? [{ id: String(index), label: message.content }]
+        : [],
+    ),
   );
 
   private readonly scroller = viewChild<ElementRef<HTMLDivElement>>('scroller');
+  protected readonly scrollerElement = computed(
+    () => this.scroller()?.nativeElement,
+  );
   private syncedSessionId: string | null = null;
 
   constructor() {
@@ -238,12 +246,6 @@ export class SessionChat {
       () => this.toast.success('Copied to clipboard'),
       () => this.toast.error('Copy failed'),
     );
-  }
-
-  scrollToMessage(index: number): void {
-    this.historyOpen.set(false);
-    const el = this.scroller()?.nativeElement.querySelector(`#msg-${index}`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   private scrollToBottom(): void {

@@ -20,6 +20,8 @@ export interface NarrativeAction {
   detail: string;
   error: string | null;
   running: boolean;
+  /** The rows of the stored query this call ran; null when none matches. */
+  rows: Record<string, unknown>[] | null;
 }
 
 /** The result table of the last query that returned rows. */
@@ -173,6 +175,7 @@ function actionsOf(
       detail,
       error: call.error ?? query?.error ?? null,
       running: !call.finished,
+      rows: query && Array.isArray(query.rows) ? query.rows : null,
     };
   });
 }
@@ -227,6 +230,34 @@ function summaryOf(output: Record<string, unknown> | undefined): string | null {
     if (typeof value === 'string' && value.trim()) return value.trim();
   }
   return null;
+}
+
+/**
+ * A step's tool calls in order, each with its query's rationale and rows when
+ * the step's output kept them (Analyse's `queries`).
+ */
+export function callActions(
+  calls: NodeToolCallView[],
+  output: Record<string, unknown> | undefined,
+): NarrativeAction[] {
+  return actionsOf(calls, queriesOf(output));
+}
+
+/**
+ * What a step with no tool calls of its own read: `Based on 7 rows from 2
+ * queries` for a step handed the earlier queries (Write answer's `queries`);
+ * null when its input has none.
+ */
+export function readSummary(
+  input: Record<string, unknown> | undefined,
+): string | null {
+  const queries = queriesOf(input).filter((q) => !q.error);
+  if (!queries.length) return null;
+  const rows = queries.reduce(
+    (sum, q) => sum + (typeof q.rowCount === 'number' ? q.rowCount : 0),
+    0,
+  );
+  return `Based on ${plural(rows, 'row')} from ${plural(queries.length, 'query', 'queries')}`;
 }
 
 export function buildStepNarrative(source: NarrativeSource): StepNarrative {

@@ -8,6 +8,8 @@ import {
   answerFrom,
   clearPlan,
   dataQualityReply,
+  ExplorerReply,
+  isResultExplorerCall,
   v2StepOf,
 } from './v2-steps';
 
@@ -100,8 +102,25 @@ export interface LlmStub {
    * what the app shows while it still streams. Unset answers at once.
    */
   hold?: (request: StubRequest) => Promise<void> | undefined;
+  /**
+   * Optional: overrides any agent call's answer, the structured steps' and
+   * `result-explorer`'s included (the request is recorded first). A
+   * `{ status }` answers that HTTP error with an OpenAI-style error body (use
+   * a 4xx: the AI SDK retries a 5xx); a `StubReply` is sent as is, e.g. a
+   * reply that is no JSON for a step that expects JSON. Undefined goes on as
+   * usual.
+   */
+  intercept?: (
+    request: StubRequest,
+  ) => StubReply | { status: number; message?: string } | undefined;
   /** Plan's output for a v2 run; the default is `clearPlan` of the question. */
   plan: (request: StubRequest) => V2Plan;
+  /**
+   * `result-explorer`'s reply (a filter in words, or Answer a Business
+   * Question's Interpret follow-up, roadmap 1.28.8). The default reads a new
+   * question, so a follow-up run plans as before; a test that explores sets it.
+   */
+  explore: (request: StubRequest) => ExplorerReply;
   /** Write answer's output; the default is `answerFrom` the last text `reply` gave. */
   answer: (request: StubRequest) => V2Answer;
   /** The last text `reply` gave a streamed call (Analyse's final text), or `STUB_ANSWER`. */
@@ -252,6 +271,14 @@ export async function startLlmStub(
     reply: () => ({ text: STUB_ANSWER }),
     plan: (request) => clearPlan(lastUserText(request)),
     answer: () => answerFrom(stub.lastText),
+    explore: () => ({
+      action: 'new-question',
+      query: null,
+      filters: [],
+      sort: [],
+      page: { move: 'keep', to: null },
+      understood: 'A new question',
+    }),
     lastText: STUB_ANSWER,
     close: async () => undefined,
   };
@@ -276,6 +303,15 @@ export async function startLlmStub(
           ? dataQualityReply(lastUserText(request))
           : stub.answer(request)),
     };
+    const viaTool =
+      request.tools.includes(JSON_TOOL) &&
+      request.messages.at(-1)?.role !== 'tool';
+    return viaTool
+      ? { toolCall: { name: JSON_TOOL, arguments: value } }
+      : { text: JSON.stringify(value) };
+  };
+  const exploring = (request: StubRequest): StubReply => {
+    const value = { ...stub.explore(request) } as Record<string, unknown>;
     const viaTool =
       request.tools.includes(JSON_TOOL) &&
       request.messages.at(-1)?.role !== 'tool';
@@ -341,9 +377,10 @@ export async function startLlmStub(
           .map(messageText)
           .at(-1) ?? '',
       );
+      const explore = isResultExplorerCall(messages.filter((m) => m.role === 'system').map(messageText));
       // The settings connection test asks for a JSON status object; v2's
       // structured steps may too, but they carry their instructions.
-      if (body.response_format && step === null) {
+      if (body.response_format && step === null && !explore) {
         stub.probes.push({
           path: req.url,
           reasoningEffort: body.reasoning_effort,
@@ -362,6 +399,30 @@ export async function startLlmStub(
         ...(step !== null ? { step } : {}),
       };
       stub.requests.push(request);
+      const intercepted = stub.intercept?.(request);
+      if (intercepted && 'status' in intercepted) {
+        res.writeHead(intercepted.status, {
+          'Content-Type': 'application/json',
+        });
+        res.end(
+          JSON.stringify({
+            error: {
+              message: intercepted.message ?? 'The stub model failed.',
+              type: 'invalid_request_error',
+              code: null,
+            },
+          }),
+        );
+        return;
+      }
+      if (intercepted) {
+        respond(res, request.stream, intercepted);
+        return;
+      }
+      if (explore) {
+        respond(res, request.stream, exploring(request));
+        return;
+      }
       if (step !== null) {
         respond(res, request.stream, structured(request, step));
         return;

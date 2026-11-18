@@ -4,6 +4,7 @@ import type {
   RestEndpointDef,
 } from '../entities/datasource.entity';
 import { MASKED } from './connector';
+import type { PagedStatement } from './paged-sql.types';
 import { RestConnector } from './rest.connector';
 
 type Responder = (url: URL, init: RequestInit) => unknown;
@@ -363,6 +364,103 @@ describe('RestConnector pagination', () => {
     );
 
     expect(calls()).toHaveLength(50);
+  });
+});
+
+describe('RestConnector runPagedSql on real SQLite (datasources R52)', () => {
+  const config = build([customers]);
+  const people = [
+    { id: 1, name: 'Ada', vip: true, city: 'Lima' },
+    { id: 2, name: 'Bo', vip: false, city: null },
+    { id: 3, name: 'Cy', vip: true, city: 'Quito' },
+    { id: 4, name: 'Di', vip: true, city: 'lima' },
+    { id: 5, name: 'Ed_1%', vip: false, city: 'Cusco' },
+  ];
+  const stmt = (overrides: Partial<PagedStatement> = {}): PagedStatement => ({
+    sql: 'SELECT name, vip, city FROM api.default.customers ORDER BY id;',
+    columns: ['name', 'vip', 'city'],
+    filters: [],
+    sort: [],
+    limit: 2,
+    offset: 0,
+    kinds: { name: 'text', vip: 'boolean', city: 'text' },
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    respond = () => people;
+  });
+
+  it('filters on a boolean, keeps the stored order and reports the matching total', async () => {
+    const page = await new RestConnector().runPagedSql(
+      config,
+      stmt({ filters: [{ column: 'vip', op: 'eq', value: true }] }),
+    );
+
+    expect(page).toEqual({
+      columns: ['name', 'vip', 'city'],
+      rows: [
+        { name: 'Ada', vip: 1, city: 'Lima' },
+        { name: 'Cy', vip: 1, city: 'Quito' },
+      ],
+      matchedRows: 3,
+    });
+  });
+
+  it('reads a later page in the requested order with NULLs last', async () => {
+    const page = await new RestConnector().runPagedSql(
+      config,
+      stmt({
+        sort: [{ column: 'city', direction: 'asc' }],
+        limit: 2,
+        offset: 3,
+      }),
+    );
+
+    // Cusco, Lima, Quito, lima (binary order), then the NULL.
+    expect(page.rows.map((r) => r.city)).toEqual(['lima', null]);
+    expect(page.matchedRows).toBe(5);
+  });
+
+  it('compares text case-insensitively, escapes LIKE and keeps NULLs on neq', async () => {
+    const run = (filters: PagedStatement['filters']) =>
+      new RestConnector().runPagedSql(config, stmt({ filters, limit: 10 }));
+
+    expect(
+      (await run([{ column: 'city', op: 'eq', value: 'LIMA' }])).rows.map(
+        (r) => r.name,
+      ),
+    ).toEqual(['Ada', 'Di']);
+    expect(
+      (await run([{ column: 'name', op: 'contains', value: '_1%' }])).rows.map(
+        (r) => r.name,
+      ),
+    ).toEqual(['Ed_1%']);
+    expect(
+      (await run([{ column: 'city', op: 'neq', value: 'lima' }])).rows.map(
+        (r) => r.name,
+      ),
+    ).toEqual(['Bo', 'Cy', 'Ed_1%']);
+  });
+
+  it('counts once more for a page past the end', async () => {
+    const page = await new RestConnector().runPagedSql(
+      config,
+      stmt({ filters: [{ column: 'vip', op: 'eq', value: false }], offset: 4 }),
+    );
+
+    expect(page.rows).toEqual([]);
+    expect(page.matchedRows).toBe(2);
+  });
+
+  it('rejects write SQL before fetching anything', async () => {
+    await expect(
+      new RestConnector().runPagedSql(
+        config,
+        stmt({ sql: 'DELETE FROM api.default.customers' }),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

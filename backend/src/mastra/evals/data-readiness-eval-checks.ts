@@ -205,6 +205,67 @@ export function topFindingCounts(outputs: Record<string, unknown>[]): number[] {
   return counts;
 }
 
+/**
+ * The `findings` pages of `dimension` that `get_readiness_report` returned
+ * (story 1.28.12), in call order.
+ */
+export function dimensionPages(
+  calls: EvalRawToolCall[],
+  dimension: string,
+): Record<string, unknown>[] {
+  return readinessOutputs(calls, ['get_readiness_report'])
+    .map((out) => out['findings'])
+    .filter(
+      (page): page is Record<string, unknown> =>
+        !!page &&
+        typeof page === 'object' &&
+        (page as Record<string, unknown>)['dimension'] === dimension,
+    );
+}
+
+/**
+ * Counts an answer may give by counting every finding of a dimension once
+ * all its pages were read (story 1.28.12): per severity, per table and the
+ * number of tables. A count of some of the pages is never taken for a count
+ * of the data.
+ */
+export function dimensionFindingCounts(
+  outputs: Record<string, unknown>[],
+): number[] {
+  const pages = new Map<string, Map<number, Record<string, unknown>[]>>();
+  for (const output of outputs) {
+    const page = output['findings'] as Record<string, unknown> | undefined;
+    if (!page || typeof page !== 'object' || !Array.isArray(page['items'])) {
+      continue;
+    }
+    const key = `${fieldText(output['reportId'])}:${fieldText(page['dimension'])}:${fieldText(page['total'])}`;
+    const byPage =
+      pages.get(key) ?? new Map<number, Record<string, unknown>[]>();
+    byPage.set(
+      Number(page['page']),
+      page['items'] as Record<string, unknown>[],
+    );
+    pages.set(key, byPage);
+  }
+  const counts: number[] = [];
+  for (const [key, byPage] of pages) {
+    const items = [...byPage.values()].flat();
+    if (String(items.length) !== key.split(':').pop()) continue;
+    const groups = new Map<string, number>();
+    for (const item of items) {
+      for (const group of [
+        `s:${fieldText(item?.['severity'])}`,
+        `e:${fieldText(item?.['entity'])}`,
+      ]) {
+        groups.set(group, (groups.get(group) ?? 0) + 1);
+      }
+    }
+    const tables = [...groups.keys()].filter((g) => g.startsWith('e:'));
+    counts.push(tables.length, ...groups.values());
+  }
+  return counts;
+}
+
 /** A number quoted in the answer, with the text it was found in. */
 export interface QuotedNumber {
   value: number;
@@ -294,6 +355,7 @@ export function quotedNumbersFromTools(allow: number[] = []): EvalCustomCheck {
       const allowed = [
         ...numbersIn(outputs),
         ...topFindingCounts(outputs),
+        ...dimensionFindingCounts(outputs),
         ...METHOD_CONSTANTS,
         ...allow,
       ];
@@ -385,17 +447,24 @@ export function calledAtMost(name: string, max: number): EvalCustomCheck {
 
 /**
  * The readiness tools received only the inputs agents.md 3.13 defines
- * (`dataset`, `reportId`): no attempt to pass a score in.
+ * (`dataset`, `reportId`, and `dimension` and `page` of
+ * `get_readiness_report`): no attempt to pass a score in.
  */
 export function onlyDefinedInputs(): EvalCustomCheck {
   const allowed = new Set(['dataset', 'reportId']);
+  const listing = new Set(['dimension', 'page']);
+  // The id stays as it was, so runs before story 1.28.12 compare.
   return drCheck(
     'readiness tools were called only with dataset and reportId',
     ({ toolCalls }) => {
       const bad = toolCalls.find(
         (call) =>
           READINESS_TOOLS.includes(call.name) &&
-          Object.keys(callInput(call)).some((key) => !allowed.has(key)),
+          Object.keys(callInput(call)).some(
+            (key) =>
+              !allowed.has(key) &&
+              !(call.name === 'get_readiness_report' && listing.has(key)),
+          ),
       );
       return bad
         ? `"${bad.name}" was called with ${JSON.stringify(callInput(bad)).slice(0, 300)}`
@@ -523,6 +592,72 @@ export function assessOnlyWithoutReport(): EvalCustomCheck {
       return noReport
         ? undefined
         : `"assess_data_readiness" ran although no lookup showed the dataset without a report; tools: ${names(toolCalls)}`;
+    },
+  );
+}
+
+// ------------------------------- every finding of a dimension (story 1.28.12)
+
+/** Every page of `dimension`'s findings, 1 to its pageCount, was read. */
+export function readsEveryPage(dimension: string): EvalCustomCheck {
+  return drCheck(
+    `every page of the ${dimension} findings was read`,
+    ({ toolCalls }) => {
+      const pages = dimensionPages(toolCalls, dimension);
+      if (!pages.length) {
+        return `no get_readiness_report result lists the ${dimension} findings; tools: ${names(toolCalls)}`;
+      }
+      const pageCount = Math.max(...pages.map((p) => Number(p['pageCount'])));
+      const read = [...new Set(pages.map((p) => Number(p['page'])))].sort(
+        (a, b) => a - b,
+      );
+      return read.length >= pageCount
+        ? undefined
+        : `read page(s) ${read.join(', ')} of ${pageCount} of the ${dimension} findings`;
+    },
+  );
+}
+
+/**
+ * Rule D15: findings are listed from the report, never counted again with
+ * SQL. A `run_readonly_sql` call over `information_schema`, or one that
+ * counts `IS NULL` rows (`count(…)` or `sum(…)` with `IS NULL`), fails.
+ * Showing the rows behind one finding (`WHERE c IS NULL … LIMIT`) passes.
+ */
+export function noFindingRecount(): EvalCustomCheck {
+  return drCheck(
+    'run_readonly_sql never recounts findings',
+    ({ toolCalls }) => {
+      const recount = callsOf(toolCalls, 'run_readonly_sql')
+        .map((call) => fieldText(callInput(call)['sql']))
+        .find(
+          (sql) =>
+            /\binformation_schema\b/i.test(sql) ||
+            (/\bIS\s+NULL\b/i.test(sql) && /\b(?:count|sum)\s*\(/i.test(sql)),
+        );
+      return recount === undefined
+        ? undefined
+        : `a query recounts findings: ${recount.replace(/\s+/g, ' ').slice(0, 300)}`;
+    },
+  );
+}
+
+/** The answer gives the total of `dimension`'s findings the report states. */
+export function quotesDimensionTotal(dimension: string): EvalCustomCheck {
+  return drCheck(
+    `the answer gives the report's total of ${dimension} findings`,
+    ({ answer, toolCalls }) => {
+      const pages = dimensionPages(toolCalls, dimension);
+      const total = pages[pages.length - 1]?.['total'];
+      if (typeof total !== 'number') {
+        return `no get_readiness_report result lists the ${dimension} findings; tools: ${names(toolCalls)}`;
+      }
+      const quoted = [...answer.matchAll(/(?<![\w.,])\d[\d,]*(?![\w])/g)].map(
+        (match) => Number(match[0].replace(/,/g, '')),
+      );
+      return quoted.includes(total)
+        ? undefined
+        : `the answer does not give the report's total of ${total} ${dimension} findings`;
     },
   );
 }

@@ -233,7 +233,7 @@ describe('AgentTryIt', () => {
     it('shows chips and query rows for an answer with data, and renders one without data as before', async () => {
       await answerWithData();
       expect(byId('agent-tryit-answer')?.querySelector('[data-testid="query-row-0"]')).not.toBeNull();
-      expect(byId('agent-tryit-answer')?.querySelector('[data-testid="figure-ref"]')?.textContent).toBe('Q1');
+      expect(byId('agent-tryit-answer')?.querySelector('[data-testid="figure-ref"]')?.textContent).toBe('1');
       expect(byId('agent-tryit-answer')?.textContent).not.toContain('Data used');
 
       await ask('Again');
@@ -277,7 +277,7 @@ describe('AgentTryIt', () => {
       row.focus();
       row.click();
       sheet.detectChanges();
-      expect(inSheet('query-inspector-position')?.textContent).toContain('Query 1 of 1');
+      expect(inSheet('query-inspector-position')?.textContent).toContain('Source 1 of 1');
 
       // The steps tab is the first shown: the query is explained at once.
       expect(evidenceCalls).toEqual(['prepare draft-3', 'explain draft-3 0']);

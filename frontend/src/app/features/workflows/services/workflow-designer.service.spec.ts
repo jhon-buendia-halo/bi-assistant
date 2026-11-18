@@ -10,7 +10,7 @@ import {
   WorkflowRun,
   WorkflowRunRequest,
 } from '../models/workflow.model';
-import { WorkflowDesigner } from './workflow-designer.service';
+import { ASK_HINTS, WorkflowDesigner } from './workflow-designer.service';
 import { GRAPH_RETRY_RUN, GRAPH_WORKFLOW } from './workflow-graph.testing';
 import {
   RunStreamHandlers,
@@ -190,7 +190,10 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       .expectOne((r) => r.url.endsWith('/workflows/answer-business-question'))
       .flush(ASSISTANT);
     http
-      .expectOne((r) => r.url.endsWith('/datasets'))
+      // The light listing (api.md 21): the run form's picker needs no snapshots.
+      .expectOne(
+        (r) => r.url.endsWith('/datasets') && r.params.get('view') === 'summary',
+      )
       .flush({
         datasets: [
           {
@@ -240,6 +243,61 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
     expect(designer.runResult()).toBeNull();
     expect(designer.inputValues()).toEqual({ verbose: false });
+  });
+
+  describe("the home's Ask (app-shell R51)", () => {
+    const datasets = {
+      datasets: [
+        { name: 'World Cup Core', tables: ['a'], datasourceKind: 'postgres' },
+      ],
+    };
+
+    function open(): void {
+      designer.load(ASSISTANT.id);
+      http
+        .expectOne((r) => r.url.endsWith('/workflows/answer-business-question'))
+        .flush(ASSISTANT);
+    }
+
+    it('runs on the held values once the datasets have loaded', () => {
+      designer.prefillOnLoad(
+        { question: 'Goals by team?', datasets: ['World Cup Core'] },
+        { execute: true },
+      );
+      open();
+      expect(runs.calls.length).toBe(0);
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush(datasets);
+      expect(runs.calls.length).toBe(1);
+      expect(runs.last.workflowId).toBe(ASSISTANT.id);
+      expect(runs.last.body.input).toEqual(
+        jasmine.objectContaining({
+          question: 'Goals by team?',
+          datasets: ['World Cup Core'],
+        }),
+      );
+      expect(designer.running()).toBeTrue();
+    });
+
+    it('only fills the form without execute, and runs once at most', () => {
+      designer.prefillOnLoad({ question: 'Goals by team?' });
+      open();
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush(datasets);
+      expect(runs.calls.length).toBe(0);
+      expect(designer.inputValue('question')).toBe('Goals by team?');
+      // A later open does not run either.
+      open();
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush(datasets);
+      expect(runs.calls.length).toBe(0);
+    });
+
+    it('does not run when the page shows a stored run', () => {
+      designer.showRunOnLoad(storedRun());
+      designer.prefillOnLoad({ question: 'Goals by team?' }, { execute: true });
+      open();
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush(datasets);
+      expect(runs.calls.length).toBe(0);
+      expect(designer.runResult()?.runId).toBe('run-1');
+    });
   });
 
   it('Run again drops the run shown and opens the form with its whole input (R19)', () => {
@@ -768,6 +826,232 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.runResult()?.status).toBe('running');
   });
 
+  describe('asking one agent in a follow-up', () => {
+    const agentStep = (
+      id: string,
+      title: string,
+      name: string,
+      role?: string,
+    ): WorkflowDetail['steps'][number] => ({
+      id,
+      title,
+      kind: 'agent',
+      summary: title,
+      agent: { key: id, name, ...(role ? { role } : {}), tools: [], maxSteps: 5 },
+      input: ['question'],
+      output: ['out'],
+      exits: [],
+    });
+    const ASK: WorkflowDetail = {
+      ...ASSISTANT,
+      steps: [
+        agentStep('plan', 'Plan', 'Olivia'),
+        agentStep('analyse', 'Analyse', 'Insights Analyst'),
+        agentStep('write-answer', 'Write answer', 'Jessica', 'Insights Writer'),
+        {
+          id: 'wrap-up',
+          title: 'Wrap up',
+          kind: 'code',
+          summary: 'Wrap up',
+          input: [],
+          output: [],
+          exits: [],
+        },
+      ],
+    };
+    const step = (
+      id: string,
+      status: WorkflowRun['steps'][number]['status'],
+    ) => ({ id, title: id, status });
+
+    beforeEach(() => {
+      designer.workflow.set(ASK);
+    });
+
+    it('lists the agent steps that ran in the shown run, in step order, skipped ones left out', () => {
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({
+          steps: [
+            step('wrap-up', 'success'),
+            step('write-answer', 'success'),
+            step('analyse', 'success'),
+            step('plan', 'skipped'),
+          ],
+        }),
+      );
+      expect(designer.askableSteps()).toEqual([
+        // No role: the step's title says what the agent does.
+        {
+          id: 'analyse',
+          agentName: 'Insights Analyst',
+          label: 'Insights Analyst · Analyse',
+        },
+        {
+          id: 'write-answer',
+          agentName: 'Jessica',
+          label: 'Jessica · Insights Writer',
+        },
+      ]);
+    });
+
+    it('says under the picker what the picked follow-up does', () => {
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({ steps: [step('write-answer', 'success')] }),
+      );
+      expect(designer.askHint()).toBe(ASK_HINTS['']);
+      designer.askStep.set('write-answer');
+      expect(designer.askHint()).toBe(
+        'Write answer step: rewrites the earlier answer from the same results. Runs no new queries.',
+      );
+    });
+
+    it('the last attempt of a step wins', () => {
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({
+          steps: [
+            step('analyse', 'success'),
+            { ...step('analyse', 'skipped'), attempt: 2 },
+            step('write-answer', 'failed'),
+          ],
+        }),
+      );
+      expect(designer.askableSteps().map((s) => s.id)).toEqual([
+        'write-answer',
+      ]);
+    });
+
+    it('gives none for another workflow', () => {
+      designer.workflow.set({ ...ASK, id: 'other-workflow' });
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({
+          workflowId: 'other-workflow',
+          steps: [step('analyse', 'success')],
+        }),
+      );
+      expect(designer.askableSteps()).toEqual([]);
+    });
+
+    it('Follow up sends the picked step and the run says who was asked; a new run resets the pick', () => {
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({ steps: [step('write-answer', 'success')] }),
+      );
+      designer.askStep.set('write-answer');
+      expect(designer.askedAgentName()).toBe('Jessica');
+      designer.followUp('Shorter please');
+      expect(runs.last.body.context).toEqual({
+        fromRunId: 'run-1',
+        askStep: 'write-answer',
+      });
+      expect(designer.contextRun()?.askedAgent).toBe('Jessica');
+      expect(designer.contextAgent()).toBe('Jessica');
+      expect(designer.askStep()).toBe('');
+      expect(designer.askedAgentName()).toBeNull();
+    });
+
+    describe('Build visual', () => {
+      const ROWS = {
+        tool: 'run_readonly_sql',
+        columns: ['team'],
+        rows: [{ team: 'Brazil' }],
+        rowCount: 1,
+      };
+      const withVisual = (): void =>
+        designer.workflow.set({
+          ...ASK,
+          steps: [
+            ...ASK.steps,
+            agentStep('build-visual', 'Build visual', 'Ryan', 'Visual Designer'),
+          ],
+        });
+      const answer = (data: unknown[]): Partial<WorkflowRun> => ({
+        answer: {
+          role: 'assistant',
+          content: 'Brazil',
+          at: '2026-01-01T00:00:00Z',
+          data,
+        } as never,
+      });
+
+      it('is offered after the other agents when the earlier answer has query rows, even skipped', () => {
+        withVisual();
+        executeQuestion();
+        runs.last.handlers.onDone!(
+          storedRun({
+            ...answer([ROWS]),
+            steps: [
+              step('analyse', 'success'),
+              step('build-visual', 'skipped'),
+            ],
+          }),
+        );
+        expect(designer.askableSteps().map((s) => s.id)).toEqual([
+          'analyse',
+          'build-visual',
+        ]);
+        designer.askStep.set('build-visual');
+        expect(designer.askHint()).toBe(ASK_HINTS['build-visual']);
+        expect(designer.askedAgentName()).toBe('Ryan');
+      });
+
+      it('is left out when the answer has no query rows or the step is running or absent', () => {
+        withVisual();
+        executeQuestion();
+        runs.last.handlers.onDone!(
+          storedRun({
+            ...answer([{ tool: 'run_readonly_sql', rows: [], rowCount: 0 }]),
+            steps: [step('build-visual', 'success')],
+          }),
+        );
+        expect(designer.askableSteps()).toEqual([]);
+        runs.last.handlers.onDone!(
+          storedRun({ steps: [step('build-visual', 'success')] }),
+        );
+        expect(designer.askableSteps()).toEqual([]);
+        runs.last.handlers.onDone!(
+          storedRun({
+            ...answer([ROWS]),
+            steps: [step('build-visual', 'running')],
+          }),
+        );
+        expect(designer.askableSteps()).toEqual([]);
+        runs.last.handlers.onDone!(
+          storedRun({ ...answer([ROWS]), steps: [step('analyse', 'success')] }),
+        );
+        expect(designer.askableSteps().map((s) => s.id)).toEqual(['analyse']);
+      });
+
+      it('a stored run with context.askStep build-visual names Ryan', () => {
+        withVisual();
+        executeQuestion();
+        runs.last.handlers.onDone!(
+          storedRun({
+            id: 'run-2',
+            context: { fromRunId: 'run-1', askStep: 'build-visual' },
+            steps: [step('build-visual', 'success')],
+          }),
+        );
+        expect(designer.contextAgent()).toBe('Ryan');
+      });
+    });
+
+    it('a stored run with context.askStep names the agent asked', () => {
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({
+          id: 'run-2',
+          context: { fromRunId: 'run-1', askStep: 'analyse' },
+          steps: [step('analyse', 'success')],
+        }),
+      );
+      expect(designer.contextAgent()).toBe('Insights Analyst');
+    });
+  });
+
   it('Follow up sends the composer images: the kept paths and the new ones', () => {
     executeQuestion();
     runs.last.handlers.onDone!(
@@ -1156,6 +1440,26 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       expect(runs.prepareEvidence).toHaveBeenCalledTimes(1);
       openStored(withData('run-2'));
       expect(runs.prepareEvidence).toHaveBeenCalledTimes(2);
+    });
+
+    it('turns the inspector on, and prepares evidence, for a run of any workflow whose answer holds data', () => {
+      const readiness = { ...ASSISTANT, id: 'assess-data-readiness' };
+      designer.showRunOnLoad({
+        ...withData(),
+        workflowId: 'assess-data-readiness',
+      });
+      designer.load(readiness.id);
+      http
+        .expectOne((r) => r.url.endsWith('/workflows/assess-data-readiness'))
+        .flush(readiness);
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+      expect(designer.inspectsQueries()).toBeTrue();
+      expect(runs.prepareEvidence).toHaveBeenCalledOnceWith('run-1');
+    });
+
+    it('leaves the inspector off for a run whose answer holds no data', () => {
+      openStored(storedRun());
+      expect(designer.inspectsQueries()).toBeFalse();
     });
 
     it('does not prepare an answer with no data, and a failure is silent', () => {

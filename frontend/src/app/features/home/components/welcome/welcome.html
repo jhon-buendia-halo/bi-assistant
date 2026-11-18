@@ -1,0 +1,310 @@
+<section
+  class="flex h-full min-h-0 flex-col overflow-y-auto"
+  aria-labelledby="welcome-title"
+  data-testid="welcome"
+>
+  <div
+    class="@container mx-auto flex w-full max-w-[960px] flex-col gap-5 px-6 py-6"
+  >
+    <header>
+      <h2
+        id="welcome-title"
+        [class]="
+          flat
+            ? 'display-title text-[28px] leading-9 text-fg-strong'
+            : 'text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong'
+        "
+      >
+        {{ brand.welcomeLead }}
+        <span [class.display-accent]="flat">{{ brand.welcomeName }}</span>
+      </h2>
+      <p class="mt-1 text-[14px] leading-5 text-fg-muted">
+        Ask a question about your data. An analyst plans it, runs read-only
+        queries and shows the query behind every figure.
+      </p>
+    </header>
+
+    @if (setupGaps().length > 0) {
+      <section
+        class="card flex flex-col gap-2 border-on-warning-soft/30 bg-warning-soft p-3"
+        aria-labelledby="welcome-setup-title"
+        data-testid="welcome-setup"
+      >
+        <p
+          id="welcome-setup-title"
+          class="m-0 flex items-center gap-2 text-[13px] font-semibold text-on-warning-soft"
+        >
+          <lucide-angular [img]="CircleAlert" [size]="16" aria-hidden="true" />
+          Before your first question
+        </p>
+        <ul class="m-0 flex list-none flex-col gap-2 p-0">
+          @for (gap of setupGaps(); track gap) {
+            <li
+              class="flex flex-wrap items-center justify-between gap-2"
+              [attr.data-testid]="'welcome-setup-' + gap"
+            >
+              @if (gap === "llm") {
+                <span class="text-[13px] text-on-warning-soft">
+                  Connect a model: the analyst needs an LLM to answer.
+                </span>
+                <button
+                  type="button"
+                  class="btn btn-secondary shrink-0"
+                  (click)="openLlmSettings()"
+                >
+                  LLM settings
+                </button>
+              } @else {
+                <span class="text-[13px] text-on-warning-soft">
+                  Create a dataset: the tables the analyst may query.
+                </span>
+                <button
+                  type="button"
+                  class="btn btn-secondary shrink-0"
+                  (click)="openArea('datasets')"
+                >
+                  Datasets
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    <form
+      class="card flex flex-col gap-3 p-3 focus-within:border-border-selected"
+      data-testid="welcome-ask"
+      (submit)="$event.preventDefault(); ask()"
+    >
+      <label
+        for="welcome-question"
+        class="text-[15px] font-semibold text-fg-strong"
+        >What do you want to know?</label
+      >
+      <textarea
+        #questionBox
+        id="welcome-question"
+        data-testid="welcome-question"
+        rows="3"
+        maxlength="4000"
+        placeholder="e.g. Which teams scored the most goals per match in the last three World Cups?"
+        [value]="question()"
+        [attr.aria-invalid]="errorField() === 'question' ? 'true' : null"
+        [attr.aria-describedby]="
+          errorField() === 'question' ? 'welcome-ask-error' : null
+        "
+        (input)="onQuestion($event)"
+        (keydown.enter)="onEnter($event)"
+        class="w-full resize-none border-0 bg-transparent p-0.5 text-[14px] leading-5 text-fg outline-none placeholder:text-fg-muted"
+      ></textarea>
+      <div
+        class="flex flex-col gap-1"
+        role="group"
+        aria-labelledby="welcome-datasets-label"
+      >
+        <span
+          id="welcome-datasets-label"
+          class="text-[12px] font-medium text-fg-muted"
+          >Datasets</span
+        >
+        @if (datasets(); as list) {
+          @if (list.length > 0) {
+            <app-dataset-picker
+              [datasets]="list"
+              [selected]="picked()"
+              [invalid]="errorField() === 'datasets'"
+              (selectedChange)="onPicked($event)"
+            />
+          } @else {
+            <p class="m-0 text-[12px] text-fg-muted">
+              No datasets yet — create one in Datasets first.
+            </p>
+          }
+        }
+      </div>
+      @if (error(); as message) {
+        <p
+          id="welcome-ask-error"
+          data-testid="welcome-ask-error"
+          role="alert"
+          class="m-0 text-[12px] text-on-danger-soft"
+        >
+          {{ message }}
+        </p>
+      }
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <span class="text-[12px] text-fg-muted">
+          Runs the
+          <span class="font-medium text-fg">{{
+            askWorkflow()?.name ?? "Answer a Business Question"
+          }}</span>
+          user journey · Shift+Enter for a new line
+        </span>
+        <button
+          type="submit"
+          class="btn btn-primary"
+          data-testid="welcome-ask-submit"
+          [disabled]="blocked() !== null"
+          [attr.title]="blocked()"
+        >
+          <lucide-angular [img]="SendHorizontal" [size]="16" />
+          Ask
+        </button>
+      </div>
+    </form>
+
+    <div
+      class="grid grid-cols-1 items-start gap-5 @3xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]"
+    >
+      <section aria-labelledby="welcome-runs-title" data-testid="welcome-runs">
+        <h3
+          id="welcome-runs-title"
+          class="mb-2 text-[12px] font-semibold tracking-wide text-fg-muted uppercase"
+        >
+          Recent runs
+        </h3>
+        @if (!runsState.runsLoaded()) {
+          <p class="m-0 text-[13px] text-fg-muted">Loading runs…</p>
+        } @else if (recentRuns().length === 0) {
+          <p
+            class="card m-0 p-3 text-[13px] text-fg-muted"
+            data-testid="welcome-runs-empty"
+          >
+            No runs yet. Your questions and user journey runs show up here.
+          </p>
+        } @else {
+          <ul
+            class="card m-0 list-none divide-y divide-border overflow-hidden p-0"
+          >
+            @for (run of recentRuns(); track run.id) {
+              <li>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-muted"
+                  [attr.data-testid]="'welcome-run-' + run.id"
+                  (click)="openRun(run)"
+                >
+                  <span class="flex min-w-0 flex-1 flex-col">
+                    <span
+                      class="truncate text-[13px] font-medium text-fg-strong"
+                      >{{ run.title }}</span
+                    >
+                    <span class="truncate text-[12px] text-fg-muted"
+                      >{{ run.workflowName }} · {{ when(run) }}</span
+                    >
+                  </span>
+                  <span
+                    class="chip shrink-0"
+                    [class.chip-neutral]="
+                      run.status !== 'failed' && run.status !== 'suspended'
+                    "
+                    [class.chip-warning]="
+                      run.status === 'failed' || run.status === 'suspended'
+                    "
+                    >{{ status(run.status) }}</span
+                  >
+                </button>
+              </li>
+            }
+            <li>
+              <button
+                type="button"
+                class="flex w-full items-center gap-1 px-3 py-2 text-left text-[13px] font-medium text-accent hover:bg-surface-muted"
+                data-testid="welcome-all-runs"
+                (click)="openArea('runs')"
+              >
+                All runs
+                <lucide-angular
+                  [img]="ArrowRight"
+                  [size]="14"
+                  aria-hidden="true"
+                />
+              </button>
+            </li>
+          </ul>
+        }
+      </section>
+
+      <section
+        aria-labelledby="welcome-workflows-title"
+        data-testid="welcome-workflows"
+      >
+        <h3
+          id="welcome-workflows-title"
+          class="mb-2 text-[12px] font-semibold tracking-wide text-fg-muted uppercase"
+        >
+          Other user journeys
+        </h3>
+        @if (workflows() === null) {
+          <p class="m-0 text-[13px] text-fg-muted">Loading user journeys…</p>
+        } @else {
+          <ul
+            class="card m-0 list-none divide-y divide-border overflow-hidden p-0"
+          >
+            @for (workflow of otherWorkflows(); track workflow.id) {
+              <li>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-muted"
+                  [attr.data-testid]="'welcome-workflow-' + workflow.id"
+                  [attr.title]="workflow.description"
+                  (click)="openWorkflow(workflow)"
+                >
+                  <span
+                    class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-on-primary-soft"
+                    aria-hidden="true"
+                  >
+                    <lucide-angular [img]="Workflow" [size]="14" />
+                  </span>
+                  <span class="flex min-w-0 flex-1 flex-col">
+                    <span
+                      class="truncate text-[13px] font-medium text-fg-strong"
+                      >{{ workflow.name }}</span
+                    >
+                    <span class="truncate text-[12px] text-fg-muted">{{
+                      workflow.description
+                    }}</span>
+                  </span>
+                </button>
+              </li>
+            }
+            <li>
+              <button
+                type="button"
+                class="flex w-full items-center gap-1 px-3 py-2 text-left text-[13px] font-medium text-accent hover:bg-surface-muted"
+                data-testid="welcome-all-workflows"
+                (click)="openArea('workflows')"
+              >
+                All workflows
+                <lucide-angular
+                  [img]="ArrowRight"
+                  [size]="14"
+                  aria-hidden="true"
+                />
+              </button>
+            </li>
+          </ul>
+        }
+      </section>
+    </div>
+
+    <div
+      class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"
+    >
+      <p class="m-0 text-[13px] text-fg-muted">
+        Agent personas are the building blocks behind every step. Open one to
+        read how it works, or build your own.
+      </p>
+      <button
+        type="button"
+        class="btn btn-secondary shrink-0"
+        data-testid="welcome-agents"
+        (click)="openArea('agents')"
+      >
+        <lucide-angular [img]="Bot" [size]="16" />
+        Explore agent personas
+      </button>
+    </div>
+  </div>
+</section>

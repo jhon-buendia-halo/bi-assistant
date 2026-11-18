@@ -272,7 +272,13 @@
                       [size]="14"
                       class="mt-0.5 shrink-0"
                     />
-                    @if (fixture.selfRegistering) {
+                    @if (fixture.selfRegistering && fixture.datasourceKind === 'file') {
+                      <span>
+                        This copies the {{ fixture.name }} files into this
+                        app's data folder and saves them as a datasource and
+                        dataset. No database is involved.
+                      </span>
+                    } @else if (fixture.selfRegistering) {
                       <span>
                         This registers the {{ fixture.name }} at
                         <span class="font-mono">{{

@@ -13,6 +13,7 @@ import {
   runReadOnlySqlTool,
   sampleRowsTool,
 } from '../tools/dataset.tools';
+import { exploreResultTool } from '../tools/explore-result.tool';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { catalogFrameworkSkills } from '../skill-sources';
 import { INSIGHTS_ANALYST_PROMPT } from './system-prompts';
@@ -28,16 +29,17 @@ export {
 } from './insights-analyst-catalog';
 
 /**
- * Its tools (agents.md 2.11): the assistant's dataset tools and its
- * clarification tool (the same instances), in the order of
- * `INSIGHTS_ANALYST_TOOL_NAMES`, and nothing else — no visuals, panel or
- * workflow tool and no workspace.
+ * Its tools (agents.md 2.11): the assistant's dataset tools (with
+ * `explore_result`, 3.15) and its clarification tool (the same instances),
+ * in the order of `INSIGHTS_ANALYST_TOOL_NAMES`, and nothing else — no
+ * visuals, panel or workflow tool and no workspace.
  */
 export const insightsAnalystTools = {
   list_entities: listEntitiesTool,
   describe_entity: describeEntityTool,
   sample_rows: sampleRowsTool,
   run_readonly_sql: runReadOnlySqlTool,
+  explore_result: exploreResultTool,
   ask_clarification: askClarificationTool,
 };
 

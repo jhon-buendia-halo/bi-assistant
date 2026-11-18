@@ -91,7 +91,7 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     byId('agent-prompt-edit')!.click();
     fixture.detectChanges();
     expect(byId('agent-prompt-banner')?.textContent).toContain(
-      'Changes apply to every session and agent as soon as you save.',
+      'Changes apply to every session and agent persona as soon as you save.',
     );
     const area = el().querySelector<HTMLTextAreaElement>(
       '[data-testid="agent-prompt-textarea"]',

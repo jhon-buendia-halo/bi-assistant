@@ -111,7 +111,7 @@ describe('SessionsPage', () => {
     ).map((th) => th.textContent!.trim());
     expect(headers).toEqual([
       'Run',
-      'Agent',
+      'Agent persona',
       'Turns',
       'Last activity',
       'Wall time',
@@ -161,7 +161,7 @@ describe('SessionsPage', () => {
     await render();
     const select = q('session-filter-agent') as HTMLSelectElement;
     expect(Array.from(select.options).map((o) => o.textContent!.trim())).toEqual([
-      'All agents',
+      'All agent personas',
       'Questions to Insights Assistant',
       'Visual Designer',
     ]);

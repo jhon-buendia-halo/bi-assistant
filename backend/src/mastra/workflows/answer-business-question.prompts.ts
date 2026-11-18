@@ -36,7 +36,9 @@ Reply with one JSON object and nothing else:
 - needsClarification: true only when the metric or meaning is undefined and the choice would change the analysis (for example "the best team" with no measure named). A fuzzy scope is not a reason: assume the natural default and list it under assumptions. Never true when the question answers an earlier clarifying question.
 - clarification: when needsClarification is true, { "question": one short question, "options": 2-4 concrete options, each a short title optionally followed by " — " and one line explaining it }; otherwise null. Each option is a measure the listed columns can compute (say which in its explanation, in plain words); never offer a measure the columns cannot give, or one that mixes several measures into a score.
 
-Never answer the question and never state a figure: the analysis step runs the queries.`;
+Never answer the question and never state a figure: the analysis step runs the queries.
+
+A catalog entity whose name suggests a measure (a view such as customer_ltv or product_revenue) does not define what "best", "top", "most valuable" or "biggest" means: when the question names no measure, set needsClarification to true and offer that measure among the options.`;
 
 /** The Write answer step's instructions (agents.md Appendix F). */
 export const WRITE_ANSWER_INSTRUCTIONS = `${WRITE_ANSWER_FIRST_LINE}
@@ -58,7 +60,9 @@ Rules:
 - Nothing from general knowledge anywhere, assumptions and caveats included: no remark about what the domain usually is (how many matches a tournament normally has, how a rule usually counts), and nothing about values that did not appear in the results (do not say how own goals count when no own goal appears).
 - No usable rows (every query failed, or none ran): say the analysis could not get the data and give no figure.
 - Never dump a schema, a table list or SQL.
-- Long lists: when a query's line says that only its first rows are shown (for example "102 rows, the first 50 shown") and the answer must list that result, write no table for it; put, alone on a line where the table goes, [[rows:<n>]] (n is the query's number in the request), optionally with the columns to show and their headers: [[rows:2 | name=Driver, total_race_starts=Race starts]]. The table of every row is put there for you. Never say that rows are missing or were cut because only some were shown to you.`;
+- Long lists: when a query's line says that only its first rows are shown (for example "102 rows, the first 50 shown") and the answer must list that result, write no table for it; put, alone on a line where the table goes, [[rows:<n>]] (n is the query's number in the request), optionally with the columns to show and their headers: [[rows:2 | name=Driver, total_race_starts=Race starts]]. The table of every row is put there for you. Never say that rows are missing or were cut because only some were shown to you.
+
+Counts stay exact even when you describe a spread: never round a count into a range ("about 37,000 to 38,000"); give the exact smallest and largest counts the rows hold.`;
 
 /** The most result rows of one query Write answer reads. */
 export const ANSWER_ROWS_CAP = 50;
@@ -180,6 +184,19 @@ function queryLines(query: AnalyseQuery, index: number): string {
  * Read images' notes, when not empty, follow the plan, set off by blank
  * lines; without them the request is what it was before Read images.
  */
+/**
+ * How a Validate finding reads to the writer: a warning-only check that did
+ * not pass is a `warning`, not a `failed` check, so it never becomes a
+ * caveat (roadmap 1.29.8, known issue D).
+ */
+export function findingStatus(finding: {
+  passed: boolean;
+  check: string;
+}): 'passed' | 'failed' | 'warning' {
+  if (finding.passed) return 'passed';
+  return /\(warning only\)/i.test(finding.check) ? 'warning' : 'failed';
+}
+
 export function writeAnswerRequest(input: {
   question: string;
   plan: Plan;
@@ -202,7 +219,7 @@ export function writeAnswerRequest(input: {
     'Validation findings:',
     ...(input.findings.length
       ? input.findings.map(
-          (f) => `- ${f.passed ? 'passed' : 'failed'}: ${f.check}. ${f.detail}`,
+          (f) => `- ${findingStatus(f)}: ${f.check}. ${f.detail}`,
         )
       : ['- none']),
   ].join('\n');
@@ -215,56 +232,6 @@ export function writeAnswerRequest(input: {
       ? `${queries.slice(0, room)}\n[rows shortened to fit]`
       : queries;
   return `${head}Queries and their result rows:\n${body}\n${findings}`;
-}
-
-/**
- * The first line of Check data quality's request to Sarah: her model runs
- * with her own instructions, so a stub model routes this call by it.
- */
-export const DATA_QUALITY_REQUEST_FIRST_LINE =
-  'Check the data quality behind an answer from Questions to Insights.';
-
-/** Engine findings Sarah reads at most, most severe first. */
-export const DATA_QUALITY_FINDINGS_CAP = 30;
-
-/**
- * Check data quality's request to Sarah (agents.md 5.11): the question,
- * the SQL the analysis ran (no rows) and the engine's findings on the
- * tables it read, numbered from 1. She answers with the numbers of the
- * findings that could change or limit this answer, and how; the numbers
- * come from the deterministic engine and she never changes one.
- */
-export function dataQualityRequest(input: {
-  question: string;
-  sql: readonly string[];
-  tables: readonly string[];
-  findings: readonly {
-    severity: string;
-    dimension: string;
-    entity: string;
-    field?: string;
-    description: string;
-  }[];
-}): string {
-  return [
-    DATA_QUALITY_REQUEST_FIRST_LINE,
-    'The deterministic readiness engine has just assessed the tables the analysis read. Decide which of its findings could change or limit the answer to the question, given the SQL below: a finding on a column the SQL filters, groups, joins or aggregates on can; a finding on a column the SQL never touches usually cannot. Do not change, round or recompute any number. Answer with an empty list when none applies.',
-    '',
-    `Question: ${input.question}`,
-    '',
-    `Tables assessed: ${input.tables.join(', ') || 'none'}`,
-    '',
-    'SQL the analysis ran:',
-    ...(input.sql.length ? input.sql.map((sql) => `- ${sql}`) : ['- none']),
-    '',
-    'Engine findings:',
-    ...(input.findings.length
-      ? input.findings.map(
-          (f, index) =>
-            `${index + 1}. [${f.severity}] ${f.dimension} · ${f.field ? `${f.entity}.${f.field}` : f.entity}: ${f.description}`,
-        )
-      : ['- none']),
-  ].join('\n');
 }
 
 /**

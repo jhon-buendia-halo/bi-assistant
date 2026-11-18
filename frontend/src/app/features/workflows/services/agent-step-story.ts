@@ -4,6 +4,12 @@ import {
   WorkflowRunStep,
   WorkflowRunToolCall,
 } from '../models/workflow.model';
+import {
+  ActivityCall,
+  ActivityStep,
+  activitySteps,
+  toolPhrase,
+} from './agent-activity';
 
 /**
  * What each agent of a run is doing, told as a person would (ui.md 4.4b,
@@ -56,6 +62,8 @@ export interface AgentStepStory {
   queries: number;
   /** Its output field names, in the workflow's order (for the handoff line). */
   passes: string[];
+  /** Its tool calls as plain-language steps (`agent-activity.ts`); empty when none. */
+  activity: ActivityStep[];
 }
 
 /** A step of the run shown; a step that never started has no status. */
@@ -89,8 +97,19 @@ export function agentStepStories(
       run?.status === 'running' && source.liveToolCalls?.length
         ? source.liveToolCalls.map(fromLive)
         : (run?.toolCalls ?? []);
+    const streamed =
+      run?.status === 'running' && source.liveToolCalls?.length
+        ? source.liveToolCalls.map(activityOfLive)
+        : null;
     const state = stepState(run, hasRun, source.running);
-    const doing = state === 'active' ? activeDoing(live, step.title) : '';
+    // Between two streamed calls it is deciding, not still on the last one.
+    const between = streamed !== null && streamed.at(-1)?.finished === true;
+    const doing =
+      state !== 'active'
+        ? ''
+        : between
+          ? 'working out the next step'
+          : activeDoing(live, step.title);
     out.set(step.id, {
       stepId: step.id,
       title: step.title,
@@ -103,6 +122,7 @@ export function agentStepStories(
       durationMs: durationOf(run),
       queries: live.filter(isQuery).length,
       passes: [...(step.output ?? [])],
+      activity: activitySteps(streamed ?? run?.toolCalls ?? [], !!streamed),
     });
   }
   // The lines name who works now, so they come once every state is known.
@@ -246,13 +266,9 @@ function activeDoing(
   const last = calls[calls.length - 1];
   if (!last) return gerund(title);
   if (isQuery(last)) return `running query ${calls.filter(isQuery).length}`;
-  const tool = last.tool;
-  if (tool.endsWith('list_entities')) return 'looking at the tables';
-  if (tool.endsWith('describe_entity')) return 'reading the columns';
-  if (tool.endsWith('sample_rows')) return 'sampling a few rows';
-  if (tool.endsWith('ask_clarification')) return 'asking you a question';
-  if (/skill/.test(tool)) return 'reading a skill';
-  return `using ${tool.replace(/^.*?([a-z_]+)$/, '$1')}`;
+  // The same words as its activity line, without the table it is about.
+  const doing = toolPhrase(last.tool).doing;
+  return doing.charAt(0).toLowerCase() + doing.slice(1);
 }
 
 function doneSentence(
@@ -313,6 +329,18 @@ function fromLive(call: LiveToolCall): WorkflowRunToolCall {
   };
 }
 
+function activityOfLive(call: LiveToolCall): ActivityCall {
+  return {
+    tool: call.name,
+    ...(call.input !== undefined ? { input: call.input } : {}),
+    ...(call.rationale ? { rationale: call.rationale } : {}),
+    ...(call.rowCount !== undefined ? { rowCount: call.rowCount } : {}),
+    ...(call.error !== undefined ? { error: call.error } : {}),
+    ...(call.progress ? { progress: call.progress } : {}),
+    finished: call.finished,
+  };
+}
+
 function isQuery(call: WorkflowRunToolCall): boolean {
   return call.tool.endsWith('run_readonly_sql');
 }
@@ -354,6 +382,33 @@ function ordinal(n: number): string {
   const rest = n % 100;
   if (rest >= 11 && rest <= 13) return `${n}th`;
   return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`;
+}
+
+/**
+ * Who comes next, while a run goes on (ui.md 4.4b): the agents still
+ * waiting, each with what it will do: `Jessica writes the answer, then Ryan
+ * builds the visual`; null when none waits.
+ */
+export function upNextLine(stories: Iterable<AgentStepStory>): string | null {
+  const waiting = [...stories].filter((story) => story.state === 'waiting');
+  if (waiting.length === 0) return null;
+  return waiting
+    .map((story) => `${story.agent.name} ${thirdPerson(story.title)}`)
+    .join(', then ');
+}
+
+/** `Write answer` → `writes the answer`, `Clarify` → `clarifies`. */
+export function thirdPerson(title: string): string {
+  const [first, ...rest] = title.trim().split(/\s+/);
+  if (!first) return 'works';
+  // Only the verb is lower-cased: `Fix SQL` → `fixes the SQL`.
+  const verb = first.toLowerCase();
+  const s = /(s|sh|ch|x|z|o)$/.test(verb)
+    ? `${verb}es`
+    : /[^aeiou]y$/.test(verb)
+      ? `${verb.slice(0, -1)}ies`
+      : `${verb}s`;
+  return rest.length > 0 ? `${s} the ${rest.join(' ')}` : s;
 }
 
 /** `Plan` → `planning`, `Write answer` → `writing the answer`. */

@@ -1,5 +1,7 @@
 import {
   Component,
+  ElementRef,
+  viewChild,
   computed,
   effect,
   inject,
@@ -13,13 +15,17 @@ import { SessionActionResult } from '../../../sessions/models/session.model';
 import { WorkflowRun } from '../../../workflows/models/workflow.model';
 import { RunVisualResult } from '../../../workflows/services/workflow-runs-api.service';
 import { RunVisualsState } from '../../services/run-visuals-state';
+import { artifactKind } from '../run-artifact-card/run-artifact-card';
 
 /**
  * The workflows whose visual is drawn by code from the run's own data, not
  * from a query: Tailor, Refresh and revert have nothing to act on, so the
- * panel is read-only (agents.md 5.19).
+ * panel is read-only (agents.md 5.19, 5.20).
  */
-const CODE_BUILT_VISUAL_WORKFLOWS: readonly string[] = ['review-website'];
+const CODE_BUILT_VISUAL_WORKFLOWS: readonly string[] = [
+  'review-website',
+  'consumption-gap-analysis',
+];
 
 /**
  * A run's visual, open under its answer (visuals R12-R24 on a run): the
@@ -31,6 +37,21 @@ const CODE_BUILT_VISUAL_WORKFLOWS: readonly string[] = ['review-website'];
   selector: 'app-run-visual',
   imports: [LucideAngularModule, InteractiveVisualPanel],
   templateUrl: './run-visual.html',
+  styles: `
+    /* The side panel: full height on the window's right edge, over the page. */
+    .run-visual-sheet {
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 45;
+      width: min(820px, calc(100vw - 240px));
+      border-radius: 0;
+      border-top: 0;
+      border-right: 0;
+      border-bottom: 0;
+      box-shadow: -12px 0 32px rgb(0 0 0 / 0.14);
+    }
+  `,
 })
 export class RunVisual {
   protected readonly state = inject(RunVisualsState);
@@ -39,6 +60,11 @@ export class RunVisual {
   protected readonly Minimize2 = Minimize2;
 
   readonly run = input.required<WorkflowRun>();
+  /**
+   * A side panel on the window's right edge (visuals R42: a run's artifact
+   * card opens the visual here) instead of a section under the answer.
+   */
+  readonly sheet = input(false);
   /** The run as a visual action stored it. */
   readonly runChange = output<WorkflowRun>();
 
@@ -51,6 +77,19 @@ export class RunVisual {
     return shown !== null && shown.runId === this.run().id ? shown : null;
   });
 
+  /** The open visual's title, for the side panel's header. */
+  protected readonly title = computed(
+    () => this.open()?.visualization.title ?? null,
+  );
+  protected readonly kind = computed(() => artifactKind(this.run().workflowId));
+  private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
+
+  /** Escape leaves full screen first, then closes the side panel. */
+  protected onEscape(): void {
+    if (this.fullScreen()) this.fullScreen.set(false);
+    else if (this.sheet()) this.state.close();
+  }
+
   /** A visual drawn by code from the run's data: no Tailor, no Refresh. */
   protected readonly codeBuilt = computed(() =>
     CODE_BUILT_VISUAL_WORKFLOWS.includes(this.run().workflowId),
@@ -60,6 +99,12 @@ export class RunVisual {
     // A closed or replaced visual leaves full screen.
     effect(() => {
       if (this.open() === null) this.fullScreen.set(false);
+    });
+    // The side panel takes the focus when it opens, so Escape closes it.
+    effect(() => {
+      const id = this.open()?.visualization.id ?? null;
+      if (id === null || !this.sheet()) return;
+      setTimeout(() => this.panel()?.nativeElement.focus());
     });
   }
 

@@ -1,12 +1,44 @@
 import type { KnowledgeUse } from '../../ontology/entities/ontology-item.entity';
 import type { Maturity } from '../../data-readiness/engine/types';
 import type { QueryEvidence } from '../query-evidence/query-evidence.types';
+import type { ExplorableQuery } from '../query-evidence/explorable-queries';
 
 export type { KnowledgeUse };
 
 export interface ClarificationOption {
   label: string;
   description?: string;
+}
+
+/**
+ * A follow-up that asks one agent of Answer a Business Question alone
+ * (workflows R40; agents.md 5.21): the asked step and, for Write answer,
+ * what the earlier run gives it.
+ */
+export interface AskedStep {
+  /** The step whose agent answers alone (`ASKABLE_STEP_IDS`). */
+  step: string;
+  /**
+   * Write answer and Build visual only: the earlier run's answer and what
+   * led to it (Write answer: plan, findings and notes; Build visual: the
+   * question and the answer text).
+   */
+  earlier?: {
+    /** Write answer: the earlier plan as its Plan step stored it; null when not kept. */
+    plan?: unknown;
+    /** Write answer: the earlier failed and passed data quality findings, if it checked. */
+    qualityFindings?: { check: string; passed: boolean; detail: string }[];
+    /** Write answer: Zoe's notes of the earlier run, `''` without images. */
+    imageNotes?: string;
+    /** Build visual: the earlier run's question, Ryan's `<question>`. */
+    question?: string;
+    /** Build visual: the earlier answer's text, Ryan's `<answer>`. */
+    answer?: string;
+    /** The earlier answer's records, carried into this run's answer. */
+    records: ToolDataRecord[];
+    /** Their evidence, so the carried sources keep their coverage and view. */
+    evidence: QueryEvidence[];
+  };
 }
 
 /** One tool invocation's captured result, kept for visuals and transparency. */
@@ -37,6 +69,13 @@ export interface ToolDataRecord {
    * anyone reads the SQL.
    */
   warnings?: string[];
+  /**
+   * When set, the only columns whose values are figures a reader looks up
+   * (agent-answers R69): the rows behind a readiness finding (roadmap
+   * 1.28.11) carry their count in `matching_rows` or `occurrences`, and
+   * their other cells are raw data that must not link a figure by chance.
+   */
+  figureColumns?: string[];
 }
 
 /** One step of the assistant's plain-language route from question to answer. */
@@ -337,6 +376,11 @@ export interface SessionDoc {
    */
   contextBlock?: string;
   /**
+   * A run host's earlier queries, which its turn may explore with
+   * `explore_result` (agents.md 3.15, 4.2). In memory only, like the host.
+   */
+  contextQueries?: ExplorableQuery[];
+  /**
    * A follow-up run's host whose memory threads are copies of the earlier
    * run's (agents.md 5.14): its turn's input replays the earlier run's
    * answer with the new question, as the copied thread does not hold it.
@@ -344,11 +388,11 @@ export interface SessionDoc {
    */
   continuesThreads?: boolean;
   /**
-   * A run host of Answer a Business Question whose input ticked Check data
-   * quality (agents.md 5.11): its turn takes the branch to that step. In
+   * A run host of Answer a Business Question whose input ticked Build a
+   * visual (agents.md 5.11): its turn takes the branch to Build visual. In
    * memory only, like the host.
    */
-  checkDataQuality?: true;
+  buildVisual?: true;
   /**
    * A run host of Dashboard Image to Artifact (agents.md 5.17): the path of the
    * run's input image in the host's workspace. In memory only, like the
@@ -372,6 +416,13 @@ export interface SessionDoc {
    * In memory only, like the host.
    */
   inputValues?: Record<string, string | number | boolean | string[]>;
+  /**
+   * A follow-up run's host that asks one agent of Answer a Business
+   * Question alone (workflows R40; agents.md 5.21): the asked step, and for
+   * Write answer what the earlier run gives it. Its turn runs on the
+   * `ask-agent` engine. In memory only, like the host.
+   */
+  ask?: AskedStep;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   /** What the agent showed in the right panel, oldest first (data-model 3.4.4). */

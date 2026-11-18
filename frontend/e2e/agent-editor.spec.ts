@@ -14,6 +14,7 @@ import {
   seedWorldCupDataset,
 } from './helpers/agents-api';
 import { apiJson } from './helpers/api';
+import { pickDatasetIn } from './helpers/run-ui';
 import { worldCupKey } from './helpers/world-cup-db';
 import {
   LlmStub,
@@ -53,18 +54,18 @@ function button(page: Page | Locator, name: string): Locator {
 async function openHub(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents', exact: true })
+    .getByRole('button', { name: 'Agent personas', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
 }
 
 async function openNewAgent(page: Page): Promise<void> {
   await openHub(page);
-  await button(page, 'New agent').click();
+  await button(page, 'New agent persona').click();
   await expect(
-    page.getByRole('heading', { name: 'New agent', exact: true }),
+    page.getByRole('heading', { name: 'New agent persona', exact: true }),
   ).toBeVisible();
 }
 
@@ -82,10 +83,15 @@ async function openEditor(page: Page, id: string, name: string) {
 const nameField = (page: Page) => page.getByLabel('Name', { exact: true });
 const instructionsField = (page: Page) =>
   page.getByLabel('Job description', { exact: true });
-const datasetBox = (page: Page, label: string) =>
-  page
-    .getByRole('group', { name: 'Datasets' })
-    .getByRole('checkbox', { name: label, exact: true });
+const datasetsGroup = (page: Page) =>
+  page.getByRole('group', { name: 'Datasets' });
+/** A picked dataset's chip, by its text (`<name> (missing)` when it no longer exists). */
+const datasetChip = (page: Page, text: string) =>
+  datasetsGroup(page)
+    .getByTestId('dataset-picker-chip')
+    .filter({ hasText: new RegExp(`^\\s*${text.replace(/[()]/g, '\\$&')}\\s*$`) });
+const pickAgentDataset = (page: Page, name: string) =>
+  pickDatasetIn(datasetsGroup(page), name);
 const editorStatus = (page: Page) => page.getByTestId('agent-editor-status');
 const detailsPanel = (page: Page) =>
   page.getByRole('complementary', { name: 'Details panel' });
@@ -139,7 +145,7 @@ test('creates an agent, tries it, publishes it and deletes it', async ({
 
   await nameField(page).fill(HISTORIAN);
   await instructionsField(page).fill('Always name the tournament year.');
-  await datasetBox(page, WORLD_CUP_DATASET).check();
+  await pickAgentDataset(page, WORLD_CUP_DATASET);
   await button(page, 'Add starter question').click();
   await page.getByLabel('Starter question 1').fill('Who won in 2014?');
   await page.getByTestId('agent-save').click();
@@ -169,7 +175,7 @@ test('creates an agent, tries it, publishes it and deletes it', async ({
   await page.getByTestId('agent-delete').click();
   await expect(page.getByText(`Agent "${HISTORIAN}" deleted`)).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
   await expect(page.getByText(HISTORIAN, { exact: true })).toHaveCount(0);
 });
@@ -245,7 +251,7 @@ test('Try it stores nothing: the run leaves no workspace, and Reset clears the r
   await expect(
     page.getByRole('heading', { name: HISTORIAN, exact: true }),
   ).toBeVisible();
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await expect.poll(() => draftRunWorkspaces(appDataDir)).toEqual([]);
   expect(await storedRuns(page)).toEqual([]);
 });
@@ -284,13 +290,13 @@ test('leaving with unsaved changes asks first', async ({ page }) => {
   await button(page, 'Back').click();
   expect(message).toBe('Discard unsaved changes?');
   await expect(
-    page.getByRole('heading', { name: 'New agent', exact: true }),
+    page.getByRole('heading', { name: 'New agent persona', exact: true }),
   ).toBeVisible();
 
   page.once('dialog', (dialog) => void dialog.accept());
   await button(page, 'Back').click();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
   await expect(page.getByText(HISTORIAN, { exact: true })).toHaveCount(0);
 });
@@ -303,13 +309,15 @@ test('a dataset that no longer exists stays visible in the editor', async ({
     datasets: [WORLD_CUP_DATASET, 'Gone'],
   });
   await openEditor(page, id, HISTORIAN);
-  await expect(datasetBox(page, WORLD_CUP_DATASET)).toBeChecked();
-  await expect(datasetBox(page, 'Gone (missing)')).toBeChecked();
+  await expect(datasetChip(page, WORLD_CUP_DATASET)).toBeVisible();
+  await expect(datasetChip(page, 'Gone (missing)')).toBeVisible();
 
-  await datasetBox(page, 'Gone (missing)').uncheck();
+  await datasetsGroup(page)
+    .getByRole('button', { name: 'Remove Gone', exact: true })
+    .click();
   await page.getByTestId('agent-save').click();
   await expect(page.getByText('Draft saved')).toBeVisible();
-  await expect(datasetBox(page, 'Gone (missing)')).toHaveCount(0);
+  await expect(datasetChip(page, 'Gone (missing)')).toHaveCount(0);
 
   await openHub(page);
   await expect(page.getByTestId(`agent-card-${id}`)).not.toContainText(
@@ -448,7 +456,7 @@ async function evidence(page: Page, folder: string, name: string) {
 test('only linked tools are offered to the model', async ({ page }) => {
   await openNewAgent(page);
   await nameField(page).fill('KPI lookup');
-  await datasetBox(page, WORLD_CUP_DATASET).check();
+  await pickAgentDataset(page, WORLD_CUP_DATASET);
   await page.getByTestId('link-tool').click();
   await linkMenu(page)
     .getByRole('option', { name: /^sample_rows\b/ })
@@ -496,7 +504,7 @@ test('a linked skill reaches Try it, and editing the skill leaves the Live agent
   });
   await openNewAgent(page);
   await nameField(page).fill('Finance helper');
-  await datasetBox(page, WORLD_CUP_DATASET).check();
+  await pickAgentDataset(page, WORLD_CUP_DATASET);
   await linkFromMenu(page, instructionsEditor(page), '/fis', FISCAL);
   await page.getByTestId('agent-save').click();
   await expect(
@@ -543,7 +551,7 @@ test("a linked skill's tools come with it", async ({ page }) => {
   });
   await openNewAgent(page);
   await nameField(page).fill('Chart helper');
-  await datasetBox(page, WORLD_CUP_DATASET).check();
+  await pickAgentDataset(page, WORLD_CUP_DATASET);
   await linkFromMenu(page, instructionsEditor(page), '/char', CHART_STYLE);
   await page.getByTestId('agent-save').click();
   await expect(
@@ -629,7 +637,7 @@ test('an agent saved before links gets a links line', async ({
     'create_visual',
   ]);
   await expect(page.getByTestId('agent-legacy-notice')).toHaveText(
-    'Links were added for what this agent had. Save to keep them.',
+    'Links were added for what this agent persona had. Save to keep them.',
   );
   await expect(page.getByTestId('agent-save')).toBeEnabled();
 });
@@ -689,7 +697,7 @@ test('editing the Job Description in place saves a draft with the link', async (
   await page.getByTestId('prompt-edit').click();
   await expect(
     page.getByText(
-      'Type / to link a skill or tool. The agent only gets the skills and tools its instructions link.',
+      'Type / to link a skill or tool. The agent persona only gets the skills and tools its instructions link.',
     ),
   ).toBeVisible();
   await expect(page.getByTestId('prompt-save')).toBeDisabled();
@@ -754,7 +762,7 @@ test('leaving an unsaved Job Description edit asks first', async ({ page }) => {
     message = dialog.message();
     void dialog.dismiss();
   });
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await expect.poll(() => message).toBe('Discard unsaved changes?');
   await expect(
     page.getByRole('heading', { name: HISTORIAN, exact: true }),
@@ -773,7 +781,7 @@ test('@demo @story-1.23.23 Try it runs the draft, not the Live version', async (
   });
   await publishAgent(page, id);
 
-  await test.step('Given the Live agent "Cup historian" answers in one sentence', async () => {
+  await test.step('Given the Live agent persona "Cup historian" answers in one sentence', async () => {
     const agent = await apiJson<{ live: { instructions: string } }>(
       page,
       'GET',
@@ -781,7 +789,7 @@ test('@demo @story-1.23.23 Try it runs the draft, not the Live version', async (
     );
     expect(agent.live.instructions).toBe('Answer in one sentence.');
   });
-  await test.step("When I edit the draft's instructions in the agent editor", async () => {
+  await test.step("When I edit the draft's instructions in the agent persona editor", async () => {
     await openEditor(page, id, HISTORIAN);
     await instructionsField(page).fill('Talk like a pirate.');
   });
@@ -835,7 +843,7 @@ test('the Try it tab runs the draft, and Reset starts over', async ({
   await expect(tab.getByTestId('agent-tryit-question')).toHaveValue('');
   await expect(tab.getByText(STUB_ANSWER)).toHaveCount(0);
 
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await openAgentPage(page, id, HISTORIAN);
   await expect(tab.getByTestId('agent-tryit-question')).toHaveValue('');
   await expect(tab.getByText(STUB_ANSWER)).toHaveCount(0);
@@ -845,7 +853,7 @@ test('Try it needs a dataset', async ({ page }) => {
   const id = await createUserAgent(page, { name: 'Empty historian' });
   await openAgentPage(page, id, 'Empty historian');
   await expect(page.getByTestId('agent-tryit-no-dataset')).toContainText(
-    'Add a dataset to this agent to try it.',
+    'Add a dataset to this agent persona to try it.',
   );
   await expect(page.getByTestId('agent-tryit-edit')).toHaveText('Edit');
 });
@@ -892,7 +900,7 @@ test('the Skills tab shows what is linked and creates a skill inline', async ({
     page.getByTestId(`agent-skill-row-${CHART_STYLE}`),
   ).toContainText('create_visual');
   await expect(
-    page.getByText('Built-in · included in every agent'),
+    page.getByText('Built-in · included in every agent persona'),
   ).toBeVisible();
   await evidence(page, '1.14.9', 'agent-skills-tab-linked.png');
 
@@ -944,7 +952,7 @@ test('@demo @story-1.25.11 Try it shows the evidence of its answer in the query 
   const answer = detailsPanel(page).getByTestId('agent-tryit-answer');
   const sheet = page.getByTestId('query-inspector-sheet');
 
-  await test.step('Given a draft user agent "Cup historian" over "World Cup Core" in its editor', async () => {
+  await test.step('Given a draft user agent persona "Cup historian" over "World Cup Core" in its editor', async () => {
     await openEditor(page, id, HISTORIAN);
     await page.getByTestId('agent-try-it').click();
   });
@@ -952,8 +960,8 @@ test('@demo @story-1.25.11 Try it shows the evidence of its answer in the query 
     await tryInPanel(page, question);
     await expect(answer).toContainText('The data holds 4,321');
   });
-  await test.step('Then the answer shows a figure chip, the coverage line and the query row with its coverage chip', async () => {
-    await expect(answer.getByTestId('figure-ref').first()).toHaveText('Q1');
+  await test.step('Then the answer shows a numbered source on a figure, the coverage line and the query row with its coverage chip', async () => {
+    await expect(answer.getByTestId('figure-ref').first()).toHaveText('1');
     await expect(answer.getByTestId('query-coverage-line')).toBeVisible();
     await expect(answer.getByTestId('query-row-0')).toBeVisible();
     await expect(answer.getByTestId('query-coverage-chip')).toHaveCount(1);
@@ -970,9 +978,9 @@ test('@demo @story-1.25.11 Try it shows the evidence of its answer in the query 
     expect(box!.x + box!.width).toBeLessThanOrEqual(panel!.x + 1);
     expect(box!.width).toBeLessThanOrEqual(720);
   });
-  await test.step("And the inspector's header shows Query 1 of 1 and its steps start from a table and end with Show", async () => {
+  await test.step("And the inspector's header shows Source 1 of 1 and its steps start from a table and end with Show", async () => {
     await expect(page.getByTestId('query-inspector-position')).toHaveText(
-      'Query 1 of 1',
+      'Source 1 of 1',
     );
     const steps = page.getByTestId('query-funnel-step');
     await expect(steps.first()).toHaveAttribute('data-verb', 'start');

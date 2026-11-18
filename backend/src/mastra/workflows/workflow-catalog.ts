@@ -17,8 +17,13 @@ import {
   DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
+  GAP_ADVISOR_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
+  LAYER_MAPPER_AGENT_KEY,
+  REQUIREMENTS_ANALYST_AGENT_KEY,
+  RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
+  VISUALIZATION_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import {
@@ -26,6 +31,14 @@ import {
   INSIGHTS_ANALYST_DESCRIPTION,
 } from '../agents/insights-analyst-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
+import {
+  CONSUMPTION_GAP_DESCRIPTION,
+  CONSUMPTION_GAP_EDGES,
+  CONSUMPTION_GAP_STEPS,
+  CONSUMPTION_GAP_WORKFLOW_ID,
+  CONSUMPTION_GAP_WORKFLOW_NAME,
+  GAP_MAX_QUESTIONS,
+} from './consumption-gap-analysis.steps';
 import {
   DATA_READINESS_ASSESSMENT_DESCRIPTION,
   DATA_READINESS_ASSESSMENT_EDGES,
@@ -104,6 +117,10 @@ export type WorkflowTrigger = 'run';
 /** The placeholder of a run's question. */
 const QUESTION_PLACEHOLDER = 'Ask a question about your data';
 
+/** Consumption Gap Analysis's placeholder: two questions, one per line. */
+const CONSUMPTION_GAP_PLACEHOLDER =
+  'Which team won the most matches in each World Cup?\nWhat share of the goals were penalties?';
+
 const QUESTION_FIELD: WorkflowInputField = {
   name: 'question',
   label: 'Question',
@@ -140,16 +157,16 @@ const CAREFUL_FIELD: WorkflowInputField = {
 };
 
 /**
- * Answer a Business Question's optional data-quality check (agents.md
- * 5.11): the branch to Check data quality, where Sarah reviews the tables
- * the analysis read. Off unless ticked.
+ * Answer a Business Question's visual (agents.md 5.11, workflows R41): the
+ * branch to Build visual, where Ryan designs an interactive visual from the
+ * answer's query results. On unless unticked.
  */
-const CHECK_DATA_QUALITY_FIELD: WorkflowInputField = {
-  name: 'checkDataQuality',
-  label: 'Check data quality: Sarah reviews the tables the analysis used',
+const BUILD_VISUAL_FIELD: WorkflowInputField = {
+  name: 'buildVisual',
+  label: 'Build a visual: Ryan charts the results of the answer',
   type: 'boolean',
   required: false,
-  default: false,
+  default: true,
 };
 
 /**
@@ -207,17 +224,19 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
         IMAGES_FIELD,
         DATASETS_FIELD,
-        CHECK_DATA_QUALITY_FIELD,
+        BUILD_VISUAL_FIELD,
       ],
       steps: ANSWER_BUSINESS_QUESTION_STEPS,
-      // Zoe reads the reference images when there are some; Olivia plans
-      // and Jessica writes the answer; Michael analyses; Sarah checks the
-      // data quality when the run asks for it.
+      // Zoe reads the reference images when there are some; Nathan reads a
+      // follow-up over an earlier result; Olivia plans and Jessica writes
+      // the answer; Michael analyses; Ryan builds the visual unless the run
+      // turns it off.
       stepAgents: {
         [READ_IMAGES_STEP_ID]: IMAGE_READER_AGENT_KEY,
+        'interpret-follow-up': RESULT_EXPLORER_AGENT_KEY,
         plan: ANALYSIS_PLANNER_AGENT_KEY,
-        'check-data-quality': DATA_READINESS_AGENT_KEY,
         'write-answer': ANSWER_WRITER_AGENT_KEY,
+        'build-visual': VISUALIZATION_AGENT_KEY,
       },
       edges: ANSWER_BUSINESS_QUESTION_EDGES,
       bar: 'steps',
@@ -423,6 +442,52 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       edges: REVIEW_WEBSITE_EDGES,
       bar: 'steps',
     },
+    {
+      id: CONSUMPTION_GAP_WORKFLOW_ID,
+      name: CONSUMPTION_GAP_WORKFLOW_NAME,
+      description: CONSUMPTION_GAP_DESCRIPTION,
+      // The Gap Advisor recommends the fixes (agents.md 2.20, 5.20).
+      primaryFor: GAP_ADVISOR_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        {
+          ...DATASETS_FIELD,
+          help: 'Datasets whose schemas are tagged Landing, Normalized and Consumption.',
+        },
+        {
+          name: 'question',
+          label: 'Business questions',
+          type: 'textarea',
+          required: true,
+          placeholder: CONSUMPTION_GAP_PLACEHOLDER,
+          help: `One question per line, up to ${GAP_MAX_QUESTIONS}.`,
+          maxLength: QUESTION_MAX_LENGTH,
+        },
+        {
+          ...IMAGES_FIELD,
+          label: 'Reference dashboards',
+          help: 'Screenshots of the dashboards the model must support.',
+        },
+        {
+          name: 'artifact',
+          label: 'Saved dashboard',
+          type: 'artifact',
+          required: false,
+          artifactKinds: ['dashboard'],
+        },
+      ],
+      steps: CONSUMPTION_GAP_STEPS,
+      // Grace reads the reference dashboards, the Requirements Analyst
+      // derives the requirements and the Layer Mapper maps them; the Gap
+      // Advisor (`primaryFor`) recommends the fixes.
+      stepAgents: {
+        'read-dashboards': DASHBOARD_READER_AGENT_KEY,
+        'derive-requirements': REQUIREMENTS_ANALYST_AGENT_KEY,
+        'map-requirements': LAYER_MAPPER_AGENT_KEY,
+      },
+      edges: CONSUMPTION_GAP_EDGES,
+      bar: 'steps',
+    },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
 
 /** What one agent turn of a run takes from the run's input (plan 4.2, 5.1). */
@@ -433,8 +498,8 @@ export interface AgentRunTurn {
   datasets?: string[];
   /** Careful mode (the Assistant and user agents). */
   careful: boolean;
-  /** Answer a Business Question's `checkDataQuality`: Check data quality runs. */
-  checkDataQuality?: true;
+  /** Answer a Business Question's `buildVisual`: Build visual runs. */
+  buildVisual?: true;
   /** Map a Dashboard to Data's `artifact`: the saved dashboard it maps. */
   artifact?: string;
 }
@@ -453,9 +518,7 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     question: text(values['question']) || text(values['url']),
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
-    ...(values['checkDataQuality'] === true
-      ? { checkDataQuality: true as const }
-      : {}),
+    ...(values['buildVisual'] === true ? { buildVisual: true as const } : {}),
     ...(text(values['artifact']) ? { artifact: text(values['artifact']) } : {}),
   };
 }

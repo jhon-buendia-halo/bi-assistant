@@ -10,10 +10,11 @@ import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
   analyseInputSchema,
   answerBusinessQuestionInputSchema,
+  followedUpQuestionSchema,
   planInputSchema,
   answerBusinessQuestionResultSchema,
   turnSummarySchema,
-  dataQualityInputSchema,
+  answerPathInputSchema,
 } from './answer-business-question.schemas';
 import {
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
@@ -22,11 +23,13 @@ import {
   analysisLoopDone,
   catalogBlock,
   clarifyingQuestionOf,
+  interpretFollowUp,
   loadCatalog,
+  pageAnswer,
   planAfterAnswer,
   planCatalogBlock,
   planLoopDone,
-  queriedTables,
+  chartableQueries,
   receiveQuestion,
   validateAttempt,
   wrapUp,
@@ -46,14 +49,24 @@ import { engineInputSchema, withContract } from './workflow-contract';
 // (https://mastra.ai/docs/workflows/suspend-and-resume, ADR-0043):
 //
 //   .branch(the input has images → read-images) → read-images-outcome
-//   → receive-question → load-catalog
-//   → .dountil(plan-round: plan → .branch(needs clarification → clarify)
-//              → plan-round-outcome, until a plan needs no clarification)
-//   → .branch(not stopped → analysis-path:
-//       .dountil(analysis-attempt: analyse → validate, ok or 2 attempts)
-//       → .branch(not stopped → answer-path:
-//           .branch(the run checks data quality → check-data-quality)
-//           → quality-outcome → write-answer → wrap-up))
+//   → receive-question → load-catalog → interpret-follow-up
+//   → .branch(
+//       not stopped, no follow-up → question-path: question-input
+//         → .dountil(plan-round: plan → .branch(needs clarification → clarify)
+//                  → plan-round-outcome, until a plan needs no clarification)
+//         → .branch(not stopped → analysis-path:
+//             .dountil(analysis-attempt: analyse → validate, ok or 2 attempts)
+//             → .branch(not stopped → answer-path:
+//                 write-answer → visual-input
+//                 → .branch(the run builds a visual → build-visual)
+//                 → visual-outcome → wrap-up)),
+//       not stopped, a follow-up over an earlier result → explore-result:
+//         page-result → page-answer)
+//
+// Interpret follow-up (roadmap 1.28.8) makes no model call on a run without
+// earlier queries; otherwise result-explorer reads whether the question asks
+// for another page, a filter or an order of an earlier result. Its "no"
+// (a new question, or a model error) plans the question as before.
 //
 // Clarify suspends the run with the plan's question; resumed with the
 // user's answer, it hands Plan's input back with the answer, and the loop
@@ -64,12 +77,14 @@ import { engineInputSchema, withContract } from './workflow-contract';
 //
 // Read images (agents.md 2.15; workflows R35) describes the run's reference
 // images once, before Receive question; its notes (`imageNotes`, `''`
-// without images) travel in every step's data to Plan, Analyse and Write
-// answer, so they survive a wait and a resume (the runtime is rebuilt
-// empty on resume, and nested workflows cannot read a parent's steps).
+// without images) travel in every step's data, Interpret follow-up's and
+// the question path's included, to Plan, Analyse and Write answer, so they
+// survive a wait and a resume (the runtime is rebuilt empty on resume, and
+// nested workflows cannot read a parent's steps).
 //
-// The nested workflows (`plan-round`, `analysis-path`, `analysis-attempt`,
-// `answer-path`) and the mapping steps `plan-round-outcome` and
+// The nested workflows (`question-path`, `plan-round`, `analysis-path`,
+// `analysis-attempt`, `answer-path`, `explore-result`) and the mapping steps
+// `read-images-outcome`, `question-input`, `plan-round-outcome` and
 // `quality-outcome` are not catalogue steps: the engine reports their steps as
 // `<parent>.<child>.<step>`, and the session code reads the last segment.
 // A step's bail ends only the sequence it is in, so a stopped Analyse ends
@@ -162,6 +177,88 @@ const loadCatalogStep = createStep({
       ...(await loadCatalog(inputData.datasets)),
       imageNotes: inputData.imageNotes,
     }),
+  ),
+});
+
+/** The run's turn, when it has one (Interpret follow-up's gate reads it). */
+function optionalRuntimeOf(params: {
+  requestContext: { get(key: string): unknown };
+}): AnswerBusinessQuestionRuntime | undefined {
+  return params.requestContext.get(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY) as
+    AnswerBusinessQuestionRuntime | undefined;
+}
+
+// A follow-up over an earlier result (roadmap 1.28.8): a code gate, then at
+// most one result-explorer call. A run without earlier queries makes no
+// model call; a new question or a model error plans as before.
+const interpretFollowUpStep = createStep({
+  id: STEP['interpret-follow-up'].id,
+  description: STEP['interpret-follow-up'].title,
+  inputSchema: engineInputSchema(SCHEMAS['interpret-follow-up'].input),
+  outputSchema: SCHEMAS['interpret-follow-up'].output,
+  execute: withContract(
+    STEP['interpret-follow-up'].title,
+    SCHEMAS['interpret-follow-up'],
+    async (params: StepParams<(typeof SCHEMAS)['interpret-follow-up']>) => {
+      const { inputData } = params;
+      const { followUp, stopped } = await interpretFollowUp(
+        inputData.question,
+        optionalRuntimeOf(params),
+      );
+      // A stop takes neither branch: nothing after this step runs.
+      return { ...inputData, followUp, ...(stopped ? { stopped } : {}) };
+    },
+  ),
+});
+
+const pageResultStep = createStep({
+  id: STEP['page-result'].id,
+  description: STEP['page-result'].title,
+  inputSchema: engineInputSchema(SCHEMAS['page-result'].input),
+  outputSchema: SCHEMAS['page-result'].output,
+  execute: withContract(
+    STEP['page-result'].title,
+    SCHEMAS['page-result'],
+    async (params: StepParams<(typeof SCHEMAS)['page-result']>) => {
+      const { followUp } = params.inputData;
+      if (!followUp) throw new Error('The follow-up names no earlier result');
+      const runtime = runtimeOf(params, STEP['page-result'].title);
+      if (!runtime.pageResult) {
+        throw new Error('The Page result step has no result to page');
+      }
+      return runtime.pageResult({
+        query: followUp.query,
+        request: followUp.request,
+        understood: followUp.understood,
+      });
+    },
+  ),
+});
+
+const pageAnswerStep = createStep({
+  id: STEP['page-answer'].id,
+  description: STEP['page-answer'].title,
+  inputSchema: engineInputSchema(SCHEMAS['page-answer'].input),
+  outputSchema: SCHEMAS['page-answer'].output,
+  execute: withContract(
+    STEP['page-answer'].title,
+    SCHEMAS['page-answer'],
+    async (params: StepParams<(typeof SCHEMAS)['page-answer']>) => {
+      const { inputData } = params;
+      const runtime = runtimeOf(params, STEP['page-answer'].title);
+      if (!runtime.deliverAnswer) {
+        throw new Error('The Page answer step has no answer to deliver');
+      }
+      const answer = pageAnswer(inputData.view, inputData, inputData.title);
+      await runtime.deliverAnswer(answer);
+      // The summary Wrap up writes: one query, its page's rows.
+      return {
+        sqlQueries: 1,
+        failedQueries: 0,
+        rows: inputData.rows.length,
+        answer,
+      };
+    },
   ),
 });
 
@@ -314,52 +411,6 @@ const validateStep = createStep({
   ),
 });
 
-/** Whether the run checks data quality: its runtime says so (the input). */
-function checksDataQuality(requestContext: unknown): boolean {
-  const context = requestContext as { get(key: string): unknown } | undefined;
-  const runtime = context?.get(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY) as
-    AnswerBusinessQuestionRuntime | undefined;
-  return runtime?.checksDataQuality === true;
-}
-
-// Optional: the engine assesses the tables the queries read, and Sarah
-// picks the findings that affect the answer; they reach Write answer as
-// findings. A check that cannot run says so in a finding: it never fails
-// the run. A stop leaves the findings as they were (Write answer stops).
-const checkDataQualityStep = createStep({
-  id: STEP['check-data-quality'].id,
-  description: STEP['check-data-quality'].title,
-  inputSchema: engineInputSchema(SCHEMAS['check-data-quality'].input),
-  outputSchema: SCHEMAS['check-data-quality'].output,
-  execute: withContract(
-    STEP['check-data-quality'].title,
-    SCHEMAS['check-data-quality'],
-    async (params: StepParams<(typeof SCHEMAS)['check-data-quality']>) => {
-      const { inputData } = params;
-      const runtime = runtimeOf(params, STEP['check-data-quality'].title);
-      if (!runtime.checkDataQuality) {
-        throw new Error('The Check data quality step has no check to run');
-      }
-      const checked = await runtime.checkDataQuality({
-        question: inputData.question,
-        queries: inputData.queries,
-        tables: queriedTables(inputData.queries, inputData.catalog),
-      });
-      return {
-        question: inputData.question,
-        plan: inputData.plan,
-        queries: inputData.queries,
-        findings: checked.stopped
-          ? inputData.findings
-          : [...inputData.findings, ...checked.findings],
-        calls: inputData.calls,
-        imageNotes: inputData.imageNotes,
-        dataQuality: checked.dataQuality,
-      };
-    },
-  ),
-});
-
 const writeAnswerStep = createStep({
   id: STEP['write-answer'].id,
   description: STEP['write-answer'].title,
@@ -382,6 +433,54 @@ const writeAnswerStep = createStep({
       });
       const output = { ...answer, calls: inputData.calls };
       // A stopped turn ends here: Wrap up does not run.
+      return stopped ? params.bail(output) : output;
+    },
+  ),
+});
+
+/** Whether the run builds a visual: its runtime says so (the input). */
+function buildsVisual(requestContext: unknown): boolean {
+  const context = requestContext as { get(key: string): unknown } | undefined;
+  const runtime = context?.get(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY) as
+    AnswerBusinessQuestionRuntime | undefined;
+  return runtime?.buildsVisual === true;
+}
+
+// On unless the run turns it off (workflows R41): Ryan designs an
+// interactive visual from the answer and its queries' rows, stored with the
+// run. Nothing to chart skips the design; a design that fails leaves the
+// answer without a visual and never fails the run. A stop bails the step (Wrap up still sums the stopped turn).
+const buildVisualStep = createStep({
+  id: STEP['build-visual'].id,
+  description: STEP['build-visual'].title,
+  inputSchema: engineInputSchema(SCHEMAS['build-visual'].input),
+  outputSchema: SCHEMAS['build-visual'].output,
+  execute: withContract(
+    STEP['build-visual'].title,
+    SCHEMAS['build-visual'],
+    async (params: StepParams<(typeof SCHEMAS)['build-visual']>) => {
+      const { inputData } = params;
+      const written = {
+        headline: inputData.headline,
+        answer: inputData.answer,
+        calls: inputData.calls,
+      };
+      if (!chartableQueries(inputData.queries)) {
+        return {
+          ...written,
+          visual: { skipped: 'No query returned rows to chart.' },
+        };
+      }
+      const runtime = runtimeOf(params, STEP['build-visual'].title);
+      if (!runtime.buildVisual) {
+        throw new Error('The Build visual step has no designer to run');
+      }
+      const { visual, stopped } = await runtime.buildVisual({
+        question: inputData.question,
+        answer: inputData.answer,
+        queries: inputData.queries,
+      });
+      const output = { ...written, visual };
       return stopped ? params.bail(output) : output;
     },
   ),
@@ -447,29 +546,42 @@ const analysisAttemptWorkflow = createWorkflow({
 // The answer: written from the last attempt, then summed up.
 const answerPathWorkflow = createWorkflow({
   id: 'answer-path',
-  // Write answer's input and the catalog Check data quality reads.
-  inputSchema: engineInputSchema(dataQualityInputSchema),
+  // Write answer's input and the catalog of the run's datasets.
+  inputSchema: engineInputSchema(answerPathInputSchema),
   outputSchema: turnSummarySchema,
   options: { shouldPersistSnapshot: persistWhileWaiting },
 })
-  // Check data quality when the run asks for it (its input's
-  // `checkDataQuality`); either way Write answer gets Write answer's input.
+  .then(writeAnswerStep)
+  // Build visual unless the run turns it off (its input's `buildVisual`),
+  // from the answer and the queries' rows; Wrap up sums up either way.
+  .map(
+    async (params) => {
+      const { question, queries } = answerPathInputSchema.parse(
+        params.getInitData(),
+      );
+      return Promise.resolve({
+        ...(params.inputData as Record<string, unknown>),
+        question,
+        queries,
+      });
+    },
+    { id: 'visual-input' },
+  )
   .branch([
     [
       async ({ requestContext }) =>
-        Promise.resolve(checksDataQuality(requestContext)),
-      checkDataQualityStep,
+        Promise.resolve(buildsVisual(requestContext)),
+      buildVisualStep,
     ],
   ])
   .map(
     async (params) =>
       Promise.resolve(
-        ((params.inputData as Record<string, unknown>)['check-data-quality'] ??
-          params.getInitData()) as Record<string, unknown>,
+        ((params.inputData as Record<string, unknown>)['build-visual'] ??
+          params.getStepResult(writeAnswerStep)) as Record<string, unknown>,
       ),
-    { id: 'quality-outcome' },
+    { id: 'visual-outcome' },
   )
-  .then(writeAnswerStep)
   .then(wrapUpStep)
   .commit();
 
@@ -495,10 +607,76 @@ const analysisPathWorkflow = createWorkflow({
   ])
   .commit();
 
+// A new question: the plan loop (Plan, asking the user first when it
+// needs to), then the analysis unless the turn was stopped.
+const questionPathWorkflow = createWorkflow({
+  id: 'question-path',
+  // Interpret follow-up's output: Plan's input, with no follow-up.
+  inputSchema: engineInputSchema(followedUpQuestionSchema),
+  outputSchema: passOn,
+  options: { shouldPersistSnapshot: persistWhileWaiting },
+})
+  // Plan's input: the question, the catalog, its columns and Read images'
+  // notes.
+  .map(
+    async ({ inputData }) =>
+      Promise.resolve({
+        question: inputData.question,
+        catalog: inputData.catalog,
+        columns: inputData.columns,
+        imageNotes: inputData.imageNotes,
+      }),
+    { id: 'question-input' },
+  )
+  .dountil(planRoundWorkflow, async ({ inputData }) =>
+    Promise.resolve(planLoopDone(inputData as Record<string, unknown>)),
+  )
+  .branch([
+    [
+      async ({ inputData }) => {
+        const planned = inputData as Record<string, unknown>;
+        return Promise.resolve(
+          planned['stopped'] !== true &&
+            (planned['plan'] as { needsClarification?: unknown } | undefined)
+              ?.needsClarification !== true,
+        );
+      },
+      analysisPathWorkflow,
+    ],
+  ])
+  .commit();
+
+// A follow-up over an earlier result (roadmap 1.28.8): its page, then the
+// answer written from it. Never waits.
+const exploreResultWorkflow = createWorkflow({
+  id: 'explore-result',
+  inputSchema: engineInputSchema(followedUpQuestionSchema),
+  outputSchema: turnSummarySchema,
+  options: { shouldPersistSnapshot: persistWhileWaiting },
+})
+  .then(pageResultStep)
+  .then(pageAnswerStep)
+  .commit();
+
+/** Interpret follow-up's output, as a branch condition reads it. */
+function followedUp(inputData: unknown): {
+  stopped: boolean;
+  explore: boolean;
+} {
+  const read = inputData as {
+    stopped?: unknown;
+    followUp?: { action?: unknown } | null;
+  };
+  return {
+    stopped: read.stopped === true,
+    explore: read.followUp?.action === 'explore',
+  };
+}
+
 export const answerBusinessQuestionWorkflow = createWorkflow({
   id: ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   description:
-    'One turn of Insights Analyst: receive the question, load the catalog, plan (asking the user first when the question is ambiguous), then analyse and validate (retried once) and write the answer.',
+    'One turn of Insights Analyst: read the reference images when there are some, receive the question, load the catalog, then either page an earlier result the follow-up asks for, or plan (asking the user first when the question is ambiguous), analyse and validate (retried once) and write the answer.',
   inputSchema: answerBusinessQuestionInputSchema,
   outputSchema: answerBusinessQuestionResultSchema,
   options: {
@@ -518,20 +696,23 @@ export const answerBusinessQuestionWorkflow = createWorkflow({
   .map(readImagesOutcome, { id: READ_IMAGES_OUTCOME_ID })
   .then(receiveQuestionStep)
   .then(loadCatalogStep)
-  .dountil(planRoundWorkflow, async ({ inputData }) =>
-    Promise.resolve(planLoopDone(inputData as Record<string, unknown>)),
-  )
+  .then(interpretFollowUpStep)
+  // Exactly one branch, unless the turn was stopped: a new question (the
+  // catalogue lists its steps first) or the earlier result's page.
   .branch([
     [
       async ({ inputData }) => {
-        const planned = inputData as Record<string, unknown>;
-        return Promise.resolve(
-          planned['stopped'] !== true &&
-            (planned['plan'] as { needsClarification?: unknown } | undefined)
-              ?.needsClarification !== true,
-        );
+        const read = followedUp(inputData);
+        return Promise.resolve(!read.stopped && !read.explore);
       },
-      analysisPathWorkflow,
+      questionPathWorkflow,
+    ],
+    [
+      async ({ inputData }) => {
+        const read = followedUp(inputData);
+        return Promise.resolve(!read.stopped && read.explore);
+      },
+      exploreResultWorkflow,
     ],
   ])
   .commit();

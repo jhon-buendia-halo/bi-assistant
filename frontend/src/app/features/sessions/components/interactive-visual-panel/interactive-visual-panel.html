@@ -2,8 +2,10 @@
   <div
     class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3 whitespace-nowrap"
   >
-    <lucide-angular [img]="BarChart3" [size]="15" class="shrink-0 text-fg-muted" />
-    <span class="shrink-0 text-[13px] font-medium text-fg">Visuals</span>
+    @if (chrome()) {
+      <lucide-angular [img]="BarChart3" [size]="15" class="shrink-0 text-fg-muted" />
+      <span class="shrink-0 text-[13px] font-medium text-fg">Visuals</span>
+    }
 
     <div class="ml-auto flex shrink-0 items-center gap-1.5">
       <!-- The session panel's "Shown in this session" menu, when hosted there. -->
@@ -149,6 +151,18 @@
                   class="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg outline-none placeholder:text-fg-muted focus:border-border-selected"
                 />
               </label>
+              <label class="mt-2.5 flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-fg-muted">Describe the change (optional)</span>
+                <textarea
+                  rows="3"
+                  aria-label="Describe the change"
+                  placeholder="e.g. Show it as a stacked bar by year and highlight France"
+                  [value]="tailorFreeText()"
+                  (input)="setTailorFreeText($any($event.target).value)"
+                  (keydown)="onFreeTextKeydown($event)"
+                  class="resize-y rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg outline-none placeholder:text-fg-muted focus:border-border-selected"
+                ></textarea>
+              </label>
               @if (tailorInstruction(); as instruction) {
                 <p class="mt-2.5 rounded-lg bg-surface-muted px-2.5 py-1.5 text-[11px] leading-5 text-fg-muted">
                   {{ instruction }}
@@ -280,10 +294,12 @@
       ></iframe>
     </div>
     <!-- Title, takeaway and analysis now live inside the document itself. -->
+    @if (chrome()) {
     <div class="flex shrink-0 items-center justify-between gap-3 px-4 py-2.5">
       <p class="truncate text-[12px] text-fg-muted">{{ visual.title }}</p>
       <p class="shrink-0 font-mono text-[10px] text-fg-muted">{{ visual.path }}/v{{ visual.version }}</p>
     </div>
+    }
   } @else {
     <div
       class="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center"

@@ -265,7 +265,7 @@ describe('TraceWaterfall', () => {
   it('shows a legend of the span kinds', async () => {
     await render();
     expect(text(q('trace-legend'))).toBe(
-      'Agent Model Request Tool Memory Framework',
+      'Agent persona Model Request Tool Memory Framework',
     );
   });
 

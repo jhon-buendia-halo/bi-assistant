@@ -778,13 +778,15 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       h.onText!('Brazil scored');
       fixture.detectChanges();
       const live = q('workflow-run-live')!;
-      expect(live.textContent).toContain('Thinking');
-      expect(live.textContent).toContain('Looking at the goals table');
-      expect(
-        Array.from(q('workflow-run-tool')!.querySelectorAll('span')).map((span) =>
-          span.textContent?.trim(),
-        ),
-      ).toEqual(['run_readonly_sql', '3 rows']);
+      // Its thought and its steps in plain words, no tool names and no empty heading.
+      expect(el.textContent).toContain('Looking at the goals table');
+      expect(el.textContent).not.toContain('Thinking');
+      const tool = q('workflow-run-tool')!;
+      expect(tool.getAttribute('data-tool')).toBe('run_readonly_sql');
+      expect(tool.getAttribute('data-state')).toBe('done');
+      expect(tool.textContent).toContain('Ran a query');
+      expect(tool.textContent).toContain('3 rows');
+      expect(tool.textContent).not.toContain('run_readonly_sql');
       expect(live.textContent).toContain('Brazil scored');
       expect(q('run-answer')).toBeNull();
 
@@ -818,6 +820,186 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(text('workflow-run-context')).toBe(
         'Follows up on “Which team scored the most goals?”',
       );
+    });
+
+    describe('asking one agent in a follow-up', () => {
+      const agentStep = (
+        id: string,
+        title: string,
+        name: string,
+        role?: string,
+      ): WorkflowDetail['steps'][number] => ({
+        ...STEP(id, title, ['question'], ['out']),
+        kind: 'agent',
+        agent: { name, ...(role ? { role } : {}), tools: [], maxSteps: 5 },
+      });
+      const ASK: WorkflowDetail = {
+        ...ASSISTANT,
+        steps: [
+          STEP('receive-question', 'Receive question', ['question'], ['question']),
+          agentStep('plan', 'Plan', 'Olivia'),
+          agentStep('analyse', 'Analyse', 'Insights Analyst'),
+          agentStep('write-answer', 'Write answer', 'Jessica', 'Insights Writer'),
+        ],
+      };
+      const ranSteps: WorkflowRun['steps'] = [
+        { id: 'receive-question', title: 'Receive question', status: 'success' },
+        { id: 'plan', title: 'Plan', status: 'skipped' },
+        { id: 'analyse', title: 'Analyse', status: 'success' },
+        { id: 'write-answer', title: 'Write answer', status: 'success' },
+      ];
+
+      function showAnswer(overrides: Partial<WorkflowRun> = {}): void {
+        openAssistant(ASK);
+        typeQuestion('Which team scored the most goals?');
+        pickDataset();
+        click('workflow-run');
+        const h = runs.last.handlers;
+        h.onRun!({ runId: 'run-1', workflowId: ASK.id });
+        h.onDone!(
+          assistantRun({
+            steps: ranSteps,
+            answer: { role: 'assistant', content: 'Brazil.', at: 'x' },
+            ...overrides,
+          }),
+        );
+        fixture.detectChanges();
+      }
+
+      const select = () => q('workflow-follow-up-agent') as HTMLSelectElement | null;
+
+      it('lists the Whole user journey and the agent steps that ran, skipped ones left out', () => {
+        showAnswer();
+        const picker = select()!;
+        expect(picker.getAttribute('aria-label')).toBe('Ask');
+        expect(Array.from(picker.options).map((o) => [o.value, o.textContent?.trim()])).toEqual([
+          ['', 'Whole user journey'],
+          ['analyse', 'Insights Analyst · Analyse'],
+          ['write-answer', 'Jessica · Insights Writer'],
+        ]);
+        expect(picker.value).toBe('');
+        expect(picker.getAttribute('aria-describedby')).toBe('workflow-follow-up-agent-hint');
+        expect(text('workflow-follow-up-agent-hint')).toBe(
+          'Runs every step again: plans, queries the data, checks and writes a new answer.',
+        );
+        expect(q('workflow-follow-up-agent-hint')!.classList).toContain('text-fg-muted');
+        const head = picker.closest('div')!.querySelector('.composer-head')!;
+        expect(head.textContent?.replace(/\s+/g, ' ').trim()).toBe('Who answersOptional');
+        expect((q('workflow-follow-up-input') as HTMLTextAreaElement).placeholder).toBe(
+          'Ask a follow-up about this result',
+        );
+      });
+
+      it('picking an agent names it in the placeholder and sends askStep; the run reads Asked <agent>', () => {
+        showAnswer();
+        const picker = select()!;
+        picker.value = 'write-answer';
+        picker.dispatchEvent(new Event('change'));
+        fixture.detectChanges();
+        const input = q('workflow-follow-up-input') as HTMLTextAreaElement;
+        expect(input.placeholder).toBe('Ask Jessica about this result');
+        expect(text('workflow-follow-up-agent-hint')).toBe(
+          'Write answer step: rewrites the earlier answer from the same results. Runs no new queries.',
+        );
+        input.value = 'Say it shorter';
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        click('workflow-run-follow-up');
+        expect(runs.last.body.context).toEqual({
+          fromRunId: 'run-1',
+          askStep: 'write-answer',
+        });
+        fixture.detectChanges();
+        expect(text('workflow-run-context')).toBe(
+          'Asked Jessica · Follows up on “Which team scored the most goals?”',
+        );
+      });
+
+      it('a stored run that asked an agent reads Asked <agent>', () => {
+        showAnswer();
+        designer.run.set(
+          assistantRun({
+            id: 'run-2',
+            steps: ranSteps,
+            context: { fromRunId: 'run-1', askStep: 'write-answer' },
+            answer: { role: 'assistant', content: 'Short.', at: 'x' },
+          }),
+        );
+        fixture.detectChanges();
+        expect(text('workflow-run-context')).toContain('Asked Jessica');
+      });
+
+      it('offers Ryan when the earlier answer has query rows and sends askStep build-visual', () => {
+        const withVisual: WorkflowDetail = {
+          ...ASK,
+          steps: [...ASK.steps, agentStep('build-visual', 'Build visual', 'Ryan', 'Visual Designer')],
+        };
+        openAssistant(withVisual);
+        typeQuestion('Which team scored the most goals?');
+        pickDataset();
+        click('workflow-run');
+        const h = runs.last.handlers;
+        h.onRun!({ runId: 'run-1', workflowId: withVisual.id });
+        h.onDone!(
+          assistantRun({
+            steps: [...ranSteps, { id: 'build-visual', title: 'Build visual', status: 'skipped' }],
+            answer: {
+              role: 'assistant',
+              content: 'Brazil.',
+              at: 'x',
+              data: [
+                {
+                  tool: 'run_readonly_sql',
+                  columns: ['team'],
+                  rows: [{ team: 'Brazil' }],
+                  rowCount: 1,
+                },
+              ],
+            },
+          }),
+        );
+        fixture.detectChanges();
+        const picker = select()!;
+        expect(Array.from(picker.options).map((o) => o.value)).toEqual([
+          '',
+          'analyse',
+          'write-answer',
+          'build-visual',
+        ]);
+        picker.value = 'build-visual';
+        picker.dispatchEvent(new Event('change'));
+        fixture.detectChanges();
+        expect(text('workflow-follow-up-agent-hint')).toBe(
+          "Ryan designs a new visual from the earlier answer's rows, following what you type. No new queries run.",
+        );
+        const input = q('workflow-follow-up-input') as HTMLTextAreaElement;
+        input.value = 'A bar chart';
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        click('workflow-run-follow-up');
+        expect(runs.last.body.context).toEqual({
+          fromRunId: 'run-1',
+          askStep: 'build-visual',
+        });
+      });
+
+      it('has no picker for another workflow', () => {
+        openAssistant({ ...ASK, id: 'other-workflow' });
+        typeQuestion('Which team scored the most goals?');
+        pickDataset();
+        click('workflow-run');
+        runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'other-workflow' });
+        runs.last.handlers.onDone!(
+          assistantRun({
+            workflowId: 'other-workflow',
+            steps: ranSteps,
+            answer: { role: 'assistant', content: 'x', at: 'x' },
+          }),
+        );
+        fixture.detectChanges();
+        expect(q('workflow-follow-up-input')).not.toBeNull();
+        expect(select()).toBeNull();
+      });
     });
 
     it('Stop ends the run: the run reads "Run stopped"', () => {
@@ -962,14 +1144,23 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(el.querySelector('[aria-label="Example questions"]')).toBeNull();
     });
 
-    it('the question field comes first, its label is screen-reader only and it has two rows', () => {
+    it('the question field comes first, in its own labelled section marked Required, with three rows (ui.md 4.4b)', () => {
       openForm();
       const form = q('workflow-run-composer')!;
       expect(form.getAttribute('aria-label')).toBe('Input');
       expect(form.querySelector('textarea')).toBe(q('workflow-input-question') as HTMLTextAreaElement);
-      expect((q('workflow-input-question') as HTMLTextAreaElement).rows).toBe(2);
+      expect((q('workflow-input-question') as HTMLTextAreaElement).rows).toBe(3);
       const label = el.querySelector('label[for="workflow-input-question"]')!;
-      expect(label.classList).toContain('sr-only');
+      expect(label.classList).toContain('composer-label');
+      expect(label.classList).not.toContain('sr-only');
+      // The tag sits beside the label, outside it: the field's name stays "Question".
+      const tag = label.parentElement!.querySelector('.composer-tag')!;
+      expect(tag.textContent?.trim()).toBe('Required');
+      expect(tag.getAttribute('aria-hidden')).toBe('true');
+      expect(label.contains(tag)).toBeFalse();
+      // One section per field, divided.
+      const sections = form.querySelector('.composer-fields')!;
+      expect(sections.children.length).toBeGreaterThan(1);
       expect(q('workflow-follow-up-input')).toBeNull();
     });
 
@@ -996,12 +1187,29 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(q('workflow-input-datasets')).toBeNull();
       expect(q('workflow-run')).toBeNull();
       const follow = q('workflow-follow-up-input') as HTMLTextAreaElement;
-      expect(follow.rows).toBe(1);
+      expect(follow.rows).toBe(3);
+      expect(follow.classList).toContain('field');
       expect(follow.getAttribute('aria-describedby')).toBe('workflow-follow-up-hint');
       const hint = el.querySelector('#workflow-follow-up-hint')!;
       expect(hint.textContent?.trim()).toBe('Follows up on this run');
-      expect(hint.classList).toContain('sr-only');
+      expect(hint.classList).not.toContain('sr-only');
       expect(q('workflow-run-empty')).toBeNull();
+    });
+
+    it('the follow-up composer is a labelled form: Follow-up question Required, Who answers Optional', () => {
+      openStored(answered());
+      const heads = Array.from(
+        q('workflow-run-composer')!.querySelectorAll('.composer-head'),
+      ).map((h) => h.textContent?.replace(/\s+/g, ' ').trim());
+      expect(heads).toContain('Follow-up questionRequired');
+      const follow = q('workflow-follow-up-input') as HTMLTextAreaElement;
+      expect(follow.labels?.[0].textContent?.trim()).toBe('Follow-up question');
+      const button = q('workflow-run-follow-up') as HTMLButtonElement;
+      expect(button.disabled).toBeTrue();
+      follow.value = 'And in 2018?';
+      follow.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(button.disabled).toBeFalse();
     });
 
     it('Enter in the follow-up sends it; Shift+Enter does not', () => {

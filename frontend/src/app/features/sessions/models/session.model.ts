@@ -26,6 +26,8 @@ export interface ToolDataRecord {
    * so a questionable figure is visible even when nobody reviews the SQL.
    */
   warnings?: string[];
+  /** When set, the only columns holding figures a reader looks up (R69). */
+  figureColumns?: string[];
 }
 
 /** One step of the assistant's plain-language route from question to answer. */
@@ -314,7 +316,7 @@ export interface Session {
  * marked once the agent is gone (R59).
  */
 export function sessionAgentLabel(agent: SessionAgent): string {
-  return agent.deleted ? `${agent.name} · agent deleted` : agent.name;
+  return agent.deleted ? `${agent.name} · agent persona deleted` : agent.name;
 }
 
 /** The line under a session's name in the session list: its datasets (R63). */
@@ -327,7 +329,7 @@ export function sessionListSubtitle(session: Session): string {
  * show it (past-chats R57, R63), marked once its agent is gone (R59).
  */
 export function sessionWorkflowLabel(ref: SessionWorkflowRef): string {
-  return ref.deleted ? `${ref.name} · agent deleted` : ref.name;
+  return ref.deleted ? `${ref.name} · agent persona deleted` : ref.name;
 }
 
 /** The assistant's workflow name, for a session the backend sent no ref for. */

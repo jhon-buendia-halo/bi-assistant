@@ -46,13 +46,16 @@ import {
   quotedSampleNumbers,
   sampleNeverAScore,
   sampleNumbersFromTool,
+  noFindingRecount,
   noScoreForUnassessed,
   numbersIn,
   oneSucceeded,
   onlyDefinedInputs,
   quotedNumbers,
   quotedNumbersFromTools,
+  quotesDimensionTotal,
   quotesOverallScore,
+  readsEveryPage,
   skillBeforeAssess,
   sqlSelectsNulls,
 } from './data-readiness-eval-checks';
@@ -525,6 +528,180 @@ describe('data readiness eval checks', () => {
     ).resolves.toMatch(/no query reads goals/);
   });
 
+  describe('every finding of a dimension (story 1.28.12)', () => {
+    const item = (severity: string, entity: string, field: string) => ({
+      severity,
+      entity,
+      field,
+      measured: 0.25,
+      description: `25% of ${field} is null`,
+      recommendation: 'Backfill it',
+    });
+    /** A get_readiness_report call for one page of completeness findings. */
+    const pageCall = (page: number, pageCount: number, total: number) =>
+      call(
+        'get_readiness_report',
+        {
+          report: { id: 'r-1', findings: [] },
+          // Few numbers besides the page's, so the counts below are tested.
+          summary: {
+            reportId: 'r-1',
+            datasourceName: 'Formula 1',
+            generatedAt: '',
+            entityCount: 48,
+            overallScore: 61.2,
+            maturity: 'Defined',
+            dimensionScores: [
+              {
+                dimension: 'completeness',
+                score: 41.7,
+                findingCount: total,
+                maxSeverity: 'high',
+                assessed: true,
+                totalChecks: 120,
+              },
+            ],
+            findingCount: total,
+            topFindings: [],
+            findings: {
+              dimension: 'completeness',
+              total,
+              page,
+              pageCount,
+              pageSize: 50,
+              items:
+                page === 1
+                  ? [
+                      item('high', 'f1.qualifying_result', 'fastest'),
+                      item('high', 'f1.qualifying_result', 'grid'),
+                      item('medium', 'f1.results', 'time'),
+                    ]
+                  : [item('low', 'f1.races', 'url')],
+            },
+          },
+        },
+        { dimension: 'completeness', ...(page > 1 ? { page } : {}) },
+      );
+    // The reply of execution 129ad364, rewritten as the rule wants it.
+    const REPLY = [
+      'The report lists **4 completeness findings** across 3 tables:',
+      '',
+      '| Severity | Table | Column | Measured |',
+      '|---|---|---|---|',
+      '| high | f1.qualifying_result | fastest | 25% |',
+      '| high | f1.qualifying_result | grid | 25% |',
+      '| medium | f1.results | time | 25% |',
+      '| low | f1.races | url | 25% |',
+      '',
+      '2 of the completeness findings are high severity.',
+    ].join('\n');
+
+    it('the hand-written reply passes every check of the case', async () => {
+      const calls = [pageCall(1, 2, 4), pageCall(2, 2, 4)];
+      const c = DATA_READINESS_EVAL_SET.cases.find(
+        (k) => k.id === 'dr-all-completeness-findings',
+      );
+      expect(c?.question).toBe('What are all the completeness issues?');
+      for (const check of c?.customChecks ?? []) {
+        await expect(run(check, REPLY, calls)).resolves.toBeUndefined();
+      }
+      expect((c?.customChecks ?? []).map((k) => k.id)).toEqual([
+        'dr-get-readiness-report-called-with-dimension-completeness',
+        'dr-every-page-of-the-completeness-findings-was-read',
+        'dr-run-readonly-sql-never-recounts-findings',
+        'dr-the-answer-gives-the-report-s-total-of-completeness-findings',
+        'dr-every-score-like-number-in-the-answer-is-one-a-readiness-too',
+      ]);
+    });
+
+    it('readsEveryPage fails when a page was left unread', async () => {
+      const check = readsEveryPage('completeness');
+      await expect(run(check, REPLY, [pageCall(1, 2, 4)])).resolves.toBe(
+        'read page(s) 1 of 2 of the completeness findings',
+      );
+      await expect(run(check, REPLY, ASSESSED)).resolves.toMatch(
+        /no get_readiness_report result lists the completeness findings/,
+      );
+    });
+
+    it('noFindingRecount fails a null count over information_schema or with IS NULL', async () => {
+      const check = noFindingRecount();
+      const sql = (text: string) =>
+        call('run_readonly_sql', { rows: [] }, { sql: text });
+      await expect(
+        run(check, REPLY, [
+          pageCall(1, 1, 4),
+          sql('SELECT q3 FROM f1.qualifying_result WHERE q3 IS NULL LIMIT 50'),
+        ]),
+      ).resolves.toBeUndefined();
+      await expect(
+        run(check, REPLY, [
+          sql(
+            "SELECT table_name, column_name FROM information_schema.columns WHERE table_type = 'BASE TABLE'",
+          ),
+        ]),
+      ).resolves.toMatch(/recounts/);
+      await expect(
+        run(check, REPLY, [
+          sql(
+            'SELECT SUM(CASE WHEN q3 IS NULL THEN 1 ELSE 0 END) FROM f1.qualifying_result',
+          ),
+        ]),
+      ).resolves.toMatch(/recounts/);
+      await expect(
+        run(check, REPLY, [
+          sql('SELECT count(*) FROM f1.results WHERE time IS NULL'),
+        ]),
+      ).resolves.toMatch(/recounts/);
+    });
+
+    it('quotesDimensionTotal wants the total the report gives', async () => {
+      const check = quotesDimensionTotal('completeness');
+      await expect(
+        run(check, 'There are 140 completeness issues.', [pageCall(1, 1, 284)]),
+      ).resolves.toBe(
+        "the answer does not give the report's total of 284 completeness findings",
+      );
+      await expect(
+        run(check, 'The report has 284 completeness findings.', [
+          pageCall(1, 6, 284),
+        ]),
+      ).resolves.toBeUndefined();
+      await expect(
+        run(check, 'The report has 1,284 completeness findings.', [
+          pageCall(1, 26, 1284),
+        ]),
+      ).resolves.toBeUndefined();
+      await expect(run(check, 'None.', ASSESSED)).resolves.toMatch(
+        /no get_readiness_report result/,
+      );
+    });
+
+    it('quotedNumbersFromTools accepts counts of a complete dimension list, not of a cut one', async () => {
+      const check = quotedNumbersFromTools();
+      const calls = [pageCall(1, 2, 4), pageCall(2, 2, 4)];
+      await expect(run(check, REPLY, calls)).resolves.toBeUndefined();
+      // Page 2 unread: "2 of them high" and "3 tables" are not the data's.
+      const reason = await run(
+        check,
+        'The completeness findings span 3 tables; 2 findings are high.',
+        [pageCall(1, 2, 4)],
+      );
+      expect(reason).toContain('3 in');
+    });
+  });
+
+  it('onlyDefinedInputs accepts the dimension and page of get_readiness_report (story 1.28.12)', async () => {
+    await expect(
+      run(onlyDefinedInputs(), '', [
+        call('get_readiness_report', summary(), {
+          dimension: 'completeness',
+          page: 2,
+        }),
+      ]),
+    ).resolves.toBeUndefined();
+  });
+
   it('assessOnlyWithoutReport allows an assessment only after no report was found', async () => {
     const check = assessOnlyWithoutReport();
     const assess = call('assess_data_readiness', summary());
@@ -698,7 +875,8 @@ describe('data-readiness eval set', () => {
       agentKey: 'data-readiness',
     });
     expect(EVAL_SETS).toContain(DATA_READINESS_EVAL_SET);
-    expect(evalSetsFor('data-readiness')).toEqual([DATA_READINESS_EVAL_SET]);
+    // Sarah's page also lists her Check data quality set (story 1.29.4).
+    expect(evalSetsFor('data-readiness')).toContain(DATA_READINESS_EVAL_SET);
     expect(hasEvals('data-readiness')).toBe(true);
     expect(agentForCases(['dr-assess', 'dr-no-sql'])).toEqual({
       agentKey: 'data-readiness',
@@ -734,6 +912,7 @@ describe('data-readiness eval set', () => {
       'dr-list-reports',
       'dr-explain-weakest',
       'dr-accuracy-not-assessed',
+      'dr-all-completeness-findings',
     ]);
   });
 
@@ -801,6 +980,9 @@ describe('data-readiness eval set', () => {
   });
 
   it('evalTargetFor gives the data-readiness target', () => {
-    expect(evalTargetFor('data-readiness').agentKey).toBe('data-readiness');
+    // Her sets use two targets: a run picks one through its cases.
+    expect(
+      evalTargetFor('data-readiness', ['dr-assess', 'dr-no-sql']).agentKey,
+    ).toBe('data-readiness');
   });
 });

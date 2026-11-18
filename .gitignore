@@ -17,3 +17,6 @@ dist
 
 # scripts/qa.mjs reports and logs (delivery.md 13)
 /.qa-reports/
+
+# DuckDB extensions fetched by scripts/fetch-duckdb-extensions.mjs (ADR-0052)
+/backend/vendor/

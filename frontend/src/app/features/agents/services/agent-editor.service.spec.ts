@@ -74,7 +74,8 @@ describe('AgentEditorService', () => {
       .expectOne(`${API_BASE_URL}/llm/settings`)
       .flush({ configured: true, model: 'gpt-4.1' });
     http
-      .expectOne(`${API_BASE_URL}/datasets`)
+      // The light listing: the editor needs names, not entity snapshots.
+      .expectOne(`${API_BASE_URL}/datasets?view=summary`)
       .flush({ datasets: [{ name: 'World Cup Core', tables: [] }] });
     http.expectOne(`${API_BASE_URL}/skills`).flush({ skills: SKILLS });
     http.expectOne(`${API_BASE_URL}/skills/built-in`).flush({ skills: [] });
@@ -93,7 +94,7 @@ describe('AgentEditorService', () => {
 
   it('opens a new agent empty, with Save disabled and Publish shown', async () => {
     await open(null);
-    expect(editor.title()).toBe('New agent');
+    expect(editor.title()).toBe('New agent persona');
     expect(editor.changed()).toBeFalse();
     expect(editor.canSave()).toBeFalse();
     expect(editor.showPublish()).toBeTrue();

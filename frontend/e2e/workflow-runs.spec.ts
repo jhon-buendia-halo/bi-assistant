@@ -13,7 +13,7 @@ import {
   startLlmStub,
 } from './helpers/llm-stub';
 import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
-import { fillRun, pickDataset, pickedDataset } from './helpers/run-ui';
+import { fillRun as fillRunDefault, pickDataset, pickedDataset } from './helpers/run-ui';
 
 /**
  * Mirrors the Feature "Workflow runs" in specs/capabilities/workflows/spec.md:
@@ -38,6 +38,15 @@ const V2_STEPS = [
   'write-answer',
   'wrap-up',
 ];
+
+/**
+ * Fills the Run tab and turns "Build a visual" off (it is on by default), so
+ * a run that is not about the visual keeps its steps to the answer's.
+ */
+async function fillRun(page: Page, question: string, dataset?: string): Promise<void> {
+  await fillRunDefault(page, question, dataset);
+  await page.getByTestId('workflow-input-buildVisual').setChecked(false);
+}
 
 let stub: LlmStub;
 
@@ -116,8 +125,8 @@ function runDock(page: Page): Locator {
 }
 
 async function openWorkflowPage(page: Page, id: string, name: string): Promise<void> {
-  await railItem(page, 'Workflows').click();
-  await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible();
+  await railItem(page, 'User journeys').click();
+  await expect(page.getByRole('heading', { name: 'User journeys', exact: true })).toBeVisible();
   await page.getByTestId(`workflow-${id}`).click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(name);
 }
@@ -154,7 +163,7 @@ test.describe('Feature: Workflow runs', () => {
       stub.hold = (request) =>
         isTurn(request, QUESTION) && afterToolResult(request) ? held.promise : undefined;
 
-      await scenarioStep(page, `When I open "${V2}" from Workflows and click Execute`, async () => {
+      await scenarioStep(page, `When I open "${V2}" from User journeys and click Execute`, async () => {
         await openWorkflowPage(page, V2_ID, V2);
         await openRunTab(page);
       });
@@ -186,8 +195,7 @@ test.describe('Feature: Workflow runs', () => {
         async () => {
           await expect(nodeStatus(page, 'analyse')).toHaveText('Running');
           await expect(runStep(page, 'analyse')).toHaveAttribute('data-status', 'running');
-          await expect(page.getByTestId('workflow-run-live')).toContainText('Thinking');
-          await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
+          await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
           await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
           held.release();
         },
@@ -207,14 +215,14 @@ test.describe('Feature: Workflow runs', () => {
             await expect(runStep(page, id)).toHaveAttribute('data-status', 'success');
           }
           await expect(nodeStatus(page, 'clarify')).toHaveText('Skipped');
-          // The data-quality check runs only when asked for, and its line says so.
-          await expect(nodeStatus(page, 'check-data-quality')).toHaveText('Skipped');
-          await expect(runStep(page, 'check-data-quality')).toHaveAttribute(
+          // The visual is off for this run, and its line says so.
+          await expect(nodeStatus(page, 'build-visual')).toHaveText('Skipped');
+          await expect(runStep(page, 'build-visual')).toHaveAttribute(
             'data-status',
             'skipped',
           );
           await expect(
-            runStep(page, 'check-data-quality').getByTestId('workflow-node-activity'),
+            runStep(page, 'build-visual').getByTestId('workflow-node-activity'),
           ).toHaveText('Off for this run');
         },
       );
@@ -288,9 +296,12 @@ test.describe('Feature: Workflow runs', () => {
         await expect(runAnswer(page).getByText(/Data used/)).toHaveCount(0);
       });
       const chip = runAnswer(page).getByTestId('figure-ref').first();
-      await scenarioStep(page, 'And a figure of the answer carries a chip to its query', async () => {
-        await expect(chip).toHaveText('Q1');
+      await scenarioStep(page, 'And a figure of the answer carries a numbered source', async () => {
+        await expect(chip).toHaveText('1');
         await expect(chip).toHaveAttribute('data-query-index', '0');
+        await chip.hover();
+        await expect(page.getByTestId('figure-ref-card')).toContainText('Counting all the matches.');
+        await expect(page.getByTestId('figure-ref-card')).toContainText('Click to see how it was computed');
       });
       await scenarioStep(page, 'When I open the query from the chip', async () => {
         await chip.click();
@@ -299,7 +310,7 @@ test.describe('Feature: Workflow runs', () => {
         await expect(sheet).toBeVisible();
         await expect(sheet).toHaveAttribute('aria-modal', 'false');
         await expect(page.getByTestId('query-inspector-close')).toBeFocused();
-        await expect(page.getByTestId('query-inspector-position')).toHaveText('Query 1 of 1');
+        await expect(page.getByTestId('query-inspector-position')).toHaveText('Source 1 of 1');
         await expect(page.getByTestId('query-inspector-title')).toHaveText('Counting all the matches.');
         await expect(page.getByTestId('query-inspector-meta')).toContainText('PostgreSQL');
         await expect(page.getByTestId('query-inspector-tab-steps')).toHaveAttribute('aria-selected', 'true');
@@ -307,10 +318,11 @@ test.describe('Feature: Workflow runs', () => {
         await expect(steps.first()).toHaveAttribute('data-verb', 'start');
         await expect(steps.last()).toHaveAttribute('data-verb', 'show');
         await expect(steps.last()).toContainText('Show');
-        // The sheet stays clear of the Run panel and the answer stays visible.
+        // The sheet opens over the canvas, right of the Run panel on the left,
+        // so the answer stays visible.
         const sheetBox = (await page.getByTestId('query-inspector-sheet').boundingBox())!;
         const dockBox = (await runDock(page).boundingBox())!;
-        expect(sheetBox.x + sheetBox.width).toBeLessThanOrEqual(dockBox.x + 1);
+        expect(sheetBox.x).toBeGreaterThanOrEqual(dockBox.x + dockBox.width - 1);
         expect(sheetBox.width).toBeLessThanOrEqual(720);
         await expect(runAnswer(page)).toBeVisible();
       });
@@ -379,7 +391,7 @@ test.describe('Feature: Workflow runs', () => {
         await page.getByTestId('query-row-0').click();
       });
       await scenarioStep(page, 'Then the inspector shows its steps and the focus is on its close button', async () => {
-        await expect(page.getByTestId('query-inspector-position')).toHaveText('Query 1 of 1');
+        await expect(page.getByTestId('query-inspector-position')).toHaveText('Source 1 of 1');
         await expect(page.getByTestId('query-funnel-step').last()).toHaveAttribute('data-verb', 'show');
         await expect(page.getByTestId('query-inspector-close')).toBeFocused();
         const sheet = (await page.getByTestId('query-inspector-sheet').boundingBox())!;
@@ -396,7 +408,7 @@ test.describe('Feature: Workflow runs', () => {
   );
 
   test(
-    'Answer a Business Question checks data quality with Sarah when asked',
+    'Answer a Business Question builds a visual with Ryan unless it is turned off',
     { tag: ['@demo'] },
     async ({ page }) => {
       stub.reply = answerWithSql({ [QUESTION]: ANSWER });
@@ -407,20 +419,20 @@ test.describe('Feature: Workflow runs', () => {
       });
       await scenarioStep(
         page,
-        `When I tick "Check data quality", pick "${WORLD_CUP_DATASET}", ask "${QUESTION}" and click Execute`,
+        `When "Build a visual" is ticked by default, I pick "${WORLD_CUP_DATASET}", ask "${QUESTION}" and click Execute`,
         async () => {
-          await page.getByTestId('workflow-input-checkDataQuality').check();
-          await fillRun(page, QUESTION, WORLD_CUP_DATASET);
+          await expect(page.getByTestId('workflow-input-buildVisual')).toBeChecked();
+          await fillRunDefault(page, QUESTION, WORLD_CUP_DATASET);
           await page.getByTestId('workflow-run').click();
         },
       );
       await scenarioStep(
         page,
-        'Then "Check data quality" ends Done, after Validate and before Write answer in How it ran',
+        'Then "Build visual" ends Done, after Write answer and before Wrap up in How it ran',
         async () => {
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
-          await expect(nodeStatus(page, 'check-data-quality')).toHaveText('Done');
-          await expect(runStep(page, 'check-data-quality')).toHaveAttribute('data-status', 'success');
+          await expect(nodeStatus(page, 'build-visual')).toHaveText('Done');
+          await expect(runStep(page, 'build-visual')).toHaveAttribute('data-status', 'success');
           const order = await page
             .getByTestId('workflow-run-story')
             .locator('[data-testid^="workflow-run-story-step-"]')
@@ -429,20 +441,13 @@ test.describe('Feature: Workflow runs', () => {
                 (e.getAttribute('data-testid') ?? '').replace('workflow-run-story-step-', ''),
               ),
             );
-          expect(order.indexOf('check-data-quality')).toBeGreaterThan(order.indexOf('validate'));
-          expect(order.indexOf('check-data-quality')).toBeLessThan(order.indexOf('write-answer'));
+          expect(order.indexOf('build-visual')).toBeGreaterThan(order.indexOf('write-answer'));
+          expect(order.indexOf('build-visual')).toBeLessThan(order.indexOf('wrap-up'));
         },
       );
-      await scenarioStep(
-        page,
-        "And Sarah's model call reached the stub, and the answer shows a readiness card",
-        async () => {
-          const asked = stub.requests.filter((request) => request.step === 'quality');
-          expect(asked.length, "Sarah's structured call").toBeGreaterThan(0);
-          await expect(runAnswer(page)).toContainText(ANSWER);
-          await expect(runAnswer(page).getByTestId('readiness-card')).toBeVisible();
-        },
-      );
+      await scenarioStep(page, 'And the answer is still shown', async () => {
+        await expect(runAnswer(page)).toContainText(ANSWER);
+      });
     },
   );
 
@@ -500,7 +505,7 @@ test.describe('Feature: Workflow runs', () => {
       await question.fill(QUESTION);
       await question.press('Enter');
     });
-    await test.step('Then the workflow runs and I see the answer', async () => {
+    await test.step('Then the user journey runs and I see the answer', async () => {
       await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       await expect(runAnswer(page)).toContainText(ANSWER);
       await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
@@ -525,6 +530,38 @@ test.describe('Feature: Workflow runs', () => {
       await expect(page.getByTestId('workflow-input-question')).toBeFocused();
       await expect(pickedDataset(page, WORLD_CUP_DATASET)).toBeVisible();
       await expect(page.getByTestId('workflow-run-new')).toHaveCount(0);
+    });
+  });
+
+  test('Asking on home runs Answer a Business Question on its page', async ({ page }) => {
+    stub.reply = answerWithSql({ [QUESTION]: ANSWER });
+    const ask = page.getByTestId('welcome-ask');
+    await test.step(`Given I am on home with "${WORLD_CUP_DATASET}" as the only dataset`, async () => {
+      await page.reload();
+      await expect(ask.getByLabel('What do you want to know?')).toBeVisible();
+      await expect(page.getByTestId('welcome-setup')).toHaveCount(0);
+    });
+    await test.step('Then that dataset is already picked', async () => {
+      await expect(
+        ask.getByRole('button', { name: `Remove ${WORLD_CUP_DATASET}`, exact: true }),
+      ).toBeVisible();
+    });
+    await test.step('When I type the question and press Enter', async () => {
+      const question = page.getByTestId('welcome-question');
+      await question.fill(QUESTION);
+      await question.press('Enter');
+    });
+    await test.step(`Then "${V2}" opens, runs on my question and I see the answer`, async () => {
+      await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
+      await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+      await expect(runAnswer(page)).toContainText(ANSWER);
+      await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
+    });
+    await test.step('And home lists the run under Recent runs', async () => {
+      await page.reload();
+      await expect(
+        page.getByTestId('welcome-runs').getByRole('button', { name: new RegExp(V2) }),
+      ).toBeVisible();
     });
   });
 
@@ -558,12 +595,12 @@ test.describe('Feature: Workflow runs', () => {
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
       await expect.poll(width).toBe(normal);
     });
-    await test.step('When I press Arrow Left on the resize separator, the panel grows', async () => {
+    await test.step('When I press Arrow Right on the resize separator, the panel grows', async () => {
       const separator = dock.getByRole('separator', { name: 'Resize Run panel' });
       await expect(separator).toHaveAttribute('aria-orientation', 'vertical');
       const before = Number(await separator.getAttribute('aria-valuenow'));
       await separator.focus();
-      await page.keyboard.press('ArrowLeft');
+      await page.keyboard.press('ArrowRight');
       await expect
         .poll(async () => Number(await separator.getAttribute('aria-valuenow')))
         .toBeGreaterThan(before);
@@ -603,7 +640,7 @@ test.describe('Feature: Workflow runs', () => {
         await openRunTab(page);
         await fillRun(page, QUESTION, WORLD_CUP_DATASET);
         await page.getByTestId('workflow-run').click();
-        await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
+        await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
       });
       await test.step('When I click Stop', async () => {
         await page.getByTestId('workflow-run-stop').click();
@@ -648,7 +685,7 @@ test.describe('Feature: Workflow runs', () => {
           await openRunTab(page);
           await fillRun(page, QUESTION, WORLD_CUP_DATASET);
           await page.getByTestId('workflow-run').click();
-          await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
+          await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
         });
         await scenarioStep(page, 'When I go to another area', async () => {
           await railItem(page, 'Datasets').click();
@@ -682,8 +719,7 @@ test.describe('Feature: Workflow runs', () => {
           async () => {
             await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
             await expect(nodeStatus(page, 'analyse')).toHaveText('Running');
-            await expect(page.getByTestId('workflow-run-live')).toContainText('Thinking');
-            await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
+            await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
             await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
           },
         );

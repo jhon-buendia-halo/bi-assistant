@@ -37,8 +37,15 @@ import type {
   ChatMessage,
   FilePanelItem,
   InteractiveVisualization,
+  SessionVisualization,
   VisualEvent,
 } from '../sessions/entities/session.entity';
+import type {
+  FilterInterpretation,
+  PageRequest,
+  PageResult,
+  ResultView,
+} from '../datasources/connectors/paged-sql.types';
 import {
   AnswerEvidenceService,
   type AnswerHost,
@@ -52,6 +59,10 @@ import type {
 import { QUERY_EVIDENCE_SERVICE } from '../sessions/query-evidence/query-evidence.token';
 import type { QueryEvidence } from '../sessions/query-evidence/query-evidence.types';
 import {
+  explorableQueriesOf,
+  type ExplorableQuery,
+} from '../sessions/query-evidence/explorable-queries';
+import {
   RUN_HOST_ID_PREFIX,
   SessionsService,
   type RunVisualAction,
@@ -60,6 +71,13 @@ import {
 } from '../sessions/sessions.service';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { nodeChatHostRunId } from './node-chat-context';
+import {
+  askHostOf,
+  askRefusal,
+  chartedRunOf,
+  type AskHost,
+} from './ask-agent-context';
+import type { AskableStepId } from '../../mastra/workflows/ask-agent.steps';
 import { HeldDraftRuns } from './held-draft-runs';
 import { LiveRuns, type LiveRunEvent } from './live-runs';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
@@ -78,6 +96,7 @@ import {
   type StepTeller,
   type WorkflowRun,
   type WorkflowRunDoc,
+  type WorkflowRunStep,
   type WorkflowRunSummary,
   type WorkflowRunWaitingFor,
 } from './workflow-run-steps';
@@ -116,6 +135,29 @@ function visualEventMessage(event: VisualEvent): ChatMessage {
     at: new Date().toISOString(),
     visual: event,
   };
+}
+
+/**
+ * The event of the visual Build visual stored (agents.md 5.11, workflows
+ * R41), logged beside the answer as a visual action is, so the answer keeps
+ * its query evidence; none when the step did not run or built nothing.
+ */
+function builtVisualEvent(
+  steps: readonly WorkflowRunStep[],
+  visualizations: readonly SessionVisualization[],
+): ChatMessage | undefined {
+  const built = steps.find((step) => step.id === 'build-visual')?.output?.[
+    'visual'
+  ] as { visualId?: unknown } | undefined;
+  const metadata = visualizations.find((v) => v.id === built?.visualId);
+  return metadata
+    ? visualEventMessage({
+        visualId: metadata.id,
+        version: 1,
+        title: metadata.title,
+        action: 'created',
+      })
+    : undefined;
 }
 
 /**
@@ -189,6 +231,16 @@ export interface PreparedRun {
     fromRunId: string;
     question: string;
     answer: string;
+    /**
+     * The earlier answer's queries, for `explore_result` (agents.md 3.15;
+     * plan m1-27 2); absent when it ran none.
+     */
+    queries?: ExplorableQuery[];
+    /**
+     * A follow-up that asks one agent alone (workflows R40; agents.md
+     * 5.21): the asked step and how its host is set up.
+     */
+    ask?: AskHost;
   };
   /**
    * A draft run (api.md R12; agents-evals R60): the user agent whose saved
@@ -354,7 +406,7 @@ export class WorkflowRunsService implements OnModuleInit {
     const errors: WorkflowInputError[] = checked.ok ? [] : checked.errors;
     let context: PreparedRun['context'];
     try {
-      context = await this.contextOf(request.context);
+      context = await this.contextOf(request.context, workflow.id);
     } catch (refusal) {
       if (!(refusal instanceof BadRequestException)) throw refusal;
       errors.push({ field: null, message: refusal.message });
@@ -411,7 +463,7 @@ export class WorkflowRunsService implements OnModuleInit {
         description: '',
         kind: 'agent',
         owner: 'You',
-        agents: [{ key: agentId, name: target.name }],
+        agents: [{ key: agentId, name: target.name, role: target.role }],
         stepCount: 1,
         bar: 'agent',
         trigger: 'run',
@@ -579,14 +631,20 @@ export class WorkflowRunsService implements OnModuleInit {
     const { workflow } = prepared;
     const live = liveEmit(emit, abortSignal);
     live({ type: 'run', runId: base.id, workflowId: workflow.id });
+    // A follow-up that asks one agent alone (agents.md 5.21).
+    const ask = prepared.context?.ask;
     return this.drive(held, live, abortSignal, async (io) => {
       const host = await this.sessions.createRunHost({
         runId: base.id,
-        workflowId: workflow.id,
+        ...(ask?.agentKey
+          ? { agentKey: ask.agentKey }
+          : { workflowId: workflow.id }),
         name: workflow.name,
+        ...(ask ? { ask: ask.ask } : {}),
+        ...(ask?.contextBlock ? { contextBlock: ask.contextBlock } : {}),
         ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
         ...(prepared.turn.datasets ? { datasets: prepared.turn.datasets } : {}),
-        ...(prepared.turn.checkDataQuality ? { checkDataQuality: true } : {}),
+        ...(prepared.turn.buildVisual ? { buildVisual: true } : {}),
         ...(prepared.image ? { image: prepared.image } : {}),
         ...(prepared.images.length
           ? {
@@ -608,8 +666,17 @@ export class WorkflowRunsService implements OnModuleInit {
                 question: prepared.context.question,
                 answer: prepared.context.answer,
               },
-              // Its agents go on from copies of the earlier run's threads.
-              continuesThreadsOf: `${RUN_HOST_ID_PREFIX}${prepared.context.fromRunId}`,
+              // Its agents go on from copies of the earlier run's threads
+              // (not Sarah asked alone: the host's thread is the Analyst's).
+              ...(ask?.continuesThreads === false
+                ? {}
+                : {
+                    continuesThreadsOf: `${RUN_HOST_ID_PREFIX}${prepared.context.fromRunId}`,
+                  }),
+              // "Next page" or "only Brazil" explores its queries.
+              ...(prepared.context.queries?.length
+                ? { contextQueries: prepared.context.queries }
+                : {}),
             }
           : {}),
       });
@@ -631,8 +698,11 @@ export class WorkflowRunsService implements OnModuleInit {
    * restarted since (the stored run is then `stopped` with `waitingFor`
    * marked `expired`); 409 `Run "<id>" is not waiting for an answer`; 400
    * `Answer is required`; 400 `Step "<stepId>" is not waiting for an
-   * answer`. A run that passes is taken out of the waiting runs, so it is
-   * resumed once.
+   * answer`. A run whose workflow's contract changed since it started
+   * (its stored `contractHash`, data-model 3.16; e.g. the Clarify path
+   * that moved under `question-path` in roadmap 1.28.8) cannot be resumed
+   * either: 410, as an expired run. A run that passes is taken out of the
+   * waiting runs, so it is resumed once.
    */
   async prepareResume(id: string, body: unknown): Promise<PreparedResume> {
     const run = await this.stored(id);
@@ -655,12 +725,32 @@ export class WorkflowRunsService implements OnModuleInit {
         `Step "${stepId}" is not waiting for an answer`,
       );
     }
+    const changed = await this.contractChanged(run);
     const taken = this.waiting.take(id);
-    if (!taken || taken.expired) {
+    if (!taken || taken.expired || changed) {
       await this.expire(id, taken?.value);
       throw new GoneException(RUN_EXPIRED_ERROR);
     }
     return { held: taken.value, answer };
+  }
+
+  /**
+   * Whether the run's workflow no longer has the contract the run started
+   * with: its stored hash differs from the catalogue's. A run stored
+   * without a hash, or of a workflow the catalogue no longer holds, is
+   * left to the other checks.
+   */
+  private async contractChanged(run: WorkflowRunDoc): Promise<boolean> {
+    if (!run.contractHash) return false;
+    try {
+      const workflow = await this.workflows.definition(run.workflowId);
+      return (
+        workflow.contractHash !== undefined &&
+        workflow.contractHash !== run.contractHash
+      );
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -886,6 +976,31 @@ export class WorkflowRunsService implements OnModuleInit {
   /** Run one of the answer's queries again; nothing is stored (api.md 142). */
   async rerunQuery(id: string, index: number): Promise<QueryRerunResult> {
     return this.answers.rerun(this.answerHost(id), index);
+  }
+
+  /**
+   * One page of one of the answer's queries, filtered and sorted (api.md
+   * 152); nothing is stored.
+   */
+  async pageQuery(
+    id: string,
+    index: number,
+    request: PageRequest,
+  ): Promise<PageResult> {
+    return this.answers.page(this.answerHost(id), index, request);
+  }
+
+  /**
+   * The user's words read as a view of one of the answer's queries (api.md
+   * 153); nothing is stored.
+   */
+  async interpretFilter(
+    id: string,
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Promise<FilterInterpretation> {
+    return this.answers.interpretFilter(this.answerHost(id), index, text, view);
   }
 
   /**
@@ -1304,7 +1419,14 @@ export class WorkflowRunsService implements OnModuleInit {
         : {}),
       input: prepared.values,
       ...(prepared.context
-        ? { context: { fromRunId: prepared.context.fromRunId } }
+        ? {
+            context: {
+              fromRunId: prepared.context.fromRunId,
+              ...(prepared.context.ask
+                ? { askStep: prepared.context.ask.ask.step }
+                : {}),
+            },
+          }
         : {}),
       status: 'running',
       steps: [],
@@ -1324,12 +1446,24 @@ export class WorkflowRunsService implements OnModuleInit {
   }
 
   /** The earlier run a request names as context (plan 5.4). */
-  private async contextOf(raw: unknown): Promise<PreparedRun['context']> {
+  private async contextOf(
+    raw: unknown,
+    workflowId: string,
+  ): Promise<PreparedRun['context']> {
     const fromRunId =
       raw && typeof raw === 'object'
         ? (raw as { fromRunId?: unknown }).fromRunId
         : undefined;
+    const askStep =
+      raw && typeof raw === 'object'
+        ? (raw as { askStep?: unknown }).askStep
+        : undefined;
+    const asks = askStep !== undefined && askStep !== null && askStep !== '';
     if (fromRunId === undefined || fromRunId === null || fromRunId === '') {
+      // Asking one agent is a follow-up: it needs the run it follows.
+      if (asks) {
+        throw new BadRequestException('Asking one agent needs an earlier run');
+      }
       return undefined;
     }
     const earlier =
@@ -1345,7 +1479,7 @@ export class WorkflowRunsService implements OnModuleInit {
     // with my answer", api.md 138 410): its question and the clarifying
     // question it asked are the context, so the new run's question (the
     // user's answer) is planned with the original question.
-    if (earlier.question && !earlier.answer && earlier.waitingFor) {
+    if (earlier.question && !earlier.answer && earlier.waitingFor && !asks) {
       return {
         fromRunId: earlier.id,
         question: earlier.question,
@@ -1357,10 +1491,31 @@ export class WorkflowRunsService implements OnModuleInit {
         `Run "${earlier.id}" has no answer to continue from`,
       );
     }
+    // Asking one agent (workflows R40): a step that ran in the earlier run
+    // of Answer a Business Question.
+    let ask: AskHost | undefined;
+    if (asks) {
+      const refused = askRefusal(workflowId, askStep, earlier);
+      if (refused) throw new BadRequestException(refused);
+      // Ryan charts the answer of the run that was not itself an ask of him.
+      ask = askHostOf(
+        earlier,
+        askStep as AskableStepId,
+        askStep === 'build-visual'
+          ? await chartedRunOf(earlier, (id) => this.repository.get(id))
+          : earlier,
+      );
+    }
+    const queries = explorableQueriesOf(
+      earlier.answer.data ?? [],
+      earlier.answer.evidence,
+    );
     return {
       fromRunId: earlier.id,
       question: earlier.question,
       answer: earlier.answer.content,
+      ...(queries.length ? { queries } : {}),
+      ...(ask ? { ask } : {}),
     };
   }
 
@@ -1423,6 +1578,7 @@ export class WorkflowRunsService implements OnModuleInit {
     }
     const answer = runAnswerOf(view.messages, prepared.context ? 2 : 0);
     const output = status === 'success' ? tracker.lastOutput() : undefined;
+    const built = builtVisualEvent(ended.steps, view.visualizations ?? []);
     return {
       ...base,
       status,
@@ -1437,6 +1593,7 @@ export class WorkflowRunsService implements OnModuleInit {
       ...(view.agentName ? { agentName: view.agentName } : {}),
       panelItems: view.panelItems,
       visualizations: view.visualizations ?? [],
+      ...(built ? { events: [...(base.events ?? []), built] } : {}),
       ...(view.workflowState ? { workflowState: view.workflowState } : {}),
       finishedAt,
     };

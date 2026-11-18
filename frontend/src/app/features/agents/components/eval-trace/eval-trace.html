@@ -193,7 +193,7 @@
         </p>
         @if (result.toolCalls.length === 0) {
           <p class="text-[12px] text-fg-muted">
-            The agent answered without calling any tool.
+            The agent persona answered without calling any tool.
           </p>
         } @else {
           @for (call of result.toolCalls; track $index) {
@@ -238,7 +238,9 @@
             class="overflow-x-auto rounded-md bg-surface-muted px-3 py-2 text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
             >{{ result.answer }}</pre>
         } @else {
-          <p class="text-[12px] text-fg-muted">The agent returned no text.</p>
+          <p class="text-[12px] text-fg-muted">
+            The agent persona returned no text.
+          </p>
         }
       </div>
 
@@ -299,7 +301,8 @@
         }
       </div>
       <p class="text-[12px] text-fg-muted">
-        Run the evals to see the steps the agent executed for this question.
+        Run the evals to see the steps the agent persona executed for this
+        question.
       </p>
     }
   </div>

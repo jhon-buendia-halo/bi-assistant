@@ -21,7 +21,7 @@ Defined in [../../product/glossary.md](../../product/glossary.md): sampled profi
 
 Separation from readiness
 - R1. The sampled profile SHALL be a separate, approximate view. It SHALL NOT change readiness profiling, the readiness engine or its scores, and no sampled statistic SHALL feed a readiness score. [data-readiness](../data-readiness/spec.md) R29 (exact aggregates, no sampling) SHALL stand as written. The UI SHALL say so beside every profile (R14).
-- R2. A sampled profile SHALL be offered for datasets on a PostgreSQL or Databricks datasource only. A dataset on a `rest` datasource SHALL get the empty-state text under **UI**.
+- R2. A sampled profile SHALL be offered for datasets on a PostgreSQL or Databricks datasource only. A dataset on any other datasource (`rest`, `file`) SHALL get the empty-state text under **UI**.
 
 Sampling
 - R3. The sample size SHALL be at most 1,000 rows per table (`SAMPLE_SIZE_MAX`). A request MAY lower it, never raise it. The oversampling factor SHALL be 1.5, and the sampled share is `p = min(100, ceil(1.5 × sampleSize / estimate × 100 × 10⁴) / 10⁴)` percent.
@@ -135,7 +135,7 @@ Exact texts of `POST /synthetic-data/profiles` ([../../system/api.md](../../syst
 - 400 `datasetName is required`
 - 404 `Dataset "<name>" not found`
 - 400 `Dataset "<name>" has no datasource`
-- 400 `Profiling a sample supports PostgreSQL and Databricks datasets only`
+- 400 `Synthetic data supports PostgreSQL and Databricks datasources; "<name>" is an Excel / CSV datasource.` (or `… is a REST API datasource.`)
 - 400 `tables must be an array of entity keys`
 - 400 `"<key>" is not a table of dataset "<name>"`
 - 400 `Choose at most 50 tables`
@@ -159,7 +159,7 @@ Exact texts of `POST /synthetic-data/sample-exports` (114), Style B, the first t
 
 Texts of the Data Readiness Agent's tools (R40-R44), returned to the model as `{ error }`, beyond the dataset resolution texts of [../../system/agents.md](../../system/agents.md) 3.13:
 
-- `Synthetic data supports PostgreSQL and Databricks datasets only`
+- `Synthetic data supports PostgreSQL and Databricks datasources; "<name>" is an Excel / CSV datasource.` (or `… is a REST API datasource.`)
 - `"<name>" is not a table of dataset "<dataset>"`
 - `Choose at most 20 tables in chat; use Profile & synthesize on the dataset for more`
 - `rowsPerTable must be a whole number from 1 to 1,000 in chat`
@@ -317,7 +317,7 @@ Responses of 112 to 114 (all `200`, [../../system/api.md](../../system/api.md) 2
 
 ## UI
 
-Placement: the **Profile & synthesize** tab of the dataset editor, the third tab of a saved dataset ([../../system/ui.md](../../system/ui.md) 4.3 and 4.3a, [../datasets/spec.md](../datasets/spec.md) R48). A new (unsaved) dataset shows no tabs. A dataset on a `rest` datasource shows the tab with the empty-state text `Profiling a sample works for PostgreSQL and Databricks datasets.` and no controls.
+Placement: the **Profile & synthesize** tab of the dataset editor, the third tab of a saved dataset ([../../system/ui.md](../../system/ui.md) 4.3 and 4.3a, [../datasets/spec.md](../datasets/spec.md) R48). A new (unsaved) dataset shows no tabs. A dataset on a `rest` or `file` (Excel / CSV) datasource shows the tab with the empty-state text `Profiling a sample works for PostgreSQL and Databricks datasets.` and no controls.
 
 - Tab: `data-testid="dataset-tab-synthesize"`, `id="dataset-tab-synthesize"`, lucide `FlaskConical`, panel `dataset-panel-synthesize`. The Left and Right arrow keys cycle over the three tabs.
 - Component: `app-synthetic-data-panel` with the dataset as its input.

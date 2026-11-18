@@ -336,13 +336,16 @@ const STEPS = [
   { number: 1, title: 'Read images' },
   { number: 2, title: 'Receive question' },
   { number: 3, title: 'Load catalog' },
-  { number: 4, title: 'Plan' },
-  { number: 5, title: 'Clarify' },
-  { number: 6, title: 'Analyse' },
-  { number: 7, title: 'Validate' },
-  { number: 8, title: 'Check data quality' },
+  { number: 4, title: 'Interpret follow-up' },
+  { number: 5, title: 'Plan' },
+  { number: 6, title: 'Clarify' },
+  { number: 7, title: 'Analyse' },
+  { number: 8, title: 'Validate' },
   { number: 9, title: 'Write answer' },
-  { number: 10, title: 'Wrap up' },
+  { number: 10, title: 'Build visual' },
+  { number: 11, title: 'Wrap up' },
+  { number: 12, title: 'Page result' },
+  { number: 13, title: 'Page answer' },
 ];
 
 /** The plan block the default plan gives Analyse. */
@@ -361,7 +364,7 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
     });
   });
 
-  it("shows its workflow's ten steps before any turn (agent-panel R8a)", async () => {
+  it("shows its workflow's thirteen steps before any turn (agent-panel R8a)", async () => {
     const ctx = build();
     expect(ctx.service.effectiveWorkflowFor(ctx.session)).toEqual(STEPS);
     expect((await ctx.service.toView(ctx.session)).workflow).toEqual({
@@ -553,8 +556,8 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       });
       // The bar stops at Clarify, the run's last step.
       expect(workflowMoves(events).at(-1)).toEqual({
-        current: 5,
-        done: [2, 3, 4],
+        current: 6,
+        done: [2, 3, 4, 5],
       });
       expect(events.at(-1)?.type).toBe('done');
     });
@@ -586,10 +589,10 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       const moves = workflowMoves(events);
       // The retry makes Analyse current again, after the first attempt's
       // Analyse and Validate were done.
-      expect(moves).toContainEqual({ current: 6, done: [2, 3, 4, 6, 7] });
+      expect(moves).toContainEqual({ current: 7, done: [2, 3, 4, 5, 7, 8] });
       expect(moves.at(-1)).toEqual({
-        current: 10,
-        done: [2, 3, 4, 6, 7, 9, 10],
+        current: 11,
+        done: [2, 3, 4, 5, 7, 8, 9, 11],
       });
       expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
     });
@@ -629,8 +632,8 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       expect(answer?.content).not.toContain('never streamed');
       // The run ends at Analyse: no answer is written.
       expect(workflowMoves(events).at(-1)).toEqual({
-        current: 6,
-        done: [2, 3, 4],
+        current: 7,
+        done: [2, 3, 4, 5],
       });
       expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
       expect(events.some((event) => event.type === 'done')).toBe(true);
@@ -664,8 +667,8 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
         content: WRITTEN,
       });
       expect(workflowMoves(events).at(-1)).toEqual({
-        current: 10,
-        done: [2, 3, 4, 6, 7, 9, 10],
+        current: 11,
+        done: [2, 3, 4, 5, 7, 8, 9, 11],
       });
     });
   });
@@ -715,18 +718,21 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
         { current: 2, done: [2] },
         { current: 3, done: [2] },
         { current: 3, done: [2, 3] },
+        // Interpret follow-up (4): no earlier result, no model call.
         { current: 4, done: [2, 3] },
         { current: 4, done: [2, 3, 4] },
-        // Clarify (5) is the branch not taken.
-        { current: 6, done: [2, 3, 4] },
-        { current: 6, done: [2, 3, 4, 6] },
-        { current: 7, done: [2, 3, 4, 6] },
-        { current: 7, done: [2, 3, 4, 6, 7] },
-        // Check data quality (8) is not asked for in a chat.
-        { current: 9, done: [2, 3, 4, 6, 7] },
-        { current: 9, done: [2, 3, 4, 6, 7, 9] },
-        { current: 10, done: [2, 3, 4, 6, 7, 9] },
-        { current: 10, done: [2, 3, 4, 6, 7, 9, 10] },
+        { current: 5, done: [2, 3, 4] },
+        { current: 5, done: [2, 3, 4, 5] },
+        // Clarify (6) is the branch not taken.
+        { current: 7, done: [2, 3, 4, 5] },
+        { current: 7, done: [2, 3, 4, 5, 7] },
+        { current: 8, done: [2, 3, 4, 5, 7] },
+        { current: 8, done: [2, 3, 4, 5, 7, 8] },
+        { current: 9, done: [2, 3, 4, 5, 7, 8] },
+        { current: 9, done: [2, 3, 4, 5, 7, 8, 9] },
+        // Build visual (10) is not asked for in a chat.
+        { current: 11, done: [2, 3, 4, 5, 7, 8, 9] },
+        { current: 11, done: [2, 3, 4, 5, 7, 8, 9, 11] },
       ]);
       // The answer streams inside Write answer, between its start and end.
       const types = events.map((event) => event.type);
@@ -734,18 +740,18 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       const moves = events
         .map((event, i) => (event.type === 'workflow' ? i : -1))
         .filter((i) => i >= 0);
-      expect(text).toBeGreaterThan(moves[10]);
-      expect(text).toBeLessThan(moves[11]);
+      expect(text).toBeGreaterThan(moves[12]);
+      expect(text).toBeLessThan(moves[13]);
       expect(types.at(-1)).toBe('done');
       const done = events.at(-1)?.session as SessionView | undefined;
       expect(done?.workflow).toMatchObject({
         source: 'workflow',
-        current: 10,
-        done: [2, 3, 4, 6, 7, 9, 10],
+        current: 11,
+        done: [2, 3, 4, 5, 7, 8, 9, 11],
       });
       expect(ctx.session.workflowState).toMatchObject({
-        current: 10,
-        done: [2, 3, 4, 6, 7, 9, 10],
+        current: 11,
+        done: [2, 3, 4, 5, 7, 8, 9, 11],
       });
       expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
     });
@@ -773,14 +779,14 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
         turn(ctx, 'How many?', false, undefined, events),
       ).rejects.toThrow('model down');
       expect(workflowMoves(events).at(-1)).toEqual({
-        current: 6,
-        done: [2, 3, 4],
-        failed: 6,
+        current: 7,
+        done: [2, 3, 4, 5],
+        failed: 7,
       });
       expect(ctx.session.workflowState).toMatchObject({
-        current: 6,
-        done: [2, 3, 4],
-        failed: 6,
+        current: 7,
+        done: [2, 3, 4, 5],
+        failed: 7,
       });
       expect(events.some((event) => event.type === 'done')).toBe(false);
       // The question was kept; no answer was added.
@@ -817,8 +823,8 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       );
       const events = await turn(ctx, 'How many?', false, controller.signal);
       expect(workflowMoves(events).at(-1)).toEqual({
-        current: 6,
-        done: [2, 3, 4],
+        current: 7,
+        done: [2, 3, 4, 5],
       });
       expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
       expect(events.some((event) => event.type === 'done')).toBe(false);

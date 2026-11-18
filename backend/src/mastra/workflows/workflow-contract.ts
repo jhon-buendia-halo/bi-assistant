@@ -62,6 +62,17 @@ export interface WorkflowEdge {
   to: string;
   kind: 'next' | 'branch' | 'loop';
   label?: string;
+  /**
+   * What happens on this path, in business words (workflows R42): shown
+   * under the label on the canvas. Every labelled edge has one.
+   */
+  note?: string;
+}
+
+/** An edge without its note: the flow alone, as the contract snapshot keeps it. */
+export function edgeFlow(edge: WorkflowEdge): WorkflowEdge {
+  const { from, to, kind, label } = edge;
+  return { from, to, kind, ...(label ? { label } : {}) };
 }
 
 /**

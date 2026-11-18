@@ -156,7 +156,7 @@ test('surfaces a failed connection in both the form and system diagnostics', asy
   await page.getByLabel('Host').fill('127.0.0.1');
   await page.getByLabel('Port').fill('1');
   await page.getByLabel('Database').fill('missing');
-  await page.getByLabel('User').fill('missing');
+  await page.getByLabel('User', { exact: true }).fill('missing');
   await page.getByLabel('Password').fill('do-not-log-this');
   await page.getByRole('button', { name: 'Test connection' }).click();
 

@@ -8,8 +8,10 @@
  * catalogue can load it without Mastra.
  *
  * The flow (agents.md 5.11): Read images when the run has reference images
- * (its schemas are ./read-images.schemas.ts), Receive question → Load catalog → Plan, then a
- * branch: Clarify (the run waits for the user's answer, then goes back to
+ * (its schemas are ./read-images.schemas.ts), Receive question → Load catalog
+ * → Interpret follow-up, then either Page result → Page answer (a follow-up
+ * over an earlier result, roadmap 1.28.8) or Plan, then a branch: Clarify
+ * (the run waits for the user's answer, then goes back to
  * Plan with it), or the analysis loop (Analyse → Validate, retried once;
  * Analyse can wait for an answer too) → Write answer → Wrap up. A step
  * passes on what the steps after it read, so each carries the question, the
@@ -17,6 +19,7 @@
  * only its previous step's output.
  */
 import { z } from 'zod';
+import { FILTER_OPS } from '../../modules/datasources/connectors/paged-sql.types';
 
 /** A turn's question and datasets (the eval target's input, agents.md 8). */
 export const turnInputSchema = z.object({
@@ -81,7 +84,7 @@ export const catalogEntitySchema = z.object({
   datasourceKind: z
     .string()
     .nullable()
-    .describe('postgres, databricks or rest.'),
+    .describe('postgres, databricks, rest or file.'),
   columnCount: z.number().nullable().describe('Its column count, when known.'),
 });
 
@@ -113,6 +116,100 @@ export const catalogedQuestionSchema = z.object({
       'The columns of each entity, for Plan only: at most 40 per entity and 400 in all.',
     ),
   imageNotes: imageNotesSchema,
+});
+
+const filterValueSchema = z.union([z.string(), z.number(), z.boolean()]);
+
+/** One condition on one result column (paged-sql.types `FilterSpec`). */
+export const filterSpecSchema = z.object({
+  column: z.string().describe('The result column.'),
+  op: z.enum(FILTER_OPS).describe('The operator.'),
+  value: filterValueSchema.optional().describe('Its value.'),
+  valueTo: filterValueSchema.optional().describe('The upper bound of between.'),
+  values: z
+    .array(filterValueSchema)
+    .optional()
+    .describe('The values of in and not_in.'),
+});
+
+/** One sort key (paged-sql.types `SortSpec`). */
+export const sortSpecSchema = z.object({
+  column: z.string().describe('The result column.'),
+  direction: z.enum(['asc', 'desc']).describe('Its direction.'),
+});
+
+/** A page of a stored result, as asked for (paged-sql.types `PageRequest`). */
+export const pageRequestSchema = z.object({
+  page: z.number().optional().describe('1-based; default 1.'),
+  pageSize: z.number().optional().describe('Rows a page; default 50.'),
+  filters: z
+    .array(filterSpecSchema)
+    .optional()
+    .describe('The filters, AND-ed.'),
+  sort: z
+    .array(sortSpecSchema)
+    .optional()
+    .describe('The sort keys; none is the default order.'),
+});
+
+/** The view a page was read with (paged-sql.types `ResultView`). */
+export const resultViewSchema = z.object({
+  filters: z.array(filterSpecSchema).describe('The filters, AND-ed.'),
+  sort: z.array(sortSpecSchema).describe('The sort keys.'),
+  page: z.number().describe('The page, 1-based.'),
+  pageSize: z.number().describe('Rows a page.'),
+  matchedRows: z.number().optional().describe('Rows matching the filters.'),
+  capped: z.boolean().optional().describe('More rows matched than paged.'),
+});
+
+/**
+ * What Interpret follow-up read in a follow-up's words (roadmap 1.28.8):
+ * another page, a filter or an order over one of the run's earlier
+ * queries. A new question is no follow-up (`followUp: null`).
+ */
+export const followUpSchema = z.object({
+  action: z
+    .literal('explore')
+    .describe('The words ask for the earlier rows paged, filtered or sorted.'),
+  query: z
+    .number()
+    .describe("The 0-based index of the earlier query in the run's queries."),
+  ref: z.string().describe('Its label: Q1, Q2, …'),
+  request: pageRequestSchema.describe('The page, filters and sort to read.'),
+  understood: z.string().describe('The request in one line of words.'),
+});
+
+/**
+ * What Interpret follow-up passes on: Load catalog's output with the
+ * follow-up it read, or null when the run plans a new analysis.
+ */
+export const followedUpQuestionSchema = catalogedQuestionSchema.extend({
+  followUp: followUpSchema
+    .nullable()
+    .describe(
+      'The page of an earlier result the words ask for; null: a new question, planned.',
+    ),
+  stopped: z
+    .boolean()
+    .optional()
+    .describe(
+      'Set when the turn was stopped while the words were read: nothing after runs.',
+    ),
+});
+
+/** What Page result passes on: one page of the earlier query's full result. */
+export const pagedResultSchema = z.object({
+  title: z.string().describe('The earlier query, in words.'),
+  columns: z.array(z.string()).describe("The result's columns."),
+  rows: z
+    .array(z.record(z.string(), z.unknown()))
+    .describe("The page's rows, at most 100."),
+  page: z.number().describe('The page read, 1-based.'),
+  pageCount: z.number().describe('Pages the matching rows fill.'),
+  matchedRows: z.number().describe('Rows matching the filters.'),
+  capped: z.boolean().describe('More rows matched than can be paged.'),
+  view: resultViewSchema.describe('The view the page was read with.'),
+  understood: z.string().describe('The view in one line of words.'),
 });
 
 /** The clarifying question a plan asks instead of analysing. */
@@ -320,64 +417,13 @@ export const writeAnswerInputSchema = z.object({
 });
 
 /**
- * What Check data quality receives (agents.md 5.11; the run's optional
- * quality check): Write answer's input, and the catalog its tables are
- * looked up in.
+ * What the answer path receives (agents.md 5.11): Write answer's input, and
+ * the catalog of the run's datasets.
  */
-export const dataQualityInputSchema = writeAnswerInputSchema.extend({
+export const answerPathInputSchema = writeAnswerInputSchema.extend({
   catalog: z
     .array(catalogEntitySchema)
     .describe("The entities of the run's datasets."),
-});
-
-/** What Check data quality measured: the scope, the reports and the issues. */
-export const dataQualitySummarySchema = z.object({
-  tables: z
-    .array(z.string())
-    .describe('The tables the queries read that were assessed.'),
-  reportIds: z
-    .array(z.string())
-    .describe('The readiness reports stored for them, one per datasource.'),
-  findingCount: z
-    .number()
-    .describe('Engine findings on those tables, of any severity.'),
-  issues: z
-    .number()
-    .describe('Of those, the ones Sarah judged to affect this answer.'),
-  skipped: z
-    .array(z.string())
-    .describe(
-      'Tables read that could not be assessed (not PostgreSQL or Databricks).',
-    ),
-  error: z
-    .string()
-    .optional()
-    .describe('Why the check could not run; the answer is still written.'),
-});
-
-/**
- * What Check data quality passes on: Write answer's input, its findings
- * ending with the data-quality ones, and what it measured.
- */
-export const qualityCheckedSchema = writeAnswerInputSchema.extend({
-  dataQuality: dataQualitySummarySchema.describe('What the check measured.'),
-});
-
-/**
- * Sarah's reply in Check data quality: the engine findings (by their number
- * in the request) that could change or limit this answer, each with how.
- */
-export const dataQualityReplySchema = z.object({
-  issues: z
-    .array(
-      z.object({
-        finding: z.number().describe('The finding number from the request.'),
-        impact: z
-          .string()
-          .describe('One sentence: how it could change or limit this answer.'),
-      }),
-    )
-    .describe('Only the findings that affect this answer; empty when none.'),
 });
 
 /** The answer the Write answer step's model writes (AnswerOutput). */
@@ -401,6 +447,39 @@ export const writtenAnswerSchema = z.object({
   calls: z.array(analyseCallSchema).describe("The last attempt's tool calls."),
 });
 
+/**
+ * What Build visual receives (agents.md 5.11, workflows R41): Write answer's
+ * answer, the question and the queries with their rows.
+ */
+export const visualInputSchema = writtenAnswerSchema.extend({
+  question: z.string().describe('The trimmed question.'),
+  queries: z
+    .array(analyseQuerySchema)
+    .describe('The SQL queries of the last attempt, with their rows.'),
+});
+
+/** What Build visual made: the stored visual, or why there is none. */
+export const builtVisualSchema = z.object({
+  visualId: z
+    .string()
+    .optional()
+    .describe("The run's new visual (absent when none was built)."),
+  title: z.string().optional().describe("The visual's title."),
+  skipped: z
+    .string()
+    .optional()
+    .describe('Why no visual was built (no rows to chart).'),
+  error: z
+    .string()
+    .optional()
+    .describe('Why the design failed; the answer stands without a visual.'),
+});
+
+/** What Build visual passes on: Write answer's output and the visual. */
+export const visualBuiltSchema = writtenAnswerSchema.extend({
+  visual: builtVisualSchema.describe('The visual Ryan built, or why none.'),
+});
+
 /** What Wrap up receives. */
 export const wrapUpInputSchema = z.object({
   answer: z.string().describe("The run's answer."),
@@ -416,14 +495,22 @@ export const turnSummarySchema = z.object({
 });
 
 /**
- * The run's result (the workflow's output): the branch taken after the plan
- * loop, keyed by its nested workflow id: `analysis-path` holding
- * `answer-path`'s Wrap up summary (absent when the turn was stopped). A run
- * waiting for an answer has no result until it is resumed.
+ * The run's result (the workflow's output): the branch taken after
+ * Interpret follow-up, keyed by its nested workflow id. `explore-result`
+ * holds Page answer's summary (a follow-up over an earlier result,
+ * roadmap 1.28.8); `question-path` holds the branch taken after the plan
+ * loop: `analysis-path` with `answer-path`'s Wrap up summary (absent when
+ * the turn was stopped). A run waiting for an answer has no result until
+ * it is resumed.
  */
 export const answerBusinessQuestionResultSchema = z.object({
-  'analysis-path': z
-    .object({ 'answer-path': turnSummarySchema.optional() })
+  'explore-result': turnSummarySchema.optional(),
+  'question-path': z
+    .object({
+      'analysis-path': z
+        .object({ 'answer-path': turnSummarySchema.optional() })
+        .optional(),
+    })
     .optional(),
 });
 
@@ -436,6 +523,12 @@ export const ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS = {
   'load-catalog': {
     input: receivedQuestionSchema,
     output: catalogedQuestionSchema,
+  },
+  // A follow-up over an earlier result (roadmap 1.28.8): no model call on
+  // a run without earlier queries.
+  'interpret-follow-up': {
+    input: catalogedQuestionSchema,
+    output: followedUpQuestionSchema,
   },
   plan: { input: planInputSchema, output: plannedQuestionSchema },
   // Clarify and Analyse can wait for the user (api.md 138): what they
@@ -453,15 +546,14 @@ export const ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS = {
     resume: clarificationAnswerSchema,
   },
   validate: { input: analyseOutcomeSchema, output: validateOutcomeSchema },
-  // Optional (the input's `checkDataQuality`): Sarah's review of the data
-  // the analysis read.
-  'check-data-quality': {
-    input: dataQualityInputSchema,
-    output: qualityCheckedSchema,
-  },
   'write-answer': {
     input: writeAnswerInputSchema,
     output: writtenAnswerSchema,
   },
+  // Optional (the input's `buildVisual`): Ryan's visual of the answer.
+  'build-visual': { input: visualInputSchema, output: visualBuiltSchema },
   'wrap-up': { input: wrapUpInputSchema, output: turnSummarySchema },
+  // The follow-up branch: the earlier query's page, then the answer.
+  'page-result': { input: followedUpQuestionSchema, output: pagedResultSchema },
+  'page-answer': { input: pagedResultSchema, output: turnSummarySchema },
 } as const;

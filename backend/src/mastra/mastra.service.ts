@@ -11,8 +11,8 @@ import { mastra } from './index';
 import type { Workspace } from '@mastra/core/workspace';
 import type { RequestContext } from '@mastra/core/request-context';
 import { explainQueryWithModel } from './agents/query-explainer.agent';
+import { interpretResultWithModel } from './agents/result-explorer.agent';
 import {
-  checkDataQualityWithModel,
   planWithModel,
   writeAnswerWithModel,
 } from './workflows/answer-business-question.agents';
@@ -21,6 +21,12 @@ import {
   readDashboardWithModel,
 } from './workflows/recreate-dashboard.agents';
 import { readImagesWithModel } from './workflows/read-images.agents';
+import {
+  deriveRequirementsWithModel,
+  mapRequirementsWithModel,
+  recommendFixesWithModel,
+  reviseRequirementsWithModel,
+} from './workflows/consumption-gap-analysis.agents';
 import { reviewTemplateWithModel } from './workflows/review-website.agents';
 import {
   createSessionWorkspace,
@@ -118,14 +124,14 @@ export class MastraService {
   }
 
   /**
-   * Insights Analyst's optional Check data quality step model call
-   * (agents.md 5.11): Sarah's model, no tools, the issues read from her
-   * reply.
+   * A user's words read as a view of a query's result (api.md 153, 155;
+   * agents.md 2.17): one `result-explorer` call, no tools, the reply turned
+   * into `{ action, query, interpretation }` by `specOf`.
    */
-  checkDataQuality(
-    ...args: Parameters<typeof checkDataQualityWithModel>
-  ): ReturnType<typeof checkDataQualityWithModel> {
-    return checkDataQualityWithModel(...args);
+  interpretResult(
+    ...args: Parameters<typeof interpretResultWithModel>
+  ): ReturnType<typeof interpretResultWithModel> {
+    return interpretResultWithModel(...args);
   }
 
   /**
@@ -171,6 +177,36 @@ export class MastraService {
     ...args: Parameters<typeof mapDataWithModel>
   ): ReturnType<typeof mapDataWithModel> {
     return mapDataWithModel(...args);
+  }
+
+  /**
+   * Consumption Gap Analysis's model calls (agents.md 2.18 to 2.20, 5.20):
+   * the Requirements Analyst (Derive and Confirm requirements), the Layer
+   * Mapper (Map requirements) and the Gap Advisor (Recommend fixes), each
+   * reply read leniently and checked in code.
+   */
+  deriveRequirements(
+    ...args: Parameters<typeof deriveRequirementsWithModel>
+  ): ReturnType<typeof deriveRequirementsWithModel> {
+    return deriveRequirementsWithModel(...args);
+  }
+
+  reviseRequirements(
+    ...args: Parameters<typeof reviseRequirementsWithModel>
+  ): ReturnType<typeof reviseRequirementsWithModel> {
+    return reviseRequirementsWithModel(...args);
+  }
+
+  mapRequirements(
+    ...args: Parameters<typeof mapRequirementsWithModel>
+  ): ReturnType<typeof mapRequirementsWithModel> {
+    return mapRequirementsWithModel(...args);
+  }
+
+  recommendFixes(
+    ...args: Parameters<typeof recommendFixesWithModel>
+  ): ReturnType<typeof recommendFixesWithModel> {
+    return recommendFixesWithModel(...args);
   }
 
   /** Every registered agent, keyed by its registry name. */

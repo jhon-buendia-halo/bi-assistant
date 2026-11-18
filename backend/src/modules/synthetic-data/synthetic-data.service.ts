@@ -1,3 +1,4 @@
+import { unsupportedKindMessage } from '../datasources/kind-refusal';
 import {
   BadGatewayException,
   BadRequestException,
@@ -124,7 +125,7 @@ export class SyntheticDataService {
     const kind = dataset.datasourceKind;
     if (kind !== 'postgres' && kind !== 'databricks') {
       throw new BadRequestException(
-        'Profiling a sample supports PostgreSQL and Databricks datasets only',
+        unsupportedKindMessage('Synthetic data', dataset.name, kind),
       );
     }
     const keys = requestedKeys(body.tables, dataset);

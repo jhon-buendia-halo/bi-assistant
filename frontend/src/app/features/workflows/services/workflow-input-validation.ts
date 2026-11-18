@@ -19,6 +19,7 @@ const KIND_LABELS: Record<DatasourceKind, string> = {
   postgres: 'PostgreSQL',
   databricks: 'Databricks',
   rest: 'REST',
+  file: 'Excel / CSV',
 };
 
 /** `A`, `A or B`, `A, B or C`. */

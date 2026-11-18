@@ -30,6 +30,13 @@ export interface SampleFixtureDefaults {
   ssl: boolean;
 }
 
+/** One schema of a multi-schema sample, with the layer it plays. */
+export interface SampleLayerSchema {
+  name: string;
+  layer: 'landing' | 'normalized' | 'consumption';
+  description: string;
+}
+
 export interface SampleFixture {
   /** Stable id used in URLs and by the eval sets that depend on the sample. */
   id: string;
@@ -42,6 +49,14 @@ export interface SampleFixture {
   seedFile?: string;
   /** The schema the sample owns — what `DROP SCHEMA` targets before a seed. */
   schema: string;
+  /**
+   * Optional: a sample that owns several schemas (a medallion sample). The
+   * loader drops every one before seeding, registers every entity of them and
+   * saves a schema note (layer and description) per schema. `requiredTables`
+   * is then qualified (`schema.table`), and `schema` names the primary one.
+   * Absent = the sample owns just `schema`, exactly as before.
+   */
+  layerSchemas?: SampleLayerSchema[];
   defaults: SampleFixtureDefaults;
   /** Name of the datasource record the loader creates (and reuses). */
   datasourceName: string;
@@ -59,7 +74,7 @@ export interface SampleFixture {
    * Catalog schema and registers them, and their entities are keyed
    * `<catalog>.<schema>.<table>` (`evals.world_cup.matches`).
    */
-  datasourceKind?: 'postgres' | 'rest' | 'databricks';
+  datasourceKind?: 'postgres' | 'rest' | 'databricks' | 'file';
   /**
    * Knowledge entries and metrics about the sample's data, created by the
    * loader after a successful load from the panel (testing-data R26). Only
@@ -67,6 +82,14 @@ export interface SampleFixture {
    * Analytics samples carry one; World Cup deliberately has none.
    */
   knowledge?: KnowledgeSeed;
+  /**
+   * A `'file'` sample: the files it copies into the app, in a folder next to
+   * this one. Loaded through the upload (api.md 156) and save (18) code path,
+   * so no database server is involved. `requiredTables` are then qualified
+   * `<file schema>.<table>` (the file name without its extension, then the
+   * sheet's table), keyed `file.<schema>.<table>`.
+   */
+  files?: { dir: string; names: string[] };
 }
 
 const WORLD_CUP: SampleFixture = {
@@ -646,12 +669,150 @@ const WORLD_CUP_DATABRICKS = databricksFixture(WORLD_CUP);
 const FINANCE_DATABRICKS = databricksFixture(FINANCE);
 const MARKETING_ANALYTICS_DATABRICKS = databricksFixture(MARKETING_ANALYTICS);
 
+/**
+ * A retail store built to break things: a million-row table, awkward names,
+ * awkward values and every data-quality problem the readiness engine scores.
+ * Each edge case and where it lives is listed in the testing-data spec.
+ */
+const EDGE_CASES: SampleFixture = {
+  id: 'edge-cases',
+  name: 'Edge Cases',
+  description:
+    'An e-commerce store built to break things, synthetic data — ' +
+    '1,000,000 order lines, a 65-column table, an empty and a one-row table, ' +
+    'odd column names (spaces, MixedCase, reserved words, accents, %), ' +
+    'NULLs, NaN, huge numbers, far dates, duplicates, orphans, invalid ' +
+    'emails and phones, inconsistent spellings, outliers and ranking ties.',
+  // Plain SQL that generates its rows with generate_series and md5-based
+  // expressions, so every load holds the same data; hand-maintained.
+  seedFile: '005_edge_cases.sql',
+  schema: 'edge_cases',
+  defaults: {
+    host: SAMPLE_HOST,
+    port: SAMPLE_PORT,
+    database: 'edge_cases',
+    user: SAMPLE_USER,
+    password: SAMPLE_PASSWORD,
+    ssl: false,
+  },
+  datasourceName: 'Edge Cases PostgreSQL',
+  datasetName: 'Edge Cases',
+  requiredTables: [
+    'store_settings',
+    'categories',
+    'customers',
+    'customer_profile_wide',
+    'products',
+    'promotions',
+    'orders',
+    'order_lines',
+    'payments',
+    'shipments',
+    'returns',
+    'reviews',
+    'inventory_snapshots',
+    'gift_cards',
+    'LegacyOrders',
+    'v_order_totals',
+    'v_customer_ltv',
+    'v_product_revenue',
+    'mv_daily_sales',
+  ],
+};
+
+/**
+ * A medallion sample on the World Cup data: three schemas, one per layer, with
+ * deliberate gaps (2018 missing from Consumption, columns only in Normalized,
+ * raw text only in Landing, cards in no layer). Hand-maintained.
+ */
+const WORLD_CUP_MEDALLION: SampleFixture = {
+  id: 'world-cup-medallion',
+  name: 'World Cup Medallion',
+  description:
+    'The World Cup 2018 and 2022 as a medallion lakehouse — raw Landing text, ' +
+    'typed Normalized tables and a Consumption layer with known gaps.',
+  seedFile: '006_world_cup_medallion.sql',
+  schema: 'wc_consumption',
+  layerSchemas: [
+    {
+      name: 'wc_landing',
+      layer: 'landing',
+      description: 'Raw files as delivered: every value is text.',
+    },
+    {
+      name: 'wc_normalized',
+      layer: 'normalized',
+      description: 'Cleaned, typed and keyed tables.',
+    },
+    {
+      name: 'wc_consumption',
+      layer: 'consumption',
+      description: 'Reporting tables for dashboards.',
+    },
+  ],
+  defaults: { ...WORLD_CUP.defaults },
+  datasourceName: 'World Cup Medallion PostgreSQL',
+  datasetName: 'World Cup Medallion',
+  requiredTables: [
+    'wc_landing.raw_matches',
+    'wc_landing.raw_goals',
+    'wc_landing.raw_match_stats',
+    'wc_landing.raw_teams',
+    'wc_normalized.matches',
+    'wc_normalized.teams',
+    'wc_normalized.goals',
+    'wc_normalized.match_team_statistics',
+    'wc_consumption.fct_match_results',
+    'wc_consumption.agg_team_tournament',
+    'wc_consumption.agg_player_goals',
+  ],
+};
+
+/**
+ * The World Cup data as an Excel workbook and a CSV file: the sample for the
+ * `file` datasource kind (M1-31). `fixtures/world-cup-excel/build.cjs`
+ * generates the files from the World Cup seed. The workbook has a title row
+ * and a blank row above the header of `Matches` and a `Total` row under
+ * `Goals`, so detection and the total-row exclusion have something to do.
+ */
+const WORLD_CUP_EXCEL: SampleFixture = {
+  id: 'world-cup-excel',
+  name: 'World Cup Excel',
+  description:
+    'The World Cup 2018 and 2022 as files — an Excel workbook with the ' +
+    'sheets Matches (a title row above its header), Teams and Goals (a ' +
+    'trailing Total row) and a players CSV.',
+  datasourceKind: 'file',
+  files: { dir: 'world-cup-excel', names: ['world_cup.xlsx', 'players.csv'] },
+  schema: 'world_cup',
+  // Placeholders: nothing connects anywhere; the panel shows no form.
+  defaults: {
+    host: '',
+    port: 0,
+    database: '',
+    user: '',
+    password: '',
+    ssl: false,
+  },
+  datasourceName: 'World Cup Excel',
+  datasetName: 'World Cup Excel',
+  requiredTables: [
+    'world_cup.matches',
+    'world_cup.teams',
+    'world_cup.goals',
+    'players.players',
+  ],
+};
+
 /** Every sample the app knows how to provision, in panel order. */
 export const SAMPLE_FIXTURES: SampleFixture[] = [
   WORLD_CUP,
   FORMULA_1,
   INTELLIFY,
   US_HEALTH,
+  EDGE_CASES,
+  WORLD_CUP_MEDALLION,
+  WORLD_CUP_EXCEL,
   WORLD_CUP_REST,
   FINANCE,
   HEALTH_INSURANCE,
@@ -688,7 +849,24 @@ export function databricksSource(
  * eval preflight match against.
  */
 export function requiredEntities(fixture: SampleFixture): string[] {
-  return fixture.requiredTables.map((table) => `${fixture.schema}.${table}`);
+  return fixture.requiredTables.map((table) => qualifiedTable(fixture, table));
+}
+
+/**
+ * A required table as `schema.table`: a multi-schema or file sample lists its
+ * tables already qualified, every other sample's belong to its one schema.
+ */
+export function qualifiedTable(fixture: SampleFixture, table: string): string {
+  return fixture.layerSchemas || fixture.files
+    ? table
+    : `${fixture.schema}.${table}`;
+}
+
+/** Every schema a sample owns: the loader drops all of them before seeding. */
+export function ownedSchemas(fixture: SampleFixture): string[] {
+  return fixture.layerSchemas
+    ? fixture.layerSchemas.map((entry) => entry.name)
+    : [fixture.schema];
 }
 
 /**

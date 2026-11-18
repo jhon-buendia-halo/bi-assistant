@@ -11,6 +11,7 @@ import type { QueryEvidence, QueryFacts } from './query-evidence.types';
 export const EVIDENCE_TOOLS: ReadonlySet<string> = new Set([
   'run_readonly_sql',
   'sample_rows',
+  'explore_result',
 ]);
 
 /** The facts a tool passed beside one record's result, when there are any. */
@@ -20,10 +21,12 @@ export type FactsOf = (
 ) => QueryFacts | undefined;
 
 /**
- * One entry per `run_readonly_sql` or `sample_rows` record, failed ones
- * included (with no coverage), in `data` order; `index` is the record's
- * position in `data`. Without facts (an answer stored before 1.25) the
- * coverage falls back to the cap the rows ran into.
+ * One entry per `run_readonly_sql`, `sample_rows` or `explore_result`
+ * record, failed ones included (with no coverage), in `data` order; `index`
+ * is the record's position in `data`. Without facts (an answer stored before
+ * 1.25) the coverage falls back to the cap the rows ran into. An
+ * `explore_result` entry carries its `view` and is `partial` when more rows
+ * matched than its page holds.
  */
 export function evidenceOf(
   data: readonly ToolDataRecord[],
@@ -46,22 +49,31 @@ export function evidenceOf(
       evidence.push({ index, ...known });
       return;
     }
+    const explored = record.tool === 'explore_result';
     const outerLimit =
-      record.tool === 'run_readonly_sql' && record.input
+      record.tool !== 'sample_rows' && record.input
         ? outerLimitOf(record.input)
         : undefined;
+    const rowCount = record.rowCount ?? record.rows?.length ?? 0;
+    const matched = explored
+      ? (facts?.view?.matchedRows ?? known.totalRows)
+      : undefined;
     evidence.push({
       index,
-      coverage: coverageOf({
-        tool: record.tool,
-        sql: record.input,
-        rowCount: record.rowCount ?? record.rows?.length ?? 0,
-        totalRows: known.totalRows,
-        rowLimit: known.rowLimit,
-        truncated: record.truncated,
-      }),
+      coverage:
+        typeof matched === 'number' && matched > rowCount
+          ? 'partial'
+          : coverageOf({
+              tool: record.tool,
+              sql: record.input,
+              rowCount,
+              totalRows: known.totalRows,
+              rowLimit: known.rowLimit,
+              truncated: record.truncated,
+            }),
       ...(outerLimit !== undefined ? { outerLimit } : {}),
       ...known,
+      ...(explored && facts?.view ? { view: facts.view } : {}),
     });
   });
   return evidence;

@@ -69,6 +69,7 @@ describe('the synthetic-data tools (agents.md 3.14)', () => {
       'generate_synthetic_data',
       'describe_entity',
       'run_readonly_sql',
+      'explore_result',
       'show_in_panel',
       'ask_clarification',
     ]);

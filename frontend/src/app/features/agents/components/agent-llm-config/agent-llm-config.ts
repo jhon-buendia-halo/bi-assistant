@@ -33,7 +33,7 @@ export class AgentLlmConfig {
       { label: 'Provider', value: providerLabel(llm) },
       {
         label: 'Model',
-        value: `${llm.model}${this.modelOverride() ? ' (agent override)' : ''}`,
+        value: `${llm.model}${this.modelOverride() ? ' (agent persona override)' : ''}`,
       },
       { label: 'API key', value: llm.apiKeyConfigured ? 'Set' : 'Not set' },
       {

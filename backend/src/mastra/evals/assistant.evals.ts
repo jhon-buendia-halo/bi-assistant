@@ -71,6 +71,11 @@ import {
 } from '../../modules/sessions/turn-data';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
 import type { SessionsService } from '../../modules/sessions/sessions.service';
+import {
+  EVAL_CASE_CONTEXT_KEY,
+  evalDetailsOf,
+  type EvalRunDetails,
+} from './eval-details';
 
 /**
  * Eval suite for the Questions to Insights assistant.
@@ -160,6 +165,13 @@ export interface AssistantEvalCase {
    * the ones the tools see), for cases that stage what the model is told.
    */
   orientationSnapshots?: (snapshots: DatasetSnapshot[]) => DatasetSnapshot[];
+  /**
+   * The frozen input of a case whose target calls one model function
+   * (`isolatedCallTarget`, agents.md 8.1): exactly what the call receives,
+   * typed by the target's input type. The target reads it from the case,
+   * not from `question` (which is then only the case's label).
+   */
+  input?: unknown;
 }
 
 /** One tool call as the agent made it, with its parsed input and output. */
@@ -179,6 +191,14 @@ export interface EvalCustomCheckInput {
   datasets: string[];
   /** Values the target's setup produced for the case (e.g. a draft's id). */
   vars: Record<string, string>;
+  /**
+   * Structured facts of the run (agents.md 8.1, "Run details"): an
+   * isolated call's whole `output`, a workflow's step outputs (`steps`),
+   * the readiness report and Rows behind findings' sources. The runner
+   * always sets it (`{}` when the target sets none); optional only so a
+   * spec can call a check without it.
+   */
+  details?: EvalRunDetails;
 }
 
 /**
@@ -232,9 +252,162 @@ export interface AssistantEvalSet {
    * means the `assistant`.
    */
   agentKey?: string;
+  /**
+   * The eval target its cases run on, when its agent has more than one
+   * (`eval-sets.ts` `EVAL_TARGET_FACTORIES`): `data-readiness:assessment-workflow`. Absent means the agent's own
+   * target (its `agentKey`).
+   */
+  target?: string;
   cases: AssistantEvalCase[];
 }
 
+/**
+ * The World Cup data as an Excel workbook and a CSV file (`file` datasource,
+ * M1-31): `world_cup.xlsx` (sheets Matches, Teams, Goals) and `players.csv`,
+ * built from the same seed. DuckDB reads `file.world_cup.<sheet>` and
+ * `file.players.players`. The questions are the World Cup ones the sheets can
+ * answer; the goals question is also a trap for the `Total` row under Goals,
+ * which the import excludes (24, not 48), and the last one reads the CSV.
+ */
+const WORLD_CUP_EXCEL_EVAL_CASES: AssistantEvalCase[] = [
+  {
+    id: 'excel-champion-2022',
+    question: 'Who won the 2022 World Cup?',
+    intent:
+      'Single-hop lookup in the Matches sheet: the winner of the 2022 final.',
+    scorers: [
+      checks.includes('Argentina'),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT winner FROM file.world_cup.matches ' +
+      "WHERE tournament_year = 2022 AND stage = 'final'",
+  },
+  {
+    id: 'excel-final-score-2018',
+    question: 'What was the score of the 2018 World Cup final?',
+    intent:
+      'Filter the Matches sheet by stage and year, read both goal columns.',
+    scorers: [
+      checks.matches(/4\s*[-–:]\s*2/),
+      checks.includes('France'),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT home_team, away_team, home_goals, away_goals ' +
+      'FROM file.world_cup.matches ' +
+      "WHERE tournament_year = 2018 AND stage = 'final'",
+  },
+  {
+    id: 'excel-top-scorer-2022',
+    question: 'Who scored the most goals in the 2022 World Cup, and how many?',
+    intent:
+      'Aggregate the Goals sheet by scorer, excluding own goals; the sheet has a Total row the import must have dropped.',
+    scorers: [
+      checks.includes('Messi'),
+      checks.matches(/\b4\b/),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT scorer, COUNT(*) AS goals FROM file.world_cup.goals ' +
+      "WHERE tournament_year = 2022 AND goal_type <> 'own_goal' " +
+      'GROUP BY scorer ORDER BY goals DESC, scorer LIMIT 1',
+  },
+  {
+    id: 'excel-goals-2022',
+    question: 'How many goals were scored in the 2022 World Cup?',
+    intent:
+      'Count rows of the Goals sheet for one year; a Total row left in the table would double the figure.',
+    scorers: [
+      checks.matches(/\b24\b/),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT COUNT(*) AS goals FROM file.world_cup.goals ' +
+      'WHERE tournament_year = 2022',
+  },
+  {
+    id: 'excel-shootouts',
+    question:
+      'Which knockout matches went to a penalty shootout, and who advanced?',
+    intent:
+      'Shootouts are non-null penalty columns of the Matches sheet, not a flag.',
+    scorers: [
+      checks.includes('Croatia'),
+      checks.matches(/Argentina/i),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT tournament_year, home_team, away_team, winner ' +
+      'FROM file.world_cup.matches WHERE home_penalties IS NOT NULL ' +
+      'ORDER BY tournament_year, match_number',
+  },
+  {
+    id: 'excel-biggest-venue',
+    // Two matches share the best attendance at one stadium.
+    resultSetOptions: { distinctRows: true },
+    question:
+      'Which stadium hosted the best-attended match, and what was the attendance?',
+    intent:
+      'Order the Matches sheet by a nullable measure; the title row above its header must not shift the columns.',
+    scorers: [
+      checks.includes('Lusail'),
+      checks.matches(/88[,.]?966/),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT DISTINCT stadium, attendance FROM file.world_cup.matches ' +
+      'WHERE attendance = (SELECT MAX(attendance) FROM file.world_cup.matches)',
+  },
+  {
+    id: 'excel-goalkeepers',
+    question: 'How many goalkeepers are in the players list?',
+    intent: 'A question only the CSV file can answer (`file.players.players`).',
+    scorers: [
+      checks.matches(/\b13\b/),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      "SELECT COUNT(*) AS goalkeepers FROM file.players.players WHERE position = 'GK'",
+  },
+  {
+    id: 'excel-schema-discovery',
+    question: 'What data do I have available to analyse?',
+    intent:
+      'Pure discovery: the answer names the sheets and the CSV rather than running SQL.',
+    scorers: [
+      checks.includes('matches'),
+      checks.matches(/players/i),
+      checks.didNotCall('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+  },
+];
+
+/**
+ * The `world-cup-excel` set (M1-31) stays in code for now: its reference
+ * SQL runs in DuckDB over `file.<schema>.<table>`, a dialect the set files
+ * do not have yet. It follows the sets of the files.
+ */
+const WORLD_CUP_EXCEL_EVAL_SET: AssistantEvalSet = {
+  id: 'world-cup-excel',
+  name: 'World Cup Excel',
+  description:
+    'The World Cup questions the sample files can answer, against the ' +
+    'bundled World Cup Excel sample: the workbook world_cup.xlsx (sheets ' +
+    'Matches, Teams, Goals) and players.csv. Load it from Settings → Testing ' +
+    'Data and select its Excel / CSV datasource with the saved dataset; ' +
+    'reference SQL runs in DuckDB over file.world_cup.* and file.players.players.',
+  fixtureId: 'world-cup-excel',
+  cases: WORLD_CUP_EXCEL_EVAL_CASES,
+};
 /**
  * Epic BA-318 acceptance: the same World Cup tables are offered in a Landing
  * schema that does not exist in the database and in the real Consumption
@@ -287,6 +460,7 @@ const SCHEMA_NOTES_EVAL_SET: AssistantEvalSet = {
  */
 export const ASSISTANT_EVAL_SETS: AssistantEvalSet[] = [
   ...toAssistantEvalSets(loadEvalSets()),
+  WORLD_CUP_EXCEL_EVAL_SET,
   SCHEMA_NOTES_EVAL_SET,
 ];
 
@@ -1034,6 +1208,14 @@ export async function evalRunModel(): Promise<string | undefined> {
  * first teaches the case's signals, then probes with what its scope recalls,
  * and its scope is deleted whatever happened (R238 to R240).
  */
+/**
+ * The scorer of a case with custom checks only: it passes every answer, so
+ * the verdict is the custom checks' (Mastra's runEvals needs one scorer).
+ */
+function anyAnswer() {
+  return checks.includes('');
+}
+
 export async function runAssistantEvalCase(
   evalCase: AssistantEvalCase,
   datasets: string[],
@@ -1061,6 +1243,7 @@ export async function runAssistantEvalCase(
   let rawToolCalls: EvalRawToolCall[] = [];
   let history: EvalHistoryMessage[] = [];
   let vars: Record<string, string> = {};
+  let details: EvalRunDetails = {};
   let scorerPayloads: Record<string, any> = {};
   // Populated live via onStepFinish as the run executes — the same records a
   // real turn would have threaded through TURN_RECORDS_CONTEXT_KEY.
@@ -1130,6 +1313,8 @@ export async function runAssistantEvalCase(
       evalCase.agentTools,
       usageSink,
     );
+    // The case itself, for a target that reads its frozen `input`.
+    requestContext.set(EVAL_CASE_CONTEXT_KEY, evalCase);
     target.configureContext?.(requestContext);
     // The probe recalls as a chat turn does, in parallel with the context.
     const recall: Promise<ProbeRecall> | undefined = memory
@@ -1160,7 +1345,9 @@ export async function runAssistantEvalCase(
           requestContext,
         },
       ],
-      scorers: evalCase.scorers,
+      // Mastra wants one scorer at least: a case judged only by custom
+      // checks (the isolated-call sets) gets one that any answer passes.
+      scorers: evalCase.scorers.length ? evalCase.scorers : [anyAnswer()],
       target: target.runTarget ?? target.agent,
       // Same step budget and dataset/entity + join-hint grounding a real chat
       // turn gets from TurnOptions.agentContext — without this the model
@@ -1192,6 +1379,7 @@ export async function runAssistantEvalCase(
           failed: call.failed,
         }));
         scorerPayloads = scorerResults ?? {};
+        details = evalDetailsOf(targetResult);
       },
     });
 
@@ -1291,6 +1479,7 @@ export async function runAssistantEvalCase(
             toolCalls: rawToolCalls,
             datasets,
             vars,
+            details,
           }),
           undefined,
         ),

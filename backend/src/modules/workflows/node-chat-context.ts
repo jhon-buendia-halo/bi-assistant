@@ -9,7 +9,14 @@ import type {
   WorkflowRunStep,
   WorkflowRunToolCall,
 } from './workflow-run-steps';
-import { STEP_OUTPUT_CAP } from './workflow-run-steps';
+import { STEP_OUTPUT_CAP, TOOL_CALL_INPUT_CAP } from './workflow-run-steps';
+import {
+  EXPLORABLE_TOOLS,
+  explorableQueriesOf,
+  sqlKey,
+  withRefs,
+  type ExplorableQuery,
+} from '../sessions/query-evidence/explorable-queries';
 
 /** One message of a node chat, as stored and as the API shows it. */
 export interface NodeChatMessage {
@@ -198,4 +205,40 @@ export function nodeChatContextBlock(
     part.cuttable ? shorten(part.text, limit) : part.text,
   );
   return [SHORTENED_NOTE, ...shortened].join('\n').slice(0, cap);
+}
+
+/**
+ * What a node chat's turn may explore with `explore_result` (agents.md 3.15,
+ * 5.16; plan m1-27 2): the run's answer queries, then the chat's earlier
+ * turns' successful queries whose SQL is stored whole (a clipped input is
+ * not known), each statement once. A chat query keeps no columns: it pages
+ * in its default order, unfiltered, until the agent runs it again.
+ */
+export function nodeChatQueries(
+  run: Pick<WorkflowRunDoc, 'answer'>,
+  earlier: readonly NodeChatMessage[],
+): ExplorableQuery[] {
+  const queries = explorableQueriesOf(
+    run.answer?.data ?? [],
+    run.answer?.evidence,
+  );
+  const seen = new Set(queries.map((query) => sqlKey(query.sql)));
+  for (const message of earlier) {
+    for (const call of message.toolCalls ?? []) {
+      const sql = call.input?.trim();
+      if (!EXPLORABLE_TOOLS.has(call.tool) || call.error || !sql) continue;
+      if ((call.input ?? '').length >= TOOL_CALL_INPUT_CAP) continue;
+      const key = sqlKey(sql);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      queries.push({
+        ref: '',
+        sql,
+        columns: [],
+        kinds: {},
+        sampleValues: {},
+      });
+    }
+  }
+  return withRefs(queries);
 }

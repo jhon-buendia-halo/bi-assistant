@@ -46,6 +46,24 @@ describe('entityOrientationLines (agents.md 4.1 Block 1)', () => {
     );
   });
 
+  it('adds the DuckDB line last, only when a file dataset is in scope (ADR-0052)', () => {
+    const fileLine =
+      'Entities on a `file` datasource are Excel / CSV sheets: query them in DuckDB SQL (PostgreSQL-like; strftime, not to_char; TRY_CAST text columns before arithmetic).';
+    expect(entityOrientationLines(['Core'], datasets)).not.toContain(fileLine);
+    const withFile = [
+      ...datasets,
+      {
+        name: 'Sales',
+        datasourceId: 'ds-2',
+        datasourceKind: 'file' as const,
+        tables: ['file.sales_2026.region'],
+      },
+    ];
+    expect(entityOrientationLines(['Core', 'Sales'], withFile).at(-1)).toBe(
+      fileLine,
+    );
+  });
+
   it('leaves sample_rows out of the hint when it is not selected (ADR-0022)', () => {
     expect(entityOrientationLines(['Core'], datasets, ['visuals']).at(-1)).toBe(
       'Use describe_entity / run_readonly_sql to inspect and query them.',

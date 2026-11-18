@@ -6,9 +6,17 @@
   data-testid="dataset-picker"
 >
   @for (name of selected(); track name) {
-    <span class="picker-chip" data-testid="dataset-picker-chip">
+    <span
+      class="picker-chip"
+      [class.picker-chip-missing]="isMissing(name)"
+      data-testid="dataset-picker-chip"
+    >
       <lucide-angular [img]="Database" [size]="12" class="shrink-0" />
-      <span class="truncate">{{ name }}</span>
+      <span class="truncate"
+        >{{ name }}@if (isMissing(name)) {
+          (missing)
+        }</span
+      >
       <button
         type="button"
         class="picker-chip-remove"

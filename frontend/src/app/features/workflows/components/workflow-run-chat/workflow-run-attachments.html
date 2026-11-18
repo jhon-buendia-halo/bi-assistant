@@ -5,23 +5,50 @@
   [attr.aria-describedby]="error() ? 'workflow-input-error-images' : null"
   class="flex flex-col gap-1"
 >
-  <span
-    id="workflow-input-images-label"
-    [class]="showLabel() ? 'text-[12px] font-medium text-fg-muted' : 'sr-only'"
-    >{{ label() }}</span
-  >
+  @if (showLabel()) {
+    <!-- In the input form: a labelled section (ui.md 4.4b) -->
+    <div class="composer-head">
+      <span id="workflow-input-images-label" class="composer-label">{{
+        label()
+      }}</span>
+      <span aria-hidden="true" class="composer-tag composer-tag-optional"
+        >Optional</span
+      >
+    </div>
+  } @else {
+    <span id="workflow-input-images-label" class="sr-only">{{ label() }}</span>
+  }
   <div class="flex flex-wrap items-center gap-2">
-    <button
-      type="button"
-      data-testid="workflow-input-images-attach"
-      aria-label="Attach images"
-      title="Attach images"
-      [disabled]="images().length >= max()"
-      (click)="openPicker()"
-      class="btn-icon"
-    >
-      <lucide-angular [img]="Paperclip" [size]="16" />
-    </button>
+    @if (showLabel()) {
+      <!-- A visible drop zone: where to click, paste or drop -->
+      <button
+        type="button"
+        data-testid="workflow-input-images-attach"
+        aria-label="Attach images"
+        [attr.aria-describedby]="help() ? 'workflow-input-images-help' : null"
+        [disabled]="images().length >= max()"
+        (click)="openPicker()"
+        class="images-drop"
+      >
+        <lucide-angular [img]="ImagePlus" [size]="16" class="shrink-0" />
+        <span
+          ><span class="font-medium text-fg">Attach images</span>, or paste or
+          drop them here</span
+        >
+      </button>
+    } @else {
+      <button
+        type="button"
+        data-testid="workflow-input-images-attach"
+        aria-label="Attach images"
+        title="Attach images"
+        [disabled]="images().length >= max()"
+        (click)="openPicker()"
+        class="btn-icon"
+      >
+        <lucide-angular [img]="Paperclip" [size]="16" />
+      </button>
+    }
     <input
       #file
       type="file"
@@ -53,7 +80,9 @@
     }
   </div>
   @if (help()) {
-    <p class="m-0 text-[12px] text-fg-muted">{{ help() }}</p>
+    <p id="workflow-input-images-help" class="m-0 text-[12px] text-fg-muted">
+      {{ help() }}
+    </p>
   }
   @if (error(); as message) {
     <p

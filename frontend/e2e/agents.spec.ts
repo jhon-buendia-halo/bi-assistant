@@ -690,7 +690,7 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await saveLenaiSettings(page, stub.baseUrl);
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
 
   // The hub lists the harness registry in domain sections, every card
@@ -775,7 +775,7 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await expect(page.locator(CASE_ROWS)).toHaveCount(0);
 
   // Back returns to the hub.
-  await page.getByRole('button', { name: 'All agents' }).click();
+  await page.getByRole('button', { name: 'All agent personas' }).click();
   await expect(
     page.getByTestId('agent-section-sql').getByTestId('agent-sql-verifier'),
   ).toBeVisible();
@@ -785,23 +785,23 @@ test('opens an agent from the Agents list and switches between its tabs', async 
 test('shows the stateless, no-tool agents accurately', async ({ page }) => {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-sql-fixer').click();
 
   await page.getByTestId('agent-tab-tools').click();
   await expect(
-    page.getByText('This agent runs in a single step with no tools.'),
+    page.getByText('This agent persona runs in a single step with no tools.'),
   ).toBeVisible();
 
   await page.getByTestId('agent-tab-memory').click();
   await expect(
-    page.getByText('This agent is stateless — no memory is configured.'),
+    page.getByText('This agent persona is stateless — no memory is configured.'),
   ).toBeVisible();
 
   await page.getByTestId('agent-tab-evals').click();
   await expect(
-    page.getByText('No evals configured for this agent yet.'),
+    page.getByText('No evals configured for this agent persona yet.'),
   ).toBeVisible();
 });
 
@@ -814,7 +814,7 @@ test('offers the configured datasources and starts a run from the evals tab', as
 
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -841,7 +841,7 @@ test('runs only the ticked questions', async ({ page }) => {
 
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -873,7 +873,7 @@ test('refuses to run against a datasource with no datasets', async ({
 
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -890,7 +890,7 @@ test('explains an incomplete eval dataset without starting a run', async ({
   await createWorldCupDataset(page);
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -908,7 +908,7 @@ test('opens a question in the right panel with what it is scored on', async ({
 }) => {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -924,7 +924,7 @@ test('opens a question in the right panel with what it is scored on', async ({
   await expect(panel).toContainText('Single-hop lookup');
   await expect(panel).toContainText('Checks if output includes "Argentina"');
   await expect(panel).toContainText(
-    'Run the evals to see the steps the agent executed',
+    'Run the evals to see the steps the agent persona executed',
   );
 
   // Selecting another question swaps the panel.
@@ -938,7 +938,7 @@ test('separates the question suite from past executions', async ({ page }) => {
 
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
@@ -970,7 +970,7 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
 
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
+    .getByRole('button', { name: 'Agent personas' })
     .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();

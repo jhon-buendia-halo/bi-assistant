@@ -8,28 +8,54 @@
       (click)="fullScreen.set(false)"
     ></button>
   }
+  <!-- Inline under the answer, or (sheet) a full-height panel on the
+       window's right edge that opens from a run's artifact card (visuals R42) -->
   <section
-    class="card overflow-hidden"
-    [class.mt-4]="!fullScreen()"
-    [class.fixed]="fullScreen()"
+    #panel
+    tabindex="-1"
+    class="card overflow-hidden outline-none"
+    [class.mt-4]="!fullScreen() && !sheet()"
+    [class.fixed]="fullScreen() || sheet()"
     [class.inset-4]="fullScreen()"
     [class.z-50]="fullScreen()"
-    [class.flex]="fullScreen()"
-    [class.flex-col]="fullScreen()"
-    [attr.role]="fullScreen() ? 'dialog' : null"
+    [class.flex]="fullScreen() || sheet()"
+    [class.flex-col]="fullScreen() || sheet()"
+    [class.run-visual-sheet]="sheet() && !fullScreen()"
+    [attr.role]="fullScreen() || sheet() ? 'dialog' : null"
     [attr.aria-modal]="fullScreen() ? 'true' : null"
-    aria-label="Visual"
+    [attr.aria-label]="sheet() ? (title() ?? 'Visual') : 'Visual'"
     data-testid="run-visual"
     [attr.data-full-screen]="fullScreen() ? 'true' : null"
-    (keydown.escape)="fullScreen.set(false)"
+    [attr.data-sheet]="sheet() ? 'true' : null"
+    (keydown.escape)="onEscape()"
   >
-    <div class="flex items-center justify-between gap-2 px-3 pt-2">
-      <h2
-        class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-      >
-        Visual
-      </h2>
-      <div class="flex items-center gap-1">
+    <div
+      class="flex items-center justify-between gap-2"
+      [class]="sheet() ? 'border-b border-border px-4 py-3' : 'px-3 pt-2'"
+    >
+      @if (sheet()) {
+        <div class="flex min-w-0 items-center gap-2">
+          <span class="chip chip-info shrink-0" data-testid="run-visual-kind">{{
+            kind().label
+          }}</span>
+          <h2
+            class="m-0 truncate text-[15px] leading-6 font-semibold text-fg-strong"
+            data-testid="run-visual-title"
+          >
+            {{ title() ?? "Loading…" }}
+          </h2>
+          @if (kind().mock) {
+            <span class="chip chip-warning shrink-0">Mock data</span>
+          }
+        </div>
+      } @else {
+        <h2
+          class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+        >
+          Visual
+        </h2>
+      }
+      <div class="flex shrink-0 items-center gap-1">
         <button
           type="button"
           data-testid="run-visual-full-screen"
@@ -48,6 +74,7 @@
           type="button"
           aria-label="Close visual"
           title="Close visual"
+          data-testid="run-visual-close"
           (click)="fullScreen.set(false); state.close()"
           class="rounded-lg p-1 text-icon hover:bg-surface-muted"
         >
@@ -56,9 +83,9 @@
       </div>
     </div>
     <div
-      [class.h-[520px]]="!fullScreen()"
-      [class.min-h-0]="fullScreen()"
-      [class.flex-1]="fullScreen()"
+      [class.h-[520px]]="!fullScreen() && !sheet()"
+      [class.min-h-0]="fullScreen() || sheet()"
+      [class.flex-1]="fullScreen() || sheet()"
     >
       <app-interactive-visual-panel
         class="h-full"
@@ -68,6 +95,7 @@
         [loading]="state.loading()"
         [error]="state.error()"
         [downloading]="state.downloading() !== null"
+        [chrome]="!sheet()"
         (downloadVisual)="state.download($event)"
         (selectVersion)="state.selectVersion($event)"
         (revertVersion)="state.revert($event, apply)"

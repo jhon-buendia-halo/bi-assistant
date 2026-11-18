@@ -23,24 +23,40 @@ async function expectCurrent(page: Page, name: string): Promise<void> {
 }
 
 test('moves between areas from the rail', async ({ page }) => {
+  // The order of use (app-shell R3): journeys and their results first, operations last.
+  const items = page.getByRole('navigation', { name: 'Workspace navigation' }).getByRole('button');
+  await expect(items).toHaveCount(7);
+  const names = await items.evaluateAll((buttons) =>
+    buttons.map((button) => button.getAttribute('aria-label')),
+  );
+  expect(names).toEqual([
+    'User journeys',
+    'Runs',
+    'Artifacts',
+    'Datasets',
+    'Agent personas',
+    'Monitoring',
+    'Costs',
+  ]);
+
   await railItem(page, 'Datasets').click();
   await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
   await expectCurrent(page, 'Datasets');
 
-  await railItem(page, 'Workflows').click();
+  await railItem(page, 'User journeys').click();
   await expect(
-    page.getByRole('heading', { name: 'Workflows', exact: true }),
+    page.getByRole('heading', { name: 'User journeys', exact: true }),
   ).toBeVisible();
-  await expectCurrent(page, 'Workflows');
+  await expectCurrent(page, 'User journeys');
 
-  await railItem(page, 'Agents').click();
-  await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
-  await expectCurrent(page, 'Agents');
+  await railItem(page, 'Agent personas').click();
+  await expect(page.getByRole('heading', { name: 'Agent personas' })).toBeVisible();
+  await expectCurrent(page, 'Agent personas');
   await expect(railItem(page, 'Datasets')).not.toHaveAttribute('aria-current');
 
-  await railItem(page, 'Agents').click();
-  await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
-  await expectCurrent(page, 'Agents');
+  await railItem(page, 'Agent personas').click();
+  await expect(page.getByRole('heading', { name: 'Agent personas' })).toBeVisible();
+  await expectCurrent(page, 'Agent personas');
 
   // The Context area is gone; ontologies live in the dataset editor (app-shell R3).
   await expect(railItem(page, 'Context')).toHaveCount(0);
@@ -73,7 +89,7 @@ test('Opens the empty Monitoring page from the rail', async ({ page }) => {
         page.getByRole('heading', { name: 'Monitoring', exact: true }),
       ).toBeVisible();
       await expect(page.getByTestId('monitoring-note')).toHaveText(
-        "LLM calls made by the app's agents, newest first.",
+        "LLM calls made by the app's agent personas, newest first.",
       );
       await expect(page.getByTestId('llm-calls-empty')).toHaveText(
         'No LLM calls yet.',
@@ -120,49 +136,39 @@ test('Opens the empty Costs page from the rail', async ({ page }) => {
   );
 });
 
-test('the start page explains how the product works', async ({ page }) => {
+test('the start page asks a question first and links runs, workflows and agents', async ({
+  page,
+}) => {
   await expect(
     page.getByRole('heading', { name: 'Welcome to Halo Workbench' }),
   ).toBeVisible();
-  const steps = [
-    'Pick your data',
-    'Run a workflow',
-    'Agents are the building blocks',
-    'Read, refine, download',
-  ];
-  for (const [index, step] of steps.entries()) {
-    await expect(page.getByTestId(`welcome-step-${index + 1}`)).toContainText(
-      step,
-    );
-  }
-  // The fourth step names a place but opens nothing.
+  const ask = page.getByTestId('welcome-ask');
+  await expect(ask.getByLabel('What do you want to know?')).toBeVisible();
+  await expect(ask.getByRole('button', { name: 'Ask' })).toBeVisible();
   await expect(
-    page.getByTestId('welcome-step-4').getByRole('button'),
-  ).toHaveCount(0);
-  await page.screenshot({ path: evidence('1.14.17', 'welcome-page.png') });
-
-  // Each step opens the place it names (app-shell R51).
-  const step = (n: number) => page.getByTestId(`welcome-step-${n}`);
-  await step(1).getByRole('button', { name: 'Datasets' }).click();
-  await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
-  await expectCurrent(page, 'Datasets');
-
-  await page.goto(page.url());
-  await step(2).getByRole('button', { name: 'Workflows' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Workflows', exact: true }),
+    page.getByRole('heading', { name: 'Recent runs' }),
   ).toBeVisible();
-  await expectCurrent(page, 'Workflows');
+  await expect(page.getByTestId('welcome-runs-empty')).toBeVisible();
+  // Answer a Business Question is the question box; the others are listed.
+  const workflows = page.getByTestId('welcome-workflows');
+  await expect(
+    workflows.getByTestId('welcome-workflow-review-website'),
+  ).toBeVisible();
+  await expect(
+    workflows.getByTestId('welcome-workflow-answer-business-question'),
+  ).toHaveCount(0);
+
+  // Each link opens the place it names (app-shell R51).
+  await page.getByTestId('welcome-all-workflows').click();
+  await expect(
+    page.getByRole('heading', { name: 'User journeys', exact: true }),
+  ).toBeVisible();
+  await expectCurrent(page, 'User journeys');
 
   await page.goto(page.url());
-  await step(3).getByRole('button', { name: 'Agents' }).click();
-  await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
-  await expectCurrent(page, 'Agents');
-
-  await page.goto(page.url());
-  await page.getByRole('button', { name: 'Explore agents' }).click();
-  await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
-  await expectCurrent(page, 'Agents');
+  await page.getByRole('button', { name: 'Explore agent personas' }).click();
+  await expect(page.getByRole('heading', { name: 'Agent personas' })).toBeVisible();
+  await expectCurrent(page, 'Agent personas');
 });
 
 test(
@@ -176,20 +182,21 @@ test(
         await expect(page.getByTestId('welcome')).toBeVisible();
       },
     );
-    await scenarioStep(page, 'Then home shows "Run a workflow"', async () => {
-      await expect(page.getByTestId('welcome-step-2')).toContainText(
-        'Run a workflow',
+    await scenarioStep(page, 'Then home offers to ask a question and lists the user journeys', async () => {
+      await expect(page.getByTestId('welcome-ask')).toContainText(
+        'Answer a Business Question',
       );
+      await expect(page.getByTestId('welcome-workflows')).toBeVisible();
     });
-    await scenarioStep(page, 'When I open Workflows', async () => {
-      await railItem(page, 'Workflows').click();
+    await scenarioStep(page, 'When I open User journeys', async () => {
+      await railItem(page, 'User journeys').click();
       await expect(
-        page.getByRole('heading', { name: 'Workflows', exact: true }),
+        page.getByRole('heading', { name: 'User journeys', exact: true }),
       ).toBeVisible();
     });
     await scenarioStep(
       page,
-      'Then every workflow has "Run" and none has "Start chat"',
+      'Then every user journey has "Run" and none has "Start chat"',
       async () => {
         const cards = page.locator('[data-testid^="workflow-card-"]');
         await expect(cards.first()).toBeVisible();
@@ -232,14 +239,14 @@ test('no Start chat, New conversation or Send message control exists outside the
   };
 
   await noChatControl(); // home
-  await railItem(page, 'Workflows').click();
+  await railItem(page, 'User journeys').click();
   await expect(page.getByTestId('workflows-page')).toBeVisible();
   await noChatControl();
   await page.locator('[data-testid^="workflow-card-"]').first().click();
   await expect(page.getByTestId('workflow-detail-name')).toBeVisible();
   await noChatControl();
-  await railItem(page, 'Agents').click();
-  await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
+  await railItem(page, 'Agent personas').click();
+  await expect(page.getByRole('heading', { name: 'Agent personas' })).toBeVisible();
   await noChatControl();
   await railItem(page, 'Runs').click();
   await expect(sessionsList(page)).toBeVisible();
@@ -296,7 +303,7 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
   });
   for (const label of [
     'Datasets',
-    'Agents',
+    'Agent personas',
     'Artifacts',
     'Runs',
     'Costs',
@@ -413,7 +420,7 @@ test('the app opens straight into the shell', async ({ page }) => {
   // Every area is reachable (app-shell R3, R50).
   for (const [area, heading] of [
     ['Datasets', 'Datasets'],
-    ['Agents', 'Agents'],
+    ['Agent personas', 'Agent personas'],
   ]) {
     await railItem(page, area).click();
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();

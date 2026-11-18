@@ -754,6 +754,46 @@ describe('workflowCanvasLayout from edges (a branch and a loop)', () => {
   });
 });
 
+describe('connector notes (workflows R42)', () => {
+  const NOTE =
+    'A follow-up that only pages, filters or sorts the earlier answer rows. No new analysis.';
+  // Every labelled edge carries a long note, the loops and the drops included.
+  const noted = (w: WorkflowDetail): WorkflowDetail => ({
+    ...w,
+    edges: w.edges!.map((e) => (e.label ? { ...e, note: NOTE } : e)),
+  });
+
+  for (const [name, w] of [
+    ['Clarify ends the run', REAL_V2],
+    ['Clarify goes back to Plan', REAL_V2_CLARIFY_LOOP],
+  ] as const) {
+    it(`${name}: each label shows its note under it, wrapped, and nothing overlaps`, () => {
+      const layout = workflowCanvasLayout(noted(w));
+      const labelled = layout.edges.filter((e) => e.branchLabel);
+      expect(labelled.length).toBeGreaterThan(0);
+      for (const edge of labelled) {
+        expect(edge.branchLabelLines).toEqual([edge.branchLabel!]);
+        expect(edge.branchNoteLines.join(' ')).toBe(NOTE);
+        expect(edge.branchNoteLines.every((l) => l.length <= 30)).toBe(true);
+        expect(edge.about).toBe(NOTE);
+      }
+      expect(overlapping(layout)).toEqual([]);
+    });
+  }
+
+  it('an edge with no note is told by the step it leads to', () => {
+    const layout = workflowCanvasLayout(REAL_V2);
+    const edge = layout.edges.find(
+      (e) => e.from === 'analyse' && e.to === 'validate',
+    )!;
+    expect(edge.branchNoteLines).toEqual([]);
+    expect(edge.about).toMatch(/^Next: Validate\. /);
+    expect(layout.edges.find((e) => e.to === 'end')!.about).toMatch(
+      /^Next: |^Then the run ends\.$/,
+    );
+  });
+});
+
 describe('Insights Analyst as the API returns it (roomy canvas)', () => {
   for (const [name, w] of [
     ['Clarify ends the run', REAL_V2],

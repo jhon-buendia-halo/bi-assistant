@@ -5,19 +5,17 @@ jest.mock('../tool-services', () => ({
 
 import { checkWorkflowContract } from './workflow-contract';
 import {
-  DATA_QUALITY_CHECK,
   ANSWER_BUSINESS_QUESTION_EDGES,
   ANSWER_BUSINESS_QUESTION_STEPS,
   analysisLoopDone,
   answerDeltas,
   answerOf,
   answerWithRowTables,
-  assessable,
   expandRowTables,
+  interpretFollowUp,
+  pageAnswer,
   ROW_TABLE_CAP,
-  dataQualityFailure,
-  dataQualityFindings,
-  queriedTables,
+  chartableQueries,
   catalogBlock,
   clarifyingQuestionOf,
   loadCatalog,
@@ -33,7 +31,10 @@ import {
   wrapUp,
   type AnalyseQuery,
   type AnalysisPlan,
+  type AnswerBusinessQuestionRuntime,
 } from './answer-business-question.steps';
+import type { ExplorableQuery } from '../../modules/sessions/query-evidence/explorable-queries';
+import type { ExplorerSpec } from '../agents/result-explorer.prompts';
 import {
   ANSWER_ROWS_CAP,
   PLAN_FIRST_LINE,
@@ -66,7 +67,7 @@ const query = (partial: Partial<AnalyseQuery> = {}): AnalyseQuery => ({
 });
 
 describe('answer-business-question steps (agents.md 5.11)', () => {
-  it('lists the ten steps with their ids, titles and kinds, Read images first, Clarify after Plan and Check data quality after Validate', () => {
+  it('lists the thirteen steps with their ids, titles and kinds, Read images first, Interpret follow-up before Plan, Clarify after Plan, Build visual after Write answer and the follow-up branch last', () => {
     expect(
       ANSWER_BUSINESS_QUESTION_STEPS.map(({ id, title, kind }) => ({
         id,
@@ -77,22 +78,35 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       { id: 'read-images', title: 'Read images', kind: 'agent' },
       { id: 'receive-question', title: 'Receive question', kind: 'code' },
       { id: 'load-catalog', title: 'Load catalog', kind: 'code' },
+      {
+        id: 'interpret-follow-up',
+        title: 'Interpret follow-up',
+        kind: 'agent',
+      },
       { id: 'plan', title: 'Plan', kind: 'agent' },
       { id: 'clarify', title: 'Clarify', kind: 'code' },
       { id: 'analyse', title: 'Analyse', kind: 'agent' },
       { id: 'validate', title: 'Validate', kind: 'code' },
-      { id: 'check-data-quality', title: 'Check data quality', kind: 'agent' },
       { id: 'write-answer', title: 'Write answer', kind: 'agent' },
+      { id: 'build-visual', title: 'Build visual', kind: 'agent' },
       { id: 'wrap-up', title: 'Wrap up', kind: 'code' },
+      { id: 'page-result', title: 'Page result', kind: 'code' },
+      { id: 'page-answer', title: 'Page answer', kind: 'code' },
     ]);
     expect(
       ANSWER_BUSINESS_QUESTION_STEPS.filter((step) => step.modelOnly).map(
         (s) => s.id,
       ),
-    ).toEqual(['read-images', 'plan', 'check-data-quality', 'write-answer']);
+    ).toEqual([
+      'read-images',
+      'interpret-follow-up',
+      'plan',
+      'write-answer',
+      'build-visual',
+    ]);
   });
 
-  it('connects them with the edges of api.md 117: Read images is an optional branch from Start, Clarify loops back to Plan once answered', () => {
+  it('connects them with the edges of api.md 117: Read images is an optional branch from Start, Clarify loops back to Plan once answered; a follow-up over an earlier result pages it instead of planning', () => {
     expect(
       ANSWER_BUSINESS_QUESTION_EDGES.map(
         (e) => `${e.from}->${e.to} ${e.kind}${e.label ? ` "${e.label}"` : ''}`,
@@ -102,145 +116,38 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       'start->read-images branch "Reference images"',
       'read-images->receive-question next',
       'receive-question->load-catalog next',
-      'load-catalog->plan next',
+      'load-catalog->interpret-follow-up next',
+      'interpret-follow-up->plan branch "New question"',
+      'interpret-follow-up->page-result branch "Explore the earlier result"',
       'plan->clarify branch "Needs clarification"',
       'clarify->plan loop "Answered"',
       'plan->analyse branch "Clear"',
       'analyse->validate next',
       'validate->analyse loop "Retry once"',
       'validate->write-answer next "Valid or retried"',
-      'validate->check-data-quality branch "Check data quality"',
-      'check-data-quality->write-answer next',
       'write-answer->wrap-up next',
+      'write-answer->build-visual branch "Build a visual"',
+      'build-visual->wrap-up next',
       'wrap-up->end next',
+      'page-result->page-answer next',
+      'page-answer->end next',
     ]);
   });
 
-  describe('the optional data-quality check (agents.md 5.11)', () => {
-    const CATALOG = [
-      {
-        entity: 'wc.public.matches',
-        dataset: 'World Cup',
-        datasourceId: 'ds-pg',
-        datasourceKind: 'postgres',
-        columnCount: 5,
-      },
-      {
-        entity: 'wc.public.teams',
-        dataset: 'World Cup',
-        datasourceId: 'ds-pg',
-        datasourceKind: 'postgres',
-        columnCount: 3,
-      },
-      {
-        entity: 'api.orders.items',
-        dataset: 'Orders API',
-        datasourceId: 'ds-rest',
-        datasourceKind: 'rest',
-        columnCount: 4,
-      },
-    ];
-    const query = (sql: string) => ({
-      sql,
+  describe('the optional Build visual (workflows R41)', () => {
+    const query = (rowCount: number, error?: string) => ({
+      sql: 'SELECT 1',
       rows: [],
-      rowCount: 0,
+      rowCount,
       truncated: false,
+      ...(error ? { error } : {}),
     });
 
-    it('finds the catalog tables the SQL names, ignoring case, in catalog order, once each', () => {
-      const tables = queriedTables(
-        [
-          query(
-            'SELECT * FROM WC.Public.Teams t JOIN wc.public.matches m ON 1=1',
-          ),
-          query('SELECT count(*) FROM wc.public.matches'),
-          query('SELECT * FROM api.orders.items'),
-          query('SELECT * FROM other.schema.unknown'),
-        ],
-        CATALOG,
-      );
-      expect(tables.map((t) => t.entity)).toEqual([
-        'wc.public.matches',
-        'wc.public.teams',
-        'api.orders.items',
-      ]);
-      // Only PostgreSQL and Databricks tables can be assessed.
-      expect(tables.filter(assessable).map((t) => t.entity)).toEqual([
-        'wc.public.matches',
-        'wc.public.teams',
-      ]);
-    });
-
-    it('turns each finding Sarah picked into a failed finding with the engine’s words and her impact', () => {
-      const findings = dataQualityFindings({
-        tables: ['wc.public.matches'],
-        findings: [
-          {
-            severity: 'high',
-            dimension: 'completeness',
-            entity: 'public.matches',
-            field: 'winner',
-            description: '62% of winner is null.',
-          },
-          {
-            severity: 'low',
-            dimension: 'consistency',
-            entity: 'public.matches',
-            field: 'stage',
-            description: 'stage differs by case.',
-          },
-        ],
-        // A repeated and an unknown number are dropped.
-        issues: [
-          { finding: 1, impact: 'The count of wins may be low.' },
-          { finding: 1, impact: 'Again.' },
-          { finding: 9, impact: 'Unknown.' },
-        ],
-      });
-      expect(findings).toEqual([
-        {
-          check: `${DATA_QUALITY_CHECK}: public.matches.winner (completeness, high)`,
-          passed: false,
-          detail: '62% of winner is null. The count of wins may be low.',
-        },
-      ]);
-    });
-
-    it('says what was checked when no finding affects the answer, or none exists', () => {
-      expect(
-        dataQualityFindings({
-          tables: ['wc.public.matches'],
-          findings: [
-            {
-              severity: 'low',
-              dimension: 'consistency',
-              entity: 'public.matches',
-              description: 'x',
-            },
-          ],
-          issues: [],
-        }),
-      ).toEqual([
-        {
-          check: DATA_QUALITY_CHECK,
-          passed: true,
-          detail:
-            '1 data-quality findings on wc.public.matches; none affects this answer.',
-        },
-      ]);
-      expect(
-        dataQualityFindings({
-          tables: ['wc.public.matches'],
-          findings: [],
-          issues: [],
-        })[0].detail,
-      ).toBe('No data-quality findings on wc.public.matches.');
-      expect(dataQualityFailure('connect ECONNREFUSED')).toEqual({
-        check: DATA_QUALITY_CHECK,
-        passed: false,
-        detail:
-          'The data quality of the tables used could not be checked: connect ECONNREFUSED',
-      });
+    it('has something to chart only when a query ran without error and returned rows', () => {
+      expect(chartableQueries([])).toBe(false);
+      expect(chartableQueries([query(0)])).toBe(false);
+      expect(chartableQueries([query(3, 'syntax error')])).toBe(false);
+      expect(chartableQueries([query(0), query(2)])).toBe(true);
     });
   });
 
@@ -320,7 +227,6 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       'clarify',
       'analyse',
       'validate',
-      'check-data-quality',
       'write-answer',
     ]) {
       // The steps a waiting run is resumed at default the notes to '': a
@@ -577,8 +483,16 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
     it("is the run's result under its branch, read back by turnSummaryOf", () => {
       const summary = wrapUp([], 'A.');
       expect(
-        turnSummaryOf({ 'analysis-path': { 'answer-path': summary } }),
+        turnSummaryOf({
+          'question-path': { 'analysis-path': { 'answer-path': summary } },
+        }),
       ).toEqual(summary);
+      // A follow-up over an earlier result: Page answer's summary.
+      expect(turnSummaryOf({ 'explore-result': summary })).toEqual(summary);
+      // The shape before Interpret follow-up is no longer read.
+      expect(
+        turnSummaryOf({ 'analysis-path': { 'answer-path': summary } }),
+      ).toBeUndefined();
       expect(
         turnSummaryOf({ clarify: { question: 'Q?', options: ['a', 'b'] } }),
       ).toBeUndefined();
@@ -1085,13 +999,17 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
         "when a query's line says that only its first rows are shown",
       );
-      // Last, so the rules before it read in the order they always had.
-      expect(
-        WRITE_ANSWER_INSTRUCTIONS.trimEnd()
-          .split('\n')
-          .pop()
-          ?.startsWith('- Long lists:'),
-      ).toBe(true);
+      // The last rule of the list, so the rules before it read in the order
+      // they always had; only the exact-counts paragraph follows (1.29.8).
+      const lines = WRITE_ANSWER_INSTRUCTIONS.trimEnd().split('\n');
+      const lastRule = lines.filter((line) => line.startsWith('- ')).pop();
+      expect(lastRule?.startsWith('- Long lists:')).toBe(true);
+    });
+
+    it('ends Write answer with the exact-counts rule (roadmap 1.29.8)', () => {
+      expect(WRITE_ANSWER_INSTRUCTIONS.trimEnd().split('\n').pop()).toMatch(
+        /^Counts stay exact even when you describe a spread/,
+      );
     });
 
     it('hands a retry of Analyse the failed checks of the previous attempt', () => {
@@ -1108,6 +1026,246 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       expect(retry).toContain('Attempt 1 of this analysis failed validation.');
       expect(retry).toContain('- Ran a query: No SQL query ran.');
       expect(retry).not.toContain('No unresolved tool error');
+    });
+  });
+
+  describe('interpretFollowUp: the code gate, then result-explorer (roadmap 1.28.8)', () => {
+    const EARLIER: ExplorableQuery = {
+      ref: 'Q1',
+      sql: 'SELECT m.id AS match_id, m.stage FROM wc.public.matches m',
+      datasourceId: 'ds-pg',
+      columns: ['match_id', 'stage'],
+      kinds: { match_id: 'number', stage: 'text' },
+      sampleValues: { match_id: [1, 2], stage: ['final', 'group'] },
+      rationale: 'I list each match with its stage.',
+    };
+    const SECOND: ExplorableQuery = {
+      ...EARLIER,
+      ref: 'Q2',
+      sql: 'SELECT name FROM wc.public.teams',
+      columns: ['name'],
+      kinds: { name: 'text' },
+      sampleValues: { name: ['Brazil'] },
+      view: { filters: [], sort: [], page: 3, pageSize: 50, matchedRows: 400 },
+    };
+    const spec = (partial: Partial<ExplorerSpec> = {}): ExplorerSpec => ({
+      action: 'explore',
+      query: 0,
+      interpretation: {
+        request: { filters: [], sort: [], page: 2, pageSize: 50 },
+        understood: 'page 2',
+      },
+      ...partial,
+    });
+    const turn = (
+      followUp: ExplorableQuery[] | undefined,
+      reply: () => Promise<{ spec: ExplorerSpec; stopped: boolean }>,
+    ) => {
+      const interpretFollowUp = jest.fn(reply);
+      return {
+        runtime: {
+          ...(followUp ? { followUp } : {}),
+          interpretFollowUp,
+        } as Pick<
+          AnswerBusinessQuestionRuntime,
+          'followUp' | 'interpretFollowUp'
+        >,
+        interpretFollowUp,
+      };
+    };
+
+    it('makes no model call on a run without earlier queries (every first run, every eval case)', async () => {
+      for (const followUp of [undefined, []]) {
+        const { runtime, interpretFollowUp: call } = turn(followUp, () =>
+          Promise.resolve({ spec: spec(), stopped: false }),
+        );
+        await expect(interpretFollowUp('next page', runtime)).resolves.toEqual({
+          followUp: null,
+          stopped: false,
+        });
+        expect(call).not.toHaveBeenCalled();
+      }
+      // No runtime at all: no follow-up either (Plan reports the missing turn).
+      await expect(interpretFollowUp('next page', undefined)).resolves.toEqual({
+        followUp: null,
+        stopped: false,
+      });
+    });
+
+    it("asks result-explorer once with the words, every earlier query as a candidate and the latest query's view", async () => {
+      const { runtime, interpretFollowUp: call } = turn([EARLIER, SECOND], () =>
+        Promise.resolve({
+          spec: spec({ query: 0 }),
+          stopped: false,
+        }),
+      );
+      const read = await interpretFollowUp('next page of Q1', runtime);
+      expect(call).toHaveBeenCalledTimes(1);
+      expect(call).toHaveBeenCalledWith({
+        text: 'next page of Q1',
+        candidates: [
+          expect.objectContaining({ ref: 'Q1', view: null }),
+          expect.objectContaining({ ref: 'Q2', view: SECOND.view }),
+        ],
+        view: SECOND.view,
+        pageCount: 8,
+      });
+      expect(read).toEqual({
+        followUp: {
+          action: 'explore',
+          query: 0,
+          ref: 'Q1',
+          request: { filters: [], sort: [], page: 2, pageSize: 50 },
+          understood: 'page 2',
+        },
+        stopped: false,
+      });
+    });
+
+    it('falls through to planning on a new question, a part it could not read, or a model error; never fails the run', async () => {
+      const replies: (() => Promise<{
+        spec: ExplorerSpec;
+        stopped: boolean;
+      }>)[] = [
+        () =>
+          Promise.resolve({
+            spec: spec({ action: 'new-question' }),
+            stopped: false,
+          }),
+        () =>
+          Promise.resolve({
+            spec: spec({
+              interpretation: {
+                request: {},
+                understood: 'All rows',
+                rejected: ['goals per team'],
+              },
+            }),
+            stopped: false,
+          }),
+        () => Promise.reject(new Error('The provider failed')),
+      ];
+      for (const reply of replies) {
+        const { runtime } = turn([EARLIER], reply);
+        await expect(
+          interpretFollowUp('goals per team', runtime),
+        ).resolves.toEqual({ followUp: null, stopped: false });
+      }
+    });
+
+    it('says the turn was stopped while the words were read', async () => {
+      const { runtime } = turn([EARLIER], () =>
+        Promise.resolve({ spec: spec(), stopped: true }),
+      );
+      await expect(interpretFollowUp('next page', runtime)).resolves.toEqual({
+        followUp: null,
+        stopped: true,
+      });
+    });
+  });
+
+  describe('pageAnswer (roadmap 1.28.8)', () => {
+    const view = {
+      filters: [],
+      sort: [],
+      page: 2,
+      pageSize: 50,
+      matchedRows: 1264,
+    };
+    const rows = Array.from({ length: 50 }, (_, i) => ({
+      match_id: 2 + Math.floor(i / 23),
+      stage: 'final',
+      player_id: 51 + i,
+      shirt_number: null,
+    }));
+
+    it('heads the answer with the rows shown and the total, then the query, the understood line and a table of the page', () => {
+      const answer = pageAnswer(
+        view,
+        {
+          columns: ['match_id', 'stage', 'player_id', 'shirt_number'],
+          rows,
+          pageCount: 26,
+          matchedRows: 1264,
+          capped: false,
+          understood: 'page 2',
+        },
+        'I list each match with its squad members.',
+      );
+      const lines = answer.split('\n');
+      expect(lines[0]).toBe('Rows 51–100 of 1,264');
+      expect(answer).toContain(
+        'Query: I list each match with its squad members.',
+      );
+      expect(answer).toContain('Understood as: page 2');
+      expect(answer).toContain(
+        '| Match id | Stage | Player id | Shirt number |',
+      );
+      expect(answer).toContain('| 2 | final | 51 |  |');
+      expect(lines.filter((line) => line.startsWith('| ')).length).toBe(2 + 50);
+      expect(answer).toContain(
+        'Page 2 of 26. Open the query to page, filter or sort the full result.',
+      );
+    });
+
+    it('says when the rows are filtered, capped or none match', () => {
+      const filtered = {
+        ...view,
+        page: 1,
+        filters: [{ column: 'stage', op: 'eq' as const, value: 'final' }],
+      };
+      const page = {
+        columns: ['stage'],
+        rows: [{ stage: 'final' }],
+        pageCount: 1,
+        matchedRows: 1,
+        capped: false,
+        understood: 'Stage is final',
+      };
+      expect(pageAnswer(filtered, page, 'Q1').split('\n')[0]).toBe(
+        'Rows 1–1 of 1 matching',
+      );
+      expect(
+        pageAnswer(
+          { ...view, page: 1 },
+          {
+            ...page,
+            rows: rows.slice(0, 50),
+            matchedRows: 50000,
+            capped: true,
+          },
+          'Q1',
+        ).split('\n')[0],
+      ).toBe('Rows 1–50 of 50,000+');
+      const none = pageAnswer(
+        filtered,
+        { ...page, rows: [], matchedRows: 0 },
+        'Q1',
+      );
+      expect(none.split('\n')[0]).toBe('No rows match these filters.');
+      expect(none).not.toContain('| ');
+    });
+
+    // A page read straight from the connector (the pg driver hands a
+    // timestamp over as a Date) shows its instants as the stored rows
+    // do, never as JSON with its quotes (found by the live-LLM layer).
+    it('writes a timestamp cell as its ISO instant, without JSON quotes', () => {
+      const answer = pageAnswer(
+        { ...view, page: 1 },
+        {
+          columns: ['stage', 'kicked_off_at'],
+          rows: [
+            { stage: 'final', kicked_off_at: new Date('2018-07-15T15:00:00Z') },
+          ],
+          pageCount: 1,
+          matchedRows: 1,
+          capped: false,
+          understood: 'Stage is final',
+        },
+        'Q1',
+      );
+      expect(answer).toContain('| final | 2018-07-15T15:00:00.000Z |');
+      expect(answer).not.toContain('"2018');
     });
   });
 

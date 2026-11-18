@@ -13,43 +13,16 @@
  * stays green.
  */
 
-import { execFileSync } from 'node:child_process';
 import { Pool } from 'pg';
-import { WORLD_CUP_CONNECTION, worldCupPool, runSql } from './world-cup';
+import { worldCupIsUp, worldCupPool, runSql } from './world-cup';
 import {
   inspectResult,
   type DataWarning,
 } from '../src/modules/sessions/result-guards';
 import { compareResults } from '../src/modules/sessions/result-compare';
 
-/**
- * `describe.skip` is decided while jest collects the file, long before any
- * async hook could await `worldCupReachable()`, so the probe runs in a child
- * process — same connection settings, same query, just synchronous. Gating in
- * `beforeAll` instead would report a docker-less run as a suite of passing
- * tests, which is worse than a visible skip.
- */
-function fixtureIsUp(): boolean {
-  const probe = `
-    const { Pool } = require(${JSON.stringify(require.resolve('pg'))});
-    const pool = new Pool({ ...${JSON.stringify(WORLD_CUP_CONNECTION)}, max: 1, connectionTimeoutMillis: 3000 });
-    pool.query('SELECT 1')
-      .then(() => pool.end())
-      .then(() => process.exit(0))
-      .catch(() => process.exit(1));
-  `;
-  try {
-    execFileSync(process.execPath, ['-e', probe], {
-      stdio: 'ignore',
-      timeout: 15_000,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const describeLive = fixtureIsUp() ? describe : describe.skip;
+// The probe is synchronous: see `worldCupIsUp`.
+const describeLive = worldCupIsUp() ? describe : describe.skip;
 
 /* The statements under test. Verified against the fixture — do not reword. */
 

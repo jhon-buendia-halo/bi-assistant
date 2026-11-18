@@ -14,15 +14,16 @@ jest.mock('../agents/analysis-planner.agent', () => ({
     generate: (...args: unknown[]) => generate(...args),
   },
 }));
-jest.mock('../agents/data-readiness.agent', () => ({
-  dataReadinessStepAgent: {},
-}));
+jest.mock('../agents/data-readiness.agent', () => ({}));
 
 import {
   planWithModel,
   writeAnswerWithModel,
 } from './answer-business-question.agents';
-import { writeAnswerRequest } from './answer-business-question.prompts';
+import {
+  findingStatus,
+  writeAnswerRequest,
+} from './answer-business-question.prompts';
 import type {
   AnalyseQuery,
   AnalysisPlan,
@@ -133,5 +134,48 @@ describe("the model calls with Read images' notes", () => {
       'Question: Q\n\nCAT',
       `Question: Q\n\nCAT\n\n${NOTES}`,
     ]);
+  });
+});
+
+describe('the findings as the writer reads them (roadmap 1.29.8, issue D)', () => {
+  it('reads a warning-only check that did not pass as a warning, never as failed', () => {
+    expect(findingStatus({ passed: true, check: 'Ran a query' })).toBe(
+      'passed',
+    );
+    expect(findingStatus({ passed: false, check: 'Ran a query' })).toBe(
+      'failed',
+    );
+    expect(
+      findingStatus({
+        passed: false,
+        check: 'Measures covered (warning only)',
+      }),
+    ).toBe('warning');
+  });
+
+  it('writes the warning into the request with its status', () => {
+    const request = writeAnswerRequest({
+      question: 'How many orders were delivered?',
+      plan: {
+        question: 'How many orders were delivered?',
+        measures: ['delivered orders'],
+        entities: ['orders'],
+        scope: 'all',
+        assumptions: [],
+        needsClarification: false,
+        clarification: null,
+      },
+      queries: [],
+      findings: [
+        {
+          check: 'Measures covered (warning only)',
+          passed: false,
+          detail: 'No query names "delivery rate".',
+        },
+        { check: 'Ran a query', passed: false, detail: 'No SQL query ran.' },
+      ],
+    });
+    expect(request).toContain('- warning: Measures covered (warning only).');
+    expect(request).toContain('- failed: Ran a query.');
   });
 });

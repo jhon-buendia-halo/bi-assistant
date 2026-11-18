@@ -7,7 +7,20 @@
  * loading Mastra; the workflow itself is built in ./answer-business-question.workflow.ts.
  */
 import type { z } from 'zod';
+import type {
+  PageRequest,
+  ResultView,
+} from '../../modules/datasources/connectors/paged-sql.types';
+import {
+  explorerCandidateOfQuery,
+  type ExplorableQuery,
+} from '../../modules/sessions/query-evidence/explorable-queries';
 import { coverageOf } from '../../modules/sessions/query-evidence/query-coverage';
+import {
+  pageCountOf,
+  type ExplorerCandidate,
+  type ExplorerSpec,
+} from '../agents/result-explorer.prompts';
 import { getDatasetToolServices } from '../tool-services';
 import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
@@ -20,9 +33,11 @@ import {
   type answeredClarificationSchema,
   type catalogEntitySchema,
   type clarifyingQuestionSchema,
-  type dataQualitySummarySchema,
+  type builtVisualSchema,
   type answerBusinessQuestionInputSchema,
   type entityColumnsSchema,
+  type followUpSchema,
+  type pagedResultSchema,
   type turnSummarySchema,
   type validateOutcomeSchema,
   type validationFindingSchema,
@@ -155,6 +170,19 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
+      id: 'interpret-follow-up',
+      title: 'Interpret follow-up',
+      kind: 'agent',
+      summary:
+        "On a follow-up over an earlier result, Result Explorer's model reads whether the question asks for another page, a filter or an order of the earlier rows. A first run makes no model call. No tools.",
+      // A model error is no failure: the run plans the question instead.
+      exits: [{ label: 'you stop it', outcome: 'stops' }],
+      modelOnly: true,
+    },
+    SCHEMAS['interpret-follow-up'],
+  ),
+  contractStepEntry(
+    {
       id: 'plan',
       title: 'Plan',
       kind: 'agent',
@@ -205,18 +233,6 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
-      id: 'check-data-quality',
-      title: 'Check data quality',
-      kind: 'agent',
-      summary:
-        "Optional (Check data quality): the deterministic engine assesses the tables the queries read, then Sarah's model picks the findings that affect this answer. No tools. They reach Write answer as findings.",
-      exits: [{ label: 'you stop it', outcome: 'stops' }],
-      modelOnly: true,
-    },
-    SCHEMAS['check-data-quality'],
-  ),
-  contractStepEntry(
-    {
       id: 'write-answer',
       title: 'Write answer',
       kind: 'agent',
@@ -229,6 +245,18 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
+      id: 'build-visual',
+      title: 'Build visual',
+      kind: 'agent',
+      summary:
+        "On unless the run turns it off (Build a visual): Ryan's model designs an interactive visual from the answer and the rows its queries returned. No tools. Skipped when no query returned rows; a design that fails leaves the answer without a visual, never a failed run.",
+      exits: [{ label: 'you stop it', outcome: 'stops' }],
+      modelOnly: true,
+    },
+    SCHEMAS['build-visual'],
+  ),
+  contractStepEntry(
+    {
       id: 'wrap-up',
       title: 'Wrap up',
       kind: 'code',
@@ -238,6 +266,28 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
     },
     SCHEMAS['wrap-up'],
   ),
+  contractStepEntry(
+    {
+      id: 'page-result',
+      title: 'Page result',
+      kind: 'code',
+      summary:
+        "Reads the page of the earlier query's full result the follow-up asks for, through the query inspector's page path. No LLM.",
+      exits: [{ label: 'the page cannot be read', outcome: 'fails' }],
+    },
+    SCHEMAS['page-result'],
+  ),
+  contractStepEntry(
+    {
+      id: 'page-answer',
+      title: 'Page answer',
+      kind: 'code',
+      summary:
+        'Writes the answer from the page: which rows it shows, what was understood and a table of the rows. No LLM.',
+      exits: [],
+    },
+    SCHEMAS['page-answer'],
+  ),
 ];
 
 /** The edges of the workflow (api.md 117), from Start to End. */
@@ -245,27 +295,69 @@ export const ANSWER_BUSINESS_QUESTION_EDGES: readonly WorkflowEdge[] = [
   // Start → Receive question, or through Read images when the run has images.
   ...readImagesEdges('receive-question'),
   { from: 'receive-question', to: 'load-catalog', kind: 'next' },
-  { from: 'load-catalog', to: 'plan', kind: 'next' },
-  { from: 'plan', to: 'clarify', kind: 'branch', label: 'Needs clarification' },
-  { from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' },
-  { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
+  { from: 'load-catalog', to: 'interpret-follow-up', kind: 'next' },
+  {
+    from: 'interpret-follow-up',
+    to: 'plan',
+    kind: 'branch',
+    label: 'New question',
+    note: 'A question that needs a new analysis: plan it, query the data, write an answer.',
+  },
+  {
+    from: 'interpret-follow-up',
+    to: 'page-result',
+    kind: 'branch',
+    label: 'Explore the earlier result',
+    note: 'A follow-up that only pages, filters or sorts the earlier answer’s rows. No new analysis.',
+  },
+  {
+    from: 'plan',
+    to: 'clarify',
+    kind: 'branch',
+    label: 'Needs clarification',
+    note: 'The question can be read more than one way: the run waits for you to pick.',
+  },
+  {
+    from: 'clarify',
+    to: 'plan',
+    kind: 'loop',
+    label: 'Answered',
+    note: 'Your answer goes back to Plan, which plans with it and never asks again.',
+  },
+  {
+    from: 'plan',
+    to: 'analyse',
+    kind: 'branch',
+    label: 'Clear',
+    note: 'The plan is clear: the analyst queries the data.',
+  },
   { from: 'analyse', to: 'validate', kind: 'next' },
-  { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
+  {
+    from: 'validate',
+    to: 'analyse',
+    kind: 'loop',
+    label: 'Retry once',
+    note: 'A check failed: the analyst tries once more, told what failed.',
+  },
   {
     from: 'validate',
     to: 'write-answer',
     kind: 'next',
     label: 'Valid or retried',
+    note: 'The checks passed, or the retry is spent: the answer is written from the results.',
   },
-  {
-    from: 'validate',
-    to: 'check-data-quality',
-    kind: 'branch',
-    label: 'Check data quality',
-  },
-  { from: 'check-data-quality', to: 'write-answer', kind: 'next' },
   { from: 'write-answer', to: 'wrap-up', kind: 'next' },
+  {
+    from: 'write-answer',
+    to: 'build-visual',
+    kind: 'branch',
+    label: 'Build a visual',
+    note: 'On unless turned off: Ryan charts the rows behind the answer.',
+  },
+  { from: 'build-visual', to: 'wrap-up', kind: 'next' },
   { from: 'wrap-up', to: 'end', kind: 'next' },
+  { from: 'page-result', to: 'page-answer', kind: 'next' },
+  { from: 'page-answer', to: 'end', kind: 'next' },
 ];
 
 /** The most attempts of the analysis loop: the first and one retry. */
@@ -324,22 +416,22 @@ export type AnsweredClarification = z.output<
 /** The Wrap up step's summary: the run's result. */
 export type AnswerBusinessQuestionSummary = z.output<typeof turnSummarySchema>;
 
-/** What Check data quality measured (its output's `dataQuality`). */
-export type DataQualitySummary = z.output<typeof dataQualitySummarySchema>;
+/** What Build visual made: the run's visual, or why there is none. */
+export type BuiltVisual = z.output<typeof builtVisualSchema>;
 
-/** One table the queries read, with the dataset it belongs to. */
-export interface QualityTable {
-  /** The entity key, `catalog.schema.table`. */
-  entity: string;
-  dataset: string;
-  datasourceKind: string | null;
-}
+/** What Interpret follow-up read: the page of an earlier result asked for. */
+export type FollowUp = z.output<typeof followUpSchema>;
 
-/** What the run's Check data quality call gives back. */
-export interface DataQualityOutcome {
-  findings: ValidationFinding[];
-  dataQuality: DataQualitySummary;
-  stopped: boolean;
+/** One page of an earlier query's full result, as Page result passes it on. */
+export type PagedFollowUp = z.output<typeof pagedResultSchema>;
+
+/** What result-explorer reads (api.md 153's call): the words and the queries. */
+export interface FollowUpRequest {
+  text: string;
+  candidates: ExplorerCandidate[];
+  /** The latest query's view; null for its stored rows. */
+  view: ResultView | null;
+  pageCount: number | null;
 }
 
 /**
@@ -387,20 +479,20 @@ export interface AnswerBusinessQuestionRuntime {
     imageNotes?: string;
   }): Promise<AnalyseAttempt>;
   /**
-   * Whether the run checks data quality (its input's `checkDataQuality`):
-   * the condition of the branch to Check data quality. Absent means no.
+   * Whether the run builds a visual (its input's `buildVisual`): the
+   * condition of the branch to Build visual. Absent means no.
    */
-  checksDataQuality?: boolean;
+  buildsVisual?: boolean;
   /**
-   * Check data quality (optional step): the engine assesses the tables the
-   * queries read and Sarah picks the findings that affect the answer. It
-   * never fails the run: a check that cannot run says so in its findings.
+   * Build visual (workflows R41): Ryan designs an interactive visual from
+   * the answer and its queries' rows; it is stored with the run. It never
+   * fails the run: a design that fails comes back as `error`.
    */
-  checkDataQuality?(input: {
+  buildVisual?(input: {
     question: string;
+    answer: string;
     queries: AnalyseQuery[];
-    tables: QualityTable[];
-  }): Promise<DataQualityOutcome>;
+  }): Promise<{ visual: BuiltVisual; stopped: boolean }>;
   /** The Write answer step's model call; its text is the run's answer. */
   writeAnswer(input: {
     question: string;
@@ -410,6 +502,31 @@ export interface AnswerBusinessQuestionRuntime {
     /** Read images' notes (agents.md 2.15); absent or `''` without images. */
     imageNotes?: string;
   }): Promise<{ answer: BusinessAnswer; stopped: boolean }>;
+  /**
+   * The run's earlier queries (roadmap 1.28.8): an earlier run's answer's
+   * queries on a follow-up, a chat's earlier answers' queries. Absent or
+   * empty on a first run: Interpret follow-up then makes no model call.
+   */
+  followUp?: readonly ExplorableQuery[];
+  /**
+   * Interpret follow-up's model call: result-explorer reads the words as a
+   * view of one of the earlier queries; `stopped` when the turn was stopped.
+   */
+  interpretFollowUp?(
+    input: FollowUpRequest,
+  ): Promise<{ spec: ExplorerSpec | null; stopped: boolean }>;
+  /**
+   * Page result: the page of earlier query `query` (an index into
+   * `followUp`) through the query inspector's page path, recorded as an
+   * `explore_result` call of the turn. Throws the reason it cannot be read.
+   */
+  pageResult?(input: {
+    query: number;
+    request: PageRequest;
+    understood: string;
+  }): Promise<PagedFollowUp>;
+  /** Page answer: the run's answer, written by code. */
+  deliverAnswer?(answer: string): Promise<void>;
 }
 
 /**
@@ -599,17 +716,23 @@ function readableColumn(name: string): string {
   return words ? words[0].toUpperCase() + words.slice(1) : name;
 }
 
-/** A cell as stored: only a pipe and a line break escaped; null is empty. */
+/**
+ * A cell as stored: only a pipe and a line break escaped; null is empty. A
+ * Date (a page read straight from the pg driver) is its ISO instant, as
+ * the stored rows hold it.
+ */
 function tableCell(value: unknown): string {
   if (value === null || value === undefined) return '';
   const raw =
     typeof value === 'string'
       ? value
-      : typeof value === 'number' ||
-          typeof value === 'boolean' ||
-          typeof value === 'bigint'
-        ? String(value)
-        : JSON.stringify(value);
+      : value instanceof Date
+        ? value.toISOString()
+        : typeof value === 'number' ||
+            typeof value === 'boolean' ||
+            typeof value === 'bigint'
+          ? String(value)
+          : JSON.stringify(value);
   return raw.replace(/\|/g, '\\|').replace(/\r\n|\r|\n/g, '<br>');
 }
 
@@ -618,6 +741,21 @@ function resultColumns(rows: readonly Record<string, unknown>[]): string[] {
   const seen = new Set<string>();
   for (const row of rows) for (const key of Object.keys(row)) seen.add(key);
   return [...seen];
+}
+
+/** A Markdown table of the rows, written cell by cell: a header, then a row each. */
+function markdownTable(
+  columns: readonly { key: string; header: string }[],
+  rows: readonly Record<string, unknown>[],
+): string[] {
+  const line = (cells: string[]) => `| ${cells.join(' | ')} |`;
+  return [
+    line(columns.map((column) => tableCell(column.header))),
+    line(columns.map(() => '---')),
+    ...rows.map((row) =>
+      line(columns.map((column) => tableCell(row[column.key]))),
+    ),
+  ];
 }
 
 /**
@@ -646,14 +784,7 @@ function rowTableLines(
   const columns = named.length
     ? named
     : all.map((key) => ({ key, header: readableColumn(key) }));
-  const line = (cells: string[]) => `| ${cells.join(' | ')} |`;
-  const table = [
-    line(columns.map((column) => tableCell(column.header))),
-    line(columns.map(() => '---')),
-    ...rows.map((row) =>
-      line(columns.map((column) => tableCell(row[column.key]))),
-    ),
-  ];
+  const table = markdownTable(columns, rows);
   const total = Math.max(query.rowCount, query.rows.length);
   return total > rows.length
     ? [
@@ -961,113 +1092,138 @@ export function wrapUp(
   };
 }
 
-/** The `check` of every Check data quality finding. */
-export const DATA_QUALITY_CHECK = 'Data quality';
-
-/** The datasource kinds the readiness engine can assess. */
-const QUALITY_KINDS: readonly string[] = ['postgres', 'databricks'];
-
 /**
- * The catalog's tables the queries read, in catalog order: every
- * `catalog.schema.table` name in their SQL (as the dataset tools write
- * them) that names a catalog entity, ignoring case.
+ * Whether the answer has something to chart (workflows R41): a query that
+ * ran without error and returned rows. Build visual is skipped otherwise.
  */
-export function queriedTables(
-  queries: readonly AnalyseQuery[],
-  catalog: readonly CatalogEntity[],
-): QualityTable[] {
-  const named = new Set<string>();
-  for (const query of queries) {
-    for (const match of query.sql.matchAll(
-      /\b([a-zA-Z0-9_]+\.[a-zA-Z0-9_]+\.[a-zA-Z0-9_]+)\b/g,
-    )) {
-      named.add(match[1].toLowerCase());
-    }
-  }
-  const seen = new Set<string>();
-  const tables: QualityTable[] = [];
-  for (const entry of catalog) {
-    const key = entry.entity.toLowerCase();
-    if (!named.has(key) || seen.has(key)) continue;
-    seen.add(key);
-    tables.push({
-      entity: entry.entity,
-      dataset: entry.dataset,
-      datasourceKind: entry.datasourceKind,
-    });
-  }
-  return tables;
-}
-
-/** Whether the readiness engine can assess a table's datasource. */
-export function assessable(table: QualityTable): boolean {
-  return QUALITY_KINDS.includes(table.datasourceKind ?? '');
-}
-
-/** One engine finding as Check data quality hands it to Sarah. */
-export interface QualityEngineFinding {
-  severity: string;
-  dimension: string;
-  /** `namespace.entity`, or the source for a source-level finding. */
-  entity: string;
-  field?: string;
-  description: string;
+export function chartableQueries(queries: readonly AnalyseQuery[]): boolean {
+  return queries.some((query) => !query.error && query.rowCount > 0);
 }
 
 /**
- * Check data quality's findings for Write answer (agents.md 5.11): one per
- * engine finding Sarah picked (`issues`, by its number from 1), with what
- * the engine measured and her sentence on the answer; else one passed
- * finding saying what was checked. Unknown or repeated numbers are dropped.
+ * The run's summary, when the run got that far: Page answer's on a
+ * follow-up over an earlier result, else Wrap up's.
  */
-export function dataQualityFindings(input: {
-  tables: readonly string[];
-  findings: readonly QualityEngineFinding[];
-  issues: readonly { finding: number; impact: string }[];
-}): ValidationFinding[] {
-  const picked = new Set<number>();
-  const out: ValidationFinding[] = [];
-  for (const issue of input.issues) {
-    const finding = input.findings[issue.finding - 1];
-    if (!finding || picked.has(issue.finding)) continue;
-    picked.add(issue.finding);
-    const where = finding.field
-      ? `${finding.entity}.${finding.field}`
-      : finding.entity;
-    out.push({
-      check: `${DATA_QUALITY_CHECK}: ${where} (${finding.dimension}, ${finding.severity})`,
-      passed: false,
-      detail: `${finding.description} ${issue.impact.trim()}`.trim(),
-    });
-  }
-  if (out.length > 0) return out;
-  const scope = input.tables.join(', ') || 'no table';
-  return [
-    {
-      check: DATA_QUALITY_CHECK,
-      passed: true,
-      detail: input.findings.length
-        ? `${input.findings.length} data-quality findings on ${scope}; none affects this answer.`
-        : `No data-quality findings on ${scope}.`,
-    },
-  ];
-}
-
-/** The finding of a Check data quality that could not run. */
-export function dataQualityFailure(reason: string): ValidationFinding {
-  return {
-    check: DATA_QUALITY_CHECK,
-    passed: false,
-    detail: `The data quality of the tables used could not be checked: ${reason}`,
-  };
-}
-
-/** The Wrap up summary of a run's result, when the run got that far. */
 export function turnSummaryOf(
   result: unknown,
 ): AnswerBusinessQuestionSummary | undefined {
   const parsed = answerBusinessQuestionResultSchema.safeParse(result);
-  return parsed.success
-    ? parsed.data['analysis-path']?.['answer-path']
-    : undefined;
+  if (!parsed.success) return undefined;
+  return (
+    parsed.data['explore-result'] ??
+    parsed.data['question-path']?.['analysis-path']?.['answer-path']
+  );
+}
+
+/**
+ * Interpret follow-up (roadmap 1.28.8): a code gate, then at most one
+ * result-explorer call. A run without earlier queries (every first run,
+ * every eval case) makes no model call and plans as before. Otherwise the
+ * words are read against every earlier query, from the latest one's view:
+ * a view of one of them is the follow-up; a new question, a part that
+ * names no known column, or a model error is none (the run plans the
+ * question, it never fails here).
+ */
+export async function interpretFollowUp(
+  question: string,
+  runtime:
+    | Pick<AnswerBusinessQuestionRuntime, 'followUp' | 'interpretFollowUp'>
+    | undefined,
+): Promise<{ followUp: FollowUp | null; stopped: boolean }> {
+  const queries = runtime?.followUp ?? [];
+  const none = { followUp: null, stopped: false };
+  if (!queries.length || !runtime?.interpretFollowUp) return none;
+  const latest = queries[queries.length - 1];
+  const view = latest.view ?? null;
+  let read: { spec: ExplorerSpec | null; stopped: boolean };
+  try {
+    read = await runtime.interpretFollowUp({
+      text: question,
+      candidates: queries.map(explorerCandidateOfQuery),
+      view,
+      pageCount: pageCountOf(view),
+    });
+  } catch {
+    return none;
+  }
+  if (read.stopped) return { followUp: null, stopped: true };
+  const { spec } = read;
+  if (
+    !spec ||
+    spec.action !== 'explore' ||
+    spec.interpretation.rejected?.length
+  ) {
+    return none;
+  }
+  const index = queries[spec.query] ? spec.query : queries.length - 1;
+  return {
+    followUp: {
+      action: 'explore',
+      query: index,
+      ref: queries[index].ref,
+      request: spec.interpretation.request,
+      understood: spec.interpretation.understood,
+    },
+    stopped: false,
+  };
+}
+
+/** `1264` reads `1,264`. */
+function count(value: number): string {
+  return value.toLocaleString('en-US');
+}
+
+/**
+ * The page's headline, in the query inspector's words (plan 0.5):
+ * `Rows 51–100 of 2,034`, `Rows 1–50 of 312 matching`, `Rows 1–50 of
+ * 50,000+`; `No rows match these filters.` when none does.
+ */
+function pageHeadline(
+  view: ResultView,
+  shown: number,
+  matchedRows: number,
+  capped: boolean,
+): string {
+  const filtered = view.filters.length > 0;
+  if (!shown) {
+    return filtered
+      ? 'No rows match these filters.'
+      : 'The result has no rows.';
+  }
+  const first = (Math.max(1, view.page) - 1) * view.pageSize + 1;
+  const last = first + shown - 1;
+  return `Rows ${count(first)}–${count(last)} of ${count(matchedRows)}${capped ? '+' : ''}${filtered ? ' matching' : ''}`;
+}
+
+/**
+ * Page answer (roadmap 1.28.8): the run's answer from one page of an
+ * earlier query's result, written by code: the headline (which rows, of
+ * how many), the query and what the words were understood as, a Markdown
+ * table of the page's rows, and where the page sits.
+ */
+export function pageAnswer(
+  view: ResultView,
+  result: Pick<
+    PagedFollowUp,
+    'columns' | 'rows' | 'pageCount' | 'matchedRows' | 'capped' | 'understood'
+  >,
+  queryTitle: string,
+): string {
+  const lines = [
+    pageHeadline(view, result.rows.length, result.matchedRows, result.capped),
+    '',
+    `Query: ${queryTitle}`,
+    `Understood as: ${result.understood}`,
+  ];
+  if (!result.rows.length) return lines.join('\n');
+  const columns = (
+    result.columns.length ? result.columns : resultColumns(result.rows)
+  ).map((key) => ({ key, header: readableColumn(key) }));
+  lines.push(
+    '',
+    ...markdownTable(columns, result.rows),
+    '',
+    `Page ${count(view.page)} of ${count(result.pageCount)}. Open the query to page, filter or sort the full result.`,
+  );
+  return lines.join('\n');
 }

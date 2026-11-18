@@ -1,3 +1,4 @@
+import { edgeFlow } from './workflow-contract';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { OFFICIAL_AGENT_KEYS, SYSTEM_AGENT_KEYS } from '../agent-constants';
@@ -43,7 +44,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds five code workflows: Insights Analyst, Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18) and Review a Website (5.19)', () => {
+  it('holds six code workflows: Insights Analyst, Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18), Review a Website (5.19) and Consumption Gap Analysis (5.20)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -88,32 +89,57 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         bar: 'steps',
         trigger: 'run',
       },
+      {
+        id: 'consumption-gap-analysis',
+        name: 'Consumption Gap Analysis',
+        primaryFor: 'gap-advisor',
+        bar: 'steps',
+        trigger: 'run',
+      },
     ]);
     expect(CODE_WORKFLOWS[0].steps.map((step) => step.id)).toEqual([
       'read-images',
       'receive-question',
       'load-catalog',
+      'interpret-follow-up',
       'plan',
       'clarify',
       'analyse',
       'validate',
-      'check-data-quality',
       'write-answer',
+      'build-visual',
       'wrap-up',
+      'page-result',
+      'page-answer',
     ]);
     // The flow is its edges (api.md 117): the optional branch to Read
-    // images from Start, a branch after Plan, a loop back from Clarify to
-    // Plan once answered, a loop back from Validate to Analyse, and the
-    // optional branch to Check data quality.
-    expect(CODE_WORKFLOWS[0].edges).toHaveLength(15);
+    // images from Start, a branch after Interpret follow-up (a new
+    // question, or the earlier result paged), a branch after Plan, a loop
+    // back from Clarify to Plan once answered, a loop back from Validate to
+    // Analyse, and the optional branch from Write answer to Build visual.
+    expect(CODE_WORKFLOWS[0].edges).toHaveLength(19);
     expect(
-      CODE_WORKFLOWS[0].edges.filter((edge) => edge.kind !== 'next'),
+      CODE_WORKFLOWS[0].edges
+        .filter((edge) => edge.kind !== 'next')
+        .map(edgeFlow),
     ).toEqual([
       {
         from: 'start',
         to: 'read-images',
         kind: 'branch',
         label: 'Reference images',
+      },
+      {
+        from: 'interpret-follow-up',
+        to: 'plan',
+        kind: 'branch',
+        label: 'New question',
+      },
+      {
+        from: 'interpret-follow-up',
+        to: 'page-result',
+        kind: 'branch',
+        label: 'Explore the earlier result',
       },
       {
         from: 'plan',
@@ -125,10 +151,10 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
       { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
       {
-        from: 'validate',
-        to: 'check-data-quality',
+        from: 'write-answer',
+        to: 'build-visual',
         kind: 'branch',
-        label: 'Check data quality',
+        label: 'Build a visual',
       },
     ]);
     expect(CODE_WORKFLOWS[0].description).toBe(
@@ -146,16 +172,34 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       IMAGES_FIELD,
       { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
       {
-        name: 'checkDataQuality',
-        label: 'Check data quality: Sarah reviews the tables the analysis used',
+        name: 'buildVisual',
+        label: 'Build a visual: Ryan charts the results of the answer',
         type: 'boolean',
         required: false,
-        default: false,
+        default: true,
       },
     ]);
   });
 
   // Reference images (workflows R35; agents.md 2.15; api.md 116; plan D5).
+  it('explains every labelled connector of every workflow in a note (workflows R42)', () => {
+    const labelled = CODE_WORKFLOWS.flatMap((workflow) =>
+      workflow.edges
+        .filter((edge) => edge.label)
+        .map((edge) => ({ workflow: workflow.id, ...edge })),
+    );
+    expect(labelled.length).toBeGreaterThan(0);
+    expect(
+      labelled
+        .filter((edge) => !edge.note?.trim())
+        .map((edge) => `${edge.workflow}: ${edge.from} -> ${edge.to}`),
+    ).toEqual([]);
+    for (const edge of labelled) {
+      expect(edge.note!.length).toBeLessThanOrEqual(100);
+      expect(edge.note).toMatch(/\.$/);
+    }
+  });
+
   describe('reference images', () => {
     const byId = (id: string) =>
       CODE_WORKFLOWS.find((workflow) => workflow.id === id)!;
@@ -210,7 +254,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         question: ['read-images', 'receive-question'],
         images: ['read-images'],
         datasets: ['receive-question'],
-        checkDataQuality: [],
+        buildVisual: [],
       });
       expect(usedBy('data-readiness-assessment')).toEqual({
         dataset: ['resolve-dataset'],
@@ -222,6 +266,82 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         datasets: ['load-dashboard'],
         question: ['read-images', 'load-dashboard'],
         images: ['read-images'],
+      });
+    });
+  });
+
+  // Consumption Gap Analysis (agents.md 5.20; workflows R37; api.md 116).
+  describe('consumption gap analysis', () => {
+    const gap = () =>
+      CODE_WORKFLOWS.find(
+        (workflow) => workflow.id === 'consumption-gap-analysis',
+      )!;
+
+    it('takes the datasets, the questions, reference dashboards and an optional saved dashboard', () => {
+      expect(gap().input).toEqual([
+        {
+          name: 'datasets',
+          label: 'Datasets',
+          type: 'datasets',
+          required: true,
+          help: 'Datasets whose schemas are tagged Landing, Normalized and Consumption.',
+        },
+        {
+          name: 'question',
+          label: 'Business questions',
+          type: 'textarea',
+          required: true,
+          placeholder:
+            'Which team won the most matches in each World Cup?\nWhat share of the goals were penalties?',
+          help: 'One question per line, up to 20.',
+          maxLength: 4000,
+        },
+        {
+          ...IMAGES_FIELD,
+          label: 'Reference dashboards',
+          help: 'Screenshots of the dashboards the model must support.',
+        },
+        {
+          name: 'artifact',
+          label: 'Saved dashboard',
+          type: 'artifact',
+          required: false,
+          artifactKinds: ['dashboard'],
+        },
+      ]);
+      // Grace reads the dashboards itself: no Read images step.
+      expect(gap().steps.map((step) => step.id)).not.toContain('read-images');
+    });
+
+    it('runs Grace, the Requirements Analyst, the Layer Mapper and the Gap Advisor', () => {
+      expect(
+        gap()
+          .steps.filter((step) => step.kind === 'agent')
+          .map((step) => [step.id, stepAgentKey(gap(), step.id)]),
+      ).toEqual([
+        ['read-dashboards', 'dashboard-reader'],
+        ['derive-requirements', 'requirements-analyst'],
+        ['map-requirements', 'layer-mapper'],
+        ['recommend-fixes', 'gap-advisor'],
+      ]);
+      expect(workflowsUsingAgent('requirements-analyst')).toEqual([
+        { id: 'consumption-gap-analysis', name: 'Consumption Gap Analysis' },
+      ]);
+    });
+
+    it('says which steps read each field as api.md 116 lists them', () => {
+      expect(
+        Object.fromEntries(
+          inputFieldsWithUsage(gap()).map((field) => [
+            field.name,
+            field.usedBy,
+          ]),
+        ),
+      ).toEqual({
+        datasets: ['read-dashboards'],
+        question: ['read-dashboards'],
+        images: ['read-dashboards'],
+        artifact: ['read-dashboards'],
       });
     });
   });
@@ -482,14 +602,19 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ]);
     });
 
-    it('data-readiness is used in Answer a Business Question (Check data quality) and Assess Data Readiness', () => {
+    it('data-readiness is used in Assess Data Readiness only', () => {
       expect(workflowsUsingAgent('data-readiness')).toEqual([
-        { id: 'answer-business-question', name: 'Answer a Business Question' },
         { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
       ]);
     });
 
-    it.each(['assistant', 'rfp', 'sql-fixer', 'visualization', 'u-1'])(
+    it('visualization is used in Answer a Business Question (Build visual)', () => {
+      expect(workflowsUsingAgent('visualization')).toEqual([
+        { id: 'answer-business-question', name: 'Answer a Business Question' },
+      ]);
+    });
+
+    it.each(['assistant', 'rfp', 'sql-fixer', 'u-1'])(
       '%s is used in none: agents are a library',
       (key) => {
         expect(workflowsUsingAgent(key)).toEqual([]);

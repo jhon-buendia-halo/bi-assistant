@@ -1,6 +1,6 @@
 {
   "name": "@jhon-buendia-halo/questions-to-insights",
-  "version": "0.73.0",
+  "version": "0.82.0",
   "description": "Ask questions of your data in plain language and get answers, SQL and interactive visuals. Runs locally: npx @jhon-buendia-halo/questions-to-insights",
   "license": "UNLICENSED",
   "repository": {
@@ -14,7 +14,8 @@
   "files": [
     "dist",
     "!dist/**/*.tsbuildinfo",
-    "public"
+    "public",
+    "vendor/duckdb-extensions"
   ],
   "engines": {
     "node": ">=22.13.0"
@@ -36,6 +37,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:live-llm": "jest --config ./test/jest-live-llm.json --runInBand",
     "worldcup:api:dump": "ts-node -T -P tsconfig.json scripts/worldcup-rest-api/dump.ts",
     "worldcup:api": "ts-node -T -P tsconfig.json scripts/worldcup-rest-api/serve.ts",
     "worldcup:rest:setup": "ts-node -T -P tsconfig.json scripts/setup-worldcup-rest.ts",
@@ -59,12 +61,13 @@
     "eval:leak-check": "ts-node -T -P tsconfig.json scripts/eval-leak-check.ts",
     "build:web": "npm --prefix ../frontend run build:web && node scripts/copy-web.js",
     "build:all": "npm run build && npm run build:web",
-    "prepack": "npm run build:all && node scripts/assert-publishable-brand.js",
+    "prepack": "npm run build:all && node ../scripts/fetch-duckdb-extensions.mjs windows_amd64 osx_arm64 osx_amd64 linux_amd64 --out vendor/duckdb-extensions && node scripts/assert-publishable-brand.js",
     "start:web": "node dist/cli.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.130",
     "@databricks/sql": "2.1.0",
+    "@duckdb/node-api": "1.5.2-r.2",
     "@github/copilot-sdk": "1.0.30",
     "@mastra/arize": "1.3.16",
     "@mastra/core": "1.66.0",

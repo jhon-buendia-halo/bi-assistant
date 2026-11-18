@@ -86,6 +86,8 @@ const V2_STEP_TRAIL = [
   'receive-question:success',
   'load-catalog:running',
   'load-catalog:success',
+  'interpret-follow-up:running',
+  'interpret-follow-up:success',
   'plan:running:1',
   'plan:success:1',
   'analyse:running:1',
@@ -100,10 +102,15 @@ const V2_STEP_TRAIL = [
   'write-answer:success',
   'wrap-up:running',
   'wrap-up:success',
-  // The branches not taken, once the run ended: Clarify, and Check data
-  // quality, which the input did not ask for (agents.md 5.11).
+  // The branches not taken, once the run ended: Read images (no images),
+  // Clarify, Build visual, which the input turned off
+  // (agents.md 5.11), and the follow-up branch a first run never takes
+  // (roadmap 1.28.8).
+  'read-images:skipped',
   'clarify:skipped',
-  'check-data-quality:skipped',
+  'build-visual:skipped',
+  'page-result:skipped',
+  'page-answer:skipped',
 ];
 
 /** A step frame or stored step as `id:status[:attempt]`. */
@@ -257,7 +264,7 @@ describe('Streamed runs of agent workflows (API)', () => {
   it('streams a v2 run: run, its steps each running then done (the analysis twice), the answer, then done with the run', async () => {
     const question = 'How many matches were played?';
     const res = await runStream('answer-business-question', {
-      input: { question, datasets: ['World Cup Core'] },
+      input: { question, datasets: ['World Cup Core'], buildVisual: false },
     });
     expect(res.status).toBe(200);
     const types = res.frames.map((frame) => frame.type);
@@ -321,7 +328,7 @@ describe('Streamed runs of agent workflows (API)', () => {
   it('each step frame and the stored run carry what the step received, its output and its times', async () => {
     const question = 'Who won the 2002 World Cup?';
     const res = await runStream('answer-business-question', {
-      input: { question, datasets: ['World Cup Core'] },
+      input: { question, datasets: ['World Cup Core'], buildVisual: false },
     });
     const steps = res.frames.filter(
       (frame) => frame.type === 'step' && frame.status !== 'skipped',
@@ -358,17 +365,21 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(stored.steps).toEqual(done.run!.steps);
     // Catalogue order, a retried step's attempts one after the other.
     expect(stored.steps.map(trail)).toEqual([
+      'read-images:skipped',
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success:1',
       'clarify:skipped',
       'analyse:success:1',
       'analyse:success:2',
       'validate:success:1',
       'validate:success:2',
-      'check-data-quality:skipped',
       'write-answer:success',
+      'build-visual:skipped',
       'wrap-up:success',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     stored.steps
       .filter((step) => step.status !== 'skipped')
@@ -391,7 +402,11 @@ describe('Streamed runs of agent workflows (API)', () => {
     const res = await http()
       .post('/workflows/answer-business-question/runs')
       .send({
-        input: { question: 'Who won in 1998?', datasets: ['World Cup Core'] },
+        input: {
+          question: 'Who won in 1998?',
+          datasets: ['World Cup Core'],
+          buildVisual: false,
+        },
       })
       .expect(200);
     const run = res.body as NonNullable<Frame['run']>;
@@ -411,7 +426,11 @@ describe('Streamed runs of agent workflows (API)', () => {
       await http()
         .post('/workflows/answer-business-question/runs')
         .send({
-          input: { question: 'Who won in 1998?', datasets: ['World Cup Core'] },
+          input: {
+            question: 'Who won in 1998?',
+            datasets: ['World Cup Core'],
+            buildVisual: false,
+          },
         })
         .expect(200)
     ).body as { id: string };
@@ -448,7 +467,11 @@ describe('Streamed runs of agent workflows (API)', () => {
       await http()
         .post('/workflows/answer-business-question/runs')
         .send({
-          input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
+          input: {
+            question: 'Who won in 2002?',
+            datasets: ['World Cup Core'],
+            buildVisual: false,
+          },
         })
         .expect(200)
     ).body as {
@@ -461,11 +484,17 @@ describe('Streamed runs of agent workflows (API)', () => {
       .body as { contractHash?: string };
     expect(stored.contractHash).toBe(detail.contractHash);
     // Every step on the path ran and passed on exactly the fields its schema
-    // requires; Clarify and Check data quality, the branches not taken,
+    // requires; Clarify and Build visual (turned off), the branches not taken,
     // were skipped.
     expect(
       run.steps.filter((step) => step.status === 'skipped').map((s) => s.id),
-    ).toEqual(['clarify', 'check-data-quality']);
+    ).toEqual([
+      'read-images',
+      'clarify',
+      'build-visual',
+      'page-result',
+      'page-answer',
+    ]);
     for (const step of run.steps.filter((s) => s.status !== 'skipped')) {
       const declared = detail.steps.find((entry) => entry.id === step.id)!;
       expect({ id: step.id, status: step.status }).toEqual({
@@ -483,7 +512,11 @@ describe('Streamed runs of agent workflows (API)', () => {
     const lastUser = (req: ReturnType<typeof asSent>) =>
       messageText([...req.messages].reverse().find((m) => m.role === 'user')!);
     const question = 'Which stadium hosted the final?';
-    const input = { question, datasets: ['World Cup Core'] };
+    const input = {
+      question,
+      datasets: ['World Cup Core'],
+      buildVisual: false,
+    };
     const run = await recorded(() =>
       runStream('answer-business-question', { input }),
     );
@@ -503,12 +536,20 @@ describe('Streamed runs of agent workflows (API)', () => {
 
   it("a follow-up run goes on from a copy of the earlier run's Analyse thread, then its answer and this question", async () => {
     const first = await runStream('answer-business-question', {
-      input: { question: 'Who hosted in 2002?', datasets: ['World Cup Core'] },
+      input: {
+        question: 'Who hosted in 2002?',
+        datasets: ['World Cup Core'],
+        buildVisual: false,
+      },
     });
     const runId = first.frames[0].runId!;
     const sent = await recorded(() =>
       runStream('answer-business-question', {
-        input: { question: 'And in 2006?', datasets: ['World Cup Core'] },
+        input: {
+          question: 'And in 2006?',
+          datasets: ['World Cup Core'],
+          buildVisual: false,
+        },
         context: { fromRunId: runId },
       }),
     );
@@ -560,6 +601,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         input: {
           question: 'Who hosted in 2010?',
           datasets: ['World Cup Core'],
+          buildVisual: false,
         },
       });
       const firstId = first.frames[0].runId!;
@@ -577,7 +619,11 @@ describe('Streamed runs of agent workflows (API)', () => {
       expect(rolesIn(host)).toContain('assistant');
 
       const second = await runStream('answer-business-question', {
-        input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
+        input: {
+          question: 'And in 2014?',
+          datasets: ['World Cup Core'],
+          buildVisual: false,
+        },
         context: { fromRunId: firstId },
       });
       const next = `run-${second.frames[0].runId!}`;
@@ -636,7 +682,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     const question = 'How many goals were scored in total?';
     const sent = await recorded(() =>
       runStream('answer-business-question', {
-        input: { question, datasets: ['Analyst Goals'] },
+        input: { question, datasets: ['Analyst Goals'], buildVisual: false },
       }),
     );
     const turn = sent.find(isAnalyseRequest)!;
@@ -741,7 +787,11 @@ describe('Streamed runs of agent workflows (API)', () => {
       let runId = '';
       const asked = await recorded(async () => {
         const first = await runStream('answer-business-question', {
-          input: { question: DOMINANT, datasets: ['World Cup Core'] },
+          input: {
+            question: DOMINANT,
+            datasets: ['World Cup Core'],
+            buildVisual: false,
+          },
         });
         expect(first.status).toBe(200);
         runId = first.frames[0].runId!;
@@ -783,6 +833,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         expect(run.steps.map(trail)).toEqual([
           'receive-question:success',
           'load-catalog:success',
+          'interpret-follow-up:success',
           'plan:success:1',
           'clarify:suspended:1',
         ]);
@@ -839,8 +890,10 @@ describe('Streamed runs of agent workflows (API)', () => {
         });
         expect(done.run).not.toHaveProperty('waitingFor');
         expect(done.run!.steps.map(trail)).toEqual([
+          'read-images:skipped',
           'receive-question:success',
           'load-catalog:success',
+          'interpret-follow-up:success',
           'plan:success:1',
           'plan:success:2',
           'clarify:success:1',
@@ -848,9 +901,11 @@ describe('Streamed runs of agent workflows (API)', () => {
           'analyse:success:2',
           'validate:success:1',
           'validate:success:2',
-          'check-data-quality:skipped',
           'write-answer:success',
+          'build-visual:skipped',
           'wrap-up:success',
+          'page-result:skipped',
+          'page-answer:skipped',
         ]);
       });
       // Plan planned again with the question, its question and the answer.
@@ -900,7 +955,11 @@ describe('Streamed runs of agent workflows (API)', () => {
           : { text: STUB_ANSWER },
       );
       const first = await runStream('answer-business-question', {
-        input: { question: ASKED, datasets: ['World Cup Core'] },
+        input: {
+          question: ASKED,
+          datasets: ['World Cup Core'],
+          buildVisual: false,
+        },
       });
       expect(first.status).toBe(200);
       const runId = first.frames[0].runId!;
@@ -923,6 +982,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       expect(done.run!.steps.map(trail)).toEqual([
         'receive-question:success',
         'load-catalog:success',
+        'interpret-follow-up:success',
         'plan:success:1',
         'analyse:suspended:1',
       ]);
@@ -943,17 +1003,21 @@ describe('Streamed runs of agent workflows (API)', () => {
         // The resumed attempt is the same attempt 1; the stub's agent never
         // queries, so Validate retries once.
         expect(end.run!.steps.map(trail)).toEqual([
+          'read-images:skipped',
           'receive-question:success',
           'load-catalog:success',
+          'interpret-follow-up:success',
           'plan:success:1',
           'clarify:skipped',
           'analyse:success:1',
           'analyse:success:2',
           'validate:success:1',
           'validate:success:2',
-          'check-data-quality:skipped',
           'write-answer:success',
+          'build-visual:skipped',
           'wrap-up:success',
+          'page-result:skipped',
+          'page-answer:skipped',
         ]);
       });
       // Both attempts after the answer go on with it.
@@ -987,7 +1051,11 @@ describe('Streamed runs of agent workflows (API)', () => {
       });
 
       const finished = await runStream('answer-business-question', {
-        input: { question: 'How many matches?', datasets: ['World Cup Core'] },
+        input: {
+          question: 'How many matches?',
+          datasets: ['World Cup Core'],
+          buildVisual: false,
+        },
       });
       const finishedId = finished.frames[0].runId!;
       const notWaiting = await resumeStream(finishedId, {
@@ -1007,7 +1075,11 @@ describe('Streamed runs of agent workflows (API)', () => {
           }),
       });
       const waiting = await runStream('answer-business-question', {
-        input: { question: 'Which?', datasets: ['World Cup Core'] },
+        input: {
+          question: 'Which?',
+          datasets: ['World Cup Core'],
+          buildVisual: false,
+        },
       });
       const waitingId = waiting.frames[0].runId!;
       const blank = await resumeStream(waitingId, {
@@ -1044,6 +1116,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         input: {
           question: 'How many matches in all?',
           datasets: ['World Cup Core'],
+          buildVisual: false,
         },
       });
       const text = res.frames
@@ -1083,7 +1156,11 @@ describe('Streamed runs of agent workflows (API)', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input: { question: 'Hold this one', datasets: ['World Cup Core'] },
+          input: {
+            question: 'Hold this one',
+            datasets: ['World Cup Core'],
+            buildVisual: false,
+          },
         }),
         signal: controller.signal,
       },
@@ -1136,7 +1213,11 @@ describe('Streamed runs of agent workflows (API)', () => {
       const answer = await http()
         .post('/workflows/answer-business-question/runs/stream')
         .send({
-          input: { question: 'Next', datasets: ['World Cup Core'] },
+          input: {
+            question: 'Next',
+            datasets: ['World Cup Core'],
+            buildVisual: false,
+          },
           context: { fromRunId: runId },
         });
       refusal = {
@@ -1153,7 +1234,11 @@ describe('Streamed runs of agent workflows (API)', () => {
   });
 
   describe('refusals before any stream (Style B)', () => {
-    const ASK = { question: 'Hi', datasets: ['World Cup Core'] };
+    const ASK = {
+      question: 'Hi',
+      datasets: ['World Cup Core'],
+      buildVisual: false,
+    };
     it.each([
       [
         'answer-business-question',

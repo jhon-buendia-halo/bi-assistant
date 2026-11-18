@@ -34,6 +34,7 @@ The directory is created (recursively) at backend start if it does not exist.
 | **Agent memory store** | `mastra.sqlite` | LibSQL file (Mastra runtime storage) | Conversation memory threads/messages of sessions and of workflow runs' agents (section 5); any other Mastra runtime state | Agent framework |
 | **Observability store** | `observability.duckdb` | DuckDB (memory limit 512 MB, 2 threads) | Agent traces, metrics and logs written by the framework's storage exporter (service name `questions-to-insights`, log level `info`). The `span_events` table is **read by Monitoring** ([../capabilities/monitoring/spec.md](../capabilities/monitoring/spec.md), ADR-0038): event-sourced, one `start` and one `end` row per span (`eventType`, `timestamp`, `traceId`, `spanId`, `parentSpanId`, `entityType`, `entityId`, `entityName`, `threadId`, `name`, `spanType`, `endedAt`, and the JSON columns `attributes`, `metadata`, `input`, `output`, `error`). Monitoring reads the `agent_run`, `model_generation`, `model_step`, `tool_call` and `memory_operation` spans (and, for the waterfall, the framework spans `skill_action`, `processor_run`, `workspace_action` and `model_inference`), in the backend process, one **trace** (`traceId`) being one turn of a session and the `threadId` of its `agent_run` being the session id, through the same store handle that writes them. It adds no collection and writes nothing here | Agent framework |
 | **Session workspaces** | `workspaces/session-<session-id>/`; a stored workflow run's `workspaces/session-run-<run id>/` (3.16) | Plain directories, a contained filesystem root per session or run | Visual bundles, deep-analysis reports, panel files and synthetic scripts (section 4) | App backend + agents (agents can create/edit files there but cannot delete) |
+| **Excel / CSV files** | `files/uploads/<uploadId>/<name>` (an uploaded file not saved yet; also a test's throwaway `files/uploads/check-<uuid>/data.duckdb`); `files/<datasourceId>/originals/<fileId>.<ext>` (the saved copy of each source file); `files/<datasourceId>/data.duckdb` (the imported tables, one schema per file, built as `data.duckdb.tmp` and renamed) | Plain files; DuckDB database files | The `file` kind's uploads and each Excel / CSV datasource's files ([api.md](api.md) 156 to 158, 16, 18, 19; datasources R61 to R67). An upload goes when it is saved (moved to `originals/`), dropped (158), or at backend start once older than 24 hours; `files/<datasourceId>/` goes with its datasource | App backend |
 | **Developer settings** | `developer-settings.json` | JSON file, written atomically (temp file + rename) | `{ observabilityEnabled: boolean, phoenixEndpoint: string, otlpEndpoint: string, updatedAt: ISO string }`. Absent until the first save, and absent means the defaults (`false`, `http://localhost:6006`, `http://localhost:4318`). Invalid or missing values fall back to their defaults. Read synchronously by the backend at startup, before any app module loads (ADR-0006). See [../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md). | App backend |
 | **App secret** | `.app-secret` | Text file, mode `0600` | 64 lowercase hex characters (32 random bytes). The key material for encrypting stored secrets (section 2.3). Read if present and non-empty, else generated once and written. `APP_SECRET` env var, when set, wins and the file is not used. Created by the launcher (Electron main or CLI); a backend started without `APP_SECRET` reads or creates the same file itself. | Launcher, else backend |
 | **Backend PID** (desktop app only) | `backend.pid` | Text file | The decimal PID of the backend child the desktop shell last spawned. Written after each spawn, removed when that child exits and on quit. Read once at startup to stop a backend left running by an earlier launch ([api.md](api.md) 4.3). Never read by the backend. | Electron main |
@@ -130,8 +131,8 @@ One document per saved connection. The `kind` selects the shape of `config`.
 |---|---|---|---|
 | `id` | uuid | yes | Generated on first save (`legacy-databricks` for the migrated legacy connection, section 6). |
 | `name` | string | yes | User-chosen display name, trimmed, non-empty, truncated to 64 characters. Not required to be unique (the testing-data feature looks a sample's datasource up by name). |
-| `kind` | enum | yes | `databricks` \| `postgres` \| `rest`. |
-| `config` | object | yes | One of the three config shapes below. |
+| `kind` | enum | yes | `databricks` \| `postgres` \| `rest` \| `file`. |
+| `config` | object | yes | One of the four config shapes below. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 `DatabricksConfig` (`kind = databricks`):
@@ -175,7 +176,42 @@ One document per saved connection. The `kind` selects the shape of `config`.
 | `pagination` | object | no | `style` enum `none` \| `page` \| `offset` \| `cursor` (required in the object); `pageParam`, `sizeParam`, `offsetParam`, `cursorParam`, `cursorPointer` (string, the query param / response pointer names the style needs); `pageSize` (number). |
 | `maxRows` | number | no | Cap on rows fetched. |
 
-**Secret masking.** API views of a connection replace secrets with the literal `••••••••` (8 bullet characters U+2022) when the secret is non-empty (empty stays empty): Postgres `password`, Databricks `token`, REST `auth.token` and `auth.password`. When the client sends a masked or empty secret back on test/save for an existing `id` of the same `kind`, the stored secret is kept. The view also carries a computed `summary` string (not stored): Postgres `host:port/database` (port defaults 5432); Databricks `host · warehouse <warehouseId>`; REST `REST API · <baseUrl> · <n> endpoint(s)`. See [api.md](api.md).
+`FileDatasourceConfig` (`kind = file`, Excel / CSV, ADR-0052; datasources R53–R67). No secret. The imported tables live in the datasource's own DuckDB database, `<dataDir>/files/<id>/data.duckdb`, and its source files in `<dataDir>/files/<id>/originals/` (section 1.2); the database path is filled in for each connector call and never stored.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `files` | `SourceFile[]` | yes | The uploaded files, each one schema of `file.<schema>.<table>`. |
+
+`SourceFile`:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | Stable across Replace file. |
+| `name` | string | yes | Original file name, e.g. `sales_2026.xlsx`. |
+| `format` | enum | yes | `xlsx` \| `csv`. |
+| `sizeBytes` | number | yes | |
+| `sha256` | string | yes | Of the file's bytes. |
+| `uploadedAt` | ISO | yes | |
+| `schema` | string | yes | Entity schema segment (datasources R55), e.g. `sales_2026`. |
+| `sheets` | `SheetImport[]` | yes | A CSV has one. |
+| `uploadId` | string | no | Set only while the file is not saved yet: it names `files/uploads/<uploadId>/`. Never stored: saving moves the file to `files/<datasourceId>/originals/<id>.<format>` and drops it. |
+
+`SheetImport`:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `sheet` | string | yes | Workbook sheet name; for a CSV, the file name without extension. |
+| `table` | string | yes | Entity table segment (datasources R55); a CSV's equals its file's `schema`. |
+| `include` | boolean | yes | Imported as a table. |
+| `headerRow` | number | yes | 1-based row of the column names. |
+| `range` | string | yes | A1 range of header and data, e.g. `A3:H12482`. |
+| `excludeLastRow` | boolean | yes | The last row of the range is not imported (a total). |
+| `allText` | boolean | yes | Every column read as `VARCHAR`. |
+| `rowCount` | number | no | Data rows imported; set by the import. |
+| `columns` | `{name, type}[]` | no | Imported column names and DuckDB types; set by the import. |
+| `warnings` | `SheetWarning[]` | no | From the detection (datasources R56): `{code: 'total-row', row}`, `{code: 'no-table'}`, `{code: 'header-guessed', row}`, `{code: 'duplicate-columns', names}`. |
+
+**Secret masking.** API views of a connection replace secrets with the literal `••••••••` (8 bullet characters U+2022) when the secret is non-empty (empty stays empty): Postgres `password`, Databricks `token`, REST `auth.token` and `auth.password`. When the client sends a masked or empty secret back on test/save for an existing `id` of the same `kind`, the stored secret is kept. The view also carries a computed `summary` string (not stored): Postgres `host:port/database` (port defaults 5432); Databricks `host · warehouse <warehouseId>`; REST `REST API · <baseUrl> · <n> endpoint(s)`; Excel / CSV `<n> files · <m> tables` (a file config has nothing to mask). See [api.md](api.md).
 
 The **inventory shape** every connector normalises to (used by section 3.5 and the datasets browser): `catalog → schema → table → column`, as `CatalogInfo {name, schemas[], selectable?}`, `SchemaInfo {name, tables[], selectable?}`, `TableInfo {name, columns[], selectable?}`, `ColumnInfo {name: string, type: string, nullable: boolean}`. `selectable` is `boolean`, optional: `undefined` means access unknown (treated as accessible); only an explicit `false` means the credentials cannot query it (shown greyed).
 
@@ -309,7 +345,7 @@ How much data one query of an answer stands for (the query inspector, roadmap 1.
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `index` | number | yes | Index of the record in `data`; also the `:index` of [api.md](api.md) 140-143. |
-| `coverage` | enum | no | `whole-table` \| `top-n` \| `sample` \| `partial`; absent on a failed record. Rules, in order, over the SQL with literals and comments masked, at bracket depth 0: `sample_rows` is `sample`; rows cut by the tool's cap are `partial` (`totalRows > rowCount`; for a record without `totalRows`, the cap its rows ran into, unless that is the statement's own LIMIT); the statement's own top-level `LIMIT` (or `FETCH FIRST n`) reached is `top-n` with an `ORDER BY` before it and `sample` without; anything else is `whole-table`. |
+| `coverage` | enum | no | `whole-table` \| `top-n` \| `sample` \| `partial`; absent on a failed record. Rules, in order, over the SQL with literals and comments masked, at bracket depth 0: `sample_rows` is `sample`; an `explore_result` page is `partial` when more rows matched than it holds (`view.matchedRows`, else `totalRows`, > `rowCount`); rows cut by the tool's cap are `partial` (`totalRows > rowCount`; for a record without `totalRows`, the cap its rows ran into, unless that is the statement's own LIMIT); the statement's own top-level `LIMIT` (or `FETCH FIRST n`) reached is `top-n` with an `ORDER BY` before it and `sample` without; anything else is `whole-table`. |
 | `outerLimit` | number | no | The statement's own top-level `LIMIT` / `FETCH FIRST n`. |
 | `datasourceId` | string | no | The datasource the call ran on. |
 | `datasourceKind` | string | no | Filled by api.md 139. |
@@ -317,6 +353,7 @@ How much data one query of an answer stands for (the query inspector, roadmap 1.
 | `rowLimit` | number | no | The tool's cap for the call: `run_readonly_sql` `limit` ?? 100, `sample_rows` `limit` ?? 10. |
 | `tables` | `QueryTableSize[]` | no | Filled by api.md 139: `{entity, rows: number \| null, error?}` per table the query reads, an exact `COUNT(*)`; `rows: null` with the error when the count failed. |
 | `explanation` | `QueryExplanation` | no | Filled when the inspector first opens the query (api.md 140, 141): `{steps: QueryStep[], fallback?: true, at, stageCounts?: {status: 'verified' \| 'unverified', at, reason?}}`. |
+| `view` | `ResultView` | no | Set on an `explore_result` record only ([agents.md](agents.md) 3.15): the filters, sort, page, page size, matched rows and cap its rows were read with (api.md 152's `ResultView`); the inspector opens the query on it. Never on the record itself, which models read. |
 
 Every write to a run's `answer.evidence` goes through the run's answer lock (api.md 139-143), and to a past chat message's `evidence` through the lock of that session and message (144-146). A re-run (142, 147) never changes it.
 
@@ -652,7 +689,7 @@ A **draft run** (Try it, api.md 129) is never a document here and is not stored 
 | `workflowName` | string | yes | Its name when the run started, so a deleted user agent's run still names it. |
 | `contractHash` | string | no | The workflow's data-contract hash when the run started (12 hex; api.md 117, [agents.md](agents.md) 5.12). Written on insert. Runs stored before 2026-11-13 lack it; readers treat it as absent, no migration. |
 | `input` | object | yes | The checked input (api.md 118: declared fields only, defaults filled), as `Record<string, string \| number \| boolean \| string[]>`. An `image` field holds the path of the file in the run's workspace (`inputs/<field name>.<png\|jpg\|webp>`), never the image; an `images` field holds the list of paths `inputs/images/<n>.<png\|jpg\|webp>` (`n` from 1, in the order attached), never the bytes (workflows R35). |
-| `context` | `{ fromRunId: string }` | no | The earlier run whose question and answer the agent was given (api.md 3.6). |
+| `context` | `{ fromRunId: string; askStep?: string }` | no | The earlier run whose question and answer the agent was given (api.md 3.6); `askStep` when the follow-up asked that step's agent alone (workflows R40, agents.md 5.21). |
 | `status` | `running` \| `suspended` \| `success` \| `failed` \| `stopped` | yes | `running` until it ends; `suspended` while it waits for the user's answer (api.md 138, ADR-0043). |
 | `waitingFor` | `{ stepId, title, question, options: string[], since, expiresAt, expired?: true }` (api.md 3.6) | no | A `suspended` run: the waiting step (`clarify` or `analyse`), its title, its clarifying question and options, when it started waiting and when it stops being answerable (30 minutes later). Removed when the run is answered; kept with `expired: true` on a run that could no longer be answered (it expired, or the app restarted), which is then `stopped`. Runs stored before 2026-11-13 have none; no migration. |
 | `steps` | `{ id, title, status, attempt?, input?, inputTruncated?, output?, outputTruncated?, error?, startedAt?, endedAt?, toolCalls?, story? }[]` (api.md 3.6 `WorkflowRunStep`; `story` is the step's `StepStory`, told as it ends or is skipped; runs stored before it get it told on read, never written back, no migration) | yes | `[]` while running; at the end every step in workflow order with `success`, `failed`, `skipped` or `stopped`; while `suspended`, only the steps that ran, the waiting one `suspended`. A step inside a loop (v2's Plan and Clarify, Analyse and Validate, api.md 117 `edges`) has one entry per attempt, in attempt order right after one another, each with `attempt` (1, 2); `attempt` is absent on every other step and on a skipped one, and the same step id can therefore appear twice. Runs stored before 2026-11-13 have neither and one entry per step; readers treat `attempt` as absent, no migration. `input` is what the step received and `output` its output, each when its JSON is at most 20 000 characters, else `inputTruncated: true` / `outputTruncated: true`. `startedAt` and `endedAt` are ISO times (none on a skipped step). `toolCalls` (`{ tool, input?, rowCount?, error?, durationMs? }[]`, at most 50, `input` at most 2 000 characters) are an agent step's calls from its agent turn. Runs stored before these fields existed (the n8n-style workflow page) lack `input`, the times and `toolCalls`; readers treat them as absent, no migration. |
@@ -1035,7 +1072,7 @@ Any other field, a key that is not a lower-case id without a `/`, or a rate that
 - What is stored: the user/assistant turns of chat as the framework records them (the framework writes new turns itself once the thread exists). The other agents (SQL repair, verifier, designer, knowledge bootstrap, eval judge) run **without** the memory thread so they never pollute the history a later chat question is answered from.
 - **Bootstrap of legacy transcripts.** When a turn is about to run and the thread does not yet exist (sessions created before memory was enabled, or a brand-new session), the agent input is the entire persisted transcript mapped to plain `{role, content}` text messages (structured fields such as `data` are not replayed); the framework then creates the thread from it. When the thread exists, the input is only the latest user message — except when the previous assistant message was a clarification (it ended its turn before memory saw the question), in which case the clarification text (as an assistant message) and the user's answer are both sent.
 - On session deletion every thread whose resource is the session id is deleted (`deleteMemoryResource`), the workspace is unregistered and destroyed, and the workspace directory is removed.
-- **Workflow runs** (since 2026-11-15; [agents.md](agents.md) 5.14). A run's agents keep their conversation per run, all threads with the run host's id `run-<run id>` as resource: the host's agent (Analyse's `insights-analyst`) in `run-<run id>` through its memory as above, and each step agent with no memory of its own (`analysis-planner`, `data-readiness` for Check data quality, `answer-writer`) in `run-<run id>:<agent key>`, where the app saves each of its exchanges (the request as a user message, the reply as an assistant message). A node chat keeps `run-<run id>-node-<step id>` (resource the same id) across its turns. The threads outlive the run's turn and are deleted with the run (api.md 122); a follow-up run starts from copies of the earlier run's threads under its own ids. Runs from before 2026-11-15 have no threads (theirs were deleted when their turn ended); nothing is migrated.
+- **Workflow runs** (since 2026-11-15; [agents.md](agents.md) 5.14). A run's agents keep their conversation per run, all threads with the run host's id `run-<run id>` as resource: the host's agent (Analyse's `insights-analyst`) in `run-<run id>` through its memory as above, and each step agent with no memory of its own (`analysis-planner`, `answer-writer`) in `run-<run id>:<agent key>`, where the app saves each of its exchanges (the request as a user message, the reply as an assistant message). A node chat keeps `run-<run id>-node-<step id>` (resource the same id) across its turns. The threads outlive the run's turn and are deleted with the run (api.md 122); a follow-up run starts from copies of the earlier run's threads under its own ids. Runs from before 2026-11-15 have no threads (theirs were deleted when their turn ended); nothing is migrated.
 - **Ownership.** Memory threads and workspaces carry no owner of their own. They are reached only through a session: every route and tool that touches a thread or workspace first loads the session by id, and an unknown id answers as not found. Session ids are random UUIDs but are not treated as secrets.
 - The session document's `messages` remain the source of truth for display and for everything with structured fields; memory is only the model's conversational context.
 

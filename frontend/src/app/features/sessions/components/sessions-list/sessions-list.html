@@ -61,7 +61,7 @@
             class="chip min-w-0 max-w-48 shrink-0"
             [class.chip-neutral]="session.workflowRef?.deleted !== true"
             [class.chip-warning]="session.workflowRef?.deleted === true"
-            [attr.title]="'Workflow: ' + workflowName(session)"
+            [attr.title]="'User journey: ' + workflowName(session)"
           >
             <lucide-angular [img]="Workflow" [size]="12" class="shrink-0" />
             <span class="truncate">{{ workflowName(session) }}</span>

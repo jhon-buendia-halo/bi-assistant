@@ -274,6 +274,7 @@ describe('Agent definitions (API)', () => {
     });
     const alwaysOn = [
       'describe_entity',
+      'explore_result',
       'list_entities',
       'run_readonly_sql',
       'show_in_panel',

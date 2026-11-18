@@ -134,8 +134,9 @@ export function hubEmptyMessage(
 ): string | null {
   if (sections.length > 0) return null;
   const trimmed = query.trim();
-  if (trimmed) return `No agents match "${trimmed}"`;
-  if (filter === 'pinned') return 'No pinned agents yet.';
-  if (owner === 'mine' && filter === 'all') return 'No agents of yours yet.';
-  return 'No agents match these filters.';
+  if (trimmed) return `No agent personas match "${trimmed}"`;
+  if (filter === 'pinned') return 'No pinned agent personas yet.';
+  if (owner === 'mine' && filter === 'all')
+    return 'No agent personas of yours yet.';
+  return 'No agent personas match these filters.';
 }

@@ -40,7 +40,7 @@ test('a dataset save keeps running in the background while the user is elsewhere
   });
 
   await test.step('Another area: the save is still listed as running', async () => {
-    await rail.getByRole('button', { name: 'Workflows', exact: true }).click();
+    await rail.getByRole('button', { name: 'User journeys', exact: true }).click();
     await tasksButton.click();
     const panel = page.getByRole('dialog', { name: 'Background tasks' });
     await expect(panel).toBeVisible();

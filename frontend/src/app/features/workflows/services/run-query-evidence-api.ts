@@ -1,8 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, map, tap, throwError } from 'rxjs';
 import {
+  FilterInterpretation,
+  PageRequest,
+  PageResult,
   QueryEvidenceApi,
   QueryRerunResult,
+  ResultView,
 } from '../../../shared/query-evidence/query-evidence.model';
 import { WorkflowRun } from '../models/workflow.model';
 import { WorkflowDesigner } from './workflow-designer.service';
@@ -51,6 +55,26 @@ export abstract class RunEvidenceApi implements QueryEvidenceApi {
     return this.withRun((id) => this.runs.queryCsv(id, index));
   }
 
+  page(index: number, request: PageRequest): Observable<PageResult> {
+    return this.withRun((id) =>
+      this.runs
+        .pageQuery(id, index, request)
+        .pipe(map((response) => response.result)),
+    );
+  }
+
+  interpretFilter(
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Observable<FilterInterpretation> {
+    return this.withRun((id) =>
+      this.runs
+        .interpretFilter(id, index, text, view)
+        .pipe(map((response) => response.interpretation)),
+    );
+  }
+
   private withRun<T>(call: (id: string) => Observable<T>): Observable<T> {
     const id = this.shownRun()?.id;
     return id === undefined
@@ -72,8 +96,9 @@ export abstract class RunEvidenceApi implements QueryEvidenceApi {
 export class RunQueryEvidenceApi extends RunEvidenceApi {
   private readonly designer = inject(WorkflowDesigner);
 
+  /** The run whose query is open: an earlier conversation turn's, else the shown run. */
   protected shownRun(): WorkflowRun | null {
-    return this.designer.run();
+    return this.designer.queryRun() ?? this.designer.run();
   }
 
   protected showRun(run: WorkflowRun): void {

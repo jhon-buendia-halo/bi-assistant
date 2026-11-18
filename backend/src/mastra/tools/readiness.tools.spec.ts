@@ -152,6 +152,7 @@ describe('the readiness tools (agents.md 3.13)', () => {
       'generate_synthetic_data',
       'describe_entity',
       'run_readonly_sql',
+      'explore_result',
       'show_in_panel',
       'ask_clarification',
     ]);
@@ -313,6 +314,77 @@ describe('the readiness tools (agents.md 3.13)', () => {
       expect(modelSees('get_readiness_report', result)).toEqual({
         type: 'json',
         value: SUMMARY,
+      });
+    });
+
+    it('takes an optional dimension (the engine ids) and a 1-based page (story 1.28.12)', () => {
+      const schema = readinessTools.get_readiness_report
+        .inputSchema as unknown as {
+        safeParse: (v: unknown) => { success: boolean };
+        shape: Record<string, { description?: string }>;
+      };
+      expect(Object.keys(schema.shape)).toEqual([
+        'reportId',
+        'dataset',
+        'dimension',
+        'page',
+      ]);
+      expect(schema.safeParse({}).success).toBe(true);
+      expect(
+        schema.safeParse({ dimension: 'completeness', page: 2 }).success,
+      ).toBe(true);
+      expect(schema.safeParse({ dimension: 'reasonability' }).success).toBe(
+        true,
+      );
+      expect(schema.safeParse({ dimension: 'nulls' }).success).toBe(false);
+      expect(
+        schema.safeParse({ dimension: 'completeness', page: 0 }).success,
+      ).toBe(false);
+      expect(
+        schema.safeParse({ dimension: 'completeness', page: 1.5 }).success,
+      ).toBe(false);
+      expect(schema.shape['dimension'].description).toMatch(/every finding/i);
+      expect(readinessTools.get_readiness_report.description).toMatch(
+        /dimension/,
+      );
+    });
+
+    it('passes a dimension and page through, and the model sees the page in the summary', async () => {
+      const page = {
+        dimension: 'completeness',
+        total: 1,
+        page: 1,
+        pageCount: 1,
+        pageSize: 50,
+        items: [
+          {
+            severity: 'high',
+            entity: 'customers',
+            field: 'email',
+            measured: 0.62,
+            description: '62% of email values are missing.',
+            recommendation: 'Make email required at capture.',
+          },
+        ],
+      };
+      getReport.mockResolvedValueOnce({
+        report: REPORT,
+        summary: { ...SUMMARY, findings: page },
+      });
+      const result = await run('get_readiness_report', {
+        dimension: 'completeness',
+        page: 1,
+      });
+      expect(getReport).toHaveBeenCalledWith({
+        sessionId: 's-1',
+        reportId: undefined,
+        datasetName: undefined,
+        dimension: 'completeness',
+        page: 1,
+      });
+      expect(modelSees('get_readiness_report', result)).toEqual({
+        type: 'json',
+        value: { ...SUMMARY, findings: page },
       });
     });
 

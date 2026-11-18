@@ -6,14 +6,14 @@
     aria-label="Filter runs"
   >
     <label class="flex w-52 flex-col gap-1">
-      <span class="field-label">Agent</span>
+      <span class="field-label">Agent persona</span>
       <select
         data-testid="session-filter-agent"
         class="field"
         (change)="onSelect('agent', $event)"
       >
         <option value="" class="bg-surface" [selected]="filters().agent === ''">
-          All agents
+          All agent personas
         </option>
         @for (agent of agentOptions(); track agent.id) {
           <option
@@ -134,7 +134,7 @@
             class="border-b border-border bg-surface-muted text-[12px] font-medium text-fg-muted"
           >
             <th scope="col" class="px-3 py-2 font-medium">Run</th>
-            <th scope="col" class="px-3 py-2 font-medium">Agent</th>
+            <th scope="col" class="px-3 py-2 font-medium">Agent persona</th>
             <th scope="col" class="px-3 py-2 text-right font-medium">Turns</th>
             <th scope="col" class="px-3 py-2 font-medium">Last activity</th>
             <th scope="col" class="px-3 py-2 text-right font-medium">
