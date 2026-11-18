@@ -1103,7 +1103,7 @@ specs/capabilities/llm-settings/spec.md:66-66  R27 The model route SHALL be: `op
 specs/capabilities/llm-settings/spec.md:67-67  R28 The configured reasoning effort SHALL be sent with chat turns, the SQL
 specs/capabilities/llm-settings/spec.md:68-68  R29 Reasoning effort SHALL be filed under the provider option the target m
 specs/capabilities/llm-settings/spec.md:69-69  R30 For OpenAI-compatible gateway routes (`lenai`, and `custom` in the Ope
-specs/capabilities/llm-settings/spec.md:70-70  R31 Provider responses of 429, 500, 502 or 503 SHALL be retried up to 3 ti
+specs/capabilities/llm-settings/spec.md:70-70  R31 Provider responses of 429, 500, 502, 503, 504, 520 to 524 or 529 SHALL
 specs/capabilities/llm-settings/spec.md:71-73  R32 The visual-designer agent MAY use a different model from the configure
 specs/capabilities/llm-settings/spec.md:74-74  R36 The system SHALL know, for every model name, its effort levels: an ord
 specs/capabilities/llm-settings/spec.md:75-75  R37 The settings screen SHALL show a **Reasoning effort** select below the
