@@ -3541,11 +3541,18 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
         Promise.resolve({ datasets: ['World Cup Core'] }),
       ),
     });
+    // What the watchdog calls when its clock runs out.
+    const stall = jest.spyOn(
+      t.ctx().service as unknown as { stall: () => void },
+      'stall',
+    );
     const id = await t.launch();
     await t.ctx().service.live.whenEnded(id);
     // Less than the 30-minute wait, more than the no-progress limit.
     await jest.advanceTimersByTimeAsync(20 * t.MINUTE);
     expect((await t.ctx().repository.get(id))?.status).toBe('suspended');
+    // The clock was stopped when the run suspended, not merely ignored.
+    expect(stall).not.toHaveBeenCalled();
     const prepared = await t.ctx().service.prepareResume(id, {
       stepId: 'clarify',
       answer: 'Goals',

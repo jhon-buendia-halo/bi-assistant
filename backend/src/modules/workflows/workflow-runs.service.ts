@@ -1938,9 +1938,11 @@ export class WorkflowRunsService implements OnModuleInit {
   ): Promise<WorkflowRunDoc> {
     const { prepared, base, tracker } = held;
     held.suspension = suspension;
+    // Read the host before the run is held: a host that cannot be read
+    // fails the run, and a failed run must not stay among the waiting ones.
+    const view = await this.sessions.runHostView(hostId);
     const since = new Date();
     const expiresAt = this.waiting.add(base.id, held);
-    const view = await this.sessions.runHostView(hostId);
     const step = prepared.workflow.steps.find(
       (candidate) => candidate.id === suspension.stepId,
     );
