@@ -207,6 +207,8 @@
       @defer (on immediate) {
         <app-workflow-run-team
           [stories]="designer.agentStories()"
+          [thought]="reasoningSnippet()"
+          [showWork]="!business()"
           (openNode)="openStep($event)"
         />
       }
@@ -248,51 +250,31 @@
       }
 
       @if (liveAgentStep()) {
-        <!-- The running agent step, live: Thinking, its tool calls and the answer forming -->
+        <!-- The running agent step, live: the answer forming. Its thought and
+             steps show under its agent in the team; an agent step with no
+             persona shows them here (ui.md 4.4b). -->
         <div class="flex flex-col gap-2" data-testid="workflow-run-live">
           <!-- The Business view shows the answer forming, not the agent's work (R38) -->
-          @if (!business()) {
-            <div class="flex min-w-0 items-center gap-2">
-              <lucide-angular
-                [img]="Brain"
-                [size]="14"
-                class="shrink-0 text-fg-muted"
-              />
-              <span class="text-[13px] font-medium text-fg">Thinking</span>
-              @if (reasoningSnippet()) {
-                <span
-                  class="min-w-0 truncate rounded bg-surface-muted px-2 py-0.5 text-[12px] text-fg-muted"
-                  >{{ reasoningSnippet() }}</span
-                >
-              }
-            </div>
-            @for (call of designer.toolCalls(); track $index) {
-              <div
-                class="flex min-w-0 items-center gap-2 text-fg-muted"
-                data-testid="workflow-run-tool"
+          @if (!business() && !liveStepInTeam()) {
+            @if (reasoningSnippet()) {
+              <p
+                class="m-0 flex min-w-0 items-start gap-1.5 text-[12px] leading-snug text-fg-muted italic"
+                data-testid="workflow-run-thought"
               >
-                <lucide-angular [img]="Wrench" [size]="13" class="shrink-0" />
-                <span class="truncate font-mono text-[12px]">{{
-                  call.name
+                <lucide-angular
+                  [img]="Brain"
+                  [size]="12"
+                  class="mt-px shrink-0"
+                />
+                <span class="line-clamp-2 min-w-0">{{
+                  reasoningSnippet()
                 }}</span>
-                @if (call.error) {
-                  <span class="text-[12px] text-on-danger-soft">failed</span>
-                } @else if (call.rowCount !== undefined) {
-                  <span class="text-[12px]">{{ call.rowCount }} rows</span>
-                } @else if (!call.finished) {
-                  <lucide-angular
-                    [img]="Loader2"
-                    [size]="11"
-                    class="shrink-0 animate-spin"
-                  />
-                  @if (call.progress) {
-                    <span class="min-w-0 truncate text-[12px]">{{
-                      call.progress
-                    }}</span>
-                  }
-                }
-              </div>
+              </p>
             }
+            <app-agent-activity
+              [steps]="liveActivity()"
+              (openQuery)="openRunningStep()"
+            />
           }
           @if (designer.streamingText()) {
             <div
@@ -487,10 +469,7 @@
         >
           <!-- What it follows up on, then one labelled section per control,
                divided, as the run's input form (ui.md 4.4b) -->
-          <p
-            id="workflow-follow-up-hint"
-            class="m-0 text-[12px] text-fg-muted"
-          >
+          <p id="workflow-follow-up-hint" class="m-0 text-[12px] text-fg-muted">
             Follows up on this run
           </p>
           <div class="composer-fields">
@@ -536,7 +515,9 @@
                   (change)="onAskStepChange($event)"
                   class="field w-full min-w-0 truncate"
                 >
-                  <option value="" class="bg-surface">Whole user journey</option>
+                  <option value="" class="bg-surface">
+                    Whole user journey
+                  </option>
                   @for (step of designer.askableSteps(); track step.id) {
                     <option [value]="step.id" class="bg-surface">
                       {{ step.label }}

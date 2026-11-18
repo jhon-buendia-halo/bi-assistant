@@ -1,0 +1,101 @@
+@if (steps().length > 0) {
+  <div class="flex flex-col gap-0.5" data-testid="agent-activity">
+    @if (toggleText(); as text) {
+      <button
+        type="button"
+        class="flex w-fit items-center gap-1 rounded py-0.5 text-[12px] text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-focus"
+        data-testid="agent-activity-toggle"
+        [attr.aria-expanded]="expanded()"
+        (click)="toggle()"
+      >
+        <lucide-angular
+          [img]="expanded() ? ChevronDown : ChevronRight"
+          [size]="12"
+          class="shrink-0"
+        />
+        {{ text }}
+      </button>
+    }
+    @if (shown().length > 0) {
+      <ol
+        class="m-0 flex list-none flex-col gap-px border-l-2 border-border py-0 pr-0 pl-2.5"
+        aria-label="Steps"
+      >
+        @for (step of shown(); track $index) {
+          <li>
+            <ng-template #line>
+              @switch (step.state) {
+                @case ("current") {
+                  <lucide-angular
+                    [img]="Loader2"
+                    [size]="12"
+                    class="shrink-0 animate-spin text-primary"
+                  />
+                }
+                @case ("failed") {
+                  <lucide-angular
+                    [img]="X"
+                    [size]="12"
+                    class="shrink-0 text-on-danger-soft"
+                  />
+                }
+                @default {
+                  <lucide-angular
+                    [img]="Check"
+                    [size]="12"
+                    class="shrink-0 text-on-success-soft"
+                  />
+                }
+              }
+              <span
+                class="min-w-0 flex-1 truncate"
+                [class.text-fg-strong]="step.state === 'current'"
+                [class.text-on-danger-soft]="step.state === 'failed'"
+                >{{ step.label }}</span
+              >
+              @if (step.query) {
+                @if (step.rows) {
+                  <span
+                    class="shrink-0 text-fg-muted tabular-nums group-hover:hidden group-focus-visible:hidden"
+                    >{{ step.rows }}</span
+                  >
+                }
+                <span
+                  class="hidden shrink-0 text-[11px] text-primary group-hover:inline group-focus-visible:inline"
+                  >Open</span
+                >
+              } @else if (step.rows) {
+                <span class="shrink-0 text-fg-muted tabular-nums">{{
+                  step.rows
+                }}</span>
+              }
+            </ng-template>
+            @if (step.query) {
+              <button
+                type="button"
+                class="group -ml-1.5 flex w-[calc(100%+0.375rem)] min-w-0 items-center gap-2 rounded-md px-1.5 py-[3px] text-left text-[12px] text-fg hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
+                data-testid="workflow-run-tool"
+                [attr.data-state]="step.state"
+                [attr.data-tool]="step.tool"
+                [title]="title(step)"
+                (click)="openQuery.emit()"
+              >
+                <ng-container [ngTemplateOutlet]="line" />
+              </button>
+            } @else {
+              <div
+                class="-ml-1.5 flex min-w-0 items-center gap-2 px-1.5 py-[3px] text-[12px] text-fg"
+                data-testid="workflow-run-tool"
+                [attr.data-state]="step.state"
+                [attr.data-tool]="step.tool"
+                [title]="title(step)"
+              >
+                <ng-container [ngTemplateOutlet]="line" />
+              </div>
+            }
+          </li>
+        }
+      </ol>
+    }
+  </div>
+}

@@ -467,6 +467,42 @@ describe('VisualizationService.createFromAnswer (Build visual)', () => {
 
     expect(agent.generate).not.toHaveBeenCalled();
   });
+
+  it('follows an instruction (a follow-up that asks Ryan alone): the earlier question is the question, the follow-up the instruction, kept on v1', async () => {
+    const { service, agent } = build();
+    const session = emptySession();
+    // The follow-up's words are the transcript's last message.
+    session.messages = [
+      {
+        role: 'user',
+        content: 'As a line chart, please',
+        at: '2024-02-01T00:00:00.000Z',
+      },
+    ];
+
+    const { metadata } = await service.createFromAnswer(session, {
+      question: 'Claims per month?',
+      answer: 'March is the peak.',
+      at: AT,
+      data: [record],
+      instruction: 'As a line chart, please',
+    });
+
+    const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
+    const block = (tag: string) =>
+      prompt.slice(
+        prompt.indexOf(`<${tag}>`),
+        prompt.indexOf(`</${tag}>`) + tag.length + 3,
+      );
+    expect(block('question')).toContain('Claims per month?');
+    expect(block('question')).not.toContain('As a line chart');
+    expect(block('instruction')).toContain('As a line chart, please');
+    expect(metadata.versions?.[0]).toMatchObject({
+      version: 1,
+      sourceMessageAt: AT,
+      instruction: 'As a line chart, please',
+    });
+  });
 });
 
 describe('VisualizationService contextFor reasoning', () => {

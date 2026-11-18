@@ -72,7 +72,12 @@ import {
 } from '../sessions/sessions.service';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { nodeChatHostRunId } from './node-chat-context';
-import { askHostOf, askRefusal, type AskHost } from './ask-agent-context';
+import {
+  askHostOf,
+  askRefusal,
+  chartedRunOf,
+  type AskHost,
+} from './ask-agent-context';
 import type { AskableStepId } from '../../mastra/workflows/ask-agent.steps';
 import { HeldDraftRuns } from './held-draft-runs';
 import {
@@ -1824,7 +1829,14 @@ export class WorkflowRunsService implements OnModuleInit {
     if (asks) {
       const refused = askRefusal(workflowId, askStep, earlier);
       if (refused) throw new BadRequestException(refused);
-      ask = askHostOf(earlier, askStep as AskableStepId);
+      // Ryan charts the answer of the run that was not itself an ask of him.
+      ask = askHostOf(
+        earlier,
+        askStep as AskableStepId,
+        askStep === 'build-visual'
+          ? await chartedRunOf(earlier, (id) => this.repository.get(id))
+          : earlier,
+      );
     }
     const queries = explorableQueriesOf(
       earlier.answer.data ?? [],

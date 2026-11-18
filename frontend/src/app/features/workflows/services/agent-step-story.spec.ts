@@ -4,6 +4,8 @@ import {
   handoffLine,
   listOf,
   teamActivity,
+  thirdPerson,
+  upNextLine,
 } from './agent-step-story';
 
 function step(
@@ -117,6 +119,59 @@ describe('agent step stories (ui.md 4.4b, Agents at work)', () => {
       'Olivia passed question, plan and catalog to Michael',
     );
     expect(handoffLine(analyse, write)).toBeNull();
+    // The waiting agents, on one line.
+    expect(upNextLine(stories.values())).toBe('Jessica writes the answer');
+    // A stored running step's calls read as steps, none of them spinning.
+    expect(analyse.activity.map((a) => [a.label, a.state, a.rows])).toEqual([
+      ['Looked at the tables', 'done', null],
+      ['Ran a query', 'done', '5 rows'],
+      ['Ran a query', 'done', '1 row'],
+    ]);
+  });
+
+  it("reads the streamed calls of the running step as its steps, the agent's reason first", () => {
+    const stories = agentStepStories({
+      steps: STEPS,
+      running: true,
+      runSteps: [
+        PLANNED,
+        { id: 'analyse', title: 'Analyse', status: 'running' },
+      ],
+      liveToolCalls: [
+        { name: 'describe_entity', input: 'goals', finished: false },
+        {
+          name: 'run_readonly_sql',
+          rationale: 'Goals per team',
+          rowCount: 66,
+          finished: true,
+        },
+        { name: 'skill', input: 'ranking', finished: false },
+      ],
+    });
+    const analyse = stories.get('analyse')!;
+    expect(analyse.activity.map((a) => [a.label, a.state])).toEqual([
+      ['Read the columns of goals', 'done'],
+      ['Goals per team', 'done'],
+      ['Reading the ranking skill…', 'current'],
+    ]);
+    expect(analyse.doing).toBe('reading a skill');
+
+    // Its latest call ended: it is deciding what to do next.
+    const between = agentStepStories({
+      steps: STEPS,
+      running: true,
+      runSteps: [PLANNED, { id: 'analyse', title: 'Analyse', status: 'running' }],
+      liveToolCalls: [{ name: 'skill', input: 'ranking', finished: true }],
+    }).get('analyse')!;
+    expect(between.sentence).toBe("I'm working out the next step…");
+  });
+
+  it('says what a waiting agent will do, in the third person', () => {
+    expect(thirdPerson('Write answer')).toBe('writes the answer');
+    expect(thirdPerson('Build visual')).toBe('builds the visual');
+    expect(thirdPerson('Clarify')).toBe('clarifies');
+    expect(thirdPerson('Analyse')).toBe('analyses');
+    expect(thirdPerson('Fix SQL')).toBe('fixes the SQL');
   });
 
   it("says a done or skipped step's story in a few words on its line, a concern flagged", () => {
@@ -137,7 +192,11 @@ describe('agent step stories (ui.md 4.4b, Agents at work)', () => {
           id: 'analyse',
           title: 'Analyse',
           status: 'skipped',
-          story: { headline: 'Skipped: off.', brief: 'Off for this run', source: 'step' },
+          story: {
+            headline: 'Skipped: off.',
+            brief: 'Off for this run',
+            source: 'step',
+          },
         },
       ],
     });

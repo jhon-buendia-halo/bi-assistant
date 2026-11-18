@@ -752,6 +752,7 @@ describe('noteToolFrame (api.md 3.1 `tool`, `tool-result`)', () => {
         input: 'SELECT 1',
         rowCount: 1,
         durationMs: 0,
+        rationale: 'Count',
       },
       { tool: 'describe_entity' },
     ]);

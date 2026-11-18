@@ -1360,6 +1360,11 @@ flowchart LR
   - **A supervisor agent with subagents (`agents:` in Mastra 1.66):** flexible, but the flow would come from a prompt (against ADR-0034), with a supervisor call on top of every subagent call; not picked.
   - **Mastra's time travel (`run.timeTravel`) from the asked step:** needs snapshots kept after a run ends (ADR-0043 keeps them only while suspended) and runs every step after the target; rejected.
   - **The node chat path (agents.md 5.16) for every agent:** step agents would answer in their JSON format, and the reply would live in the step's chat, not in the Run panel; rejected.
+- **Amendment (2026-11-17): Build visual is askable.**
+  - Build visual (`build-visual`, Ryan, `visualization`) joins the askable steps, as a fifth step agent with one model call. Why: users want a different visual (another chart type, other measures) without running the whole workflow again; the Tailor form's free-text field covers edits to an existing visual, not a new one from the answer's rows.
+  - Ryan designs a new visual (v1) from the earlier answer's question, text and records, with the follow-up text as his instruction; no query runs. His answer is code-written (`Here's a new visual of the earlier answer: "<title>".`, or `I couldn't build a new visual: <reason>`), so it is not an agent turn.
+  - It is the one askable step whose earlier `skipped` status (Build a visual unticked) or `visual.skipped` does not refuse it: rows are what it needs, and with none the request is refused with `The earlier answer has no query rows to chart`.
+  - The Decision and Consequences above stand; the graph and contract hash of `answer-business-question` are still unchanged.
 
 ## Level 4 — Code
 

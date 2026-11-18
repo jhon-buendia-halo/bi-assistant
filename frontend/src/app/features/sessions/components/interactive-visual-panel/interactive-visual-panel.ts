@@ -81,6 +81,8 @@ export interface TailorOptions {
   chartType: TailorChartType;
   sort: TailorSort;
   topN: number | null;
+  /** Optional own-words request, added as the last sentence(s). */
+  freeText?: string;
 }
 
 const CHART_TYPE_PHRASES: Record<Exclude<TailorChartType, 'auto'>, string> = {
@@ -140,6 +142,8 @@ export function buildTailorInstruction(options: TailorOptions): string {
       `Show only the top ${topN} items and group the rest as "Other".`,
     );
   }
+  const freeText = options.freeText?.trim();
+  if (freeText) parts.push(freeText);
   return parts.join(' ');
 }
 
@@ -203,6 +207,7 @@ export class InteractiveVisualPanel {
   readonly tailorChartType = signal<TailorChartType>('auto');
   readonly tailorSort = signal<TailorSort>('none');
   readonly tailorTopN = signal<number | null>(null);
+  readonly tailorFreeText = signal('');
 
   private readonly runsApi = inject(WorkflowRunsApiService);
   private readonly tasks = inject(BackgroundTasksService);
@@ -250,6 +255,7 @@ export class InteractiveVisualPanel {
       chartType: this.tailorChartType(),
       sort: this.tailorSort(),
       topN: this.tailorTopN(),
+      freeText: this.tailorFreeText(),
     }),
   );
 
@@ -485,6 +491,17 @@ export class InteractiveVisualPanel {
     );
   }
 
+  setTailorFreeText(value: string): void {
+    this.tailorFreeText.set(value);
+  }
+
+  /** Cmd/Ctrl+Enter in the free-text field applies; plain Enter is a new line. */
+  onFreeTextKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey)) return;
+    event.preventDefault();
+    this.applyTailoring();
+  }
+
   applyTailoring(): void {
     const instruction = this.tailorInstruction();
     const visual = this.visualization();
@@ -499,6 +516,7 @@ export class InteractiveVisualPanel {
     this.tailorChartType.set('auto');
     this.tailorSort.set('none');
     this.tailorTopN.set(null);
+    this.tailorFreeText.set('');
     this.seenTailorFailure.set(this.tailorTask()?.id ?? null);
   }
 

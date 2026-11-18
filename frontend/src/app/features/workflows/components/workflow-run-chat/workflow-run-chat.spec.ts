@@ -778,13 +778,15 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       h.onText!('Brazil scored');
       fixture.detectChanges();
       const live = q('workflow-run-live')!;
-      expect(live.textContent).toContain('Thinking');
-      expect(live.textContent).toContain('Looking at the goals table');
-      expect(
-        Array.from(q('workflow-run-tool')!.querySelectorAll('span')).map((span) =>
-          span.textContent?.trim(),
-        ),
-      ).toEqual(['run_readonly_sql', '3 rows']);
+      // Its thought and its steps in plain words, no tool names and no empty heading.
+      expect(el.textContent).toContain('Looking at the goals table');
+      expect(el.textContent).not.toContain('Thinking');
+      const tool = q('workflow-run-tool')!;
+      expect(tool.getAttribute('data-tool')).toBe('run_readonly_sql');
+      expect(tool.getAttribute('data-state')).toBe('done');
+      expect(tool.textContent).toContain('Ran a query');
+      expect(tool.textContent).toContain('3 rows');
+      expect(tool.textContent).not.toContain('run_readonly_sql');
       expect(live.textContent).toContain('Brazil scored');
       expect(q('run-answer')).toBeNull();
 
@@ -925,6 +927,60 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
         );
         fixture.detectChanges();
         expect(text('workflow-run-context')).toContain('Asked Jessica');
+      });
+
+      it('offers Ryan when the earlier answer has query rows and sends askStep build-visual', () => {
+        const withVisual: WorkflowDetail = {
+          ...ASK,
+          steps: [...ASK.steps, agentStep('build-visual', 'Build visual', 'Ryan', 'Visual Designer')],
+        };
+        openAssistant(withVisual);
+        typeQuestion('Which team scored the most goals?');
+        pickDataset();
+        click('workflow-run');
+        const h = runs.last.handlers;
+        h.onRun!({ runId: 'run-1', workflowId: withVisual.id });
+        h.onDone!(
+          assistantRun({
+            steps: [...ranSteps, { id: 'build-visual', title: 'Build visual', status: 'skipped' }],
+            answer: {
+              role: 'assistant',
+              content: 'Brazil.',
+              at: 'x',
+              data: [
+                {
+                  tool: 'run_readonly_sql',
+                  columns: ['team'],
+                  rows: [{ team: 'Brazil' }],
+                  rowCount: 1,
+                },
+              ],
+            },
+          }),
+        );
+        fixture.detectChanges();
+        const picker = select()!;
+        expect(Array.from(picker.options).map((o) => o.value)).toEqual([
+          '',
+          'analyse',
+          'write-answer',
+          'build-visual',
+        ]);
+        picker.value = 'build-visual';
+        picker.dispatchEvent(new Event('change'));
+        fixture.detectChanges();
+        expect(text('workflow-follow-up-agent-hint')).toBe(
+          "Ryan designs a new visual from the earlier answer's rows, following what you type. No new queries run.",
+        );
+        const input = q('workflow-follow-up-input') as HTMLTextAreaElement;
+        input.value = 'A bar chart';
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        click('workflow-run-follow-up');
+        expect(runs.last.body.context).toEqual({
+          fromRunId: 'run-1',
+          askStep: 'build-visual',
+        });
       });
 
       it('has no picker for another workflow', () => {

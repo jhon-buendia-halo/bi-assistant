@@ -117,6 +117,7 @@ import {
   planOf,
 } from '../../mastra/workflows/answer-business-question.steps';
 import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
+import { askAgentWorkflow } from '../../mastra/workflows/ask-agent.workflow';
 import { DATA_READINESS_ASSESSMENT_STEPS } from '../../mastra/workflows/data-readiness-assessment.steps';
 import { dataReadinessAssessmentWorkflow } from '../../mastra/workflows/data-readiness-assessment.workflow';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
@@ -397,7 +398,9 @@ function build(options: BuildOptions = {}) {
                 inputData,
                 requestContext,
               )
-            : streamTurnWorkflow(key, inputData, requestContext),
+            : key === 'ask-agent'
+              ? streamStubWorkflow(askAgentWorkflow, inputData, requestContext)
+              : streamTurnWorkflow(key, inputData, requestContext),
     ),
     discardSuspendedWorkflowRuns: jest.fn().mockResolvedValue(0),
     ensureSessionWorkspace: jest.fn((id: string) =>
@@ -1240,6 +1243,92 @@ describe('a v2 run that builds a visual (agents.md 5.11, workflows R41)', () => 
     );
     expect(createFromAnswer).not.toHaveBeenCalled();
     expect(run.visualizations ?? []).toEqual([]);
+  });
+
+  it("asked alone (agents.md 5.21), Ryan designs a new visual from the earlier answer's rows, the follow-up as his instruction, and no query runs", async () => {
+    const createFromAnswer = jest
+      .fn()
+      .mockResolvedValue({ metadata: BUILT, bundle: {} });
+    const ctx = build({ visuals: { createFromAnswer } });
+    await ctx.sessions.onModuleInit();
+    const first = await runOf(ctx, V2_INPUT);
+    const earlierRecords = first.run.answer?.data ?? [];
+    expect(earlierRecords).toHaveLength(1);
+
+    const { run } = await runOf(
+      ctx,
+      { question: 'As a bar chart', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id, askStep: 'build-visual' } },
+    );
+
+    expect(run.status).toBe('success');
+    expect(
+      run.steps
+        .filter((step) => step.status !== 'skipped')
+        .map((step) => `${step.id}:${step.status}`),
+    ).toEqual(['build-visual:success']);
+    // One designer call, no new query or model step.
+    expect(createFromAnswer).toHaveBeenCalledTimes(1);
+    expect(ctx.calls['insights-analyst']).toHaveLength(1);
+    expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(1);
+    expect(ctx.mastra.writeAnswer).toHaveBeenCalledTimes(1);
+    const [, source] = createFromAnswer.mock.calls[0] as [
+      unknown,
+      {
+        question: string;
+        answer: string;
+        at: string;
+        data: unknown[];
+        instruction?: string;
+      },
+    ];
+    expect(source).toMatchObject({
+      question: 'Who won?',
+      answer: first.run.answer?.content,
+      instruction: 'As a bar chart',
+    });
+    expect(source.data).toEqual(earlierRecords);
+    // The code-written answer carries the earlier records once, with their
+    // evidence, at the time the visual names as its source.
+    expect(run.answer?.content).toBe(
+      `Here's a new visual of the earlier answer: "Wins per team".`,
+    );
+    expect(run.answer?.visual).toBeUndefined();
+    expect(run.answer?.data).toEqual(earlierRecords);
+    expect(run.answer?.evidence).toHaveLength(1);
+    expect(run.answer?.at).toBe(source.at);
+    expect(
+      run.steps.find((s) => s.id === 'build-visual')?.output,
+    ).toMatchObject({ visual: { visualId: 'v-1', title: 'Wins per team' } });
+    expect(run.events?.at(-1)?.content).toContain(
+      'Created interactive visual "Wins per team" (v1).',
+    );
+  });
+
+  it("asked alone, a design that fails is the answer's news and the step still ends done", async () => {
+    const createFromAnswer = jest
+      .fn()
+      .mockRejectedValue(new Error('The designer is down'));
+    const ctx = build({ visuals: { createFromAnswer } });
+    await ctx.sessions.onModuleInit();
+    const first = await runOf(ctx, V2_INPUT);
+    const { run } = await runOf(
+      ctx,
+      { question: 'As a bar chart', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id, askStep: 'build-visual' } },
+    );
+    expect(run.status).toBe('success');
+    expect(run.answer?.content).toContain(
+      "I couldn't build a new visual: The designer is down",
+    );
+    expect(
+      run.steps.find((s) => s.id === 'build-visual')?.output,
+    ).toMatchObject({
+      visual: {
+        error: expect.stringContaining('The designer is down') as unknown,
+      },
+    });
+    expect(run.events ?? []).toEqual([]);
   });
 });
 
