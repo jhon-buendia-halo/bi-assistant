@@ -23,6 +23,14 @@ import {
 } from '../agents/result-explorer.prompts';
 import { getDatasetToolServices } from '../tool-services';
 import {
+  asksAboutToday,
+  asksTimeRelative,
+  dataEnd,
+  isSnapshot,
+  readsNow,
+  sqlReadsTable,
+} from '../data-dates';
+import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
   answerSchema,
   planSchema,
@@ -591,6 +599,18 @@ export async function loadCatalog(datasets: readonly string[]): Promise<{
   columns: EntityColumns[];
 }> {
   const snapshots = await getDatasetToolServices().getDatasets([...datasets]);
+  // Where each dataset's data ends (*Data dates*, agents.md 5.11).
+  const ends = new Map(
+    snapshots.map((dataset) => [
+      dataset.name,
+      dataEnd(
+        dataset.tables.map((key) => ({
+          key,
+          columns: dataset.entities?.find((e) => e.key === key)?.columns ?? [],
+        })),
+      )?.date ?? null,
+    ]),
+  );
   const catalog: CatalogEntity[] = [];
   const columns: EntityColumns[] = [];
   let room = PLAN_COLUMNS_TOTAL;
@@ -604,6 +624,8 @@ export async function loadCatalog(datasets: readonly string[]): Promise<{
         datasourceId: dataset.datasourceId ?? null,
         datasourceKind: dataset.datasourceKind ?? null,
         columnCount: known ? known.length : null,
+        // The dataset's own end, the same for each of its entities.
+        dataEndsAt: ends.get(dataset.name) ?? null,
       });
       if (!known) continue;
       const listed = known
@@ -629,6 +651,7 @@ export async function loadCatalog(datasets: readonly string[]): Promise<{
 export function planCatalogBlock(
   catalog: readonly CatalogEntity[],
   columns: readonly EntityColumns[],
+  options: CatalogBlockOptions = {},
 ): string {
   const lines = columns.map((entry) => {
     const listed = entry.columns
@@ -638,23 +661,55 @@ export function planCatalogBlock(
     return `- ${entry.entity}: ${listed || '(none listed)'}${more}`;
   });
   return [
-    catalogBlock(catalog),
+    catalogBlock(catalog, options),
     ...(lines.length
       ? ['', 'Columns of each entity (name type):', ...lines]
       : ['', 'No columns are known for these entities.']),
   ].join('\n');
 }
 
-/** The catalog as the Plan and Analyse steps' system message (agents.md 5.11). */
-export function catalogBlock(catalog: readonly CatalogEntity[]): string {
+/** What the catalog block reads besides the catalog. */
+export interface CatalogBlockOptions {
+  /** The run's question: its time cue adds the data-dates line. */
+  question?: string;
+  /** Today (tests pass a fixed date). */
+  now?: Date;
+}
+
+/**
+ * The catalog as the Plan and Analyse steps' system message (agents.md
+ * 5.11). When the question asks for a figure that depends on the current
+ * date or recency (`asksTimeRelative`) and a dataset's data ends well
+ * before today (*Data dates*), one last line per such dataset says where it
+ * ends and what to measure from; any other request is as before.
+ */
+export function catalogBlock(
+  catalog: readonly CatalogEntity[],
+  options: CatalogBlockOptions = {},
+): string {
   if (!catalog.length) return 'Catalog loaded for this turn: no entities.';
+  const now = options.now ?? new Date();
+  const ended = new Map<string, string>();
+  if (options.question && asksTimeRelative(options.question)) {
+    for (const e of catalog) {
+      if (e.dataEndsAt && isSnapshot(e.dataEndsAt, now)) {
+        ended.set(e.dataset, e.dataEndsAt);
+      }
+    }
+  }
   return [
     `Catalog loaded for this turn: ${catalog.length} ${catalog.length === 1 ? 'entity' : 'entities'}.`,
     ...catalog.map(
       (e) =>
         `- ${e.entity} (dataset: ${e.dataset}; ${e.columnCount ?? '?'} columns)`,
     ),
+    ...[...ended].map(([dataset, date]) => snapshotCatalogLine(dataset, date)),
   ].join('\n');
+}
+
+/** The catalog's line for a dataset whose data ends well before today. */
+export function snapshotCatalogLine(dataset: string, date: string): string {
+  return `The ${dataset} data ends ${date}: a figure that depends on the current date (tenure, age, time since) is measured from that date, not from today, unless the question asks about today.`;
 }
 
 function strings(value: unknown): string[] {
@@ -946,6 +1001,7 @@ export const VALIDATION_CHECKS = {
   rowLimit: 'No result cut at its row limit',
   sample: 'No answer from a sample',
   measures: 'Measures covered (warning only)',
+  dataDate: "Measured from the data's date",
   retry: 'Retry completed (warning only)',
 } as const;
 
@@ -991,6 +1047,32 @@ function unresolvedSamples(queries: readonly AnalyseQuery[]): boolean[] {
 }
 
 /**
+ * Each successful query that measured against today on a table whose data
+ * ends well before it (*Data dates*), and that no later successful query on
+ * that table re-read without today.
+ */
+function unresolvedNow(
+  queries: readonly AnalyseQuery[],
+  snapshots: readonly string[],
+): boolean[] {
+  const tablesOf = (sql: string) =>
+    snapshots.filter((key) => sqlReadsTable(sql, key));
+  return queries.map((query, index) => {
+    if (query.error || !readsNow(query.sql)) return false;
+    const tables = tablesOf(query.sql);
+    if (!tables.length) return false;
+    return !queries
+      .slice(index + 1)
+      .some(
+        (later) =>
+          !later.error &&
+          !readsNow(later.sql) &&
+          tablesOf(later.sql).some((key) => tables.includes(key)),
+      );
+  });
+}
+
+/**
  * The Validate step (agents.md 5.11): code checks over one analysis
  * attempt's tool calls and queries. `ok` when at least one
  * `run_readonly_sql` call succeeded, every failed call was followed by a
@@ -1001,13 +1083,21 @@ function unresolvedSamples(queries: readonly AnalyseQuery[]): boolean[] {
  * plan's measures are
  * looked for (best effort: a word of each in some successful query's SQL,
  * rationale or columns) and reported as a warning that never fails the
- * attempt.
+ * attempt. When the catalog has a table whose data ends well before today
+ * (*Data dates*), one more check fails an attempt that measured against
+ * today on it (`CURRENT_DATE`, `NOW()`, …) unless the question asks about
+ * today; without such a table the findings are as before.
  */
-export function validateAttempt(input: {
-  plan: AnalysisPlan;
-  calls: readonly AnalyseCall[];
-  queries: readonly AnalyseQuery[];
-}): { ok: boolean; findings: ValidationFinding[] } {
+export function validateAttempt(
+  input: {
+    plan: AnalysisPlan;
+    calls: readonly AnalyseCall[];
+    queries: readonly AnalyseQuery[];
+    catalog?: readonly CatalogEntity[];
+    question?: string;
+  },
+  now: Date = new Date(),
+): { ok: boolean; findings: ValidationFinding[] } {
   const { plan, calls, queries } = input;
   const succeeded = queries.filter((query) => !query.error);
   const ranQuery: ValidationFinding = {
@@ -1075,10 +1165,68 @@ export function validateAttempt(input: {
         ? `Not found in any query: ${missing.join('; ')}.`
         : 'Every planned measure appears in a query.',
   };
+  const dataDate = dataDateFinding(input, now);
   return {
     ok:
-      ranQuery.passed && noToolError.passed && rowLimit.passed && sample.passed,
-    findings: [ranQuery, noToolError, rowLimit, sample, measures],
+      ranQuery.passed &&
+      noToolError.passed &&
+      rowLimit.passed &&
+      sample.passed &&
+      (dataDate?.passed ?? true),
+    findings: [
+      ranQuery,
+      noToolError,
+      rowLimit,
+      sample,
+      measures,
+      ...(dataDate ? [dataDate] : []),
+    ],
+  };
+}
+
+/**
+ * The *Measured from the data's date* check, or undefined when no table of
+ * the catalog ends well before today (the findings are then as before).
+ */
+function dataDateFinding(
+  input: {
+    queries: readonly AnalyseQuery[];
+    catalog?: readonly CatalogEntity[];
+    question?: string;
+  },
+  now: Date,
+): ValidationFinding | undefined {
+  const snapshots = (input.catalog ?? []).filter((e) =>
+    isSnapshot(e.dataEndsAt, now),
+  );
+  if (!snapshots.length) return undefined;
+  const check = VALIDATION_CHECKS.dataDate;
+  if (asksAboutToday(input.question ?? '')) {
+    return { check, passed: true, detail: 'The question asks about today.' };
+  }
+  const flags = unresolvedNow(
+    input.queries,
+    snapshots.map((e) => e.entity),
+  );
+  const flagged = input.queries.filter((_query, index) => flags[index]);
+  if (!flagged.length) {
+    return {
+      check,
+      passed: true,
+      detail: 'No query measured against today on data that ends before it.',
+    };
+  }
+  const ends = [
+    ...new Map(
+      snapshots
+        .filter((e) => flagged.some((q) => sqlReadsTable(q.sql, e.entity)))
+        .map((e) => [e.dataset, `the ${e.dataset} data ends ${e.dataEndsAt}`]),
+    ).values(),
+  ].join('; ');
+  return {
+    check,
+    passed: false,
+    detail: `${flagged.length} ${flagged.length === 1 ? 'query measured' : 'queries measured'} against today on data that ends well before it (${ends}): measure from the date the data ends, and say which date you used.`,
   };
 }
 
@@ -1119,6 +1267,15 @@ export function flaggedQueries(
     if (samples[index] && failed.has(VALIDATION_CHECKS.sample)) {
       return VALIDATION_CHECKS.sample;
     }
+    // Measured against today on a snapshot: the check names no table, so
+    // any successful query that read the current date carries it.
+    if (
+      failed.has(VALIDATION_CHECKS.dataDate) &&
+      !query.error &&
+      readsNow(query.sql)
+    ) {
+      return VALIDATION_CHECKS.dataDate;
+    }
     return undefined;
   });
 }
@@ -1157,6 +1314,9 @@ export function mergeAttempts(input: {
   plan: AnalysisPlan;
   first: CheckedAttempt;
   second: Pick<CheckedAttempt, 'calls' | 'queries'> & { retryError?: string };
+  /** The run's catalog and question, for the data-date check (*Data dates*). */
+  catalog?: readonly CatalogEntity[];
+  question?: string;
 }): MergedAttempts {
   const { plan, first, second } = input;
   const keepFirst = (extra: ValidationFinding[] = []): MergedAttempts => ({
@@ -1194,6 +1354,8 @@ export function mergeAttempts(input: {
   // is for Write answer only, so an earlier query never resolves a later one.
   const checked = validateAttempt({
     plan,
+    catalog: input.catalog,
+    question: input.question,
     calls: [...firstCalls, ...second.calls],
     queries: [
       ...first.queries.filter((_query, index) => keeps[index]),

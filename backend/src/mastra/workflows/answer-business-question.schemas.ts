@@ -86,6 +86,14 @@ export const catalogEntitySchema = z.object({
     .nullable()
     .describe('postgres, databricks, rest or file.'),
   columnCount: z.number().nullable().describe('Its column count, when known.'),
+  // Optional: a run stored or waiting before it existed has none.
+  dataEndsAt: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+    ),
 });
 
 /** One entity's columns, as Load catalog hands them to Plan. */

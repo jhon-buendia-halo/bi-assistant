@@ -8,8 +8,15 @@ import { ONTOLOGY_STORE } from '../../infrastructure/database/doc-store';
 import type { DocStore } from '../../infrastructure/database/doc-store';
 import type { OntologyItem } from '../ontology/entities/ontology-item.entity';
 import { DatasourcesService } from '../datasources/datasources.service';
-import type { ForeignKeyEdge } from '../datasources/connectors/connector';
-import type { QueryResult } from '../datasources/entities/datasource.entity';
+import {
+  mapWithConcurrency,
+  type ForeignKeyEdge,
+} from '../datasources/connectors/connector';
+import type {
+  DatasourceKind,
+  QueryResult,
+} from '../datasources/entities/datasource.entity';
+import { dateColumns, dateRangeSql, rangesOf } from './date-ranges';
 import { applyReferences, inferRelationships } from './relationships';
 import {
   DatasetsRepository,
@@ -216,7 +223,61 @@ export class DatasetsService {
     const sampled = entities.map(
       (entity) => enriched.get(entity?.key) ?? entity,
     );
-    return this.withJoins(datasourceId, tables, sampled);
+    const dated = await this.withDateRanges(datasourceId, included, sampled);
+    return this.withJoins(datasourceId, tables, dated);
+  }
+
+  /**
+   * Add `range` to each date column of the included tables: one read-only
+   * `MIN`/`MAX` statement per table over the whole table (agents.md 5.11
+   * *Data dates*). Best effort per table: a failure leaves that table's
+   * columns as they were and never fails the save. A REST datasource gets
+   * none.
+   */
+  private async withDateRanges(
+    datasourceId: string,
+    included: ReadonlySet<string>,
+    entities: DatasetEntitySnapshot[],
+  ): Promise<DatasetEntitySnapshot[]> {
+    let kind: DatasourceKind;
+    try {
+      kind = (await this.datasources.get(datasourceId)).kind;
+    } catch {
+      return entities;
+    }
+    const ranged = new Map<string, DatasetEntitySnapshot>();
+    const targets = entities.filter(
+      (entity) => entity?.key && included.has(entity.key),
+    );
+    await mapWithConcurrency(
+      targets,
+      ENRICHMENT_CONCURRENCY,
+      async (entity) => {
+        const columns = dateColumns(entity.columns ?? []);
+        const sql = dateRangeSql(kind, entity.key, columns);
+        if (!sql) return;
+        try {
+          const result = await this.datasources.runReadOnlySql(
+            datasourceId,
+            sql,
+            1,
+          );
+          const ranges = rangesOf(columns, result.rows[0]);
+          if (!ranges.size) return;
+          ranged.set(entity.key, {
+            ...entity,
+            columns: entity.columns.map((column) => {
+              const range = ranges.get(column.name);
+              return range ? { ...column, range } : column;
+            }),
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.warn(`Date ranges skipped for ${entity.key}: ${message}`);
+        }
+      },
+    );
+    return entities.map((entity) => ranged.get(entity?.key) ?? entity);
   }
 
   /**

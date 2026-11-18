@@ -283,7 +283,9 @@ const planStep = createStep({
         catalog: inputData.catalog,
         // Plan sees each entity's columns, so its measures and its
         // clarifying options rest on what the data can compute.
-        catalogBlock: planCatalogBlock(inputData.catalog, inputData.columns),
+        catalogBlock: planCatalogBlock(inputData.catalog, inputData.columns, {
+          question: inputData.question,
+        }),
         ...(answered ? { clarification: answered } : {}),
         imageNotes: inputData.imageNotes,
       });
@@ -377,8 +379,10 @@ const analyseStep = createStep({
         // need not describe the entities again. With none known, the
         // catalog block alone, as before.
         catalogBlock: inputData.columns.length
-          ? planCatalogBlock(inputData.catalog, inputData.columns)
-          : catalogBlock(inputData.catalog),
+          ? planCatalogBlock(inputData.catalog, inputData.columns, {
+              question: inputData.question,
+            })
+          : catalogBlock(inputData.catalog, { question: inputData.question }),
         plan: inputData.plan,
         attempt,
         planBlock: analysePlanBlock(
@@ -436,6 +440,8 @@ const validateStep = createStep({
             plan: inputData.plan,
             first: inputData.earlier,
             second: inputData,
+            catalog: inputData.catalog,
+            question: inputData.question,
           })
         : {
             ...validateAttempt(inputData),

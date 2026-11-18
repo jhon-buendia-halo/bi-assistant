@@ -356,6 +356,8 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
             datasourceId: 'ds-pg',
             datasourceKind: 'postgres',
             columnCount: 3,
+            // No dated column: no date the data ends on.
+            dataEndsAt: null,
           },
           {
             entity: 'n.public.notes',
@@ -363,6 +365,7 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
             datasourceId: null,
             datasourceKind: null,
             columnCount: null,
+            dataEndsAt: null,
           },
         ],
         // Plan's columns: the entities whose columns are known.
@@ -2044,11 +2047,15 @@ describe('the carry-forward retry of the analysis (agents.md 5.11; workflows R27
       line.startsWith('Earlier work in the request:'),
     );
     expect(start).toBeGreaterThan(0);
-    // Last: the rules before it read as they always did.
+    // Late: the rules before it read as they always did; only the data-dates
+    // rule (agents.md 4.1 *Data dates*) follows it.
+    const dates = rules.findIndex((line) => line.startsWith('Data dates:'));
+    expect(dates).toBeGreaterThan(start);
     const rule = rules
-      .slice(start + 1)
+      .slice(start + 1, dates)
       .join(' ')
-      .replace(/\s+/g, ' ');
+      .replace(/\s+/g, ' ')
+      .trim();
     expect(rule).toBe(
       '- When the request lists queries an earlier attempt of this analysis already ran, or the columns of each entity, do not list the entities again ([[tool:list_entities]]) and do not describe an entity whose columns are all listed ([[tool:describe_entity]]): run only the queries the failed checks need, or on a first attempt the ones the plan needs. An entity marked "none listed" or "more not listed" has columns the request leaves out: describe it when the analysis needs one of them.',
     );
@@ -2109,5 +2116,182 @@ describe('the carry-forward retry of the analysis (agents.md 5.11; workflows R27
       '- wc.unlisted: (none listed) (+40 more not listed)',
     );
     expect(rule).toContain('"none listed" or "more not listed"');
+  });
+});
+
+describe('data dates in the analysis (agents.md 4.1 *Data dates*, 5.11 Validate)', () => {
+  const NOW = new Date('2026-11-17T12:00:00Z');
+  const CENSUS = 'file.demo_census_prod.demographics_data';
+  const PLAN: AnalysisPlan = {
+    question: 'How many employees fall in each tenure band?',
+    measures: ['employees per tenure band'],
+    entities: [CENSUS],
+    scope: 'All employees.',
+    assumptions: [],
+    needsClarification: false,
+    clarification: null,
+  };
+  const catalog = (dataEndsAt: string | null) => [
+    {
+      entity: CENSUS,
+      dataset: 'Census',
+      datasourceId: 'ds-1',
+      datasourceKind: 'file',
+      columnCount: 97,
+      dataEndsAt,
+    },
+  ];
+  const query = (sql: string): AnalyseQuery => ({
+    sql,
+    rows: [{ band: '3-5', n: 484 }],
+    rowCount: 6,
+    truncated: false,
+  });
+  const TODAY = query(
+    `SELECT band, COUNT(*) n FROM ${CENSUS} WHERE date_diff('day', "Date of Hire", CURRENT_DATE) > 0 GROUP BY band`,
+  );
+  const AS_OF = query(
+    `SELECT band, COUNT(*) n FROM ${CENSUS} WHERE date_diff('day', "Date of Hire", DATE '2024-01-01') > 0 GROUP BY band`,
+  );
+  const calls = [{ tool: 'run_readonly_sql', rowCount: 6, failed: false }];
+  const check = VALIDATION_CHECKS.dataDate;
+
+  it('loads the date the data ends from the dated columns', async () => {
+    getDatasets.mockResolvedValueOnce([
+      {
+        name: 'Census',
+        datasourceId: 'ds-1',
+        datasourceKind: 'file',
+        tables: [CENSUS],
+        entities: [
+          {
+            key: CENSUS,
+            columns: [
+              {
+                name: 'Date of Hire',
+                type: 'DATE',
+                range: { min: '2004-01-01', max: '2023-07-02' },
+              },
+              { name: 'Age', type: 'DOUBLE' },
+            ],
+          },
+        ],
+      },
+    ]);
+    const { catalog: loaded } = await loadCatalog(['Census']);
+    expect(loaded[0].dataEndsAt).toBe('2023-07-02');
+  });
+
+  it('says in the catalog where the data ends when the question has a time cue, and is as before otherwise', () => {
+    const question = 'How many employees fall in each tenure band?';
+    const block = catalogBlock(catalog('2023-07-02'), { question, now: NOW });
+    expect(block).toBe(
+      [
+        'Catalog loaded for this turn: 1 entity.',
+        `- ${CENSUS} (dataset: Census; 97 columns)`,
+        'The Census data ends 2023-07-02: a figure that depends on the current date (tenure, age, time since) is measured from that date, not from today, unless the question asks about today.',
+      ].join('\n'),
+    );
+    const plain = `Catalog loaded for this turn: 1 entity.\n- ${CENSUS} (dataset: Census; 97 columns)`;
+    // Current data, a question with no time cue, or no question: as before.
+    expect(catalogBlock(catalog('2026-11-10'), { question, now: NOW })).toBe(
+      plain,
+    );
+    expect(
+      catalogBlock(catalog('2023-07-02'), {
+        question: 'Which plan is the most popular?',
+        now: NOW,
+      }),
+    ).toBe(plain);
+    expect(catalogBlock(catalog('2023-07-02'), { now: NOW })).toBe(plain);
+  });
+
+  it('fails an attempt that measured against today on data that ends well before it', () => {
+    const checked = validateAttempt(
+      {
+        plan: PLAN,
+        calls,
+        queries: [TODAY],
+        catalog: catalog('2023-07-02'),
+        question: PLAN.question,
+      },
+      NOW,
+    );
+    expect(checked.ok).toBe(false);
+    expect(checked.findings.find((f) => f.check === check)).toEqual({
+      check,
+      passed: false,
+      detail:
+        '1 query measured against today on data that ends well before it (the Census data ends 2023-07-02): measure from the date the data ends, and say which date you used.',
+    });
+    expect(flaggedQueries([TODAY], checked.findings)).toEqual([check]);
+  });
+
+  it('passes when the data date is used, a later query re-read it, or the question asks about today', () => {
+    const base = { plan: PLAN, calls, catalog: catalog('2023-07-02') };
+    expect(
+      validateAttempt(
+        { ...base, queries: [AS_OF], question: PLAN.question },
+        NOW,
+      ).ok,
+    ).toBe(true);
+    expect(
+      validateAttempt(
+        { ...base, queries: [TODAY, AS_OF], question: PLAN.question },
+        NOW,
+      ).ok,
+    ).toBe(true);
+    const today = validateAttempt(
+      {
+        ...base,
+        queries: [TODAY],
+        question: 'How many employees have under 1 year of tenure as of today?',
+      },
+      NOW,
+    );
+    expect(today.ok).toBe(true);
+    expect(today.findings.find((f) => f.check === check)?.detail).toBe(
+      'The question asks about today.',
+    );
+  });
+
+  it('adds no finding over current data or without a catalog, so other runs read as before', () => {
+    for (const input of [
+      {
+        plan: PLAN,
+        calls,
+        queries: [TODAY],
+        catalog: catalog('2026-11-10'),
+        question: PLAN.question,
+      },
+      { plan: PLAN, calls, queries: [TODAY] },
+    ]) {
+      const checked = validateAttempt(input, NOW);
+      expect(checked.ok).toBe(true);
+      expect(checked.findings.map((f) => f.check)).not.toContain(check);
+      expect(checked.findings).toHaveLength(5);
+    }
+  });
+
+  it('drops the query measured against today when a retry measures from the data date', () => {
+    const first = validateAttempt(
+      {
+        plan: PLAN,
+        calls,
+        queries: [TODAY],
+        catalog: catalog('2023-07-02'),
+        question: PLAN.question,
+      },
+      NOW,
+    );
+    const merged = mergeAttempts({
+      plan: PLAN,
+      first: { calls, queries: [TODAY], findings: first.findings },
+      second: { calls, queries: [AS_OF] },
+      catalog: catalog('2023-07-02'),
+      question: PLAN.question,
+    });
+    expect(merged.ok).toBe(true);
+    expect(merged.queries).toEqual([AS_OF]);
   });
 });

@@ -40,7 +40,9 @@ Reply with one JSON object and nothing else:
 
 Never answer the question and never state a figure: the analysis step runs the queries.
 
-A catalog entity whose name suggests a measure (a view such as customer_ltv or product_revenue) does not define what "best", "top", "most valuable" or "biggest" means: when the question names no measure, set needsClarification to true and offer that measure among the options.`;
+A catalog entity whose name suggests a measure (a view such as customer_ltv or product_revenue) does not define what "best", "top", "most valuable" or "biggest" means: when the question names no measure, set needsClarification to true and offer that measure among the options.
+
+When the catalog says an entity's data ends on a date ("data ends …") and a measure depends on the current date (tenure, age, time since), plan it as of that date and list the date under assumptions; it is no reason to clarify.`;
 
 /** The Write answer step's instructions (agents.md Appendix F). */
 export const WRITE_ANSWER_INSTRUCTIONS = `${WRITE_ANSWER_FIRST_LINE}
