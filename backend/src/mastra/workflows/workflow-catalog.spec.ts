@@ -178,6 +178,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         required: false,
         default: true,
       },
+      {
+        name: 'approveSteps',
+        label: "Approve each step: every agent's work waits for your OK",
+        type: 'boolean',
+        required: false,
+        default: true,
+      },
     ]);
   });
 
@@ -261,6 +268,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         images: ['read-images'],
         datasets: ['receive-question'],
         buildVisual: [],
+        approveSteps: [],
       });
       // Resolve dataset starts Zoe's reading of the images (agents.md 5.13).
       expect(usedBy('data-readiness-assessment')).toEqual({

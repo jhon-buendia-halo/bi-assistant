@@ -264,7 +264,12 @@ describe('Streamed runs of agent workflows (API)', () => {
   it('streams a v2 run: run, its steps each running then done (the analysis twice), the answer, then done with the run', async () => {
     const question = 'How many matches were played?';
     const res = await runStream('answer-business-question', {
-      input: { question, datasets: ['World Cup Core'], buildVisual: false },
+      input: {
+        question,
+        datasets: ['World Cup Core'],
+        buildVisual: false,
+        approveSteps: false,
+      },
     });
     expect(res.status).toBe(200);
     const types = res.frames.map((frame) => frame.type);
@@ -328,7 +333,12 @@ describe('Streamed runs of agent workflows (API)', () => {
   it('each step frame and the stored run carry what the step received, its output and its times', async () => {
     const question = 'Who won the 2002 World Cup?';
     const res = await runStream('answer-business-question', {
-      input: { question, datasets: ['World Cup Core'], buildVisual: false },
+      input: {
+        question,
+        datasets: ['World Cup Core'],
+        buildVisual: false,
+        approveSteps: false,
+      },
     });
     const steps = res.frames.filter(
       (frame) => frame.type === 'step' && frame.status !== 'skipped',
@@ -406,6 +416,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           question: 'Who won in 1998?',
           datasets: ['World Cup Core'],
           buildVisual: false,
+          approveSteps: false,
         },
       })
       .expect(200);
@@ -430,6 +441,7 @@ describe('Streamed runs of agent workflows (API)', () => {
             question: 'Who won in 1998?',
             datasets: ['World Cup Core'],
             buildVisual: false,
+            approveSteps: false,
           },
         })
         .expect(200)
@@ -471,6 +483,7 @@ describe('Streamed runs of agent workflows (API)', () => {
             question: 'Who won in 2002?',
             datasets: ['World Cup Core'],
             buildVisual: false,
+            approveSteps: false,
           },
         })
         .expect(200)
@@ -516,6 +529,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       question,
       datasets: ['World Cup Core'],
       buildVisual: false,
+      approveSteps: false,
     };
     const run = await recorded(() =>
       runStream('answer-business-question', { input }),
@@ -540,6 +554,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         question: 'Who hosted in 2002?',
         datasets: ['World Cup Core'],
         buildVisual: false,
+        approveSteps: false,
       },
     });
     const runId = first.frames[0].runId!;
@@ -549,6 +564,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           question: 'And in 2006?',
           datasets: ['World Cup Core'],
           buildVisual: false,
+          approveSteps: false,
         },
         context: { fromRunId: runId },
       }),
@@ -602,6 +618,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           question: 'Who hosted in 2010?',
           datasets: ['World Cup Core'],
           buildVisual: false,
+          approveSteps: false,
         },
       });
       const firstId = first.frames[0].runId!;
@@ -623,6 +640,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           question: 'And in 2014?',
           datasets: ['World Cup Core'],
           buildVisual: false,
+          approveSteps: false,
         },
         context: { fromRunId: firstId },
       });
@@ -682,7 +700,12 @@ describe('Streamed runs of agent workflows (API)', () => {
     const question = 'How many goals were scored in total?';
     const sent = await recorded(() =>
       runStream('answer-business-question', {
-        input: { question, datasets: ['Analyst Goals'], buildVisual: false },
+        input: {
+          question,
+          datasets: ['Analyst Goals'],
+          buildVisual: false,
+          approveSteps: false,
+        },
       }),
     );
     const turn = sent.find(isAnalyseRequest)!;
@@ -774,6 +797,60 @@ describe('Streamed runs of agent workflows (API)', () => {
       };
     };
 
+    it('an interactive run (approveSteps) waits for Approve after Plan and after Analyse, then finishes the same run with an answer', async () => {
+      useV2Steps(stub, () => ({ text: STUB_ANSWER }));
+      const first = await runStream('answer-business-question', {
+        input: {
+          question: 'How many matches were played?',
+          datasets: ['World Cup Core'],
+          approveSteps: true,
+          buildVisual: false,
+        },
+      });
+      expect(first.status).toBe(200);
+      const runId = first.frames[0].runId!;
+      const atPlan = first.frames.find((f) => f.type === 'input-required');
+      expect(atPlan).toMatchObject({
+        stepId: 'plan',
+        options: ['Approve'],
+        review: expect.stringContaining('**Measures**') as unknown,
+      });
+      expect(first.frames.at(-1)!.run).toMatchObject({
+        id: runId,
+        status: 'suspended',
+      });
+
+      const second = await resumeStream(runId, {
+        stepId: 'plan',
+        answer: 'Approve',
+      });
+      expect(second.status).toBe(200);
+      const atAnalyse = second.frames.find((f) => f.type === 'input-required');
+      expect(atAnalyse).toMatchObject({
+        stepId: 'analyse',
+        options: ['Approve'],
+        review: expect.stringMatching(/^\*\*Queries run:\*\*/) as unknown,
+      });
+
+      // The stub's analysis runs no query, so the check fails and Michael
+      // retries; each attempt waits for Approve again. Approve until done.
+      let last = second;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (!last.frames.some((f) => f.type === 'input-required')) break;
+        last = await resumeStream(runId, {
+          stepId: 'analyse',
+          answer: 'Approve',
+        });
+        expect(last.status).toBe(200);
+      }
+      expect(last.frames.some((f) => f.type === 'input-required')).toBe(false);
+      expect(last.frames.at(-1)!.run).toMatchObject({
+        id: runId,
+        status: 'success',
+        answer: { role: 'assistant', content: STUB_ANSWER },
+      });
+    });
+
     it('a plan that needs clarification suspends the run at Clarify; 138 continues the same run id with the answer to success', async () => {
       const DOMINANT = 'Which team was the most dominant?';
       useV2Steps(stub, () => ({ text: STUB_ANSWER }), {
@@ -798,6 +875,7 @@ describe('Streamed runs of agent workflows (API)', () => {
             question: DOMINANT,
             datasets: ['World Cup Core'],
             buildVisual: false,
+            approveSteps: false,
           },
         });
         expect(first.status).toBe(200);
@@ -966,6 +1044,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           question: ASKED,
           datasets: ['World Cup Core'],
           buildVisual: false,
+          approveSteps: false,
         },
       });
       expect(first.status).toBe(200);
@@ -1062,6 +1141,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           question: 'How many matches?',
           datasets: ['World Cup Core'],
           buildVisual: false,
+          approveSteps: false,
         },
       });
       const finishedId = finished.frames[0].runId!;
@@ -1086,6 +1166,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           question: 'Which?',
           datasets: ['World Cup Core'],
           buildVisual: false,
+          approveSteps: false,
         },
       });
       const waitingId = waiting.frames[0].runId!;
@@ -1124,6 +1205,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           question: 'How many matches in all?',
           datasets: ['World Cup Core'],
           buildVisual: false,
+          approveSteps: false,
         },
       });
       const text = res.frames
@@ -1167,6 +1249,7 @@ describe('Streamed runs of agent workflows (API)', () => {
             question: 'Hold this one',
             datasets: ['World Cup Core'],
             buildVisual: false,
+            approveSteps: false,
           },
         }),
         signal: controller.signal,
@@ -1224,6 +1307,7 @@ describe('Streamed runs of agent workflows (API)', () => {
             question: 'Next',
             datasets: ['World Cup Core'],
             buildVisual: false,
+            approveSteps: false,
           },
           context: { fromRunId: runId },
         });
@@ -1245,6 +1329,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       question: 'Hi',
       datasets: ['World Cup Core'],
       buildVisual: false,
+      approveSteps: false,
     };
     it.each([
       [

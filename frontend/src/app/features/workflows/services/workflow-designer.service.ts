@@ -1353,6 +1353,7 @@ export class WorkflowDesigner {
           question: event.question,
           options: event.options,
           expiresAt: event.expiresAt,
+          ...(event.review !== undefined ? { review: event.review } : {}),
         });
       },
       onReasoning: (delta) => {

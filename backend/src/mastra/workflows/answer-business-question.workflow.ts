@@ -47,6 +47,14 @@ import {
   readImagesStep,
 } from './read-images.workflow';
 import { engineInputSchema, withContract } from './workflow-contract';
+import {
+  APPROVE_OPTION,
+  interactiveStep,
+  isApproval,
+  reviewOf,
+  reviewQuestion,
+} from './answer-business-question.review';
+import { analysisReview, planReview } from './answer-business-question.prompts';
 
 // The turn of Insights Analyst as a workflow defined in code
 // (ADR-0034; agents.md 5.11), on Mastra's control flow
@@ -201,17 +209,58 @@ const interpretFollowUpStep = createStep({
   description: STEP['interpret-follow-up'].title,
   inputSchema: engineInputSchema(SCHEMAS['interpret-follow-up'].input),
   outputSchema: SCHEMAS['interpret-follow-up'].output,
+  suspendSchema: SCHEMAS['interpret-follow-up'].suspend,
+  resumeSchema: SCHEMAS['interpret-follow-up'].resume,
   execute: withContract(
     STEP['interpret-follow-up'].title,
     SCHEMAS['interpret-follow-up'],
     async (params: StepParams<(typeof SCHEMAS)['interpret-follow-up']>) => {
       const { inputData } = params;
-      const { followUp, stopped } = await interpretFollowUp(
-        inputData.question,
-        optionalRuntimeOf(params),
+      const runtime = optionalRuntimeOf(params);
+      // Nathan was called on this try: only then is there an outcome of his
+      // to approve (a first run makes no model call).
+      let called = false;
+      const ended = await interactiveStep(
+        params as never,
+        runtime?.interactive === true,
+        {
+          run: async (interactive) => {
+            const read = await interpretFollowUp(inputData.question, runtime, {
+              ...interactive,
+              track: runtime?.interactive === true,
+            });
+            called = read.called === true;
+            // A stop takes neither branch: nothing after this step runs.
+            return {
+              output: {
+                ...inputData,
+                followUp: read.followUp,
+                ...(read.stopped ? { stopped: read.stopped } : {}),
+              },
+              reply: read.reply ?? '',
+              stopped: read.stopped,
+              ...(read.clarification
+                ? { clarification: read.clarification }
+                : {}),
+            };
+          },
+          // His "a new question" goes on to Olivia; a page of an earlier
+          // result goes to code only, so it needs no approval.
+          gate: (output) =>
+            called && !output.followUp
+              ? {
+                  question: reviewQuestion(
+                    'Nathan',
+                    'reading of your follow-up',
+                    'Olivia',
+                  ),
+                  review:
+                    'Nathan read your words as a new question, not as another page, filter or order of an earlier result. Olivia will plan it.',
+                }
+              : undefined,
+        },
       );
-      // A stop takes neither branch: nothing after this step runs.
-      return { ...inputData, followUp, ...(stopped ? { stopped } : {}) };
+      return ended.type === 'suspended' ? (ended.value as never) : ended.output;
     },
   ),
 });
@@ -272,34 +321,61 @@ const planStep = createStep({
   description: STEP.plan.title,
   inputSchema: engineInputSchema(SCHEMAS.plan.input),
   outputSchema: SCHEMAS.plan.output,
+  suspendSchema: SCHEMAS.plan.suspend,
+  resumeSchema: SCHEMAS.plan.resume,
   execute: withContract(
     STEP.plan.title,
     SCHEMAS.plan,
     async (params: StepParams<(typeof SCHEMAS)['plan']>) => {
       const { inputData } = params;
       const answered = inputData.clarification;
-      const { plan, stopped } = await runtimeOf(params, STEP.plan.title).plan({
-        question: inputData.question,
-        catalog: inputData.catalog,
-        // Plan sees each entity's columns, so its measures and its
-        // clarifying options rest on what the data can compute.
-        catalogBlock: planCatalogBlock(inputData.catalog, inputData.columns, {
-          question: inputData.question,
-        }),
-        ...(answered ? { clarification: answered } : {}),
-        imageNotes: inputData.imageNotes,
-      });
-      const output = {
-        question: inputData.question,
-        catalog: inputData.catalog,
-        // Analyse lists the columns too (agents.md 5.11).
-        columns: inputData.columns,
-        // After an answer, Plan never asks again.
-        plan: planAfterAnswer(plan, answered),
-        imageNotes: inputData.imageNotes,
-      };
+      const runtime = runtimeOf(params, STEP.plan.title);
+      // Olivia asks through Clarify, never on her own: her plan alone waits
+      // on the approval gate in an interactive run (workflows R44).
+      const ended = await interactiveStep(
+        params as never,
+        runtime.interactive === true,
+        {
+          run: async ({ revision }) => {
+            const { plan, stopped } = await runtime.plan({
+              question: inputData.question,
+              catalog: inputData.catalog,
+              // Plan sees each entity's columns, so its measures and its
+              // clarifying options rest on what the data can compute.
+              catalogBlock: planCatalogBlock(
+                inputData.catalog,
+                inputData.columns,
+                { question: inputData.question },
+              ),
+              ...(answered ? { clarification: answered } : {}),
+              ...(revision ? { revision } : {}),
+              imageNotes: inputData.imageNotes,
+            });
+            const output = {
+              question: inputData.question,
+              catalog: inputData.catalog,
+              // Analyse lists the columns too (agents.md 5.11).
+              columns: inputData.columns,
+              // After an answer, Plan never asks again.
+              plan: planAfterAnswer(plan, answered),
+              imageNotes: inputData.imageNotes,
+              ...(stopped ? { stopped: true } : {}),
+            };
+            return { output, reply: JSON.stringify(output.plan), stopped };
+          },
+          // A plan that asks goes to Clarify first; a clear one to Michael.
+          gate: (output) =>
+            output.plan.needsClarification
+              ? undefined
+              : {
+                  question: reviewQuestion('Olivia', 'plan', 'Michael'),
+                  review: planReview(output.plan),
+                },
+        },
+      );
+      if (ended.type === 'suspended') return ended.value as never;
       // A stopped turn ends here: nothing after Plan runs.
-      return stopped ? params.bail({ ...output, stopped: true }) : output;
+      return ended.output.stopped ? params.bail(ended.output) : ended.output;
     },
   ),
 });
@@ -350,12 +426,21 @@ const analyseStep = createStep({
       const { inputData } = params;
       const previous = inputData.attempt ?? 0;
       const attempt = previous + 1;
-      // Resumed after the agent's clarifying question: it goes on with the
-      // user's answer, in the same attempt.
+      const runtime = runtimeOf(params, STEP.analyse.title);
+      const interactive = runtime.interactive === true;
+      const answer = params.resumeData?.answer?.trim();
+      // Resumed on the approval gate (workflows R44): approved, the held
+      // outcome goes on to Validate with no new turn.
+      const pending = interactive ? reviewOf(params.suspendData) : undefined;
+      if (pending && answer && isApproval(answer)) {
+        return pending.outcome as never;
+      }
+      // Resumed after the agent's clarifying question, or with the user's
+      // changes on its approval gate: it goes on with the user's words, in
+      // the same attempt.
       const asked = params.resumeData
         ? clarifyingQuestionOf(params.suspendData)
         : undefined;
-      const answer = params.resumeData?.answer?.trim();
       // A retry carries the earlier attempt forward (Validate's output): it
       // is shown its queries, and Validate merges them with its own.
       const earlier =
@@ -369,10 +454,7 @@ const analyseStep = createStep({
       const earlierBlock = earlier
         ? earlierQueriesBlock(earlier.queries, earlier.findings)
         : '';
-      const { clarification, ...attemptResult } = await runtimeOf(
-        params,
-        STEP.analyse.title,
-      ).analyse({
+      const { clarification, ...attemptResult } = await runtime.analyse({
         question: inputData.question,
         catalog: inputData.catalog,
         // The columns Load catalog loaded, as Plan got them: the agent
@@ -397,7 +479,15 @@ const analyseStep = createStep({
               earlier: { queries: earlier.queries, findings: earlier.findings },
             }
           : {}),
-        ...(asked && answer ? { answered: { ...asked, answer } } : {}),
+        ...(asked && answer
+          ? {
+              answered: {
+                question: asked.question,
+                options: asked.options,
+                answer,
+              },
+            }
+          : {}),
         imageNotes: inputData.imageNotes,
         ...visualFollows(params.requestContext, inputData),
       });
@@ -419,7 +509,20 @@ const analyseStep = createStep({
         imageNotes: inputData.imageNotes,
       };
       // A stopped turn ends the attempt: the loop ends, no answer is written.
-      return outcome.stopped ? params.bail(outcome) : outcome;
+      if (outcome.stopped) return params.bail(outcome);
+      // In an interactive run the attempt waits for the user's approval
+      // before Validate and Jessica get it (workflows R44).
+      if (interactive) {
+        return params.suspend({
+          kind: 'review',
+          question: reviewQuestion('Michael', 'analysis', 'Jessica'),
+          options: [APPROVE_OPTION],
+          review: analysisReview(outcome),
+          outcome,
+          reply: outcome.text,
+        });
+      }
+      return outcome;
     },
   ),
 });
@@ -470,25 +573,59 @@ const writeAnswerStep = createStep({
   description: STEP['write-answer'].title,
   inputSchema: engineInputSchema(SCHEMAS['write-answer'].input),
   outputSchema: SCHEMAS['write-answer'].output,
+  suspendSchema: SCHEMAS['write-answer'].suspend,
+  resumeSchema: SCHEMAS['write-answer'].resume,
   execute: withContract(
     STEP['write-answer'].title,
     SCHEMAS['write-answer'],
     async (params: StepParams<(typeof SCHEMAS)['write-answer']>) => {
       const { inputData } = params;
-      const { answer, stopped } = await runtimeOf(
-        params,
-        STEP['write-answer'].title,
-      ).writeAnswer({
-        question: inputData.question,
-        plan: inputData.plan,
-        queries: inputData.queries,
-        findings: inputData.findings,
-        imageNotes: inputData.imageNotes,
-        ...visualFollows(params.requestContext, inputData),
+      const runtime = runtimeOf(params, STEP['write-answer'].title);
+      const interactive = runtime.interactive === true;
+      // Her answer goes on to Ryan only when Build visual runs: only then
+      // does it wait on the approval gate (workflows R44), unseen until the
+      // user approves it.
+      const gated = interactive && buildsVisual(params.requestContext);
+      let stopped = false;
+      const ended = await interactiveStep(params as never, interactive, {
+        run: async ({ canAsk, answered, revision }) => {
+          const written = await runtime.writeAnswer({
+            question: inputData.question,
+            plan: inputData.plan,
+            queries: inputData.queries,
+            findings: inputData.findings,
+            imageNotes: inputData.imageNotes,
+            ...visualFollows(params.requestContext, inputData),
+            ...(canAsk ? { canAsk } : {}),
+            ...(answered ? { answered } : {}),
+            ...(revision ? { revision } : {}),
+            ...(gated ? { quiet: true } : {}),
+          });
+          stopped = written.stopped;
+          return {
+            output: { ...written.answer, calls: inputData.calls },
+            reply: written.answer.answer,
+            stopped: written.stopped,
+            ...(written.clarification
+              ? { clarification: written.clarification }
+              : {}),
+          };
+        },
+        gate: (output) =>
+          gated
+            ? {
+                question: reviewQuestion('Jessica', 'answer', 'Ryan'),
+                review: output.answer,
+              }
+            : undefined,
       });
-      const output = { ...answer, calls: inputData.calls };
+      if (ended.type === 'suspended') return ended.value as never;
+      // Approved: the answer she wrote unseen becomes the run's answer.
+      if (ended.approved && runtime.deliverAnswer) {
+        await runtime.deliverAnswer(ended.output.answer);
+      }
       // A stopped turn ends here: Wrap up does not run.
-      return stopped ? params.bail(output) : output;
+      return stopped ? params.bail(ended.output) : ended.output;
     },
   ),
 });

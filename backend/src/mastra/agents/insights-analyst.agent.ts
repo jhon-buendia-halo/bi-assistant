@@ -1,6 +1,7 @@
 import { Agent } from '@mastra/core/agent';
 import { Memory } from '@mastra/memory';
 import { resolveAgentModel } from '../model-resolver';
+import { stepModelFrom } from '../step-model';
 import { resolveLinks } from '../agent-links';
 import { withToolSection } from '../tool-section';
 import {
@@ -89,7 +90,9 @@ export const insightsAnalystAgent = new Agent({
   // Loaded on demand through Mastra's skill tools (ADR-0025).
   skills: () => insightsAnalystSkills(),
   // Resolved at call time from the persisted LLM settings (agents.md 1.3).
-  model: async () => resolveAgentModel(),
+  // A workflow may run its step agents on its own model (agents.md 1.3).
+  model: async ({ requestContext }) =>
+    resolveAgentModel(stepModelFrom(requestContext)?.model),
   // One thread per session, configured as the assistant's.
   memory: new Memory({
     options: {

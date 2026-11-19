@@ -12,6 +12,7 @@ import { dashboardReaderAgent } from '../agents/dashboard-reader.agent';
 import { dataMapperAgent } from '../agents/data-mapper.agent';
 import { modelCallTuning } from '../model-compat';
 import { resolveAgentModelConfig } from '../model-resolver';
+import { stepModelFrom } from '../step-model';
 import {
   callOptions,
   noteExchange,
@@ -94,9 +95,11 @@ export async function tunedOptions(
   options: StepModelOptions,
   maxOutputTokens: number,
 ) {
-  const tuning = modelCallTuning(await resolveAgentModelConfig(), {
-    maxOutputTokens,
-  });
+  // Tuned for the model the call runs on: a workflow's step model, if any.
+  const tuning = modelCallTuning(
+    await resolveAgentModelConfig(stepModelFrom(options.requestContext)?.model),
+    { maxOutputTokens },
+  );
   const base = callOptions(options);
   const providerOptions = {
     ...tuning.providerOptions,

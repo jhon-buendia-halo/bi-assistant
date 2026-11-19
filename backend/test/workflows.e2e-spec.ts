@@ -173,6 +173,15 @@ describe('The workflow catalogue (API)', () => {
             default: true,
             usedBy: [],
           },
+          {
+            // No step reads it; it makes the run interactive.
+            name: 'approveSteps',
+            label: "Approve each step: every agent's work waits for your OK",
+            type: 'boolean',
+            required: false,
+            default: true,
+            usedBy: [],
+          },
         ],
         datasets: [],
         missingDatasets: [],
@@ -396,6 +405,12 @@ describe('The workflow catalogue (API)', () => {
         },
         {
           name: 'buildVisual',
+          required: false,
+          maxLength: undefined,
+          usedBy: [],
+        },
+        {
+          name: 'approveSteps',
           required: false,
           maxLength: undefined,
           usedBy: [],

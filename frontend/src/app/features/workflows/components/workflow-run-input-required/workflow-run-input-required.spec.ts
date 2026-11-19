@@ -105,6 +105,75 @@ describe('WorkflowRunInputRequired (ui.md 4.4b waiting card)', () => {
     );
   });
 
+  describe('approval gate (workflows R44)', () => {
+    const GATE: WorkflowWaitingFor = {
+      ...WAITING,
+      title: 'Plan',
+      question: 'Olivia’s plan is ready. Approve it or write what to change.',
+      options: ['Approve'],
+      review: '## The plan\n\n- **Count** the goals',
+    };
+
+    it('shows the approval heading and the review as Markdown, without option buttons', () => {
+      mount(GATE);
+      expect(el().querySelector('h2')?.textContent?.trim()).toBe(
+        'Waiting for your approval',
+      );
+      expect(q('workflow-run-input-step')?.textContent?.trim()).toBe('Plan');
+      expect(q('workflow-run-input-question')?.textContent).toContain(
+        'plan is ready',
+      );
+      const review = q('workflow-run-input-review')!;
+      expect(review.querySelector('h2')?.textContent).toBe('The plan');
+      expect(review.querySelector('strong')?.textContent).toBe('Count');
+      expect(q('workflow-run-input-option-0')).toBeNull();
+    });
+
+    it('Approve sends the answer Approve', () => {
+      mount(GATE);
+      const approve = q<HTMLButtonElement>('workflow-run-input-approve')!;
+      expect(approve.textContent?.trim()).toBe('Approve');
+      approve.click();
+      expect(answered).toEqual(['Approve']);
+    });
+
+    it('Ask for changes stays disabled while blank, then sends the typed text', () => {
+      mount(GATE);
+      const ask = q<HTMLButtonElement>('workflow-run-input-continue')!;
+      expect(ask.textContent?.trim()).toBe('Ask for changes');
+      expect(el().textContent).toContain('Or say what to change');
+      expect(ask.disabled).toBeTrue();
+      type('  shorter, please ');
+      expect(ask.disabled).toBeFalse();
+      ask.click();
+      expect(answered).toEqual(['shorter, please']);
+    });
+
+    it('turns Approve off while sending', () => {
+      mount(GATE);
+      fixture.componentRef.setInput('busy', true);
+      fixture.detectChanges();
+      expect(
+        q<HTMLButtonElement>('workflow-run-input-approve')!.disabled,
+      ).toBeTrue();
+    });
+
+    it('a plain question has no review, no Approve and the old labels', () => {
+      mount(WAITING);
+      expect(q('workflow-run-input-review')).toBeNull();
+      expect(q('workflow-run-input-approve')).toBeNull();
+      expect(q('workflow-run-input-continue')?.textContent?.trim()).toBe(
+        'Continue',
+      );
+    });
+
+    it('expired gate: no Approve, Run again with my answer', () => {
+      mount({ ...GATE, expired: true });
+      expect(q('workflow-run-input-approve')).toBeNull();
+      expect(q('workflow-run-input-rerun')).not.toBeNull();
+    });
+  });
+
   it('expired: says it can no longer continue and offers Run again with my answer', () => {
     mount({ ...WAITING, expired: true });
     expect(q('workflow-run-input-expired')?.textContent).toContain(

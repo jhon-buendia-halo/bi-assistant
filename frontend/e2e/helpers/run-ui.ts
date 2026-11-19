@@ -77,6 +77,8 @@ export async function fillRun(
     await pickDataset(page, dataset);
   }
   await page.getByTestId('workflow-input-question').fill(question);
+  // Approve each step is on by default: a run that is not about approvals goes straight through.
+  await page.getByTestId('workflow-input-approveSteps').setChecked(false);
 }
 
 /** Opens Answer a Business Question's Run tab, fills it and clicks Execute. */

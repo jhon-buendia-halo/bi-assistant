@@ -170,6 +170,7 @@ function runV2On(page: Page, question: string) {
     question,
     datasets: [WORLD_CUP_DATASET],
     buildVisual: false,
+    approveSteps: false,
   });
 }
 
@@ -365,6 +366,7 @@ test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
     question: V2_QUESTION,
     datasets: [WORLD_CUP_DATASET],
     buildVisual: false,
+    approveSteps: false,
   });
   expect(result.status).toBe(200);
   expect(stepStatuses(result, 'receive-question').at(-1)).toBe('success');

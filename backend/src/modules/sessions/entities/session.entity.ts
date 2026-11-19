@@ -394,6 +394,12 @@ export interface SessionDoc {
    */
   buildVisual?: true;
   /**
+   * A run host of Answer a Business Question whose input ticked Approve
+   * each step (workflows R44): its step agents may ask first, and each
+   * outcome waits for the user's approval. In memory only, like the host.
+   */
+  approveSteps?: true;
+  /**
    * A run host of Dashboard Image to Artifact (agents.md 5.17): the path of the
    * run's input image in the host's workspace. In memory only, like the
    * host.

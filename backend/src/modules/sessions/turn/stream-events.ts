@@ -50,6 +50,8 @@ export interface TurnSuspension {
   stepId: string;
   question: string;
   options: string[];
+  /** An approval gate's outcome in words (workflows R44); absent otherwise. */
+  review?: string;
   resume(answer: string, io: TurnResumeIo): Promise<TurnSuspension | undefined>;
   discard(): Promise<void>;
 }

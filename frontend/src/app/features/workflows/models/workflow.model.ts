@@ -388,6 +388,8 @@ export interface WorkflowWaitingFor {
   expiresAt: string;
   /** The run can no longer continue (30 minutes passed, or the app restarted). */
   expired?: true;
+  /** An approval gate's outcome in words, as Markdown (workflows R44). */
+  review?: string;
 }
 
 /** The `input-required` event of a run stream (api.md 3.6). */
@@ -398,6 +400,8 @@ export interface WorkflowInputRequired {
   question: string;
   options: string[];
   expiresAt: string;
+  /** An approval gate's outcome in words, as Markdown (workflows R44). */
+  review?: string;
 }
 
 /** The body of `POST /workflows/:id/runs/stream` (api.md 118, 119). */

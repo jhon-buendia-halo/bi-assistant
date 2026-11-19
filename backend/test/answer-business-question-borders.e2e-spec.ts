@@ -82,7 +82,13 @@ describe('Answer a Business Question: border cases (API, no Postgres)', () => {
   const client = runClient(() => backend!.url);
   const ask = (question: string, extra: Record<string, unknown> = {}) =>
     client.run(WORKFLOW, {
-      input: { question, datasets: [DATASET], buildVisual: false, ...extra },
+      input: {
+        question,
+        datasets: [DATASET],
+        buildVisual: false,
+        approveSteps: false,
+        ...extra,
+      },
     });
 
   /** The model requests `act` made, in order. */

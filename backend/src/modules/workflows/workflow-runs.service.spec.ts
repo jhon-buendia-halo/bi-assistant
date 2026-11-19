@@ -599,8 +599,10 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       workflowId: 'answer-business-question',
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
-      // Build visual is on unless the run turns it off (workflows R41).
+      // Build visual is on unless the run turns it off (workflows R41),
+      // and so is Approve each step (workflows R44).
       buildVisual: true,
+      approveSteps: true,
     });
     // Careful is no field of v2's input: the turn runs without it.
     // The turn runs on its own signal: the no-progress watchdog's.
@@ -975,6 +977,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
       buildVisual: true,
+      approveSteps: true,
       context: {
         question: 'Who won in 2002?',
         answer: 'Brazil won in 2002.',

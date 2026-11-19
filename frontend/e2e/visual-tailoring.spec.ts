@@ -320,6 +320,7 @@ test(
               question: QUESTION,
               datasets: [WORLD_CUP_DATASET],
               buildVisual: false,
+              approveSteps: false,
             },
           },
         );
@@ -586,6 +587,7 @@ test(
               question: DASHBOARD_QUESTION,
               datasets: [WORLD_CUP_DATASET],
               buildVisual: false,
+              approveSteps: false,
             },
           },
         );

@@ -170,6 +170,19 @@ const BUILD_VISUAL_FIELD: WorkflowInputField = {
 };
 
 /**
+ * Answer a Business Question's approvals (workflows R44): each agent may
+ * ask you first, and its work waits for your approval before the next
+ * agent gets it. On unless unticked.
+ */
+const APPROVE_STEPS_FIELD: WorkflowInputField = {
+  name: 'approveSteps',
+  label: "Approve each step: every agent's work waits for your OK",
+  type: 'boolean',
+  required: false,
+  default: true,
+};
+
+/**
  * The input of a draft run (Try it, api.md R12): the question, and careful
  * mode; its datasets are the draft's.
  */
@@ -225,6 +238,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         IMAGES_FIELD,
         DATASETS_FIELD,
         BUILD_VISUAL_FIELD,
+        APPROVE_STEPS_FIELD,
       ],
       steps: ANSWER_BUSINESS_QUESTION_STEPS,
       // Zoe reads the reference images when there are some; Nathan reads a
@@ -500,6 +514,8 @@ export interface AgentRunTurn {
   careful: boolean;
   /** Answer a Business Question's `buildVisual`: Build visual runs. */
   buildVisual?: true;
+  /** Answer a Business Question's `approveSteps` (workflows R44). */
+  approveSteps?: true;
   /** Map a Dashboard to Data's `artifact`: the saved dashboard it maps. */
   artifact?: string;
 }
@@ -519,6 +535,7 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
     ...(values['buildVisual'] === true ? { buildVisual: true as const } : {}),
+    ...(values['approveSteps'] === true ? { approveSteps: true as const } : {}),
     ...(text(values['artifact']) ? { artifact: text(values['artifact']) } : {}),
   };
 }

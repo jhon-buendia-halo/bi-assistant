@@ -51,6 +51,7 @@ import {
   type validationFindingSchema,
 } from './answer-business-question.schemas';
 import { readImagesEdges, readImagesStepEntry } from './read-images.steps';
+import type { Revision } from './answer-business-question.review';
 import {
   contractJsonSchema,
   schemaFieldNames,
@@ -146,6 +147,18 @@ const MODEL_EXITS: readonly WorkflowStepExit[] = [
   { label: 'you stop it', outcome: 'stops' },
 ];
 
+/** A step agent asks the user first (an interactive run, workflows R44). */
+const ASKS_EXIT: WorkflowStepExit = {
+  label: 'if it asks you a question',
+  outcome: 'waits',
+};
+
+/** Its outcome waits on the approval gate (an interactive run, R44). */
+const APPROVAL_EXIT: WorkflowStepExit = {
+  label: 'until you approve its work',
+  outcome: 'waits',
+};
+
 /**
  * The steps, in catalogue order (Clarify after Plan): the session's
  * workflow bar shows them. Their field names and JSON Schemas come from
@@ -154,7 +167,8 @@ const MODEL_EXITS: readonly WorkflowStepExit[] = [
 export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
   // Optional (the run's reference images, workflows R35): Zoe describes
   // them; Plan, Analyse and Write answer get her notes as text.
-  readImagesStepEntry(),
+  // In an interactive run (R44) Zoe may ask, and her notes wait for approval.
+  readImagesStepEntry([ASKS_EXIT, APPROVAL_EXIT]),
   contractStepEntry(
     {
       id: 'receive-question',
@@ -184,7 +198,13 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       summary:
         "On a follow-up over an earlier result, Result Explorer's model reads whether the question asks for another page, a filter or an order of the earlier rows. A first run makes no model call. No tools.",
       // A model error is no failure: the run plans the question instead.
-      exits: [{ label: 'you stop it', outcome: 'stops' }],
+      // In an interactive run (R44) Nathan may ask, and his "a new question"
+      // waits for approval.
+      exits: [
+        { label: 'you stop it', outcome: 'stops' },
+        ASKS_EXIT,
+        APPROVAL_EXIT,
+      ],
       modelOnly: true,
     },
     SCHEMAS['interpret-follow-up'],
@@ -196,7 +216,8 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       kind: 'agent',
       summary:
         "The agent's model plans the analysis: measures, entities, scope, assumptions, and whether to clarify first. No tools.",
-      exits: MODEL_EXITS,
+      // In an interactive run (R44) a clear plan waits for approval.
+      exits: [...MODEL_EXITS, APPROVAL_EXIT],
       modelOnly: true,
     },
     SCHEMAS.plan,
@@ -223,7 +244,9 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       // the agent then goes on with it (agents.md 5.11, api.md 138).
       exits: [
         ...MODEL_EXITS,
-        { label: 'if it asks you a question', outcome: 'waits' },
+        ASKS_EXIT,
+        // In an interactive run (R44) each attempt waits for approval.
+        APPROVAL_EXIT,
       ],
     },
     SCHEMAS.analyse,
@@ -246,7 +269,9 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       kind: 'agent',
       summary:
         "The agent's model writes the run's answer from the queries' rows and the findings. No tools.",
-      exits: MODEL_EXITS,
+      // In an interactive run (R44) she may ask, and her answer waits for
+      // approval when Build visual follows.
+      exits: [...MODEL_EXITS, ASKS_EXIT, APPROVAL_EXIT],
       modelOnly: true,
     },
     SCHEMAS['write-answer'],
@@ -468,6 +493,14 @@ export type AnalyseAttempt = Pick<
  */
 export interface AnswerBusinessQuestionRuntime {
   /**
+   * A run of the workflow (workflows R44; answer-business-question.review.ts):
+   * every step agent may ask the user first, and each outcome that goes on
+   * to another agent waits for the user's approval. Absent in a past chat's
+   * turn and in an eval run: nothing waits but Clarify and Analyse's own
+   * question, as before.
+   */
+  interactive?: boolean;
+  /**
    * The Plan step's model call; `stopped` when the turn was stopped. After
    * Clarify, `clarification` holds its question and the user's answer.
    */
@@ -476,6 +509,8 @@ export interface AnswerBusinessQuestionRuntime {
     catalog: CatalogEntity[];
     catalogBlock: string;
     clarification?: AnsweredClarification;
+    /** The changes the user asked for on Plan's approval gate. */
+    revision?: Revision;
     /** Read images' notes (agents.md 2.15); absent or `''` without images. */
     imageNotes?: string;
   }): Promise<{ plan: AnalysisPlan; stopped: boolean }>;
@@ -544,7 +579,22 @@ export interface AnswerBusinessQuestionRuntime {
      * (`visualCued`): the request says a visual follows. Absent otherwise.
      */
     visualFollows?: true;
-  }): Promise<{ answer: BusinessAnswer; stopped: boolean }>;
+    /** An interactive run: Jessica may ask the user one question first. */
+    canAsk?: boolean;
+    /** Her question with the user's answer, once answered. */
+    answered?: { question: string; answer: string };
+    /** The changes the user asked for on her approval gate. */
+    revision?: Revision;
+    /**
+     * Her answer waits on an approval gate: it is not streamed as the
+     * run's answer; `deliverAnswer` hands it over once approved.
+     */
+    quiet?: boolean;
+  }): Promise<{
+    answer: BusinessAnswer;
+    stopped: boolean;
+    clarification?: { question: string; options: string[] };
+  }>;
   /**
    * The run's earlier queries (roadmap 1.28.8): an earlier run's answer's
    * queries on a follow-up, a chat's earlier answers' queries. Absent or
@@ -556,8 +606,17 @@ export interface AnswerBusinessQuestionRuntime {
    * view of one of the earlier queries; `stopped` when the turn was stopped.
    */
   interpretFollowUp?(
-    input: FollowUpRequest,
-  ): Promise<{ spec: ExplorerSpec | null; stopped: boolean }>;
+    input: FollowUpRequest & {
+      /** An interactive run: Nathan may ask the user one question first. */
+      canAsk?: boolean;
+      answered?: { question: string; answer: string };
+      revision?: Revision;
+    },
+  ): Promise<{
+    spec: ExplorerSpec | null;
+    stopped: boolean;
+    clarification?: { question: string; options: string[] };
+  }>;
   /**
    * Page result: the page of earlier query `query` (an index into
    * `followUp`) through the query inspector's page path, recorded as an
@@ -1471,7 +1530,13 @@ export function clarifyingQuestionOf(
   const raw = (payload ?? {}) as Record<string, unknown>;
   const question = text(raw['question']);
   if (!question) return undefined;
-  return { question, options: strings(raw['options']) };
+  // An approval gate's outcome in words (workflows R44) is shown with it.
+  const review = raw['kind'] === 'review' ? text(raw['review']) : '';
+  return {
+    question,
+    options: strings(raw['options']),
+    ...(review ? { review } : {}),
+  };
 }
 
 /**
@@ -1547,31 +1612,61 @@ export async function interpretFollowUp(
   runtime:
     | Pick<AnswerBusinessQuestionRuntime, 'followUp' | 'interpretFollowUp'>
     | undefined,
-): Promise<{ followUp: FollowUp | null; stopped: boolean }> {
+  interactive: {
+    /** An interactive run: `called` and `reply` are reported (R44). */
+    track?: boolean;
+    canAsk?: boolean;
+    answered?: { question: string; answer: string };
+    revision?: Revision;
+  } = {},
+): Promise<{
+  followUp: FollowUp | null;
+  stopped: boolean;
+  /** Nathan was called (a run with earlier queries) and replied. */
+  called?: true;
+  /** Nathan asked the user first (an interactive run only). */
+  clarification?: { question: string; options: string[] };
+  /** Nathan's reading, as a revision shows it to him again. */
+  reply?: string;
+}> {
   const queries = runtime?.followUp ?? [];
   const none = { followUp: null, stopped: false };
   if (!queries.length || !runtime?.interpretFollowUp) return none;
   const latest = queries[queries.length - 1];
   const view = latest.view ?? null;
-  let read: { spec: ExplorerSpec | null; stopped: boolean };
+  let read: {
+    spec: ExplorerSpec | null;
+    stopped: boolean;
+    clarification?: { question: string; options: string[] };
+  };
   try {
     read = await runtime.interpretFollowUp({
       text: question,
       candidates: queries.map(explorerCandidateOfQuery),
       view,
       pageCount: pageCountOf(view),
+      ...(interactive.canAsk ? { canAsk: true } : {}),
+      ...(interactive.answered ? { answered: interactive.answered } : {}),
+      ...(interactive.revision ? { revision: interactive.revision } : {}),
     });
   } catch {
     return none;
   }
   if (read.stopped) return { followUp: null, stopped: true };
+  if (read.clarification) {
+    return { ...none, called: true, clarification: read.clarification };
+  }
   const { spec } = read;
+  // What an interactive run's gate reads; nothing more otherwise.
+  const tracked = interactive.track
+    ? { called: true as const, reply: JSON.stringify(spec) }
+    : {};
   if (
     !spec ||
     spec.action !== 'explore' ||
     spec.interpretation.rejected?.length
   ) {
-    return none;
+    return { ...none, ...tracked };
   }
   const index = queries[spec.query] ? spec.query : queries.length - 1;
   return {
@@ -1583,6 +1678,7 @@ export async function interpretFollowUp(
       understood: spec.interpretation.understood,
     },
     stopped: false,
+    ...tracked,
   };
 }
 

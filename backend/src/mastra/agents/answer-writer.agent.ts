@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { agentInstructions } from '../agent-prompt-overrides';
 import { ANSWER_WRITER_AGENT_KEY } from '../agent-constants';
 import { resolveAgentModel } from '../model-resolver';
+import { stepModelFrom } from '../step-model';
 import { WRITE_ANSWER_INSTRUCTIONS } from '../workflows/answer-business-question.prompts';
 
 /**
@@ -20,5 +21,7 @@ export const answerWriterAgent = new Agent({
     "Writes a run's answer from its queries' rows and the findings. No tools.",
   instructions: () =>
     agentInstructions(ANSWER_WRITER_AGENT_KEY, WRITE_ANSWER_INSTRUCTIONS),
-  model: async () => resolveAgentModel(),
+  // A workflow may run its step agents on its own model (agents.md 1.3).
+  model: async ({ requestContext }) =>
+    resolveAgentModel(stepModelFrom(requestContext)?.model),
 });

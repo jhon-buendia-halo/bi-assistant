@@ -255,11 +255,14 @@ const SESSIONS: Record<Workflow, Partial<SessionDoc>> = {
 
 /** The v2 run input that asks what the chat message asks. */
 // Build visual is on unless the run turns it off (workflows R41): the runs
-// below turn it off; the Build visual runs set it.
+// below turn it off; the Build visual runs set it. Approve each step is on
+// unless turned off too (workflows R44): these runs turn it off, and the
+// approval runs below set it.
 const V2_INPUT = {
   question: 'Who won?',
   datasets: ['World Cup'],
   buildVisual: false,
+  approveSteps: false,
 };
 // What the engine is given: the flag only picks the branch (the runtime's
 // `buildsVisual`), it is not an input of the workflow's steps.
@@ -600,8 +603,10 @@ async function runOf(
   signal?: AbortSignal,
 ): Promise<{ events: RunStreamEvent[]; run: WorkflowRun }> {
   const events: RunStreamEvent[] = [];
+  // Approve each step is on by default (workflows R44): a run here turns it
+  // off unless its input sets it, so it runs straight through as before.
   const prepared = await ctx.runs.prepare(V2_WORKFLOW.id, {
-    input,
+    input: { approveSteps: false, ...input },
     ...extra,
   });
   const run = await ctx.runs.stream(prepared, (e) => events.push(e), signal);
@@ -2376,7 +2381,11 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       }),
     ).rejects.toMatchObject({ status: 410 });
     const prepared = await ctx.runs.prepare(V2_WORKFLOW.id, {
-      input: { question: 'Matches won', datasets: ['World Cup'] },
+      input: {
+        question: 'Matches won',
+        datasets: ['World Cup'],
+        approveSteps: false,
+      },
       context: { fromRunId: waiting.run.id },
     });
     expect(prepared.context).toEqual({

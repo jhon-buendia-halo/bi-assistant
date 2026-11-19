@@ -527,6 +527,9 @@ export class WorkflowRunsApiService {
               ? event['options'].map(String)
               : [],
             expiresAt: String(event['expiresAt'] ?? ''),
+            ...(typeof event['review'] === 'string' && event['review'] !== ''
+              ? { review: event['review'] }
+              : {}),
           });
           return false;
         case 'done':

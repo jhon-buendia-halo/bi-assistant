@@ -2,7 +2,7 @@
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) answer-business-question's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "3967f63e19e7",
+  "contractHash": "4fa118ee0569",
   "edges": [
     {
       "from": "start",
@@ -128,6 +128,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
     },
     {
       "name": "buildVisual",
+      "required": false,
+      "type": "boolean",
+    },
+    {
+      "name": "approveSteps",
       "required": false,
       "type": "boolean",
     },

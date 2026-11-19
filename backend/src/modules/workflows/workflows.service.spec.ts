@@ -236,6 +236,15 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
       default: true,
       usedBy: [],
     },
+    {
+      // Makes the run interactive (workflows R44); no step reads it.
+      name: 'approveSteps',
+      label: "Approve each step: every agent's work waits for your OK",
+      type: 'boolean',
+      required: false,
+      default: true,
+      usedBy: [],
+    },
   ],
   datasets: [],
   missingDatasets: [],

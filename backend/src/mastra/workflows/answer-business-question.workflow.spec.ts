@@ -164,7 +164,10 @@ const FAILED_ATTEMPT: AnalyseAttempt = {
 
 /** The runtime's step calls (its flags left out). */
 type TurnCalls = Required<
-  Omit<AnswerBusinessQuestionRuntime, 'buildsVisual' | 'followUp'>
+  Omit<
+    AnswerBusinessQuestionRuntime,
+    'buildsVisual' | 'followUp' | 'interactive'
+  >
 >;
 
 /** A runtime whose model steps are mocks, each answering as scripted. */
@@ -176,6 +179,7 @@ type ScriptedTurn = {
 } & {
   buildsVisual?: boolean;
   followUp?: AnswerBusinessQuestionRuntime['followUp'];
+  interactive?: boolean;
 };
 
 /** A runtime whose model steps answer as scripted. */
@@ -1543,6 +1547,216 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       expect(turn.plan).toHaveBeenCalledWith(
         expect.objectContaining({ imageNotes: '' }),
       );
+    });
+  });
+
+  describe('an interactive run: approvals and questions (workflows R44)', () => {
+    /** `expect.stringContaining`, typed for an object literal. */
+    const containing = (text: string): string =>
+      expect.stringContaining(text) as string;
+    /** The payload the top step of a suspended run carries. */
+    const payloadOf = (
+      started: {
+        result: { steps?: Record<string, { suspendPayload?: unknown }> };
+      },
+      top = 'question-path',
+    ) => started.result.steps?.[top]?.suspendPayload as Record<string, unknown>;
+
+    it("waits on Olivia's plan, then on Michael's analysis, and passes each on unchanged once approved", async () => {
+      const turn = runtime({ interactive: true });
+      const started = await run('How many matches?', turn);
+      expect(started.result.status).toBe('suspended');
+      expect(started.result.suspended).toEqual([
+        ['question-path', 'plan-round', 'plan'],
+      ]);
+      expect(payloadOf(started)).toMatchObject({
+        kind: 'review',
+        question: containing("Olivia's plan is ready"),
+        options: ['Approve'],
+        review: containing('**Measures**\n- match count'),
+      });
+      expect(turn.analyse).not.toHaveBeenCalled();
+
+      const planned = await resume(started, 'Approve');
+      // Approved: the held plan goes on, Olivia is not asked again.
+      expect(turn.plan).toHaveBeenCalledTimes(1);
+      expect(turn.analyse).toHaveBeenCalledTimes(1);
+      expect(planned.result.status).toBe('suspended');
+      expect(planned.result.suspended).toEqual([
+        ['question-path', 'analysis-path', 'analysis-attempt', 'analyse'],
+      ]);
+      const analysed = {
+        ...started,
+        result: planned.result,
+      };
+      expect(payloadOf(analysed)).toMatchObject({
+        kind: 'review',
+        question: containing("Michael's analysis is ready"),
+        review: containing('1. I count the matches. (1 rows)'),
+      });
+      expect(turn.writeAnswer).not.toHaveBeenCalled();
+
+      const { result } = await resume(analysed, 'ok');
+      expect(turn.analyse).toHaveBeenCalledTimes(1);
+      // Build visual does not run: Jessica's answer goes to no agent.
+      expect(turn.writeAnswer).toHaveBeenCalledTimes(1);
+      expect(turn.writeAnswer.mock.calls[0][0]).not.toHaveProperty('quiet');
+      expect(result.status).toBe('success');
+      expect(turnSummaryOf(result.result)?.answer).toContain('16 matches');
+    });
+
+    it("calls Olivia again with her earlier plan and the user's words when they ask for changes", async () => {
+      const turn = runtime({ interactive: true });
+      const started = await run('How many matches?', turn);
+      const revised = await resume(started, 'Count only the 2022 matches');
+      expect(turn.plan).toHaveBeenCalledTimes(2);
+      expect(turn.plan.mock.calls[1][0]).toMatchObject({
+        revision: {
+          previous: JSON.stringify(PLAN),
+          note: 'Count only the 2022 matches',
+        },
+      });
+      // The new plan waits on the gate again.
+      expect(revised.result.status).toBe('suspended');
+      expect(revised.result.suspended).toEqual([
+        ['question-path', 'plan-round', 'plan'],
+      ]);
+      expect(turn.analyse).not.toHaveBeenCalled();
+    });
+
+    it("runs Michael again in the same attempt with the user's words as the answer to the gate", async () => {
+      const turn = runtime({ interactive: true });
+      const started = await run('How many matches?', turn);
+      const planned = await resume(started, 'Approve');
+      const analysed = { ...started, result: planned.result };
+      const revised = await resume(analysed, 'Split it by year');
+      expect(turn.analyse).toHaveBeenCalledTimes(2);
+      expect(turn.analyse.mock.calls[1][0]).toMatchObject({
+        attempt: 1,
+        answered: {
+          question: containing("Michael's analysis is ready"),
+          options: ['Approve'],
+          answer: 'Split it by year',
+        },
+      });
+      expect(revised.result.status).toBe('suspended');
+      expect(turn.writeAnswer).not.toHaveBeenCalled();
+    });
+
+    it("holds Jessica's answer, unseen, until it is approved when Ryan builds a visual from it", async () => {
+      const turn = runtime({
+        interactive: true,
+        buildsVisual: true,
+        deliverAnswer: jest.fn(() => Promise.resolve()),
+      });
+      const started = await run('How many matches?', turn);
+      const planned = await resume(started, 'Approve');
+      const analysed = await resume(
+        { ...started, result: planned.result },
+        'Approve',
+      );
+      expect(turn.writeAnswer).toHaveBeenCalledTimes(1);
+      expect(turn.writeAnswer.mock.calls[0][0]).toMatchObject({ quiet: true });
+      expect(analysed.result.suspended).toEqual([
+        ['question-path', 'analysis-path', 'answer-path', 'write-answer'],
+      ]);
+      expect(payloadOf({ result: analysed.result })).toMatchObject({
+        kind: 'review',
+        question: containing("Jessica's answer is ready"),
+        review: 'The data holds 16 matches.\n\nHow I got this: …',
+      });
+      expect(turn.buildVisual).not.toHaveBeenCalled();
+      expect(turn.deliverAnswer).not.toHaveBeenCalled();
+
+      const { result } = await resume(
+        { ...started, result: analysed.result },
+        'Approve',
+      );
+      expect(turn.writeAnswer).toHaveBeenCalledTimes(1);
+      // Approved: her answer becomes the run's answer, then Ryan draws it.
+      expect(turn.deliverAnswer).toHaveBeenCalledWith(
+        'The data holds 16 matches.\n\nHow I got this: …',
+      );
+      expect(turn.buildVisual).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe('success');
+    });
+
+    it('lets Jessica ask the user first, then writes with the answer', async () => {
+      const asked = { question: 'Which year?', options: ['2018', '2022'] };
+      const turn = runtime({
+        interactive: true,
+        writeAnswer: jest
+          .fn()
+          .mockResolvedValueOnce({
+            answer: { headline: '', answer: '' },
+            stopped: false,
+            clarification: asked,
+          })
+          .mockResolvedValueOnce({
+            answer: { headline: 'In 2022.', answer: 'In 2022, 64 matches.' },
+            stopped: false,
+          }),
+      });
+      const started = await run('How many matches?', turn);
+      const planned = await resume(started, 'Approve');
+      const analysed = await resume(
+        { ...started, result: planned.result },
+        'Approve',
+      );
+      expect(turn.writeAnswer.mock.calls[0][0]).toMatchObject({ canAsk: true });
+      expect(payloadOf({ result: analysed.result })).toEqual({
+        kind: 'clarify',
+        ...asked,
+      });
+      const { result } = await resume(
+        { ...started, result: analysed.result },
+        '2022',
+      );
+      expect(turn.writeAnswer.mock.calls[1][0]).toMatchObject({
+        answered: { question: 'Which year?', answer: '2022' },
+      });
+      expect(turn.writeAnswer.mock.calls[1][0]).not.toHaveProperty('canAsk');
+      expect(result.status).toBe('success');
+      expect(turnSummaryOf(result.result)?.answer).toBe('In 2022, 64 matches.');
+    });
+
+    it("waits on Zoe's notes before the next agent gets them", async () => {
+      const turn = runtime({ interactive: true });
+      const images = ONE_IMAGE();
+      const interactiveReader = { ...images.reader, interactive: true };
+      const started = await run('How many matches?', turn, ['World Cup'], {
+        paths: images.paths,
+        reader: interactiveReader,
+      });
+      expect(started.result.suspended).toEqual([['read-images']]);
+      expect(payloadOf(started, 'read-images')).toMatchObject({
+        kind: 'review',
+        question: containing("Zoe's notes on your images"),
+        review: NOTES,
+      });
+      expect(
+        (images.reader.readImages.mock.calls[0] as unknown[])[0],
+      ).toMatchObject({
+        canAsk: true,
+      });
+      expect(turn.plan).not.toHaveBeenCalled();
+      const next = await resume(started, 'Approve');
+      expect(images.reader.readImages).toHaveBeenCalledTimes(1);
+      expect(turn.plan).toHaveBeenCalledWith(
+        expect.objectContaining({ imageNotes: NOTES }),
+      );
+      // Olivia's plan waits next.
+      expect(next.result.suspended).toEqual([
+        ['question-path', 'plan-round', 'plan'],
+      ]);
+    });
+
+    it('waits on nothing and offers no question when the run is not interactive', async () => {
+      const turn = runtime();
+      const { result } = await run('How many matches?', turn);
+      expect(result.status).toBe('success');
+      expect(turn.plan.mock.calls[0][0]).not.toHaveProperty('revision');
+      expect(turn.writeAnswer.mock.calls[0][0]).not.toHaveProperty('canAsk');
     });
   });
 });

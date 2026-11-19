@@ -165,7 +165,13 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
     const run = (
       await http()
         .post('/workflows/answer-business-question/runs')
-        .send({ input: { question: QUESTION, datasets: ['World Cup Core'] } })
+        .send({
+          input: {
+            question: QUESTION,
+            datasets: ['World Cup Core'],
+            approveSteps: false,
+          },
+        })
         .expect(200)
     ).body as { id: string; status: string };
     expect(run.status).toBe('success');

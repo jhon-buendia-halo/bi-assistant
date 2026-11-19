@@ -279,7 +279,11 @@ describe('Stored runs: the run history API (API)', () => {
         ? held
         : undefined;
     const pending = runStream('answer-business-question', {
-      input: { question: HOLD_QUESTION, datasets: ['World Cup Core'] },
+      input: {
+        question: HOLD_QUESTION,
+        datasets: ['World Cup Core'],
+        approveSteps: false,
+      },
     });
     await waitForModelCall(HOLD_QUESTION);
     const listedWhileRunning = (
@@ -481,7 +485,11 @@ describe('Stored runs: the run history API (API)', () => {
 
     it('a v2 run may continue from one with an answer; one without is refused clearly', async () => {
       const followUp = await runStream('answer-business-question', {
-        input: { question: 'And why now?', datasets: ['World Cup Core'] },
+        input: {
+          question: 'And why now?',
+          datasets: ['World Cup Core'],
+          approveSteps: false,
+        },
         context: { fromRunId: 'old-deep' },
       });
       expect(followUp.status).toBe(200);
@@ -492,7 +500,11 @@ describe('Stored runs: the run history API (API)', () => {
       const refused = await http()
         .post('/workflows/answer-business-question/runs/stream')
         .send({
-          input: { question: 'And?', datasets: ['World Cup Core'] },
+          input: {
+            question: 'And?',
+            datasets: ['World Cup Core'],
+            approveSteps: false,
+          },
           context: { fromRunId: 'old-seq' },
         })
         .expect(400);
@@ -524,7 +536,11 @@ describe('Stored runs: the run history API (API)', () => {
 
   it('after a restart: a run the app was killed in is failed, an orphan run workspace is gone, and a stored run is still context', async () => {
     const first = await runStream('answer-business-question', {
-      input: { question: 'Who hosted in 2002?', datasets: ['World Cup Core'] },
+      input: {
+        question: 'Who hosted in 2002?',
+        datasets: ['World Cup Core'],
+        approveSteps: false,
+      },
     });
     const firstId = first.frames[0].runId!;
     expect(first.frames.at(-1)!.type).toBe('done');
@@ -543,7 +559,11 @@ describe('Stored runs: the run history API (API)', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input: { question: 'Hold this one', datasets: ['World Cup Core'] },
+          input: {
+            question: 'Hold this one',
+            datasets: ['World Cup Core'],
+            approveSteps: false,
+          },
         }),
         signal: controller.signal,
       },
@@ -580,7 +600,11 @@ describe('Stored runs: the run history API (API)', () => {
 
     const before = stub.requests.length;
     const followUp = await runStream('answer-business-question', {
-      input: { question: 'And in 2006?', datasets: ['World Cup Core'] },
+      input: {
+        question: 'And in 2006?',
+        datasets: ['World Cup Core'],
+        approveSteps: false,
+      },
       context: { fromRunId: firstId },
     });
     expect(followUp.frames.at(-1)!.type).toBe('done');

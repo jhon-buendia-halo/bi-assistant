@@ -8,6 +8,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { WorkflowWaitingFor } from '../../models/workflow.model';
 
 let nextId = 0;
@@ -22,6 +23,7 @@ let nextId = 0;
 @Component({
   selector: 'app-workflow-run-input-required',
   templateUrl: './workflow-run-input-required.html',
+  imports: [MarkdownPipe],
   host: { class: 'block' },
 })
 export class WorkflowRunInputRequired implements AfterViewInit {
@@ -42,6 +44,8 @@ export class WorkflowRunInputRequired implements AfterViewInit {
 
   protected readonly blank = computed(() => this.text().trim() === '');
   protected readonly expired = computed(() => this.waiting().expired === true);
+  /** An approval gate: the agent's outcome waits for an OK (workflows R44). */
+  protected readonly gate = computed(() => !!this.waiting().review);
 
   ngAfterViewInit(): void {
     this.card().nativeElement.focus();
@@ -55,6 +59,11 @@ export class WorkflowRunInputRequired implements AfterViewInit {
   protected pick(option: string): void {
     if (this.expired()) this.text.set(option);
     else if (!this.busy()) this.answered.emit(option);
+  }
+
+  /** Approve a gate: the backend reads the answer `Approve` as the OK. */
+  protected approve(): void {
+    if (!this.busy()) this.answered.emit('Approve');
   }
 
   protected submit(): void {

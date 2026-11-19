@@ -103,6 +103,7 @@ export async function runQuestion(
     datasets?: string[];
     fromRunId?: string;
     buildVisual?: boolean;
+    approveSteps?: boolean;
   } = {},
 ): Promise<RunResult> {
   return runWorkflow(
@@ -113,6 +114,8 @@ export async function runQuestion(
       datasets: options.datasets ?? [WORLD_CUP_DATASET],
       // Off unless asked: Build visual (workflows R41) makes one more model call.
       buildVisual: options.buildVisual ?? false,
+      // Off unless asked: with approvals on, a run stops after each agent's work.
+      approveSteps: options.approveSteps ?? false,
     },
     options.fromRunId ? { fromRunId: options.fromRunId } : undefined,
   );
@@ -126,6 +129,7 @@ export async function runQuestionOk(
     datasets?: string[];
     fromRunId?: string;
     buildVisual?: boolean;
+    approveSteps?: boolean;
   } = {},
 ): Promise<RunResult> {
   const result = await runQuestion(page, question, options);

@@ -352,7 +352,13 @@ test.describe('Runs and Past chats', () => {
       page,
       'POST',
       `/workflows/${V2_WORKFLOW_ID}/runs`,
-      { input: { question: QUESTION, datasets: [WORLD_CUP_DATASET] } },
+      {
+        input: {
+          question: QUESTION,
+          datasets: [WORLD_CUP_DATASET],
+          approveSteps: false,
+        },
+      },
     );
     return run.id;
   }

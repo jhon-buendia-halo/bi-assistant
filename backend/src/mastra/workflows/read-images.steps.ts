@@ -74,6 +74,15 @@ export interface ReadImagesInput {
   question: string;
   /** The images' paths in the run's workspace (`inputs/images/<n>.<ext>`), in order. */
   images: string[];
+  /**
+   * An interactive run (answer-business-question.review.ts): Zoe may ask
+   * the user one question first. Absent otherwise.
+   */
+  canAsk?: boolean;
+  /** Her question with the user's answer, once answered. */
+  answered?: { question: string; answer: string };
+  /** The changes the user asked for on her approval gate. */
+  revision?: { previous: string; note: string };
 }
 
 /** What Read images gets back from the runtime. */
@@ -88,6 +97,8 @@ export interface ReadImagesOutcome {
    * model step sees the aborted signal and ends the run.
    */
   stopped: boolean;
+  /** Zoe asked the user first (only when `canAsk`): the step waits. */
+  clarification?: { question: string; options: string[] };
 }
 
 /**
@@ -98,6 +109,12 @@ export interface ReadImagesOutcome {
  */
 export interface ReadImagesRuntime {
   readImages(input: ReadImagesInput): Promise<ReadImagesOutcome>;
+  /**
+   * An interactive run of Answer a Business Question (workflows R44): Zoe
+   * may ask first, and her notes wait for the user's approval before they
+   * go on. Absent in every other workflow and in chats.
+   */
+  interactive?: boolean;
 }
 
 /** One image as Read images keeps it from the reply. */
@@ -126,7 +143,10 @@ const MODEL_EXITS: readonly WorkflowStepExit[] = [
  * object on every call, to put first in a workflow's `steps`. A run
  * without images shows it as `skipped` (a catalogue step that never ran).
  */
-export function readImagesStepEntry(): ContractStepEntry {
+export function readImagesStepEntry(
+  /** Extra exits (Answer a Business Question's waits, workflows R44). */
+  extraExits: readonly WorkflowStepExit[] = [],
+): ContractStepEntry {
   const inputSchema = contractJsonSchema(
     READ_IMAGES_STEP_SCHEMAS.input,
     'input',
@@ -143,7 +163,7 @@ export function readImagesStepEntry(): ContractStepEntry {
       'Optional: Zoe, the Image Reader, describes the reference images you attached in one model call. Later steps get her notes as text, never the images.',
     input: schemaFieldNames(inputSchema),
     output: schemaFieldNames(outputSchema),
-    exits: MODEL_EXITS.map((exit) => ({ ...exit })),
+    exits: [...MODEL_EXITS, ...extraExits].map((exit) => ({ ...exit })),
     modelOnly: true,
     inputSchema,
     outputSchema,

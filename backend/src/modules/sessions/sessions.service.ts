@@ -174,6 +174,8 @@ export interface RunHostSpec {
   contextQueries?: ExplorableQuery[];
   /** Answer a Business Question's `buildVisual` (agents.md 5.11). */
   buildVisual?: true;
+  /** Answer a Business Question's `approveSteps` (workflows R44). */
+  approveSteps?: true;
   /**
    * Dashboard Image to Artifact's input image (agents.md 5.17): written to the
    * host's workspace at `path` before the turn.
@@ -615,6 +617,7 @@ export class SessionsService implements OnModuleInit {
         ? { contextQueries: spec.contextQueries }
         : {}),
       ...(spec.buildVisual ? { buildVisual: true as const } : {}),
+      ...(spec.approveSteps ? { approveSteps: true as const } : {}),
       ...(spec.image ? { inputImage: spec.image.path } : {}),
       ...(spec.inputImages?.length ? { inputImages: spec.inputImages } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),

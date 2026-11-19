@@ -84,6 +84,14 @@ import {
   type AnswerBusinessQuestionRuntime,
 } from '../../../mastra/workflows/answer-business-question.steps';
 import { analyseSystemBlocks } from '../../../mastra/workflows/answer-business-question.prompts';
+import { ANSWER_BUSINESS_QUESTION_MODEL } from '../../../mastra/workflows/answer-business-question.review';
+import { resolveAgentModelConfig } from '../../../mastra/model-resolver';
+import {
+  STEP_MODEL_CONTEXT_KEY,
+  servesClaude,
+  type StepModel,
+} from '../../../mastra/step-model';
+import { turnProviderOptions } from './session-datasets';
 import {
   READ_IMAGES_RUNTIME_KEY,
   imageNotesBlock,
@@ -262,6 +270,8 @@ export interface TurnEngineDeps {
       data: ToolDataRecord[];
       instruction?: string;
       reference?: string;
+      /** The workflow's step model (agents.md 1.3), when it has one. */
+      stepModel?: StepModel;
     },
     abortSignal?: AbortSignal,
   ): Promise<SessionVisualization>;
@@ -290,6 +300,7 @@ type TurnRunOutcome =
       stepId: string;
       question: string;
       options: string[];
+      review?: string;
       resume?: (answer: string) => Promise<TurnRunOutcome>;
       discard: () => Promise<void>;
     };
@@ -414,6 +425,21 @@ export class TurnEngine {
     const workflow = turnWorkflowOf(session);
     // v2's answer is its Write answer step's only (agents.md 5.11).
     const v2 = workflow.engineId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID;
+    // v2 runs its step agents on its own model and effort (agents.md 1.3)
+    // when the saved model is served as a Claude model: its agents read it
+    // from the context, and every step call and Analyse's turn send its
+    // effort. Otherwise the saved model and effort, as every agent.
+    const stepModel =
+      v2 && servesClaude(await resolveAgentModelConfig())
+        ? ANSWER_BUSINESS_QUESTION_MODEL
+        : undefined;
+    if (stepModel) {
+      options.requestContext.set(STEP_MODEL_CONTEXT_KEY, stepModel);
+      options.providerOptions = await turnProviderOptions(
+        { reasoningEffort: stepModel.reasoningEffort },
+        stepModel.model,
+      );
+    }
     // A follow-up that asks one agent (agents.md 5.21): only the Analyst
     // and Sarah answer as an agent turn; every other asked step's answer is
     // its model call's or the code's, which no synthesis replaces.
@@ -776,7 +802,17 @@ export class TurnEngine {
       // in her thread, stopped with `signal` (the turn's, or an early job's
       // own). A model error fails the step with its own message.
       const readImagesOn = async (
-        { question, images }: { question: string; images: string[] },
+        {
+          question,
+          images,
+          ...interactive
+        }: {
+          question: string;
+          images: string[];
+          canAsk?: boolean;
+          answered?: { question: string; answer: string };
+          revision?: { previous: string; note: string };
+        },
         signal: AbortSignal,
       ) => {
         const loaded: StepImage[] = [];
@@ -785,8 +821,9 @@ export class TurnEngine {
           loaded.push({ data, mediaType });
         }
         try {
+          // An interactive run's extras (workflows R44), only when given.
           const read = await this.deps.mastra.readImages(
-            { question, images: loaded },
+            { question, images: loaded, ...interactive },
             { ...stepModelOf(IMAGE_READER_AGENT_KEY), abortSignal: signal },
           );
           return { ...read, stopped: read.stopped || signal.aborted };
@@ -862,6 +899,13 @@ export class TurnEngine {
         // The current request's stream: a resumed turn reports to its own.
         (event) => emit(event),
         {
+          // A run of v2 whose input ticked Approve each step is interactive
+          // (workflows R44): its step agents may ask first, and each outcome
+          // waits for the user's approval. A past chat's turn never is: it
+          // cannot wait.
+          ...(v2 && suspendable && session.approveSteps === true
+            ? { interactive: true }
+            : {}),
           // v2's steps (agents.md 5.11): Plan and Write answer call the
           // agent's model without tools; Analyse streams the agent itself.
           plan: async ({
@@ -869,6 +913,7 @@ export class TurnEngine {
             catalogBlock,
             clarification: answered,
             imageNotes,
+            revision,
           }) => {
             try {
               // After Clarify, Plan plans with its question and the answer;
@@ -879,6 +924,7 @@ export class TurnEngine {
                   question,
                   catalogBlock,
                   ...(answered ? { answered } : {}),
+                  ...(revision ? { revision } : {}),
                   imageNotes,
                 }),
                 stepModelOf(ANALYSIS_PLANNER_AGENT_KEY),
@@ -1093,6 +1139,8 @@ export class TurnEngine {
                   data: keptRecords(queries),
                   ...(instruction !== undefined ? { instruction } : {}),
                   ...(imageNotes?.trim() ? { reference: imageNotes } : {}),
+                  // Ryan on v2's own model and effort (agents.md 1.3).
+                  ...(stepModel ? { stepModel } : {}),
                 },
                 turn.signal,
               );
@@ -1117,11 +1165,25 @@ export class TurnEngine {
           followUp,
           interpretFollowUp: async (request) => {
             try {
-              const spec = await this.deps.mastra.interpretResult(request, {
-                abortSignal: turn.signal,
-                onExchange: stepModelOf(RESULT_EXPLORER_AGENT_KEY).onExchange,
-              });
-              return { spec, stopped: turn.signal.aborted };
+              const step = stepModelOf(RESULT_EXPLORER_AGENT_KEY);
+              const { clarification, ...spec } =
+                await this.deps.mastra.interpretResult(request, {
+                  abortSignal: turn.signal,
+                  onExchange: step.onExchange,
+                  // The workflow's own model and effort (agents.md 1.3),
+                  // only when it has one: otherwise as before.
+                  ...(stepModel && step.providerOptions
+                    ? { providerOptions: step.providerOptions }
+                    : {}),
+                  ...(stepModel && step.requestContext
+                    ? { requestContext: step.requestContext }
+                    : {}),
+                });
+              return {
+                spec,
+                stopped: turn.signal.aborted,
+                ...(clarification ? { clarification } : {}),
+              };
             } catch (error) {
               if (turn.signal.aborted) return { spec: null, stopped: true };
               // The step plans the question instead; the reason is logged.
@@ -1216,17 +1278,23 @@ export class TurnEngine {
               imageNotes: earlier?.imageNotes ?? '',
             };
           },
-          writeAnswer: async (written) => {
+          writeAnswer: async ({ quiet, ...written }) => {
             try {
               // Zoe's notes only when the run has images (agents.md 5.11).
+              // An answer that waits on its approval gate is not streamed:
+              // the step delivers it once approved (workflows R44).
               const result = await this.deps.mastra.writeAnswer(
                 withImageNotes(written),
                 {
                   ...stepModelOf(ANSWER_WRITER_AGENT_KEY),
-                  onText: (delta) => {
-                    text += delta;
-                    emit({ type: 'text', content: delta });
-                  },
+                  ...(quiet
+                    ? {}
+                    : {
+                        onText: (delta: string) => {
+                          text += delta;
+                          emit({ type: 'text', content: delta });
+                        },
+                      }),
                 },
               );
               // The stored answer is the step's whole answer.
@@ -1234,6 +1302,9 @@ export class TurnEngine {
               return {
                 answer: result.answer,
                 stopped: result.stopped || turn.signal.aborted,
+                ...(result.clarification
+                  ? { clarification: result.clarification }
+                  : {}),
               };
             } catch (error) {
               throw await stepError(error);
@@ -1773,6 +1844,7 @@ export class TurnEngine {
             stepId: outcome.stepId,
             question: outcome.question,
             options: outcome.options,
+            ...(outcome.review ? { review: outcome.review } : {}),
             resume: async (answer: string, io: TurnResumeIo) => {
               emit = io.emit;
               abortSignal = io.abortSignal;
@@ -2151,6 +2223,8 @@ export class TurnEngine {
       } satisfies ConsumptionGapRuntime);
     } else {
       requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
+        // A run host's turn (workflows R44): its agents ask and wait.
+        ...(runtime.interactive ? { interactive: true } : {}),
         plan: (input) => captured(() => runtime.plan(input)),
         analyse: (input) => captured(() => runtime.analyse(input)),
         // Only a run host whose input ticked it (agents.md 5.11).
@@ -2173,6 +2247,11 @@ export class TurnEngine {
     if (readsImages) {
       requestContext.set(READ_IMAGES_RUNTIME_KEY, {
         readImages: (input) => captured(() => runtime.readImages(input)),
+        // Only a run of Answer a Business Question waits on Zoe (R44).
+        ...(runtime.interactive &&
+        workflow.engineId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID
+          ? { interactive: true }
+          : {}),
       } satisfies ReadImagesRuntime);
     }
     // The run's reference images (their stored paths), only when it has
@@ -2309,6 +2388,7 @@ export class TurnEngine {
           stepId,
           question: asked.question,
           options: asked.options,
+          ...(asked.review ? { review: asked.review } : {}),
           ...(resumeRun
             ? {
                 resume: (answer: string) =>

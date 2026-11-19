@@ -234,11 +234,31 @@ export const planClarificationSchema = z.object({
 
 /**
  * What a waiting step suspends with (the run's `waitingFor`, api.md 138):
- * one clarifying question and its options.
+ * one clarifying question and its options. In an interactive run
+ * (answer-business-question.review.ts) a step also waits on its approval
+ * gate: `kind: 'review'`, the outcome in words (`review`), the step's output
+ * passed on once approved (`outcome`) and the agent's reply (`reply`).
+ * Mastra keeps only the fields this schema names.
  */
 export const clarifyingQuestionSchema = z.object({
+  kind: z
+    .enum(['clarify', 'review'])
+    .optional()
+    .describe("'review': an approval gate; else a clarifying question."),
   question: z.string().describe('The clarifying question the run waits on.'),
   options: z.array(z.string()).describe('Its 2-4 answer options.'),
+  review: z
+    .string()
+    .optional()
+    .describe("An approval gate's outcome, in the user's words (Markdown)."),
+  outcome: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe("An approval gate's step output, passed on once approved."),
+  reply: z
+    .string()
+    .optional()
+    .describe("An approval gate's agent reply, shown again on a revision."),
 });
 
 /** What resumes a waiting step (api.md 138): the user's answer. */
@@ -600,11 +620,20 @@ export const ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS = {
   },
   // A follow-up over an earlier result (roadmap 1.28.8): no model call on
   // a run without earlier queries.
+  // In an interactive run (workflows R44) every step agent can wait for
+  // the user: its clarifying question, or its approval gate.
   'interpret-follow-up': {
     input: catalogedQuestionSchema,
     output: followedUpQuestionSchema,
+    suspend: clarifyingQuestionSchema,
+    resume: clarificationAnswerSchema,
   },
-  plan: { input: planInputSchema, output: plannedQuestionSchema },
+  plan: {
+    input: planInputSchema,
+    output: plannedQuestionSchema,
+    suspend: clarifyingQuestionSchema,
+    resume: clarificationAnswerSchema,
+  },
   // Clarify and Analyse can wait for the user (api.md 138): what they
   // suspend with, and what resumes them.
   clarify: {
@@ -623,6 +652,8 @@ export const ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS = {
   'write-answer': {
     input: writeAnswerInputSchema,
     output: writtenAnswerSchema,
+    suspend: clarifyingQuestionSchema,
+    resume: clarificationAnswerSchema,
   },
   // Optional (the input's `buildVisual`): Ryan's visual of the answer.
   'build-visual': { input: visualInputSchema, output: visualBuiltSchema },

@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { agentInstructions } from '../agent-prompt-overrides';
 import { IMAGE_READER_AGENT_KEY } from '../agent-constants';
 import { resolveAgentModel } from '../model-resolver';
+import { stepModelFrom } from '../step-model';
 import { READ_IMAGES_INSTRUCTIONS } from '../workflows/read-images.prompts';
 
 /**
@@ -22,5 +23,7 @@ export const imageReaderAgent = new Agent({
     'Reads the reference images attached to a run and describes what each shows for the analysts. No tools.',
   instructions: () =>
     agentInstructions(IMAGE_READER_AGENT_KEY, READ_IMAGES_INSTRUCTIONS),
-  model: async () => resolveAgentModel(),
+  // A workflow may run its step agents on its own model (agents.md 1.3).
+  model: async ({ requestContext }) =>
+    resolveAgentModel(stepModelFrom(requestContext)?.model),
 });

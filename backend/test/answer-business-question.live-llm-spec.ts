@@ -114,7 +114,13 @@ describeLive(
       context?: { fromRunId: string },
     ) =>
       client.run(WORKFLOW, {
-        input: { question, datasets: [DATASET], buildVisual: false, ...extra },
+        input: {
+          question,
+          datasets: [DATASET],
+          buildVisual: false,
+          approveSteps: false,
+          ...extra,
+        },
         ...(context ? { context } : {}),
       });
 

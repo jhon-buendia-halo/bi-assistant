@@ -118,15 +118,18 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     });
     // Receive question has no exit: the input node checks the question first.
     expect(step('receive-question').exits).toEqual([]);
-    // Analyse can ask a clarifying question: the run waits for the answer.
+    // Analyse can ask a clarifying question: the run waits for the answer;
+    // in an interactive run its attempt waits for approval (workflows R44).
     expect(step('analyse').exits).toEqual([
       { label: 'the model returns an error', outcome: 'fails' },
       { label: 'you stop it', outcome: 'stops' },
       { label: 'if it asks you a question', outcome: 'waits' },
+      { label: 'until you approve its work', outcome: 'waits' },
     ]);
     expect(step('plan').exits).toEqual([
       { label: 'the model returns an error', outcome: 'fails' },
       { label: 'you stop it', outcome: 'stops' },
+      { label: 'until you approve its work', outcome: 'waits' },
     ]);
     expect(step('write-answer').output).toEqual([
       'headline',

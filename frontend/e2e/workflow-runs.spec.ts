@@ -46,6 +46,7 @@ const V2_STEPS = [
 async function fillRun(page: Page, question: string, dataset?: string): Promise<void> {
   await fillRunDefault(page, question, dataset);
   await page.getByTestId('workflow-input-buildVisual').setChecked(false);
+  await page.getByTestId('workflow-input-approveSteps').setChecked(false);
 }
 
 let stub: LlmStub;
@@ -252,6 +253,83 @@ test.describe('Feature: Workflow runs', () => {
           expect(question, 'the earlier question').toBeGreaterThanOrEqual(0);
           expect(answer, 'the earlier answer').toBeGreaterThan(question);
           expect(next, 'the follow-up after both').toBeGreaterThan(answer);
+        },
+      );
+    },
+  );
+
+  test(
+    "I approve each agent's work before the next one starts",
+    { tag: ['@demo'] },
+    async ({ page }) => {
+      stub.reply = answerWithSql({ [QUESTION]: ANSWER });
+      const card = page.getByTestId('workflow-run-input-required');
+
+      await scenarioStep(
+        page,
+        `Given I open "${V2}" and its Run tab`,
+        async () => {
+          await openWorkflowPage(page, V2_ID, V2);
+          await openRunTab(page);
+        },
+      );
+      await scenarioStep(
+        page,
+        `When "Approve each step" is ticked by default, I ask "${QUESTION}" without a visual and click Execute`,
+        async () => {
+          await expect(
+            page.getByTestId('workflow-input-approveSteps'),
+          ).toBeChecked();
+          await fillRunDefault(page, QUESTION, WORLD_CUP_DATASET);
+          // fillRun unticks approvals for the other scenarios; this one wants them.
+          await page.getByTestId('workflow-input-approveSteps').setChecked(true);
+          await page
+            .getByTestId('workflow-input-buildVisual')
+            .setChecked(false);
+          await page.getByTestId('workflow-run').click();
+        },
+      );
+      await scenarioStep(
+        page,
+        "Then the run waits for my approval of Olivia's plan, with no options and no changes asked yet",
+        async () => {
+          await expect(card).toBeVisible();
+          await expect(card).toContainText('Waiting for your approval');
+          await expect(card).toContainText("Olivia's plan is ready");
+          await expect(
+            card.getByTestId('workflow-run-input-review'),
+          ).toContainText('Measures');
+          await expect(
+            card.getByTestId('workflow-run-input-approve'),
+          ).toBeEnabled();
+          await expect(
+            card.locator('[data-testid^="workflow-run-input-option-"]'),
+          ).toHaveCount(0);
+          await expect(
+            card.getByTestId('workflow-run-input-continue'),
+          ).toHaveText('Ask for changes');
+          await expect(
+            card.getByTestId('workflow-run-input-continue'),
+          ).toBeDisabled();
+        },
+      );
+      await scenarioStep(
+        page,
+        "When I approve the plan, then Michael's analysis waits for me",
+        async () => {
+          await card.getByTestId('workflow-run-input-approve').click();
+          await expect(card).toContainText("Michael's analysis is ready");
+        },
+      );
+      await scenarioStep(
+        page,
+        'When I approve the analysis, then the run ends with an answer',
+        async () => {
+          await card.getByTestId('workflow-run-input-approve').click();
+          await expect(page.getByTestId('workflow-run-status')).toHaveText(
+            'Run succeeded',
+          );
+          await expect(runAnswer(page)).toContainText(ANSWER);
         },
       );
     },
@@ -499,6 +577,7 @@ test.describe('Feature: Workflow runs', () => {
       await openWorkflowPage(page, V2_ID, V2);
       await openRunTab(page);
       await pickDataset(page, WORLD_CUP_DATASET);
+      await page.getByTestId('workflow-input-approveSteps').setChecked(false);
     });
     await test.step('When I type the question and press Enter', async () => {
       const question = page.getByTestId('workflow-input-question');
@@ -553,6 +632,15 @@ test.describe('Feature: Workflow runs', () => {
     });
     await test.step(`Then "${V2}" opens, runs on my question and I see the answer`, async () => {
       await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
+      // Home starts the run with the defaults, Approve each step among them:
+      // approve each agent's work as it waits.
+      const approve = page.getByTestId('workflow-run-input-approve');
+      await expect(async () => {
+        if (await approve.isVisible()) await approve.click();
+        await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded', {
+          timeout: 1_500,
+        });
+      }).toPass({ timeout: 30_000 });
       await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       await expect(runAnswer(page)).toContainText(ANSWER);
       await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);

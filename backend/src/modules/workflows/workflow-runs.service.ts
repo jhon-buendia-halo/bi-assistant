@@ -792,6 +792,7 @@ export class WorkflowRunsService implements OnModuleInit {
         ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
         ...(prepared.turn.datasets ? { datasets: prepared.turn.datasets } : {}),
         ...(prepared.turn.buildVisual ? { buildVisual: true } : {}),
+        ...(prepared.turn.approveSteps ? { approveSteps: true } : {}),
         ...(prepared.image ? { image: prepared.image } : {}),
         ...(prepared.images.length
           ? {
@@ -1113,7 +1114,8 @@ export class WorkflowRunsService implements OnModuleInit {
       return run;
     }
     if (run.status === 'suspended' && run.waitingFor) {
-      const { stepId, title, question, options, expiresAt } = run.waitingFor;
+      const { stepId, title, question, options, review, expiresAt } =
+        run.waitingFor;
       live({
         type: 'input-required',
         runId: run.id,
@@ -1121,6 +1123,7 @@ export class WorkflowRunsService implements OnModuleInit {
         title,
         question,
         options,
+        ...(review ? { review } : {}),
         expiresAt,
       });
     }
@@ -1974,6 +1977,7 @@ export class WorkflowRunsService implements OnModuleInit {
         title: step?.title ?? suspension.stepId,
         question: suspension.question,
         options: suspension.options,
+        ...(suspension.review ? { review: suspension.review } : {}),
         since: since.toISOString(),
         expiresAt: new Date(expiresAt).toISOString(),
       },
