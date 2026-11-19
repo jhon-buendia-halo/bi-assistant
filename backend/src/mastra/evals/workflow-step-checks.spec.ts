@@ -124,6 +124,40 @@ describe('workflowStepChecks (agents-evals R259 to R261)', () => {
     expect(plan.reason).toContain('v_match_results');
   });
 
+  it('counts a view over a reference table as naming it', () => {
+    const [plan] = workflowStepChecks(
+      input({
+        expectedSql:
+          'SELECT 1 FROM finance.transactions t JOIN finance.accounts a ON 1=1',
+        steps: {
+          ...input().steps,
+          plan: {
+            plan: { ...PLAN.plan, entities: ['finance.v_transactions'] },
+          },
+        },
+      }),
+    );
+    expect(plan.status).toBe('passed');
+    const [reverse] = workflowStepChecks(
+      input({
+        expectedSql: 'SELECT 1 FROM world_cup.v_player_goal_totals',
+        steps: {
+          ...input().steps,
+          plan: { plan: { ...PLAN.plan, entities: ['goals', 'players'] } },
+        },
+      }),
+    );
+    expect(reverse.status).toBe('passed');
+  });
+
+  it('fails Plan for asking back on a question with a reference answer', () => {
+    const s = statuses({
+      steps: { plan: { plan: { ...PLAN.plan, needsClarification: true } } },
+      endedOnClarification: true,
+    });
+    expect(s['step-plan']).toBe('failed');
+  });
+
   it('fails Plan for asking back when the case should be answered', () => {
     const s = statuses({
       expects: { clarification: false },

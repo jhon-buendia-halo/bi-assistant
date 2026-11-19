@@ -137,6 +137,26 @@ function bareName(name: string): string {
   return last.replace(/[`"[\]]/g, '').toLowerCase();
 }
 
+/** A table name without a plural ending: `matches` → `match`. */
+function stem(table: string): string {
+  return table.replace(/(?:es|s)$/, '');
+}
+
+/**
+ * Whether a catalogue entity Plan named stands for a table the reference
+ * reads: the table itself, or a view over it, which the catalogue names
+ * `v_<…>` around the table's stem (`v_transactions` for `transactions`,
+ * `v_match_results` for `matches`, `v_player_goal_totals` for `goals`).
+ * Plan checks it both ways: a base table it named also stands for a
+ * reference that reads a view over it.
+ */
+export function namesTable(entity: string, table: string): boolean {
+  if (entity === table) return true;
+  if (!entity.startsWith('v_')) return false;
+  const root = stem(table);
+  return root.length >= 3 && entity.slice(2).includes(root);
+}
+
 /** The tables a reference query reads (its CTE names left out). */
 export function referenceTables(sql: string): string[] {
   const ctes = new Set(
@@ -221,7 +241,11 @@ export function workflowStepChecks(input: StepCheckInput): StepCheckResult[] {
         'Plan went on to analyse; the question needed a clarifying question',
       ),
     );
-  } else if (expects.clarification === false && planAsked) {
+  } else if (
+    planAsked &&
+    (expects.clarification === false ||
+      (expects.clarification === undefined && input.expectedSql))
+  ) {
     results.push(
       verdict(
         'plan',
@@ -236,7 +260,11 @@ export function workflowStepChecks(input: StepCheckInput): StepCheckResult[] {
     )
       .filter((entity): entity is string => typeof entity === 'string')
       .map(bareName);
-    const hit = wanted.some((table) => named.includes(table));
+    const hit = wanted.some((table) =>
+      named.some(
+        (entity) => namesTable(entity, table) || namesTable(table, entity),
+      ),
+    );
     results.push(
       wanted.length && !hit
         ? verdict(
