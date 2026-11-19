@@ -556,6 +556,7 @@ export function workflowTurnAgent(
       [EVAL_DETAILS_KEY]: {
         steps,
         ...(judgeContext ? { judgeContext } : {}),
+        ...(clarified ? { endedOnClarification: true } : {}),
       } satisfies EvalRunDetails,
     };
   };

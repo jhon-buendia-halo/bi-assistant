@@ -13,6 +13,7 @@ import { DETERMINISTIC_CHECKS } from './checks';
 import type { CheckContext } from './checks';
 import { checkScorer } from './checks/check-scorer';
 import { sampleViews } from './sample-views';
+import { expectationsOf } from './workflow-step-checks';
 
 /**
  * The Mastra scorer a set file's check stands for. The six helper types call
@@ -96,6 +97,11 @@ export function toAssistantEvalSets(
       ...(evalCase.judgeRubric !== undefined
         ? { judgeRubric: evalCase.judgeRubric }
         : {}),
+      // What the workflow's step checks judge Plan and Build visual by.
+      ...(() => {
+        const expects = expectationsOf(evalCase.checks);
+        return Object.keys(expects).length ? { expects } : {};
+      })(),
       // The case's tool selection, put on its requestContext by the runner.
       ...(evalCase.agentTools ? { agentTools: evalCase.agentTools } : {}),
       category: evalCase.category,

@@ -1056,3 +1056,68 @@ describe('judgePrompt (agents.md 8.1, 8.2)', () => {
     );
   });
 });
+
+describe('workflow step checks in the runner (agents-evals R258 to R261)', () => {
+  it('adds the step checks of a workflow target, and they never change the verdict', async () => {
+    jest.mocked(runEvals).mockImplementation(((config: RunEvalsCall) => {
+      config.onItemComplete?.({
+        targetResult: {
+          text: 'France 4',
+          evalDetails: {
+            steps: {
+              plan: {
+                plan: {
+                  needsClarification: true,
+                  entities: [],
+                  clarification: null,
+                },
+              },
+            },
+            endedOnClarification: true,
+          },
+        } as never,
+        scorerResults: {},
+      });
+      return Promise.resolve({
+        scores: Object.fromEntries(
+          config.scorers.map((scorer) => [scorer.id, 1]),
+        ),
+      });
+    }) as never);
+    const evalCase = {
+      ...judgedCase('lookup', { rubric: false }),
+      expects: { clarification: false },
+    };
+    const result = await runAssistantEvalCase(
+      evalCase,
+      ['World Cup'],
+      undefined,
+      undefined,
+      { ...ASSISTANT_EVAL_TARGET, scoresWorkflowSteps: true },
+      { mode: 'off' },
+    );
+    const steps = result.checkResults.filter((c) => c.id.startsWith('step-'));
+    expect(steps.map((c) => [c.id, c.status])).toEqual([
+      ['step-plan', 'failed'],
+      ['step-analyse', 'not-scored'],
+      ['step-validate', 'not-scored'],
+      ['step-write', 'not-scored'],
+      ['step-visual', 'not-scored'],
+    ]);
+    expect(result.status).toBe('passed');
+  });
+
+  it('adds no step checks for an agent target', async () => {
+    const result = await runAssistantEvalCase(
+      judgedCase('lookup', { rubric: false }),
+      ['World Cup'],
+      undefined,
+      undefined,
+      ASSISTANT_EVAL_TARGET,
+      { mode: 'off' },
+    );
+    expect(result.checkResults.some((c) => c.id.startsWith('step-'))).toBe(
+      false,
+    );
+  });
+});

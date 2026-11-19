@@ -369,6 +369,7 @@ export function insightsAnalystEvalTarget(
     },
     sets: [INSIGHTS_ANALYST_EVAL_SET, INSIGHTS_ANALYST_EDGE_EVAL_SET],
     notApplicable: workflowNotApplicable,
+    scoresWorkflowSteps: true,
     // The judge checks that every fact rests on a query, so it reads the
     // whole result the model saw, not its first 2,000 characters.
     judgeTraceChars: 12_000,

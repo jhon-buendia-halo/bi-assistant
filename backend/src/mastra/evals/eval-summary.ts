@@ -20,6 +20,14 @@ import type {
   EvalCheckResult,
 } from './assistant.evals';
 
+import { gatesVerdict } from './checks/check-layers';
+import {
+  brokeAt,
+  STEP_CHECK_IDS,
+  WORKFLOW_STEPS,
+} from './workflow-step-checks';
+import type { WorkflowStep } from './workflow-step-checks';
+
 export const EVAL_STATUSES = ['passed', 'failed', 'not-scored'] as const;
 export type EvalStatus = (typeof EVAL_STATUSES)[number];
 
@@ -56,6 +64,16 @@ export interface EvalCriterionSummary {
   total: number;
 }
 
+/** One workflow step's checks over every attempt (R263). */
+export interface EvalStepSummary {
+  step: WorkflowStep;
+  passed: number;
+  failed: number;
+  notScored: number;
+  /** Failed questions whose first failed step check is this one. */
+  brokeAt: number;
+}
+
 export interface EvalRunSummary {
   /** Questions per status; a flaky question is failed (R211). */
   passed: number;
@@ -67,10 +85,13 @@ export interface EvalRunSummary {
   byCategory: EvalCategorySummary[];
   /** Scored checks with a criterion over every attempt, not questions. */
   byCriterion: EvalCriterionSummary[];
+  /** A whole-workflow run's step checks (R263); absent for any other run. */
+  byStep?: EvalStepSummary[];
 }
 
 /** Enough of a check or a question to know its status, old records included. */
 interface HasStatus {
+  id?: string;
   status?: EvalStatus;
   passed?: boolean;
 }
@@ -94,7 +115,9 @@ export function questionStatus(
   error?: string,
 ): EvalStatus {
   if (error) return 'failed';
+  // A workflow step check is diagnostic: it never decides the verdict (R258).
   const scored = checks
+    .filter((check) => gatesVerdict(check.id))
     .map(checkStatusOf)
     .filter((status) => status !== 'not-scored');
   if (scored.length === 0) return 'not-scored';
@@ -223,6 +246,13 @@ export function summarizeEvalResults(
   const categoryOrder: string[] = [];
   const criterionOrder: string[] = [];
   const totals = emptyCounts();
+  const steps = new Map<WorkflowStep, EvalStepSummary>(
+    WORKFLOW_STEPS.map((step) => [
+      step,
+      { step, passed: 0, failed: 0, notScored: 0, brokeAt: 0 },
+    ]),
+  );
+  let anyStep = false;
   const splits = { dev: emptyCounts(), heldOut: emptyCounts() };
 
   for (const result of results) {
@@ -250,6 +280,27 @@ export function summarizeEvalResults(
     const checkLists = result.attempts?.length
       ? result.attempts.map((attempt) => attempt.checkResults ?? [])
       : [result.checkResults ?? []];
+    // The question's step checks (R263), and where a failed one broke.
+    for (const step of WORKFLOW_STEPS) {
+      for (const check of checkLists.flat()) {
+        if (check.id !== STEP_CHECK_IDS[step]) continue;
+        anyStep = true;
+        const counts = steps.get(step)!;
+        const stepStatus = checkStatusOf(check);
+        counts[stepStatus === 'not-scored' ? 'notScored' : stepStatus] += 1;
+      }
+    }
+    if (status === 'failed') {
+      const failedAttempt =
+        checkLists.find((list) => questionStatus(list) === 'failed') ?? [];
+      const broke = brokeAt(
+        failedAttempt.map((check) => ({
+          id: check.id ?? '',
+          status: checkStatusOf(check),
+        })),
+      );
+      if (broke) steps.get(broke)!.brokeAt += 1;
+    }
     for (const check of checkLists.flat()) {
       const checkStatus = checkStatusOf(check);
       if (!check.criterion || checkStatus === 'not-scored') continue;
@@ -296,6 +347,7 @@ export function summarizeEvalResults(
     byCriterion: ordered(criterionOrder, EVAL_CRITERIA).map((criterion) =>
       criteria.get(criterion)!,
     ),
+    ...(anyStep ? { byStep: [...steps.values()] } : {}),
   };
 }
 
@@ -355,8 +407,32 @@ export function renderSummaryMarkdown(summary: EvalRunSummary): string[] {
       ),
     );
   }
+  // A whole-workflow run's steps (R263): diagnostic, never in the verdict.
+  if (summary.byStep?.length) {
+    lines.push(
+      '',
+      '## Workflow steps',
+      '',
+      'Step checks over every attempt; they never change a verdict. "Broke here" counts the failed questions whose first failed step is this one.',
+      '',
+      '| Step | Passed | Failed | Not scored | Broke here |',
+      '| --- | --- | --- | --- | --- |',
+      ...summary.byStep.map(
+        (entry) =>
+          `| ${STEP_LABELS[entry.step]} | ${entry.passed} | ${entry.failed} | ${entry.notScored} | ${entry.brokeAt} |`,
+      ),
+    );
+  }
   return lines;
 }
+
+const STEP_LABELS: Record<WorkflowStep, string> = {
+  plan: 'Plan',
+  analyse: 'Analyse',
+  validate: 'Validate',
+  write: 'Write answer',
+  visual: 'Build visual',
+};
 
 /** A count with thousands separators: `12,345`. */
 function thousands(value: number): string {

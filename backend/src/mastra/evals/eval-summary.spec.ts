@@ -210,9 +210,10 @@ describe('summarizeEvalResults (agents-evals R148)', () => {
       byCategory: [],
       byCriterion: [],
     });
-    expect(
-      summarizeEvalResults([{ id: 'x', passed: true } as never]),
-    ).toMatchObject({ passed: 1, byCriterion: [] });
+    expect(summarizeEvalResults([{ id: 'x', passed: true }])).toMatchObject({
+      passed: 1,
+      byCriterion: [],
+    });
   });
 });
 
@@ -362,7 +363,7 @@ describe('summarizeEvalResults splits, flaky and intervals (R212, R213)', () => 
   });
 
   it('counts a result with no split as dev', () => {
-    const summary = summarizeEvalResults([{ id: 'x', passed: true } as never]);
+    const summary = summarizeEvalResults([{ id: 'x', passed: true }]);
     expect(summary.bySplit.dev.passed).toBe(1);
   });
 });
@@ -490,6 +491,65 @@ describe('renderSummaryMarkdown (agents-evals R153)', () => {
     expect(markdown).toContain('## By category\n\nNo finished questions yet.');
     expect(markdown).toContain(
       '## By criterion\n\nNo scored check names a criterion.',
+    );
+  });
+});
+
+describe('workflow steps in the summary (agents-evals R263)', () => {
+  const check = (id: string, status: EvalStatus) => ({
+    id,
+    description: id,
+    score: status === 'passed' ? 1 : 0,
+    passed: status === 'passed',
+    status,
+  });
+  const summary = summarizeEvalResults([
+    {
+      status: 'failed',
+      checkResults: [
+        check('check-includes', 'failed'),
+        check('step-plan', 'passed'),
+        check('step-analyse', 'passed'),
+        check('step-write', 'failed'),
+      ],
+    },
+    {
+      status: 'passed',
+      checkResults: [
+        check('check-includes', 'passed'),
+        check('step-plan', 'failed'),
+        check('step-analyse', 'not-scored'),
+      ],
+    },
+  ] as never);
+
+  it('counts each step and where failed questions broke', () => {
+    expect(summary.byStep?.find((s) => s.step === 'plan')).toEqual({
+      step: 'plan',
+      passed: 1,
+      failed: 1,
+      notScored: 0,
+      brokeAt: 0,
+    });
+    expect(summary.byStep?.find((s) => s.step === 'write')?.brokeAt).toBe(1);
+    expect(summary.byStep?.find((s) => s.step === 'analyse')?.notScored).toBe(
+      1,
+    );
+  });
+
+  it('adds the Workflow steps table to the Markdown', () => {
+    const markdown = renderSummaryMarkdown(summary).join('\n');
+    expect(markdown).toContain('## Workflow steps');
+    expect(markdown).toContain('| Write answer | 0 | 1 | 0 | 1 |');
+  });
+
+  it('has no step section for an agent run', () => {
+    const agent = summarizeEvalResults([
+      { status: 'passed', checkResults: [check('check-includes', 'passed')] },
+    ] as never);
+    expect(agent.byStep).toBeUndefined();
+    expect(renderSummaryMarkdown(agent).join('\n')).not.toContain(
+      'Workflow steps',
     );
   });
 });

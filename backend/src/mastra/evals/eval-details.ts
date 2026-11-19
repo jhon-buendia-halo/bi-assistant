@@ -54,6 +54,11 @@ export interface EvalRunDetails {
    * calls, so it can see the schema the agent worked from (agents.md 8.1).
    */
   judgeContext?: string;
+  /**
+   * Whole-workflow targets: the run ended on a clarifying question (Plan's
+   * or Analyse's), so the steps after it did not run (agents-evals R260).
+   */
+  endedOnClarification?: boolean;
 }
 
 /** The key of a target result's details (`runAssistantEvalCase` reads it). */

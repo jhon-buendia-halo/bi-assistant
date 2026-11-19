@@ -10,6 +10,7 @@ import {
   evalDiffMain,
   findRow,
   formatRate,
+  onLayer,
   parseTargets,
   renderDiff,
   RESULTS_TSV_COLUMNS,
@@ -526,5 +527,60 @@ describe('evalDiffMain on runs saved in app.sqlite (R225 to R227)', () => {
     expect(out[out.length - 1]).toBe('Accept rule: met');
     // Read only: the data directory's database is byte for byte the same.
     expect(readFileSync(database).equals(stored)).toBe(true);
+  });
+});
+
+describe('onLayer (agents-evals R262)', () => {
+  const check = (id: string, status: 'passed' | 'failed') => ({
+    id,
+    description: id,
+    score: status === 'passed' ? 1 : 0,
+    passed: status === 'passed',
+    status,
+  });
+  const run = loopRun(BEFORE, [
+    storedResult('path-only', 'failed', {
+      checkResults: [
+        check('check-includes', 'passed'),
+        check('check-called-tool', 'failed'),
+      ],
+    }),
+    storedResult('answer-wrong', 'failed', {
+      checkResults: [
+        check('check-includes', 'failed'),
+        check('check-called-tool', 'passed'),
+      ],
+    }),
+    storedResult('path-checks-only', 'passed', {
+      checkResults: [check('check-called-tool', 'passed')],
+    }),
+  ]);
+
+  it('reads each verdict from the outcome checks only', () => {
+    const outcome = onLayer(run, 'outcome');
+    const status = Object.fromEntries(
+      outcome.results.map((r) => [r.id, r.status]),
+    );
+    expect(status).toEqual({
+      'path-only': 'passed',
+      'answer-wrong': 'failed',
+      'path-checks-only': 'not-scored',
+    });
+  });
+
+  it('refuses an unknown layer and names it in the output', async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const io = {
+      out: (l: string) => out.push(l),
+      err: (l: string) => err.push(l),
+    };
+    const code = await evalDiffMain(
+      ['--before', 'x', '--after', 'y', '--layer', 'path'],
+      {},
+      io,
+    );
+    expect(code).toBe(2);
+    expect(err.join('\n')).toContain('Unknown --layer "path"');
   });
 });

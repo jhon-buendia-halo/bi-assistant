@@ -35,6 +35,8 @@ import {
   withLandingCopy,
 } from './schema-notes-eval-checks';
 import type { ResultSetCheckOptions } from './result-set-check';
+import { workflowStepChecks } from './workflow-step-checks';
+import type { CaseExpectations } from './workflow-step-checks';
 import { loadEvalSets } from './eval-set-files';
 import type { EvalCategory, EvalCriterion, EvalSplit } from './eval-set-files';
 import { toAssistantEvalSets } from './eval-check-scorers';
@@ -119,6 +121,12 @@ export interface AssistantEvalCase {
    */
   expectedSql?: string;
   resultSetOptions?: ResultSetCheckOptions;
+  /**
+   * What the case expects of the run, read from its `askedClarification`
+   * and `builtVisual` checks: the workflow's step checks judge Plan and
+   * Build visual by it (agents-evals R259).
+   */
+  expects?: CaseExpectations;
   /**
    * A natural-language grading rubric for cases where a regex/text check on
    * the final answer would be too brittle (clarification quality, refusal
@@ -524,6 +532,13 @@ export interface EvalTarget {
    * comparison across targets leaves it out of both sides.
    */
   notApplicable?(evalCase: AssistantEvalCase): string | undefined;
+  /**
+   * A whole-workflow target whose step outputs (`EvalRunDetails.steps`)
+   * the runner scores with the workflow step checks (agents-evals R259 to
+   * R261): diagnostic checks of the `step` layer that never change a
+   * question's verdict.
+   */
+  scoresWorkflowSteps?: boolean;
   /** Clean-up after each case (passed, failed or thrown). Never throws. */
   afterCase?(datasets: string[]): Promise<void>;
   /** Clean-up once a run's cases are done (or it failed). Never throws. */
@@ -1571,6 +1586,38 @@ export async function runAssistantEvalCase(
           }),
           undefined,
         ),
+      );
+    }
+
+    // The workflow's step checks (R259 to R261), from the step outputs and
+    // the reference rows, after every check they read. Diagnostic: they
+    // never change the verdict (questionStatus leaves the step layer out).
+    if (target.scoresWorkflowSteps && details.steps) {
+      let stepReference = referenceRows;
+      if (!stepReference && evalCase.expectedSql) {
+        const runReference = caseReferenceRunner(datasets, datasetSnapshots);
+        try {
+          stepReference = runReference
+            ? await runReference(evalCase.expectedSql)
+            : undefined;
+        } catch {
+          stepReference = undefined;
+        }
+      }
+      checkResults.push(
+        ...workflowStepChecks({
+          steps: details.steps,
+          expects: evalCase.expects ?? {},
+          ...(evalCase.expectedSql
+            ? { expectedSql: evalCase.expectedSql }
+            : {}),
+          ...(stepReference ? { referenceRows: stepReference } : {}),
+          ...(evalCase.resultSetOptions
+            ? { resultSetOptions: evalCase.resultSetOptions }
+            : {}),
+          endedOnClarification: details.endedOnClarification === true,
+          checks: checkResults,
+        }),
       );
     }
 

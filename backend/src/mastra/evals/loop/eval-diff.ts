@@ -38,6 +38,8 @@ import {
   UNCATEGORISED,
 } from './run-source';
 import type { LoopCost, LoopResult, LoopRun } from './run-source';
+import { layerOf } from '../checks/check-layers';
+import { questionStatus } from '../eval-summary';
 
 export type DiffFlag = 'up' | 'down' | 'within';
 export type SideName = 'before' | 'after';
@@ -112,6 +114,49 @@ export interface DraftOptions {
   targets?: readonly string[];
   /** `YYYY-MM-DD`; today when absent. */
   date?: string;
+}
+
+/** The layers `--layer` takes (agents-evals R262). */
+export const DIFF_LAYERS = ['outcome'] as const;
+export type DiffLayer = (typeof DIFF_LAYERS)[number];
+
+/**
+ * A run with each question's verdict read from one layer's checks only
+ * (agents-evals R262): each attempt passes when every scored check of the
+ * layer passed (a run error still fails it), and the question passes when
+ * every scored attempt did (pass^k). An agent and a workflow are compared on
+ * the outcome layer: what the user gets, not how it was reached.
+ */
+export function onLayer(run: LoopRun, layer: DiffLayer): LoopRun {
+  return {
+    ...run,
+    results: run.results.map((result) => {
+      if (result.status === 'not-scored' && !result.attempts.length) {
+        return result;
+      }
+      const attempts = result.attempts.map((attempt) => ({
+        ...attempt,
+        status: questionStatus(
+          attempt.checks.filter((check) => layerOf(check.id) === layer),
+          attempt.error,
+        ),
+      }));
+      const scored = attempts.filter((a) => a.status !== 'not-scored');
+      const passes = scored.filter((a) => a.status === 'passed').length;
+      const status = !scored.length
+        ? 'not-scored'
+        : passes === scored.length
+          ? 'passed'
+          : 'failed';
+      return {
+        ...result,
+        attempts,
+        status,
+        passes,
+        flaky: passes > 0 && passes < scored.length,
+      };
+    }),
+  };
 }
 
 /**
@@ -724,11 +769,16 @@ function listResults(results: readonly LoopResult[]): string {
 /** Everything `eval:diff` prints, in order (R225, R226, R227). */
 export function renderDiff(
   diff: EvalDiff,
-  options: DraftOptions & { tsv?: boolean; accept?: AcceptCheck } = {},
+  options: DraftOptions & {
+    tsv?: boolean;
+    accept?: AcceptCheck;
+    layer?: DiffLayer;
+  } = {},
 ): string[] {
   const lines: string[] = [];
   lines.push(`Before: ${diff.before.runs.map(describeRun).join('; ')}`);
   lines.push(`After:  ${diff.after.runs.map(describeRun).join('; ')}`);
+  if (options.layer) lines.push(`Layer: ${options.layer} checks only`);
   lines.push('');
   lines.push(
     ...table([
@@ -788,7 +838,7 @@ export function renderDiff(
 }
 
 export const EVAL_DIFF_USAGE =
-  'npm --prefix backend run eval:diff -- --before <runs> --after <runs> [--data-dir <dir>] [--target <categories>] [--round <n>] [--lever "<text>"] [--hypothesis "<text>"] [--tsv]';
+  'npm --prefix backend run eval:diff -- --before <runs> --after <runs> [--data-dir <dir>] [--target <categories>] [--round <n>] [--lever "<text>"] [--hypothesis "<text>"] [--layer outcome] [--tsv]';
 
 const FLAGS = {
   before: 'string',
@@ -799,6 +849,7 @@ const FLAGS = {
   lever: 'string',
   hypothesis: 'string',
   tsv: 'boolean',
+  layer: 'string',
 } as const;
 
 /**
@@ -820,9 +871,17 @@ export function evalDiffMain(
     }
     const targets = parseTargets(flags.target);
     const dataDir = dataDirFrom(flags['data-dir'], env);
+    const layer = flags.layer;
+    if (layer !== undefined && !DIFF_LAYERS.includes(layer as DiffLayer)) {
+      throw new LoopInputError(
+        `Unknown --layer "${layer}"; use ${DIFF_LAYERS.join(' or ')}`,
+      );
+    }
+    const pick = (runs: LoopRun[]) =>
+      layer ? runs.map((run) => onLayer(run, layer as DiffLayer)) : runs;
     const diff = computeDiff(
-      loadRuns(flags.before, dataDir, env),
-      loadRuns(flags.after, dataDir, env),
+      pick(loadRuns(flags.before, dataDir, env)),
+      pick(loadRuns(flags.after, dataDir, env)),
     );
     const accept = targets ? checkAcceptRule(diff, targets) : undefined;
     const lines = renderDiff(diff, {
@@ -833,6 +892,7 @@ export function evalDiffMain(
       date: today,
       tsv: flags.tsv,
       accept,
+      ...(layer ? { layer: layer as DiffLayer } : {}),
     });
     for (const line of lines) io.out(line);
     return accept && !accept.met ? 1 : 0;
