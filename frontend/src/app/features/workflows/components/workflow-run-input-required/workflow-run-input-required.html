@@ -28,6 +28,18 @@
       aria-label="What the agent produced"
       [innerHTML]="review | markdown"
     ></div>
+    @if (waiting().visualId; as visualId) {
+      <div>
+        <button
+          type="button"
+          class="btn btn-secondary"
+          data-testid="workflow-run-input-open-visual"
+          (click)="openVisual.emit(visualId)"
+        >
+          Open visual
+        </button>
+      </div>
+    }
     @if (!expired()) {
       <div>
         <button
@@ -57,7 +69,13 @@
     </div>
   }
   <label class="flex flex-col gap-1 text-[12px] text-fg-muted" [attr.for]="uid + '-answer'">
-    {{ gate() ? 'Or say what to change' : 'Your answer' }}
+    {{
+      gate()
+        ? visualId() !== null
+          ? 'Or say what to change (a filter, another chart…)'
+          : 'Or say what to change'
+        : 'Your answer'
+    }}
     <textarea
       [id]="uid + '-answer'"
       rows="2"
@@ -68,6 +86,17 @@
       (input)="onInput($event)"
     ></textarea>
   </label>
+  @if (visualId() !== null && !expired()) {
+    <div data-testid="workflow-run-input-images">
+      <app-workflow-run-attachments
+        [images]="images()"
+        [max]="4"
+        [error]="imageError()"
+        (picked)="addImages($event)"
+        (removed)="removeImage($event)"
+      />
+    </div>
+  }
   @if (error(); as message) {
     <p
       role="alert"

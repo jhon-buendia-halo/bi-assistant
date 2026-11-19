@@ -284,7 +284,9 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       kind: 'agent',
       summary:
         "On unless the run turns it off (Build a visual): Ryan's model designs an interactive visual from the answer and the rows its queries returned, following Read images' notes when the run has reference images. No tools. Skipped when no query returned rows; a design that fails leaves the answer without a visual, never a failed run.",
-      exits: [{ label: 'you stop it', outcome: 'stops' }],
+      // In an interactive run (R44) his visual waits for approval; a
+      // change, with reference images or not, makes a new version of it.
+      exits: [{ label: 'you stop it', outcome: 'stops' }, APPROVAL_EXIT],
       modelOnly: true,
     },
     SCHEMAS['build-visual'],
@@ -566,6 +568,18 @@ export interface AnswerBusinessQuestionRuntime {
      * when the run has some (not blank).
      */
     imageNotes?: string;
+  }): Promise<{ visual: BuiltVisual; stopped: boolean }>;
+  /**
+   * A change the user asked for on Build visual's approval gate (workflows
+   * R44): Ryan makes a new version of the visual from the user's words and,
+   * when they attached some, Zoe's notes on the new reference images (their
+   * paths in the run's workspace). It never fails the run: a change that
+   * fails comes back as `error`.
+   */
+  reviseVisual?(input: {
+    visualId: string;
+    instruction: string;
+    images?: string[];
   }): Promise<{ visual: BuiltVisual; stopped: boolean }>;
   /** The Write answer step's model call; its text is the run's answer. */
   writeAnswer(input: {
@@ -1531,12 +1545,16 @@ export function clarifyingQuestionOf(
   const raw = (payload ?? {}) as Record<string, unknown>;
   const question = text(raw['question']);
   if (!question) return undefined;
-  // An approval gate's outcome in words (workflows R44) is shown with it.
-  const review = raw['kind'] === 'review' ? text(raw['review']) : '';
+  // An approval gate's outcome in words (workflows R44) is shown with it,
+  // and Build visual's names the visual it waits on.
+  const gate = raw['kind'] === 'review';
+  const review = gate ? text(raw['review']) : '';
+  const visualId = gate ? text(raw['visualId']) : '';
   return {
     question,
     options: strings(raw['options']),
     ...(review ? { review } : {}),
+    ...(visualId ? { visualId } : {}),
   };
 }
 

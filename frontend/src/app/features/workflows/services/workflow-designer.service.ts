@@ -1200,13 +1200,13 @@ export class WorkflowDesigner {
    * appended to what it had. A refusal before the stream leaves the run as
    * it was: an expired one reads as stopped, any other shows on the card.
    */
-  resume(answer: string): void {
+  resume(answer: string, images: readonly string[] = []): void {
     const workflow = this.workflow();
     const stored = this.run();
     const waiting = this.waitingFor();
     const text = answer.trim();
     if (workflow === null || stored === null || waiting === null) return;
-    if (this.running() || !text) return;
+    if (this.running() || (!text && images.length === 0)) return;
     if (stored.status !== 'suspended' || waiting.expired) return;
     this.cancelStream();
     const generation = this.generation;
@@ -1267,6 +1267,7 @@ export class WorkflowDesigner {
           },
         },
         controller.signal,
+        images,
       )
       .finally(() => {
         if (!live()) return;
@@ -1354,6 +1355,7 @@ export class WorkflowDesigner {
           options: event.options,
           expiresAt: event.expiresAt,
           ...(event.review !== undefined ? { review: event.review } : {}),
+          ...(event.visualId !== undefined ? { visualId: event.visualId } : {}),
         });
       },
       onReasoning: (delta) => {

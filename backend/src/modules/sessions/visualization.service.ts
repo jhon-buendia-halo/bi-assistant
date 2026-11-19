@@ -404,6 +404,17 @@ export class VisualizationService {
     visualId: string,
     instruction: string,
     turnRecords?: ToolDataRecord[],
+    /**
+     * A change asked on Build visual's approval gate (workflows R44): Zoe's
+     * notes on new reference images (the designer's `<reference>`), the
+     * workflow's step model, and the run's stop. Absent for every other
+     * caller.
+     */
+    options: {
+      reference?: string;
+      stepModel?: StepModel;
+      abortSignal?: AbortSignal;
+    } = {},
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const trimmed = (instruction ?? '').trim();
     if (!trimmed) throw new BadRequestException('instruction is required');
@@ -431,6 +442,11 @@ export class VisualizationService {
       instruction: trimmed,
       current,
       mergedData,
+      ...(options.reference?.trim()
+        ? { reference: options.reference.trim() }
+        : {}),
+      ...(options.stepModel ? { stepModel: options.stepModel } : {}),
+      ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
     });
     return this.appendVersion(
       session,

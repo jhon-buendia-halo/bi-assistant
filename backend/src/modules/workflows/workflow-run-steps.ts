@@ -47,6 +47,12 @@ export interface WorkflowRunWaitingFor {
    * clarifying question.
    */
   review?: string;
+  /**
+   * Build visual's approval gate (workflows R44): the visual Ryan built,
+   * which the user opens before approving it; a change to it may come with
+   * reference images (api.md 138).
+   */
+  visualId?: string;
   since: string;
   expiresAt: string;
   expired?: true;

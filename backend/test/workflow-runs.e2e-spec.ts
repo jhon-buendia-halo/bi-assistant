@@ -819,6 +819,20 @@ describe('Streamed runs of agent workflows (API)', () => {
         id: runId,
         status: 'suspended',
       });
+      // Reference images go only with a change to Ryan's visual (R44).
+      const png = `data:image/png;base64,${Buffer.concat([
+        Buffer.from('89504e470d0a1a0a', 'hex'),
+        Buffer.from('rest of the file'),
+      ]).toString('base64')}`;
+      const withImages = await resumeStream(runId, {
+        stepId: 'plan',
+        answer: 'Approve',
+        images: [png],
+      });
+      expect(withImages.status).toBe(400);
+      expect(JSON.parse(withImages.text)).toMatchObject({
+        message: 'Step "plan" takes no images',
+      });
 
       const second = await resumeStream(runId, {
         stepId: 'plan',

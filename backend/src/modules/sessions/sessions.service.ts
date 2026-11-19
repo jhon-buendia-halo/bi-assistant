@@ -330,6 +330,24 @@ export class SessionsService implements OnModuleInit {
         await this.saveVisualMetadata(session, metadata);
         return metadata;
       },
+      // A change on Build visual's approval gate (workflows R44): a new
+      // version of the same visual.
+      reviseVisual: async (sessionId, visualId, change, abortSignal) => {
+        const session = await this.get(sessionId);
+        const { metadata } = await this.visuals.update(
+          session,
+          visualId,
+          change.instruction,
+          undefined,
+          {
+            ...(change.reference ? { reference: change.reference } : {}),
+            ...(change.stepModel ? { stepModel: change.stepModel } : {}),
+            ...(abortSignal ? { abortSignal } : {}),
+          },
+        );
+        await this.saveVisualMetadata(session, metadata);
+        return metadata;
+      },
       saveMock: async (sessionId, bundle, instruction) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.createFromBundle(
@@ -797,6 +815,19 @@ export class SessionsService implements OnModuleInit {
     path: string,
   ): Promise<{ data: Buffer; mediaType: string }> {
     return readWorkspaceImage(hostId, path);
+  }
+
+  /**
+   * Write a file into a run host's workspace: the reference images sent
+   * with a change on Build visual's approval gate (workflows R44, api.md
+   * 138), which Zoe then reads from there.
+   */
+  async writeRunHostFile(
+    hostId: string,
+    path: string,
+    data: Buffer,
+  ): Promise<void> {
+    await writeWorkspaceFile(hostId, path, data);
   }
 
   /**

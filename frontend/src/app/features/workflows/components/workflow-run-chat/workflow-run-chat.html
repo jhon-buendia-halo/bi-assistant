@@ -191,6 +191,8 @@
           [busy]="designer.running()"
           [error]="designer.resumeError()"
           (answered)="designer.resume($event)"
+          (answeredWithImages)="designer.resume($event.answer, $event.images)"
+          (openVisual)="openGateVisual($event)"
           (rerun)="designer.rerunWithAnswer($event)"
         />
       }
@@ -283,6 +285,20 @@
             ></div>
           }
         </div>
+      }
+
+      @if (result.answer === undefined && designer.run(); as stored) {
+        <!-- A suspended run with no answer yet (Build visual's gate): the
+             visual's side panel opens from the waiting card. -->
+        @defer (
+          when visuals.shown() !== null || visuals.loading() || visuals.error() !== null
+        ) {
+          <app-run-visual
+            [run]="stored"
+            [sheet]="true"
+            (runChange)="applyRun($event)"
+          />
+        }
       }
 
       @if (result.answer; as answer) {

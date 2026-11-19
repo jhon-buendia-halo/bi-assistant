@@ -60,6 +60,30 @@ export function reviewQuestion(
   return `${agent}'s ${what} is ready. Approve it to hand it to ${next}, or write what to change.`;
 }
 
+/**
+ * The question of Ryan's approval gate (Build visual, the last agent): the
+ * run ends once the visual is approved.
+ */
+export const VISUAL_REVIEW_QUESTION =
+  "Ryan's visual is ready. Approve it to finish the run, or write what to change (a filter, another chart, a detail) and attach reference images if you want.";
+
+/** Ryan's instruction when the user attached images and wrote nothing. */
+export const VISUAL_IMAGES_INSTRUCTION =
+  'Follow the reference images the user attached.';
+
+/** Ryan's visual on his approval gate, and why a change failed, if it did. */
+export function visualReview(
+  visual: { title?: string; visualId?: string },
+  failure?: string,
+): string {
+  return [
+    ...(failure ? [`**The change could not be made:** ${failure}`, ''] : []),
+    `**${visual.title?.trim() || 'Interactive visual'}**`,
+    '',
+    'Open it to check it before you approve it.',
+  ].join('\n');
+}
+
 /** The gate of a step that suspended, read back on resume; else undefined. */
 export function reviewOf(suspendData: unknown): ReviewSuspension | undefined {
   const data = suspendData as Partial<ReviewSuspension> | undefined;

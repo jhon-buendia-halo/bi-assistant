@@ -275,6 +275,17 @@ export interface TurnEngineDeps {
     },
     abortSignal?: AbortSignal,
   ): Promise<SessionVisualization>;
+  /**
+   * A new version of a visual of the session from the user's words (Build
+   * visual's approval gate, workflows R44); `reference` is Zoe's notes on
+   * the reference images they attached, absent without any.
+   */
+  reviseVisual(
+    sessionId: string,
+    visualId: string,
+    change: { instruction: string; reference?: string; stepModel?: StepModel },
+    abortSignal?: AbortSignal,
+  ): Promise<SessionVisualization>;
   /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
   saveMock(
     sessionId: string,
@@ -301,7 +312,8 @@ type TurnRunOutcome =
       question: string;
       options: string[];
       review?: string;
-      resume?: (answer: string) => Promise<TurnRunOutcome>;
+      visualId?: string;
+      resume?: (answer: string, images?: string[]) => Promise<TurnRunOutcome>;
       discard: () => Promise<void>;
     };
 
@@ -1160,6 +1172,46 @@ export class TurnEngine {
               };
             }
           },
+          // A change asked on Ryan's approval gate (workflows R44): Zoe reads
+          // any new reference images, then Ryan makes a new version of the
+          // visual from the user's words and her notes. Never a failed run.
+          reviseVisual: async ({ visualId, instruction, images }) => {
+            const stop = () => ({ visual: {}, stopped: true });
+            if (turn.signal.aborted) return stop();
+            try {
+              const notes = images?.length
+                ? (
+                    await readImagesOn(
+                      { question: instruction, images },
+                      turn.signal,
+                    )
+                  ).imageNotes
+                : '';
+              if (turn.signal.aborted) return stop();
+              const metadata = await this.deps.reviseVisual(
+                id,
+                visualId,
+                {
+                  instruction,
+                  ...(notes.trim() ? { reference: notes } : {}),
+                  ...(stepModel ? { stepModel } : {}),
+                },
+                turn.signal,
+              );
+              return {
+                visual: { visualId: metadata.id, title: metadata.title },
+                stopped: turn.signal.aborted,
+              };
+            } catch (error) {
+              if (turn.signal.aborted) return stop();
+              return {
+                visual: {
+                  error: error instanceof Error ? error.message : String(error),
+                },
+                stopped: false,
+              };
+            }
+          },
           // v2's follow-up branch (roadmap 1.28.8): the earlier queries,
           // Nathan's reading of the words, the page and the answer.
           followUp,
@@ -1845,6 +1897,7 @@ export class TurnEngine {
             question: outcome.question,
             options: outcome.options,
             ...(outcome.review ? { review: outcome.review } : {}),
+            ...(outcome.visualId ? { visualId: outcome.visualId } : {}),
             resume: async (answer: string, io: TurnResumeIo) => {
               emit = io.emit;
               abortSignal = io.abortSignal;
@@ -1857,7 +1910,7 @@ export class TurnEngine {
                 });
               let next: TurnRunOutcome;
               try {
-                next = await resumeRun(answer);
+                next = await resumeRun(answer, io.images);
               } finally {
                 await early.settle();
                 abortSignal?.removeEventListener('abort', forwardAbort);
@@ -2057,7 +2110,11 @@ export class TurnEngine {
       Required<
         Pick<
           AnswerBusinessQuestionRuntime,
-          'buildVisual' | 'interpretFollowUp' | 'pageResult' | 'deliverAnswer'
+          | 'buildVisual'
+          | 'reviseVisual'
+          | 'interpretFollowUp'
+          | 'pageResult'
+          | 'deliverAnswer'
         >
       > &
       AgentTurnRuntime &
@@ -2230,6 +2287,7 @@ export class TurnEngine {
         // Only a run host whose input ticked it (agents.md 5.11).
         buildsVisual: session.buildVisual === true,
         buildVisual: (input) => captured(() => runtime.buildVisual(input)),
+        reviseVisual: (input) => captured(() => runtime.reviseVisual(input)),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
         // A follow-up over an earlier result (roadmap 1.28.8). Nathan's
         // failure is no step's: the run plans the question instead.
@@ -2389,13 +2447,18 @@ export class TurnEngine {
           question: asked.question,
           options: asked.options,
           ...(asked.review ? { review: asked.review } : {}),
+          ...(asked.visualId ? { visualId: asked.visualId } : {}),
           ...(resumeRun
             ? {
-                resume: (answer: string) =>
+                resume: (answer: string, images?: string[]) =>
                   drive(
                     resumeRun({
                       step: path,
-                      resumeData: { answer },
+                      // Reference images only with a change to Ryan's visual.
+                      resumeData: {
+                        answer,
+                        ...(images?.length ? { images } : {}),
+                      },
                       requestContext,
                     }),
                     true,

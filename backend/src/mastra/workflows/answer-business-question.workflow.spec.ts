@@ -1668,7 +1668,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       expect(turn.buildVisual).not.toHaveBeenCalled();
       expect(turn.deliverAnswer).not.toHaveBeenCalled();
 
-      const { result } = await resume(
+      const drawn = await resume(
         { ...started, result: analysed.result },
         'Approve',
       );
@@ -1678,7 +1678,125 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         'The data holds 16 matches.\n\nHow I got this: …',
       );
       expect(turn.buildVisual).toHaveBeenCalledTimes(1);
+      // Ryan's visual waits too, before the run ends.
+      expect(drawn.result.suspended).toEqual([
+        ['question-path', 'analysis-path', 'answer-path', 'build-visual'],
+      ]);
+      const { result } = await resume(
+        { ...started, result: drawn.result },
+        'Approve',
+      );
+      expect(turn.buildVisual).toHaveBeenCalledTimes(1);
       expect(result.status).toBe('success');
+    });
+
+    describe("Ryan's visual (Build visual's approval gate)", () => {
+      /** A run waiting on Ryan's gate, every earlier gate approved. */
+      async function atRyansGate(turn: ScriptedTurn) {
+        const started = await run('How many matches?', turn);
+        let waiting = started.result;
+        for (let gate = 0; gate < 3; gate += 1) {
+          waiting = (await resume({ ...started, result: waiting }, 'Approve'))
+            .result;
+        }
+        return { started, waiting };
+      }
+      const visualTurn = (overrides: Partial<AnswerBusinessQuestionRuntime>) =>
+        runtime({
+          interactive: true,
+          buildsVisual: true,
+          deliverAnswer: jest.fn(() => Promise.resolve()),
+          reviseVisual: jest.fn(() =>
+            Promise.resolve({
+              visual: { visualId: 'v-1', title: 'Matches by year' },
+              stopped: false,
+            }),
+          ),
+          ...overrides,
+        });
+
+      it('waits on the visual it built, naming it, and ends the run once approved', async () => {
+        const turn = visualTurn({});
+        const { started, waiting } = await atRyansGate(turn);
+        expect(waiting.suspended).toEqual([
+          ['question-path', 'analysis-path', 'answer-path', 'build-visual'],
+        ]);
+        expect(payloadOf({ result: waiting })).toMatchObject({
+          kind: 'review',
+          question: containing("Ryan's visual is ready"),
+          options: ['Approve'],
+          review: containing('**Matches**'),
+          visualId: 'v-1',
+        });
+        const { result } = await resume({ ...started, result: waiting }, 'ok');
+        expect(turn.reviseVisual).not.toHaveBeenCalled();
+        expect(result.status).toBe('success');
+      });
+
+      it('makes a new version from the words and the reference images, then waits again', async () => {
+        const turn = visualTurn({});
+        const { started, waiting } = await atRyansGate(turn);
+        const revised = await drain(
+          started.engineRun.resumeStream({
+            step: waiting.suspended![0],
+            resumeData: {
+              answer: 'Add a filter by year',
+              images: ['inputs/revisions/1-1.png'],
+            },
+            requestContext: started.requestContext,
+          }),
+        );
+        expect(turn.reviseVisual).toHaveBeenCalledWith({
+          visualId: 'v-1',
+          instruction: 'Add a filter by year',
+          images: ['inputs/revisions/1-1.png'],
+        });
+        expect(turn.buildVisual).toHaveBeenCalledTimes(1);
+        expect(revised.result.status).toBe('suspended');
+        expect(payloadOf({ result: revised.result })).toMatchObject({
+          review: containing('**Matches by year**'),
+          visualId: 'v-1',
+        });
+      });
+
+      it('follows the images alone when the user wrote nothing', async () => {
+        const turn = visualTurn({});
+        const { started, waiting } = await atRyansGate(turn);
+        await drain(
+          started.engineRun.resumeStream({
+            step: waiting.suspended![0],
+            resumeData: { answer: '', images: ['inputs/revisions/1-1.png'] },
+            requestContext: started.requestContext,
+          }),
+        );
+        expect(turn.reviseVisual).toHaveBeenCalledWith({
+          visualId: 'v-1',
+          instruction: 'Follow the reference images the user attached.',
+          images: ['inputs/revisions/1-1.png'],
+        });
+      });
+
+      it('keeps the visual as it was, saying why, when the change fails', async () => {
+        const turn = visualTurn({
+          reviseVisual: jest.fn(() =>
+            Promise.resolve({
+              visual: { error: 'The designer timed out' },
+              stopped: false,
+            }),
+          ),
+        });
+        const { started, waiting } = await atRyansGate(turn);
+        const revised = await resume(
+          { ...started, result: waiting },
+          'Make it a map',
+        );
+        expect(payloadOf({ result: revised.result })).toMatchObject({
+          review: containing(
+            '**The change could not be made:** The designer timed out',
+          ),
+          visualId: 'v-1',
+        });
+      });
     });
 
     it('lets Jessica ask the user first, then writes with the answer', async () => {

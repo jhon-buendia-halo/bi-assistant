@@ -491,10 +491,11 @@ export class WorkflowRunsApiService {
     answer: string,
     handlers: RunStreamHandlers,
     signal?: AbortSignal,
+    images: readonly string[] = [],
   ): Promise<void> {
     await this.postStream(
       `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/resume/stream`,
-      { stepId, answer },
+      { stepId, answer, ...(images.length > 0 ? { images } : {}) },
       handlers,
       signal,
       this.runFrames('', handlers),
@@ -529,6 +530,10 @@ export class WorkflowRunsApiService {
             expiresAt: String(event['expiresAt'] ?? ''),
             ...(typeof event['review'] === 'string' && event['review'] !== ''
               ? { review: event['review'] }
+              : {}),
+            ...(typeof event['visualId'] === 'string' &&
+            event['visualId'] !== ''
+              ? { visualId: event['visualId'] }
               : {}),
           });
           return false;

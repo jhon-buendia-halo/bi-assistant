@@ -415,6 +415,19 @@ export class WorkflowRunChat {
     if (run !== null) this.visuals.view(run, event);
   }
 
+  /** A gate's Open visual: the visual Ryan built opens in the side panel, answer or not. */
+  protected openGateVisual(visualId: string): void {
+    const found = this.designer
+      .run()
+      ?.visualizations?.find((visual) => visual.id === visualId);
+    this.viewVisual({
+      visualId,
+      version: found?.currentVersion ?? 1,
+      title: found?.title ?? '',
+      action: 'created',
+    });
+  }
+
   /** The shown answer made a visual: its card carries Saved to Artifacts and Map to data. */
   protected readonly hasArtifactCard = computed(
     () =>

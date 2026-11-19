@@ -259,6 +259,10 @@ export const clarifyingQuestionSchema = z.object({
     .string()
     .optional()
     .describe("An approval gate's agent reply, shown again on a revision."),
+  visualId: z
+    .string()
+    .optional()
+    .describe("Build visual's approval gate: the visual Ryan built."),
 });
 
 /** What resumes a waiting step (api.md 138): the user's answer. */
@@ -266,6 +270,12 @@ export const clarificationAnswerSchema = z.object({
   answer: z
     .string()
     .describe("The user's answer: one of the options or their own words."),
+  images: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "On Build visual's approval gate (workflows R44): reference images for the change, as their paths in the run's workspace.",
+    ),
 });
 
 /** A clarifying question with the user's answer to it. */
@@ -656,7 +666,14 @@ export const ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS = {
     resume: clarificationAnswerSchema,
   },
   // Optional (the input's `buildVisual`): Ryan's visual of the answer.
-  'build-visual': { input: visualInputSchema, output: visualBuiltSchema },
+  // In an interactive run Ryan's visual waits for approval (workflows R44);
+  // a change, with reference images or not, makes a new version of it.
+  'build-visual': {
+    input: visualInputSchema,
+    output: visualBuiltSchema,
+    suspend: clarifyingQuestionSchema,
+    resume: clarificationAnswerSchema,
+  },
   'wrap-up': { input: wrapUpInputSchema, output: turnSummarySchema },
   // The follow-up branch: the earlier query's page, then the answer.
   'page-result': { input: followedUpQuestionSchema, output: pagedResultSchema },

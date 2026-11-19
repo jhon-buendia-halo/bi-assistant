@@ -53,6 +53,9 @@ import {
   isApproval,
   reviewOf,
   reviewQuestion,
+  VISUAL_IMAGES_INSTRUCTION,
+  VISUAL_REVIEW_QUESTION,
+  visualReview,
 } from './answer-business-question.review';
 import { analysisReview, planReview } from './answer-business-question.prompts';
 
@@ -662,6 +665,8 @@ const buildVisualStep = createStep({
   description: STEP['build-visual'].title,
   inputSchema: engineInputSchema(SCHEMAS['build-visual'].input),
   outputSchema: SCHEMAS['build-visual'].output,
+  suspendSchema: SCHEMAS['build-visual'].suspend,
+  resumeSchema: SCHEMAS['build-visual'].resume,
   execute: withContract(
     STEP['build-visual'].title,
     SCHEMAS['build-visual'],
@@ -682,17 +687,64 @@ const buildVisualStep = createStep({
       if (!runtime.buildVisual) {
         throw new Error('The Build visual step has no designer to run');
       }
-      // The notes are the designer's reference, only when there are some.
-      const { visual, stopped } = await runtime.buildVisual({
-        question: inputData.question,
-        answer: inputData.answer,
-        queries: inputData.queries,
-        ...(inputData.imageNotes.trim()
-          ? { imageNotes: inputData.imageNotes }
-          : {}),
-      });
-      const output = { ...written, visual };
-      return stopped ? params.bail(output) : output;
+      const interactive = runtime.interactive === true;
+      // Resumed on Ryan's approval gate (workflows R44): approved, the
+      // visual stands; otherwise the user's words, and any reference
+      // images they attached, make a new version of the same visual.
+      const pending = interactive ? reviewOf(params.suspendData) : undefined;
+      const gated = (params.suspendData ?? {}) as { visualId?: unknown };
+      const answer = params.resumeData?.answer?.trim() ?? '';
+      const images = params.resumeData?.images ?? [];
+      let output: z.output<(typeof SCHEMAS)['build-visual']['output']>;
+      let stopped: boolean;
+      let failure: string | undefined;
+      if (pending && isApproval(answer) && !images.length) {
+        return pending.outcome as never;
+      }
+      if (
+        pending &&
+        typeof gated.visualId === 'string' &&
+        runtime.reviseVisual
+      ) {
+        const revised = await runtime.reviseVisual({
+          visualId: gated.visualId,
+          instruction: answer || VISUAL_IMAGES_INSTRUCTION,
+          ...(images.length ? { images } : {}),
+        });
+        stopped = revised.stopped;
+        // A change that failed keeps the visual as it was, saying why.
+        failure = revised.visual.error;
+        output = failure
+          ? (pending.outcome as typeof output)
+          : { ...written, visual: revised.visual };
+      } else {
+        // The notes are the designer's reference, only when there are some.
+        const built = await runtime.buildVisual({
+          question: inputData.question,
+          answer: inputData.answer,
+          queries: inputData.queries,
+          ...(inputData.imageNotes.trim()
+            ? { imageNotes: inputData.imageNotes }
+            : {}),
+        });
+        stopped = built.stopped;
+        output = { ...written, visual: built.visual };
+      }
+      if (stopped) return params.bail(output);
+      // A visual that was built waits for the user's approval before the
+      // run ends; none (a failed design) ends it as before.
+      if (interactive && output.visual.visualId) {
+        return params.suspend({
+          kind: 'review',
+          question: VISUAL_REVIEW_QUESTION,
+          options: [APPROVE_OPTION],
+          review: visualReview(output.visual, failure),
+          outcome: output,
+          reply: output.visual.title ?? '',
+          visualId: output.visual.visualId,
+        });
+      }
+      return output;
     },
   ),
 });

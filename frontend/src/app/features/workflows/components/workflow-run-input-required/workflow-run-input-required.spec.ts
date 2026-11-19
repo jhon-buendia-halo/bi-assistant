@@ -186,11 +186,102 @@ describe('WorkflowRunInputRequired (ui.md 4.4b waiting card)', () => {
     q<HTMLButtonElement>('workflow-run-input-option-0')!.click();
     fixture.detectChanges();
     expect(answered).toEqual([]);
-    expect(
-      q<HTMLTextAreaElement>('workflow-run-input-answer')!.value,
-    ).toBe('2018');
+    expect(q<HTMLTextAreaElement>('workflow-run-input-answer')!.value).toBe(
+      '2018',
+    );
     expect(again.disabled).toBeFalse();
     again.click();
     expect(rerun).toEqual(['2018']);
+  });
+
+  describe('visual gate (Build visual)', () => {
+    const GATE: WorkflowWaitingFor = {
+      ...WAITING,
+      options: [],
+      review: '**Ryan** built a visual: Goals by team',
+      visualId: 'vis-1',
+    };
+    let withImages: { answer: string; images: string[] }[];
+    let opened: string[];
+
+    function mountGate(waiting: WorkflowWaitingFor = GATE): void {
+      mount(waiting);
+      withImages = [];
+      opened = [];
+      fixture.componentInstance.answeredWithImages.subscribe((a) =>
+        withImages.push(a),
+      );
+      fixture.componentInstance.openVisual.subscribe((id) => opened.push(id));
+    }
+
+    async function attach(): Promise<void> {
+      const input = el().querySelector<HTMLInputElement>(
+        '[data-testid="workflow-input-images-file"]',
+      )!;
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['x'], 'a.png', { type: 'image/png' }));
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change'));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      fixture.detectChanges();
+    }
+
+    it('shows Open visual, the image control and the visual wording', () => {
+      mountGate();
+      expect(q('workflow-run-input-open-visual')).not.toBeNull();
+      expect(q('workflow-run-input-images')).not.toBeNull();
+      expect(el().textContent).toContain(
+        'Or say what to change (a filter, another chart…)',
+      );
+    });
+
+    it('Open visual emits the visual id', () => {
+      mountGate();
+      q('workflow-run-input-open-visual')!.click();
+      expect(opened).toEqual(['vis-1']);
+    });
+
+    it('Ask for changes is enabled with only an image and sends answer "" with it', async () => {
+      mountGate();
+      expect(
+        q<HTMLButtonElement>('workflow-run-input-continue')!.disabled,
+      ).toBeTrue();
+      await attach();
+      expect(
+        el().querySelector('[data-testid="workflow-input-images-thumb-0"]'),
+      ).not.toBeNull();
+      const button = q<HTMLButtonElement>('workflow-run-input-continue')!;
+      expect(button.disabled).toBeFalse();
+      button.click();
+      fixture.detectChanges();
+      expect(withImages.length).toBe(1);
+      expect(withImages[0].answer).toBe('');
+      expect(withImages[0].images.length).toBe(1);
+      expect(withImages[0].images[0]).toMatch(/^data:image\/png/);
+      expect(
+        el().querySelector('[data-testid="workflow-input-images-thumb-0"]'),
+      ).toBeNull();
+    });
+
+    it('sends the trimmed text with no images', () => {
+      mountGate();
+      type('  add a filter  ');
+      q('workflow-run-input-continue')!.click();
+      expect(withImages).toEqual([{ answer: 'add a filter', images: [] }]);
+    });
+
+    it('Approve still answers Approve', () => {
+      mountGate();
+      q('workflow-run-input-approve')!.click();
+      expect(answered).toEqual(['Approve']);
+    });
+
+    it('a gate without a visual shows neither Open visual nor the images', () => {
+      mountGate({ ...GATE, visualId: undefined });
+      expect(q('workflow-run-input-open-visual')).toBeNull();
+      expect(q('workflow-run-input-images')).toBeNull();
+      expect(el().textContent).toContain('Or say what to change');
+      expect(el().textContent).not.toContain('a filter, another chart');
+    });
   });
 });
