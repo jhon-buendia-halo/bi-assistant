@@ -288,11 +288,27 @@ export function computeDiff(
 ): EvalDiff {
   const before = combineSide('before', beforeRuns);
   const after = combineSide('after', afterRuns);
+  // A question on both sides that one side did not score (a case its
+  // target cannot run, R256) counts on neither side.
+  const unpaired = new Set(
+    [...before.results.values()]
+      .filter((r) => {
+        const other = after.results.get(r.id);
+        return other !== undefined && (!isScored(r) || !isScored(other));
+      })
+      .map((r) => r.id),
+  );
+  const paired = (r: LoopResult): LoopResult =>
+    unpaired.has(r.id) ? { ...r, status: 'not-scored' } : r;
   const rows: DiffRow[] = [];
   const flips: EvalDiff['flips'] = [];
   for (const split of SPLITS) {
-    const b = [...before.results.values()].filter((r) => r.split === split);
-    const a = [...after.results.values()].filter((r) => r.split === split);
+    const b = [...before.results.values()]
+      .filter((r) => r.split === split)
+      .map(paired);
+    const a = [...after.results.values()]
+      .filter((r) => r.split === split)
+      .map(paired);
     const categories = orderCategories(
       [...b, ...a].filter(isScored).map((r) => r.category),
     );

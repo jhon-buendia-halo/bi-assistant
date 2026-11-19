@@ -84,7 +84,10 @@ describe('eval:diff rows (agents-evals R225)', () => {
       storedResult('n', 'not-scored', dev('visual')),
       storedResult('x', 'passed', dev('join')),
     ]);
-    const after = loopRun(AFTER, [storedResult('n', 'passed', dev('visual'))]);
+    const after = loopRun(AFTER, [
+      storedResult('n', 'passed', dev('visual')),
+      storedResult('v', 'passed', dev('visual')),
+    ]);
     const diff = computeDiff([before], [after]);
     const visual = findRow(diff, 'dev', 'visual')!;
     expect(visual.before).toMatchObject({
@@ -92,6 +95,13 @@ describe('eval:diff rows (agents-evals R225)', () => {
       failed: 0,
       notScored: 1,
       scored: 0,
+    });
+    // A question one side did not score counts on neither (R256): only v.
+    expect(visual.after).toMatchObject({
+      passed: 1,
+      failed: 0,
+      notScored: 1,
+      scored: 1,
     });
     expect(visual.change).toBeUndefined();
     expect(visual.flag).toBeUndefined();

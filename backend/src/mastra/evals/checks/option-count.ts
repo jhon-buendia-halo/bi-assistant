@@ -37,6 +37,20 @@ export const optionCount: DeterministicCheck = {
     'Checks that at most one clarification was asked, with 2 to 4 options',
   evaluate: (turn) => {
     const calls = callsOf(turn, 'ask_clarification');
+    // The workflow's Plan asked it, with no tool call (R254): its options.
+    const planned = turn.outcome?.clarification;
+    if (calls.length === 0 && planned) {
+      const count = planned.options.length;
+      if (count < 2 || count > 4) {
+        return fail(
+          `the clarification offered ${count} option${count === 1 ? '' : 's'}; it needs 2 to 4`,
+        );
+      }
+      const keys = planned.options.map((option) => option.trim().toLowerCase());
+      return new Set(keys).size === keys.length
+        ? PASS
+        : fail('the clarification offers the same option twice');
+    }
     if (calls.length === 0) return PASS;
     if (calls.length > 1) {
       return fail(

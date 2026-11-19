@@ -36,9 +36,37 @@ export interface CheckTurn {
   /** The assistant's answer text. */
   answer: string;
   toolCalls: CheckToolCall[];
+  /**
+   * How a whole-workflow turn ended besides its tool calls (agents.md 8.1):
+   * a clarifying question a step asked (Plan's, with no tool call) and the
+   * visual a step built (Build visual's). Absent for an agent's own turn,
+   * whose clarification and visual are its tool calls.
+   */
+  outcome?: TurnOutcome;
 }
 
+/** What a workflow step, not a tool call, ended the turn with. */
+export interface TurnOutcome {
+  clarification?: { question: string; options: string[] };
+  visual?: { title?: string; description?: string };
+}
+
+/**
+ * The metadata key of the scored answer message under which a whole-workflow
+ * target records its `TurnOutcome` (`content.metadata[EVAL_OUTCOME_KEY]`).
+ */
+export const EVAL_OUTCOME_KEY = 'evalOutcome';
+
 type Json = Record<string, unknown>;
+
+/** The `TurnOutcome` a message's metadata carries, if any. */
+function messageOutcome(message: unknown): TurnOutcome | undefined {
+  if (!isObject(message) || !isObject(message.content)) return undefined;
+  const metadata = message.content.metadata;
+  if (!isObject(metadata)) return undefined;
+  const outcome = metadata[EVAL_OUTCOME_KEY];
+  return isObject(outcome) ? outcome : undefined;
+}
 
 function isObject(value: unknown): value is Json {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -181,10 +209,12 @@ export function turnFromScorerRun(run: {
     .filter((message) => isObject(message) && message.role === 'assistant')
     .map(messageText)
     .join(' ');
+  const outcome = output.map(messageOutcome).find(Boolean);
   return {
     question,
     answer,
     toolCalls: output.flatMap(messageInvocations).map(invocationCall),
+    ...(outcome ? { outcome } : {}),
   };
 }
 

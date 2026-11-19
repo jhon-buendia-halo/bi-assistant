@@ -45,6 +45,7 @@ import type { EvalArm } from '../../mastra/evals/memory-case';
 import { evalMemoryScope } from '../../mastra/evals/eval-memory';
 import { LEARNING_STORE } from '../memory/learning-store.port';
 import type { LearningStore } from '../memory/learning-store.port';
+import type { ToolDataRecord } from '../sessions/entities/session.entity';
 
 export type EvalRunStatus = 'running' | 'completed' | 'failed';
 
@@ -500,6 +501,17 @@ export class EvalRunsService {
               view.judge,
               {
                 model: view.model,
+                // Ryan on the throwaway host, for a whole-workflow target's
+                // Build visual (agents-evals R257).
+                ...(evalSession
+                  ? {
+                      visualBuilder: (source) =>
+                        this.sessions.buildVisualOnHost(evalSession.id, {
+                          ...source,
+                          data: source.data as ToolDataRecord[],
+                        }),
+                    }
+                  : {}),
                 ...(store
                   ? {
                       memory: {

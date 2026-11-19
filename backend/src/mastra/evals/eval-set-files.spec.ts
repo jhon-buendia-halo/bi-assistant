@@ -106,6 +106,41 @@ const DROPPED_ON_MAIN: Readonly<Record<string, string[]>> = {
   'rest-schema-discovery': ['Checks that "list_entities" was called'],
   'f1-schema-discovery': ['Checks that "list_entities" was called'],
 };
+/**
+ * The tool checks agents-evals R254 and R255 replaced with target-neutral
+ * ones (2026-11-18), so an agent and the whole workflow score alike: the
+ * snapshot's check, by its description, and what stands in for it now
+ * (none: the toolOrder whose order builtVisual checks).
+ */
+const NEUTRAL_SINCE: Readonly<
+  Record<string, { id: string; name: string; description: string } | null>
+> = {
+  'Checks that "ask_clarification" was called': {
+    id: 'check-asked-clarification',
+    name: 'Asked Clarification Check',
+    description:
+      "Checks that the turn ended on a clarifying question (ask_clarification or the workflow's Plan)",
+  },
+  'Checks that "ask_clarification" was NOT called': {
+    id: 'check-asked-clarification',
+    name: 'Asked Clarification Check',
+    description:
+      "Checks that the turn did not end on a clarifying question (ask_clarification or the workflow's Plan)",
+  },
+  'Checks that "create_visual" was called': {
+    id: 'check-built-visual',
+    name: 'Built Visual Check',
+    description:
+      "Checks that a visual was built from queried data (create_visual after run_readonly_sql, or the workflow's Build visual)",
+  },
+  'Checks that "create_visual" was NOT called': {
+    id: 'check-built-visual',
+    name: 'Built Visual Check',
+    description:
+      "Checks that no visual was built (no create_visual call, no visual from the workflow's Build visual)",
+  },
+  'Checks tool call order: [run_readonly_sql → create_visual]': null,
+};
 const ADDED_ON_MAIN = [
   'no-clarification-best-team',
   'no-visuals-chart-request',
@@ -276,12 +311,18 @@ describe('eval set files', () => {
         // the same arguments (the description carries them); BA-183 only
         // added checks (agents-evals R126). The ones main dropped are gone.
         const dropped = DROPPED_ON_MAIN[evalCase.id] ?? [];
+        // The tool checks R254/R255 made target-neutral, as they are now
+        // (the snapshot holds no case with a tool selection: main added those).
+        const neutral = (scorer: (typeof beforeScorers)[number]) => {
+          const swapped = NEUTRAL_SINCE[scorer.description];
+          return swapped === undefined ? [scorer] : swapped ? [swapped] : [];
+        };
         expect([evalCase.id, scorers]).toEqual([
           evalCase.id,
           expect.arrayContaining(
-            beforeScorers.filter(
-              (scorer) => !dropped.includes(scorer.description),
-            ),
+            beforeScorers
+              .filter((scorer) => !dropped.includes(scorer.description))
+              .flatMap(neutral),
           ),
         ]);
         expect(
@@ -491,10 +532,15 @@ describe('the deterministic checks on the moved sets (agents-evals R126)', () =>
       'formula-1',
     ]);
     for (const set of moved) {
+      // The target-neutral tool checks (R254, R255) stand in for built-in
+      // tool checks, not for the checks of a category.
       const deterministicOf = (evalCase: (typeof set.cases)[number]) =>
         evalCase.checks
           .map((check) => check.type)
-          .filter(isDeterministicCheckType);
+          .filter(isDeterministicCheckType)
+          .filter(
+            (type) => type !== 'askedClarification' && type !== 'builtVisual',
+          );
       for (const evalCase of set.cases) {
         // A paraphrase carries the checks of the question it rephrases
         // (agents-evals R134), so those of that question's category.
@@ -547,7 +593,7 @@ describe('the deterministic checks on the moved sets (agents-evals R126)', () =>
         evalCase.checks
           .filter((check) => check.criterion === 'G2')
           .map((check) => check.type),
-      ).toEqual(['didNotCall', 'matches', 'notMatches']);
+      ).toEqual(['builtVisual', 'matches', 'notMatches']);
     }
   });
 

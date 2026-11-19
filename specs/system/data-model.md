@@ -970,6 +970,8 @@ Variants of one bank are named by datasource kind ([agents-evals](../capabilitie
 | `sqlMatches` | `{ pattern, flags? }` | `check-sql-matches` | none | agents-evals R122 |
 | `notMatches` | `{ pattern, flags?, in? }`, `in` = `answer` (default) or `sql` | `check-not-matches` | none | agents-evals R123 |
 | `usesEntities` | `{ entities? }`; absent: the tables the case's reference query reads, so the case then needs a reference | `check-uses-entities` | D2 | agents-evals R124 |
+| `askedClarification` | `{ asked? }`, a boolean, true when absent | `check-asked-clarification` | D5 | agents-evals R254 |
+| `builtVisual` | `{ built? }`, a boolean, true when absent | `check-built-visual` | G4 | agents-evals R255 |
 | `noRowValuesRetained` | none | `check-no-row-values-retained` | M1 | agents-evals R241 (memory cases only) |
 | `notRejectedSql` | none | `check-not-rejected-sql` | M2 | agents-evals R242 (memory cases only) |
 | `teachNotRecalled` | none | `check-teach-not-recalled` | M3 | agents-evals R243 (memory cases only) |

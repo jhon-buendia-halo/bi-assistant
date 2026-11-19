@@ -187,6 +187,12 @@ describe('the deterministic checks on the baseline traces', () => {
       optionCount: [6, 6],
       notMatches: [4, 6],
       visualKeywords: [0, 5],
+      // The target-neutral tool checks (R254, R255): gpt-4o-mini asked none
+      // of the six ambiguous questions, and of the eleven visual checks the
+      // five chart requests fail (create_visual failed) while the six "no
+      // visual" ones pass.
+      askedClarification: [0, 6],
+      builtVisual: [6, 11],
     });
   });
 });

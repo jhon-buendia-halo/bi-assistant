@@ -6,6 +6,7 @@ import { entityOrientationLines } from '../context-blocks';
 import type { OptionalAgentTool } from '../agent-tools';
 import {
   retryDoesNotRediscover,
+  workflowNotApplicable,
   workflowTurnAgent,
 } from './insights-analyst-workflow-target';
 import type {
@@ -367,6 +368,7 @@ export function insightsAnalystEvalTarget(
       return run;
     },
     sets: [INSIGHTS_ANALYST_EVAL_SET, INSIGHTS_ANALYST_EDGE_EVAL_SET],
+    notApplicable: workflowNotApplicable,
     // The judge checks that every fact rests on a query, so it reads the
     // whole result the model saw, not its first 2,000 characters.
     judgeTraceChars: 12_000,

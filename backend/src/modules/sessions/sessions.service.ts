@@ -318,16 +318,8 @@ export class SessionsService implements OnModuleInit {
       },
       writeFile: (sessionId, path, data) =>
         writeWorkspaceFile(sessionId, path, data),
-      buildVisual: async (sessionId, source, abortSignal) => {
-        const session = await this.get(sessionId);
-        const { metadata } = await this.visuals.createFromAnswer(
-          session,
-          source,
-          abortSignal,
-        );
-        await this.saveVisualMetadata(session, metadata);
-        return metadata;
-      },
+      buildVisual: (sessionId, source, abortSignal) =>
+        this.buildVisualOnHost(sessionId, source, abortSignal),
       saveMock: async (sessionId, bundle, instruction) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.createFromBundle(
@@ -1390,6 +1382,27 @@ export class SessionsService implements OnModuleInit {
   }
 
   /** Upsert visual metadata on the session, optionally logging a chat event. */
+  /**
+   * Build visual's design on a host (agents.md 5.11): Ryan designs a visual
+   * from the answer and its records, stored on the host. A run's Build
+   * visual calls it through the turn engine; the eval runner calls it on its
+   * throwaway host for a whole-workflow target (agents-evals R257).
+   */
+  async buildVisualOnHost(
+    sessionId: string,
+    source: Parameters<VisualizationService['createFromAnswer']>[1],
+    abortSignal?: AbortSignal,
+  ): Promise<SessionVisualization> {
+    const session = await this.get(sessionId);
+    const { metadata } = await this.visuals.createFromAnswer(
+      session,
+      source,
+      abortSignal,
+    );
+    await this.saveVisualMetadata(session, metadata);
+    return metadata;
+  }
+
   private async saveVisualMetadata(
     session: SessionDoc,
     metadata: SessionVisualization,

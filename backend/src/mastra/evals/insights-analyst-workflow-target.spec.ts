@@ -51,9 +51,31 @@ import {
   clarificationAnswer,
   lastUserText,
   retryDoesNotRediscover,
+  scoredOutput,
+  workflowNotApplicable,
   workflowTurnAgent,
   type WorkflowTargetParts,
 } from './insights-analyst-workflow-target';
+import { EVAL_VISUAL_BUILDER_KEY } from './eval-details';
+import { turnFromScorerRun, type TurnOutcome } from './checks/turn';
+import { askedClarification } from './checks/asked-clarification';
+import { builtVisual } from './checks/built-visual';
+import { visualKeywords } from './checks/visual-keywords';
+
+/** The message the scorers read the answer from (R253), with its outcome. */
+function scoredAnswer(text: string, outcome?: TurnOutcome) {
+  return {
+    id: 'eval-scored-answer',
+    role: 'assistant',
+    createdAt: expect.any(Date) as unknown,
+    content: {
+      format: 2,
+      parts: [{ type: 'text', text }],
+      content: text,
+      ...(outcome ? { metadata: { evalOutcome: outcome } } : {}),
+    },
+  };
+}
 
 const PLAN: AnalysisPlan = {
   question: 'Who scored the most goals in 2018?',
@@ -207,9 +229,16 @@ describe('the v2 eval target runs the whole answer-business-question workflow (a
     expect(result['text']).toBe(
       'Harry Kane scored the most goals: 6.\n\nHow I got this: …',
     );
+    // The scorers read Analyse's messages, then Write answer's answer as
+    // the one message with text (R253), never Analyse's note.
     expect(result['scoringData']).toEqual({
       input: 'q',
-      output: ['analyse messages'],
+      output: [
+        'analyse messages',
+        scoredAnswer(
+          'Harry Kane scored the most goals: 6.\n\nHow I got this: …',
+        ),
+      ],
     });
     expect((result['steps'] as unknown[]).length).toBe(1);
     // Every step's output reaches the checks: Plan's JSON, Validate's
@@ -270,7 +299,13 @@ describe('the v2 eval target runs the whole answer-business-question workflow (a
     ]);
     expect(result['scoringData']).toEqual({
       input: 'q',
-      output: ['analyse messages', 'analyse messages'],
+      output: [
+        'analyse messages',
+        'analyse messages',
+        scoredAnswer(
+          'Harry Kane scored the most goals: 6.\n\nHow I got this: …',
+        ),
+      ],
     });
     expect(evalDetailsOf(result).steps?.['analyse-attempts']).toEqual([
       ['run_readonly_sql'],
@@ -432,9 +467,20 @@ describe('the v2 eval target runs the whole answer-business-question workflow (a
       'Dominant by which measure?\n- Matches won\n- Goals scored',
     );
     expect(result['steps']).toEqual([]);
+    // Plan's question is the run's outcome, which askedClarification reads.
     expect(result['scoringData']).toEqual({
       input: 'Which team was the most dominant?',
-      output: [],
+      output: [
+        scoredAnswer(
+          'Dominant by which measure?\n- Matches won\n- Goals scored',
+          {
+            clarification: {
+              question: 'Dominant by which measure?',
+              options: ['Matches won', 'Goals scored'],
+            },
+          },
+        ),
+      ],
     });
   });
 
@@ -540,5 +586,173 @@ describe('the v2 eval target runs the whole answer-business-question workflow (a
     expect(
       clarificationAnswer({ question: 'Which?', options: ['A', 'B'] }),
     ).toBe('Which?\n- A\n- B');
+  });
+});
+
+describe('the workflow target scores like an agent (agents-evals R253 to R257)', () => {
+  const ctx = { dialect: 'postgres' as const };
+
+  it("scores the final answer, not Analyse's note", () => {
+    const note = {
+      role: 'assistant',
+      content: {
+        format: 2,
+        parts: [
+          { type: 'text', text: 'Note: Kane 6, Mbappe 4, checked 2018.' },
+          {
+            type: 'tool-invocation',
+            toolInvocation: {
+              state: 'result',
+              toolCallId: 'c1',
+              toolName: 'run_readonly_sql',
+              args: { sql: 'SELECT 1' },
+              result: { columns: ['goals'], rows: [{ goals: 6 }] },
+            },
+          },
+        ],
+        content: 'Note: Kane 6, Mbappe 4, checked 2018.',
+      },
+    };
+    const turn = turnFromScorerRun({
+      input: { inputMessages: [{ role: 'user', content: 'Top scorer?' }] },
+      output: scoredOutput([note], 'Harry Kane scored 6 goals.', {}),
+    });
+    expect(turn.answer).toBe(' Harry Kane scored 6 goals.');
+    expect(turn.toolCalls.map((call) => call.name)).toEqual([
+      'run_readonly_sql',
+    ]);
+    expect(turn.outcome).toBeUndefined();
+  });
+
+  it("passes askedClarification on Plan's question and on an agent's ask_clarification, and fails asked: false on either", () => {
+    const planned = turnFromScorerRun({
+      output: scoredOutput([], 'Which measure?\n- A\n- B', {
+        clarification: { question: 'Which measure?', options: ['A', 'B'] },
+      }),
+    });
+    const agent = {
+      question: 'q',
+      answer: 'Pick one.',
+      toolCalls: [
+        {
+          name: 'ask_clarification',
+          args: { question: 'Which?', options: [] },
+          argsReadable: true,
+          result: { ok: true },
+        },
+      ],
+    };
+    const none = { question: 'q', answer: 'France.', toolCalls: [] };
+    expect(askedClarification.evaluate(planned, {}, ctx).passed).toBe(true);
+    expect(askedClarification.evaluate(agent, {}, ctx).passed).toBe(true);
+    expect(askedClarification.evaluate(none, {}, ctx)).toEqual({
+      passed: false,
+      reason:
+        'no clarifying question was asked: no ask_clarification call and no question from the workflow',
+    });
+    expect(
+      askedClarification.evaluate(planned, { asked: false }, ctx).reason,
+    ).toBe("a clarifying question was asked (the workflow's Plan)");
+    expect(
+      askedClarification.evaluate(none, { asked: false }, ctx).passed,
+    ).toBe(true);
+  });
+
+  it("passes builtVisual on Build visual's visual or create_visual after a query, and reads Ryan's title for visualKeywords", () => {
+    const ryan = turnFromScorerRun({
+      output: scoredOutput([], 'Argentina scored 8.', {
+        visual: { title: 'Goals per team, 2022 knockout stage' },
+      }),
+    });
+    const sql = {
+      name: 'run_readonly_sql',
+      args: {},
+      argsReadable: true,
+      result: { rows: [] },
+    };
+    const chart = {
+      name: 'create_visual',
+      args: {},
+      argsReadable: true,
+      result: { title: 'Goals' },
+    };
+    const agent = { question: 'q', answer: 'a', toolCalls: [sql, chart] };
+    const early = { question: 'q', answer: 'a', toolCalls: [chart, sql] };
+    expect(builtVisual.evaluate(ryan, {}, ctx).passed).toBe(true);
+    expect(builtVisual.evaluate(agent, {}, ctx).passed).toBe(true);
+    expect(builtVisual.evaluate(early, {}, ctx).reason).toBe(
+      'create_visual was called before any successful run_readonly_sql',
+    );
+    expect(builtVisual.evaluate(ryan, { built: false }, ctx).reason).toBe(
+      "the workflow's Build visual built a visual",
+    );
+    expect(
+      visualKeywords.evaluate(
+        ryan,
+        { keywords: ['goal', '2022', 'knockout'] },
+        ctx,
+      ).passed,
+    ).toBe(true);
+    expect(
+      visualKeywords.evaluate(ryan, { keywords: ['assist'] }, ctx).reason,
+    ).toBe(
+      'the visual "Goals per team, 2022 knockout stage" does not mention "assist"',
+    );
+  });
+
+  it("runs Build visual when the question asks for a chart, with the queries' records, and records the visual", async () => {
+    const { target, options } = setUp(PLAN, [
+      agentResult([{ player: 'Kane', goals: 6 }]),
+    ]);
+    const designer = jest.fn(() =>
+      Promise.resolve({ id: 'v1', title: 'Goals per player, 2018' }),
+    );
+    options.requestContext.set(EVAL_VISUAL_BUILDER_KEY, designer);
+    const result = (await target.generate(
+      'Chart the goals per player in 2018.',
+      options as never,
+    )) as unknown as Record<string, unknown>;
+    expect(designer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'Chart the goals per player in 2018.',
+        data: [expect.objectContaining({ tool: 'run_readonly_sql' })],
+      }),
+    );
+    const output = (result['scoringData'] as { output: unknown[] }).output;
+    expect(turnFromScorerRun({ output }).outcome).toEqual({
+      visual: { title: 'Goals per player, 2018' },
+    });
+  });
+
+  it('builds no visual for a question that does not ask for one', async () => {
+    const { target, options } = setUp(PLAN, [
+      agentResult([{ player: 'Kane', goals: 6 }]),
+    ]);
+    const designer = jest.fn();
+    options.requestContext.set(EVAL_VISUAL_BUILDER_KEY, designer);
+    await target.generate(
+      'Who scored the most goals in 2018?',
+      options as never,
+    );
+    expect(designer).not.toHaveBeenCalled();
+  });
+
+  it('marks a case that takes away asking back or charting as not applicable to the workflow', () => {
+    expect(workflowNotApplicable({})).toBeUndefined();
+    expect(
+      workflowNotApplicable({
+        agentTools: ['sample_rows', 'ask_clarification', 'visuals'],
+      }),
+    ).toBeUndefined();
+    expect(
+      workflowNotApplicable({ agentTools: ['sample_rows', 'visuals'] }),
+    ).toBe(
+      'Not applicable to the Answer a Business Question workflow: the case takes away ask_clarification, which its Plan and Build visual steps cannot drop',
+    );
+    expect(
+      workflowNotApplicable({
+        agentTools: ['sample_rows', 'ask_clarification'],
+      }),
+    ).toMatch(/takes away visuals/);
   });
 });

@@ -410,10 +410,7 @@
       "notes": "A tool check can confirm ask_clarification fired; it cannot judge whether the question itself is well formed, so that quality goes to the judge instead of a brittle text check.",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {
@@ -535,9 +532,9 @@
           "criterion": "G1"
         },
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         },
@@ -565,17 +562,7 @@
       "intent": "Answer first, then build a visual — checks the SQL → create_visual ordering.",
       "checks": [
         {
-          "type": "toolOrder",
-          "args": {
-            "tools": ["run_readonly_sql", "create_visual"]
-          },
-          "criterion": "G4"
-        },
-        {
-          "type": "calledTool",
-          "args": {
-            "tool": "create_visual"
-          },
+          "type": "builtVisual",
           "criterion": "G4"
         },
         {
@@ -1870,9 +1857,9 @@
       "notes": "Verified 2026-09-23: Argentina scored 3 penalty kicks during play in the matches loaded (all Lionel Messi: 73' v Netherlands, 34' v Croatia, 23' in the final) and converted 8 kicks in two shoot-outs (4 v Netherlands, 4 v France). Unlike ambiguous-best-team, answering both readings with each figure labelled is as good as asking, so there is no calledTool ask_clarification check; the judge decides. The goal-type snippet explains how the data encodes each kind of penalty, which does not tell the assistant which one the user means. didNotCall create_visual is the check-bearing scorer: charting an ambiguous single count is always wrong.\n\nConverted 2026-10-16: the didNotCall create_visual check names D5, the criterion of the ambiguous questions' tool checks.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "D5"
         },
@@ -1900,10 +1887,7 @@
       "notes": "Verified 2026-09-23 that the readings disagree: fewest goals conceded over both tournaments — Portugal (1, one match played); fewest per match — Belgium (2 in 3, 2018); most clean sheets — France (3); 2018 alone — Belgium and France tie on 2 conceded; 2022 alone — Brazil and Portugal tie on 1 (one match each). Teams played 1 to 6 matches here, so no reading is the obvious default. Same checks as ambiguous-best-team.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {
@@ -1965,9 +1949,9 @@
           "criterion": "G1"
         },
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         },
@@ -2031,9 +2015,9 @@
           "criterion": "G1"
         },
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         },

@@ -234,9 +234,9 @@
       "notes": "service_date runs 2024-01-01 to 2025-12-31 (619 claims in 2024, 581 in 2025; 592 and 572 once the dataset's default filter drops test claims) and a CHECK constraint forbids anything else, so a 2019 query returns an empty aggregate, not a small one. A bare '$0.00' is technically true, reads like a finding and is the failure this case exists to catch; the honest answer names the covered window. Member dates of birth (1948-2005) are the only earlier dates in the schema and must not be mistaken for claim history. noToolErrors was retired (no reference SQL, and a coverage probe that errors is not a wrong answer); didNotCall create_visual stays as the one tool check — charting a year with no data is always wrong. Guards against silently answering outside the fixture's coverage.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance hand).",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -256,10 +256,7 @@
       "notes": "Three defensible answers sit in the data: Naomi Sedgewick bills the most (13,426,400 cents), Graham Thistlewood costs the plan the most in payments (3,375,050) and Camille Fontaine carries the most member responsibility (924,034). Whichever the agent picks unasked looks authoritative and is unfalsifiable to the reader, so the pass condition is that it asks which cost measure is meant. No noToolErrors: a clarification has no reference SQL. Guards against confident single-metric guesses on an under-specified money question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance hand).",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {
@@ -967,9 +964,9 @@
       "notes": "No table or column records a diagnosis: there is no ICD-10 or diagnosis field on claims, claim_lines or anywhere else in the schema (checked against information_schema on 2026-09-23). What the data does hold is 34 procedure codes (CPT/HCPCS) with descriptions on claim lines, each provider's specialty, and one denial reason (CO-11, \"Diagnosis inconsistent with the procedure billed\") whose text mentions a diagnosis without recording one. The tempting wrong answer ranks procedures as if they were diagnoses — venipuncture on 146 non-test claims, influenza vaccine on 143, office visits 99213 on 141 and 99214 on 138 — or maps specialties to conditions (Oncology -> cancer). didNotCall create_visual is the tool check: charting a proxy as the answer is always wrong. Guards against substituting the nearest available column for data that does not exist.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -989,9 +986,9 @@
       "notes": "75 non-test claims have an INPATIENT_HOSPITAL place of service (77 with test traffic), but each claim has exactly one service_date; there is no admission date, discharge date or length-of-stay field (checked against information_schema on 2026-09-23), and the revenue codes present (0250, 0300, 0320, 0360, 0450, 0636, 0762) include no room-and-board code. The dates that do exist measure something else: service_date -> received_on is the submission lag (12.6 days on average for inpatient claims) and received_on -> adjudicated_on the processing time (22.9 days) — both tempting to relabel as a stay. didNotCall create_visual is the tool check. Guards against computing a plausible-looking metric from dates that do not mean what the question needs.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -1011,10 +1008,7 @@
       "notes": "Two defensible answers sit in the data (non-test claims): by amount billed, Cascade Spine and Orthopedic Institute — out of network, the planted distractor — leads on both average billed per claim ($14,929.28) and total billed ($582,242.00); by what the plan allowed or paid, Granite Peak Oncology Center leads on average allowed ($4,815.94), total allowed ($139,662.25) and total paid ($126,037.33), while Cascade Spine's average allowed is only $2,416.78. The generator asserts that the distractor tops average billed and does NOT top average allowed. Whichever the agent picks unasked is unfalsifiable to the reader, so the pass condition is a clarifying question. Checks mirror most-expensive-member: calledTool ask_clarification and didNotCall run_readonly_sql — an undefined metric is asked about up front, per the assistant's clarification rule. Guards against confident single-measure guesses on an under-specified money question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {
@@ -1040,10 +1034,7 @@
       "notes": "In 2025 (non-test claims) Cedar Hollow Family Practice has the most claims (42) and the highest share of billed amount paid (0.5880); Silverbrook Cancer Institute has the lowest denial rate (none denied on its 2 adjudicated claims, 3 in all), and among providers with real volume Vantage Heart Specialists is lowest (1 of 16 adjudicated, 6.25%); Granite Peak Oncology Center receives the most money (5,885,607 cents paid). \"Best\" is one of the undefined words the assistant's clarification rule names, so the pass condition is a clarifying question. Checks mirror most-expensive-member. Guards against the agent silently choosing a definition of performance.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {

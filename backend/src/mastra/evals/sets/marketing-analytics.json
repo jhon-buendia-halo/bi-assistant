@@ -1601,10 +1601,7 @@
       "notes": "In 2025 alone: most leads = Drive Smart Rewards, highest click-through rate and most of its budget used = Renters Campus Push, lowest cost per acquisition = Term Life Tuesdays; the measure and the period are both open. The pass condition is a clarifying question.",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {
@@ -1630,10 +1627,7 @@
       "notes": "Premium and policies point at the Northeast (three of Harborline's eight states), digital share at the West; share of market and growth give other readings. The pass condition is a clarifying question.",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {
@@ -1659,9 +1653,9 @@
       "notes": "periods lists 2026-Q1 with reporting_status NOT_REPORTED and no table has a row for it; sales run to 2025-Q4, which is preliminary. A bare \"0 policies\" reads like a finding and is the failure this case catches.",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -1681,9 +1675,9 @@
       "notes": "Nothing in the schema measures satisfaction (no survey, NPS or rating). Walk-aways or retention campaigns are not a substitute unless the answer says plainly that it is offering a proxy.",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -1711,9 +1705,9 @@
           }
         },
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -1733,9 +1727,9 @@
       "notes": "The six carriers are Harborline Mutual, Crestview Insurance, Northgate Assurance, Bluefield General, Pinecrest Casualty and Tidewater Insurance Group. Carrier names are public in the product (the policy hides their figures, not their names). A confident zero, or a figure for a similarly named carrier, is the failure.",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -1755,9 +1749,9 @@
       "notes": "89,954 bound, non-test policies from 2024-Q1 to 2025-Q4. Asking which period is unnecessary: the whole data is a sensible default as long as the answer states it.\n\nChecked against facts.json: harborlinePoliciesAllPeriods.\n\nTrap query (must return different rows): SELECT SUM(s.policy_count) FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual'\n\nParaphrases: How many policies has Harborline sold in total? | harborline total policies sold",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "askedClarification",
           "args": {
-            "tool": "ask_clarification"
+            "asked": false
           },
           "criterion": "D5"
         },
@@ -1797,20 +1791,7 @@
       "notes": "Eight quarterly figures in dollars (bound, non-test sales). The reference projects only the figures, so any quarter label matches.\n\nTrap query (must return different rows): SELECT p.period_code, SUM(s.written_premium_cents) FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' GROUP BY p.period_code ORDER BY p.period_code",
       "checks": [
         {
-          "type": "toolOrder",
-          "args": {
-            "tools": [
-              "run_readonly_sql",
-              "create_visual"
-            ]
-          },
-          "criterion": "G4"
-        },
-        {
-          "type": "calledTool",
-          "args": {
-            "tool": "create_visual"
-          },
+          "type": "builtVisual",
           "criterion": "G4"
         },
         {

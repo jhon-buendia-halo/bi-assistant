@@ -155,7 +155,10 @@ describe('EvalRunsService dataset validation', () => {
         '',
         { agentKey: 'assistant' },
         { mode: 'off' },
-        { model: 'openai/gpt-4o-mini' },
+        {
+          model: 'openai/gpt-4o-mini',
+          visualBuilder: expect.any(Function) as unknown,
+        },
       );
       if (!('jobId' in result)) throw new Error('Run did not start');
       expect((await runner.status(result.jobId))?.status).toBe('completed');
@@ -168,6 +171,59 @@ describe('EvalRunsService dataset validation', () => {
         ['champion-2022'],
         'none',
         undefined,
+      );
+    }),
+  );
+
+  it(
+    "hands every question Ryan on the run's host, for a whole-workflow target's Build visual (agents-evals R257)",
+    asDemoUser(async () => {
+      datasets.list.mockResolvedValue([
+        {
+          name: 'Sample',
+          datasourceId: 'wc',
+          datasourceKind: 'postgres',
+          tables: [
+            'tournaments',
+            'teams',
+            'matches',
+            'venues',
+            'players',
+            'goals',
+            'match_team_statistics',
+            'disciplinary_events',
+            'v_match_results',
+            'v_player_goal_totals',
+          ].map((table) => `world_cup.world_cup.${table}`),
+        },
+      ]);
+      const visual = { id: 'v1', title: 'Goals per team' };
+      const sessions = {
+        buildVisualOnHost: jest.fn().mockResolvedValue(visual),
+      };
+      const runner = new EvalRunsService(
+        datasets as never,
+        repository as never,
+        {} as never,
+        sessions as never,
+        knowledge as never,
+      );
+      const result = await runner.start('assistant', 'wc');
+      if (!('jobId' in result)) throw new Error('Run did not start');
+      await new Promise((resolve) => setImmediate(resolve));
+      const options = jest.mocked(runAssistantEvalCase).mock.calls[0][6] as {
+        visualBuilder: (source: unknown) => Promise<unknown>;
+      };
+      const source = {
+        question: 'Chart the goals.',
+        answer: 'Argentina 8.',
+        at: '2026-11-18T00:00:00.000Z',
+        data: [{ tool: 'run_readonly_sql', input: 'SELECT 1' }],
+      };
+      await expect(options.visualBuilder(source)).resolves.toBe(visual);
+      expect(sessions.buildVisualOnHost).toHaveBeenCalledWith(
+        'session',
+        source,
       );
     }),
   );
@@ -258,7 +314,10 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
       '',
       target,
       { mode: 'off' },
-      { model: 'openai/gpt-4o-mini' },
+      {
+        model: 'openai/gpt-4o-mini',
+        visualBuilder: expect.any(Function) as unknown,
+      },
     );
     expect(target.finish).toHaveBeenCalledWith(['Sample']);
   });
@@ -414,7 +473,10 @@ describe('EvalRunsService judge option and summary (R144, R148)', () => {
         '',
         { agentKey: 'assistant' },
         judge,
-        { model: 'openai/gpt-4o-mini' },
+        {
+          model: 'openai/gpt-4o-mini',
+          visualBuilder: expect.any(Function) as unknown,
+        },
       );
     }));
 
@@ -984,7 +1046,10 @@ describe('EvalRunsService memory arm (R19 step 10, R231, R232, R238, R246)', () 
     await settle();
     // Under none no attempt is given a memory (agents.md 8.3).
     for (const call of jest.mocked(runAssistantEvalCase).mock.calls) {
-      expect(call[6]).toEqual({ model: 'openai/gpt-4o-mini' });
+      expect(call[6]).toEqual({
+        model: 'openai/gpt-4o-mini',
+        visualBuilder: expect.any(Function) as unknown,
+      });
     }
   });
 
@@ -1005,6 +1070,7 @@ describe('EvalRunsService memory arm (R19 step 10, R231, R232, R238, R246)', () 
     expect(options).toEqual(
       [1, 2, 3].map((attempt) => ({
         model: 'openai/gpt-4o-mini',
+        visualBuilder: expect.any(Function) as unknown,
         memory: {
           store,
           scope: `eval-${started.jobId}-champion-2022-${attempt}`,

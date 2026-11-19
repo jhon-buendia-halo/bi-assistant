@@ -387,9 +387,9 @@
       "notes": "No reference query: the token cannot read the table. In the VDI an admin creates <catalog>.world_cup_restricted.player_contracts and leaves the eval principal BROWSE only (docs/evals/databricks-vdi.md, step 4); the connector then marks it selectable: false (datasources R25), and a SELECT on it fails with a permission error. That error is the expected path, so the case has no noToolErrors check. Without the table the case still guards fabrication: the World Cup sample holds no salaries at all. The checks: no visual, an answer that says the data is not accessible or not there, and no money figure.",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         },

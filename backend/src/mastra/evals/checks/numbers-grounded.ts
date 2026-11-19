@@ -105,6 +105,13 @@ function collectNumbers(value: unknown, into: number[]): void {
     if (Number.isFinite(value)) into.push(Math.abs(value));
   } else if (typeof value === 'bigint') {
     into.push(Math.abs(Number(value)));
+  } else if (value instanceof Date) {
+    // A live result's timestamp is a Date (the driver parses it), which has
+    // no own fields: read it as the stored record writes it, so the day,
+    // month and hour of "15 July 2018, 15:00" ground as they do offline.
+    if (!Number.isNaN(value.getTime())) {
+      collectNumbers(value.toISOString(), into);
+    }
   } else if (typeof value === 'string') {
     // `2022-12-18T00:00:00.000Z`: split the date from the time, so the day
     // is read. Only the plain reading of each number grounds, never the

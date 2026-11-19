@@ -523,9 +523,9 @@
       "notes": "samples.collected_on spans 2023-02-02 to 2024-12-11 (68 samples in 2023, 72 in 2024) and a CHECK constraint forbids anything else. A bare 'zero' is technically true but useless and reads like a finding; the honest answer names the covered window. noToolErrors was retired (no reference SQL, and a coverage probe that errors is not a wrong answer); didNotCall create_visual stays as the one tool check — charting a year with no data is always wrong. Guards against silently answering outside the fixture's coverage.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance hand).",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -545,9 +545,9 @@
       "notes": "There is no methylation entity or column anywhere in the schema: the per-sample measurements are variant calls (genotype, read counts, filter status, genotype quality) and gene expression (raw_count and tpm per gene per sample; BRCA1 averages 98.742 TPM over the non-control samples). The tempting failure is to answer with expression and call it methylation, or to \"infer\" methylation from low expression. didNotCall create_visual is the one tool check (charting a measure that does not exist is always wrong); no reference SQL.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -567,9 +567,9 @@
       "notes": "Verified against the live fixture: the 450 variants are SNV 371, DELETION 34, INSERTION 30, INDEL 15, and the deletions remove 1 to 5 bases (reference alleles of 2-6 bases, alternate allele of 1), so nothing here is a copy-number or structural variant. The tempting failures are counting the 34 deletions (or 34 + 30 insertions) as copy-number losses/gains, or a bare \"0 CNVs\" that reads like a measured finding. didNotCall create_visual is the tool check; no reference SQL — a count query that confirms the variant types is fine.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -589,10 +589,7 @@
       "notes": "Three defensible answers sit in the data: BRCA1 has the most variants (34), TP53 the most pathogenic ones (11), CFTR the most variant calls (566 across the non-control samples). Guessing one of the three looks authoritative and is unfalsifiable to the reader, so the pass condition is that the agent asks which sense of 'matters' is meant. No noToolErrors: a clarification has no reference SQL. Guards against confident single-metric guesses on an under-specified question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance hand).",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {
@@ -618,10 +615,7 @@
       "notes": "Verified against the live fixture (non-control samples): SMP-0113 has the deepest mean coverage (586.4x, a PANEL sample), SMP-0121 the highest share of high-confidence calls (36 of 37, 97.3%, a 30.5x WGS sample), and SMP-0054 the highest mean genotype quality (68.21, a hair above SMP-0121 on 68.19). Coverage is also not comparable across assays — panels are sequenced an order of magnitude deeper than genomes — so picking it silently is misleading as well as arbitrary. No reference SQL; the pass condition is a clarifying question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {
@@ -647,10 +641,7 @@
       "notes": "Verified against the live fixture (all 120 subjects): African has the most affected subjects (22 of 36, 61.1%), Admixed American the highest share affected (10 of 16, 62.5%), and African also the most subjects carrying a pathogenic variant (17, genotype 0/1 or 1/1, controls excluded). A count and a rate name different superpopulations, and the rate winner leads by 1.4 points on 16 subjects — guessing either is unfalsifiable to the reader. No reference SQL; the pass condition is a clarifying question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {

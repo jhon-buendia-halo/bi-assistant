@@ -65,6 +65,37 @@ export const EVAL_DETAILS_KEY = 'evalDetails';
  */
 export const EVAL_CASE_CONTEXT_KEY = 'eval-case';
 
+/**
+ * What the eval host's visual designer is handed (agents-evals R257): the
+ * question, the answer and the turn's tool records, as a run's Build visual
+ * hands them to Ryan.
+ */
+export interface EvalVisualSource {
+  question: string;
+  answer: string;
+  at: string;
+  data: unknown[];
+}
+
+/** The visual the designer built: as the run host stores it. */
+export interface EvalBuiltVisual {
+  id: string;
+  title: string;
+  description?: string;
+}
+
+/** Ryan on the eval's throwaway run host, as a run's Build visual calls him. */
+export type EvalVisualBuilder = (
+  source: EvalVisualSource,
+) => Promise<EvalBuiltVisual>;
+
+/**
+ * The requestContext key under which the eval runner puts the throwaway
+ * host's visual designer (`EvalVisualBuilder`), so a whole-workflow target
+ * can run Build visual as a run does (R257). Absent: Build visual is off.
+ */
+export const EVAL_VISUAL_BUILDER_KEY = 'eval-visual-builder';
+
 /** The details on a target result, or `{}`. */
 export function evalDetailsOf(targetResult: unknown): EvalRunDetails {
   const details = (targetResult as Record<string, unknown> | undefined)?.[

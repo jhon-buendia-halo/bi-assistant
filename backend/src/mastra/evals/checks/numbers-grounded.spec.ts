@@ -90,6 +90,20 @@ describe('numbersGrounded (R115, G1)', () => {
     ).toBe(false);
   });
 
+  it('reads a live timestamp, which the driver hands over as a Date, as the stored record writes it', () => {
+    // Live, `pg` parses timestamptz into a Date, which has no own fields:
+    // "15 July 2018, 15:00" failed every live run as "states 15" (2026-11-18).
+    const live = rows([
+      { kicked_off_at: new Date('2018-07-15T15:00:00.000Z') },
+    ]);
+    expect(
+      verdict(turn('Played on 15 July 2018 (2018-07-15), 15:00 UTC.', [live])),
+    ).toEqual({ passed: true });
+    expect(verdict(turn('Played on 16 July 2018.', [live])).reason).toBe(
+      'the answer states 16, which no tool result of this turn holds or rounds to',
+    );
+  });
+
   it('reads thousands, a European grouping, dates and row counts', () => {
     const venue = [rows([{ venue: 'Lusail Stadium', attendance: 88966 }])];
     expect(verdict(turn('Lusail Stadium, 88,966.', venue)).passed).toBe(true);

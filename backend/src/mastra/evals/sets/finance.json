@@ -1315,10 +1315,7 @@
       "notes": "Trap: The client with the most assets holds only execution-only portfolios and pays no advisory fee (W12).\n\nParaphrases: Which wealth client matters most to us?\n\nChecked against backend/scripts/fixtures/finance/facts.json: wealth.W12_biggestClient (Tamsin Whitlock by assets, Alistair Buchanan by fee revenue).\n\nBusiness rules: docs/evals/domains/finance-policy.md.",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {
@@ -1348,10 +1345,7 @@
       "notes": "Trap: Percentage return and dollar gain name different portfolios, and the period changes both.\n\nParaphrases: What's our best portfolio?\n\nBusiness rules: docs/evals/domains/finance-policy.md.",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {
@@ -1385,9 +1379,9 @@
           "criterion": "D3"
         },
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -1411,9 +1405,9 @@
           "criterion": "D3"
         },
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -1437,9 +1431,9 @@
           "criterion": "D3"
         },
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -1500,9 +1494,9 @@
           "criterion": "D1"
         },
         {
-          "type": "didNotCall",
+          "type": "askedClarification",
           "args": {
-            "tool": "ask_clarification"
+            "asked": false
           },
           "criterion": "D5"
         },
@@ -1530,20 +1524,7 @@
       "notes": "Trap: Eight quarter-ends, March 2024 to December 2025.\n\nParaphrases: Plot AUM by quarter for the last two years.\n\nChecked against backend/scripts/fixtures/finance/facts.json: wealth.W5_aumByQuarterEndDollars.\n\nBusiness rules: docs/evals/domains/finance-policy.md.",
       "checks": [
         {
-          "type": "toolOrder",
-          "args": {
-            "tools": [
-              "run_readonly_sql",
-              "create_visual"
-            ]
-          },
-          "criterion": "G4"
-        },
-        {
-          "type": "calledTool",
-          "args": {
-            "tool": "create_visual"
-          },
+          "type": "builtVisual",
           "criterion": "G4"
         },
         {
@@ -1899,9 +1880,9 @@
       "notes": "Every transaction is booked between 2024-01-01 and 2025-12-31 (CHECK constraint): 2,296 in 2024 and 3,104 in 2025 (2,289 and 3,075 on real accounts). Verified against the live fixture 2026-09-28 (seed 20260929, psql): 18 accounts were opened in 2021 and 16 loans originated in 2021, so the year does exist elsewhere in the schema — but not as transaction history, and a 2021 query on transactions returns an empty aggregate. A bare \"0\" is technically true, reads like a finding and is the failure this case exists to catch; the honest answer names the covered window. didNotCall create_visual is the one tool check — charting a year with no data is always wrong. Guards against silently answering outside the fixture's coverage.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).\n\nThe banking rows are identical in the finance fixture (same seed and draw order); re-run on ba9_finance on 2026-10-13.",
       "checks": [
         {
-          "type": "didNotCall",
+          "type": "builtVisual",
           "args": {
-            "tool": "create_visual"
+            "built": false
           },
           "criterion": "G2"
         }
@@ -1921,10 +1902,7 @@
       "notes": "Several defensible answers sit in the data. Verified against the live fixture 2026-09-28 (seed 20260929, psql), real (non-test) accounts only: Barnaby Cole has the most transactions in 2025 (106, ahead of 90) and Horatio Finch the most across 2024-2025 (209); Farid Haddad has borrowed the most (73,740,000 minor units = $737,400 of principal over three loans, ahead of $641,000); Pradeep Venkataraman holds the most on deposit ($712,839.82 at the December 2025 fx_rates rates, ahead of $350,521.02). The generator plants the 2025-activity, loan-principal and deposit-balance winners as three different customers, each at least 10% clear of the runner-up with or without test accounts. Whichever the agent picks unasked looks authoritative and is unfalsifiable to the reader, so the pass condition is that it asks which measure is meant. No noToolErrors: a clarification has no reference SQL. Guards against confident single-metric guesses on an under-specified value question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).\n\nThe banking rows are identical in the finance fixture (same seed and draw order); re-run on ba9_finance on 2026-10-13.",
       "checks": [
         {
-          "type": "calledTool",
-          "args": {
-            "tool": "ask_clarification"
-          },
+          "type": "askedClarification",
           "criterion": "D5"
         },
         {

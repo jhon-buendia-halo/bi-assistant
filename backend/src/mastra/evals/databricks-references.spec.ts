@@ -214,7 +214,7 @@ describe('the Databricks-only World Cup set (agents-evals R189 to R191)', () => 
       browseOnly.checks
         .filter((check) => check.criterion === 'G2')
         .map((check) => check.type),
-    ).toEqual(['didNotCall', 'matches', 'notMatches']);
+    ).toEqual(['builtVisual', 'matches', 'notMatches']);
     expect(browseOnly.checks.map((check) => check.type)).not.toContain(
       'noToolErrors',
     );

@@ -73,8 +73,10 @@ import type { ToolDataRecord } from '../../modules/sessions/entities/session.ent
 import type { SessionsService } from '../../modules/sessions/sessions.service';
 import {
   EVAL_CASE_CONTEXT_KEY,
+  EVAL_VISUAL_BUILDER_KEY,
   evalDetailsOf,
   type EvalRunDetails,
+  type EvalVisualBuilder,
 } from './eval-details';
 
 /**
@@ -515,6 +517,13 @@ export interface EvalTarget {
     evalCase: AssistantEvalCase,
     input: Omit<EvalOrientationInput, 'requestContext' | 'vars'>,
   ): Promise<string | PreparedEvalQuestion>;
+  /**
+   * Why a case cannot run on this target as written, or undefined
+   * (agents-evals R256): a case that takes away a capability the target
+   * cannot drop. Such a case is not scored, with no model call, and a
+   * comparison across targets leaves it out of both sides.
+   */
+  notApplicable?(evalCase: AssistantEvalCase): string | undefined;
   /** Clean-up after each case (passed, failed or thrown). Never throws. */
   afterCase?(datasets: string[]): Promise<void>;
   /** Clean-up once a run's cases are done (or it failed). Never throws. */
@@ -1018,6 +1027,9 @@ function parseJsonObject(text: string | undefined): unknown {
 /** Scorer id for the LLM-judge check, shown in the report's checks table. */
 const LLM_JUDGE_CHECK_ID = 'llm-judge';
 
+/** The one check of a case its target cannot run (R256). */
+export const NOT_APPLICABLE_CHECK_ID = 'not-applicable';
+
 /** A scored check with its status from its verdict, and its criterion. */
 function withStatus(
   check: ScoredCheckResult,
@@ -1223,6 +1235,11 @@ export interface EvalAttemptOptions {
    * is read or written, and the memory checks score an empty record.
    */
   memory?: EvalAttemptMemory;
+  /**
+   * Ryan on the run's throwaway host (agents-evals R257), for a
+   * whole-workflow target's Build visual. Absent: Build visual is off.
+   */
+  visualBuilder?: EvalVisualBuilder;
 }
 
 /**
@@ -1319,6 +1336,33 @@ export async function runAssistantEvalCase(
     flaky: false,
   });
 
+  // A case this target cannot run as written (R256): not scored, no call.
+  const notApplicable = target.notApplicable?.(evalCase);
+  if (notApplicable) {
+    stopMemoryUsage?.();
+    return {
+      ...attemptFields('not-scored'),
+      scores: {},
+      checkResults: [
+        {
+          id: NOT_APPLICABLE_CHECK_ID,
+          description: 'The case applies to this target',
+          score: 0,
+          passed: false,
+          status: 'not-scored',
+          reason: notApplicable,
+        },
+      ],
+      answer: '',
+      toolCalls: [],
+      status: 'not-scored',
+      passed: false,
+      durationMs: 0,
+      usage: [],
+      costUsd: 0,
+    };
+  }
+
   try {
     runModel ??= await evalRunModel();
     const datasetSnapshots =
@@ -1356,6 +1400,9 @@ export async function runAssistantEvalCase(
     );
     // The case itself, for a target that reads its frozen `input`.
     requestContext.set(EVAL_CASE_CONTEXT_KEY, evalCase);
+    if (options.visualBuilder) {
+      requestContext.set(EVAL_VISUAL_BUILDER_KEY, options.visualBuilder);
+    }
     target.configureContext?.(requestContext);
     // The probe recalls as a chat turn does, in parallel with the context.
     const recall: Promise<ProbeRecall> | undefined = memory

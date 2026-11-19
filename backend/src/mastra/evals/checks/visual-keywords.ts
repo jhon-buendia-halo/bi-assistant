@@ -21,6 +21,20 @@ export const visualKeywords: DeterministicCheck<VisualKeywordsArgs> = {
   describe: (args) =>
     `Checks that a created visual's title and description mention ${quotedList(args.keywords)}`,
   evaluate: (turn, args) => {
+    // The workflow's Build visual built it (R255): its title and description.
+    const built = turn.outcome?.visual;
+    if (built) {
+      const title = built.title ?? '';
+      const text = `${title} ${built.description ?? ''}`.toLowerCase();
+      const missing = args.keywords.filter(
+        (keyword) => !text.includes(keyword.toLowerCase()),
+      );
+      return missing.length === 0
+        ? PASS
+        : fail(
+            `the visual "${quote(title || '(untitled)')}" does not mention ${quotedList(missing)}`,
+          );
+    }
     const calls = callsOf(turn, 'create_visual');
     if (calls.length === 0) return fail('create_visual was not called');
     const created = calls.filter((call) => call.error === undefined);

@@ -5,6 +5,10 @@
  * each in a Mastra scorer through `check-scorer.ts`.
  */
 import type { DeterministicCheck } from './check';
+import { askedClarification } from './asked-clarification';
+import type { AskedClarificationArgs } from './asked-clarification';
+import { builtVisual } from './built-visual';
+import type { BuiltVisualArgs } from './built-visual';
 import { dialect } from './dialect';
 import { namesNotIds } from './names-not-ids';
 import type { NamesNotIdsArgs } from './names-not-ids';
@@ -36,6 +40,8 @@ export const DETERMINISTIC_CHECK_TYPES = [
   'sqlMatches',
   'notMatches',
   'usesEntities',
+  'askedClarification',
+  'builtVisual',
 ] as const;
 export type DeterministicCheckType = (typeof DETERMINISTIC_CHECK_TYPES)[number];
 
@@ -54,7 +60,9 @@ export type DeterministicCheckSpec =
   | { type: 'visualKeywords'; args: VisualKeywordsArgs }
   | { type: 'sqlMatches'; args: { pattern: string; flags?: string } }
   | { type: 'notMatches'; args: NotMatchesArgs }
-  | { type: 'usesEntities'; args?: UsesEntitiesArgs };
+  | { type: 'usesEntities'; args?: UsesEntitiesArgs }
+  | { type: 'askedClarification'; args?: AskedClarificationArgs }
+  | { type: 'builtVisual'; args?: BuiltVisualArgs };
 
 export const DETERMINISTIC_CHECKS: Readonly<
   Record<DeterministicCheckType, DeterministicCheck<any>>
@@ -71,6 +79,8 @@ export const DETERMINISTIC_CHECKS: Readonly<
   sqlMatches,
   notMatches,
   usesEntities,
+  askedClarification,
+  builtVisual,
 };
 
 export function isDeterministicCheckType(
@@ -80,5 +90,9 @@ export function isDeterministicCheckType(
 }
 
 export type { CheckContext, CheckVerdict, DeterministicCheck } from './check';
-export type { CheckTurn, CheckToolCall } from './turn';
-export { turnFromCaseResult, turnFromScorerRun } from './turn';
+export type { CheckTurn, CheckToolCall, TurnOutcome } from './turn';
+export {
+  EVAL_OUTCOME_KEY,
+  turnFromCaseResult,
+  turnFromScorerRun,
+} from './turn';
