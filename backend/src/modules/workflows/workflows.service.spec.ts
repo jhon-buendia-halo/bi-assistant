@@ -198,7 +198,7 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
     { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
     { key: 'visualization', name: 'Ryan', role: 'Visualization Designer' },
   ],
-  stepCount: 13,
+  stepCount: 9,
   bar: 'steps',
   trigger: 'run',
   input: [
@@ -317,7 +317,6 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         detail.steps.flatMap((step) => (step.agent ? [step.agent.key] : [])),
       ).toEqual([
         'image-reader',
-        'result-explorer',
         'analysis-planner',
         'insights-analyst',
         'answer-writer',
@@ -333,15 +332,15 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail.steps.some((step) => step.agent)).toBe(true);
       expect(detail).toMatchObject({
         id: 'answer-business-question',
-        stepCount: 13,
+        stepCount: 9,
         contractHash: CODE_WORKFLOWS[0].contractHash,
       });
       expect(detail.contractHash).toMatch(/^[0-9a-f]{12}$/);
       // Plan receives the question (a string), the catalog and Read
       // images' notes ('' without images; optional, so a run stored before
       // Read images existed resumes with none).
-      expect(detail.steps[4]).toMatchObject({ id: 'plan' });
-      expect(detail.steps[4].inputSchema).toMatchObject({
+      expect(detail.steps[3]).toMatchObject({ id: 'plan' });
+      expect(detail.steps[3].inputSchema).toMatchObject({
         type: 'object',
         properties: {
           question: { type: 'string' },

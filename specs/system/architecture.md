@@ -1355,6 +1355,7 @@ flowchart LR
   - The picker lists only steps that ran in the shown run; a run that asked one agent has only that step, so its own follow-up offers that agent or the whole workflow.
   - `answer-business-question`'s graph and contract hash are unchanged, so no eval set and no stored suspended run is affected.
   - **Stack-neutral:** a rebuild needs a run store with a context field, a way to run one step's model call outside its workflow, and the shared answer path.
+  - **Amended 2026-11-19:** Answer a Business Question became one line ("the workflow will be linear, there will be no follow-up questions"): Interpret follow-up, Page result, Page answer and Clarify left it (Plan asks in its own step), so Nathan is no longer askable and the graph and contract hash above changed. The rest of this record is kept as written.
 - **Alternatives considered:**
   - **A router inside the workflow (more `.branch()` arms after Interpret follow-up):** automatic, but a wrong route is invisible to the user; not picked.
   - **A supervisor agent with subagents (`agents:` in Mastra 1.66):** flexible, but the flow would come from a prompt (against ADR-0034), with a supervisor call on top of every subagent call; not picked.

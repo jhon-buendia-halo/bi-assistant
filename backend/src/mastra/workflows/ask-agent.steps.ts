@@ -7,17 +7,12 @@
  * the asked step's id, so the run shows that one step `Done` and every
  * other `Skipped`. Plain data and pure code, no framework import.
  */
-import type { PageRequest } from '../../modules/datasources/connectors/paged-sql.types';
-import type { ExplorableQuery } from '../../modules/sessions/query-evidence/explorable-queries';
-import type { ExplorerSpec } from '../agents/result-explorer.prompts';
 import type {
   AnalyseQuery,
   AnalysisPlan,
   BuiltVisual,
   BusinessAnswer,
   CatalogEntity,
-  FollowUpRequest,
-  PagedFollowUp,
   TurnCallsOutcome,
   ValidationFinding,
 } from './answer-business-question.steps';
@@ -35,7 +30,6 @@ export const ASK_AGENT_RUNTIME_KEY = 'ask-agent-runtime';
  */
 export const ASKABLE_STEP_IDS = [
   'read-images',
-  'interpret-follow-up',
   'plan',
   'analyse',
   'write-answer',
@@ -115,18 +109,6 @@ export interface AskAgentRuntime {
     question: string;
     images: string[];
   }): Promise<ReadImagesOutcome>;
-  /** The earlier answer's queries, for Nathan. */
-  followUp: readonly ExplorableQuery[];
-  /** Interpret follow-up's model call (result-explorer). */
-  interpretFollowUp(
-    input: FollowUpRequest,
-  ): Promise<{ spec: ExplorerSpec | null; stopped: boolean }>;
-  /** Page result: the page, recorded as an `explore_result` call. */
-  pageResult(input: {
-    query: number;
-    request: PageRequest;
-    understood: string;
-  }): Promise<PagedFollowUp>;
   /** Plan's model call, over the catalog block. */
   plan(input: {
     question: string;
@@ -162,14 +144,6 @@ export interface AskAgentRuntime {
   /** A code-written answer: the run's answer text. */
   deliverAnswer(answer: string): Promise<void>;
 }
-
-/** What Nathan answers when the words ask a new question. */
-export const ASK_NEW_QUESTION_REPLY =
-  "That's a new question, not a page, filter or sort of the earlier result. Ask the Analyst or the whole workflow.";
-
-/** What Nathan answers when the earlier answer ran no query. */
-export const ASK_NO_RESULT_REPLY =
-  'The earlier answer has no query result to page, filter or sort. Ask the Analyst or the whole workflow.';
 
 /** What Zoe answers when the run has no reference image. */
 export const ASK_NO_IMAGES_REPLY =

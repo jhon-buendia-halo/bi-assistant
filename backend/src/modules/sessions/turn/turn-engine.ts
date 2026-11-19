@@ -17,13 +17,11 @@ import {
   IMAGE_READER_AGENT_KEY,
   LAYER_MAPPER_AGENT_KEY,
   REQUIREMENTS_ANALYST_AGENT_KEY,
-  RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
 import { getDatasetToolServices } from '../../../mastra/tool-services';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
-import { pageExplorableQuery } from '../../../mastra/tools/explore-result.tool';
 import { readinessModelOutput } from '../../../mastra/tools/readiness.tools';
 import {
   ASSESSED_REPORT_CONTEXT_KEY,
@@ -401,9 +399,6 @@ export class TurnEngine {
       session.messages,
     );
     options.requestContext.set(EXPLORABLE_QUERIES_CONTEXT_KEY, explorable);
-    // What v2's Interpret follow-up may page (roadmap 1.28.8): the earlier
-    // queries as the turn starts, before it runs any of its own.
-    const followUp: readonly ExplorableQuery[] = [...explorable];
     let stream: Awaited<ReturnType<typeof agent.stream>> | undefined;
 
     let text = '';
@@ -1211,83 +1206,6 @@ export class TurnEngine {
                 stopped: false,
               };
             }
-          },
-          // v2's follow-up branch (roadmap 1.28.8): the earlier queries,
-          // Nathan's reading of the words, the page and the answer.
-          followUp,
-          interpretFollowUp: async (request) => {
-            try {
-              const step = stepModelOf(RESULT_EXPLORER_AGENT_KEY);
-              const { clarification, ...spec } =
-                await this.deps.mastra.interpretResult(request, {
-                  abortSignal: turn.signal,
-                  onExchange: step.onExchange,
-                  // The workflow's own model and effort (agents.md 1.3),
-                  // only when it has one: otherwise as before.
-                  ...(stepModel && step.providerOptions
-                    ? { providerOptions: step.providerOptions }
-                    : {}),
-                  ...(stepModel && step.requestContext
-                    ? { requestContext: step.requestContext }
-                    : {}),
-                });
-              return {
-                spec,
-                stopped: turn.signal.aborted,
-                ...(clarification ? { clarification } : {}),
-              };
-            } catch (error) {
-              if (turn.signal.aborted) return { spec: null, stopped: true };
-              // The step plans the question instead; the reason is logged.
-              this.deps.logger.warn(
-                `Could not read the follow-up of ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
-              );
-              throw error;
-            }
-          },
-          // The page is an `explore_result` call of the turn: its record
-          // (the source SQL, the page's rows) and its view as evidence, so
-          // the answer's query opens the inspector on that view.
-          pageResult: async ({ query, request, understood }) => {
-            const target = followUp[query];
-            if (!target)
-              throw new Error('The earlier query is no longer known');
-            const args = {
-              query: target.sql,
-              // Named as the reader saw it (agent-answers R69): `Source 5`.
-              rationale: `${understood.toLowerCase() === 'all rows' ? 'The rows' : understood} of the earlier answer's ${target.source ? `Source ${target.source}` : 'query'}.`,
-            };
-            calledTools.add('explore_result');
-            emit({
-              type: 'tool',
-              content: JSON.stringify({
-                name: 'explore_result',
-                rationale: args.rationale,
-                input: toolCallInput('explore_result', args),
-              }),
-            });
-            const callId = `follow-up-${randomUUID()}`;
-            const result = await pageExplorableQuery(
-              target,
-              request,
-              understood,
-              options.requestContext,
-              callId,
-            );
-            const record = toolDataRecord('explore_result', args, result);
-            if (record) captureRecord(record, callId);
-            if ('error' in result) throw new Error(result.error);
-            return {
-              title: target.rationale ?? target.ref,
-              columns: result.columns,
-              rows: result.rows,
-              page: result.page,
-              pageCount: result.pageCount,
-              matchedRows: result.matchedRows,
-              capped: result.capped,
-              view: result.view,
-              understood: result.understood,
-            };
           },
           deliverAnswer: (answer) => {
             text = answer;
@@ -2110,11 +2028,7 @@ export class TurnEngine {
       Required<
         Pick<
           AnswerBusinessQuestionRuntime,
-          | 'buildVisual'
-          | 'reviseVisual'
-          | 'interpretFollowUp'
-          | 'pageResult'
-          | 'deliverAnswer'
+          'buildVisual' | 'reviseVisual' | 'deliverAnswer'
         >
       > &
       AgentTurnRuntime &
@@ -2158,10 +2072,6 @@ export class TurnEngine {
       requestContext.set(ASK_AGENT_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
         readImages: (input) => captured(() => runtime.readImages(input)),
-        followUp: runtime.followUp ?? [],
-        interpretFollowUp: (input) =>
-          captured(() => runtime.interpretFollowUp(input)),
-        pageResult: (input) => captured(() => runtime.pageResult(input)),
         plan: (input) => captured(() => runtime.plan(input)),
         earlierAnswer: () => runtime.earlierAnswer(),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
@@ -2289,11 +2199,6 @@ export class TurnEngine {
         buildVisual: (input) => captured(() => runtime.buildVisual(input)),
         reviseVisual: (input) => captured(() => runtime.reviseVisual(input)),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
-        // A follow-up over an earlier result (roadmap 1.28.8). Nathan's
-        // failure is no step's: the run plans the question instead.
-        ...(runtime.followUp ? { followUp: runtime.followUp } : {}),
-        interpretFollowUp: (input) => runtime.interpretFollowUp(input),
-        pageResult: (input) => captured(() => runtime.pageResult(input)),
         deliverAnswer: (answer) => runtime.deliverAnswer(answer),
       } satisfies AnswerBusinessQuestionRuntime);
     }

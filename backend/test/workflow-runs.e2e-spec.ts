@@ -2,7 +2,7 @@
  * API-level proof of streamed runs (ADR-0041; api.md 118, 119; agents.md
  * 5.14; workflows R14-R16) of Insights Analyst (`answer-business-question`), the
  * one catalogue workflow since 1.23.35: `POST /workflows/:id/runs/stream`
- * runs its steps (Plan, then Clarify or the analysis loop and Write answer),
+ * runs its steps (Plan, which may ask first, then the analysis loop and Write answer),
  * its Analyse step's turn on a run host through the turn engine, so a run
  * asks the stub model for its input with the agent's tools, streams `run`,
  * each `step` with what it received, its output, its times and, in the loop,
@@ -86,10 +86,8 @@ const V2_STEP_TRAIL = [
   'receive-question:success',
   'load-catalog:running',
   'load-catalog:success',
-  'interpret-follow-up:running',
-  'interpret-follow-up:success',
-  'plan:running:1',
-  'plan:success:1',
+  'plan:running',
+  'plan:success',
   'analyse:running:1',
   'analyse:success:1',
   'validate:running:1',
@@ -103,14 +101,9 @@ const V2_STEP_TRAIL = [
   'wrap-up:running',
   'wrap-up:success',
   // The branches not taken, once the run ended: Read images (no images),
-  // Clarify, Build visual, which the input turned off
-  // (agents.md 5.11), and the follow-up branch a first run never takes
-  // (roadmap 1.28.8).
+  // Build visual, which the input turned off (agents.md 5.11).
   'read-images:skipped',
-  'clarify:skipped',
   'build-visual:skipped',
-  'page-result:skipped',
-  'page-answer:skipped',
 ];
 
 /** A step frame or stored step as `id:status[:attempt]`. */
@@ -378,9 +371,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       'read-images:skipped',
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
-      'plan:success:1',
-      'clarify:skipped',
+      'plan:success',
       'analyse:success:1',
       'analyse:success:2',
       'validate:success:1',
@@ -388,8 +379,6 @@ describe('Streamed runs of agent workflows (API)', () => {
       'write-answer:success',
       'build-visual:skipped',
       'wrap-up:success',
-      'page-result:skipped',
-      'page-answer:skipped',
     ]);
     stored.steps
       .filter((step) => step.status !== 'skipped')
@@ -497,17 +486,11 @@ describe('Streamed runs of agent workflows (API)', () => {
       .body as { contractHash?: string };
     expect(stored.contractHash).toBe(detail.contractHash);
     // Every step on the path ran and passed on exactly the fields its schema
-    // requires; Clarify and Build visual (turned off), the branches not taken,
-    // were skipped.
+    // requires; Read images (no images) and Build visual (turned off), the
+    // branches not taken, were skipped.
     expect(
       run.steps.filter((step) => step.status === 'skipped').map((s) => s.id),
-    ).toEqual([
-      'read-images',
-      'clarify',
-      'build-visual',
-      'page-result',
-      'page-answer',
-    ]);
+    ).toEqual(['read-images', 'build-visual']);
     for (const step of run.steps.filter((s) => s.status !== 'skipped')) {
       const declared = detail.steps.find((entry) => entry.id === step.id)!;
       expect({ id: step.id, status: step.status }).toEqual({
@@ -865,7 +848,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       });
     });
 
-    it('a plan that needs clarification suspends the run at Clarify; 138 continues the same run id with the answer to success', async () => {
+    it('a plan that needs clarification suspends the run at Plan; 138 continues the same run id with the answer to success', async () => {
       const DOMINANT = 'Which team was the most dominant?';
       useV2Steps(stub, () => ({ text: STUB_ANSWER }), {
         // Plan asks until it sees the answer.
@@ -898,17 +881,16 @@ describe('Streamed runs of agent workflows (API)', () => {
         const [step, required, done] = first.frames.slice(-3);
         expect(step).toMatchObject({
           type: 'step',
-          id: 'clarify',
+          id: 'plan',
           status: 'suspended',
-          attempt: 1,
         });
         expect(required).toEqual({
           // Every frame carries its number in the run's log (ADR-0048).
           seq: expect.any(Number) as unknown,
           type: 'input-required',
           runId,
-          stepId: 'clarify',
-          title: 'Clarify',
+          stepId: 'plan',
+          title: 'Plan',
           question: 'Dominant by which measure?',
           options: ['Most wins', 'Most goals — over all matches'],
           expiresAt: expect.any(String) as unknown,
@@ -920,8 +902,8 @@ describe('Streamed runs of agent workflows (API)', () => {
         };
         expect(run).toMatchObject({ id: runId, status: 'suspended' });
         expect(run.waitingFor).toEqual({
-          stepId: 'clarify',
-          title: 'Clarify',
+          stepId: 'plan',
+          title: 'Plan',
           question: 'Dominant by which measure?',
           options: ['Most wins', 'Most goals — over all matches'],
           since: expect.any(String) as unknown,
@@ -932,9 +914,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         expect(run.steps.map(trail)).toEqual([
           'receive-question:success',
           'load-catalog:success',
-          'interpret-follow-up:success',
-          'plan:success:1',
-          'clarify:suspended:1',
+          'plan:suspended',
         ]);
       });
       // Only Plan asked the model.
@@ -955,7 +935,7 @@ describe('Streamed runs of agent workflows (API)', () => {
 
       const sent = await recorded(async () => {
         const second = await resumeStream(runId, {
-          stepId: 'clarify',
+          stepId: 'plan',
           answer: 'Most wins',
         });
         expect(second.status).toBe(200);
@@ -972,10 +952,10 @@ describe('Streamed runs of agent workflows (API)', () => {
             .slice(0, 4)
             .map(trail),
         ).toEqual([
-          'clarify:running:1',
-          'clarify:success:1',
-          'plan:running:2',
-          'plan:success:2',
+          'plan:running',
+          'plan:success',
+          'analyse:running:1',
+          'analyse:success:1',
         ]);
         expect(second.frames.some((f) => f.type === 'input-required')).toBe(
           false,
@@ -992,10 +972,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           'read-images:skipped',
           'receive-question:success',
           'load-catalog:success',
-          'interpret-follow-up:success',
-          'plan:success:1',
-          'plan:success:2',
-          'clarify:success:1',
+          'plan:success',
           'analyse:success:1',
           'analyse:success:2',
           'validate:success:1',
@@ -1003,8 +980,6 @@ describe('Streamed runs of agent workflows (API)', () => {
           'write-answer:success',
           'build-visual:skipped',
           'wrap-up:success',
-          'page-result:skipped',
-          'page-answer:skipped',
         ]);
       });
       // Plan planned again with the question, its question and the answer.
@@ -1026,7 +1001,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       ]);
       // Resumed once: it no longer waits.
       const again = await resumeStream(runId, {
-        stepId: 'clarify',
+        stepId: 'plan',
         answer: 'Most goals',
       });
       expect(again.status).toBe(409);
@@ -1082,8 +1057,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       expect(done.run!.steps.map(trail)).toEqual([
         'receive-question:success',
         'load-catalog:success',
-        'interpret-follow-up:success',
-        'plan:success:1',
+        'plan:success',
         'analyse:suspended:1',
       ]);
 
@@ -1106,9 +1080,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           'read-images:skipped',
           'receive-question:success',
           'load-catalog:success',
-          'interpret-follow-up:success',
-          'plan:success:1',
-          'clarify:skipped',
+          'plan:success',
           'analyse:success:1',
           'analyse:success:2',
           'validate:success:1',
@@ -1116,8 +1088,6 @@ describe('Streamed runs of agent workflows (API)', () => {
           'write-answer:success',
           'build-visual:skipped',
           'wrap-up:success',
-          'page-result:skipped',
-          'page-answer:skipped',
         ]);
       });
       // Both attempts after the answer go on with it.
@@ -1141,7 +1111,7 @@ describe('Streamed runs of agent workflows (API)', () => {
 
     it('138 refuses before any stream (Style B): 404, 409, 400 answer, 400 step', async () => {
       const missing = await resumeStream('no-such-run', {
-        stepId: 'clarify',
+        stepId: 'plan',
         answer: 'a',
       });
       expect(missing.status).toBe(404);
@@ -1160,7 +1130,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       });
       const finishedId = finished.frames[0].runId!;
       const notWaiting = await resumeStream(finishedId, {
-        stepId: 'clarify',
+        stepId: 'plan',
         answer: 'a',
       });
       expect(notWaiting.status).toBe(409);
@@ -1185,7 +1155,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       });
       const waitingId = waiting.frames[0].runId!;
       const blank = await resumeStream(waitingId, {
-        stepId: 'clarify',
+        stepId: 'plan',
         answer: '   ',
       });
       expect(blank.status).toBe(400);

@@ -439,12 +439,12 @@ describeLive(
       }
       const waiting = first.run.waitingFor as
         { stepId: string; question: string; options: string[] } | undefined;
-      expect(['clarify', 'analyse']).toContain(waiting?.stepId);
+      expect(['plan', 'analyse']).toContain(waiting?.stepId);
       expect(waiting?.question).toBeTruthy();
       first.seen.notes.push(
         `Asked at ${waiting!.stepId}: "${waiting!.question}" (${(waiting!.options ?? []).join(' | ')})`,
       );
-      if (waiting!.stepId === 'clarify') {
+      if (waiting!.stepId === 'plan') {
         expect(waiting!.options.length).toBeGreaterThanOrEqual(2);
         expect(waiting!.options.length).toBeLessThanOrEqual(4);
       }
@@ -458,34 +458,6 @@ describeLive(
       expect(resumed.res.frames.some((f) => f.type === 'input-required')).toBe(
         false,
       );
-    });
-
-    it('a follow-up "only the finals" is read as a filter of the earlier result, not a new analysis', async () => {
-      const list = await observe('Follow-up: the list', () =>
-        ask('List every match with its stage and attendance.'),
-      );
-      expectAnswered(list.run, list.seen);
-      const follow = await observe('Follow-up: only the finals', () =>
-        ask('Only the finals, please.', {}, { fromRunId: list.run.id }),
-      );
-      expect(follow.run.status).toBe('success');
-      const explored = follow.res.steps.includes('page-result:success');
-      follow.seen.notes.push(
-        explored
-          ? 'Interpret follow-up explored the earlier result.'
-          : 'Interpret follow-up planned a new analysis instead of filtering the earlier result.',
-      );
-      expect(follow.res.steps).toContain('interpret-follow-up:success');
-      expect(explored).toBe(true);
-      // Plan and Analyse did not run (the branch not taken reads skipped).
-      expect(follow.res.steps).not.toContain('plan:success:1');
-      expect(follow.res.steps).not.toContain('analyse:success:1');
-      const page = follow.run.answer?.content ?? '';
-      expect(page).toMatch(/final/i);
-      // The page's rows are the ones the data gives for the filter, and its
-      // cells read as stored (an instant is no JSON string).
-      expect(page).toContain(`of ${truth.finals} matching`);
-      expect(page).not.toMatch(/\| "\d{4}-/);
     });
 
     it("a reference image: Zoe's notes reach Plan, and an unrelated chart does not change the data's answer", async () => {

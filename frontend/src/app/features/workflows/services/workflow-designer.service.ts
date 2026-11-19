@@ -81,8 +81,6 @@ const ASK_AGENT_WORKFLOW = 'answer-business-question';
 export const ASK_HINTS: Readonly<Record<string, string>> = {
   '': 'Runs every step again: plans, queries the data, checks and writes a new answer.',
   'read-images': 'Read images step: reads your reference images again with this question.',
-  'interpret-follow-up':
-    'Interpret follow-up step: pages, filters or sorts the earlier result. Runs no new analysis.',
   plan: 'Plan step: plans how to answer your question. Reads no data.',
   analyse:
     'Analyse step: answers with new queries over the data, with no plan or checks around it.',

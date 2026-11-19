@@ -7,20 +7,7 @@
  * loading Mastra; the workflow itself is built in ./answer-business-question.workflow.ts.
  */
 import type { z } from 'zod';
-import type {
-  PageRequest,
-  ResultView,
-} from '../../modules/datasources/connectors/paged-sql.types';
-import {
-  explorerCandidateOfQuery,
-  type ExplorableQuery,
-} from '../../modules/sessions/query-evidence/explorable-queries';
 import { coverageOf } from '../../modules/sessions/query-evidence/query-coverage';
-import {
-  pageCountOf,
-  type ExplorerCandidate,
-  type ExplorerSpec,
-} from '../agents/result-explorer.prompts';
 import { getDatasetToolServices } from '../tool-services';
 import {
   asksAboutToday,
@@ -44,8 +31,6 @@ import {
   type builtVisualSchema,
   type answerBusinessQuestionInputSchema,
   type entityColumnsSchema,
-  type followUpSchema,
-  type pagedResultSchema,
   type turnSummarySchema,
   type validateOutcomeSchema,
   type validationFindingSchema,
@@ -160,7 +145,7 @@ const APPROVAL_EXIT: WorkflowStepExit = {
 };
 
 /**
- * The steps, in catalogue order (Clarify after Plan): the session's
+ * The steps, in catalogue order, one line from Read images to Wrap up: the session's
  * workflow bar shows them. Their field names and JSON Schemas come from
  * ./answer-business-question.schemas.ts; how they connect is `ANSWER_BUSINESS_QUESTION_EDGES`.
  */
@@ -192,47 +177,18 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
-      id: 'interpret-follow-up',
-      title: 'Interpret follow-up',
-      kind: 'agent',
-      summary:
-        "On a follow-up over an earlier result, Result Explorer's model reads whether the question asks for another page, a filter or an order of the earlier rows. A first run makes no model call. No tools.",
-      // A model error is no failure: the run plans the question instead.
-      // In an interactive run (R44) Nathan may ask, and his "a new question"
-      // waits for approval.
-      exits: [
-        { label: 'you stop it', outcome: 'stops' },
-        ASKS_EXIT,
-        APPROVAL_EXIT,
-      ],
-      modelOnly: true,
-    },
-    SCHEMAS['interpret-follow-up'],
-  ),
-  contractStepEntry(
-    {
       id: 'plan',
       title: 'Plan',
       kind: 'agent',
       summary:
-        "The agent's model plans the analysis: measures, entities, scope, assumptions, and whether to clarify first. No tools.",
-      // Olivia asks through Clarify: the run waits there for the answer.
-      // In an interactive run (R44) a clear plan waits for approval.
+        "The agent's model plans the analysis: measures, entities, scope and assumptions. When the question can be read more than one way, it asks you first and plans with your answer. No tools.",
+      // Olivia asks in her own step: the run waits there for the answer
+      // (since 2026-11-19 there is no Clarify step). In an interactive run
+      // (R44) a clear plan waits for approval.
       exits: [...MODEL_EXITS, ASKS_EXIT, APPROVAL_EXIT],
       modelOnly: true,
     },
     SCHEMAS.plan,
-  ),
-  contractStepEntry(
-    {
-      id: 'clarify',
-      title: 'Clarify',
-      kind: 'code',
-      summary:
-        "Waits for the user's answer to the plan's clarifying question, then hands it back to Plan. No LLM.",
-      exits: [{ label: 'until you answer', outcome: 'waits' }],
-    },
-    SCHEMAS.clarify,
   ),
   contractStepEntry(
     {
@@ -302,28 +258,6 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
     },
     SCHEMAS['wrap-up'],
   ),
-  contractStepEntry(
-    {
-      id: 'page-result',
-      title: 'Page result',
-      kind: 'code',
-      summary:
-        "Reads the page of the earlier query's full result the follow-up asks for, through the query inspector's page path. No LLM.",
-      exits: [{ label: 'the page cannot be read', outcome: 'fails' }],
-    },
-    SCHEMAS['page-result'],
-  ),
-  contractStepEntry(
-    {
-      id: 'page-answer',
-      title: 'Page answer',
-      kind: 'code',
-      summary:
-        'Writes the answer from the page: which rows it shows, what was understood and a table of the rows. No LLM.',
-      exits: [],
-    },
-    SCHEMAS['page-answer'],
-  ),
 ];
 
 /** The edges of the workflow (api.md 117), from Start to End. */
@@ -331,42 +265,10 @@ export const ANSWER_BUSINESS_QUESTION_EDGES: readonly WorkflowEdge[] = [
   // Start → Receive question, or through Read images when the run has images.
   ...readImagesEdges('receive-question'),
   { from: 'receive-question', to: 'load-catalog', kind: 'next' },
-  { from: 'load-catalog', to: 'interpret-follow-up', kind: 'next' },
-  {
-    from: 'interpret-follow-up',
-    to: 'plan',
-    kind: 'branch',
-    label: 'New question',
-    note: 'A question that needs a new analysis: plan it, query the data, write an answer.',
-  },
-  {
-    from: 'interpret-follow-up',
-    to: 'page-result',
-    kind: 'branch',
-    label: 'Explore the earlier result',
-    note: 'A follow-up that only pages, filters or sorts the earlier answer’s rows. No new analysis.',
-  },
-  {
-    from: 'plan',
-    to: 'clarify',
-    kind: 'branch',
-    label: 'Needs clarification',
-    note: 'The question can be read more than one way: the run waits for you to pick.',
-  },
-  {
-    from: 'clarify',
-    to: 'plan',
-    kind: 'loop',
-    label: 'Answered',
-    note: 'Your answer goes back to Plan, which plans with it and never asks again.',
-  },
-  {
-    from: 'plan',
-    to: 'analyse',
-    kind: 'branch',
-    label: 'Clear',
-    note: 'The plan is clear: the analyst queries the data.',
-  },
+  // One line since 2026-11-19: no follow-up branch, and Plan asks in its
+  // own step (no Clarify loop).
+  { from: 'load-catalog', to: 'plan', kind: 'next' },
+  { from: 'plan', to: 'analyse', kind: 'next' },
   { from: 'analyse', to: 'validate', kind: 'next' },
   {
     from: 'validate',
@@ -392,8 +294,6 @@ export const ANSWER_BUSINESS_QUESTION_EDGES: readonly WorkflowEdge[] = [
   },
   { from: 'build-visual', to: 'wrap-up', kind: 'next' },
   { from: 'wrap-up', to: 'end', kind: 'next' },
-  { from: 'page-result', to: 'page-answer', kind: 'next' },
-  { from: 'page-answer', to: 'end', kind: 'next' },
 ];
 
 /** The most attempts of the analysis loop: the first and one retry. */
@@ -448,7 +348,7 @@ export type ValidateOutcome = z.output<typeof validateOutcomeSchema>;
 /** The answer (AnswerOutput). */
 export type BusinessAnswer = z.output<typeof answerSchema>;
 
-/** What a waiting step (Clarify, Analyse) suspends the run with. */
+/** What a waiting step (Plan, Analyse, an approval gate) suspends the run with. */
 export type ClarifyingQuestion = z.output<typeof clarifyingQuestionSchema>;
 
 /** A clarifying question with the user's answer to it. */
@@ -461,21 +361,6 @@ export type AnswerBusinessQuestionSummary = z.output<typeof turnSummarySchema>;
 
 /** What Build visual made: the run's visual, or why there is none. */
 export type BuiltVisual = z.output<typeof builtVisualSchema>;
-
-/** What Interpret follow-up read: the page of an earlier result asked for. */
-export type FollowUp = z.output<typeof followUpSchema>;
-
-/** One page of an earlier query's full result, as Page result passes it on. */
-export type PagedFollowUp = z.output<typeof pagedResultSchema>;
-
-/** What result-explorer reads (api.md 153's call): the words and the queries. */
-export interface FollowUpRequest {
-  text: string;
-  candidates: ExplorerCandidate[];
-  /** The latest query's view; null for its stored rows. */
-  view: ResultView | null;
-  pageCount: number | null;
-}
 
 /**
  * What one analysis attempt of the agent turn gives back; `clarification`
@@ -499,13 +384,13 @@ export interface AnswerBusinessQuestionRuntime {
    * A run of the workflow (workflows R44; answer-business-question.review.ts):
    * every step agent may ask the user first, and each outcome that goes on
    * to another agent waits for the user's approval. Absent in a past chat's
-   * turn and in an eval run: nothing waits but Clarify and Analyse's own
+   * turn and in an eval run: nothing waits but Plan's and Analyse's own
    * question, as before.
    */
   interactive?: boolean;
   /**
    * The Plan step's model call; `stopped` when the turn was stopped. After
-   * Clarify, `clarification` holds its question and the user's answer.
+   * Plan asked the user, `clarification` holds its question and the answer.
    */
   plan(input: {
     question: string;
@@ -611,38 +496,9 @@ export interface AnswerBusinessQuestionRuntime {
     clarification?: { question: string; options: string[] };
   }>;
   /**
-   * The run's earlier queries (roadmap 1.28.8): an earlier run's answer's
-   * queries on a follow-up, a chat's earlier answers' queries. Absent or
-   * empty on a first run: Interpret follow-up then makes no model call.
+   * The run's answer, written outside the stream: Jessica's, once approved
+   * on her gate (workflows R44).
    */
-  followUp?: readonly ExplorableQuery[];
-  /**
-   * Interpret follow-up's model call: result-explorer reads the words as a
-   * view of one of the earlier queries; `stopped` when the turn was stopped.
-   */
-  interpretFollowUp?(
-    input: FollowUpRequest & {
-      /** An interactive run: Nathan may ask the user one question first. */
-      canAsk?: boolean;
-      answered?: { question: string; answer: string };
-      revision?: Revision;
-    },
-  ): Promise<{
-    spec: ExplorerSpec | null;
-    stopped: boolean;
-    clarification?: { question: string; options: string[] };
-  }>;
-  /**
-   * Page result: the page of earlier query `query` (an index into
-   * `followUp`) through the query inspector's page path, recorded as an
-   * `explore_result` call of the turn. Throws the reason it cannot be read.
-   */
-  pageResult?(input: {
-    query: number;
-    request: PageRequest;
-    understood: string;
-  }): Promise<PagedFollowUp>;
-  /** Page answer: the run's answer, written by code. */
   deliverAnswer?(answer: string): Promise<void>;
 }
 
@@ -1511,7 +1367,7 @@ function queryKey(query: AnalyseQuery): string {
 }
 
 /**
- * The plan after the user answered Clarify (agents.md 5.11): Plan never
+ * The plan after the user answered its question (agents.md 5.11): Plan never
  * asks twice, so a plan made with an answer needs no clarification, whatever
  * the model replied.
  */
@@ -1521,17 +1377,6 @@ export function planAfterAnswer(
 ): AnalysisPlan {
   if (!answered || !plan.needsClarification) return plan;
   return { ...plan, needsClarification: false, clarification: null };
-}
-
-/**
- * Whether the plan loop ends after a round (agents.md 5.11): Plan's output
- * (a plan, needing no clarification or stopped) ends it; Clarify's (the
- * answer, no plan yet) sends the run back to Plan.
- */
-export function planLoopDone(outcome: Record<string, unknown>): boolean {
-  return (
-    outcome['plan'] !== undefined && outcome['clarification'] === undefined
-  );
 }
 
 /**
@@ -1602,161 +1447,11 @@ export function chartableQueries(queries: readonly AnalyseQuery[]): boolean {
   return queries.some((query) => !query.error && query.rowCount > 0);
 }
 
-/**
- * The run's summary, when the run got that far: Page answer's on a
- * follow-up over an earlier result, else Wrap up's.
- */
+/** The run's summary (Wrap up's), when the run got that far. */
 export function turnSummaryOf(
   result: unknown,
 ): AnswerBusinessQuestionSummary | undefined {
   const parsed = answerBusinessQuestionResultSchema.safeParse(result);
   if (!parsed.success) return undefined;
-  return (
-    parsed.data['explore-result'] ??
-    parsed.data['question-path']?.['analysis-path']?.['answer-path']
-  );
-}
-
-/**
- * Interpret follow-up (roadmap 1.28.8): a code gate, then at most one
- * result-explorer call. A run without earlier queries (every first run,
- * every eval case) makes no model call and plans as before. Otherwise the
- * words are read against every earlier query, from the latest one's view:
- * a view of one of them is the follow-up; a new question, a part that
- * names no known column, or a model error is none (the run plans the
- * question, it never fails here).
- */
-export async function interpretFollowUp(
-  question: string,
-  runtime:
-    | Pick<AnswerBusinessQuestionRuntime, 'followUp' | 'interpretFollowUp'>
-    | undefined,
-  interactive: {
-    /** An interactive run: `called` and `reply` are reported (R44). */
-    track?: boolean;
-    canAsk?: boolean;
-    answered?: { question: string; answer: string };
-    revision?: Revision;
-  } = {},
-): Promise<{
-  followUp: FollowUp | null;
-  stopped: boolean;
-  /** Nathan was called (a run with earlier queries) and replied. */
-  called?: true;
-  /** Nathan asked the user first (an interactive run only). */
-  clarification?: { question: string; options: string[] };
-  /** Nathan's reading, as a revision shows it to him again. */
-  reply?: string;
-}> {
-  const queries = runtime?.followUp ?? [];
-  const none = { followUp: null, stopped: false };
-  if (!queries.length || !runtime?.interpretFollowUp) return none;
-  const latest = queries[queries.length - 1];
-  const view = latest.view ?? null;
-  let read: {
-    spec: ExplorerSpec | null;
-    stopped: boolean;
-    clarification?: { question: string; options: string[] };
-  };
-  try {
-    read = await runtime.interpretFollowUp({
-      text: question,
-      candidates: queries.map(explorerCandidateOfQuery),
-      view,
-      pageCount: pageCountOf(view),
-      ...(interactive.canAsk ? { canAsk: true } : {}),
-      ...(interactive.answered ? { answered: interactive.answered } : {}),
-      ...(interactive.revision ? { revision: interactive.revision } : {}),
-    });
-  } catch {
-    return none;
-  }
-  if (read.stopped) return { followUp: null, stopped: true };
-  if (read.clarification) {
-    return { ...none, called: true, clarification: read.clarification };
-  }
-  const { spec } = read;
-  // What an interactive run's gate reads; nothing more otherwise.
-  const tracked = interactive.track
-    ? { called: true as const, reply: JSON.stringify(spec) }
-    : {};
-  if (
-    !spec ||
-    spec.action !== 'explore' ||
-    spec.interpretation.rejected?.length
-  ) {
-    return { ...none, ...tracked };
-  }
-  const index = queries[spec.query] ? spec.query : queries.length - 1;
-  return {
-    followUp: {
-      action: 'explore',
-      query: index,
-      ref: queries[index].ref,
-      request: spec.interpretation.request,
-      understood: spec.interpretation.understood,
-    },
-    stopped: false,
-    ...tracked,
-  };
-}
-
-/** `1264` reads `1,264`. */
-function count(value: number): string {
-  return value.toLocaleString('en-US');
-}
-
-/**
- * The page's headline, in the query inspector's words (plan 0.5):
- * `Rows 51–100 of 2,034`, `Rows 1–50 of 312 matching`, `Rows 1–50 of
- * 50,000+`; `No rows match these filters.` when none does.
- */
-function pageHeadline(
-  view: ResultView,
-  shown: number,
-  matchedRows: number,
-  capped: boolean,
-): string {
-  const filtered = view.filters.length > 0;
-  if (!shown) {
-    return filtered
-      ? 'No rows match these filters.'
-      : 'The result has no rows.';
-  }
-  const first = (Math.max(1, view.page) - 1) * view.pageSize + 1;
-  const last = first + shown - 1;
-  return `Rows ${count(first)}–${count(last)} of ${count(matchedRows)}${capped ? '+' : ''}${filtered ? ' matching' : ''}`;
-}
-
-/**
- * Page answer (roadmap 1.28.8): the run's answer from one page of an
- * earlier query's result, written by code: the headline (which rows, of
- * how many), the query and what the words were understood as, a Markdown
- * table of the page's rows, and where the page sits.
- */
-export function pageAnswer(
-  view: ResultView,
-  result: Pick<
-    PagedFollowUp,
-    'columns' | 'rows' | 'pageCount' | 'matchedRows' | 'capped' | 'understood'
-  >,
-  queryTitle: string,
-): string {
-  const lines = [
-    pageHeadline(view, result.rows.length, result.matchedRows, result.capped),
-    '',
-    `Query: ${queryTitle}`,
-    `Understood as: ${result.understood}`,
-  ];
-  if (!result.rows.length) return lines.join('\n');
-  const columns = (
-    result.columns.length ? result.columns : resultColumns(result.rows)
-  ).map((key) => ({ key, header: readableColumn(key) }));
-  lines.push(
-    '',
-    ...markdownTable(columns, result.rows),
-    '',
-    `Page ${count(view.page)} of ${count(result.pageCount)}. Open the query to page, filter or sort the full result.`,
-  );
-  return lines.join('\n');
+  return parsed.data['question-path']?.['analysis-path']?.['answer-path'];
 }

@@ -101,23 +101,17 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'read-images',
       'receive-question',
       'load-catalog',
-      'interpret-follow-up',
       'plan',
-      'clarify',
       'analyse',
       'validate',
       'write-answer',
       'build-visual',
       'wrap-up',
-      'page-result',
-      'page-answer',
     ]);
     // The flow is its edges (api.md 117): the optional branch to Read
-    // images from Start, a branch after Interpret follow-up (a new
-    // question, or the earlier result paged), a branch after Plan, a loop
-    // back from Clarify to Plan once answered, a loop back from Validate to
-    // Analyse, and the optional branch from Write answer to Build visual.
-    expect(CODE_WORKFLOWS[0].edges).toHaveLength(19);
+    // images from Start, a loop back from Validate to Analyse, and the
+    // optional branch from Write answer to Build visual; the rest is one line.
+    expect(CODE_WORKFLOWS[0].edges).toHaveLength(13);
     expect(
       CODE_WORKFLOWS[0].edges
         .filter((edge) => edge.kind !== 'next')
@@ -129,26 +123,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         kind: 'branch',
         label: 'Reference images',
       },
-      {
-        from: 'interpret-follow-up',
-        to: 'plan',
-        kind: 'branch',
-        label: 'New question',
-      },
-      {
-        from: 'interpret-follow-up',
-        to: 'page-result',
-        kind: 'branch',
-        label: 'Explore the earlier result',
-      },
-      {
-        from: 'plan',
-        to: 'clarify',
-        kind: 'branch',
-        label: 'Needs clarification',
-      },
-      { from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' },
-      { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
       { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
       {
         from: 'write-answer',

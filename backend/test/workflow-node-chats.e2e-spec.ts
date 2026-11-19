@@ -209,20 +209,13 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
         400,
         'Step "ghost" has no agent to chat with',
       ],
-      // Validate is code; Clarify is code and did not run.
+      // Validate is code.
       [
         runId,
         'validate',
         { content: 'Chat: why?' },
         400,
         'Step "validate" has no agent to chat with',
-      ],
-      [
-        runId,
-        'clarify',
-        { content: 'Chat: why?' },
-        400,
-        'Step "clarify" has no agent to chat with',
       ],
     ];
     for (const [id, stepId, body, status, message] of cases) {

@@ -28,8 +28,6 @@ jest.mock('../tool-services', () => ({
 
 import { RequestContext } from '@mastra/core/request-context';
 import type { z } from 'zod';
-import type { ExplorableQuery } from '../../modules/sessions/query-evidence/explorable-queries';
-import type { ExplorerSpec } from '../agents/result-explorer.prompts';
 import { answerBusinessQuestionWorkflow } from './answer-business-question.workflow';
 import {
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
@@ -164,10 +162,7 @@ const FAILED_ATTEMPT: AnalyseAttempt = {
 
 /** The runtime's step calls (its flags left out). */
 type TurnCalls = Required<
-  Omit<
-    AnswerBusinessQuestionRuntime,
-    'buildsVisual' | 'followUp' | 'interactive'
-  >
+  Omit<AnswerBusinessQuestionRuntime, 'buildsVisual' | 'interactive'>
 >;
 
 /** A runtime whose model steps are mocks, each answering as scripted. */
@@ -178,7 +173,6 @@ type ScriptedTurn = {
   >;
 } & {
   buildsVisual?: boolean;
-  followUp?: AnswerBusinessQuestionRuntime['followUp'];
   interactive?: boolean;
 };
 
@@ -283,54 +277,39 @@ async function resume(
   );
 }
 
-/** The plan loop's events of a round where Plan needed no clarification. */
-const CLEAR_PLAN_ROUND = [
-  'question-path.plan-round:running',
-  'question-path.plan-round.plan:running',
-  'question-path.plan-round.plan:success',
-  'question-path.plan-round.plan-round-outcome:running',
-  'question-path.plan-round.plan-round-outcome:success',
-  'question-path.plan-round:success',
-];
+/** The events of Plan when it needed no clarification. */
+const CLEAR_PLAN = ['question-path.plan:running', 'question-path.plan:success'];
 
 describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
-  it('builds the thirteen catalogue steps, in order, with their titles', () => {
+  it('builds the nine catalogue steps, in order, with their titles', () => {
     expect(workflow.id).toBe(ANSWER_BUSINESS_QUESTION_WORKFLOW_ID);
     expect(leafSteps(workflow).map((s) => [s.id, s.description])).toEqual([
       ['read-images', 'Read images'],
       ['receive-question', 'Receive question'],
       ['load-catalog', 'Load catalog'],
-      ['interpret-follow-up', 'Interpret follow-up'],
       ['plan', 'Plan'],
-      ['clarify', 'Clarify'],
       ['analyse', 'Analyse'],
       ['validate', 'Validate'],
       ['write-answer', 'Write answer'],
       ['build-visual', 'Build visual'],
       ['wrap-up', 'Wrap up'],
-      ['page-result', 'Page result'],
-      ['page-answer', 'Page answer'],
     ]);
   });
 
-  it('is built with a .branch() to Read images and its outcome map first, then Interpret follow-up and a .branch() to the question path (.dountil() around the plan round, a .branch() to the analysis, .dountil() around the analysis attempt) or to the explore path', () => {
+  it('is built with a .branch() to Read images and its outcome map first, then a one-way .branch() to the question path (Plan, a .branch() to the analysis, .dountil() around the analysis attempt)', () => {
     expect(workflow.entries.map((entry) => entry.type)).toEqual([
       'branch',
       'map',
       'step',
       'step',
-      'step',
       'branch',
     ]);
-    const top = workflow.entries[5] as Extract<StubEntry, { type: 'branch' }>;
-    expect(top.pairs.map(([, step]) => step.id)).toEqual([
-      'question-path',
-      'explore-result',
-    ]);
+    const top = workflow.entries[4] as Extract<StubEntry, { type: 'branch' }>;
+    expect(top.pairs.map(([, step]) => step.id)).toEqual(['question-path']);
     const questionPath = top.pairs[0][1];
     expect(questionPath.entries?.map((entry) => entry.type)).toEqual([
       'map',
-      'dountil',
+      'step',
       'branch',
     ]);
     const readImages = workflow.entries[0] as Extract<
@@ -341,20 +320,6 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       'read-images',
     ]);
     expect(workflow.entries[1]).toMatchObject({ id: READ_IMAGES_OUTCOME_ID });
-    const planLoop = questionPath.entries![1] as Extract<
-      StubEntry,
-      { type: 'dountil' }
-    >;
-    expect(planLoop.step.id).toBe('plan-round');
-    expect(planLoop.step.entries?.map((entry) => entry.type)).toEqual([
-      'step',
-      'branch',
-      'map',
-    ]);
-    expect(leafSteps(planLoop.step).map((step) => step.id)).toEqual([
-      'plan',
-      'clarify',
-    ]);
     const branch = questionPath.entries![2] as Extract<
       StubEntry,
       { type: 'branch' }
@@ -371,10 +336,10 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       'analyse',
       'validate',
     ]);
-    expect(leafSteps(top.pairs[1][1]).map((step) => step.id)).toEqual([
-      'page-result',
-      'page-answer',
-    ]);
+    expect(questionPath.entries![1]).toMatchObject({
+      type: 'step',
+      step: { id: 'plan' },
+    });
   });
 
   // The agent's Graph tab draws the catalogue (agents-evals R108): its
@@ -415,17 +380,9 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         ['question', 'datasets', 'imageNotes'],
         ['question', 'catalog', 'columns', 'imageNotes'],
       ],
-      'interpret-follow-up': [
-        ['question', 'catalog', 'columns', 'imageNotes'],
-        ['question', 'catalog', 'columns', 'imageNotes', 'followUp', 'stopped'],
-      ],
       plan: [
-        ['question', 'catalog', 'columns', 'imageNotes', 'clarification'],
+        ['question', 'catalog', 'columns', 'imageNotes'],
         ['question', 'catalog', 'columns', 'plan', 'stopped', 'imageNotes'],
-      ],
-      clarify: [
-        ['question', 'catalog', 'columns', 'plan', 'stopped', 'imageNotes'],
-        ['question', 'catalog', 'columns', 'imageNotes', 'clarification'],
       ],
       // On a retry Analyse is given the earlier attempt's calls and queries,
       // and hands Validate the earlier attempt to merge (agents.md 5.11).
@@ -497,34 +454,6 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         ['answer', 'calls'],
         ['sqlQueries', 'failedQueries', 'rows', 'answer'],
       ],
-      'page-result': [
-        ['question', 'catalog', 'columns', 'imageNotes', 'followUp', 'stopped'],
-        [
-          'title',
-          'columns',
-          'rows',
-          'page',
-          'pageCount',
-          'matchedRows',
-          'capped',
-          'view',
-          'understood',
-        ],
-      ],
-      'page-answer': [
-        [
-          'title',
-          'columns',
-          'rows',
-          'page',
-          'pageCount',
-          'matchedRows',
-          'capped',
-          'view',
-          'understood',
-        ],
-        ['sqlQueries', 'failedQueries', 'rows', 'answer'],
-      ],
     });
   });
 
@@ -551,12 +480,10 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
-      'interpret-follow-up:running',
-      'interpret-follow-up:success',
       'question-path:running',
       'question-path.question-input:running',
       'question-path.question-input:success',
-      ...CLEAR_PLAN_ROUND,
+      ...CLEAR_PLAN,
       'question-path.analysis-path:running',
       'question-path.analysis-path.analysis-attempt:running',
       'question-path.analysis-path.analysis-attempt.analyse:running',
@@ -643,165 +570,6 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
           },
         },
       },
-    });
-  });
-
-  describe('a follow-up over an earlier result (roadmap 1.28.8)', () => {
-    const EARLIER: ExplorableQuery = {
-      ref: 'Q1',
-      sql: 'SELECT m.id AS match_id, m.stage FROM wc.public.matches m CROSS JOIN wc.public.squad_members s',
-      datasourceId: 'ds-pg',
-      columns: ['match_id', 'stage'],
-      kinds: { match_id: 'number', stage: 'text' },
-      sampleValues: { match_id: [1], stage: ['final'] },
-      rationale: 'I list each match with its squad members.',
-    };
-    const NEXT_PAGE: ExplorerSpec = {
-      action: 'explore',
-      query: 0,
-      interpretation: {
-        request: { filters: [], sort: [], page: 2, pageSize: 50 },
-        understood: 'page 2',
-      },
-    };
-    const VIEW = {
-      filters: [],
-      sort: [],
-      page: 2,
-      pageSize: 50,
-      matchedRows: 1264,
-      capped: false,
-    };
-    const PAGE = {
-      title: EARLIER.rationale!,
-      columns: ['match_id', 'stage'],
-      rows: Array.from({ length: 50 }, (_, i) => ({
-        match_id: 3 + i,
-        stage: 'final',
-      })),
-      page: 2,
-      pageCount: 26,
-      matchedRows: 1264,
-      capped: false,
-      view: VIEW,
-      understood: 'page 2',
-    };
-    const followUpTurn = (
-      spec: ExplorerSpec | Error,
-      followUp: ExplorableQuery[] = [EARLIER],
-    ) =>
-      runtime({
-        followUp,
-        interpretFollowUp: jest.fn(() =>
-          spec instanceof Error
-            ? Promise.reject(spec)
-            : Promise.resolve({ spec, stopped: false }),
-        ),
-        pageResult: jest.fn(() => Promise.resolve(PAGE)),
-        deliverAnswer: jest.fn(() => Promise.resolve()),
-      });
-
-    it('makes no model call on a run without earlier queries, and plans the question', async () => {
-      const turn = followUpTurn(NEXT_PAGE, []);
-      const { events, outputs, result } = await run('Next page', turn);
-      expect(turn.interpretFollowUp).not.toHaveBeenCalled();
-      expect(outputs.get('interpret-follow-up')).toMatchObject({
-        followUp: null,
-      });
-      expect(turn.plan).toHaveBeenCalledTimes(1);
-      expect(events.some((event) => event.startsWith('explore-result'))).toBe(
-        false,
-      );
-      expect(turn.pageResult).not.toHaveBeenCalled();
-      expect(turnSummaryOf(result.result)?.answer).toContain('16 matches');
-    });
-
-    it('pages the earlier result instead of planning: Page result, then Page answer delivers the answer', async () => {
-      const turn = followUpTurn(NEXT_PAGE);
-      const { events, result } = await run('  next page  ', turn);
-      expect(events).toEqual([
-        `${READ_IMAGES_OUTCOME_ID}:running`,
-        `${READ_IMAGES_OUTCOME_ID}:success`,
-        'receive-question:running',
-        'receive-question:success',
-        'load-catalog:running',
-        'load-catalog:success',
-        'interpret-follow-up:running',
-        'interpret-follow-up:success',
-        'explore-result:running',
-        'explore-result.page-result:running',
-        'explore-result.page-result:success',
-        'explore-result.page-answer:running',
-        'explore-result.page-answer:success',
-        'explore-result:success',
-      ]);
-      expect(turn.interpretFollowUp).toHaveBeenCalledTimes(1);
-      expect(turn.interpretFollowUp).toHaveBeenCalledWith(
-        expect.objectContaining({ text: 'next page', view: null }),
-      );
-      expect(turn.plan).not.toHaveBeenCalled();
-      expect(turn.analyse).not.toHaveBeenCalled();
-      expect(turn.writeAnswer).not.toHaveBeenCalled();
-      expect(turn.pageResult).toHaveBeenCalledWith({
-        query: 0,
-        request: NEXT_PAGE.interpretation.request,
-        understood: 'page 2',
-      });
-      expect(turn.deliverAnswer).toHaveBeenCalledTimes(1);
-      const answer = turn.deliverAnswer.mock.calls[0][0];
-      expect(answer.split('\n')[0]).toBe('Rows 51–100 of 1,264');
-      expect(result).toEqual({
-        status: 'success',
-        result: {
-          'explore-result': {
-            sqlQueries: 1,
-            failedQueries: 0,
-            rows: 50,
-            answer,
-          },
-        },
-      });
-      expect(turnSummaryOf(result.result)?.answer).toBe(answer);
-    });
-
-    it('plans the question when result-explorer reads a new question or fails', async () => {
-      for (const reply of [
-        { ...NEXT_PAGE, action: 'new-question' as const },
-        new Error('The provider failed'),
-      ]) {
-        const turn = followUpTurn(reply);
-        const { events, result } = await run('Goals per team?', turn);
-        expect(turn.interpretFollowUp).toHaveBeenCalledTimes(1);
-        expect(turn.plan).toHaveBeenCalledTimes(1);
-        expect(turn.pageResult).not.toHaveBeenCalled();
-        expect(events).toContain('question-path:success');
-        expect(result.status).toBe('success');
-      }
-    });
-
-    it('takes neither branch when the turn was stopped while the words were read', async () => {
-      const turn = followUpTurn(NEXT_PAGE);
-      turn.interpretFollowUp.mockResolvedValueOnce({
-        spec: NEXT_PAGE,
-        stopped: true,
-      });
-      const { events, result } = await run('next page', turn);
-      expect(events.at(-1)).toBe('interpret-follow-up:success');
-      expect(turn.plan).not.toHaveBeenCalled();
-      expect(turn.pageResult).not.toHaveBeenCalled();
-      expect(result).toEqual({ status: 'success', result: {} });
-    });
-
-    it('fails Page result with the reason the page cannot be read; no answer is delivered', async () => {
-      const turn = followUpTurn(NEXT_PAGE);
-      turn.pageResult.mockRejectedValueOnce(
-        new Error('Page 2000 is past the 50,000-row limit'),
-      );
-      const { events, result } = await run('page 2000', turn);
-      expect(events).toContain('explore-result.page-result:failed');
-      expect(turn.deliverAnswer).not.toHaveBeenCalled();
-      expect(result.status).toBe('failed');
-      expect(String(result.error)).toContain('past the 50,000-row limit');
     });
   });
 
@@ -1125,18 +893,17 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     expect(result.status).toBe('success');
   });
 
-  it('suspends at Clarify with the plan question when the plan needs clarification: no analysis yet', async () => {
+  it("suspends at Plan with the plan's question when the plan needs clarification: no analysis yet", async () => {
     const turn = runtime({
       plan: jest.fn(() =>
         Promise.resolve({ plan: CLARIFYING, stopped: false }),
       ),
     });
     const { events, result } = await run('Which team was dominant?', turn);
-    expect(events.slice(-5)).toEqual([
-      'question-path.plan-round.plan:success',
-      'question-path.plan-round.clarify:running',
-      'question-path.plan-round.clarify:suspended',
-      'question-path.plan-round:suspended',
+    expect(events.slice(-4)).toEqual([
+      'question-path.question-input:success',
+      'question-path.plan:running',
+      'question-path.plan:suspended',
       'question-path:suspended',
     ]);
     expect(
@@ -1145,15 +912,14 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     expect(turn.analyse).not.toHaveBeenCalled();
     expect(result.status).toBe('suspended');
     // The path from the top, handed back unchanged on resume (ADR-0043).
-    expect(result.suspended).toEqual([
-      ['question-path', 'plan-round', 'clarify'],
-    ]);
-    expect(result.steps?.['question-path']?.suspendPayload).toEqual(
-      CLARIFYING.clarification,
-    );
+    expect(result.suspended).toEqual([['question-path', 'plan']]);
+    expect(result.steps?.['question-path']?.suspendPayload).toEqual({
+      kind: 'clarify',
+      ...CLARIFYING.clarification,
+    });
   });
 
-  it('resumes Clarify with the answer, goes back to Plan with it, then analyses and writes the answer', async () => {
+  it('resumes Plan with the answer, plans again with it and never asks twice, then analyses and writes the answer', async () => {
     const turn = runtime({
       plan: jest
         .fn()
@@ -1163,30 +929,19 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     });
     const started = await run('Which team was dominant?', turn);
     const { events, outputs, result } = await resume(started, 'Matches won');
-    expect(events.slice(0, 7)).toEqual([
+    expect(events.slice(0, 3)).toEqual([
       'question-path:running',
-      'question-path.plan-round:running',
-      'question-path.plan-round.clarify:running',
-      'question-path.plan-round.clarify:success',
-      'question-path.plan-round.plan-round-outcome:running',
-      'question-path.plan-round.plan-round-outcome:success',
-      'question-path.plan-round:success',
+      'question-path.plan:running',
+      'question-path.plan:success',
     ]);
-    expect(events.slice(7, 13)).toEqual(CLEAR_PLAN_ROUND);
-    // Clarify hands Plan its own input back, with the answer.
-    expect(outputs.get('question-path.plan-round.clarify')).toEqual({
-      question: 'Which team was dominant?',
-      catalog: expect.any(Array) as unknown,
-      columns: expect.any(Array) as unknown,
-      imageNotes: '',
-      clarification: { ...CLARIFYING.clarification, answer: 'Matches won' },
-    });
+    // Plan asked once: no second wait, whatever the model replied.
+    expect(events.filter((event) => event.endsWith(':suspended'))).toEqual([]);
     expect(turn.plan).toHaveBeenCalledTimes(2);
     expect(turn.plan.mock.calls[1][0]).toMatchObject({
       question: 'Which team was dominant?',
       clarification: { ...CLARIFYING.clarification, answer: 'Matches won' },
     });
-    expect(outputs.get('question-path.plan-round.plan')).toMatchObject({
+    expect(outputs.get('question-path.plan')).toMatchObject({
       plan: { needsClarification: false, clarification: null },
     });
     expect(turn.analyse).toHaveBeenCalledTimes(1);
@@ -1264,9 +1019,9 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     });
     const { events, result } = await run('Go', turn);
     expect(events.slice(-4)).toEqual([
-      'question-path.plan-round.plan:running',
-      'question-path.plan-round.plan:bailed',
-      'question-path.plan-round:success',
+      'question-path.question-input:success',
+      'question-path.plan:running',
+      'question-path.plan:bailed',
       'question-path:success',
     ]);
     expect(
@@ -1385,11 +1140,10 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       expect(turn.analyse).toHaveBeenCalledWith(
         expect.objectContaining({ imageNotes: NOTES }),
       );
-      // Interpret follow-up passes them on to the question path (roadmap
-      // 1.28.8), and Write answer on to Build visual.
-      expect(outputs.get('interpret-follow-up')).toMatchObject({
+      // Load catalog passes them on to the question path, and Write answer
+      // on to Build visual.
+      expect(outputs.get('load-catalog')).toMatchObject({
         imageNotes: NOTES,
-        followUp: null,
       });
       expect(
         outputs.get('question-path.analysis-path.answer-path.write-answer'),
@@ -1415,7 +1169,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       });
     });
 
-    it('keeps the notes through a Clarify wait and its resume, without reading the images again', async () => {
+    it('keeps the notes through the wait at Plan and its resume, without reading the images again', async () => {
       const turn = runtime({
         plan: jest
           .fn()
@@ -1431,7 +1185,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       );
       expect(started.result.status).toBe('suspended');
       const { outputs, result } = await resume(started, 'Matches won');
-      expect(outputs.get('question-path.plan-round.clarify')).toMatchObject({
+      expect(outputs.get('question-path.plan')).toMatchObject({
         imageNotes: NOTES,
       });
       expect(turn.plan).toHaveBeenCalledTimes(2);
@@ -1449,35 +1203,38 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       expect(result.status).toBe('success');
     });
 
-    it('resumes a run that waited at Clarify before Read images existed: its stored data has no notes, so they are empty (workflows R35)', async () => {
-      // What such a run's snapshot holds: Clarify's input (Plan's output)
-      // and the plan round's input, both without `imageNotes`.
-      const clarify = leafSteps(workflow).find(
-        (step) => step.id === 'clarify',
+    it('resumes a run that waited at Plan before Read images existed: its stored data has no notes, so they are empty (workflows R35)', async () => {
+      // What such a run's snapshot holds: Plan's input, without `imageNotes`.
+      const plan = leafSteps(workflow).find(
+        (step) => step.id === 'plan',
       ) as unknown as {
         execute(params: Record<string, unknown>): Promise<unknown>;
       };
+      const turn = runtime();
+      const requestContext = new RequestContext();
+      requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, turn);
       const stored = {
-        question: 'Which team was dominant?',
-        catalog: [],
-        plan: CLARIFYING,
-      };
-      const planRoundInput = {
         question: 'Which team was dominant?',
         catalog: [],
         columns: [],
       };
-      const output = await clarify.execute({
+      await plan.execute({
         inputData: stored,
+        requestContext,
         resumeData: { answer: 'Matches won' },
+        suspendData: { kind: 'clarify', ...CLARIFYING.clarification },
         suspend: jest.fn(),
-        getInitData: () => planRoundInput,
+        bail: jest.fn(),
       });
-      expect(output).toEqual({
-        ...planRoundInput,
-        imageNotes: '',
-        clarification: { ...CLARIFYING.clarification, answer: 'Matches won' },
-      });
+      expect(turn.plan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clarification: {
+            ...CLARIFYING.clarification,
+            answer: 'Matches won',
+          },
+          imageNotes: '',
+        }),
+      );
     });
 
     it("keeps the notes through Analyse's own clarifying question and its resume", async () => {
@@ -1566,9 +1323,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       const turn = runtime({ interactive: true });
       const started = await run('How many matches?', turn);
       expect(started.result.status).toBe('suspended');
-      expect(started.result.suspended).toEqual([
-        ['question-path', 'plan-round', 'plan'],
-      ]);
+      expect(started.result.suspended).toEqual([['question-path', 'plan']]);
       expect(payloadOf(started)).toMatchObject({
         kind: 'review',
         question: containing("Olivia's plan is ready"),
@@ -1618,9 +1373,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       });
       // The new plan waits on the gate again.
       expect(revised.result.status).toBe('suspended');
-      expect(revised.result.suspended).toEqual([
-        ['question-path', 'plan-round', 'plan'],
-      ]);
+      expect(revised.result.suspended).toEqual([['question-path', 'plan']]);
       expect(turn.analyse).not.toHaveBeenCalled();
     });
 
@@ -1864,9 +1617,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         expect.objectContaining({ imageNotes: NOTES }),
       );
       // Olivia's plan waits next.
-      expect(next.result.suspended).toEqual([
-        ['question-path', 'plan-round', 'plan'],
-      ]);
+      expect(next.result.suspended).toEqual([['question-path', 'plan']]);
     });
 
     it('waits on nothing and offers no question when the run is not interactive', async () => {

@@ -28,7 +28,7 @@ const ANSWER = 'Brazil scored the most goals in this data.';
 const FOLLOW_UP = 'And the fewest?';
 const FOLLOW_UP_ANSWER = 'Bolivia scored the fewest goals in this data.';
 const SQL = `SELECT stage, COUNT(*) AS matches FROM ${worldCupKey('matches')} GROUP BY stage`;
-/** The steps a clear question runs (Clarify, the other way after Plan, is skipped). */
+/** The steps a clear question runs. */
 const V2_STEPS = [
   'receive-question',
   'load-catalog',
@@ -203,7 +203,7 @@ test.describe('Feature: Workflow runs', () => {
       );
       await scenarioStep(
         page,
-        "And I see the stub's answer with its SQL, and every step Done but Clarify",
+        "And I see the stub's answer with its SQL, and every step Done but Build visual",
         async () => {
           await expect(runAnswer(page)).toContainText(ANSWER);
           await page.getByTestId('query-row-0').click();
@@ -215,7 +215,6 @@ test.describe('Feature: Workflow runs', () => {
             await expect(nodeStatus(page, id)).toHaveText('Done');
             await expect(runStep(page, id)).toHaveAttribute('data-status', 'success');
           }
-          await expect(nodeStatus(page, 'clarify')).toHaveText('Skipped');
           // The visual is off for this run, and its line says so.
           await expect(nodeStatus(page, 'build-visual')).toHaveText('Skipped');
           await expect(runStep(page, 'build-visual')).toHaveAttribute(

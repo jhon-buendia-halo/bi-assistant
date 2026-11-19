@@ -102,8 +102,6 @@ const V2_STEPS_BEFORE: StepEvent[] = [
   stepResult('receive-question', { question: 'Who won in 2002?' }),
   stepStart('load-catalog', { question: 'Who won in 2002?' }),
   stepResult('load-catalog', { entities: 1 }),
-  stepStart('interpret-follow-up', { question: 'Who won in 2002?' }),
-  stepResult('interpret-follow-up', { followUp: null }),
   stepStart('plan', { question: 'Who won in 2002?' }),
   stepResult('plan', PLAN_OUTPUT),
   stepStart('analyse', { question: 'Who won in 2002?' }),
@@ -627,8 +625,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
-      'interpret-follow-up:running',
-      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -642,12 +638,9 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'wrap-up:running',
       'wrap-up:success',
       // The steps the run never took end skipped: Read images (no image
-      // attached) and the Clarify branch.
+      // attached).
       'read-images:skipped',
-      'clarify:skipped',
       'build-visual:skipped',
-      'page-result:skipped',
-      'page-answer:skipped',
       'done',
     ]);
     expect(events[0]).toEqual({
@@ -664,7 +657,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
       startedAt: expect.any(String) as string,
     });
-    expect(events[12]).toEqual({
+    expect(events[10]).toEqual({
       type: 'step',
       id: 'analyse',
       title: 'Analyse',
@@ -698,9 +691,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success', output: { entities: 1 } },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success', output: PLAN_OUTPUT },
-        { id: 'clarify', title: 'Clarify', status: 'skipped' },
         {
           id: 'analyse',
           title: 'Analyse',
@@ -712,8 +703,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'write-answer', status: 'success', output: ANSWER_OUTPUT },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'success', output: WRAP_UP_OUTPUT },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
       output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
@@ -725,7 +714,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     expect(run.input).not.toHaveProperty('careful');
     expect(run.finishedAt).toBeDefined();
     // Every step that ran has its start and end times, the end never before
-    // the start; the skipped Clarify has none.
+    // the start; the skipped steps have none.
     for (const step of run.steps.filter((s) => s.status !== 'skipped')) {
       expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
         Date.parse(step.startedAt!),
@@ -834,9 +823,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         {
           id: 'analyse',
           status: 'failed',
@@ -847,19 +834,14 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
-    expect(stepTrail(events).slice(-8)).toEqual([
-      'clarify:skipped',
+    expect(stepTrail(events).slice(-5)).toEqual([
       'analyse:failed',
       'validate:skipped',
       'write-answer:skipped',
       'build-visual:skipped',
       'wrap-up:skipped',
-      'page-result:skipped',
-      'page-answer:skipped',
     ]);
     expect(run.answer).toBeUndefined();
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
@@ -888,8 +870,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
-      'interpret-follow-up:running',
-      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -902,13 +882,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       brief: 'Not reached',
       source: 'generic',
     };
-    expect(run.steps.slice(5)).toEqual([
-      {
-        id: 'clarify',
-        title: 'Clarify',
-        status: 'skipped',
-        story: expect.objectContaining({ source: 'step' }) as unknown,
-      },
+    expect(run.steps.slice(4)).toEqual([
       {
         id: 'analyse',
         title: 'Analyse',
@@ -944,18 +918,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         story: notReached,
       },
       { id: 'wrap-up', title: 'Wrap up', status: 'skipped', story: notReached },
-      {
-        id: 'page-result',
-        title: 'Page result',
-        status: 'skipped',
-        story: notReached,
-      },
-      {
-        id: 'page-answer',
-        title: 'Page answer',
-        status: 'skipped',
-        story: notReached,
-      },
     ]);
     // The turn's own signal aborts with the request's.
     expect(ctx.sessions.streamRunTurn.mock.calls[0][3]?.aborted).toBe(true);
@@ -1377,16 +1339,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: message },
         { id: 'validate', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
   });
@@ -1441,16 +1399,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'success' },
         { id: 'validate', status: 'success' },
         { id: 'write-answer', status: 'success' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'success' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
       output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
@@ -1492,16 +1446,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: 'Model error' },
         { id: 'validate', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
     ctx.db.close();
@@ -1519,16 +1469,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'stopped' },
         { id: 'validate', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
   });
@@ -2562,7 +2508,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
   describe('a run that waits for the user (138)', () => {
     function suspendingTurn() {
       const suspension = {
-        stepId: 'clarify',
+        stepId: 'plan',
         question: 'Which measure?',
         options: ['Goals', 'Wins'],
         resume: jest.fn(
@@ -2596,7 +2542,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
       ]);
       const last = Number(waiting.got.at(-1)!.split(':')[0]);
       const prepared = await ctx.service.prepareResume(id, {
-        stepId: 'clarify',
+        stepId: 'plan',
         answer: 'Goals',
       });
       expect(ctx.service.resumeDetached(prepared)).toBe(id);
@@ -3142,7 +3088,6 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     expect(await storedTrail(id)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
       'analyse:running',
     ]);
@@ -3232,7 +3177,6 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     expect(stored?.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
       'analyse:failed',
     ]);
@@ -3245,12 +3189,12 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, _emit, _signal, _careful, onStep) => {
-        for (const step of V2_STEPS_BEFORE.slice(0, -1)) onStep(step);
-        onStep(stepStart('clarify', PLAN_OUTPUT));
+        for (const step of V2_STEPS_BEFORE.slice(0, -3)) onStep(step);
+        onStep(stepStart('plan', { question: 'Who won in 2002?' }));
         onStep({
           type: 'workflow-step-suspended',
           payload: {
-            id: 'clarify',
+            id: 'plan',
             status: 'suspended',
             suspendPayload: { question: 'Which measure?' },
           },
@@ -3261,7 +3205,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     );
     const id = await launch();
     await settled();
-    expect((await storedTrail(id)).at(-1)).toBe('clarify:suspended');
+    expect((await storedTrail(id)).at(-1)).toBe('plan:suspended');
     expect((await ctx.repository.get(id))?.status).toBe('running');
     const fresh = ctx.restarted();
     await fresh.onModuleInit();
@@ -3271,7 +3215,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
       error: 'The app stopped before the run finished',
     });
     expect(stored?.steps.at(-1)).toMatchObject({
-      id: 'clarify',
+      id: 'plan',
       status: 'failed',
       error: 'The app stopped before the run finished',
     });
@@ -3284,19 +3228,19 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, _emit, _signal, _careful, onStep) => {
-        for (const step of V2_STEPS_BEFORE.slice(0, -1)) onStep(step);
-        onStep(stepStart('clarify', PLAN_OUTPUT));
+        for (const step of V2_STEPS_BEFORE.slice(0, -3)) onStep(step);
+        onStep(stepStart('plan', { question: 'Who won in 2002?' }));
         onStep({
           type: 'workflow-step-suspended',
           payload: {
-            id: 'clarify',
+            id: 'plan',
             status: 'suspended',
             suspendPayload: { question: 'Which measure?' },
           },
         });
         await settled();
         return {
-          stepId: 'clarify',
+          stepId: 'plan',
           question: 'Which measure?',
           options: ['Goals', 'Wins'],
           resume: jest.fn(() => Promise.resolve(undefined)),
@@ -3312,7 +3256,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     const stored = await ctx.repository.get(id);
     expect(stored).toMatchObject({ status: 'failed', error: 'host lost' });
     expect(stored?.steps.at(-1)).toMatchObject({
-      id: 'clarify',
+      id: 'plan',
       status: 'failed',
       error: 'host lost',
     });
@@ -3341,7 +3285,6 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     expect(stored?.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
       // The turn ended with Analyse unfinished, so the tracker closed it;
       // the checkpoint had stored it running.
@@ -3430,7 +3373,7 @@ describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () =
   it('a run waiting for the user holds no slot, and its resume is never refused', async () => {
     buildCapped();
     const suspension = {
-      stepId: 'clarify',
+      stepId: 'plan',
       question: 'Which measure?',
       options: ['Goals', 'Wins'],
       resume: jest.fn(() => Promise.resolve(undefined)),
@@ -3450,7 +3393,7 @@ describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () =
     const release = holdTurn();
     const other = await ctx.service.launch(await prepared());
     const resume = await ctx.service.prepareResume(waiting, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Goals',
     });
     expect(ctx.service.resumeDetached(resume)).toBe(waiting);
@@ -3612,7 +3555,7 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
     t.state.ctx = build();
     let resumedSignal: AbortSignal | undefined;
     const suspension = {
-      stepId: 'clarify',
+      stepId: 'plan',
       question: 'Which measure?',
       options: ['Goals', 'Wins'],
       resume: jest.fn(
@@ -3645,7 +3588,7 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
     // The clock was stopped when the run suspended, not merely ignored.
     expect(stall).not.toHaveBeenCalled();
     const prepared = await t.ctx().service.prepareResume(id, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Goals',
     });
     t.ctx().service.resumeDetached(prepared);
@@ -3797,7 +3740,6 @@ describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 am
     expect(run.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
       'analyse:stopped',
     ]);
@@ -3913,7 +3855,7 @@ describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 am
   it('a Stop before a resume starts ends the run stopped without resuming its turn, the waiting turn dropped', async () => {
     t.state.ctx = build();
     const suspension = {
-      stepId: 'clarify',
+      stepId: 'plan',
       question: 'Which measure?',
       options: ['Goals', 'Wins'],
       resume: jest.fn(() => Promise.resolve(undefined)),
@@ -3930,7 +3872,7 @@ describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 am
     const id = await t.launch();
     await t.ctx().service.live.whenEnded(id);
     const prepared = await t.ctx().service.prepareResume(id, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Goals',
     });
     // The Stop lands while the resume stores the run running again.

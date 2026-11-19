@@ -115,10 +115,9 @@ describe('The workflow catalogue (API)', () => {
         description: expect.any(String) as string,
         kind: 'code',
         owner: 'Official',
-        // Michael analyses; Zoe reads the reference images, Nathan reads a
-        // follow-up over an earlier result, Olivia plans, Jessica writes and
-        // Ryan builds the visual unless the run turns it off (agents.md
-        // 5.11).
+        // Michael analyses; Zoe reads the reference images, Olivia plans,
+        // Jessica writes and Ryan builds the visual unless the run turns it
+        // off (agents.md 5.11).
         agents: [
           {
             key: 'insights-analyst',
@@ -126,7 +125,6 @@ describe('The workflow catalogue (API)', () => {
             role: 'Insights Analyst',
           },
           { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
-          { key: 'result-explorer', name: 'Nathan', role: 'Result Explorer' },
           { key: 'analysis-planner', name: 'Olivia', role: 'Analysis Lead' },
           { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
           {
@@ -135,7 +133,7 @@ describe('The workflow catalogue (API)', () => {
             role: 'Visualization Designer',
           },
         ],
-        stepCount: 13,
+        stepCount: 9,
         bar: 'steps',
         trigger: 'run',
         input: [
@@ -365,16 +363,12 @@ describe('The workflow catalogue (API)', () => {
         'read-images',
         'receive-question',
         'load-catalog',
-        'interpret-follow-up',
         'plan',
-        'clarify',
         'analyse',
         'validate',
         'write-answer',
         'build-visual',
         'wrap-up',
-        'page-result',
-        'page-answer',
       ]);
       // The Start node: each field with its rules and the steps reading it.
       expect(
@@ -432,7 +426,6 @@ describe('The workflow catalogue (API)', () => {
           .map((step) => [step.id, step.agent?.key, step.agent?.tools.length]),
       ).toEqual([
         ['read-images', 'image-reader', 0],
-        ['interpret-follow-up', 'result-explorer', 0],
         ['plan', 'analysis-planner', 0],
         ['analyse', 'insights-analyst', 6],
         ['write-answer', 'answer-writer', 0],
@@ -447,23 +440,13 @@ describe('The workflow catalogue (API)', () => {
           systemPrompt: expect.any(String) as string,
           toolDetails: expect.any(Array) as unknown[],
         },
-        // Zoe, Nathan, Olivia and Jessica: their job descriptions, no tools.
+        // Zoe, Olivia and Jessica: their job descriptions, no tools.
         {
           key: 'image-reader',
           name: 'Zoe',
           role: 'Image Analyst',
           model: null,
           systemPrompt: expect.any(String) as string,
-          toolDetails: [],
-        },
-        {
-          key: 'result-explorer',
-          name: 'Nathan',
-          role: 'Result Explorer',
-          model: null,
-          systemPrompt: expect.stringMatching(
-            /^You turn a user's words about a query's result into a view/,
-          ) as string,
           toolDetails: [],
         },
         {
@@ -562,10 +545,8 @@ describe('The workflow catalogue (API)', () => {
       // Write answer's output is the answer (AnswerOutput) and the calls.
       const written = v2.steps.find((step) => step.id === 'write-answer')!;
       expect(written.output).toEqual(['headline', 'answer', 'calls']);
-      // The flow is its edges (117): a branch after Interpret follow-up (a
-      // new question, or the earlier result paged), a branch after Plan, a
-      // loop back from Clarify to Plan once answered, a loop back from
-      // Validate to Analyse, End after Wrap up or Page answer.
+      // The flow is its edges (117): one line, with a loop back from
+      // Validate to Analyse, and End after Wrap up.
       const { edges } = (
         await http().get('/workflows/answer-business-question').expect(200)
       ).body as {
@@ -601,27 +582,8 @@ describe('The workflow catalogue (API)', () => {
         },
         { from: 'read-images', to: 'receive-question', kind: 'next' },
         { from: 'receive-question', to: 'load-catalog', kind: 'next' },
-        { from: 'load-catalog', to: 'interpret-follow-up', kind: 'next' },
-        {
-          from: 'interpret-follow-up',
-          to: 'plan',
-          kind: 'branch',
-          label: 'New question',
-        },
-        {
-          from: 'interpret-follow-up',
-          to: 'page-result',
-          kind: 'branch',
-          label: 'Explore the earlier result',
-        },
-        {
-          from: 'plan',
-          to: 'clarify',
-          kind: 'branch',
-          label: 'Needs clarification',
-        },
-        { from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' },
-        { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
+        { from: 'load-catalog', to: 'plan', kind: 'next' },
+        { from: 'plan', to: 'analyse', kind: 'next' },
         { from: 'analyse', to: 'validate', kind: 'next' },
         { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
         {
@@ -640,8 +602,6 @@ describe('The workflow catalogue (API)', () => {
         },
         { from: 'build-visual', to: 'wrap-up', kind: 'next' },
         { from: 'wrap-up', to: 'end', kind: 'next' },
-        { from: 'page-result', to: 'page-answer', kind: 'next' },
-        { from: 'page-answer', to: 'end', kind: 'next' },
       ]);
       // 116 is unchanged: the summary carries neither.
       const [summary] = await workflows();

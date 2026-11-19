@@ -14,8 +14,7 @@ import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
   analyseInputSchema,
   answerBusinessQuestionInputSchema,
-  followedUpQuestionSchema,
-  planInputSchema,
+  catalogedQuestionSchema,
   answerBusinessQuestionResultSchema,
   turnSummarySchema,
   answerPathInputSchema,
@@ -27,13 +26,9 @@ import {
   analysisLoopDone,
   catalogBlock,
   clarifyingQuestionOf,
-  interpretFollowUp,
   loadCatalog,
   mergeAttempts,
-  pageAnswer,
-  planAfterAnswer,
   planCatalogBlock,
-  planLoopDone,
   chartableQueries,
   receiveQuestion,
   validateAttempt,
@@ -49,6 +44,7 @@ import {
 import { engineInputSchema, withContract } from './workflow-contract';
 import {
   APPROVE_OPTION,
+  askedOf,
   interactiveStep,
   isApproval,
   reviewOf,
@@ -65,48 +61,39 @@ import { analysisReview, planReview } from './answer-business-question.prompts';
 // (https://mastra.ai/docs/workflows/suspend-and-resume, ADR-0043):
 //
 //   .branch(the input has images → read-images) → read-images-outcome
-//   → receive-question → load-catalog → interpret-follow-up
-//   → .branch(
-//       not stopped, no follow-up → question-path: question-input
-//         → .dountil(plan-round: plan → .branch(needs clarification → clarify)
-//                  → plan-round-outcome, until a plan needs no clarification)
-//         → .branch(not stopped → analysis-path:
-//             .dountil(analysis-attempt: analyse → validate, ok or 2 attempts)
-//             → .branch(not stopped → answer-path:
-//                 write-answer → visual-input
-//                 → .branch(the run builds a visual → build-visual)
-//                 → visual-outcome → wrap-up)),
-//       not stopped, a follow-up over an earlier result → explore-result:
-//         page-result → page-answer)
+//   → receive-question → load-catalog
+//   → question-path: question-input → plan
+//       → .branch(not stopped → analysis-path:
+//           .dountil(analysis-attempt: analyse → validate, ok or 2 attempts)
+//           → .branch(not stopped → answer-path:
+//               write-answer → visual-input
+//               → .branch(the run builds a visual → build-visual)
+//               → visual-outcome → wrap-up))
 //
-// Interpret follow-up (roadmap 1.28.8) makes no model call on a run without
-// earlier queries; otherwise result-explorer reads whether the question asks
-// for another page, a filter or an order of an earlier result. Its "no"
-// (a new question, or a model error) plans the question as before.
+// One line since 2026-11-19: no follow-up branch (Interpret follow-up, Page
+// result and Page answer left the workflow) and no Clarify loop.
 //
-// Clarify suspends the run with the plan's question; resumed with the
-// user's answer, it hands Plan's input back with the answer, and the loop
-// runs Plan again (which never asks twice). Analyse suspends the run when
-// the agent asks a clarifying question; resumed, it runs the agent again
-// with the answer. A suspended run's path (`result.suspended`) is passed
-// back unchanged to `run.resumeStream`.
+// Plan suspends the run with its own clarifying question; resumed with the
+// user's answer, it plans again with it (and never asks twice). Analyse
+// suspends the run when the agent asks a clarifying question; resumed, it
+// runs the agent again with the answer. A suspended run's path
+// (`result.suspended`) is passed back unchanged to `run.resumeStream`.
 //
 // Read images (agents.md 2.15; workflows R35) describes the run's reference
 // images once, before Receive question; its notes (`imageNotes`, `''`
-// without images) travel in every step's data, Interpret follow-up's and
-// the question path's included, to Plan, Analyse and Write answer, so they
-// survive a wait and a resume (the runtime is rebuilt empty on resume, and
-// nested workflows cannot read a parent's steps).
+// without images) travel in every step's data to Plan, Analyse and Write
+// answer, so they survive a wait and a resume (the runtime is rebuilt empty
+// on resume, and nested workflows cannot read a parent's steps).
 //
-// The nested workflows (`question-path`, `plan-round`, `analysis-path`,
-// `analysis-attempt`, `answer-path`, `explore-result`) and the mapping steps
-// `read-images-outcome`, `question-input`, `plan-round-outcome` and
-// `quality-outcome` are not catalogue steps: the engine reports their steps as
+// The nested workflows (`question-path`, `analysis-path`,
+// `analysis-attempt`, `answer-path`) and the mapping steps
+// `read-images-outcome`, `question-input`, `visual-input` and
+// `visual-outcome` are not catalogue steps: the engine reports their steps as
 // `<parent>.<child>.<step>`, and the session code reads the last segment.
 // A step's bail ends only the sequence it is in, so a stopped Analyse ends
 // its attempt, the loop's condition sees `stopped`, and the answer path is
-// not taken (its steps end `skipped`); a stopped Plan likewise ends its
-// round with `stopped`, and no analysis runs.
+// not taken (its steps end `skipped`); a stopped Plan likewise ends the
+// question path with `stopped`, and no analysis runs.
 //
 // Mastra resumes a run from its persisted snapshot only, so a snapshot is
 // written while the run is suspended and at no other time; the run's
@@ -196,129 +183,12 @@ const loadCatalogStep = createStep({
   ),
 });
 
-/** The run's turn, when it has one (Interpret follow-up's gate reads it). */
-function optionalRuntimeOf(params: {
-  requestContext: { get(key: string): unknown };
-}): AnswerBusinessQuestionRuntime | undefined {
-  return params.requestContext.get(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY) as
-    AnswerBusinessQuestionRuntime | undefined;
-}
-
-// A follow-up over an earlier result (roadmap 1.28.8): a code gate, then at
-// most one result-explorer call. A run without earlier queries makes no
-// model call; a new question or a model error plans as before.
-const interpretFollowUpStep = createStep({
-  id: STEP['interpret-follow-up'].id,
-  description: STEP['interpret-follow-up'].title,
-  inputSchema: engineInputSchema(SCHEMAS['interpret-follow-up'].input),
-  outputSchema: SCHEMAS['interpret-follow-up'].output,
-  suspendSchema: SCHEMAS['interpret-follow-up'].suspend,
-  resumeSchema: SCHEMAS['interpret-follow-up'].resume,
-  execute: withContract(
-    STEP['interpret-follow-up'].title,
-    SCHEMAS['interpret-follow-up'],
-    async (params: StepParams<(typeof SCHEMAS)['interpret-follow-up']>) => {
-      const { inputData } = params;
-      const runtime = optionalRuntimeOf(params);
-      // Nathan was called on this try: only then is there an outcome of his
-      // to approve (a first run makes no model call).
-      let called = false;
-      const ended = await interactiveStep(
-        params as never,
-        runtime?.interactive === true,
-        {
-          run: async (interactive) => {
-            const read = await interpretFollowUp(inputData.question, runtime, {
-              ...interactive,
-              track: runtime?.interactive === true,
-            });
-            called = read.called === true;
-            // A stop takes neither branch: nothing after this step runs.
-            return {
-              output: {
-                ...inputData,
-                followUp: read.followUp,
-                ...(read.stopped ? { stopped: read.stopped } : {}),
-              },
-              reply: read.reply ?? '',
-              stopped: read.stopped,
-              ...(read.clarification
-                ? { clarification: read.clarification }
-                : {}),
-            };
-          },
-          // His "a new question" goes on to Olivia; a page of an earlier
-          // result goes to code only, so it needs no approval.
-          gate: (output) =>
-            called && !output.followUp
-              ? {
-                  question: reviewQuestion(
-                    'Nathan',
-                    'reading of your follow-up',
-                    'Olivia',
-                  ),
-                  review:
-                    'Nathan read your words as a new question, not as another page, filter or order of an earlier result. Olivia will plan it.',
-                }
-              : undefined,
-        },
-      );
-      return ended.type === 'suspended' ? (ended.value as never) : ended.output;
-    },
-  ),
-});
-
-const pageResultStep = createStep({
-  id: STEP['page-result'].id,
-  description: STEP['page-result'].title,
-  inputSchema: engineInputSchema(SCHEMAS['page-result'].input),
-  outputSchema: SCHEMAS['page-result'].output,
-  execute: withContract(
-    STEP['page-result'].title,
-    SCHEMAS['page-result'],
-    async (params: StepParams<(typeof SCHEMAS)['page-result']>) => {
-      const { followUp } = params.inputData;
-      if (!followUp) throw new Error('The follow-up names no earlier result');
-      const runtime = runtimeOf(params, STEP['page-result'].title);
-      if (!runtime.pageResult) {
-        throw new Error('The Page result step has no result to page');
-      }
-      return runtime.pageResult({
-        query: followUp.query,
-        request: followUp.request,
-        understood: followUp.understood,
-      });
-    },
-  ),
-});
-
-const pageAnswerStep = createStep({
-  id: STEP['page-answer'].id,
-  description: STEP['page-answer'].title,
-  inputSchema: engineInputSchema(SCHEMAS['page-answer'].input),
-  outputSchema: SCHEMAS['page-answer'].output,
-  execute: withContract(
-    STEP['page-answer'].title,
-    SCHEMAS['page-answer'],
-    async (params: StepParams<(typeof SCHEMAS)['page-answer']>) => {
-      const { inputData } = params;
-      const runtime = runtimeOf(params, STEP['page-answer'].title);
-      if (!runtime.deliverAnswer) {
-        throw new Error('The Page answer step has no answer to deliver');
-      }
-      const answer = pageAnswer(inputData.view, inputData, inputData.title);
-      await runtime.deliverAnswer(answer);
-      // The summary Wrap up writes: one query, its page's rows.
-      return {
-        sqlQueries: 1,
-        failedQueries: 0,
-        rows: inputData.rows.length,
-        answer,
-      };
-    },
-  ),
-});
-
+// Plan (agents.md 5.11): Olivia plans the question. When it can be read
+// more than one way she asks first, in her own step (since 2026-11-19 there
+// is no Clarify step): the run waits for the answer (api.md 138), then she
+// plans again with it and never asks twice. In an interactive run (workflows
+// R44) a clear plan then waits for the user's approval; their words instead
+// make her plan again with them.
 const planStep = createStep({
   id: STEP.plan.id,
   description: STEP.plan.title,
@@ -331,88 +201,70 @@ const planStep = createStep({
     SCHEMAS.plan,
     async (params: StepParams<(typeof SCHEMAS)['plan']>) => {
       const { inputData } = params;
-      const answered = inputData.clarification;
       const runtime = runtimeOf(params, STEP.plan.title);
-      // Olivia asks through Clarify, never on her own: her plan alone waits
-      // on the approval gate in an interactive run (workflows R44).
-      const ended = await interactiveStep(
-        params as never,
-        runtime.interactive === true,
-        {
-          run: async ({ revision }) => {
-            const { plan, stopped } = await runtime.plan({
-              question: inputData.question,
-              catalog: inputData.catalog,
-              // Plan sees each entity's columns, so its measures and its
-              // clarifying options rest on what the data can compute.
-              catalogBlock: planCatalogBlock(
-                inputData.catalog,
-                inputData.columns,
-                { question: inputData.question },
-              ),
-              ...(answered ? { clarification: answered } : {}),
-              ...(revision ? { revision } : {}),
-              imageNotes: inputData.imageNotes,
-            });
-            const output = {
-              question: inputData.question,
-              catalog: inputData.catalog,
-              // Analyse lists the columns too (agents.md 5.11).
-              columns: inputData.columns,
-              // After an answer, Plan never asks again.
-              plan: planAfterAnswer(plan, answered),
-              imageNotes: inputData.imageNotes,
-              ...(stopped ? { stopped: true } : {}),
-            };
-            return { output, reply: JSON.stringify(output.plan), stopped };
-          },
-          // A plan that asks goes to Clarify first; a clear one to Michael.
-          gate: (output) =>
-            output.plan.needsClarification
-              ? undefined
-              : {
-                  question: reviewQuestion('Olivia', 'plan', 'Michael'),
-                  review: planReview(output.plan),
-                },
-        },
-      );
-      if (ended.type === 'suspended') return ended.value as never;
+      const interactive = runtime.interactive === true;
+      const answer = params.resumeData?.answer?.trim() ?? '';
+      // Resumed on the approval gate: approved, the held plan goes on.
+      const pending = interactive ? reviewOf(params.suspendData) : undefined;
+      if (pending && answer && isApproval(answer)) {
+        return pending.outcome as never;
+      }
+      // Resumed after her own question: she plans with the answer.
+      const asked = askedOf(params.suspendData);
+      const answered =
+        asked && answer
+          ? { question: asked.question, options: asked.options, answer }
+          : undefined;
+      const revision =
+        pending && answer
+          ? { previous: pending.reply, note: answer }
+          : undefined;
+      const { plan, stopped } = await runtime.plan({
+        question: inputData.question,
+        catalog: inputData.catalog,
+        // Plan sees each entity's columns, so its measures and its
+        // clarifying options rest on what the data can compute.
+        catalogBlock: planCatalogBlock(inputData.catalog, inputData.columns, {
+          question: inputData.question,
+        }),
+        ...(answered ? { clarification: answered } : {}),
+        ...(revision ? { revision } : {}),
+        imageNotes: inputData.imageNotes,
+      });
+      // After an answer or the user's changes, Plan never asks again.
+      const settled =
+        (answered || revision) && plan.needsClarification
+          ? { ...plan, needsClarification: false, clarification: null }
+          : plan;
+      const output = {
+        question: inputData.question,
+        catalog: inputData.catalog,
+        // Analyse lists the columns too (agents.md 5.11).
+        columns: inputData.columns,
+        plan: settled,
+        imageNotes: inputData.imageNotes,
+      };
       // A stopped turn ends here: nothing after Plan runs.
-      return ended.output.stopped ? params.bail(ended.output) : ended.output;
-    },
-  ),
-});
-
-const clarifyStep = createStep({
-  id: STEP.clarify.id,
-  description: STEP.clarify.title,
-  inputSchema: engineInputSchema(SCHEMAS.clarify.input),
-  outputSchema: SCHEMAS.clarify.output,
-  suspendSchema: SCHEMAS.clarify.suspend,
-  resumeSchema: SCHEMAS.clarify.resume,
-  execute: withContract(
-    STEP.clarify.title,
-    SCHEMAS.clarify,
-    async (params: StepParams<(typeof SCHEMAS)['clarify']>) => {
-      const asked = params.inputData.plan.clarification;
-      if (!asked) throw new Error('The plan asked no clarifying question');
-      const answer = params.resumeData?.answer?.trim();
-      // The run waits for the user's answer (api.md 138).
-      if (!answer) {
+      if (stopped) return params.bail({ ...output, stopped: true });
+      // Her question: the run waits for the user's answer (api.md 138).
+      if (settled.needsClarification && settled.clarification) {
         return params.suspend({
-          question: asked.question,
-          options: asked.options,
+          kind: 'clarify',
+          question: settled.clarification.question,
+          options: settled.clarification.options,
         });
       }
-      // Back to Plan: its own input (the plan round's), with the answer.
-      const planInput = planInputSchema.parse(params.getInitData());
-      return {
-        question: planInput.question,
-        catalog: planInput.catalog,
-        columns: planInput.columns,
-        imageNotes: planInput.imageNotes,
-        clarification: { ...asked, answer },
-      };
+      if (interactive) {
+        return params.suspend({
+          kind: 'review',
+          question: reviewQuestion('Olivia', 'plan', 'Michael'),
+          options: [APPROVE_OPTION],
+          review: planReview(settled),
+          outcome: output,
+          reply: JSON.stringify(settled),
+        });
+      }
+      return output;
     },
   ),
 });
@@ -765,36 +617,6 @@ const wrapUpStep = createStep({
 /** Any object: what the loop and the branches pass between nested workflows. */
 const passOn = z.record(z.string(), z.unknown());
 
-// One round of planning: Plan, then Clarify when the plan needs it (the run
-// waits for the answer there). The round ends with Plan's output, or with
-// Clarify's (Plan's input with the answer), which sends the loop round again.
-const planRoundWorkflow = createWorkflow({
-  id: 'plan-round',
-  inputSchema: engineInputSchema(planInputSchema),
-  outputSchema: passOn,
-  options: { shouldPersistSnapshot: persistWhileWaiting },
-})
-  .then(planStep)
-  .branch([
-    [
-      async ({ inputData }) =>
-        Promise.resolve(
-          inputData.stopped !== true &&
-            inputData.plan.needsClarification === true,
-        ),
-      clarifyStep,
-    ],
-  ])
-  .map(
-    async (params) =>
-      Promise.resolve(
-        ((params.inputData as Record<string, unknown>)['clarify'] ??
-          params.getStepResult(planStep)) as Record<string, unknown>,
-      ),
-    { id: 'plan-round-outcome' },
-  )
-  .commit();
-
 // One attempt of the analysis: the agent's turn, then the code checks.
 const analysisAttemptWorkflow = createWorkflow({
   id: 'analysis-attempt',
@@ -872,12 +694,12 @@ const analysisPathWorkflow = createWorkflow({
   ])
   .commit();
 
-// A new question: the plan loop (Plan, asking the user first when it
-// needs to), then the analysis unless the turn was stopped.
+// The question: Plan (asking the user first when it needs to), then the
+// analysis unless the turn was stopped.
 const questionPathWorkflow = createWorkflow({
   id: 'question-path',
-  // Interpret follow-up's output: Plan's input, with no follow-up.
-  inputSchema: engineInputSchema(followedUpQuestionSchema),
+  // Load catalog's output: Plan's input.
+  inputSchema: engineInputSchema(catalogedQuestionSchema),
   outputSchema: passOn,
   options: { shouldPersistSnapshot: persistWhileWaiting },
 })
@@ -893,55 +715,22 @@ const questionPathWorkflow = createWorkflow({
       }),
     { id: 'question-input' },
   )
-  .dountil(planRoundWorkflow, async ({ inputData }) =>
-    Promise.resolve(planLoopDone(inputData as Record<string, unknown>)),
-  )
+  .then(planStep)
   .branch([
     [
-      async ({ inputData }) => {
-        const planned = inputData as Record<string, unknown>;
-        return Promise.resolve(
-          planned['stopped'] !== true &&
-            (planned['plan'] as { needsClarification?: unknown } | undefined)
-              ?.needsClarification !== true,
-        );
-      },
+      async ({ inputData }) =>
+        Promise.resolve(
+          (inputData as Record<string, unknown>)['stopped'] !== true,
+        ),
       analysisPathWorkflow,
     ],
   ])
   .commit();
 
-// A follow-up over an earlier result (roadmap 1.28.8): its page, then the
-// answer written from it. Never waits.
-const exploreResultWorkflow = createWorkflow({
-  id: 'explore-result',
-  inputSchema: engineInputSchema(followedUpQuestionSchema),
-  outputSchema: turnSummarySchema,
-  options: { shouldPersistSnapshot: persistWhileWaiting },
-})
-  .then(pageResultStep)
-  .then(pageAnswerStep)
-  .commit();
-
-/** Interpret follow-up's output, as a branch condition reads it. */
-function followedUp(inputData: unknown): {
-  stopped: boolean;
-  explore: boolean;
-} {
-  const read = inputData as {
-    stopped?: unknown;
-    followUp?: { action?: unknown } | null;
-  };
-  return {
-    stopped: read.stopped === true,
-    explore: read.followUp?.action === 'explore',
-  };
-}
-
 export const answerBusinessQuestionWorkflow = createWorkflow({
   id: ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   description:
-    'One turn of Insights Analyst: read the reference images when there are some, receive the question, load the catalog, then either page an earlier result the follow-up asks for, or plan (asking the user first when the question is ambiguous), analyse and validate (retried once) and write the answer.',
+    'One turn of Insights Analyst: read the reference images when there are some, receive the question, load the catalog, plan (asking the user first when the question is ambiguous), analyse and validate (retried once), write the answer and build its visual.',
   inputSchema: answerBusinessQuestionInputSchema,
   outputSchema: answerBusinessQuestionResultSchema,
   options: {
@@ -961,23 +750,8 @@ export const answerBusinessQuestionWorkflow = createWorkflow({
   .map(readImagesOutcome, { id: READ_IMAGES_OUTCOME_ID })
   .then(receiveQuestionStep)
   .then(loadCatalogStep)
-  .then(interpretFollowUpStep)
-  // Exactly one branch, unless the turn was stopped: a new question (the
-  // catalogue lists its steps first) or the earlier result's page.
-  .branch([
-    [
-      async ({ inputData }) => {
-        const read = followedUp(inputData);
-        return Promise.resolve(!read.stopped && !read.explore);
-      },
-      questionPathWorkflow,
-    ],
-    [
-      async ({ inputData }) => {
-        const read = followedUp(inputData);
-        return Promise.resolve(!read.stopped && read.explore);
-      },
-      exploreResultWorkflow,
-    ],
-  ])
+  // The question path is always taken: a one-way branch keeps the run's
+  // result and a waiting run's path keyed under `question-path`, as stored
+  // runs have them.
+  .branch([[async () => Promise.resolve(true), questionPathWorkflow]])
   .commit();

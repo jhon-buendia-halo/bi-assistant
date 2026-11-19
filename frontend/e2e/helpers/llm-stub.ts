@@ -116,9 +116,8 @@ export interface LlmStub {
   /** Plan's output for a v2 run; the default is `clearPlan` of the question. */
   plan: (request: StubRequest) => V2Plan;
   /**
-   * `result-explorer`'s reply (a filter in words, or Answer a Business
-   * Question's Interpret follow-up, roadmap 1.28.8). The default reads a new
-   * question, so a follow-up run plans as before; a test that explores sets it.
+   * `result-explorer`'s reply (the query inspector's filter in words). The
+   * default reads a new question; a test that explores sets it.
    */
   explore: (request: StubRequest) => ExplorerReply;
   /** Write answer's output; the default is `answerFrom` the last text `reply` gave. */
