@@ -20,6 +20,7 @@ import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
+import { setAgentModelResolver } from '../../mastra/model-resolver';
 import { agentWorkflow } from '../../mastra/workflows/agent-workflows';
 import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/answer-business-question.steps';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
@@ -436,6 +437,30 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
       const withLlm = await ctx.service.get('answer-business-question');
       expect(withLlm.agents[0].model).toBe('anthropic/claude-sonnet-4-6');
+    });
+
+    it("shows Answer a Business Question's own model on its agents when the saved model is a Claude model (agents.md 1.3)", async () => {
+      ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
+      setAgentModelResolver(() =>
+        Promise.resolve('anthropic/claude-sonnet-4-6' as const),
+      );
+      try {
+        const detail = await ctx.service.get('answer-business-question');
+        expect(
+          detail.agents.map((agent) => agent.model).filter(Boolean),
+        ).not.toHaveLength(0);
+        for (const agent of detail.agents) {
+          expect(agent.model).toBe('anthropic/claude-opus-5-5');
+        }
+        // Another saved model: every agent keeps it.
+        setAgentModelResolver(() => Promise.resolve('openai/gpt-5.2' as const));
+        const other = await ctx.service.get('answer-business-question');
+        expect(other.agents[0].model).toBe('anthropic/claude-sonnet-4-6');
+      } finally {
+        setAgentModelResolver(() =>
+          Promise.resolve('openai/gpt-4o-mini' as const),
+        );
+      }
     });
 
     it('shortens a system prompt longer than 20 000 characters, and says so', async () => {

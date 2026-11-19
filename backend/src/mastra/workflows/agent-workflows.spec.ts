@@ -126,9 +126,11 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
       { label: 'if it asks you a question', outcome: 'waits' },
       { label: 'until you approve its work', outcome: 'waits' },
     ]);
+    // Plan asks through Clarify, where the run waits for the answer.
     expect(step('plan').exits).toEqual([
       { label: 'the model returns an error', outcome: 'fails' },
       { label: 'you stop it', outcome: 'stops' },
+      { label: 'if it asks you a question', outcome: 'waits' },
       { label: 'until you approve its work', outcome: 'waits' },
     ]);
     expect(step('write-answer').output).toEqual([

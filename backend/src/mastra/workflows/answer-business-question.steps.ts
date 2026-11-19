@@ -216,8 +216,9 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       kind: 'agent',
       summary:
         "The agent's model plans the analysis: measures, entities, scope, assumptions, and whether to clarify first. No tools.",
+      // Olivia asks through Clarify: the run waits there for the answer.
       // In an interactive run (R44) a clear plan waits for approval.
-      exits: [...MODEL_EXITS, APPROVAL_EXIT],
+      exits: [...MODEL_EXITS, ASKS_EXIT, APPROVAL_EXIT],
       modelOnly: true,
     },
     SCHEMAS.plan,

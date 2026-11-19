@@ -766,7 +766,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   ```ts
   type WorkflowAgentDetail = {
     key: string; name: string; role: string;  // as 116's agents entry, same order (step order, each once)
-    model: string | null;             // `${llm.provider}/${llm.model}` of 34's AgentDetail.llm; null when no LLM is set (never the environment's fallback)
+    model: string | null;             // `${llm.provider}/${llm.model}` of 34's AgentDetail.llm; for answer-business-question, `${llm.provider}/claude-opus-5-5` when the saved model is served as a Claude model (agents.md 1.3); null when no LLM is set (never the environment's fallback)
     systemPrompt: string;             // 34's AgentDetail.instructions, at most 20 000 characters; each run adds its own context
     systemPromptTruncated?: true;     // the prompt was longer than 20 000 characters and was shortened
     toolDetails: { name: string; description: string; inputs: string[] }[];   // 34's AgentDetail.toolDetails, as is (sorted by name; inputs: top-level input param names)
