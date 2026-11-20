@@ -1536,8 +1536,9 @@ The workflow's edges (`ANSWER_BUSINESS_QUESTION_EDGES`, [api.md](api.md) 117) sa
 
 A **workflow** is a fixed sequence of steps defined in code, each deterministic code or one bounded call to an agent ([workflows](../capabilities/workflows/spec.md); ADR-0040, partly superseded by ADR-0042). Workflows are never created, edited or stored by the app. Agents are not workflows (2026-11-12): they are a library that workflow steps call.
 
-**The catalogue.** Six code-defined workflows, in this order, each a run workflow (`trigger: 'run'`) that drives the workflow bar's view from its steps (`bar: 'steps'`), with its steps and edges in `CODE_WORKFLOWS[].edges`:
+**The catalogue.** Seven code-defined workflows, in this order, each a run workflow (`trigger: 'run'`) that drives the workflow bar's view from its steps (`bar: 'steps'`), with its steps and edges in `CODE_WORKFLOWS[].edges`:
 - `answer-business-question`, *Answer a Business Question*, whose agent is `insights-analyst` (its `primaryFor` agent), with the steps of 5.11;
+- `orchestrated-answer`, *Answer a Business Question (orchestrated)* (since 2026-11-20), whose agent is `insights-analyst` for now (shared with `answer-business-question`; the orchestrator agent does not exist yet), with the one placeholder step of 5.22;
 - `data-readiness-assessment`, *Assess Data Readiness* (since 2026-11-13), whose agent is `data-readiness`, with the steps of 5.13;
 - `recreate-dashboard`, *Dashboard Image to Artifact* (since 2026-11-15), whose agent is `dashboard-reader`, with the steps of 5.17;
 - `map-dashboard-data`, *Map a Dashboard to Data* (since 2026-11-15), whose agent is `data-mapper`, with the steps of 5.18;
@@ -1558,13 +1559,14 @@ The one-step workflows of ADR-0040 (one per agent, id `agent:<registry key>` or 
 
 *Validated at run time, both ways* (`withContract`). Every step's execute is wrapped: its input is parsed with its input schema before it runs and its output (or the value it bails with) with its output schema after; the step gets and passes on the parsed values (unknown keys dropped). On failure it throws a `ContractViolationError` whose message is `Contract violation in <Step title>: <path> <message>` for its output and `Contract violation in <Step title> (input): <path> <message>` for its input; `<path>` is the first issue's path, dotted with indices (`calls[2].rowCount`), or `(root)` for the whole value, so it is always one word; `<message>` is Zod's. The step fails with that error (its `failed` step event and the stored run step's `error`), later steps do not run, and the run is `failed` with it ([api.md](api.md) 3.6). The engine sees each step's declared input schema but never refuses with it (`engineInputSchema`: the schema with a `catch` that passes the value on), so the step's own message is the one a run shows; the workflow's run input is validated against its input schema by the engine (`validateInputs: true`), after the input node has already checked it. An agent turn's own error is unchanged (5.11). A contract test runs every catalogued workflow end to end on a sample input with a stubbed model and parses every step's output with its schema; a snapshot test holds every workflow's JSON Schemas and hash, so any contract change is a reviewed diff.
 
-**Ids.** `answer-business-question`, `data-readiness-assessment`, `recreate-dashboard`, `map-dashboard-data`, `review-website` and `consumption-gap-analysis` are the only workflow ids. Any other id, including a former one-step id (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`, `agent:rfp`), `seq-text-demo` and `deep-analysis`, is not a workflow and answers `Workflow "<id>" not found` ([api.md](api.md) 117).
+**Ids.** `answer-business-question`, `orchestrated-answer`, `data-readiness-assessment`, `recreate-dashboard`, `map-dashboard-data`, `review-website` and `consumption-gap-analysis` are the only workflow ids. Any other id, including a former one-step id (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`, `agent:rfp`), `seq-text-demo` and `deep-analysis`, is not a workflow and answers `Workflow "<id>" not found` ([api.md](api.md) 117).
 
 **A session's workflow** ([data-model.md](data-model.md) 3.4). A stored session keeps its `workflowId` as stored; the derived `workflowRef` ([api.md](api.md) 2.1) is:
 
 | Session stored | Derived workflow |
 |---|---|
 | `agentKey: 'insights-analyst'` or `workflowId: 'answer-business-question'` | `answer-business-question` |
+| `workflowId: 'orchestrated-answer'` (only a run host, 5.22) | `orchestrated-answer` |
 | `workflowId: 'data-readiness-assessment'` (only a run host, 5.13) | `data-readiness-assessment` |
 | `workflowId: 'recreate-dashboard'` (only a run host, 5.17) | `recreate-dashboard` |
 | `workflowId: 'map-dashboard-data'` (only a run host, 5.18) | `map-dashboard-data` |
@@ -1884,6 +1886,26 @@ A code-written answer (Plan, Read images, Build visual) and Jessica's are never 
 > Implementation note: `mastra/workflows/ask-agent.steps.ts` (ids, `AskAgentRuntime`, `planAnswer`, the fixed replies; no framework import), `ask-agent.workflow.ts`; `modules/workflows/ask-agent-context.ts` (`askRefusal`, `askHostOf`); the runtime in `TurnEngine.streamTurn` (`earlierAnswer`) and `runTurnWorkflow` (`ASK_AGENT_RUNTIME_KEY`). Proven by `ask-agent.workflow.spec.ts`, `ask-agent-context.spec.ts`, `turn-workflow.spec.ts` and `workflow-runs.service.spec.ts` (*a follow-up that asks one agent*).
 
 ---
+
+### 5.22 Workflow: `orchestrated-answer` (Answer a Business Question (orchestrated))
+
+*Since 2026-11-20 ([workflows](../capabilities/workflows/spec.md) R45).* The same question as 5.11, to be answered by a **supervisor agent** that decides at run time which agents to call (Zoe, Olivia, Michael, Jessica and Ryan, as its tools) instead of a fixed line of steps. **Today it is an empty shell**: the orchestrator is not built yet, and the workflow answers that it is not built. Its design is still to be done per the `mastra-workflows` skill (Mastra's workflows documentation, the reusable agents, tools and workflows, three approaches with a recommendation, the user's pick); nothing here decides it.
+
+**Input** ([api.md](api.md) 116): the same five fields as 5.11, in the same order (`question`, `images`, `datasets`, `buildVisual`, `approveSteps`); no step reads `buildVisual` or `approveSteps` yet. The workflow's input schema is `answerBusinessQuestionInputSchema`, shared with 5.11.
+
+| # | id | Title | Kind | What it does | Output |
+|---|---|---|---|---|---|
+| 1 | `orchestrate` | Orchestrate | code | Placeholder, no LLM: answers by code `ORCHESTRATED_PLACEHOLDER_ANSWER` (`This workflow is not built yet. Its orchestrator will decide which agents answer your question; until then, run Answer a Business Question.`) through the run's `deliverAnswer`. | `answer` |
+
+```
+start → orchestrate → end
+```
+
+Two `next` edges, no label. The run never waits (no suspension, so no snapshot, workflows R28) and runs on a run host bound to `insights-analyst`; the turn engine (`modules/sessions/turn/turn-engine.ts`) dispatches on the engine id `orchestrated-answer`, sets the run's `OrchestratedAnswerRuntime` (`deliverAnswer`) on its RequestContext under `ORCHESTRATED_ANSWER_RUNTIME_KEY` and takes the code path for the answer (not a follow-up, not an agent turn).
+
+**Catalogue entry** ([api.md](api.md) 116, 117): `id` `orchestrated-answer`, `name` `Answer a Business Question (orchestrated)`, description `The same question as Answer a Business Question, answered by an orchestrator that decides which agents to call. Not built yet.`, `kind` code, owner Official, `primaryFor` `insights-analyst` (until the orchestrator agent exists; 5.12), `trigger` `run`, `bar` `steps`, `stepCount` 1, listed second. Because two workflows share one primary agent, the agent's own `workflow` (api.md 34, `agentWorkflow`) stays 5.11's, and each catalogue workflow's detail shows its own steps (`codeWorkflowView(workflow)` in `agent-workflows.ts`, used by `WorkflowsService`). The home page's Ask keeps running `answer-business-question`.
+
+> Implementation note: `mastra/workflows/orchestrated-answer.steps.ts` (ids, name, placeholder text, step schemas, `ORCHESTRATED_ANSWER_STEPS`, edges, `OrchestratedAnswerRuntime`) and `.workflow.ts` (the Mastra workflow); registered in `mastra/index.ts` and `CODE_WORKFLOWS` (`workflow-catalog.ts`).
 
 ## 6. Visual designer pipeline
 

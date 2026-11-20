@@ -31,6 +31,12 @@ import {
 } from '../agents/insights-analyst-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
 import {
+  ORCHESTRATED_ANSWER_EDGES,
+  ORCHESTRATED_ANSWER_STEPS,
+  ORCHESTRATED_ANSWER_WORKFLOW_ID,
+  ORCHESTRATED_ANSWER_WORKFLOW_NAME,
+} from './orchestrated-answer.steps';
+import {
   CONSUMPTION_GAP_DESCRIPTION,
   CONSUMPTION_GAP_EDGES,
   CONSUMPTION_GAP_STEPS,
@@ -250,6 +256,27 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         'build-visual': VISUALIZATION_AGENT_KEY,
       },
       edges: ANSWER_BUSINESS_QUESTION_EDGES,
+      bar: 'steps',
+    },
+    {
+      // A supervisor agent will choose which agents answer the question
+      // (workflows R45; agents.md 5.22). Not built yet: one placeholder step,
+      // on Michael's host until the orchestrator agent exists.
+      id: ORCHESTRATED_ANSWER_WORKFLOW_ID,
+      name: ORCHESTRATED_ANSWER_WORKFLOW_NAME,
+      description:
+        'The same question as Answer a Business Question, answered by an orchestrator that decides which agents to call. Not built yet.',
+      primaryFor: INSIGHTS_ANALYST_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
+        IMAGES_FIELD,
+        DATASETS_FIELD,
+        BUILD_VISUAL_FIELD,
+        APPROVE_STEPS_FIELD,
+      ],
+      steps: ORCHESTRATED_ANSWER_STEPS,
+      edges: ORCHESTRATED_ANSWER_EDGES,
       bar: 'steps',
     },
     {

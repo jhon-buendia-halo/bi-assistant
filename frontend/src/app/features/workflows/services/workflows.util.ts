@@ -53,11 +53,11 @@ export function workflowsEmptyMessage(
   return trimmed ? `No user journeys match "${trimmed}"` : null;
 }
 
-/** The kind chip: `<n> steps` (workflows R5). */
+/** The kind chip: `<n> steps`, `1 step` (workflows R5). */
 export function workflowKindLabel(
   workflow: Pick<WorkflowSummary, 'stepCount'>,
 ): string {
-  return `${workflow.stepCount} steps`;
+  return `${workflow.stepCount} ${workflow.stepCount === 1 ? 'step' : 'steps'}`;
 }
 
 /**

@@ -252,6 +252,17 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
   starterQuestions: [],
 };
 
+/** Answer a Business Question (orchestrated), as `GET /workflows` lists it. */
+const ORCHESTRATED_SUMMARY = expect.objectContaining({
+  id: 'orchestrated-answer',
+  name: 'Answer a Business Question (orchestrated)',
+  kind: 'code',
+  owner: 'Official',
+  stepCount: 1,
+  bar: 'steps',
+  trigger: 'run',
+}) as unknown;
+
 describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
@@ -266,13 +277,14 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
 
     expect(await ctx.service.list()).toEqual([
       ANSWER_BUSINESS_QUESTION_SUMMARY,
+      ORCHESTRATED_SUMMARY,
       READINESS_SUMMARY,
     ]);
   });
 
   it('lists Assess Data Readiness on one PostgreSQL or Databricks dataset, its Explain report run by the Data Readiness Agent (agents.md 5.13)', async () => {
     ctx = build();
-    const [, readiness] = await ctx.service.list();
+    const [, , readiness] = await ctx.service.list();
     expect(readiness.agents.map((agent) => agent.key)).toEqual([
       'data-readiness',
       'image-reader',
@@ -299,6 +311,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     const workflows = await ctx.service.list();
     expect(workflows).toEqual([
       ANSWER_BUSINESS_QUESTION_SUMMARY,
+      ORCHESTRATED_SUMMARY,
       READINESS_SUMMARY,
     ]);
     expect(workflows[0]).not.toHaveProperty('runRequirement');
@@ -306,6 +319,30 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   });
 
   describe('get', () => {
+    it("orchestrated-answer's detail is its own one step and two edges, and answer-business-question keeps its nine (they share a primary agent)", async () => {
+      ctx = build();
+      const orchestrated = await ctx.service.get('orchestrated-answer');
+      expect(orchestrated.steps.map((step) => step.id)).toEqual([
+        'orchestrate',
+      ]);
+      expect(orchestrated.edges).toEqual([
+        { from: 'start', to: 'orchestrate', kind: 'next' },
+        { from: 'orchestrate', to: 'end', kind: 'next' },
+      ]);
+      const answer = await ctx.service.get('answer-business-question');
+      expect(answer.steps.map((step) => step.id)).toEqual([
+        'read-images',
+        'receive-question',
+        'load-catalog',
+        'plan',
+        'analyse',
+        'validate',
+        'write-answer',
+        'build-visual',
+        'wrap-up',
+      ]);
+    });
+
     it("answer-business-question's steps are agentWorkflow('insights-analyst')'s, with their declared schemas", async () => {
       ctx = build();
       const detail = await ctx.service.get('answer-business-question');
@@ -535,7 +572,13 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
   it.each([
     [
       'insights-analyst',
-      [{ id: 'answer-business-question', name: 'Answer a Business Question' }],
+      [
+        { id: 'answer-business-question', name: 'Answer a Business Question' },
+        {
+          id: 'orchestrated-answer',
+          name: 'Answer a Business Question (orchestrated)',
+        },
+      ],
     ],
     ['assistant', []],
     [

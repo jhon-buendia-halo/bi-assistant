@@ -323,6 +323,40 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(sessions.some((session) => session.id.includes(run.id))).toBe(false);
   });
 
+  it('streams an orchestrated run: its one Orchestrate step, the placeholder answer, and no model call (agents.md 5.22)', async () => {
+    const question = 'How many matches were played?';
+    const placeholder =
+      'This workflow is not built yet. Its orchestrator will decide which agents answer your question; until then, run Answer a Business Question.';
+    const modelCalls = await recorded(async () => {
+      const res = await runStream('orchestrated-answer', {
+        input: {
+          question,
+          datasets: ['World Cup Core'],
+          buildVisual: false,
+          approveSteps: false,
+        },
+      });
+      expect(res.status).toBe(200);
+      expect(res.frames[0]).toMatchObject({
+        type: 'run',
+        workflowId: 'orchestrated-answer',
+      });
+      expect(res.frames.at(-1)!.type).toBe('done');
+      const run = res.frames.at(-1)!.run!;
+      expect(run).toMatchObject({
+        id: res.frames[0].runId,
+        workflowId: 'orchestrated-answer',
+        status: 'success',
+        question,
+        answer: { role: 'assistant', content: placeholder },
+      });
+      expect(run.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
+        'orchestrate:success',
+      ]);
+    });
+    expect(modelCalls).toEqual([]);
+  });
+
   it('each step frame and the stored run carry what the step received, its output and its times', async () => {
     const question = 'Who won the 2002 World Cup?';
     const res = await runStream('answer-business-question', {

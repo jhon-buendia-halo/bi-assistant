@@ -98,17 +98,18 @@ describe('The workflow catalogue (API)', () => {
     expect(res.body).toEqual({ ok: true });
   });
 
-  it('lists the six code workflows, Answer a Business Question and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
+  it('lists the seven code workflows, Answer a Business Question, its orchestrated version and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
     const listed = await workflows();
     expect(listed.map((w) => w.id)).toEqual([
       'answer-business-question',
+      'orchestrated-answer',
       'data-readiness-assessment',
       'recreate-dashboard',
       'map-dashboard-data',
       'review-website',
       'consumption-gap-analysis',
     ]);
-    expect(listed.slice(0, 2)).toEqual([
+    expect([listed[0], listed[2]]).toEqual([
       {
         id: 'answer-business-question',
         name: 'Answer a Business Question',
@@ -337,6 +338,7 @@ describe('The workflow catalogue (API)', () => {
     it('a published user agent adds no workflow: agents are a library', async () => {
       expect((await workflows()).map((w) => w.id)).toEqual([
         'answer-business-question',
+        'orchestrated-answer',
         'data-readiness-assessment',
         'recreate-dashboard',
         'map-dashboard-data',
@@ -634,6 +636,16 @@ describe('The workflow catalogue (API)', () => {
               id: 'answer-business-question',
               name: 'Answer a Business Question',
             },
+            // Michael alone is also the primary agent of its orchestrated
+            // version (agents.md 5.22).
+            ...(key === 'insights-analyst'
+              ? [
+                  {
+                    id: 'orchestrated-answer',
+                    name: 'Answer a Business Question (orchestrated)',
+                  },
+                ]
+              : []),
           ],
         });
       }

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
-  agentWorkflow,
+  codeWorkflowView,
   type AgentWorkflow,
   type AgentWorkflowStep,
 } from '../../mastra/workflows/agent-workflows';
@@ -294,7 +294,7 @@ function codeEntry(
     contractHash: source.contractHash,
     edges: () => source.edges.map((edge) => ({ ...edge })),
     steps: () =>
-      (agentWorkflow(source.primaryFor)?.steps ?? []).map((step) => {
+      (codeWorkflowView(source)?.steps ?? []).map((step) => {
         const declared = source.steps.find((entry) => entry.id === step.id);
         return declared
           ? {

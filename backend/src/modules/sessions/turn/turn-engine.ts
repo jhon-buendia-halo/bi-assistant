@@ -82,6 +82,11 @@ import {
   type AnswerBusinessQuestionRuntime,
 } from '../../../mastra/workflows/answer-business-question.steps';
 import { analyseSystemBlocks } from '../../../mastra/workflows/answer-business-question.prompts';
+import {
+  ORCHESTRATED_ANSWER_RUNTIME_KEY,
+  ORCHESTRATED_ANSWER_WORKFLOW_ID,
+  type OrchestratedAnswerRuntime,
+} from '../../../mastra/workflows/orchestrated-answer.steps';
 import { ANSWER_BUSINESS_QUESTION_MODEL } from '../../../mastra/workflows/answer-business-question.review';
 import { resolveAgentModelConfig } from '../../../mastra/model-resolver';
 import {
@@ -454,8 +459,12 @@ export class TurnEngine {
       workflow.engineId === ASK_AGENT_WORKFLOW_ID
         ? (session.ask?.step as AskableStepId | undefined)
         : undefined;
+    // Answer a Business Question (orchestrated) writes its answer by code
+    // until its orchestrator is built (agents.md 5.22).
     const codeAnswer =
-      v2 || (asked !== undefined && !AGENT_TURN_ASK_STEPS.includes(asked));
+      v2 ||
+      workflow.engineId === ORCHESTRATED_ANSWER_WORKFLOW_ID ||
+      (asked !== undefined && !AGENT_TURN_ASK_STEPS.includes(asked));
     // A query record of the turn: kept for the answer with its facts,
     // explorable from then on, and shown as its call's result.
     const captureRecord = (record: ToolDataRecord, callId?: string) => {
@@ -2066,7 +2075,14 @@ export class TurnEngine {
     const review = workflow.engineId === REVIEW_WEBSITE_WORKFLOW_ID;
     const gap = workflow.engineId === CONSUMPTION_GAP_WORKFLOW_ID;
     const ask = workflow.engineId === ASK_AGENT_WORKFLOW_ID;
-    if (ask) {
+    const orchestrated = workflow.engineId === ORCHESTRATED_ANSWER_WORKFLOW_ID;
+    if (orchestrated) {
+      // Answer a Business Question (orchestrated): its placeholder step
+      // writes the run's answer (agents.md 5.22).
+      requestContext.set(ORCHESTRATED_ANSWER_RUNTIME_KEY, {
+        deliverAnswer: (answer) => runtime.deliverAnswer(answer),
+      } satisfies OrchestratedAnswerRuntime);
+    } else if (ask) {
       // A follow-up that asks one agent (agents.md 5.21): the same calls
       // the workflow's own steps make, on this turn's records.
       requestContext.set(ASK_AGENT_RUNTIME_KEY, {

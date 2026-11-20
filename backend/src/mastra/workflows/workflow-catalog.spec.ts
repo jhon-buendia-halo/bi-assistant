@@ -44,7 +44,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds six code workflows: Insights Analyst, Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18), Review a Website (5.19) and Consumption Gap Analysis (5.20)', () => {
+  it('holds seven code workflows: Insights Analyst, its orchestrated version (5.22), Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18), Review a Website (5.19) and Consumption Gap Analysis (5.20)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -57,6 +57,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       {
         id: 'answer-business-question',
         name: 'Answer a Business Question',
+        primaryFor: 'insights-analyst',
+        bar: 'steps',
+        trigger: 'run',
+      },
+      {
+        id: 'orchestrated-answer',
+        name: 'Answer a Business Question (orchestrated)',
         primaryFor: 'insights-analyst',
         bar: 'steps',
         trigger: 'run',
@@ -590,6 +597,10 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it('insights-analyst is used in Insights Analyst', () => {
       expect(workflowsUsingAgent('insights-analyst')).toEqual([
         { id: 'answer-business-question', name: 'Answer a Business Question' },
+        {
+          id: 'orchestrated-answer',
+          name: 'Answer a Business Question (orchestrated)',
+        },
       ]);
     });
 

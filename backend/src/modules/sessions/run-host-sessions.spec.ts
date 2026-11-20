@@ -115,6 +115,8 @@ import {
 } from '../../mastra/workflows/answer-business-question.steps';
 import { ANALYSE_VISUAL_LINE } from '../../mastra/workflows/answer-business-question.prompts';
 import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
+import { orchestratedAnswerWorkflow } from '../../mastra/workflows/orchestrated-answer.workflow';
+import { ORCHESTRATED_PLACEHOLDER_ANSWER } from '../../mastra/workflows/orchestrated-answer.steps';
 import { askAgentWorkflow } from '../../mastra/workflows/ask-agent.workflow';
 import {
   DATA_READINESS_ASSESSMENT_STEPS,
@@ -183,14 +185,33 @@ const V2_WORKFLOW = {
   contractHash: CODE_WORKFLOWS[0].contractHash,
 };
 
+const READINESS_SOURCE = CODE_WORKFLOWS.find(
+  (w) => w.id === 'data-readiness-assessment',
+)!;
+
 /** The workflow detail the fake catalogue answers for Assess Data Readiness. */
 const READINESS_WORKFLOW = {
   id: 'data-readiness-assessment',
   name: 'Assess Data Readiness',
-  input: CODE_WORKFLOWS[1].input,
+  input: READINESS_SOURCE.input,
   agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
   steps: DATA_READINESS_ASSESSMENT_STEPS,
-  edges: CODE_WORKFLOWS[1].edges,
+  edges: READINESS_SOURCE.edges,
+};
+
+const ORCHESTRATED_SOURCE = CODE_WORKFLOWS.find(
+  (w) => w.id === 'orchestrated-answer',
+)!;
+
+/** The workflow detail the fake catalogue answers for the orchestrated answer. */
+const ORCHESTRATED_WORKFLOW = {
+  id: 'orchestrated-answer',
+  name: ORCHESTRATED_SOURCE.name,
+  input: ORCHESTRATED_SOURCE.input,
+  agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
+  steps: ORCHESTRATED_SOURCE.steps,
+  edges: ORCHESTRATED_SOURCE.edges,
+  contractHash: ORCHESTRATED_SOURCE.contractHash,
 };
 
 /** The report the fake engine scores for World Cup. */
@@ -399,15 +420,25 @@ function build(options: BuildOptions = {}) {
               requestContext,
               discards,
             )
-          : key === 'data-readiness-assessment'
+          : key === 'orchestrated-answer'
             ? streamStubWorkflow(
-                dataReadinessAssessmentWorkflow,
+                orchestratedAnswerWorkflow,
                 inputData,
                 requestContext,
               )
-            : key === 'ask-agent'
-              ? streamStubWorkflow(askAgentWorkflow, inputData, requestContext)
-              : streamTurnWorkflow(key, inputData, requestContext),
+            : key === 'data-readiness-assessment'
+              ? streamStubWorkflow(
+                  dataReadinessAssessmentWorkflow,
+                  inputData,
+                  requestContext,
+                )
+              : key === 'ask-agent'
+                ? streamStubWorkflow(
+                    askAgentWorkflow,
+                    inputData,
+                    requestContext,
+                  )
+                : streamTurnWorkflow(key, inputData, requestContext),
     ),
     discardSuspendedWorkflowRuns: jest.fn().mockResolvedValue(0),
     ensureSessionWorkspace: jest.fn((id: string) =>
@@ -521,7 +552,9 @@ function build(options: BuildOptions = {}) {
         ? Promise.resolve(V2_WORKFLOW)
         : id === READINESS_WORKFLOW.id
           ? Promise.resolve(READINESS_WORKFLOW)
-          : Promise.reject(new Error(`Workflow "${id}" not found`)),
+          : id === ORCHESTRATED_WORKFLOW.id
+            ? Promise.resolve(ORCHESTRATED_WORKFLOW)
+            : Promise.reject(new Error(`Workflow "${id}" not found`)),
     ),
   };
   const runsRepository = new WorkflowRunsRepository(
@@ -680,6 +713,26 @@ function withoutTime<T extends { at?: string }>(message: T | undefined) {
   void at;
   return rest;
 }
+
+describe('an Answer a Business Question (orchestrated) run (agents.md 5.22)', () => {
+  it('ends success with the placeholder as its answer, written by code with no model call', async () => {
+    const ctx = build();
+    await ctx.sessions.onModuleInit();
+    const prepared = await ctx.runs.prepare('orchestrated-answer', {
+      input: { question: 'Who won?', datasets: ['World Cup'] },
+    });
+    const events: RunStreamEvent[] = [];
+    const run = await ctx.runs.stream(prepared, (e) => events.push(e));
+
+    expect(run.status).toBe('success');
+    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
+      'orchestrate:success',
+    ]);
+    expect(run.answer?.content).toBe(ORCHESTRATED_PLACEHOLDER_ANSWER);
+    expect(ctx.calls['insights-analyst'] ?? []).toHaveLength(0);
+    expect(events.at(-1)?.type).toBe('done');
+  });
+});
 
 describe('a run sends the same model request as a chat turn (plan 1.24.2; agents.md 5.14)', () => {
   it('v2: the same input, options, system blocks and tools context, and the same answer', async () => {
