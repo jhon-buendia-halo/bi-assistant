@@ -10,6 +10,7 @@
  * The API's catalogue is built from it by `WorkflowsService`.
  */
 import {
+  CHIEF_OF_STAFF_AGENT_KEY,
   ANALYSIS_PLANNER_AGENT_KEY,
   ANSWER_WRITER_AGENT_KEY,
   ASSISTANT_MAX_STEPS,
@@ -259,13 +260,14 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       bar: 'steps',
     },
     {
-      // A supervisor agent will choose which agents answer the question
-      // (workflows R45; agents.md 5.22). Not built yet: one placeholder step,
-      // on Michael's host until the orchestrator agent exists.
+      // Avery, the Chief of Staff, chooses which agents answer the question
+      // and is the only one who talks to the user (workflows R45; agents.md
+      // 5.22). The run host stays Michael's: Avery's analyse_data runs his
+      // turn there, as Analyse does.
       id: ORCHESTRATED_ANSWER_WORKFLOW_ID,
       name: ORCHESTRATED_ANSWER_WORKFLOW_NAME,
       description:
-        'The same question as Answer a Business Question, answered by an orchestrator that decides which agents to call. Not built yet.',
+        'The same question as Answer a Business Question, answered by Avery, a Chief of Staff who decides which agents to call and is the only one you talk to.',
       primaryFor: INSIGHTS_ANALYST_AGENT_KEY,
       trigger: 'run',
       input: [
@@ -273,9 +275,9 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         IMAGES_FIELD,
         DATASETS_FIELD,
         BUILD_VISUAL_FIELD,
-        APPROVE_STEPS_FIELD,
       ],
       steps: ORCHESTRATED_ANSWER_STEPS,
+      stepAgents: { orchestrate: CHIEF_OF_STAFF_AGENT_KEY },
       edges: ORCHESTRATED_ANSWER_EDGES,
       bar: 'steps',
     },

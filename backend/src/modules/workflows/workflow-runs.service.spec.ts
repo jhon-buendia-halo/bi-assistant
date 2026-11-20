@@ -13,7 +13,11 @@ jest.mock('../sessions/sessions.service', () => ({
   RUN_HOST_ID_PREFIX: 'run-',
 }));
 
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
@@ -170,23 +174,29 @@ function build(
     data?: unknown[];
   }[] = [];
   let draftHost = false;
+  let orchestratedHost = false;
   const sessions = {
     createRunHost: jest.fn(
       (spec: {
         runId: string;
+        workflowId?: string;
         draftAgentId?: string;
         context?: { question: string; answer: string };
+        transcript?: { role: string; content: string }[];
         image?: unknown;
         inputFiles?: { path: string; data: Buffer }[];
         inputImages?: string[];
       }) => {
         draftHost = !!spec.draftAgentId;
-        hostMessages = spec.context
-          ? [
-              { role: 'user', content: spec.context.question, at: 't' },
-              { role: 'assistant', content: spec.context.answer, at: 't' },
-            ]
-          : [];
+        orchestratedHost = spec.workflowId === 'orchestrated-answer';
+        hostMessages = spec.transcript
+          ? spec.transcript.map((m) => ({ ...m, at: 't' }))
+          : spec.context
+            ? [
+                { role: 'user', content: spec.context.question, at: 't' },
+                { role: 'assistant', content: spec.context.answer, at: 't' },
+              ]
+            : [];
         return Promise.resolve({ id: `run-${spec.runId}` });
       },
     ),
@@ -200,6 +210,16 @@ function build(
         onStep: (event: unknown) => void,
       ) => {
         hostMessages.push({ role: 'user', content: question, at: 't' });
+        if (orchestratedHost) {
+          // Avery's one step: Orchestrate.
+          onStep(stepStart('orchestrate', { question }));
+          for (const event of script.events ?? []) emit(event);
+          const answer = script.answer ?? 'Brazil won.';
+          onStep(stepResult('orchestrate', { answer }));
+          hostMessages.push({ role: 'assistant', content: answer, at: 't' });
+          emit({ type: 'done', session: { id: 'host' } });
+          return;
+        }
         const agentStep = draftHost ? 'answer' : 'analyse';
         for (const step of script.steps ??
           (draftHost ? [stepStart('answer')] : V2_STEPS_BEFORE)) {
@@ -2050,6 +2070,127 @@ const RUN_VISUAL = {
   visualization: { id: 'v1', document: '<html>', version: 2 },
 };
 
+describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 120, 159, 160)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  const FIRST = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+  const ORCHESTRATED = 'orchestrated-answer';
+
+  /** A first message and a follow-up to it, both finished. */
+  async function conversation() {
+    ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
+    const first = await streamed(ctx, ORCHESTRATED, { input: FIRST });
+    const second = await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'And in 2006?', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.run.id },
+    });
+    return { first: first.run, second: second.run };
+  }
+
+  it('starts a conversation on a first message: its conversation is its own id', async () => {
+    ctx = build();
+    const { run } = await streamed(ctx, ORCHESTRATED, { input: FIRST });
+    expect(run.conversationId).toBe(run.id);
+    // Another workflow's run belongs to no conversation.
+    const other = await streamed(ctx, 'answer-business-question', {
+      input: FIRST,
+    });
+    expect(other.run.conversationId).toBeUndefined();
+  });
+
+  it("joins the earlier run's conversation on a follow-up, and Avery reads its turns", async () => {
+    const { first, second } = await conversation();
+    expect(second.conversationId).toBe(first.id);
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      transcript?: { role: string; content: string }[];
+    };
+    expect(spec.transcript).toEqual([
+      { role: 'user', content: 'Who won in 2002?' },
+      { role: 'assistant', content: 'Brazil won in 2002.' },
+    ]);
+
+    const third = await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'And 2010?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    expect(third.run.conversationId).toBe(first.id);
+    const next = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      transcript?: { role: string; content: string }[];
+    };
+    expect(next.transcript?.map((m) => m.content)).toEqual([
+      'Who won in 2002?',
+      'Brazil won in 2002.',
+      'And in 2006?',
+      'Brazil won in 2002.',
+    ]);
+  });
+
+  it('archives every run of the conversation, and hides them from the list', async () => {
+    const { first, second } = await conversation();
+    expect(await ctx.service.list()).toHaveLength(2);
+    expect(await ctx.service.archive(second.id)).toEqual({
+      ok: true,
+      conversationId: first.id,
+      archived: 2,
+    });
+    for (const id of [first.id, second.id]) {
+      expect((await ctx.repository.get(id))?.archivedAt).toEqual(
+        expect.any(String),
+      );
+    }
+    expect(await ctx.service.list()).toEqual([]);
+    expect(
+      (await ctx.service.list(undefined, true)).map((run) => run.id).sort(),
+    ).toEqual([first.id, second.id].sort());
+  });
+
+  it('refuses to archive while a run of the conversation is running or waiting, and an unknown run is 404', async () => {
+    const { first, second } = await conversation();
+    await ctx.repository.update(second.id, { status: 'running' });
+    await expect(ctx.service.archive(first.id)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await ctx.repository.update(second.id, { status: 'suspended' });
+    await expect(ctx.service.archive(first.id)).rejects.toThrow(
+      'The run is still running',
+    );
+    expect((await ctx.repository.get(first.id))?.archivedAt).toBeUndefined();
+    await expect(ctx.service.archive('nope')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('refuses a follow-up to an archived conversation (409)', async () => {
+    const { second } = await conversation();
+    await ctx.service.archive(second.id);
+    const refusal = ctx.service.prepare(ORCHESTRATED, {
+      input: { question: 'More?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    await expect(refusal).rejects.toBeInstanceOf(ConflictException);
+    await expect(refusal).rejects.toThrow('This conversation is archived');
+  });
+
+  it('unarchive brings the conversation back: listed again and open to a new message', async () => {
+    const { first, second } = await conversation();
+    await ctx.service.archive(first.id);
+    expect(await ctx.service.unarchive(second.id)).toEqual({
+      ok: true,
+      conversationId: first.id,
+      unarchived: 2,
+    });
+    expect((await ctx.repository.get(first.id))?.archivedAt).toBeUndefined();
+    expect(await ctx.service.list()).toHaveLength(2);
+    expect(await ctx.service.list(undefined, true)).toEqual([]);
+    const again = await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'More?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    expect(again.run.conversationId).toBe(first.id);
+  });
+});
+
 describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
   it('lists, gets, deletes and serves the files of runs', async () => {
     const runs = {
@@ -2059,6 +2200,16 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
           ? Promise.resolve({ id: 'r1', status: 'success' })
           : Promise.reject(new NotFoundException(`Run "${id}" not found`)),
       ),
+      archive: jest.fn().mockResolvedValue({
+        ok: true,
+        conversationId: 'r1',
+        archived: 2,
+      }),
+      unarchive: jest.fn().mockResolvedValue({
+        ok: true,
+        conversationId: 'r1',
+        unarchived: 2,
+      }),
       delete: jest.fn((id: string) =>
         id === 'busy'
           ? Promise.reject(
@@ -2103,11 +2254,21 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
       await request(server)
         .get('/workflow-runs')
         .expect(200, { runs: [{ id: 'r1' }] });
-      expect(runs.list).toHaveBeenLastCalledWith(undefined);
+      expect(runs.list).toHaveBeenLastCalledWith(undefined, false);
       await request(server)
         .get('/workflow-runs?workflowId=agent%3Aassistant')
         .expect(200);
-      expect(runs.list).toHaveBeenLastCalledWith('agent:assistant');
+      expect(runs.list).toHaveBeenLastCalledWith('agent:assistant', false);
+      await request(server).get('/workflow-runs?archived=true').expect(200);
+      expect(runs.list).toHaveBeenLastCalledWith(undefined, true);
+      await request(server)
+        .post('/workflow-runs/r1/archive')
+        .expect(200, { ok: true, conversationId: 'r1', archived: 2 });
+      expect(runs.archive).toHaveBeenCalledWith('r1');
+      await request(server)
+        .post('/workflow-runs/r1/unarchive')
+        .expect(200, { ok: true, conversationId: 'r1', unarchived: 2 });
+      expect(runs.unarchive).toHaveBeenCalledWith('r1');
       await request(server)
         .get('/workflow-runs/r1')
         .expect(200, { id: 'r1', status: 'success' });

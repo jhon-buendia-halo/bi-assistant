@@ -4,7 +4,7 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { EMPTY } from 'rxjs';
+import { EMPTY, of, throwError } from 'rxjs';
 import {
   WorkflowDetail,
   WorkflowRun,
@@ -102,6 +102,8 @@ class FakeRunsApi {
   }
   stopRun = jasmine.createSpy('stopRun').and.returnValue(EMPTY);
   prepareEvidence = jasmine.createSpy('prepareEvidence').and.returnValue(EMPTY);
+  archive = jasmine.createSpy('archive').and.returnValue(of({ ok: true, conversationId: 'run-1', archived: 1 }));
+  unarchive = jasmine.createSpy('unarchive').and.returnValue(of({ ok: true, conversationId: 'run-1', unarchived: 1 }));
 
   streamRun(
     workflowId: string,
@@ -1175,6 +1177,131 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(el.querySelector('[data-testid^="workflow-run-step-"]')).toBeNull();
       expect(el.querySelector('[data-testid^="workflow-run-progress"]')).toBeNull();
       expect(q('workflow-run-result')).toBeNull();
+    });
+  });
+
+  describe('Avery, the never-ending conversation (orchestrated-answer)', () => {
+    const AVERY: WorkflowDetail = { ...ASSISTANT, id: 'orchestrated-answer', name: 'Answer a Business Question (orchestrated)' };
+    const DATASETS = [{ name: 'World Cup Core', tables: ['a'], datasourceKind: 'postgres' }];
+    const ended = (overrides: Partial<WorkflowRun> = {}) =>
+      assistantRun({
+        workflowId: 'orchestrated-answer',
+        answer: { role: 'assistant', content: 'Brazil.', at: 'x' },
+        ...overrides,
+      });
+
+    function openStored(run: WorkflowRun, workflow: WorkflowDetail = AVERY): void {
+      designer.showRunOnLoad(run);
+      open(workflow, () =>
+        http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: DATASETS }),
+      );
+    }
+
+    function typeToAvery(value: string): HTMLTextAreaElement {
+      const field = q('workflow-avery-input') as HTMLTextAreaElement;
+      field.value = value;
+      field.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      return field;
+    }
+
+    it('shows a labelled Message Avery box and Archive under an ended run', () => {
+      openStored(ended());
+      const box = q('workflow-avery-input') as HTMLTextAreaElement;
+      expect(box.placeholder).toBe('Message Avery…');
+      expect(el.querySelector('label[for="workflow-avery-input"]')!.textContent).toContain('Message Avery');
+      expect(q('workflow-run-archive')!.getAttribute('title')).toBe('Archive this conversation');
+      expect((q('workflow-avery-send') as HTMLButtonElement).disabled).toBeTrue();
+    });
+
+    it('also shows for a failed or stopped run', () => {
+      openStored(ended({ status: 'failed' }));
+      expect(q('workflow-avery-input')).not.toBeNull();
+    });
+
+    it('does not show for another workflow', () => {
+      openStored(assistantRun(), ASSISTANT);
+      expect(q('workflow-avery-input')).toBeNull();
+      expect(q('workflow-run-archive')).toBeNull();
+    });
+
+    it('does not show while the run waits for the user', () => {
+      openStored(
+        ended({
+          status: 'suspended',
+          answer: undefined,
+          waitingFor: {
+            stepId: 'analyse',
+            title: 'Analyse',
+            question: 'Which year?',
+            options: ['2018', '2022'],
+            expiresAt: '2026-11-11T10:30:00.000Z',
+          },
+        }),
+      );
+      expect(q('workflow-avery-input')).toBeNull();
+      expect(q('workflow-run-archive')).toBeNull();
+    });
+
+    it('does not show for an archived run, which reads with Unarchive', () => {
+      openStored(ended({ archivedAt: '2026-11-20T10:00:00.000Z' }));
+      expect(q('workflow-avery-input')).toBeNull();
+      expect(q('workflow-run-archive')).toBeNull();
+      expect(q('workflow-run-again')).toBeNull();
+      expect(text('workflow-run-archived')).toContain('This conversation is archived.');
+      expect(q('workflow-run-unarchive')).not.toBeNull();
+    });
+
+    it('Send starts a follow-up run of the shown run and clears the box', () => {
+      openStored(ended());
+      runs.getRun.and.returnValue(of(ended()));
+      typeToAvery('And in 2022?');
+      click('workflow-avery-send');
+      expect(runs.calls.length).toBe(1);
+      expect(runs.last.body.context?.fromRunId).toBe('run-1');
+      expect(runs.last.body.input['question']).toBe('And in 2022?');
+      expect(q('workflow-avery-input')).toBeNull();
+    });
+
+    it('Enter sends, Shift+Enter does not', () => {
+      openStored(ended());
+      const field = typeToAvery('Hello');
+      const shift = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true });
+      field.dispatchEvent(shift);
+      expect(shift.defaultPrevented).toBeFalse();
+      expect(runs.calls.length).toBe(0);
+      const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      field.dispatchEvent(enter);
+      expect(enter.defaultPrevented).toBeTrue();
+      expect(runs.calls.length).toBe(1);
+    });
+
+    it('Archive calls the API, then resets the chat like New question', () => {
+      openStored(ended());
+      spyOn(designer, 'newQuestion').and.callThrough();
+      click('workflow-run-archive');
+      expect(runs.archive).toHaveBeenCalledWith('run-1');
+      expect(designer.newQuestion).toHaveBeenCalled();
+      expect(q('workflow-run-question')).toBeNull();
+      expect(q('workflow-avery-notice')!.getAttribute('role')).toBe('status');
+      expect(text('workflow-avery-notice')).toBe('Conversation archived');
+    });
+
+    it('a refused Archive shows its message and keeps the run', () => {
+      runs.archive.and.returnValue(throwError(() => ({ error: { message: 'The run is still running' } })));
+      openStored(ended());
+      click('workflow-run-archive');
+      expect(text('workflow-avery-error')).toBe('The run is still running');
+      expect(q('workflow-run-question')).not.toBeNull();
+    });
+
+    it('Unarchive calls the API and shows the run open for messages', () => {
+      openStored(ended({ archivedAt: '2026-11-20T10:00:00.000Z' }));
+      runs.getRun.and.returnValue(of(ended()));
+      click('workflow-run-unarchive');
+      expect(runs.unarchive).toHaveBeenCalledWith('run-1');
+      expect(q('workflow-run-archived')).toBeNull();
+      expect(q('workflow-avery-input')).not.toBeNull();
     });
   });
 

@@ -17,6 +17,7 @@ import {
   REQUIREMENTS_ANALYST_INSTRUCTIONS,
 } from './workflows/consumption-gap-analysis.prompts';
 import { SITE_REVIEWER_INSTRUCTIONS } from './workflows/review-website.prompts';
+import { ORCHESTRATOR_INSTRUCTIONS } from './workflows/orchestrated-answer.prompts';
 import {
   INSIGHTS_ANALYST_PROMPT,
   DATA_READINESS_PROMPT,
@@ -53,6 +54,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
   'result-explorer': RESULT_EXPLORER_INSTRUCTIONS,
   'site-reviewer': SITE_REVIEWER_INSTRUCTIONS,
+  'chief-of-staff': ORCHESTRATOR_INSTRUCTIONS,
 };
 
 /** The shipped editable prompt of a built-in agent; undefined for any other key. */

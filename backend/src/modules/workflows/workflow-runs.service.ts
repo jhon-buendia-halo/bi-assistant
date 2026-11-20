@@ -31,6 +31,10 @@ import {
   type WorkflowInputError,
 } from '../../mastra/workflows/workflow-input';
 import { REVIEW_WEBSITE_WORKFLOW_ID } from '../../mastra/workflows/review-website.steps';
+import { ORCHESTRATED_ANSWER_WORKFLOW_ID } from '../../mastra/workflows/orchestrated-answer.steps';
+
+/** The most turns of a conversation Avery reads (workflows R45). */
+export const CONVERSATION_TURNS = 20;
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import { ArtifactsService } from '../artifacts/artifacts.service';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
@@ -287,6 +291,13 @@ export interface PreparedRun {
      * 5.21): the asked step and how its host is set up.
      */
     ask?: AskHost;
+    /**
+     * A conversation with Avery (workflows R45): the conversation the new
+     * run joins, and its earlier turns in order (at most
+     * `CONVERSATION_TURNS`), which Avery reads as the conversation so far.
+     */
+    conversationId?: string;
+    transcript?: { role: 'user' | 'assistant'; content: string }[];
   };
   /**
    * A draft run (api.md R12; agents-evals R60): the user agent whose saved
@@ -816,10 +827,16 @@ export class WorkflowRunsService implements OnModuleInit {
           : {}),
         ...(prepared.context
           ? {
-              context: {
-                question: prepared.context.question,
-                answer: prepared.context.answer,
-              },
+              // A message to Avery reads the whole conversation so far
+              // (workflows R45); any other follow-up the earlier run alone.
+              ...(prepared.context.transcript?.length
+                ? { transcript: prepared.context.transcript }
+                : {
+                    context: {
+                      question: prepared.context.question,
+                      answer: prepared.context.answer,
+                    },
+                  }),
               // Its agents go on from copies of the earlier run's threads
               // (not Sarah asked alone: the host's thread is the Analyst's).
               ...(ask?.continuesThreads === false
@@ -1242,11 +1259,16 @@ export class WorkflowRunsService implements OnModuleInit {
    * newest first, as summaries titled from the question or the workflow's
    * first text input (plan 5.3).
    */
-  async list(workflowId?: string): Promise<WorkflowRunSummary[]> {
-    const [runs, catalogue] = await Promise.all([
+  async list(
+    workflowId?: string,
+    archived = false,
+  ): Promise<WorkflowRunSummary[]> {
+    const [stored, catalogue] = await Promise.all([
       this.repository.list(workflowId),
       this.workflows.list(),
     ]);
+    // Archived conversations (api.md 159) only when asked for, and then alone.
+    const runs = stored.filter((run) => Boolean(run.archivedAt) === archived);
     const textFields = new Map(
       catalogue.map((workflow) => [
         workflow.id,
@@ -1788,14 +1810,20 @@ export class WorkflowRunsService implements OnModuleInit {
    * contract hash at that moment (data-model 3.16).
    */
   private async start(prepared: PreparedRun): Promise<WorkflowRunDoc> {
+    const id = randomUUID();
     const base: WorkflowRunDoc = {
-      id: randomUUID(),
+      id,
       workflowId: prepared.workflow.id,
       workflowName: prepared.workflow.name,
       ...(prepared.workflow.contractHash
         ? { contractHash: prepared.workflow.contractHash }
         : {}),
       input: prepared.values,
+      // Avery's runs belong to a conversation (workflows R45): a first
+      // message starts one (its own id), a follow-up joins its earlier run's.
+      ...(prepared.workflow.id === ORCHESTRATED_ANSWER_WORKFLOW_ID
+        ? { conversationId: prepared.context?.conversationId ?? id }
+        : {}),
       ...(prepared.context
         ? {
             context: {
@@ -1894,7 +1922,92 @@ export class WorkflowRunsService implements OnModuleInit {
       answer: earlier.answer.content,
       ...(queries.length ? { queries } : {}),
       ...(ask ? { ask } : {}),
+      ...(workflowId === ORCHESTRATED_ANSWER_WORKFLOW_ID
+        ? await this.conversationOf(earlier)
+        : {}),
     };
+  }
+
+  /**
+   * The conversation a message to Avery joins (workflows R45): the earlier
+   * run's, and its turns so far (each run's question and answer, oldest
+   * first, the last `CONVERSATION_TURNS`). An archived conversation takes
+   * no new message (409).
+   */
+  private async conversationOf(earlier: WorkflowRunDoc): Promise<{
+    conversationId: string;
+    transcript: { role: 'user' | 'assistant'; content: string }[];
+  }> {
+    if (earlier.archivedAt) {
+      throw new ConflictException('This conversation is archived');
+    }
+    const conversationId = earlier.conversationId ?? earlier.id;
+    const runs = await this.repository.listConversation(conversationId);
+    if (!runs.some((run) => run.id === earlier.id)) runs.push(earlier);
+    const turns = runs
+      .filter((run) => run.question && run.answer?.content)
+      .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+      .slice(-CONVERSATION_TURNS);
+    return {
+      conversationId,
+      transcript: turns.flatMap((run) => [
+        { role: 'user' as const, content: run.question ?? '' },
+        { role: 'assistant' as const, content: run.answer?.content ?? '' },
+      ]),
+    };
+  }
+
+  /**
+   * Archive a run's conversation (api.md 159; workflows R45): every run of
+   * it (or the run alone, outside a conversation) gets `archivedAt`, so it
+   * leaves the run history and takes no new message. Refused while one of
+   * its runs is running or waiting.
+   */
+  async archive(id: string): Promise<{
+    ok: true;
+    conversationId: string;
+    archived: number;
+  }> {
+    const runs = await this.conversationRuns(id);
+    if (
+      runs.some((run) => run.status === 'running' || run.status === 'suspended')
+    ) {
+      throw new ConflictException('The run is still running');
+    }
+    const at = new Date().toISOString();
+    for (const run of runs) {
+      await this.repository.update(run.id, { archivedAt: at });
+    }
+    return {
+      ok: true,
+      conversationId: runs[0].conversationId ?? runs[0].id,
+      archived: runs.length,
+    };
+  }
+
+  /** Bring an archived conversation back (api.md 160; workflows R45). */
+  async unarchive(id: string): Promise<{
+    ok: true;
+    conversationId: string;
+    unarchived: number;
+  }> {
+    const runs = await this.conversationRuns(id);
+    for (const run of runs) {
+      await this.repository.update(run.id, { archivedAt: undefined });
+    }
+    return {
+      ok: true,
+      conversationId: runs[0].conversationId ?? runs[0].id,
+      unarchived: runs.length,
+    };
+  }
+
+  /** A run and every run of its conversation (404 for an unknown run). */
+  private async conversationRuns(id: string): Promise<WorkflowRunDoc[]> {
+    const run = await this.stored(id);
+    if (!run.conversationId) return [run];
+    const runs = await this.repository.listConversation(run.conversationId);
+    return runs.length ? runs : [run];
   }
 
   /**

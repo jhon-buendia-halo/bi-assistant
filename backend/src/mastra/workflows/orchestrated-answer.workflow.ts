@@ -1,41 +1,78 @@
-import { createStep, createWorkflow } from '@mastra/core/workflows';
+import {
+  createStep,
+  createWorkflow,
+  type DefaultEngineType,
+  type ExecuteFunctionParams,
+} from '@mastra/core/workflows';
+import type { z } from 'zod';
+import { clarifyingQuestionOf } from './answer-business-question.steps';
 import {
   ORCHESTRATED_ANSWER_RUNTIME_KEY,
   ORCHESTRATED_ANSWER_STEP_SCHEMAS,
   ORCHESTRATED_ANSWER_STEPS,
   ORCHESTRATED_ANSWER_WORKFLOW_ID,
-  ORCHESTRATED_PLACEHOLDER_ANSWER,
   type OrchestratedAnswerRuntime,
 } from './orchestrated-answer.steps';
 import { engineInputSchema, withContract } from './workflow-contract';
 
 // Answer a Business Question (orchestrated) as a workflow defined in code
-// (workflows R45; agents.md 5.22): for now one placeholder step that writes
-// the run's answer by code. The orchestrator (a supervisor agent that calls
-// the other agents as its tools) replaces it once it is built.
+// (workflows R45; agents.md 5.22): one step, Orchestrate, where Avery, the
+// Chief of Staff, calls the team as her tools. When she asks the user a
+// question the step suspends the run (ADR-0043, api.md 138); resumed with
+// the answer, she goes on with it. A snapshot is kept only while it waits.
 
 const [ORCHESTRATE] = ORCHESTRATED_ANSWER_STEPS;
 const SCHEMAS = ORCHESTRATED_ANSWER_STEP_SCHEMAS.orchestrate;
+
+type OrchestrateParams = ExecuteFunctionParams<
+  unknown,
+  z.output<typeof SCHEMAS.input>,
+  z.output<typeof SCHEMAS.output>,
+  z.output<typeof SCHEMAS.resume>,
+  z.output<typeof SCHEMAS.suspend>,
+  DefaultEngineType
+>;
 
 const orchestrateStep = createStep({
   id: ORCHESTRATE.id,
   description: ORCHESTRATE.title,
   inputSchema: engineInputSchema(SCHEMAS.input),
   outputSchema: SCHEMAS.output,
+  suspendSchema: SCHEMAS.suspend,
+  resumeSchema: SCHEMAS.resume,
   execute: withContract(
     ORCHESTRATE.title,
     SCHEMAS,
-    async ({
-      requestContext,
-    }: {
-      inputData: unknown;
-      requestContext: { get(key: string): unknown };
-    }) => {
-      const runtime = requestContext.get(ORCHESTRATED_ANSWER_RUNTIME_KEY) as
-        OrchestratedAnswerRuntime | undefined;
+    async (params: OrchestrateParams) => {
+      const runtime: OrchestratedAnswerRuntime | undefined =
+        params.requestContext.get(ORCHESTRATED_ANSWER_RUNTIME_KEY);
       if (!runtime) throw new Error('The Orchestrate step has no turn to run');
-      await runtime.deliverAnswer(ORCHESTRATED_PLACEHOLDER_ANSWER);
-      return { answer: ORCHESTRATED_PLACEHOLDER_ANSWER };
+      // Resumed after Avery's question: she goes on with the user's answer.
+      const asked = params.resumeData
+        ? clarifyingQuestionOf(params.suspendData)
+        : undefined;
+      const answer = params.resumeData?.answer?.trim();
+      const done = await runtime.orchestrate({
+        question: params.inputData.question,
+        ...(asked && answer
+          ? {
+              answered: {
+                question: asked.question,
+                options: asked.options,
+                answer,
+              },
+            }
+          : {}),
+      });
+      if (done.clarification && !done.stopped) {
+        return params.suspend({
+          kind: 'clarify',
+          question: done.clarification.question,
+          options: done.clarification.options,
+        });
+      }
+      const output = { answer: done.answer };
+      return done.stopped ? params.bail(output) : output;
     },
   ),
 });
@@ -43,11 +80,14 @@ const orchestrateStep = createStep({
 export const orchestratedAnswerWorkflow = createWorkflow({
   id: ORCHESTRATED_ANSWER_WORKFLOW_ID,
   description:
-    'Answer a Business Question (orchestrated): a supervisor agent will choose which agents answer the question. Not built yet: one placeholder step.',
+    'Answer a Business Question (orchestrated): Avery, the Chief of Staff, decides which agents answer the question and is the only one who talks to the user.',
   inputSchema: SCHEMAS.input,
   outputSchema: SCHEMAS.output,
-  // It never waits: nothing to resume, so no snapshot.
-  options: { shouldPersistSnapshot: () => false },
+  options: {
+    // Only a run that waits for the user's answer keeps a snapshot.
+    shouldPersistSnapshot: ({ workflowStatus }) =>
+      workflowStatus === 'suspended',
+  },
 })
   .then(orchestrateStep)
   .commit();

@@ -323,17 +323,14 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(sessions.some((session) => session.id.includes(run.id))).toBe(false);
   });
 
-  it('streams an orchestrated run: its one Orchestrate step, the placeholder answer, and no model call (agents.md 5.22)', async () => {
+  it("streams an orchestrated run: Avery's one Orchestrate step, her words as the answer (agents.md 5.22)", async () => {
     const question = 'How many matches were played?';
-    const placeholder =
-      'This workflow is not built yet. Its orchestrator will decide which agents answer your question; until then, run Answer a Business Question.';
     const modelCalls = await recorded(async () => {
       const res = await runStream('orchestrated-answer', {
         input: {
           question,
           datasets: ['World Cup Core'],
           buildVisual: false,
-          approveSteps: false,
         },
       });
       expect(res.status).toBe(200);
@@ -343,18 +340,90 @@ describe('Streamed runs of agent workflows (API)', () => {
       });
       expect(res.frames.at(-1)!.type).toBe('done');
       const run = res.frames.at(-1)!.run!;
+      // The stub model answers her turn with no tool call: her words are
+      // the run's answer.
       expect(run).toMatchObject({
         id: res.frames[0].runId,
         workflowId: 'orchestrated-answer',
         status: 'success',
         question,
-        answer: { role: 'assistant', content: placeholder },
+        answer: { role: 'assistant', content: STUB_ANSWER },
       });
       expect(run.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
         'orchestrate:success',
       ]);
+      // A first message starts a conversation of its own.
+      expect(
+        (
+          (await http().get(`/workflow-runs/${run.id}`).expect(200)).body as {
+            conversationId?: string;
+          }
+        ).conversationId,
+      ).toBe(run.id);
     });
-    expect(modelCalls).toEqual([]);
+    // Avery's one model call, on the chief-of-staff agent.
+    expect(modelCalls).toHaveLength(1);
+  });
+
+  it('archives a conversation with Avery: hidden from the list, listed under ?archived=true, closed to a follow-up, restored by unarchive (api.md 120, 159, 160)', async () => {
+    const first = await runStream('orchestrated-answer', {
+      input: { question: 'Archive me', datasets: ['World Cup Core'] },
+    });
+    const firstRun = first.frames.at(-1)!.run!;
+    const follow = await runStream('orchestrated-answer', {
+      input: { question: 'And a follow-up', datasets: ['World Cup Core'] },
+      context: { fromRunId: firstRun.id },
+    });
+    const followRun = follow.frames.at(-1)!.run!;
+    expect(followRun.status).toBe('success');
+    const ids = async (query = '') =>
+      (
+        (await http().get(`/workflow-runs${query}`).expect(200)).body as {
+          runs: { id: string; archivedAt?: string }[];
+        }
+      ).runs.map((run) => run.id);
+    expect(await ids()).toEqual(
+      expect.arrayContaining([firstRun.id, followRun.id]),
+    );
+
+    await http().post('/workflow-runs/nope/archive').expect(404);
+    expect(
+      (await http().post(`/workflow-runs/${followRun.id}/archive`).expect(200))
+        .body,
+    ).toEqual({ ok: true, conversationId: firstRun.id, archived: 2 });
+    expect(await ids()).not.toContain(firstRun.id);
+    expect(await ids()).not.toContain(followRun.id);
+    const archived = await ids('?archived=true');
+    expect(archived).toEqual(
+      expect.arrayContaining([firstRun.id, followRun.id]),
+    );
+    expect(
+      (await http().get(`/workflow-runs/${firstRun.id}`).expect(200)).body,
+    ).toMatchObject({ archivedAt: expect.any(String) as string });
+
+    const refused = await runStream('orchestrated-answer', {
+      input: { question: 'Too late', datasets: ['World Cup Core'] },
+      context: { fromRunId: followRun.id },
+    });
+    expect(refused.status).toBe(409);
+    expect(refused.text).toContain('This conversation is archived');
+
+    expect(
+      (await http().post(`/workflow-runs/${firstRun.id}/unarchive`).expect(200))
+        .body,
+    ).toEqual({ ok: true, conversationId: firstRun.id, unarchived: 2 });
+    expect(await ids()).toEqual(
+      expect.arrayContaining([firstRun.id, followRun.id]),
+    );
+    expect(await ids('?archived=true')).not.toContain(firstRun.id);
+    expect(
+      (await http().get(`/workflow-runs/${firstRun.id}`).expect(200)).body,
+    ).not.toHaveProperty('archivedAt');
+    const again = await runStream('orchestrated-answer', {
+      input: { question: 'Back again', datasets: ['World Cup Core'] },
+      context: { fromRunId: followRun.id },
+    });
+    expect(again.status).toBe(200);
   });
 
   it('each step frame and the stored run carry what the step received, its output and its times', async () => {

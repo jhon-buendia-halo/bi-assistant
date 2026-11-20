@@ -153,7 +153,8 @@ const FIXTURES: Record<string, ContractFixture> = {
     requestContext: () => {
       const context = new RequestContext();
       context.set(ORCHESTRATED_ANSWER_RUNTIME_KEY, {
-        deliverAnswer: () => Promise.resolve(),
+        orchestrate: () =>
+          Promise.resolve({ answer: 'There were 64 matches.', stopped: false }),
       } satisfies OrchestratedAnswerRuntime);
       return context;
     },

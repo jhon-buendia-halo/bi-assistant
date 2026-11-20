@@ -425,6 +425,10 @@ export interface WorkflowRun {
   workflowName: string;
   input: Record<string, WorkflowInputValue>;
   context?: { fromRunId: string; askStep?: string };
+  /** Answer a Business Question (orchestrated): the conversation this run belongs to. */
+  conversationId?: string;
+  /** Set while the run's conversation is archived (hidden, read-only). */
+  archivedAt?: string;
   status: 'running' | 'success' | 'failed' | 'stopped' | 'suspended';
   /** A suspended run (or an expired one, `expired: true`): the question it waits on. */
   waitingFor?: WorkflowWaitingFor;
@@ -513,4 +517,6 @@ export interface WorkflowRunSummary {
   title: string;
   startedAt: string;
   finishedAt?: string;
+  conversationId?: string;
+  archivedAt?: string;
 }

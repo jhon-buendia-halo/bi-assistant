@@ -85,8 +85,14 @@ import { analyseSystemBlocks } from '../../../mastra/workflows/answer-business-q
 import {
   ORCHESTRATED_ANSWER_RUNTIME_KEY,
   ORCHESTRATED_ANSWER_WORKFLOW_ID,
+  ORCHESTRATOR_MODEL,
   type OrchestratedAnswerRuntime,
 } from '../../../mastra/workflows/orchestrated-answer.steps';
+import {
+  orchestratorState,
+  runOrchestratorTurn,
+  type OrchestratorTeam,
+} from './orchestrator-turn';
 import { ANSWER_BUSINESS_QUESTION_MODEL } from '../../../mastra/workflows/answer-business-question.review';
 import { resolveAgentModelConfig } from '../../../mastra/model-resolver';
 import {
@@ -441,8 +447,13 @@ export class TurnEngine {
     // when the saved model is served as a Claude model: its agents read it
     // from the context, and every step call and Analyse's turn send its
     // effort. Otherwise the saved model and effort, as every agent.
+    // Answer a Business Question (orchestrated): Avery calls the same
+    // agents as her tools, on the same model; she runs on Opus 5.5 high
+    // (agents.md 5.22).
+    const orchestrated = workflow.engineId === ORCHESTRATED_ANSWER_WORKFLOW_ID;
+    const claude = servesClaude(await resolveAgentModelConfig());
     const stepModel =
-      v2 && servesClaude(await resolveAgentModelConfig())
+      (v2 || orchestrated) && claude
         ? ANSWER_BUSINESS_QUESTION_MODEL
         : undefined;
     if (stepModel) {
@@ -452,6 +463,16 @@ export class TurnEngine {
         stepModel.model,
       );
     }
+    const orchestratorModel =
+      orchestrated && claude ? { ...ORCHESTRATOR_MODEL } : undefined;
+    const orchestratorProviderOptions = orchestratorModel
+      ? await turnProviderOptions(
+          { reasoningEffort: orchestratorModel.reasoningEffort },
+          orchestratorModel.model,
+        )
+      : (options.providerOptions as Record<string, unknown> | undefined);
+    // What Avery's team produced: it outlives a wait for the user.
+    const orchState = orchestratorState();
     // A follow-up that asks one agent (agents.md 5.21): only the Analyst
     // and Sarah answer as an agent turn; every other asked step's answer is
     // its model call's or the code's, which no synthesis replaces.
@@ -1220,6 +1241,47 @@ export class TurnEngine {
             text = answer;
             emit({ type: 'text', content: answer });
             return Promise.resolve();
+          },
+          // Avery's turn (agents.md 5.22): the team as her tools; her answer
+          // is delivered once she is done (only she talks to the user).
+          orchestrate: async (input, team: OrchestratorTeam) => {
+            const done = await runOrchestratorTurn(
+              {
+                getAgent: (key) => this.deps.mastra.getAgent(key),
+                team,
+                state: orchState,
+                emit: (event) => emit(event),
+                signal: turn.signal,
+                datasets: session.datasets,
+                images: [...(session.inputImages ?? [])],
+                buildsVisual: session.buildVisual === true,
+                // The conversation so far (workflows R45): the host's
+                // transcript before this message.
+                history: session.messages
+                  .slice(0, -1)
+                  .filter(
+                    (message) =>
+                      (message.role === 'user' ||
+                        message.role === 'assistant') &&
+                      typeof message.content === 'string' &&
+                      message.content.trim() !== '',
+                  )
+                  .map((message) => ({
+                    role: message.role,
+                    content: message.content,
+                  })),
+                ...(orchestratorModel ? { orchestratorModel } : {}),
+                ...(orchestratorProviderOptions
+                  ? { providerOptions: orchestratorProviderOptions }
+                  : {}),
+              },
+              input,
+            );
+            if (!done.clarification && done.answer) {
+              text = done.answer;
+              emit({ type: 'text', content: done.answer });
+            }
+            return done;
           },
           // A follow-up that asks Write answer alone (agents.md 5.21): the
           // earlier answer's records come into this answer with their
@@ -2050,6 +2112,11 @@ export class TurnEngine {
         consumptionGap: ConsumptionGapRuntime;
         /** A follow-up that asks Write answer alone (agents.md 5.21). */
         earlierAnswer: () => EarlierAnswerInput;
+        /** Avery's turn, with her team (agents.md 5.22). */
+        orchestrate: (
+          input: Parameters<OrchestratedAnswerRuntime['orchestrate']>[0],
+          team: OrchestratorTeam,
+        ) => ReturnType<OrchestratedAnswerRuntime['orchestrate']>;
         /** A follow-up that asks Build visual alone (agents.md 5.21). */
         earlierVisual: () => EarlierVisualInput;
         /** Its designer call, the follow-up as Ryan's instruction. */
@@ -2077,10 +2144,19 @@ export class TurnEngine {
     const ask = workflow.engineId === ASK_AGENT_WORKFLOW_ID;
     const orchestrated = workflow.engineId === ORCHESTRATED_ANSWER_WORKFLOW_ID;
     if (orchestrated) {
-      // Answer a Business Question (orchestrated): its placeholder step
-      // writes the run's answer (agents.md 5.22).
+      // Answer a Business Question (orchestrated): Avery calls the team
+      // through the same calls Answer a Business Question's steps make.
       requestContext.set(ORCHESTRATED_ANSWER_RUNTIME_KEY, {
-        deliverAnswer: (answer) => runtime.deliverAnswer(answer),
+        orchestrate: (input) =>
+          captured(() =>
+            runtime.orchestrate(input, {
+              readImages: (read) => runtime.readImages(read),
+              plan: (planned) => runtime.plan(planned),
+              analyse: (attempt) => runtime.analyse(attempt),
+              writeAnswer: (written) => runtime.writeAnswer(written),
+              buildVisual: (built) => runtime.buildVisual(built),
+            }),
+          ),
       } satisfies OrchestratedAnswerRuntime);
     } else if (ask) {
       // A follow-up that asks one agent (agents.md 5.21): the same calls

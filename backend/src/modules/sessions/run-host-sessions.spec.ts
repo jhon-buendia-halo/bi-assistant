@@ -116,7 +116,6 @@ import {
 import { ANALYSE_VISUAL_LINE } from '../../mastra/workflows/answer-business-question.prompts';
 import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
 import { orchestratedAnswerWorkflow } from '../../mastra/workflows/orchestrated-answer.workflow';
-import { ORCHESTRATED_PLACEHOLDER_ANSWER } from '../../mastra/workflows/orchestrated-answer.steps';
 import { askAgentWorkflow } from '../../mastra/workflows/ask-agent.workflow';
 import {
   DATA_READINESS_ASSESSMENT_STEPS,
@@ -405,6 +404,7 @@ function build(options: BuildOptions = {}) {
     assistant: agentFor('assistant', 'Questions to Insights Assistant'),
     'insights-analyst': agentFor('insights-analyst', 'Insights Analyst'),
     'data-readiness': agentFor('data-readiness', 'Data Readiness Agent'),
+    'chief-of-staff': agentFor('chief-of-staff', 'Avery'),
   };
   // Suspended v2 runs dropped (their snapshots deleted, ADR-0043).
   const discards = { count: 0 };
@@ -715,7 +715,7 @@ function withoutTime<T extends { at?: string }>(message: T | undefined) {
 }
 
 describe('an Answer a Business Question (orchestrated) run (agents.md 5.22)', () => {
-  it('ends success with the placeholder as its answer, written by code with no model call', async () => {
+  it("ends success with Avery's closing words as its answer, the one Orchestrate step run by her alone", async () => {
     const ctx = build();
     await ctx.sessions.onModuleInit();
     const prepared = await ctx.runs.prepare('orchestrated-answer', {
@@ -728,7 +728,9 @@ describe('an Answer a Business Question (orchestrated) run (agents.md 5.22)', ()
     expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
       'orchestrate:success',
     ]);
-    expect(run.answer?.content).toBe(ORCHESTRATED_PLACEHOLDER_ANSWER);
+    // No team call was made, so her own words are the answer.
+    expect(run.answer?.content).toBe('Brazil won.');
+    expect(ctx.calls['chief-of-staff']).toHaveLength(1);
     expect(ctx.calls['insights-analyst'] ?? []).toHaveLength(0);
     expect(events.at(-1)?.type).toBe('done');
   });

@@ -18543,7 +18543,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) orchestrated-answer's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "9a47201746a6",
+  "contractHash": "32c9cf890b62",
   "edges": [
     {
       "from": "start",
@@ -18574,11 +18574,6 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
     },
     {
       "name": "buildVisual",
-      "required": false,
-      "type": "boolean",
-    },
-    {
-      "name": "approveSteps",
       "required": false,
       "type": "boolean",
     },

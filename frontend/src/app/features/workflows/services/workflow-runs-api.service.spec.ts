@@ -763,3 +763,38 @@ describe('WorkflowRunsApiService, a run input image (api.md 151)', () => {
     );
   });
 });
+
+describe('WorkflowRunsApiService, archive and unarchive (api.md 120, 159, 160)', () => {
+  let service: WorkflowRunsApiService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(WorkflowRunsApiService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('lists archived runs with ?archived=true and the default without', () => {
+    service.list().subscribe();
+    http.expectOne((r) => r.urlWithParams.endsWith('/workflow-runs')).flush({ runs: [] });
+    service.list({ archived: true }).subscribe();
+    http
+      .expectOne((r) => r.urlWithParams.endsWith('/workflow-runs?archived=true'))
+      .flush({ runs: [] });
+  });
+
+  it('archives and unarchives with a POST', () => {
+    service.archive('run 1').subscribe();
+    const archive = http.expectOne((r) => r.url.endsWith('/workflow-runs/run%201/archive'));
+    expect(archive.request.method).toBe('POST');
+    archive.flush({ ok: true, conversationId: 'run 1', archived: 2 });
+    service.unarchive('run 1').subscribe();
+    const unarchive = http.expectOne((r) => r.url.endsWith('/workflow-runs/run%201/unarchive'));
+    expect(unarchive.request.method).toBe('POST');
+    unarchive.flush({ ok: true, conversationId: 'run 1', unarchived: 2 });
+  });
+});

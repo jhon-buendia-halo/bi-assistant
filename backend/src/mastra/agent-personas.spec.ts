@@ -62,6 +62,7 @@ describe('built-in agent personas (agents.md 1.1)', () => {
       analysis: [
         'analysis-planner',
         'assistant',
+        'chief-of-staff',
         'insights-analyst',
         'result-explorer',
       ],

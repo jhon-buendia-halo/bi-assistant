@@ -15,7 +15,7 @@
     </h3>
     @if (designer.runResult() !== null && !designer.running()) {
       <!-- Run again: the composer opens with the shown run's whole input -->
-      @if (designer.canRunAgain()) {
+      @if (designer.canRunAgain() && !averyArchived()) {
         <button
           type="button"
           data-testid="workflow-run-again"
@@ -56,12 +56,28 @@
           </button>
         </span>
       }
+      @if (averyOpen()) {
+        <button
+          type="button"
+          data-testid="workflow-run-archive"
+          title="Archive this conversation"
+          [disabled]="averyBusy()"
+          (click)="archiveConversation()"
+          class="btn btn-ghost px-2.5 py-1"
+        >
+          <lucide-angular [img]="Archive" [size]="13" />
+          <span>Archive</span>
+        </button>
+      }
       <button
         type="button"
         data-testid="workflow-run-new"
         (click)="designer.newQuestion()"
         class="btn btn-ghost px-2.5 py-1"
-        [class.ml-auto]="!designer.canRunAgain() && savedArtifactId() === null"
+        [class.ml-auto]="
+          (!designer.canRunAgain() || averyArchived()) &&
+          savedArtifactId() === null
+        "
       >
         <lucide-angular [img]="SquarePen" [size]="13" />
         <span>New question</span>
@@ -100,6 +116,43 @@
     }
   </div>
 
+  @if (averyArchived()) {
+    <div
+      data-testid="workflow-run-archived"
+      class="mx-4 mb-1 flex shrink-0 flex-wrap items-center gap-2 rounded-md border border-border bg-surface-muted px-3 py-1.5 text-[12px] text-fg-muted"
+    >
+      <lucide-angular [img]="Archive" [size]="13" />
+      <span>This conversation is archived.</span>
+      <button
+        type="button"
+        data-testid="workflow-run-unarchive"
+        [disabled]="averyBusy()"
+        (click)="unarchiveConversation()"
+        class="btn btn-ghost ml-auto px-2 py-0.5 text-[12px]"
+      >
+        Unarchive
+      </button>
+    </div>
+  }
+  @if (averyError(); as message) {
+    <p
+      role="alert"
+      data-testid="workflow-avery-error"
+      class="m-0 mx-4 mb-1 text-[12px] text-on-danger-soft"
+    >
+      {{ message }}
+    </p>
+  }
+  @if (averyNotice(); as notice) {
+    <p
+      role="status"
+      data-testid="workflow-avery-notice"
+      class="m-0 mx-4 mb-1 text-[12px] text-fg-muted"
+    >
+      {{ notice }}
+    </p>
+  }
+
   <!-- Focusable: it scrolls (axe scrollable-region-focusable). -->
   <section
     #log
@@ -110,7 +163,7 @@
     class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3 focus-visible:outline-2 focus-visible:outline-focus"
   >
     @if (designer.runResult(); as result) {
-      @if (business()) {
+      @if (threaded()) {
         <!-- The conversation so far (R38): each earlier question and its
              answer, read-only; their figures open the inspector on that run. -->
         @for (turn of conversation.earlier(); track turn.runId) {
@@ -144,7 +197,7 @@
       @if (designer.contextRun(); as earlier) {
         <!-- In the Business view's thread the earlier question is shown above;
              only the agent asked, if one was, is still said -->
-        @if (!business() || conversation.earlier().length === 0) {
+        @if (!threaded() || conversation.earlier().length === 0) {
           <p
             data-testid="workflow-run-context"
             class="m-0 text-[12px] text-fg-muted"
@@ -479,6 +532,39 @@
       </div>
     }
   </section>
+
+  @if (averyOpen() && designer.waitingFor() === null) {
+    <!-- Avery's conversation never ends: a compact message box under the
+         last answer (a follow-up run of this conversation) -->
+    <div class="shrink-0 px-3 pb-3">
+      <form
+        class="composer flex items-end gap-2"
+        aria-label="Message Avery"
+        (submit)="$event.preventDefault(); sendAvery()"
+      >
+        <label for="workflow-avery-input" class="sr-only">Message Avery</label>
+        <textarea
+          id="workflow-avery-input"
+          data-testid="workflow-avery-input"
+          rows="2"
+          placeholder="Message Avery…"
+          class="composer-input min-w-0 flex-1"
+          [value]="averyText()"
+          (input)="averyText.set($any($event.target).value)"
+          (keydown)="onAveryKey($event)"
+        ></textarea>
+        <button
+          type="submit"
+          data-testid="workflow-avery-send"
+          class="btn btn-primary px-2.5 py-1"
+          [disabled]="averyText().trim() === '' || designer.running()"
+        >
+          <lucide-angular [img]="SendHorizontal" [size]="13" />
+          <span>Send</span>
+        </button>
+      </form>
+    </div>
+  }
 
   @if (canRun() && composerShown()) {
     <!-- The run's input, while no run is shown (no follow-up since 2026-11-20) -->

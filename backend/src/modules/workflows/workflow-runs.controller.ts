@@ -90,10 +90,13 @@ export class WorkflowRunsController {
   @Get()
   async list(
     @Query('workflowId') workflowId?: string,
+    @Query('archived') archived?: string,
   ): Promise<{ runs: WorkflowRunSummary[] }> {
     return {
       runs: await this.runs.list(
         typeof workflowId === 'string' && workflowId ? workflowId : undefined,
+        // Archived conversations only when asked for (api.md 120, 159).
+        archived === 'true',
       ),
     };
   }
@@ -263,6 +266,28 @@ export class WorkflowRunsController {
    * answered as stored. Idempotent: a run that already ended answers as it
    * is.
    */
+  /** Archive the run's conversation with Avery (api.md 159; workflows R45). */
+  @Post(':id/archive')
+  @HttpCode(200)
+  archive(@Param('id') id: string): Promise<{
+    ok: true;
+    conversationId: string;
+    archived: number;
+  }> {
+    return this.runs.archive(id);
+  }
+
+  /** Bring an archived conversation back (api.md 160; workflows R45). */
+  @Post(':id/unarchive')
+  @HttpCode(200)
+  unarchive(@Param('id') id: string): Promise<{
+    ok: true;
+    conversationId: string;
+    unarchived: number;
+  }> {
+    return this.runs.unarchive(id);
+  }
+
   @Post(':id/stop')
   @HttpCode(200)
   async stop(

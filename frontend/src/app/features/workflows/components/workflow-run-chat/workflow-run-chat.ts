@@ -11,6 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import {
+  Archive,
   Brain,
   CircleCheck,
   Loader2,
@@ -86,6 +87,8 @@ import {
 
 /** The workflow a saved dashboard is mapped in, and its artifact field. */
 const MAP_WORKFLOW_ID = 'map-dashboard-data';
+/** The never-ending conversation with Avery, the Chief of Staff. */
+const AVERY_WORKFLOW_ID = 'orchestrated-answer';
 const MAP_ARTIFACT_FIELD = 'artifact';
 
 /** The composer's controls Execute workflow may focus, in order. */
@@ -190,6 +193,7 @@ const FORM_CONTROLS =
 })
 export class WorkflowRunChat {
   protected readonly hasQueries = answerHasQueries;
+  protected readonly Archive = Archive;
   protected readonly Brain = Brain;
   protected readonly CircleCheck = CircleCheck;
   protected readonly Loader2 = Loader2;
@@ -210,6 +214,107 @@ export class WorkflowRunChat {
    */
   readonly variant = input<'panel' | 'business'>('panel');
   protected readonly business = computed(() => this.variant() === 'business');
+
+  /**
+   * The chat reads the whole thread of earlier turns: always in the Business
+   * view, and for Answer a Business Question (orchestrated) in either view,
+   * since that conversation never ends.
+   */
+  protected readonly threaded = computed(
+    () => this.business() || this.isAveryWorkflow(),
+  );
+  private readonly isAveryWorkflow = computed(
+    () => this.designer.workflow()?.id === AVERY_WORKFLOW_ID,
+  );
+
+  /** The shown run is an ended, not archived run of Avery's conversation. */
+  protected readonly averyOpen = computed(() => {
+    const status = this.designer.runResult()?.status;
+    return (
+      this.isAveryWorkflow() &&
+      this.designer.run() !== null &&
+      this.designer.run()?.archivedAt === undefined &&
+      !this.designer.running() &&
+      (status === 'success' || status === 'failed' || status === 'stopped')
+    );
+  });
+
+  /** The shown run belongs to an archived Avery conversation (read-only). */
+  protected readonly averyArchived = computed(
+    () =>
+      this.isAveryWorkflow() &&
+      this.designer.run() !== null &&
+      this.designer.run()?.archivedAt !== undefined &&
+      !this.designer.running(),
+  );
+
+  protected readonly averyText = signal('');
+  protected readonly averyError = signal<string | null>(null);
+  protected readonly averyBusy = signal(false);
+  protected readonly averyNotice = signal<string | null>(null);
+
+  protected sendAvery(): void {
+    const text = this.averyText().trim();
+    if (!text || this.designer.running()) return;
+    this.averyError.set(null);
+    this.averyNotice.set(null);
+    this.averyText.set('');
+    this.designer.followUp(text);
+  }
+
+  protected onAveryKey(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    this.sendAvery();
+  }
+
+  protected archiveConversation(): void {
+    const run = this.designer.run();
+    if (run === null || this.averyBusy()) return;
+    this.averyBusy.set(true);
+    this.averyError.set(null);
+    this.runsApi.archive(run.id).subscribe({
+      next: () => {
+        this.averyBusy.set(false);
+        this.designer.newQuestion();
+        this.averyNotice.set('Conversation archived');
+      },
+      error: (err: unknown) => {
+        this.averyBusy.set(false);
+        this.averyError.set(this.messageOf(err, 'Could not archive'));
+      },
+    });
+  }
+
+  protected unarchiveConversation(): void {
+    const run = this.designer.run();
+    if (run === null || this.averyBusy()) return;
+    this.averyBusy.set(true);
+    this.averyError.set(null);
+    this.runsApi.unarchive(run.id).subscribe({
+      next: () => {
+        this.runsApi.getRun(run.id).subscribe({
+          next: (fresh) => {
+            this.averyBusy.set(false);
+            this.designer.run.set(fresh);
+          },
+          error: () => {
+            this.averyBusy.set(false);
+            this.designer.run.set({ ...run, archivedAt: undefined });
+          },
+        });
+      },
+      error: (err: unknown) => {
+        this.averyBusy.set(false);
+        this.averyError.set(this.messageOf(err, 'Could not unarchive'));
+      },
+    });
+  }
+
+  private messageOf(err: unknown, fallback: string): string {
+    const message = (err as { error?: { message?: unknown } })?.error?.message;
+    return typeof message === 'string' && message !== '' ? message : fallback;
+  }
 
   /**
    * Business view only: show the run in the Builder view, with this step's
@@ -239,7 +344,7 @@ export class WorkflowRunChat {
   constructor() {
     // The Business view reads the whole conversation (R38).
     effect(() => {
-      const on = this.business();
+      const on = this.threaded();
       untracked(() => this.conversation.active.set(on));
     });
     // While a run streams, keep its newest text in view; once it ends, show

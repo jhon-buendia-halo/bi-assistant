@@ -136,6 +136,17 @@ export interface WorkflowRun {
   contractHash?: string;
   input: WorkflowInputValues;
   context?: { fromRunId: string };
+  /**
+   * A conversation with Avery (Answer a Business Question (orchestrated),
+   * workflows R45): the id of its first run, shared by every run that
+   * follows up on it. Absent on other workflows' runs.
+   */
+  conversationId?: string;
+  /**
+   * When the run's conversation was archived (api.md 159): it is hidden
+   * from the run history (120) unless asked for, and read-only.
+   */
+  archivedAt?: string;
   status: WorkflowRunStatus;
   /** Every step of the workflow, in its order. */
   steps: WorkflowRunStep[];
@@ -195,6 +206,10 @@ export interface WorkflowRunSummary {
   title: string;
   startedAt: string;
   finishedAt?: string;
+  /** Its conversation with Avery (workflows R45), when it has one. */
+  conversationId?: string;
+  /** When its conversation was archived (api.md 159). */
+  archivedAt?: string;
 }
 
 /** The longest run title, in characters (plan 5.3). */
@@ -237,6 +252,8 @@ export function runSummaryOf(
     title: runTitle(run, textFields),
     startedAt: run.startedAt,
     ...(run.finishedAt ? { finishedAt: run.finishedAt } : {}),
+    ...(run.conversationId ? { conversationId: run.conversationId } : {}),
+    ...(run.archivedAt ? { archivedAt: run.archivedAt } : {}),
   };
 }
 

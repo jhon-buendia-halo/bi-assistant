@@ -1,14 +1,18 @@
 /**
  * Answer a Business Question (orchestrated) (workflows R45; agents.md
- * 5.22): the same question answered by a supervisor agent that will decide
- * at run time which agents to call (Zoe, Olivia, Michael, Jessica, Ryan),
- * instead of a fixed line of steps. Since 2026-11-20 it is an empty shell:
- * the input of Answer a Business Question and one placeholder step that
- * answers that the workflow is not built yet. Plain data and pure code, no
- * framework import; the Mastra workflow is ./orchestrated-answer.workflow.ts.
+ * 5.22): the same question answered by Avery, the Chief of Staff, a
+ * supervisor agent that decides at run time which agents to call (Zoe,
+ * Olivia, Michael, Jessica, Ryan) as her tools, instead of a fixed line of
+ * steps. She is the only agent the user talks to in it. One step,
+ * Orchestrate. Plain data and pure code, no framework import; the Mastra
+ * workflow is ./orchestrated-answer.workflow.ts.
  */
 import { z } from 'zod';
-import { answerBusinessQuestionInputSchema } from './answer-business-question.schemas';
+import {
+  answerBusinessQuestionInputSchema,
+  clarificationAnswerSchema,
+  clarifyingQuestionSchema,
+} from './answer-business-question.schemas';
 import {
   contractStepEntry,
   type ContractStepEntry,
@@ -22,33 +26,46 @@ export const ORCHESTRATED_ANSWER_WORKFLOW_ID = 'orchestrated-answer';
 export const ORCHESTRATED_ANSWER_WORKFLOW_NAME =
   'Answer a Business Question (orchestrated)';
 
+/**
+ * Avery's model and effort (agents.md 1.3): Opus 5.5 at high effort when the
+ * saved model is served as a Claude model; the agents she calls run on
+ * Answer a Business Question's model (medium).
+ */
+export const ORCHESTRATOR_MODEL = {
+  model: 'claude-opus-5-5',
+  reasoningEffort: 'high',
+} as const;
+
 /** The run's RequestContext key holding its `OrchestratedAnswerRuntime`. */
 export const ORCHESTRATED_ANSWER_RUNTIME_KEY = 'orchestrated-answer-runtime';
 
-/** What the placeholder step answers until the orchestrator is built. */
-export const ORCHESTRATED_PLACEHOLDER_ANSWER =
-  'This workflow is not built yet. Its orchestrator will decide which agents answer your question; until then, run Answer a Business Question.';
-
-/** The placeholder step's input and output (agents.md 5.12 data contract). */
+/** The step's input and output (agents.md 5.12 data contract). */
 export const ORCHESTRATED_ANSWER_STEP_SCHEMAS = {
   orchestrate: {
     input: answerBusinessQuestionInputSchema,
     output: z.object({
       answer: z.string().describe("The run's answer."),
     }),
+    // Avery's question to the user: the run waits for the answer (api.md 138).
+    suspend: clarifyingQuestionSchema,
+    resume: clarificationAnswerSchema,
   },
 } as const;
 
-/** The steps, in catalogue order: one placeholder until it is built. */
+/** The steps, in catalogue order: Avery's one step. */
 export const ORCHESTRATED_ANSWER_STEPS: readonly ContractStepEntry[] = [
   contractStepEntry(
     {
       id: 'orchestrate',
       title: 'Orchestrate',
-      kind: 'code',
+      kind: 'agent',
       summary:
-        'Placeholder: the orchestrator that will choose which agents answer the question is not built yet. It answers that the workflow is not built yet. No LLM.',
-      exits: [],
+        'Avery, the Chief of Staff, decides who on the team works on the question and calls them as her tools: Zoe reads the images, Olivia plans, Michael queries the data, Jessica writes the answer and Ryan charts it. She is the only one who talks to you.',
+      exits: [
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
+        { label: 'if it asks you a question', outcome: 'waits' },
+      ],
     },
     ORCHESTRATED_ANSWER_STEP_SCHEMAS.orchestrate,
   ),
@@ -62,6 +79,44 @@ export const ORCHESTRATED_ANSWER_EDGES: readonly WorkflowEdge[] = [
 
 /** What the session code hands the run on its RequestContext. */
 export interface OrchestratedAnswerRuntime {
-  /** The run's answer, written by code (the chat's answer text). */
-  deliverAnswer(answer: string): Promise<void>;
+  /**
+   * Avery's turn (agents.md 5.22): she calls the team as her tools and the
+   * run's answer is Jessica's written answer (else Avery's own words). A
+   * question she asks the user comes back as `clarification`: the step
+   * waits for the answer, then runs her again with it (`answered`).
+   */
+  orchestrate(input: {
+    question: string;
+    answered?: { question: string; options: string[]; answer: string };
+  }): Promise<{
+    answer: string;
+    stopped: boolean;
+    clarification?: { question: string; options: string[] };
+  }>;
+}
+
+/** Avery's tools' RequestContext key: their `OrchestratorToolsRuntime`. */
+export const ORCHESTRATOR_TOOLS_RUNTIME_KEY = 'orchestrator-tools-runtime';
+
+/**
+ * What Avery's tools call (mastra/tools/orchestrator.tools.ts): the same
+ * calls Answer a Business Question's steps make, without their gates (the
+ * team never talks to the user in this workflow). Each answers Avery in a
+ * few lines of text.
+ */
+export interface OrchestratorToolsRuntime {
+  /** The run has reference images (read_reference_images is useful). */
+  hasImages: boolean;
+  /** The run builds a visual (build_visual is offered). */
+  buildsVisual: boolean;
+  /** Zoe reads the run's images; her notes, or why there are none. */
+  readImages(): Promise<string>;
+  /** Olivia's plan in words, with her clarifying question when she has one. */
+  plan(): Promise<string>;
+  /** Michael's analysis for `brief`: each query, its rows and the checks. */
+  analyse(brief: string): Promise<string>;
+  /** Jessica writes the answer; a short confirmation for Avery. */
+  writeAnswer(): Promise<string>;
+  /** Ryan charts the answer's rows; what he built, or why not. */
+  buildVisual(instruction: string): Promise<string>;
 }

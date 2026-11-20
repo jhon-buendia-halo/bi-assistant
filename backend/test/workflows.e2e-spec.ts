@@ -98,6 +98,47 @@ describe('The workflow catalogue (API)', () => {
     expect(res.body).toEqual({ ok: true });
   });
 
+  it("lists Answer a Business Question (orchestrated) with Avery as its step's agent, and no approve-steps input (agents.md 5.22)", async () => {
+    const listed = (await workflows()).find(
+      (w) => w.id === 'orchestrated-answer',
+    )!;
+    expect(listed.input.map((field) => field.name)).toEqual([
+      'question',
+      'images',
+      'datasets',
+      'buildVisual',
+    ]);
+    expect(listed.stepCount).toBe(1);
+    expect(listed.agents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'chief-of-staff',
+          name: 'Avery',
+          role: 'Chief of Staff',
+        }) as object,
+      ]),
+    );
+    const detail = (
+      await http().get('/workflows/orchestrated-answer').expect(200)
+    ).body as {
+      steps: { id: string; kind: string; agent?: { key: string } }[];
+      exits?: unknown;
+    };
+    expect(detail.steps).toEqual([
+      expect.objectContaining({
+        id: 'orchestrate',
+        kind: 'agent',
+        agent: expect.objectContaining({ key: 'chief-of-staff' }) as object,
+      }),
+    ]);
+    const avery = (await http().get('/agents/chief-of-staff').expect(200))
+      .body as { name: string; usedInWorkflows: { id: string }[] };
+    expect(avery).toMatchObject({ name: 'Avery' });
+    expect(avery.usedInWorkflows.map((w) => w.id)).toEqual([
+      'orchestrated-answer',
+    ]);
+  });
+
   it('lists the seven code workflows, Answer a Business Question, its orchestrated version and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
     const listed = await workflows();
     expect(listed.map((w) => w.id)).toEqual([

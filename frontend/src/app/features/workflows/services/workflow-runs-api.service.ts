@@ -143,10 +143,34 @@ export class WorkflowRunsApiService {
   private readonly http = inject(HttpClient);
 
   /** The run history, newest first (api.md 120). */
-  list(): Observable<{ runs: WorkflowRunSummary[] }> {
+  list(options: { archived?: boolean } = {}): Observable<{
+    runs: WorkflowRunSummary[];
+  }> {
     return this.http.get<{ runs: WorkflowRunSummary[] }>(
-      `${API_BASE_URL}/workflow-runs`,
+      `${API_BASE_URL}/workflow-runs${options.archived === true ? '?archived=true' : ''}`,
     );
+  }
+
+  /** Archive a run's whole conversation: hidden and read-only (api.md 159). */
+  archive(
+    id: string,
+  ): Observable<{ ok: boolean; conversationId: string; archived: number }> {
+    return this.http.post<{
+      ok: boolean;
+      conversationId: string;
+      archived: number;
+    }>(`${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/archive`, {});
+  }
+
+  /** Bring an archived conversation back (api.md 160). */
+  unarchive(
+    id: string,
+  ): Observable<{ ok: boolean; conversationId: string; unarchived: number }> {
+    return this.http.post<{
+      ok: boolean;
+      conversationId: string;
+      unarchived: number;
+    }>(`${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/unarchive`, {});
   }
 
   /** Delete a stored run with its workspace (api.md 122). */

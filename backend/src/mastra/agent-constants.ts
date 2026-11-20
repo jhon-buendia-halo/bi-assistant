@@ -87,6 +87,15 @@ export const GAP_ADVISOR_AGENT_KEY = 'gap-advisor';
 /** Its name: the Recommend fixes step's agent. */
 export const GAP_ADVISOR_AGENT_NAME = 'Gap Advisor';
 
+/**
+ * Avery, the Chief of Staff: the orchestrator of Answer a Business Question
+ * (orchestrated) and the only agent the user talks to in it (agents.md
+ * 2.21, 5.22). A System agent: the workflow calls her.
+ */
+export const CHIEF_OF_STAFF_AGENT_KEY = 'chief-of-staff';
+/** Her name: the Orchestrate step's agent. */
+export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
+
 /** Ryan, the visual designer: Generate interactive visuals and Build visual (agents.md 5.11). */
 export const VISUALIZATION_AGENT_KEY = 'visualization';
 
@@ -104,6 +113,7 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   LAYER_MAPPER_AGENT_KEY,
   GAP_ADVISOR_AGENT_KEY,
   VISUALIZATION_AGENT_KEY,
+  CHIEF_OF_STAFF_AGENT_KEY,
   'sql-fixer',
   'sql-verifier',
   'assistant-eval-judge',
