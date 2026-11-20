@@ -527,8 +527,9 @@ test.describe('Feature: Workflows (run workflows)', () => {
           const howItRan = page.getByTestId('workflow-run-story');
           await howItRan.getByTestId('workflow-run-story-toggle').click();
           await expect(howItRan.getByTestId('workflow-run-story-step-clarify')).toHaveCount(0);
-          // The run is over: the follow-up composer stands in for the form.
-          await expect(page.getByTestId('workflow-follow-up-input')).toBeVisible();
+          // The run is over: no composer at all, and no follow-up.
+          await expect(page.getByTestId('workflow-run-composer')).toHaveCount(0);
+          await expect(page.getByTestId('workflow-follow-up-input')).toHaveCount(0);
           await expect(page.getByTestId('workflow-run')).toHaveCount(0);
           await expect(page.getByTestId('workflow-run-new')).toBeEnabled();
         },
@@ -1501,7 +1502,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await runOnQuestion(page, QUESTION);
   await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
   await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
-  await expect(page.getByTestId('workflow-follow-up-input')).toBeVisible();
+  await expect(page.getByTestId('workflow-run-new')).toBeVisible();
   await scan('Answer a Business Question page after a run');
   await runDock(page).getByTestId('workflow-run-dock-maximize').click();
   await scan('Answer a Business Question page after a run, Run panel maximized');
@@ -1587,7 +1588,6 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
   test.use({ workflowView: null });
 
   test('I run a workflow in the Business view', { tag: ['@demo'] }, async ({ page }) => {
-    const FOLLOW_UP = 'Which stage had the most matches?';
     await scenarioStep(
       page,
       `When I open "${V2}" from User journeys on a device that never picked a view`,
@@ -1649,55 +1649,18 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
         await expect(view.getByTestId('workflow-run-execution-id')).toContainText('Execution ID');
       },
     );
-    await scenarioStep(page, `When I send "${FOLLOW_UP}"`, async () => {
-      await businessView(page).getByTestId('workflow-follow-up-input').fill(FOLLOW_UP);
-      await businessView(page).getByTestId('workflow-run-follow-up').click();
-    });
     await scenarioStep(
       page,
-      'Then it runs the user journey again, under my earlier question and answer in the same conversation',
+      'And the chat has no composer and no follow-up, with Stop gone and New question there',
       async () => {
         const view = businessView(page);
-        await expect(view.getByTestId('workflow-run-question')).toHaveText(FOLLOW_UP);
-        await expect(view.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
-        await expect(view.getByTestId('run-answer')).toContainText(ANSWER);
-        const turn = view.getByTestId('workflow-turn');
-        await expect(turn).toHaveCount(1);
-        await expect(turn.getByTestId('workflow-turn-question')).toHaveText(QUESTION);
-        await expect(turn).toContainText(ANSWER);
-        // The thread replaces the Follows up on line.
-        await expect(view.getByTestId('workflow-run-context')).toHaveCount(0);
+        await expect(view.getByTestId('workflow-run-composer')).toHaveCount(0);
+        await expect(view.getByTestId('workflow-follow-up-input')).toHaveCount(0);
+        await expect(view.getByTestId('workflow-run-stop')).toHaveCount(0);
+        await expect(view.getByTestId('workflow-run-new')).toBeEnabled();
+        await expect(view.getByTestId('workflow-turn')).toHaveCount(0);
       },
     );
-    await scenarioStep(
-      page,
-      'And the conversation navigation shows a tick per question; hovering it lists them',
-      async () => {
-        const nav = page.getByRole('navigation', { name: 'Conversation', exact: true });
-        await expect(nav.getByTestId('workflow-conversation-tick')).toHaveCount(2);
-        await nav.hover();
-        await expect(nav.getByRole('button')).toHaveText([QUESTION, FOLLOW_UP]);
-        await expect(nav.getByRole('button', { name: FOLLOW_UP })).toHaveAttribute(
-          'aria-current',
-          'true',
-        );
-      },
-    );
-    await scenarioStep(page, `When I pick "${QUESTION}" in it`, async () => {
-      await page
-        .getByRole('navigation', { name: 'Conversation', exact: true })
-        .getByRole('button', { name: QUESTION })
-        .click();
-    });
-    await scenarioStep(page, 'Then the chat scrolls to that question', async () => {
-      const question = businessView(page).getByTestId('workflow-turn-question');
-      await expect(question).toBeInViewport();
-      await expect(
-        page
-          .getByRole('navigation', { name: 'Conversation', exact: true })
-          .getByRole('button', { name: QUESTION }),
-      ).toHaveAttribute('aria-current', 'true');
-    });
     await scenarioStep(page, 'And the Business view has no detectable accessibility violations', async () => {
       await page.addScriptTag({ content: axe.source });
       for (const theme of ['light', 'dark'] as const) {
@@ -1720,7 +1683,7 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
         await expect(viewButton(page, 'Builder')).toHaveAttribute('aria-pressed', 'true');
         await expect(businessView(page)).toHaveCount(0);
         await expect(drawnSteps(page)).toHaveText(V2_STEPS);
-        await expect(runDock(page).getByTestId('workflow-run-question')).toHaveText(FOLLOW_UP);
+        await expect(runDock(page).getByTestId('workflow-run-question')).toHaveText(QUESTION);
         await expect(runDock(page).getByTestId('run-answer')).toContainText(ANSWER);
         await expect(runDock(page).getByTestId('workflow-run-story')).toBeVisible();
       },

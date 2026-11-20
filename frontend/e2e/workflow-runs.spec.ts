@@ -25,8 +25,6 @@ const V2_ID = 'answer-business-question';
 const V2 = 'Answer a Business Question';
 const QUESTION = 'Which team scored the most goals?';
 const ANSWER = 'Brazil scored the most goals in this data.';
-const FOLLOW_UP = 'And the fewest?';
-const FOLLOW_UP_ANSWER = 'Bolivia scored the fewest goals in this data.';
 const SQL = `SELECT stage, COUNT(*) AS matches FROM ${worldCupKey('matches')} GROUP BY stage`;
 /** The steps a clear question runs. */
 const V2_STEPS = [
@@ -158,7 +156,7 @@ test.describe('Feature: Workflow runs', () => {
     'I run Answer a Business Question on a question',
     { tag: ['@demo', '@story-1.23.15'] },
     async ({ page }) => {
-      stub.reply = answerWithSql({ [QUESTION]: ANSWER, [FOLLOW_UP]: FOLLOW_UP_ANSWER });
+      stub.reply = answerWithSql({ [QUESTION]: ANSWER });
       // The first answer waits until the test has seen the step running.
       const held = gate();
       stub.hold = (request) =>
@@ -226,34 +224,12 @@ test.describe('Feature: Workflow runs', () => {
           ).toHaveText('Off for this run');
         },
       );
-      await scenarioStep(page, `When I follow up with "${FOLLOW_UP}"`, async () => {
-        await page.getByTestId('workflow-follow-up-input').fill(FOLLOW_UP);
-        await page.getByTestId('workflow-run-follow-up').click();
+      await scenarioStep(page, 'And the run hides the input and offers no follow-up', async () => {
+        await expect(page.getByTestId('workflow-run-composer')).toHaveCount(0);
+        await expect(page.getByTestId('workflow-follow-up-input')).toHaveCount(0);
+        await expect(page.getByTestId('workflow-run-follow-up')).toHaveCount(0);
+        await expect(page.getByTestId('workflow-run-stop')).toHaveCount(0);
       });
-      await scenarioStep(page, 'Then I see the second answer', async () => {
-        await expect(runAnswer(page)).toContainText(FOLLOW_UP_ANSWER);
-        await expect(page.getByTestId('workflow-run-context')).toHaveText(
-          `Follows up on “${QUESTION}”`,
-        );
-        await expect(page.getByTestId('workflow-run-question')).toHaveText(FOLLOW_UP);
-      });
-      await scenarioStep(
-        page,
-        'And the follow-up reached the model after the earlier question and answer',
-        async () => {
-          const followUp = stub.requests.filter((request) => isTurn(request, FOLLOW_UP));
-          expect(followUp.length, `a streamed call for "${FOLLOW_UP}"`).toBeGreaterThan(0);
-          const texts = followUp[0].messages
-            .filter((m) => m.role === 'user' || m.role === 'assistant')
-            .map((m) => `${m.role}:${messageText(m)}`);
-          const question = texts.findIndex((t) => t.startsWith('user:') && t.includes(QUESTION));
-          const answer = texts.findIndex((t) => t.startsWith('assistant:') && t.includes(ANSWER));
-          const next = texts.findIndex((t) => t === `user:${FOLLOW_UP}`);
-          expect(question, 'the earlier question').toBeGreaterThanOrEqual(0);
-          expect(answer, 'the earlier answer').toBeGreaterThan(question);
-          expect(next, 'the follow-up after both').toBeGreaterThan(answer);
-        },
-      );
     },
   );
 
@@ -568,7 +544,7 @@ test.describe('Feature: Workflow runs', () => {
     },
   );
 
-  test('Enter runs the question, New question starts over and a follow-up replaces the form', async ({
+  test('Enter runs the question, the run hides the form and New question brings it back', async ({
     page,
   }) => {
     stub.reply = answerWithSql({ [QUESTION]: ANSWER });
@@ -588,12 +564,10 @@ test.describe('Feature: Workflow runs', () => {
       await expect(runAnswer(page)).toContainText(ANSWER);
       await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
     });
-    await test.step('And the follow-up composer replaces the run form under the answer', async () => {
-      const followUp = page.getByTestId('workflow-follow-up-input');
-      await expect(followUp).toBeVisible();
-      await expect(followUp).toHaveAccessibleName('Follow-up question');
-      await expect(followUp).toHaveJSProperty('tagName', 'TEXTAREA');
-      await expect(page.getByTestId('workflow-run-follow-up')).toBeDisabled();
+    await test.step('And the run form and any follow-up are gone under the answer', async () => {
+      await expect(page.getByTestId('workflow-run-composer')).toHaveCount(0);
+      await expect(page.getByTestId('workflow-follow-up-input')).toHaveCount(0);
+      await expect(page.getByTestId('workflow-run-follow-up')).toHaveCount(0);
       await expect(page.getByTestId('workflow-input-question')).toHaveCount(0);
       await expect(page.getByTestId('workflow-run')).toHaveCount(0);
     });
@@ -603,7 +577,7 @@ test.describe('Feature: Workflow runs', () => {
     await test.step('Then the run is cleared, the question is empty and the dataset stays picked', async () => {
       await expect(page.getByTestId('workflow-run-status')).toHaveCount(0);
       await expect(runAnswer(page)).toHaveCount(0);
-      await expect(page.getByTestId('workflow-follow-up-input')).toHaveCount(0);
+      await expect(page.getByTestId('workflow-run-composer')).toBeVisible();
       await expect(page.getByTestId('workflow-input-question')).toHaveValue('');
       await expect(page.getByTestId('workflow-input-question')).toBeFocused();
       await expect(pickedDataset(page, WORLD_CUP_DATASET)).toBeVisible();
@@ -736,8 +710,11 @@ test.describe('Feature: Workflow runs', () => {
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run stopped');
         await expect(runStep(page, 'analyse')).toHaveAttribute('data-status', 'stopped');
         await expect(nodeStatus(page, 'analyse')).toHaveText('Stopped');
-        await expect(page.getByTestId('workflow-run')).toHaveText('Execute');
         await expect(page.getByTestId('workflow-run-stop')).toHaveCount(0);
+        // The input stays hidden under the stopped run until New question.
+        await expect(page.getByTestId('workflow-run-composer')).toHaveCount(0);
+        await page.getByTestId('workflow-run-new').click();
+        await expect(page.getByTestId('workflow-run')).toHaveText('Execute');
       });
       await test.step('And the run is stored "stopped" on the server, not only on the page', async () => {
         // Stop is the server's (api.md 150); leaving the page would not stop it.
@@ -837,7 +814,7 @@ test('the Run tab with an answer has no detectable accessibility violations in e
   await fillRun(page, QUESTION, WORLD_CUP_DATASET);
   await page.getByTestId('workflow-run').click();
   await expect(runAnswer(page)).toContainText(ANSWER);
-  await expect(page.getByTestId('workflow-follow-up-input')).toBeVisible();
+  await expect(page.getByTestId('workflow-run-new')).toBeVisible();
 
   async function scan(label: string): Promise<void> {
     for (const theme of ['light', 'dark'] as const) {

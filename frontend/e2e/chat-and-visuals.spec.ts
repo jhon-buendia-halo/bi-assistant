@@ -95,9 +95,12 @@ test('renders a streamed run: reasoning, tool activity, final Markdown, and supp
     await page.getByTestId('workflow-run').click();
     await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
     await page.getByTestId('workflow-run-stop').click();
-    await expect(page.getByTestId('workflow-run')).toHaveText('Execute');
     await expect(page.getByTestId('workflow-run-stop')).toHaveCount(0);
     await expect(page.getByTestId('workflow-run-live')).toHaveCount(0);
+    // While a run is shown the input stays hidden: New question brings it back.
+    await expect(page.getByTestId('workflow-run-composer')).toHaveCount(0);
+    await page.getByTestId('workflow-run-new').click();
+    await expect(page.getByTestId('workflow-run')).toHaveText('Execute');
   } finally {
     held.release();
     never.release();

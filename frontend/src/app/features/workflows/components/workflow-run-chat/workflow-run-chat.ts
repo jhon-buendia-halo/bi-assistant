@@ -12,8 +12,6 @@ import {
 } from '@angular/core';
 import {
   Brain,
-  ChevronDown,
-  ChevronRight,
   CircleCheck,
   Loader2,
   LucideAngularModule,
@@ -193,8 +191,6 @@ const FORM_CONTROLS =
 export class WorkflowRunChat {
   protected readonly hasQueries = answerHasQueries;
   protected readonly Brain = Brain;
-  protected readonly ChevronDown = ChevronDown;
-  protected readonly ChevronRight = ChevronRight;
   protected readonly CircleCheck = CircleCheck;
   protected readonly Loader2 = Loader2;
   protected readonly MessageSquare = MessageSquare;
@@ -278,22 +274,6 @@ export class WorkflowRunChat {
           error: () => this.artifacts.set([]),
         }),
       );
-    });
-    // Follow up starts with the images the run shown was given (kept paths);
-    // a different run, or a different stored list, starts it again.
-    effect(() => {
-      const run = this.designer.run();
-      const list = run?.input?.[IMAGES_FIELD];
-      const stored = Array.isArray(list)
-        ? list.filter((item): item is string => typeof item === 'string')
-        : [];
-      const key = `${run?.id ?? ''}|${stored.join(',')}`;
-      untracked(() => {
-        if (key === this.seededImages) return;
-        this.seededImages = key;
-        this.followUpImages.set([...stored]);
-        this.attachError.set(null);
-      });
     });
     // A refused Execute: focus the first field with an error.
     effect(() => {
@@ -542,34 +522,14 @@ export class WorkflowRunChat {
   });
 
   /**
-   * The input form folds away while a run is shown that is neither running
-   * nor waiting (a workflow with many fields, Review a Website, would hide
-   * the result); `inputOpen` unfolds it. Running again starts unfolded.
+   * The run's input shows only while no run is shown (2026-11-20: runs have
+   * no follow-up any more). Under a run, running, waiting or ended, the
+   * conversation takes the whole column; New question or Run again brings
+   * the input back.
    */
-  protected readonly inputOpen = signal(false);
-  protected readonly inputFoldable = computed(
-    () =>
-      this.designer.runResult() !== null &&
-      !this.designer.running() &&
-      this.designer.waitingFor() === null &&
-      this.composerFields().length > 3,
+  protected readonly composerShown = computed(
+    () => this.designer.runResult() === null && !this.designer.running(),
   );
-  protected readonly inputFolded = computed(
-    () => this.inputFoldable() && !this.inputOpen(),
-  );
-
-  /** Under a stored answer that asks nothing: the composer follows up on it. */
-  protected readonly followUpMode = computed(
-    () =>
-      this.designer.canFollowUp() &&
-      !this.designer.runResult()?.answer?.clarification,
-  );
-
-  /** The key of the run and images the Follow up attachments were last seeded from. */
-  private seededImages = '';
-
-  /** Follow up's attachments: the run's kept paths and the new `data:` URLs. */
-  protected readonly followUpImages = signal<string[]>([]);
 
   /** The last file refused when adding images; cleared by the next add or remove. */
   protected readonly attachError = signal<string | null>(null);
@@ -594,10 +554,8 @@ export class WorkflowRunChat {
   );
 
   /** Whether the shown composer takes pasted or dropped images. */
-  private readonly takesImages = computed(() =>
-    this.followUpMode()
-      ? this.imagesField() !== null
-      : this.imagesField() !== null || this.imageField() !== null,
+  private readonly takesImages = computed(
+    () => this.imagesField() !== null || this.imageField() !== null,
   );
 
   /** The file name each image field shows, by field name. */
@@ -808,10 +766,8 @@ export class WorkflowRunChat {
 
   /** The thumbnails of the images the composer holds. */
   protected readonly composerThumbs = computed(() =>
-    (this.followUpMode()
-      ? this.followUpImages()
-      : this.designer.picked(IMAGES_FIELD)
-    )
+    this.designer
+      .picked(IMAGES_FIELD)
       .map((item) => this.imageSrc(item))
       .filter((src): src is string => src !== null),
   );
@@ -826,14 +782,11 @@ export class WorkflowRunChat {
 
   /** The images the composer's list holds now. */
   private heldImages(): string[] {
-    return this.followUpMode()
-      ? this.followUpImages()
-      : this.designer.picked(IMAGES_FIELD);
+    return this.designer.picked(IMAGES_FIELD);
   }
 
   private setHeldImages(list: string[]): void {
-    if (this.followUpMode()) this.followUpImages.set(list);
-    else this.designer.setInput(IMAGES_FIELD, list);
+    this.designer.setInput(IMAGES_FIELD, list);
   }
 
   /** Files picked, pasted or dropped into the reference images. */
@@ -912,35 +865,11 @@ export class WorkflowRunChat {
     if (field !== null) this.designer.setInput(field, text);
   }
 
-  protected onFollowUpInput(event: Event): void {
-    this.designer.followUpText.set((event.target as HTMLInputElement).value);
-  }
-
-  protected onAskStepChange(event: Event): void {
-    this.designer.askStep.set((event.target as HTMLSelectElement).value);
-  }
-
-  /** The follow-up box's hint: names the agent when one is picked. */
-  protected readonly followUpPlaceholder = computed(() => {
-    const agent = this.designer.askedAgentName();
-    return agent !== null
-      ? `Ask ${agent} about this result`
-      : 'Ask a follow-up about this result';
-  });
-
-  /** Enter sends (Execute or Follow up); Shift+Enter adds a line. */
-  protected onEnter(event: Event, action: 'execute' | 'follow-up'): void {
+  /** Enter executes; Shift+Enter adds a line. */
+  protected onEnter(event: Event): void {
     const key = event as KeyboardEvent;
     if (key.shiftKey || key.isComposing) return;
     event.preventDefault();
-    if (action === 'follow-up') this.sendFollowUp();
-    else this.designer.execute();
-  }
-
-  protected sendFollowUp(): void {
-    this.designer.followUp(
-      this.designer.followUpText(),
-      this.imagesField() !== null ? this.followUpImages() : undefined,
-    );
+    this.designer.execute();
   }
 }

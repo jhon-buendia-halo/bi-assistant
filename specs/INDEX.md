@@ -1494,7 +1494,7 @@ specs/capabilities/workflows/spec.md:81-83  R33 **Artifacts** SHALL be reusable 
 specs/capabilities/workflows/spec.md:84-89  R34 Map a Dashboard to Data SHALL run, fixed in code ([../../system/agents
 specs/capabilities/workflows/spec.md:90-98  R35 **Reference images** (2026-11-15). Answer a Business Question, Assess
 specs/capabilities/workflows/spec.md:99-101  R36 (Removed 2026-11-19.) The follow-up branch is gone: Interpret follow-u
-specs/capabilities/workflows/spec.md:102-108  R40 A follow-up of Answer a Business Question MAY ask the agent of one ste
+specs/capabilities/workflows/spec.md:102-108  R40 (UI removed 2026-11-20; the API rule stays.) The Chat has no agent pic
 specs/capabilities/workflows/spec.md:109-114  R41 **Build visual** (2026-11-17; [../../system/agents.md](../../system/ag
 specs/capabilities/workflows/spec.md:115-115  R42 **Connector notes** (2026-11-17; [../../system/ui.md](../../system/ui.
 specs/capabilities/workflows/spec.md:116-123  R37 Consumption Gap Analysis SHALL run, fixed in code ([../../system/agent
@@ -1505,12 +1505,12 @@ specs/capabilities/workflows/spec.md:138-147  R44 **Approval gates and clarifyin
 specs/capabilities/workflows/spec.md:149-169  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:171-175  ## Contracts
 specs/capabilities/workflows/spec.md:177-185  ## UI
-specs/capabilities/workflows/spec.md:187-444  ## Flows
+specs/capabilities/workflows/spec.md:187-437  ## Flows
 specs/capabilities/workflows/spec.md:189-307  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:309-395  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:397-406  ### Feature: Ask one agent in a follow-up
-specs/capabilities/workflows/spec.md:408-444  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:446-465  ## Acceptance
+specs/capabilities/workflows/spec.md:309-389  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:391-399  ### Feature: Ask one agent in a follow-up
+specs/capabilities/workflows/spec.md:401-437  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:439-458  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
@@ -2139,7 +2139,7 @@ specs/system/architecture.md:158-196  #### ADR-0010 — Multi-user org server mo
 specs/system/architecture.md:198-218  #### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
 specs/system/architecture.md:220-238  #### ADR-0012 — Local mode signs in as one of five seeded personas, with a bearer-token auth session
 specs/system/architecture.md:240-256  #### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
-specs/system/architecture.md:258-1368  ## Level 3 — Components
+specs/system/architecture.md:258-1369  ## Level 3 — Components
 specs/system/architecture.md:407-412  #### ADR-0003 — SQLite document store behind a `DocStore<T>` interface *(retroactive)*
 specs/system/architecture.md:414-419  #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
 specs/system/architecture.md:421-426  #### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
@@ -2180,8 +2180,8 @@ specs/system/architecture.md:1244-1265  #### ADR-0049 — Review a Website drive
 specs/system/architecture.md:1267-1287  #### ADR-0050 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
 specs/system/architecture.md:1289-1311  #### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
 specs/system/architecture.md:1313-1339  #### ADR-0052 — Excel and CSV files are a datasource kind, imported once into a DuckDB database per datasource
-specs/system/architecture.md:1341-1368  #### ADR-0053 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
-specs/system/architecture.md:1370-1425  ## Level 4 — Code
+specs/system/architecture.md:1341-1369  #### ADR-0053 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
+specs/system/architecture.md:1371-1426  ## Level 4 — Code
 
 specs/system/data-model.md:13-58  ## 1. Storage overview
 specs/system/data-model.md:15-27  ### 1.1 The application data directory

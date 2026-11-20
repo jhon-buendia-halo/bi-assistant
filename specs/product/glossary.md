@@ -173,7 +173,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Row cap.** A limit on rows returned or stored. See [non-functional.md](non-functional.md). A result clipped by a cap is marked *truncated*.
 
-**Run.** One execution of a *workflow* on a typed input: its steps run once and each reports its status and output. A run of an agent workflow is stored and listed under Runs; a run can carry one earlier run as context (Follow up, a clarification answer). Replaces the chat (ADR-0041).
+**Run.** One execution of a *workflow* on a typed input: its steps run once and each reports its status and output. A run of an agent workflow is stored and listed under Runs; a run can carry one earlier run as context (a clarification answer or Run again with my answer; the free Follow up was removed from the UI on 2026-11-20). Replaces the chat (ADR-0041).
 
 **Run workflow.** A *workflow* that is started by a *run* on its typed input fields, defined in code, rather than by a chat. Since ADR-0041 every workflow is a run workflow.
 
