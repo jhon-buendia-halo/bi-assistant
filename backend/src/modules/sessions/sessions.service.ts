@@ -174,6 +174,8 @@ export interface RunHostSpec {
   contextQueries?: ExplorableQuery[];
   /** Answer a Business Question's `buildVisual` (agents.md 5.11). */
   buildVisual?: true;
+  /** Answer a Business Question's `approveSteps` (workflows R44). */
+  approveSteps?: true;
   /**
    * Dashboard Image to Artifact's input image (agents.md 5.17): written to the
    * host's workspace at `path` before the turn.
@@ -324,6 +326,24 @@ export class SessionsService implements OnModuleInit {
           session,
           source,
           abortSignal,
+        );
+        await this.saveVisualMetadata(session, metadata);
+        return metadata;
+      },
+      // A change on Build visual's approval gate (workflows R44): a new
+      // version of the same visual.
+      reviseVisual: async (sessionId, visualId, change, abortSignal) => {
+        const session = await this.get(sessionId);
+        const { metadata } = await this.visuals.update(
+          session,
+          visualId,
+          change.instruction,
+          undefined,
+          {
+            ...(change.reference ? { reference: change.reference } : {}),
+            ...(change.stepModel ? { stepModel: change.stepModel } : {}),
+            ...(abortSignal ? { abortSignal } : {}),
+          },
         );
         await this.saveVisualMetadata(session, metadata);
         return metadata;
@@ -615,6 +635,7 @@ export class SessionsService implements OnModuleInit {
         ? { contextQueries: spec.contextQueries }
         : {}),
       ...(spec.buildVisual ? { buildVisual: true as const } : {}),
+      ...(spec.approveSteps ? { approveSteps: true as const } : {}),
       ...(spec.image ? { inputImage: spec.image.path } : {}),
       ...(spec.inputImages?.length ? { inputImages: spec.inputImages } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
@@ -794,6 +815,19 @@ export class SessionsService implements OnModuleInit {
     path: string,
   ): Promise<{ data: Buffer; mediaType: string }> {
     return readWorkspaceImage(hostId, path);
+  }
+
+  /**
+   * Write a file into a run host's workspace: the reference images sent
+   * with a change on Build visual's approval gate (workflows R44, api.md
+   * 138), which Zoe then reads from there.
+   */
+  async writeRunHostFile(
+    hostId: string,
+    path: string,
+    data: Buffer,
+  ): Promise<void> {
+    await writeWorkspaceFile(hostId, path, data);
   }
 
   /**

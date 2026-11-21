@@ -3,6 +3,7 @@ import {
   IMAGE_MAX_BYTES,
   IMAGES_MAX_COUNT,
   inputFieldsWithUsage,
+  revisionImagesOf,
   validateWorkflowInput,
   withStoredImages,
   type InputWorkflowShape,
@@ -13,7 +14,7 @@ import {
 // data contract's check: workflow-contract.spec.ts (`missing`).
 
 describe('usedBy: the steps that read a field from the input (api.md 116)', () => {
-  it("answer-business-question's question and datasets are read by Receive question only, and buildVisual by no step (it picks a branch)", () => {
+  it("answer-business-question's question and datasets are read by Receive question only, and buildVisual and approveSteps by no step (they pick a branch, or make the run interactive)", () => {
     expect(
       inputFieldsWithUsage(CODE_WORKFLOWS[0]).map(({ name, usedBy }) => ({
         name,
@@ -24,6 +25,7 @@ describe('usedBy: the steps that read a field from the input (api.md 116)', () =
       { name: 'images', usedBy: ['read-images'] },
       { name: 'datasets', usedBy: ['receive-question'] },
       { name: 'buildVisual', usedBy: [] },
+      { name: 'approveSteps', usedBy: [] },
     ]);
   });
 
@@ -725,5 +727,47 @@ describe('an images field (workflows R35)', () => {
       'inputs/image.webp',
       'inputs/images/1.png',
     ]);
+  });
+});
+
+describe("revisionImagesOf: reference images with a change to Ryan's visual (workflows R44)", () => {
+  const PNG = Buffer.concat([
+    Buffer.from('89504e470d0a1a0a', 'hex'),
+    Buffer.from('rest of the file'),
+  ]);
+  const png = `data:image/png;base64,${PNG.toString('base64')}`;
+
+  it('is no image when absent, and drops blank entries', () => {
+    expect(revisionImagesOf(undefined, 7)).toEqual({ ok: true, images: [] });
+    expect(revisionImagesOf([' '], 7)).toEqual({ ok: true, images: [] });
+  });
+
+  it("gives each image its path in the run's workspace, by round and order", () => {
+    const read = revisionImagesOf([png, png], 7);
+    expect(read.ok).toBe(true);
+    expect(read.ok && read.images.map((image) => image.path)).toEqual([
+      'inputs/revisions/7-1.png',
+      'inputs/revisions/7-2.png',
+    ]);
+    expect(read.ok && read.images[0].data.equals(PNG)).toBe(true);
+  });
+
+  it('refuses anything but PNG, JPEG or WebP, too many images, or one too large', () => {
+    expect(revisionImagesOf('nope', 1)).toEqual({
+      ok: false,
+      error: 'Images must be PNG, JPEG or WebP images',
+    });
+    expect(revisionImagesOf(['data:text/plain;base64,aGk='], 1)).toEqual({
+      ok: false,
+      error: 'Images must be PNG, JPEG or WebP images',
+    });
+    expect(revisionImagesOf(Array(IMAGES_MAX_COUNT + 1).fill(png), 1)).toEqual({
+      ok: false,
+      error: `Images must be at most ${IMAGES_MAX_COUNT} images`,
+    });
+    const big = Buffer.concat([PNG, Buffer.alloc(IMAGE_MAX_BYTES)]);
+    expect(
+      revisionImagesOf([`data:image/png;base64,${big.toString('base64')}`], 1),
+    ).toEqual({ ok: false, error: 'Images must be at most 5 MB each' });
   });
 });

@@ -143,10 +143,34 @@ export class WorkflowRunsApiService {
   private readonly http = inject(HttpClient);
 
   /** The run history, newest first (api.md 120). */
-  list(): Observable<{ runs: WorkflowRunSummary[] }> {
+  list(options: { archived?: boolean } = {}): Observable<{
+    runs: WorkflowRunSummary[];
+  }> {
     return this.http.get<{ runs: WorkflowRunSummary[] }>(
-      `${API_BASE_URL}/workflow-runs`,
+      `${API_BASE_URL}/workflow-runs${options.archived === true ? '?archived=true' : ''}`,
     );
+  }
+
+  /** Archive a run's whole conversation: hidden and read-only (api.md 159). */
+  archive(
+    id: string,
+  ): Observable<{ ok: boolean; conversationId: string; archived: number }> {
+    return this.http.post<{
+      ok: boolean;
+      conversationId: string;
+      archived: number;
+    }>(`${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/archive`, {});
+  }
+
+  /** Bring an archived conversation back (api.md 160). */
+  unarchive(
+    id: string,
+  ): Observable<{ ok: boolean; conversationId: string; unarchived: number }> {
+    return this.http.post<{
+      ok: boolean;
+      conversationId: string;
+      unarchived: number;
+    }>(`${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/unarchive`, {});
   }
 
   /** Delete a stored run with its workspace (api.md 122). */
@@ -491,10 +515,11 @@ export class WorkflowRunsApiService {
     answer: string,
     handlers: RunStreamHandlers,
     signal?: AbortSignal,
+    images: readonly string[] = [],
   ): Promise<void> {
     await this.postStream(
       `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/resume/stream`,
-      { stepId, answer },
+      { stepId, answer, ...(images.length > 0 ? { images } : {}) },
       handlers,
       signal,
       this.runFrames('', handlers),
@@ -527,6 +552,13 @@ export class WorkflowRunsApiService {
               ? event['options'].map(String)
               : [],
             expiresAt: String(event['expiresAt'] ?? ''),
+            ...(typeof event['review'] === 'string' && event['review'] !== ''
+              ? { review: event['review'] }
+              : {}),
+            ...(typeof event['visualId'] === 'string' &&
+            event['visualId'] !== ''
+              ? { visualId: event['visualId'] }
+              : {}),
           });
           return false;
         case 'done':

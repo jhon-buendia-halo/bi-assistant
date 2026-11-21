@@ -4,6 +4,7 @@ import { MastraStorageExporter, Observability } from '@mastra/observability';
 import { assistantAgent } from './agents/assistant.agent';
 import { analysisPlannerAgent } from './agents/analysis-planner.agent';
 import { answerWriterAgent } from './agents/answer-writer.agent';
+import { chiefOfStaffAgent } from './agents/chief-of-staff.agent';
 import { queryExplainerAgent } from './agents/query-explainer.agent';
 import { resultExplorerAgent } from './agents/result-explorer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
@@ -27,6 +28,7 @@ import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { askAgentWorkflow } from './workflows/ask-agent.workflow';
 import { answerBusinessQuestionWorkflow } from './workflows/answer-business-question.workflow';
+import { orchestratedAnswerWorkflow } from './workflows/orchestrated-answer.workflow';
 import { consumptionGapAnalysisWorkflow } from './workflows/consumption-gap-analysis.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 import { mapDashboardDataWorkflow } from './workflows/map-dashboard-data.workflow';
@@ -53,6 +55,8 @@ export const mastra = new Mastra({
     // The agents of v2's Plan and Write answer steps (agents.md 2.11).
     'analysis-planner': analysisPlannerAgent,
     'answer-writer': answerWriterAgent,
+    // Avery, the orchestrator of Answer a Business Question (orchestrated).
+    'chief-of-staff': chiefOfStaffAgent,
     // The agents of Dashboard Image to Artifact's two model steps (agents.md 5.17).
     'dashboard-reader': dashboardReaderAgent,
     'data-mapper': dataMapperAgent,
@@ -79,6 +83,8 @@ export const mastra = new Mastra({
     // A follow-up that asks one agent of Answer a Business Question (5.21).
     'ask-agent': askAgentWorkflow,
     'answer-business-question': answerBusinessQuestionWorkflow,
+    // Answer a Business Question (orchestrated): a placeholder for now (5.22).
+    'orchestrated-answer': orchestratedAnswerWorkflow,
     'data-readiness-assessment': dataReadinessAssessmentWorkflow,
     'recreate-dashboard': recreateDashboardWorkflow,
     'map-dashboard-data': mapDashboardDataWorkflow,

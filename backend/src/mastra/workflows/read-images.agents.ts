@@ -29,6 +29,11 @@ import {
   type StepImage,
 } from './recreate-dashboard.agents';
 import { guardedCall } from './model-call';
+import {
+  clarificationIn,
+  interactiveBlocks,
+  type Revision,
+} from './answer-business-question.review';
 
 /** The most tokens the Image Reader's reply takes. */
 const READ_IMAGES_OUTPUT_TOKENS = 4000;
@@ -51,14 +56,26 @@ function noNotes(stopped: boolean): ReadImagesOutcome {
  * a cut reply; cut twice, the step fails with `ReplyCutError`.
  */
 export async function readImagesWithModel(
-  input: { question: string; images: readonly StepImage[] },
+  input: {
+    question: string;
+    images: readonly StepImage[];
+    /** An interactive run: she may ask the user one question first. */
+    canAsk?: boolean;
+    answered?: { question: string; answer: string };
+    revision?: Revision;
+  },
   options: StepModelOptions,
 ): Promise<ReadImagesOutcome> {
   if (!input.images.length) return noNotes(false);
-  const request = readImagesRequest({
-    question: input.question,
-    imageCount: input.images.length,
-  });
+  // In an interactive run the request ends with the clarify rule, her
+  // answered question or the user's revision (none otherwise: unchanged).
+  const request = [
+    readImagesRequest({
+      question: input.question,
+      imageCount: input.images.length,
+    }),
+    ...interactiveBlocks(input),
+  ].join('\n\n');
   const guard = { label: 'Read images' };
   try {
     return await guardedCall(options, guard, async (call) => {
@@ -81,6 +98,14 @@ export async function readImagesWithModel(
       // A cut reply is no off-shape reply: it is not read leniently.
       throwIfCut(reply, guard.label, READ_IMAGES_OUTPUT_TOKENS);
       await noteExchange(call, request, replyText(reply.object, reply.text));
+      // She asked the user first (only offered when she may).
+      const asked =
+        input.canAsk && !input.answered
+          ? clarificationIn(reply.text ?? reply.object)
+          : undefined;
+      if (asked) {
+        return { ...noNotes(false), clarification: asked };
+      }
       const descriptions = imageDescriptionsOf(
         reply.object ?? reply.text,
         input.images.length,

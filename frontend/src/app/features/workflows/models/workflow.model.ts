@@ -388,6 +388,10 @@ export interface WorkflowWaitingFor {
   expiresAt: string;
   /** The run can no longer continue (30 minutes passed, or the app restarted). */
   expired?: true;
+  /** An approval gate's outcome in words, as Markdown (workflows R44). */
+  review?: string;
+  /** The visual an approval gate holds (Build visual): it opens, takes reference images. */
+  visualId?: string;
 }
 
 /** The `input-required` event of a run stream (api.md 3.6). */
@@ -398,6 +402,10 @@ export interface WorkflowInputRequired {
   question: string;
   options: string[];
   expiresAt: string;
+  /** An approval gate's outcome in words, as Markdown (workflows R44). */
+  review?: string;
+  /** The visual an approval gate holds (Build visual): it opens, takes reference images. */
+  visualId?: string;
 }
 
 /** The body of `POST /workflows/:id/runs/stream` (api.md 118, 119). */
@@ -417,6 +425,10 @@ export interface WorkflowRun {
   workflowName: string;
   input: Record<string, WorkflowInputValue>;
   context?: { fromRunId: string; askStep?: string };
+  /** Answer a Business Question (orchestrated): the conversation this run belongs to. */
+  conversationId?: string;
+  /** Set while the run's conversation is archived (hidden, read-only). */
+  archivedAt?: string;
   status: 'running' | 'success' | 'failed' | 'stopped' | 'suspended';
   /** A suspended run (or an expired one, `expired: true`): the question it waits on. */
   waitingFor?: WorkflowWaitingFor;
@@ -505,4 +517,6 @@ export interface WorkflowRunSummary {
   title: string;
   startedAt: string;
   finishedAt?: string;
+  conversationId?: string;
+  archivedAt?: string;
 }

@@ -6,6 +6,7 @@ import {
   resolveAgentModelConfig,
   type AgentModelConfig,
 } from '../model-resolver';
+import { stepModelFrom } from '../step-model';
 import { buildModel } from '../model-factory';
 import { agentInstructions } from '../agent-prompt-overrides';
 import { VISUALIZATION_PROMPT } from './system-prompts';
@@ -60,7 +61,12 @@ function miniSibling<T extends `${string}/${string}`>(id: T): T | undefined {
  * endpoint keeps its url (or base URL), key, headers and kind, and is never
  * routed to the public OpenAI fallback. The agent builds the result last.
  */
-export async function resolveVisualizationModel(): Promise<AgentModelConfig> {
+export async function resolveVisualizationModel(
+  stepModel?: string,
+): Promise<AgentModelConfig> {
+  // A workflow that runs its step agents on its own model (agents.md 1.3)
+  // gets that model here too, with no swap.
+  if (stepModel) return resolveAgentModelConfig(stepModel);
   const configured = await resolveAgentModelConfig();
   const override = visualModelOverride();
   if (isCopilotConfig(configured)) {
@@ -140,7 +146,10 @@ export const visualizationAgent = new Agent({
   instructions: () => agentInstructions('visualization', VISUALIZATION_PROMPT),
   // Keep analysis on the configured model while using the smaller sibling for
   // the bounded code-transformation step.
-  model: async () => buildModel(await resolveVisualizationModel()),
+  model: async ({ requestContext }) =>
+    buildModel(
+      await resolveVisualizationModel(stepModelFrom(requestContext)?.model),
+    ),
   workspace: ({ requestContext, mastra }) => {
     const workspaceId = requestContext.get(SESSION_WORKSPACE_CONTEXT_KEY);
     if (typeof workspaceId !== 'string' || !mastra) return undefined;

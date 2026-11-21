@@ -1,5 +1,6 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import {
+  Archive,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -36,6 +37,7 @@ export class RunsPage {
   protected readonly sessions = inject(SessionsState);
   private readonly toast = inject(ToastService);
 
+  protected readonly Archive = Archive;
   protected readonly Search = Search;
   protected readonly Loader2 = Loader2;
   protected readonly Trash2 = Trash2;
@@ -110,6 +112,11 @@ export class RunsPage {
   protected delete(run: WorkflowRunSummary): void {
     this.menuOpen.set(null);
     this.runsState.deleteRun(run);
+  }
+
+  protected toggleArchived(): void {
+    this.page.set(1);
+    this.runsState.setShowArchived(!this.runsState.showArchived());
   }
 
   protected selectTab(tab: RunsTab): void {

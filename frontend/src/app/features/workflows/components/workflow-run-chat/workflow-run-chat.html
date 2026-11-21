@@ -15,7 +15,7 @@
     </h3>
     @if (designer.runResult() !== null && !designer.running()) {
       <!-- Run again: the composer opens with the shown run's whole input -->
-      @if (designer.canRunAgain()) {
+      @if (designer.canRunAgain() && !averyArchived()) {
         <button
           type="button"
           data-testid="workflow-run-again"
@@ -56,15 +56,43 @@
           </button>
         </span>
       }
+      @if (averyOpen()) {
+        <button
+          type="button"
+          data-testid="workflow-run-archive"
+          title="Archive this conversation"
+          [disabled]="averyBusy()"
+          (click)="archiveConversation()"
+          class="btn btn-ghost px-2.5 py-1"
+        >
+          <lucide-angular [img]="Archive" [size]="13" />
+          <span>Archive</span>
+        </button>
+      }
       <button
         type="button"
         data-testid="workflow-run-new"
         (click)="designer.newQuestion()"
         class="btn btn-ghost px-2.5 py-1"
-        [class.ml-auto]="!designer.canRunAgain() && savedArtifactId() === null"
+        [class.ml-auto]="
+          (!designer.canRunAgain() || averyArchived()) &&
+          savedArtifactId() === null
+        "
       >
         <lucide-angular [img]="SquarePen" [size]="13" />
         <span>New question</span>
+      </button>
+    }
+    @if (designer.running()) {
+      <!-- Stop sits in the bar: the input is hidden while a run is shown -->
+      <button
+        type="button"
+        data-testid="workflow-run-stop"
+        (click)="designer.stop()"
+        class="btn btn-secondary ml-auto px-2.5 py-1"
+      >
+        <lucide-angular [img]="Square" [size]="13" />
+        <span>Stop</span>
       </button>
     }
     @if (business() && designer.stateSummary().runId; as runId) {
@@ -88,6 +116,43 @@
     }
   </div>
 
+  @if (averyArchived()) {
+    <div
+      data-testid="workflow-run-archived"
+      class="mx-4 mb-1 flex shrink-0 flex-wrap items-center gap-2 rounded-md border border-border bg-surface-muted px-3 py-1.5 text-[12px] text-fg-muted"
+    >
+      <lucide-angular [img]="Archive" [size]="13" />
+      <span>This conversation is archived.</span>
+      <button
+        type="button"
+        data-testid="workflow-run-unarchive"
+        [disabled]="averyBusy()"
+        (click)="unarchiveConversation()"
+        class="btn btn-ghost ml-auto px-2 py-0.5 text-[12px]"
+      >
+        Unarchive
+      </button>
+    </div>
+  }
+  @if (averyError(); as message) {
+    <p
+      role="alert"
+      data-testid="workflow-avery-error"
+      class="m-0 mx-4 mb-1 text-[12px] text-on-danger-soft"
+    >
+      {{ message }}
+    </p>
+  }
+  @if (averyNotice(); as notice) {
+    <p
+      role="status"
+      data-testid="workflow-avery-notice"
+      class="m-0 mx-4 mb-1 text-[12px] text-fg-muted"
+    >
+      {{ notice }}
+    </p>
+  }
+
   <!-- Focusable: it scrolls (axe scrollable-region-focusable). -->
   <section
     #log
@@ -98,7 +163,7 @@
     class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3 focus-visible:outline-2 focus-visible:outline-focus"
   >
     @if (designer.runResult(); as result) {
-      @if (business()) {
+      @if (threaded()) {
         <!-- The conversation so far (R38): each earlier question and its
              answer, read-only; their figures open the inspector on that run. -->
         @for (turn of conversation.earlier(); track turn.runId) {
@@ -132,7 +197,7 @@
       @if (designer.contextRun(); as earlier) {
         <!-- In the Business view's thread the earlier question is shown above;
              only the agent asked, if one was, is still said -->
-        @if (!business() || conversation.earlier().length === 0) {
+        @if (!threaded() || conversation.earlier().length === 0) {
           <p
             data-testid="workflow-run-context"
             class="m-0 text-[12px] text-fg-muted"
@@ -191,6 +256,8 @@
           [busy]="designer.running()"
           [error]="designer.resumeError()"
           (answered)="designer.resume($event)"
+          (answeredWithImages)="designer.resume($event.answer, $event.images)"
+          (openVisual)="openGateVisual($event)"
           (rerun)="designer.rerunWithAnswer($event)"
         />
       }
@@ -283,6 +350,20 @@
             ></div>
           }
         </div>
+      }
+
+      @if (result.answer === undefined && designer.run(); as stored) {
+        <!-- A suspended run with no answer yet (Build visual's gate): the
+             visual's side panel opens from the waiting card. -->
+        @defer (
+          when visuals.shown() !== null || visuals.loading() || visuals.error() !== null
+        ) {
+          <app-run-visual
+            [run]="stored"
+            [sheet]="true"
+            (runChange)="applyRun($event)"
+          />
+        }
       }
 
       @if (result.answer; as answer) {
@@ -452,115 +533,42 @@
     }
   </section>
 
-  @if (canRun()) {
-    <!-- The composer: a follow-up under a stored answer, else the run's input -->
+  @if (averyOpen() && designer.waitingFor() === null) {
+    <!-- Avery's conversation never ends: a compact message box under the
+         last answer (a follow-up run of this conversation) -->
     <div class="shrink-0 px-3 pb-3">
-      @if (followUpMode()) {
-        <form
-          data-testid="workflow-run-composer"
-          aria-label="Follow up"
-          class="composer composer-form flex flex-col gap-2"
-          [class.composer-dragging]="dragging()"
-          (submit)="$event.preventDefault(); sendFollowUp()"
-          (paste)="onPaste($event)"
-          (dragover)="onDragOver($event)"
-          (dragleave)="dragging.set(false)"
-          (drop)="onDrop($event)"
+      <form
+        class="composer flex items-end gap-2"
+        aria-label="Message Avery"
+        (submit)="$event.preventDefault(); sendAvery()"
+      >
+        <label for="workflow-avery-input" class="sr-only">Message Avery</label>
+        <textarea
+          id="workflow-avery-input"
+          data-testid="workflow-avery-input"
+          rows="2"
+          placeholder="Message Avery…"
+          class="composer-input min-w-0 flex-1"
+          [value]="averyText()"
+          (input)="averyText.set($any($event.target).value)"
+          (keydown)="onAveryKey($event)"
+        ></textarea>
+        <button
+          type="submit"
+          data-testid="workflow-avery-send"
+          class="btn btn-primary px-2.5 py-1"
+          [disabled]="averyText().trim() === '' || designer.running()"
         >
-          <!-- What it follows up on, then one labelled section per control,
-               divided, as the run's input form (ui.md 4.4b) -->
-          <p id="workflow-follow-up-hint" class="m-0 text-[12px] text-fg-muted">
-            Follows up on this run
-          </p>
-          <div class="composer-fields">
-            <div class="flex flex-col gap-1">
-              <div class="composer-head">
-                <label for="workflow-follow-up-input" class="composer-label"
-                  >Follow-up question</label
-                >
-                <span aria-hidden="true" class="composer-tag">Required</span>
-              </div>
-              <textarea
-                id="workflow-follow-up-input"
-                data-testid="workflow-follow-up-input"
-                aria-required="true"
-                aria-describedby="workflow-follow-up-hint"
-                [placeholder]="followUpPlaceholder()"
-                rows="3"
-                [value]="designer.followUpText()"
-                (input)="onFollowUpInput($event)"
-                (keydown.enter)="onEnter($event, 'follow-up')"
-                class="field resize-y"
-              ></textarea>
-            </div>
-            <!-- Who answers before the optional images: it decides what runs. -->
-            @if (designer.askableSteps().length > 0) {
-              <div class="flex flex-col gap-1">
-                <div class="composer-head">
-                  <label for="workflow-follow-up-agent" class="composer-label"
-                    >Who answers</label
-                  >
-                  <span
-                    aria-hidden="true"
-                    class="composer-tag composer-tag-optional"
-                    >Optional</span
-                  >
-                </div>
-                <select
-                  id="workflow-follow-up-agent"
-                  data-testid="workflow-follow-up-agent"
-                  aria-label="Ask"
-                  aria-describedby="workflow-follow-up-agent-hint"
-                  [value]="designer.askStep()"
-                  (change)="onAskStepChange($event)"
-                  class="field w-full min-w-0 truncate"
-                >
-                  <option value="" class="bg-surface">
-                    Whole user journey
-                  </option>
-                  @for (step of designer.askableSteps(); track step.id) {
-                    <option [value]="step.id" class="bg-surface">
-                      {{ step.label }}
-                    </option>
-                  }
-                </select>
-                <!-- What the picked agent is responsible for when asked alone. -->
-                <p
-                  id="workflow-follow-up-agent-hint"
-                  data-testid="workflow-follow-up-agent-hint"
-                  class="m-0 text-[12px] text-fg-muted"
-                >
-                  {{ designer.askHint() }}
-                </p>
-              </div>
-            }
-            @if (imagesField(); as images) {
-              <app-workflow-run-attachments
-                [images]="composerThumbs()"
-                [label]="images.label"
-                [max]="images.max ?? 4"
-                [help]="images.help ?? null"
-                [error]="imagesError()"
-                (picked)="addImages($event)"
-                (removed)="removeImage($event)"
-              />
-            }
-          </div>
-          <div
-            class="composer-actions flex flex-wrap items-center justify-end gap-2"
-          >
-            <button
-              type="submit"
-              data-testid="workflow-run-follow-up"
-              [disabled]="!designer.followUpText().trim()"
-              class="btn btn-primary px-2.5 py-1"
-            >
-              <lucide-angular [img]="MessageSquareReply" [size]="14" />
-              <span>Follow up</span>
-            </button>
-          </div>
-        </form>
-      } @else {
+          <lucide-angular [img]="SendHorizontal" [size]="13" />
+          <span>Send</span>
+        </button>
+      </form>
+    </div>
+  }
+
+  @if (canRun() && composerShown()) {
+    <!-- The run's input, while no run is shown (no follow-up since 2026-11-20) -->
+    <div class="shrink-0 px-3 pb-3">
         <form
           data-testid="workflow-run-composer"
           aria-label="Input"
@@ -572,27 +580,6 @@
           (dragleave)="dragging.set(false)"
           (drop)="onDrop($event)"
         >
-          @if (inputFoldable()) {
-            <!-- A run is shown: its input folds away so the result keeps the room -->
-            <button
-              type="button"
-              data-testid="workflow-run-input-toggle"
-              [attr.aria-expanded]="!inputFolded()"
-              (click)="inputOpen.set(!inputOpen())"
-              class="flex items-center gap-1.5 self-start rounded-md px-1 py-0.5 text-[12px] text-fg-muted hover:bg-surface-muted hover:text-fg"
-            >
-              <lucide-angular
-                [img]="inputFolded() ? ChevronRight : ChevronDown"
-                [size]="13"
-              />
-              <span>{{
-                inputFolded()
-                  ? "Show input (" + composerFields().length + " fields)"
-                  : "Hide input"
-              }}</span>
-            </button>
-          }
-          @if (!inputFolded()) {
             <!-- One labelled section per field, divided (ui.md 4.4b) -->
             <div class="composer-fields">
               @for (field of composerFields(); track field.name) {
@@ -895,7 +882,7 @@
                         [attr.aria-describedby]="describedBy(field.name)"
                         [value]="designer.inputValue(field.name)"
                         (input)="onInput(field.name, $event)"
-                        (keydown.enter)="onEnter($event, 'execute')"
+                        (keydown.enter)="onEnter($event)"
                         [rows]="isPrompt(field) ? 3 : 2"
                         class="field resize-y"
                         [class.border-on-danger-soft]="!!fieldError(field.name)"
@@ -955,7 +942,6 @@
                 }
               }
             </div>
-          }
           @if (w.runRequirement) {
             <p
               data-testid="workflow-run-requirement"
@@ -976,17 +962,6 @@
           <div
             class="composer-actions flex flex-wrap items-center justify-end gap-2"
           >
-            @if (designer.running()) {
-              <button
-                type="button"
-                data-testid="workflow-run-stop"
-                (click)="designer.stop()"
-                class="btn btn-secondary px-2.5 py-1"
-              >
-                <lucide-angular [img]="Square" [size]="13" />
-                <span>Stop</span>
-              </button>
-            }
             <button
               type="submit"
               data-testid="workflow-run"
@@ -1008,7 +983,6 @@
             </button>
           </div>
         </form>
-      }
     </div>
   }
 

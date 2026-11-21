@@ -20,6 +20,7 @@ import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
+import { setAgentModelResolver } from '../../mastra/model-resolver';
 import { agentWorkflow } from '../../mastra/workflows/agent-workflows';
 import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/answer-business-question.steps';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
@@ -197,7 +198,7 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
     { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
     { key: 'visualization', name: 'Ryan', role: 'Visualization Designer' },
   ],
-  stepCount: 13,
+  stepCount: 9,
   bar: 'steps',
   trigger: 'run',
   input: [
@@ -236,11 +237,31 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
       default: true,
       usedBy: [],
     },
+    {
+      // Makes the run interactive (workflows R44); no step reads it.
+      name: 'approveSteps',
+      label: "Approve each step: every agent's work waits for your OK",
+      type: 'boolean',
+      required: false,
+      default: true,
+      usedBy: [],
+    },
   ],
   datasets: [],
   missingDatasets: [],
   starterQuestions: [],
 };
+
+/** Answer a Business Question (orchestrated), as `GET /workflows` lists it. */
+const ORCHESTRATED_SUMMARY = expect.objectContaining({
+  id: 'orchestrated-answer',
+  name: 'Answer a Business Question (orchestrated)',
+  kind: 'code',
+  owner: 'Official',
+  stepCount: 1,
+  bar: 'steps',
+  trigger: 'run',
+}) as unknown;
 
 describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   let ctx: ReturnType<typeof build>;
@@ -256,13 +277,14 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
 
     expect(await ctx.service.list()).toEqual([
       ANSWER_BUSINESS_QUESTION_SUMMARY,
+      ORCHESTRATED_SUMMARY,
       READINESS_SUMMARY,
     ]);
   });
 
   it('lists Assess Data Readiness on one PostgreSQL or Databricks dataset, its Explain report run by the Data Readiness Agent (agents.md 5.13)', async () => {
     ctx = build();
-    const [, readiness] = await ctx.service.list();
+    const [, , readiness] = await ctx.service.list();
     expect(readiness.agents.map((agent) => agent.key)).toEqual([
       'data-readiness',
       'image-reader',
@@ -289,6 +311,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     const workflows = await ctx.service.list();
     expect(workflows).toEqual([
       ANSWER_BUSINESS_QUESTION_SUMMARY,
+      ORCHESTRATED_SUMMARY,
       READINESS_SUMMARY,
     ]);
     expect(workflows[0]).not.toHaveProperty('runRequirement');
@@ -296,6 +319,30 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   });
 
   describe('get', () => {
+    it("orchestrated-answer's detail is its own one step and two edges, and answer-business-question keeps its nine (they share a primary agent)", async () => {
+      ctx = build();
+      const orchestrated = await ctx.service.get('orchestrated-answer');
+      expect(orchestrated.steps.map((step) => step.id)).toEqual([
+        'orchestrate',
+      ]);
+      expect(orchestrated.edges).toEqual([
+        { from: 'start', to: 'orchestrate', kind: 'next' },
+        { from: 'orchestrate', to: 'end', kind: 'next' },
+      ]);
+      const answer = await ctx.service.get('answer-business-question');
+      expect(answer.steps.map((step) => step.id)).toEqual([
+        'read-images',
+        'receive-question',
+        'load-catalog',
+        'plan',
+        'analyse',
+        'validate',
+        'write-answer',
+        'build-visual',
+        'wrap-up',
+      ]);
+    });
+
     it("answer-business-question's steps are agentWorkflow('insights-analyst')'s, with their declared schemas", async () => {
       ctx = build();
       const detail = await ctx.service.get('answer-business-question');
@@ -307,7 +354,6 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         detail.steps.flatMap((step) => (step.agent ? [step.agent.key] : [])),
       ).toEqual([
         'image-reader',
-        'result-explorer',
         'analysis-planner',
         'insights-analyst',
         'answer-writer',
@@ -323,15 +369,15 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail.steps.some((step) => step.agent)).toBe(true);
       expect(detail).toMatchObject({
         id: 'answer-business-question',
-        stepCount: 13,
+        stepCount: 9,
         contractHash: CODE_WORKFLOWS[0].contractHash,
       });
       expect(detail.contractHash).toMatch(/^[0-9a-f]{12}$/);
       // Plan receives the question (a string), the catalog and Read
       // images' notes ('' without images; optional, so a run stored before
       // Read images existed resumes with none).
-      expect(detail.steps[4]).toMatchObject({ id: 'plan' });
-      expect(detail.steps[4].inputSchema).toMatchObject({
+      expect(detail.steps[3]).toMatchObject({ id: 'plan' });
+      expect(detail.steps[3].inputSchema).toMatchObject({
         type: 'object',
         properties: {
           question: { type: 'string' },
@@ -429,6 +475,30 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(withLlm.agents[0].model).toBe('anthropic/claude-sonnet-4-6');
     });
 
+    it("shows Answer a Business Question's own model on its agents when the saved model is a Claude model (agents.md 1.3)", async () => {
+      ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
+      setAgentModelResolver(() =>
+        Promise.resolve('anthropic/claude-sonnet-4-6' as const),
+      );
+      try {
+        const detail = await ctx.service.get('answer-business-question');
+        expect(
+          detail.agents.map((agent) => agent.model).filter(Boolean),
+        ).not.toHaveLength(0);
+        for (const agent of detail.agents) {
+          expect(agent.model).toBe('anthropic/claude-opus-5-5');
+        }
+        // Another saved model: every agent keeps it.
+        setAgentModelResolver(() => Promise.resolve('openai/gpt-5.2' as const));
+        const other = await ctx.service.get('answer-business-question');
+        expect(other.agents[0].model).toBe('anthropic/claude-sonnet-4-6');
+      } finally {
+        setAgentModelResolver(() =>
+          Promise.resolve('openai/gpt-4o-mini' as const),
+        );
+      }
+    });
+
     it('shortens a system prompt longer than 20 000 characters, and says so', async () => {
       ctx = build(undefined, { v2Prompt: 'p'.repeat(20_001) });
       const [agent] = (await ctx.service.get('answer-business-question'))
@@ -502,7 +572,13 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
   it.each([
     [
       'insights-analyst',
-      [{ id: 'answer-business-question', name: 'Answer a Business Question' }],
+      [
+        { id: 'answer-business-question', name: 'Answer a Business Question' },
+        {
+          id: 'orchestrated-answer',
+          name: 'Answer a Business Question (orchestrated)',
+        },
+      ],
     ],
     ['assistant', []],
     [

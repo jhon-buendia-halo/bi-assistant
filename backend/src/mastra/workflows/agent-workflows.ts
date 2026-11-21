@@ -131,11 +131,22 @@ const STEP_AGENTS: Record<
  */
 export function agentWorkflow(agentKey: string): AgentWorkflow | undefined {
   const workflow = CODE_WORKFLOWS.find((w) => w.primaryFor === agentKey);
-  const agent =
-    workflow && Object.hasOwn(STEP_AGENTS, agentKey)
-      ? STEP_AGENTS[agentKey]
-      : undefined;
-  if (!workflow || !agent) return undefined;
+  return workflow ? codeWorkflowView(workflow) : undefined;
+}
+
+/**
+ * One code workflow's steps as api.md 34 and 117 show them, whichever
+ * agent it is primary for (two workflows may share one: Answer a Business
+ * Question and its orchestrated version, agents.md 5.22); undefined when
+ * its agent has no step catalogue.
+ */
+export function codeWorkflowView(
+  workflow: (typeof CODE_WORKFLOWS)[number],
+): AgentWorkflow | undefined {
+  const agent = Object.hasOwn(STEP_AGENTS, workflow.primaryFor)
+    ? STEP_AGENTS[workflow.primaryFor]
+    : undefined;
+  if (!agent) return undefined;
   const source = { id: workflow.id, steps: workflow.steps, agent };
   return {
     id: source.id,

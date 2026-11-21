@@ -81,8 +81,6 @@ const ASK_AGENT_WORKFLOW = 'answer-business-question';
 export const ASK_HINTS: Readonly<Record<string, string>> = {
   '': 'Runs every step again: plans, queries the data, checks and writes a new answer.',
   'read-images': 'Read images step: reads your reference images again with this question.',
-  'interpret-follow-up':
-    'Interpret follow-up step: pages, filters or sorts the earlier result. Runs no new analysis.',
   plan: 'Plan step: plans how to answer your question. Reads no data.',
   analyse:
     'Analyse step: answers with new queries over the data, with no plan or checks around it.',
@@ -1200,13 +1198,13 @@ export class WorkflowDesigner {
    * appended to what it had. A refusal before the stream leaves the run as
    * it was: an expired one reads as stopped, any other shows on the card.
    */
-  resume(answer: string): void {
+  resume(answer: string, images: readonly string[] = []): void {
     const workflow = this.workflow();
     const stored = this.run();
     const waiting = this.waitingFor();
     const text = answer.trim();
     if (workflow === null || stored === null || waiting === null) return;
-    if (this.running() || !text) return;
+    if (this.running() || (!text && images.length === 0)) return;
     if (stored.status !== 'suspended' || waiting.expired) return;
     this.cancelStream();
     const generation = this.generation;
@@ -1267,6 +1265,7 @@ export class WorkflowDesigner {
           },
         },
         controller.signal,
+        images,
       )
       .finally(() => {
         if (!live()) return;
@@ -1353,6 +1352,8 @@ export class WorkflowDesigner {
           question: event.question,
           options: event.options,
           expiresAt: event.expiresAt,
+          ...(event.review !== undefined ? { review: event.review } : {}),
+          ...(event.visualId !== undefined ? { visualId: event.visualId } : {}),
         });
       },
       onReasoning: (delta) => {

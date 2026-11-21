@@ -16,6 +16,11 @@ import {
   specVisualOutputSchema,
 } from '../../mastra/agents/visualization.agent';
 import { modelCallTuning } from '../../mastra/model-compat';
+import {
+  STEP_MODEL_CONTEXT_KEY,
+  stepModelFrom,
+  type StepModel,
+} from '../../mastra/step-model';
 import { getDatasetToolServices } from '../../mastra/tool-services';
 import {
   ChartDataRecord,
@@ -122,6 +127,12 @@ interface DesignContext {
    * in flight and starts no further attempt. Absent for every other caller.
    */
   abortSignal?: AbortSignal;
+  /**
+   * The model and effort a workflow gives its step agents (agents.md 1.3:
+   * Answer a Business Question's Build visual). Absent for every other
+   * caller: the designer's own model and `low` effort (1.5).
+   */
+  stepModel?: StepModel;
 }
 
 /** The records a design pass should read: the merged set, or the answer's own. */
@@ -236,6 +247,7 @@ export class VisualizationService {
     question?: string,
     reference?: string,
     abortSignal?: AbortSignal,
+    stepModel?: StepModel,
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const answer = this.findSourceAnswer(session, sourceMessageAt);
     const asked: ChatMessage | undefined =
@@ -256,6 +268,7 @@ export class VisualizationService {
       mergedData,
       ...(reference?.trim() ? { reference: reference.trim() } : {}),
       abortSignal,
+      ...(stepModel ? { stepModel } : {}),
     });
 
     const visualId = randomUUID();
@@ -313,6 +326,8 @@ export class VisualizationService {
       instruction?: string;
       /** The run's image notes: the designer's `<reference>` block. */
       reference?: string;
+      /** The workflow's step model (agents.md 1.3), when it has one. */
+      stepModel?: StepModel;
     },
     abortSignal?: AbortSignal,
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
@@ -340,6 +355,7 @@ export class VisualizationService {
       instructed ? source.question : undefined,
       source.reference,
       abortSignal,
+      source.stepModel,
     );
   }
 
@@ -388,6 +404,17 @@ export class VisualizationService {
     visualId: string,
     instruction: string,
     turnRecords?: ToolDataRecord[],
+    /**
+     * A change asked on Build visual's approval gate (workflows R44): Zoe's
+     * notes on new reference images (the designer's `<reference>`), the
+     * workflow's step model, and the run's stop. Absent for every other
+     * caller.
+     */
+    options: {
+      reference?: string;
+      stepModel?: StepModel;
+      abortSignal?: AbortSignal;
+    } = {},
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const trimmed = (instruction ?? '').trim();
     if (!trimmed) throw new BadRequestException('instruction is required');
@@ -415,6 +442,11 @@ export class VisualizationService {
       instruction: trimmed,
       current,
       mergedData,
+      ...(options.reference?.trim()
+        ? { reference: options.reference.trim() }
+        : {}),
+      ...(options.stepModel ? { stepModel: options.stepModel } : {}),
+      ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
     });
     return this.appendVersion(
       session,
@@ -691,6 +723,9 @@ export class VisualizationService {
   ): Promise<Bundle> {
     const requestContext = new RequestContext();
     requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
+    if (context.stepModel) {
+      requestContext.set(STEP_MODEL_CONTEXT_KEY, context.stepModel);
+    }
 
     const toolData = effectiveData(context);
     // A spec is validated against the rows the runtime will draw, not the
@@ -946,15 +981,20 @@ export class VisualizationService {
     // hint have to be filed the way the *designer's own* model reads them — a
     // gateway deployment ignores an `openai` bucket, and a gpt-5-class one
     // rejects `max_tokens` outright.
-    const tuning = modelCallTuning(await resolveVisualizationModel(), {
-      maxOutputTokens:
-        mode === 'spec'
-          ? SPEC_OUTPUT_TOKENS
-          : composed
-            ? COMPOSED_OUTPUT_TOKENS
-            : SINGLE_OUTPUT_TOKENS,
-      reasoningEffort: 'low',
-    });
+    // A workflow's step model (agents.md 1.3) brings its own effort.
+    const stepModel = stepModelFrom(requestContext);
+    const tuning = modelCallTuning(
+      await resolveVisualizationModel(stepModel?.model),
+      {
+        maxOutputTokens:
+          mode === 'spec'
+            ? SPEC_OUTPUT_TOKENS
+            : composed
+              ? COMPOSED_OUTPUT_TOKENS
+              : SINGLE_OUTPUT_TOKENS,
+        reasoningEffort: stepModel?.reasoningEffort ?? 'low',
+      },
+    );
 
     const abortController = new AbortController();
     const deadline = setTimeout(

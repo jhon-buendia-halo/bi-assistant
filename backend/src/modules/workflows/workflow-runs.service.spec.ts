@@ -13,7 +13,11 @@ jest.mock('../sessions/sessions.service', () => ({
   RUN_HOST_ID_PREFIX: 'run-',
 }));
 
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
@@ -102,8 +106,6 @@ const V2_STEPS_BEFORE: StepEvent[] = [
   stepResult('receive-question', { question: 'Who won in 2002?' }),
   stepStart('load-catalog', { question: 'Who won in 2002?' }),
   stepResult('load-catalog', { entities: 1 }),
-  stepStart('interpret-follow-up', { question: 'Who won in 2002?' }),
-  stepResult('interpret-follow-up', { followUp: null }),
   stepStart('plan', { question: 'Who won in 2002?' }),
   stepResult('plan', PLAN_OUTPUT),
   stepStart('analyse', { question: 'Who won in 2002?' }),
@@ -172,23 +174,29 @@ function build(
     data?: unknown[];
   }[] = [];
   let draftHost = false;
+  let orchestratedHost = false;
   const sessions = {
     createRunHost: jest.fn(
       (spec: {
         runId: string;
+        workflowId?: string;
         draftAgentId?: string;
         context?: { question: string; answer: string };
+        transcript?: { role: string; content: string }[];
         image?: unknown;
         inputFiles?: { path: string; data: Buffer }[];
         inputImages?: string[];
       }) => {
         draftHost = !!spec.draftAgentId;
-        hostMessages = spec.context
-          ? [
-              { role: 'user', content: spec.context.question, at: 't' },
-              { role: 'assistant', content: spec.context.answer, at: 't' },
-            ]
-          : [];
+        orchestratedHost = spec.workflowId === 'orchestrated-answer';
+        hostMessages = spec.transcript
+          ? spec.transcript.map((m) => ({ ...m, at: 't' }))
+          : spec.context
+            ? [
+                { role: 'user', content: spec.context.question, at: 't' },
+                { role: 'assistant', content: spec.context.answer, at: 't' },
+              ]
+            : [];
         return Promise.resolve({ id: `run-${spec.runId}` });
       },
     ),
@@ -202,6 +210,16 @@ function build(
         onStep: (event: unknown) => void,
       ) => {
         hostMessages.push({ role: 'user', content: question, at: 't' });
+        if (orchestratedHost) {
+          // Avery's one step: Orchestrate.
+          onStep(stepStart('orchestrate', { question }));
+          for (const event of script.events ?? []) emit(event);
+          const answer = script.answer ?? 'Brazil won.';
+          onStep(stepResult('orchestrate', { answer }));
+          hostMessages.push({ role: 'assistant', content: answer, at: 't' });
+          emit({ type: 'done', session: { id: 'host' } });
+          return;
+        }
         const agentStep = draftHost ? 'answer' : 'analyse';
         for (const step of script.steps ??
           (draftHost ? [stepStart('answer')] : V2_STEPS_BEFORE)) {
@@ -599,8 +617,10 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       workflowId: 'answer-business-question',
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
-      // Build visual is on unless the run turns it off (workflows R41).
+      // Build visual is on unless the run turns it off (workflows R41),
+      // and so is Approve each step (workflows R44).
       buildVisual: true,
+      approveSteps: true,
     });
     // Careful is no field of v2's input: the turn runs without it.
     // The turn runs on its own signal: the no-progress watchdog's.
@@ -625,8 +645,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
-      'interpret-follow-up:running',
-      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -640,12 +658,9 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'wrap-up:running',
       'wrap-up:success',
       // The steps the run never took end skipped: Read images (no image
-      // attached) and the Clarify branch.
+      // attached).
       'read-images:skipped',
-      'clarify:skipped',
       'build-visual:skipped',
-      'page-result:skipped',
-      'page-answer:skipped',
       'done',
     ]);
     expect(events[0]).toEqual({
@@ -662,7 +677,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
       startedAt: expect.any(String) as string,
     });
-    expect(events[12]).toEqual({
+    expect(events[10]).toEqual({
       type: 'step',
       id: 'analyse',
       title: 'Analyse',
@@ -696,9 +711,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success', output: { entities: 1 } },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success', output: PLAN_OUTPUT },
-        { id: 'clarify', title: 'Clarify', status: 'skipped' },
         {
           id: 'analyse',
           title: 'Analyse',
@@ -710,8 +723,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'write-answer', status: 'success', output: ANSWER_OUTPUT },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'success', output: WRAP_UP_OUTPUT },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
       output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
@@ -723,7 +734,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     expect(run.input).not.toHaveProperty('careful');
     expect(run.finishedAt).toBeDefined();
     // Every step that ran has its start and end times, the end never before
-    // the start; the skipped Clarify has none.
+    // the start; the skipped steps have none.
     for (const step of run.steps.filter((s) => s.status !== 'skipped')) {
       expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
         Date.parse(step.startedAt!),
@@ -832,9 +843,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         {
           id: 'analyse',
           status: 'failed',
@@ -845,19 +854,14 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
-    expect(stepTrail(events).slice(-8)).toEqual([
-      'clarify:skipped',
+    expect(stepTrail(events).slice(-5)).toEqual([
       'analyse:failed',
       'validate:skipped',
       'write-answer:skipped',
       'build-visual:skipped',
       'wrap-up:skipped',
-      'page-result:skipped',
-      'page-answer:skipped',
     ]);
     expect(run.answer).toBeUndefined();
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
@@ -886,8 +890,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
-      'interpret-follow-up:running',
-      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -900,13 +902,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       brief: 'Not reached',
       source: 'generic',
     };
-    expect(run.steps.slice(5)).toEqual([
-      {
-        id: 'clarify',
-        title: 'Clarify',
-        status: 'skipped',
-        story: expect.objectContaining({ source: 'step' }) as unknown,
-      },
+    expect(run.steps.slice(4)).toEqual([
       {
         id: 'analyse',
         title: 'Analyse',
@@ -942,18 +938,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         story: notReached,
       },
       { id: 'wrap-up', title: 'Wrap up', status: 'skipped', story: notReached },
-      {
-        id: 'page-result',
-        title: 'Page result',
-        status: 'skipped',
-        story: notReached,
-      },
-      {
-        id: 'page-answer',
-        title: 'Page answer',
-        status: 'skipped',
-        story: notReached,
-      },
     ]);
     // The turn's own signal aborts with the request's.
     expect(ctx.sessions.streamRunTurn.mock.calls[0][3]?.aborted).toBe(true);
@@ -975,6 +959,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
       buildVisual: true,
+      approveSteps: true,
       context: {
         question: 'Who won in 2002?',
         answer: 'Brazil won in 2002.',
@@ -1374,16 +1359,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: message },
         { id: 'validate', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
   });
@@ -1438,16 +1419,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'success' },
         { id: 'validate', status: 'success' },
         { id: 'write-answer', status: 'success' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'success' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
       output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
@@ -1489,16 +1466,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: 'Model error' },
         { id: 'validate', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
     ctx.db.close();
@@ -1516,16 +1489,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'stopped' },
         { id: 'validate', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
   });
@@ -2101,6 +2070,127 @@ const RUN_VISUAL = {
   visualization: { id: 'v1', document: '<html>', version: 2 },
 };
 
+describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 120, 159, 160)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  const FIRST = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+  const ORCHESTRATED = 'orchestrated-answer';
+
+  /** A first message and a follow-up to it, both finished. */
+  async function conversation() {
+    ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
+    const first = await streamed(ctx, ORCHESTRATED, { input: FIRST });
+    const second = await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'And in 2006?', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.run.id },
+    });
+    return { first: first.run, second: second.run };
+  }
+
+  it('starts a conversation on a first message: its conversation is its own id', async () => {
+    ctx = build();
+    const { run } = await streamed(ctx, ORCHESTRATED, { input: FIRST });
+    expect(run.conversationId).toBe(run.id);
+    // Another workflow's run belongs to no conversation.
+    const other = await streamed(ctx, 'answer-business-question', {
+      input: FIRST,
+    });
+    expect(other.run.conversationId).toBeUndefined();
+  });
+
+  it("joins the earlier run's conversation on a follow-up, and Avery reads its turns", async () => {
+    const { first, second } = await conversation();
+    expect(second.conversationId).toBe(first.id);
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      transcript?: { role: string; content: string }[];
+    };
+    expect(spec.transcript).toEqual([
+      { role: 'user', content: 'Who won in 2002?' },
+      { role: 'assistant', content: 'Brazil won in 2002.' },
+    ]);
+
+    const third = await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'And 2010?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    expect(third.run.conversationId).toBe(first.id);
+    const next = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      transcript?: { role: string; content: string }[];
+    };
+    expect(next.transcript?.map((m) => m.content)).toEqual([
+      'Who won in 2002?',
+      'Brazil won in 2002.',
+      'And in 2006?',
+      'Brazil won in 2002.',
+    ]);
+  });
+
+  it('archives every run of the conversation, and hides them from the list', async () => {
+    const { first, second } = await conversation();
+    expect(await ctx.service.list()).toHaveLength(2);
+    expect(await ctx.service.archive(second.id)).toEqual({
+      ok: true,
+      conversationId: first.id,
+      archived: 2,
+    });
+    for (const id of [first.id, second.id]) {
+      expect((await ctx.repository.get(id))?.archivedAt).toEqual(
+        expect.any(String),
+      );
+    }
+    expect(await ctx.service.list()).toEqual([]);
+    expect(
+      (await ctx.service.list(undefined, true)).map((run) => run.id).sort(),
+    ).toEqual([first.id, second.id].sort());
+  });
+
+  it('refuses to archive while a run of the conversation is running or waiting, and an unknown run is 404', async () => {
+    const { first, second } = await conversation();
+    await ctx.repository.update(second.id, { status: 'running' });
+    await expect(ctx.service.archive(first.id)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await ctx.repository.update(second.id, { status: 'suspended' });
+    await expect(ctx.service.archive(first.id)).rejects.toThrow(
+      'The run is still running',
+    );
+    expect((await ctx.repository.get(first.id))?.archivedAt).toBeUndefined();
+    await expect(ctx.service.archive('nope')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('refuses a follow-up to an archived conversation (409)', async () => {
+    const { second } = await conversation();
+    await ctx.service.archive(second.id);
+    const refusal = ctx.service.prepare(ORCHESTRATED, {
+      input: { question: 'More?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    await expect(refusal).rejects.toBeInstanceOf(ConflictException);
+    await expect(refusal).rejects.toThrow('This conversation is archived');
+  });
+
+  it('unarchive brings the conversation back: listed again and open to a new message', async () => {
+    const { first, second } = await conversation();
+    await ctx.service.archive(first.id);
+    expect(await ctx.service.unarchive(second.id)).toEqual({
+      ok: true,
+      conversationId: first.id,
+      unarchived: 2,
+    });
+    expect((await ctx.repository.get(first.id))?.archivedAt).toBeUndefined();
+    expect(await ctx.service.list()).toHaveLength(2);
+    expect(await ctx.service.list(undefined, true)).toEqual([]);
+    const again = await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'More?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    expect(again.run.conversationId).toBe(first.id);
+  });
+});
+
 describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
   it('lists, gets, deletes and serves the files of runs', async () => {
     const runs = {
@@ -2110,6 +2200,16 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
           ? Promise.resolve({ id: 'r1', status: 'success' })
           : Promise.reject(new NotFoundException(`Run "${id}" not found`)),
       ),
+      archive: jest.fn().mockResolvedValue({
+        ok: true,
+        conversationId: 'r1',
+        archived: 2,
+      }),
+      unarchive: jest.fn().mockResolvedValue({
+        ok: true,
+        conversationId: 'r1',
+        unarchived: 2,
+      }),
       delete: jest.fn((id: string) =>
         id === 'busy'
           ? Promise.reject(
@@ -2154,11 +2254,21 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
       await request(server)
         .get('/workflow-runs')
         .expect(200, { runs: [{ id: 'r1' }] });
-      expect(runs.list).toHaveBeenLastCalledWith(undefined);
+      expect(runs.list).toHaveBeenLastCalledWith(undefined, false);
       await request(server)
         .get('/workflow-runs?workflowId=agent%3Aassistant')
         .expect(200);
-      expect(runs.list).toHaveBeenLastCalledWith('agent:assistant');
+      expect(runs.list).toHaveBeenLastCalledWith('agent:assistant', false);
+      await request(server).get('/workflow-runs?archived=true').expect(200);
+      expect(runs.list).toHaveBeenLastCalledWith(undefined, true);
+      await request(server)
+        .post('/workflow-runs/r1/archive')
+        .expect(200, { ok: true, conversationId: 'r1', archived: 2 });
+      expect(runs.archive).toHaveBeenCalledWith('r1');
+      await request(server)
+        .post('/workflow-runs/r1/unarchive')
+        .expect(200, { ok: true, conversationId: 'r1', unarchived: 2 });
+      expect(runs.unarchive).toHaveBeenCalledWith('r1');
       await request(server)
         .get('/workflow-runs/r1')
         .expect(200, { id: 'r1', status: 'success' });
@@ -2559,7 +2669,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
   describe('a run that waits for the user (138)', () => {
     function suspendingTurn() {
       const suspension = {
-        stepId: 'clarify',
+        stepId: 'plan',
         question: 'Which measure?',
         options: ['Goals', 'Wins'],
         resume: jest.fn(
@@ -2593,7 +2703,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
       ]);
       const last = Number(waiting.got.at(-1)!.split(':')[0]);
       const prepared = await ctx.service.prepareResume(id, {
-        stepId: 'clarify',
+        stepId: 'plan',
         answer: 'Goals',
       });
       expect(ctx.service.resumeDetached(prepared)).toBe(id);
@@ -3139,7 +3249,6 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     expect(await storedTrail(id)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
       'analyse:running',
     ]);
@@ -3229,7 +3338,6 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     expect(stored?.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
       'analyse:failed',
     ]);
@@ -3242,12 +3350,12 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, _emit, _signal, _careful, onStep) => {
-        for (const step of V2_STEPS_BEFORE.slice(0, -1)) onStep(step);
-        onStep(stepStart('clarify', PLAN_OUTPUT));
+        for (const step of V2_STEPS_BEFORE.slice(0, -3)) onStep(step);
+        onStep(stepStart('plan', { question: 'Who won in 2002?' }));
         onStep({
           type: 'workflow-step-suspended',
           payload: {
-            id: 'clarify',
+            id: 'plan',
             status: 'suspended',
             suspendPayload: { question: 'Which measure?' },
           },
@@ -3258,7 +3366,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     );
     const id = await launch();
     await settled();
-    expect((await storedTrail(id)).at(-1)).toBe('clarify:suspended');
+    expect((await storedTrail(id)).at(-1)).toBe('plan:suspended');
     expect((await ctx.repository.get(id))?.status).toBe('running');
     const fresh = ctx.restarted();
     await fresh.onModuleInit();
@@ -3268,7 +3376,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
       error: 'The app stopped before the run finished',
     });
     expect(stored?.steps.at(-1)).toMatchObject({
-      id: 'clarify',
+      id: 'plan',
       status: 'failed',
       error: 'The app stopped before the run finished',
     });
@@ -3281,19 +3389,19 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, _emit, _signal, _careful, onStep) => {
-        for (const step of V2_STEPS_BEFORE.slice(0, -1)) onStep(step);
-        onStep(stepStart('clarify', PLAN_OUTPUT));
+        for (const step of V2_STEPS_BEFORE.slice(0, -3)) onStep(step);
+        onStep(stepStart('plan', { question: 'Who won in 2002?' }));
         onStep({
           type: 'workflow-step-suspended',
           payload: {
-            id: 'clarify',
+            id: 'plan',
             status: 'suspended',
             suspendPayload: { question: 'Which measure?' },
           },
         });
         await settled();
         return {
-          stepId: 'clarify',
+          stepId: 'plan',
           question: 'Which measure?',
           options: ['Goals', 'Wins'],
           resume: jest.fn(() => Promise.resolve(undefined)),
@@ -3309,7 +3417,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     const stored = await ctx.repository.get(id);
     expect(stored).toMatchObject({ status: 'failed', error: 'host lost' });
     expect(stored?.steps.at(-1)).toMatchObject({
-      id: 'clarify',
+      id: 'plan',
       status: 'failed',
       error: 'host lost',
     });
@@ -3338,7 +3446,6 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     expect(stored?.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
       // The turn ended with Analyse unfinished, so the tracker closed it;
       // the checkpoint had stored it running.
@@ -3427,7 +3534,7 @@ describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () =
   it('a run waiting for the user holds no slot, and its resume is never refused', async () => {
     buildCapped();
     const suspension = {
-      stepId: 'clarify',
+      stepId: 'plan',
       question: 'Which measure?',
       options: ['Goals', 'Wins'],
       resume: jest.fn(() => Promise.resolve(undefined)),
@@ -3447,7 +3554,7 @@ describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () =
     const release = holdTurn();
     const other = await ctx.service.launch(await prepared());
     const resume = await ctx.service.prepareResume(waiting, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Goals',
     });
     expect(ctx.service.resumeDetached(resume)).toBe(waiting);
@@ -3609,7 +3716,7 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
     t.state.ctx = build();
     let resumedSignal: AbortSignal | undefined;
     const suspension = {
-      stepId: 'clarify',
+      stepId: 'plan',
       question: 'Which measure?',
       options: ['Goals', 'Wins'],
       resume: jest.fn(
@@ -3642,7 +3749,7 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
     // The clock was stopped when the run suspended, not merely ignored.
     expect(stall).not.toHaveBeenCalled();
     const prepared = await t.ctx().service.prepareResume(id, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Goals',
     });
     t.ctx().service.resumeDetached(prepared);
@@ -3794,7 +3901,6 @@ describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 am
     expect(run.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
       'analyse:stopped',
     ]);
@@ -3910,7 +4016,7 @@ describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 am
   it('a Stop before a resume starts ends the run stopped without resuming its turn, the waiting turn dropped', async () => {
     t.state.ctx = build();
     const suspension = {
-      stepId: 'clarify',
+      stepId: 'plan',
       question: 'Which measure?',
       options: ['Goals', 'Wins'],
       resume: jest.fn(() => Promise.resolve(undefined)),
@@ -3927,7 +4033,7 @@ describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 am
     const id = await t.launch();
     await t.ctx().service.live.whenEnded(id);
     const prepared = await t.ctx().service.prepareResume(id, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Goals',
     });
     // The Stop lands while the resume stores the run running again.

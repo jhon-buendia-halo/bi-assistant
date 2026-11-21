@@ -30,6 +30,8 @@ export class RunsState {
   readonly tab = signal<RunsTab>('runs');
   readonly runs = signal<WorkflowRunSummary[]>([]);
   readonly runsLoaded = signal(false);
+  /** The Runs list shows only archived runs (api.md 120 `?archived=true`). */
+  readonly showArchived = signal(false);
   readonly deletingRun = signal<string | null>(null);
 
   readonly activeRun = signal<WorkflowRun | null>(null);
@@ -50,9 +52,14 @@ export class RunsState {
     this.tab.set(tab);
   }
 
+  setShowArchived(on: boolean): void {
+    this.showArchived.set(on);
+    this.loadRuns();
+  }
+
   loadRuns(): void {
     this.api
-      .list()
+      .list(this.showArchived() ? { archived: true } : {})
       .pipe(
         retry({
           count: 12,

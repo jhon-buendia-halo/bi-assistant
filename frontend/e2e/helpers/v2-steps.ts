@@ -117,7 +117,7 @@ export function clearPlan(question: string): V2Plan {
   };
 }
 
-/** A plan that asks `clarification` first: the run stops at Clarify. */
+/** A plan that asks `clarification` first: the run waits at Plan. */
 export function clarifyingPlan(
   question: string,
   clarification: { question: string; options: string[] },

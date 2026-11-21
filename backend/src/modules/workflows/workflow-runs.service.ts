@@ -24,12 +24,17 @@ import {
 } from '../../mastra/workflows/workflow-catalog';
 import {
   inputFieldsWithUsage,
+  revisionImagesOf,
   validateWorkflowInput,
   withStoredImages,
   type InputImageFile,
   type WorkflowInputError,
 } from '../../mastra/workflows/workflow-input';
 import { REVIEW_WEBSITE_WORKFLOW_ID } from '../../mastra/workflows/review-website.steps';
+import { ORCHESTRATED_ANSWER_WORKFLOW_ID } from '../../mastra/workflows/orchestrated-answer.steps';
+
+/** The most turns of a conversation Avery reads (workflows R45). */
+export const CONVERSATION_TURNS = 20;
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import { ArtifactsService } from '../artifacts/artifacts.service';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
@@ -248,6 +253,11 @@ interface HeldRun {
 export interface PreparedResume {
   held: HeldRun;
   answer: string;
+  /**
+   * Reference images sent with a change on Build visual's approval gate
+   * (workflows R44): written to the run's workspace before it resumes.
+   */
+  images: { path: string; data: Buffer }[];
 }
 
 /** A run whose request passed every check, ready to start (api.md 119). */
@@ -281,6 +291,13 @@ export interface PreparedRun {
      * 5.21): the asked step and how its host is set up.
      */
     ask?: AskHost;
+    /**
+     * A conversation with Avery (workflows R45): the conversation the new
+     * run joins, and its earlier turns in order (at most
+     * `CONVERSATION_TURNS`), which Avery reads as the conversation so far.
+     */
+    conversationId?: string;
+    transcript?: { role: 'user' | 'assistant'; content: string }[];
   };
   /**
    * A draft run (api.md R12; agents-evals R60): the user agent whose saved
@@ -792,6 +809,7 @@ export class WorkflowRunsService implements OnModuleInit {
         ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
         ...(prepared.turn.datasets ? { datasets: prepared.turn.datasets } : {}),
         ...(prepared.turn.buildVisual ? { buildVisual: true } : {}),
+        ...(prepared.turn.approveSteps ? { approveSteps: true } : {}),
         ...(prepared.image ? { image: prepared.image } : {}),
         ...(prepared.images.length
           ? {
@@ -809,10 +827,16 @@ export class WorkflowRunsService implements OnModuleInit {
           : {}),
         ...(prepared.context
           ? {
-              context: {
-                question: prepared.context.question,
-                answer: prepared.context.answer,
-              },
+              // A message to Avery reads the whole conversation so far
+              // (workflows R45); any other follow-up the earlier run alone.
+              ...(prepared.context.transcript?.length
+                ? { transcript: prepared.context.transcript }
+                : {
+                    context: {
+                      question: prepared.context.question,
+                      answer: prepared.context.answer,
+                    },
+                  }),
               // Its agents go on from copies of the earlier run's threads
               // (not Sarah asked alone: the host's thread is the Analyst's).
               ...(ask?.continuesThreads === false
@@ -864,11 +888,24 @@ export class WorkflowRunsService implements OnModuleInit {
     }
     const request =
       body && typeof body === 'object'
-        ? (body as { stepId?: unknown; answer?: unknown })
+        ? (body as { stepId?: unknown; answer?: unknown; images?: unknown })
         : {};
     const answer =
       typeof request.answer === 'string' ? request.answer.trim() : '';
-    if (!answer) throw new BadRequestException('Answer is required');
+    // Reference images go only with a change to Ryan's visual (workflows
+    // R44); they may stand for the words.
+    const takesImages = Boolean(run.waitingFor.visualId);
+    const sent = Array.isArray(request.images) && request.images.length > 0;
+    if (sent && !takesImages) {
+      throw new BadRequestException(
+        `Step "${run.waitingFor.stepId}" takes no images`,
+      );
+    }
+    const images = revisionImagesOf(request.images, Date.now());
+    if (!images.ok) throw new BadRequestException(images.error);
+    if (!answer && !images.images.length) {
+      throw new BadRequestException('Answer is required');
+    }
     const stepId = typeof request.stepId === 'string' ? request.stepId : '';
     if (stepId !== run.waitingFor.stepId) {
       throw new BadRequestException(
@@ -881,7 +918,11 @@ export class WorkflowRunsService implements OnModuleInit {
       await this.expire(id, taken?.value);
       throw new GoneException(RUN_EXPIRED_ERROR);
     }
-    return { held: taken.value, answer };
+    return {
+      held: taken.value,
+      answer,
+      images: images.images.map(({ path, data }) => ({ path, data })),
+    };
   }
 
   /**
@@ -914,12 +955,21 @@ export class WorkflowRunsService implements OnModuleInit {
     emit: (event: RunStreamEvent) => void,
     abortSignal?: AbortSignal,
   ): Promise<WorkflowRun> {
-    const { held, answer } = prepared;
+    const { held, answer, images } = prepared;
     const { base, prepared: run } = held;
     await this.repository.update(base.id, {
       status: 'running',
       waitingFor: undefined,
     });
+    // The change's reference images go into the run's workspace, where Zoe
+    // reads them (workflows R44).
+    for (const image of images) {
+      await this.sessions.writeRunHostFile(
+        `${RUN_HOST_ID_PREFIX}${base.id}`,
+        image.path,
+        image.data,
+      );
+    }
     const live = liveEmit(emit, abortSignal);
     live({ type: 'run', runId: base.id, workflowId: run.workflow.id });
     const suspension = held.suspension;
@@ -933,6 +983,9 @@ export class WorkflowRunsService implements OnModuleInit {
             emit: io.emit,
             abortSignal: io.abortSignal,
             onStepEvent: io.onStepEvent,
+            ...(images.length
+              ? { images: images.map((image) => image.path) }
+              : {}),
           }),
     );
   }
@@ -1113,7 +1166,8 @@ export class WorkflowRunsService implements OnModuleInit {
       return run;
     }
     if (run.status === 'suspended' && run.waitingFor) {
-      const { stepId, title, question, options, expiresAt } = run.waitingFor;
+      const { stepId, title, question, options, review, visualId, expiresAt } =
+        run.waitingFor;
       live({
         type: 'input-required',
         runId: run.id,
@@ -1121,6 +1175,8 @@ export class WorkflowRunsService implements OnModuleInit {
         title,
         question,
         options,
+        ...(review ? { review } : {}),
+        ...(visualId ? { visualId } : {}),
         expiresAt,
       });
     }
@@ -1203,11 +1259,16 @@ export class WorkflowRunsService implements OnModuleInit {
    * newest first, as summaries titled from the question or the workflow's
    * first text input (plan 5.3).
    */
-  async list(workflowId?: string): Promise<WorkflowRunSummary[]> {
-    const [runs, catalogue] = await Promise.all([
+  async list(
+    workflowId?: string,
+    archived = false,
+  ): Promise<WorkflowRunSummary[]> {
+    const [stored, catalogue] = await Promise.all([
       this.repository.list(workflowId),
       this.workflows.list(),
     ]);
+    // Archived conversations (api.md 159) only when asked for, and then alone.
+    const runs = stored.filter((run) => Boolean(run.archivedAt) === archived);
     const textFields = new Map(
       catalogue.map((workflow) => [
         workflow.id,
@@ -1749,14 +1810,20 @@ export class WorkflowRunsService implements OnModuleInit {
    * contract hash at that moment (data-model 3.16).
    */
   private async start(prepared: PreparedRun): Promise<WorkflowRunDoc> {
+    const id = randomUUID();
     const base: WorkflowRunDoc = {
-      id: randomUUID(),
+      id,
       workflowId: prepared.workflow.id,
       workflowName: prepared.workflow.name,
       ...(prepared.workflow.contractHash
         ? { contractHash: prepared.workflow.contractHash }
         : {}),
       input: prepared.values,
+      // Avery's runs belong to a conversation (workflows R45): a first
+      // message starts one (its own id), a follow-up joins its earlier run's.
+      ...(prepared.workflow.id === ORCHESTRATED_ANSWER_WORKFLOW_ID
+        ? { conversationId: prepared.context?.conversationId ?? id }
+        : {}),
       ...(prepared.context
         ? {
             context: {
@@ -1855,7 +1922,92 @@ export class WorkflowRunsService implements OnModuleInit {
       answer: earlier.answer.content,
       ...(queries.length ? { queries } : {}),
       ...(ask ? { ask } : {}),
+      ...(workflowId === ORCHESTRATED_ANSWER_WORKFLOW_ID
+        ? await this.conversationOf(earlier)
+        : {}),
     };
+  }
+
+  /**
+   * The conversation a message to Avery joins (workflows R45): the earlier
+   * run's, and its turns so far (each run's question and answer, oldest
+   * first, the last `CONVERSATION_TURNS`). An archived conversation takes
+   * no new message (409).
+   */
+  private async conversationOf(earlier: WorkflowRunDoc): Promise<{
+    conversationId: string;
+    transcript: { role: 'user' | 'assistant'; content: string }[];
+  }> {
+    if (earlier.archivedAt) {
+      throw new ConflictException('This conversation is archived');
+    }
+    const conversationId = earlier.conversationId ?? earlier.id;
+    const runs = await this.repository.listConversation(conversationId);
+    if (!runs.some((run) => run.id === earlier.id)) runs.push(earlier);
+    const turns = runs
+      .filter((run) => run.question && run.answer?.content)
+      .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+      .slice(-CONVERSATION_TURNS);
+    return {
+      conversationId,
+      transcript: turns.flatMap((run) => [
+        { role: 'user' as const, content: run.question ?? '' },
+        { role: 'assistant' as const, content: run.answer?.content ?? '' },
+      ]),
+    };
+  }
+
+  /**
+   * Archive a run's conversation (api.md 159; workflows R45): every run of
+   * it (or the run alone, outside a conversation) gets `archivedAt`, so it
+   * leaves the run history and takes no new message. Refused while one of
+   * its runs is running or waiting.
+   */
+  async archive(id: string): Promise<{
+    ok: true;
+    conversationId: string;
+    archived: number;
+  }> {
+    const runs = await this.conversationRuns(id);
+    if (
+      runs.some((run) => run.status === 'running' || run.status === 'suspended')
+    ) {
+      throw new ConflictException('The run is still running');
+    }
+    const at = new Date().toISOString();
+    for (const run of runs) {
+      await this.repository.update(run.id, { archivedAt: at });
+    }
+    return {
+      ok: true,
+      conversationId: runs[0].conversationId ?? runs[0].id,
+      archived: runs.length,
+    };
+  }
+
+  /** Bring an archived conversation back (api.md 160; workflows R45). */
+  async unarchive(id: string): Promise<{
+    ok: true;
+    conversationId: string;
+    unarchived: number;
+  }> {
+    const runs = await this.conversationRuns(id);
+    for (const run of runs) {
+      await this.repository.update(run.id, { archivedAt: undefined });
+    }
+    return {
+      ok: true,
+      conversationId: runs[0].conversationId ?? runs[0].id,
+      unarchived: runs.length,
+    };
+  }
+
+  /** A run and every run of its conversation (404 for an unknown run). */
+  private async conversationRuns(id: string): Promise<WorkflowRunDoc[]> {
+    const run = await this.stored(id);
+    if (!run.conversationId) return [run];
+    const runs = await this.repository.listConversation(run.conversationId);
+    return runs.length ? runs : [run];
   }
 
   /**
@@ -1974,6 +2126,8 @@ export class WorkflowRunsService implements OnModuleInit {
         title: step?.title ?? suspension.stepId,
         question: suspension.question,
         options: suspension.options,
+        ...(suspension.review ? { review: suspension.review } : {}),
+        ...(suspension.visualId ? { visualId: suspension.visualId } : {}),
         since: since.toISOString(),
         expiresAt: new Date(expiresAt).toISOString(),
       },
@@ -1982,6 +2136,11 @@ export class WorkflowRunsService implements OnModuleInit {
       ...(view.agentKey ? { agentKey: view.agentKey } : {}),
       ...(view.agentId ? { agentId: view.agentId } : {}),
       ...(view.agentName ? { agentName: view.agentName } : {}),
+      // Ryan's visual is shown while the run waits on its approval gate
+      // (workflows R44): the run carries the host's visuals.
+      ...(suspension.visualId
+        ? { visualizations: view.visualizations ?? [] }
+        : {}),
       ...(view.workflowState ? { workflowState: view.workflowState } : {}),
     };
   }

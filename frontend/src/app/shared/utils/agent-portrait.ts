@@ -53,6 +53,7 @@ export const BUILTIN_PORTRAITS: Readonly<Record<string, PortraitLook>> = {
   'layer-mapper': { hair: 'variant09' }, // Leo
   'gap-advisor': { hair: 'variant33' }, // Nora
   'site-reviewer': { hair: 'variant12', glasses: 'variant11' }, // Iris
+  'chief-of-staff': { hair: 'variant44', glasses: 'variant03' }, // Avery
 };
 
 /** The Notionists options for an agent's portrait (pure; unit-tested). */

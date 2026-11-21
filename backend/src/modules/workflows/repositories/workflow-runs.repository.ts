@@ -34,6 +34,11 @@ export class WorkflowRunsRepository {
     });
   }
 
+  /** The runs of one conversation with Avery, oldest first (workflows R45). */
+  listConversation(conversationId: string): Promise<WorkflowRunDoc[]> {
+    return this.store.find({ conversationId }, { sort: { startedAt: 1 } });
+  }
+
   /** The runs still `running`: at start-up, the ones the app stopped in. */
   listRunning(): Promise<WorkflowRunDoc[]> {
     return this.store.find({ status: 'running' });

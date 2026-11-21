@@ -38,6 +38,11 @@ export interface TurnResumeIo {
   emit: (event: StreamEvent) => void;
   abortSignal?: AbortSignal;
   onStepEvent?: (event: RunStepEvent) => void;
+  /**
+   * Reference images sent with the answer on Build visual's approval gate
+   * (workflows R44): their paths in the run's workspace.
+   */
+  images?: string[];
 }
 
 /**
@@ -50,6 +55,10 @@ export interface TurnSuspension {
   stepId: string;
   question: string;
   options: string[];
+  /** An approval gate's outcome in words (workflows R44); absent otherwise. */
+  review?: string;
+  /** Build visual's approval gate: the visual Ryan built. */
+  visualId?: string;
   resume(answer: string, io: TurnResumeIo): Promise<TurnSuspension | undefined>;
   discard(): Promise<void>;
 }

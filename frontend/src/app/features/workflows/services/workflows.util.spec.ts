@@ -119,6 +119,11 @@ describe('workflows.util', () => {
       expect(workflowKindLabel(THREE_STEPS)).toBe('3 steps');
     });
 
+    it('reads "1 step" for a workflow of one step', () => {
+      expect(workflowKindLabel({ stepCount: 1 })).toBe('1 step');
+      expect(workflowKindLabel({ stepCount: 0 })).toBe('0 steps');
+    });
+
     it('says nothing about agents for a workflow that calls none', () => {
       expect(workflowUsesLabel(THREE_STEPS)).toBe('');
     });

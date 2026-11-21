@@ -11,9 +11,8 @@ import {
   viewChild,
 } from '@angular/core';
 import {
+  Archive,
   Brain,
-  ChevronDown,
-  ChevronRight,
   CircleCheck,
   Loader2,
   LucideAngularModule,
@@ -88,6 +87,8 @@ import {
 
 /** The workflow a saved dashboard is mapped in, and its artifact field. */
 const MAP_WORKFLOW_ID = 'map-dashboard-data';
+/** The never-ending conversation with Avery, the Chief of Staff. */
+const AVERY_WORKFLOW_ID = 'orchestrated-answer';
 const MAP_ARTIFACT_FIELD = 'artifact';
 
 /** The composer's controls Execute workflow may focus, in order. */
@@ -192,9 +193,8 @@ const FORM_CONTROLS =
 })
 export class WorkflowRunChat {
   protected readonly hasQueries = answerHasQueries;
+  protected readonly Archive = Archive;
   protected readonly Brain = Brain;
-  protected readonly ChevronDown = ChevronDown;
-  protected readonly ChevronRight = ChevronRight;
   protected readonly CircleCheck = CircleCheck;
   protected readonly Loader2 = Loader2;
   protected readonly MessageSquare = MessageSquare;
@@ -214,6 +214,107 @@ export class WorkflowRunChat {
    */
   readonly variant = input<'panel' | 'business'>('panel');
   protected readonly business = computed(() => this.variant() === 'business');
+
+  /**
+   * The chat reads the whole thread of earlier turns: always in the Business
+   * view, and for Answer a Business Question (orchestrated) in either view,
+   * since that conversation never ends.
+   */
+  protected readonly threaded = computed(
+    () => this.business() || this.isAveryWorkflow(),
+  );
+  private readonly isAveryWorkflow = computed(
+    () => this.designer.workflow()?.id === AVERY_WORKFLOW_ID,
+  );
+
+  /** The shown run is an ended, not archived run of Avery's conversation. */
+  protected readonly averyOpen = computed(() => {
+    const status = this.designer.runResult()?.status;
+    return (
+      this.isAveryWorkflow() &&
+      this.designer.run() !== null &&
+      this.designer.run()?.archivedAt === undefined &&
+      !this.designer.running() &&
+      (status === 'success' || status === 'failed' || status === 'stopped')
+    );
+  });
+
+  /** The shown run belongs to an archived Avery conversation (read-only). */
+  protected readonly averyArchived = computed(
+    () =>
+      this.isAveryWorkflow() &&
+      this.designer.run() !== null &&
+      this.designer.run()?.archivedAt !== undefined &&
+      !this.designer.running(),
+  );
+
+  protected readonly averyText = signal('');
+  protected readonly averyError = signal<string | null>(null);
+  protected readonly averyBusy = signal(false);
+  protected readonly averyNotice = signal<string | null>(null);
+
+  protected sendAvery(): void {
+    const text = this.averyText().trim();
+    if (!text || this.designer.running()) return;
+    this.averyError.set(null);
+    this.averyNotice.set(null);
+    this.averyText.set('');
+    this.designer.followUp(text);
+  }
+
+  protected onAveryKey(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    this.sendAvery();
+  }
+
+  protected archiveConversation(): void {
+    const run = this.designer.run();
+    if (run === null || this.averyBusy()) return;
+    this.averyBusy.set(true);
+    this.averyError.set(null);
+    this.runsApi.archive(run.id).subscribe({
+      next: () => {
+        this.averyBusy.set(false);
+        this.designer.newQuestion();
+        this.averyNotice.set('Conversation archived');
+      },
+      error: (err: unknown) => {
+        this.averyBusy.set(false);
+        this.averyError.set(this.messageOf(err, 'Could not archive'));
+      },
+    });
+  }
+
+  protected unarchiveConversation(): void {
+    const run = this.designer.run();
+    if (run === null || this.averyBusy()) return;
+    this.averyBusy.set(true);
+    this.averyError.set(null);
+    this.runsApi.unarchive(run.id).subscribe({
+      next: () => {
+        this.runsApi.getRun(run.id).subscribe({
+          next: (fresh) => {
+            this.averyBusy.set(false);
+            this.designer.run.set(fresh);
+          },
+          error: () => {
+            this.averyBusy.set(false);
+            this.designer.run.set({ ...run, archivedAt: undefined });
+          },
+        });
+      },
+      error: (err: unknown) => {
+        this.averyBusy.set(false);
+        this.averyError.set(this.messageOf(err, 'Could not unarchive'));
+      },
+    });
+  }
+
+  private messageOf(err: unknown, fallback: string): string {
+    const message = (err as { error?: { message?: unknown } })?.error?.message;
+    return typeof message === 'string' && message !== '' ? message : fallback;
+  }
 
   /**
    * Business view only: show the run in the Builder view, with this step's
@@ -243,7 +344,7 @@ export class WorkflowRunChat {
   constructor() {
     // The Business view reads the whole conversation (R38).
     effect(() => {
-      const on = this.business();
+      const on = this.threaded();
       untracked(() => this.conversation.active.set(on));
     });
     // While a run streams, keep its newest text in view; once it ends, show
@@ -278,22 +379,6 @@ export class WorkflowRunChat {
           error: () => this.artifacts.set([]),
         }),
       );
-    });
-    // Follow up starts with the images the run shown was given (kept paths);
-    // a different run, or a different stored list, starts it again.
-    effect(() => {
-      const run = this.designer.run();
-      const list = run?.input?.[IMAGES_FIELD];
-      const stored = Array.isArray(list)
-        ? list.filter((item): item is string => typeof item === 'string')
-        : [];
-      const key = `${run?.id ?? ''}|${stored.join(',')}`;
-      untracked(() => {
-        if (key === this.seededImages) return;
-        this.seededImages = key;
-        this.followUpImages.set([...stored]);
-        this.attachError.set(null);
-      });
     });
     // A refused Execute: focus the first field with an error.
     effect(() => {
@@ -415,6 +500,19 @@ export class WorkflowRunChat {
     if (run !== null) this.visuals.view(run, event);
   }
 
+  /** A gate's Open visual: the visual Ryan built opens in the side panel, answer or not. */
+  protected openGateVisual(visualId: string): void {
+    const found = this.designer
+      .run()
+      ?.visualizations?.find((visual) => visual.id === visualId);
+    this.viewVisual({
+      visualId,
+      version: found?.currentVersion ?? 1,
+      title: found?.title ?? '',
+      action: 'created',
+    });
+  }
+
   /** The shown answer made a visual: its card carries Saved to Artifacts and Map to data. */
   protected readonly hasArtifactCard = computed(
     () =>
@@ -529,34 +627,14 @@ export class WorkflowRunChat {
   });
 
   /**
-   * The input form folds away while a run is shown that is neither running
-   * nor waiting (a workflow with many fields, Review a Website, would hide
-   * the result); `inputOpen` unfolds it. Running again starts unfolded.
+   * The run's input shows only while no run is shown (2026-11-20: runs have
+   * no follow-up any more). Under a run, running, waiting or ended, the
+   * conversation takes the whole column; New question or Run again brings
+   * the input back.
    */
-  protected readonly inputOpen = signal(false);
-  protected readonly inputFoldable = computed(
-    () =>
-      this.designer.runResult() !== null &&
-      !this.designer.running() &&
-      this.designer.waitingFor() === null &&
-      this.composerFields().length > 3,
+  protected readonly composerShown = computed(
+    () => this.designer.runResult() === null && !this.designer.running(),
   );
-  protected readonly inputFolded = computed(
-    () => this.inputFoldable() && !this.inputOpen(),
-  );
-
-  /** Under a stored answer that asks nothing: the composer follows up on it. */
-  protected readonly followUpMode = computed(
-    () =>
-      this.designer.canFollowUp() &&
-      !this.designer.runResult()?.answer?.clarification,
-  );
-
-  /** The key of the run and images the Follow up attachments were last seeded from. */
-  private seededImages = '';
-
-  /** Follow up's attachments: the run's kept paths and the new `data:` URLs. */
-  protected readonly followUpImages = signal<string[]>([]);
 
   /** The last file refused when adding images; cleared by the next add or remove. */
   protected readonly attachError = signal<string | null>(null);
@@ -581,10 +659,8 @@ export class WorkflowRunChat {
   );
 
   /** Whether the shown composer takes pasted or dropped images. */
-  private readonly takesImages = computed(() =>
-    this.followUpMode()
-      ? this.imagesField() !== null
-      : this.imagesField() !== null || this.imageField() !== null,
+  private readonly takesImages = computed(
+    () => this.imagesField() !== null || this.imageField() !== null,
   );
 
   /** The file name each image field shows, by field name. */
@@ -795,10 +871,8 @@ export class WorkflowRunChat {
 
   /** The thumbnails of the images the composer holds. */
   protected readonly composerThumbs = computed(() =>
-    (this.followUpMode()
-      ? this.followUpImages()
-      : this.designer.picked(IMAGES_FIELD)
-    )
+    this.designer
+      .picked(IMAGES_FIELD)
       .map((item) => this.imageSrc(item))
       .filter((src): src is string => src !== null),
   );
@@ -813,14 +887,11 @@ export class WorkflowRunChat {
 
   /** The images the composer's list holds now. */
   private heldImages(): string[] {
-    return this.followUpMode()
-      ? this.followUpImages()
-      : this.designer.picked(IMAGES_FIELD);
+    return this.designer.picked(IMAGES_FIELD);
   }
 
   private setHeldImages(list: string[]): void {
-    if (this.followUpMode()) this.followUpImages.set(list);
-    else this.designer.setInput(IMAGES_FIELD, list);
+    this.designer.setInput(IMAGES_FIELD, list);
   }
 
   /** Files picked, pasted or dropped into the reference images. */
@@ -899,35 +970,11 @@ export class WorkflowRunChat {
     if (field !== null) this.designer.setInput(field, text);
   }
 
-  protected onFollowUpInput(event: Event): void {
-    this.designer.followUpText.set((event.target as HTMLInputElement).value);
-  }
-
-  protected onAskStepChange(event: Event): void {
-    this.designer.askStep.set((event.target as HTMLSelectElement).value);
-  }
-
-  /** The follow-up box's hint: names the agent when one is picked. */
-  protected readonly followUpPlaceholder = computed(() => {
-    const agent = this.designer.askedAgentName();
-    return agent !== null
-      ? `Ask ${agent} about this result`
-      : 'Ask a follow-up about this result';
-  });
-
-  /** Enter sends (Execute or Follow up); Shift+Enter adds a line. */
-  protected onEnter(event: Event, action: 'execute' | 'follow-up'): void {
+  /** Enter executes; Shift+Enter adds a line. */
+  protected onEnter(event: Event): void {
     const key = event as KeyboardEvent;
     if (key.shiftKey || key.isComposing) return;
     event.preventDefault();
-    if (action === 'follow-up') this.sendFollowUp();
-    else this.designer.execute();
-  }
-
-  protected sendFollowUp(): void {
-    this.designer.followUp(
-      this.designer.followUpText(),
-      this.imagesField() !== null ? this.followUpImages() : undefined,
-    );
+    this.designer.execute();
   }
 }

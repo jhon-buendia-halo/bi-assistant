@@ -10,6 +10,7 @@
  * The API's catalogue is built from it by `WorkflowsService`.
  */
 import {
+  CHIEF_OF_STAFF_AGENT_KEY,
   ANALYSIS_PLANNER_AGENT_KEY,
   ANSWER_WRITER_AGENT_KEY,
   ASSISTANT_MAX_STEPS,
@@ -21,7 +22,6 @@ import {
   IMAGE_READER_AGENT_KEY,
   LAYER_MAPPER_AGENT_KEY,
   REQUIREMENTS_ANALYST_AGENT_KEY,
-  RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
   VISUALIZATION_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
@@ -31,6 +31,12 @@ import {
   INSIGHTS_ANALYST_DESCRIPTION,
 } from '../agents/insights-analyst-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
+import {
+  ORCHESTRATED_ANSWER_EDGES,
+  ORCHESTRATED_ANSWER_STEPS,
+  ORCHESTRATED_ANSWER_WORKFLOW_ID,
+  ORCHESTRATED_ANSWER_WORKFLOW_NAME,
+} from './orchestrated-answer.steps';
 import {
   CONSUMPTION_GAP_DESCRIPTION,
   CONSUMPTION_GAP_EDGES,
@@ -170,6 +176,19 @@ const BUILD_VISUAL_FIELD: WorkflowInputField = {
 };
 
 /**
+ * Answer a Business Question's approvals (workflows R44): each agent may
+ * ask you first, and its work waits for your approval before the next
+ * agent gets it. On unless unticked.
+ */
+const APPROVE_STEPS_FIELD: WorkflowInputField = {
+  name: 'approveSteps',
+  label: "Approve each step: every agent's work waits for your OK",
+  type: 'boolean',
+  required: false,
+  default: true,
+};
+
+/**
  * The input of a draft run (Try it, api.md R12): the question, and careful
  * mode; its datasets are the draft's.
  */
@@ -225,20 +244,41 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         IMAGES_FIELD,
         DATASETS_FIELD,
         BUILD_VISUAL_FIELD,
+        APPROVE_STEPS_FIELD,
       ],
       steps: ANSWER_BUSINESS_QUESTION_STEPS,
-      // Zoe reads the reference images when there are some; Nathan reads a
-      // follow-up over an earlier result; Olivia plans and Jessica writes
-      // the answer; Michael analyses; Ryan builds the visual unless the run
-      // turns it off.
+      // Zoe reads the reference images when there are some; Olivia plans
+      // and Jessica writes the answer; Michael analyses; Ryan builds the
+      // visual unless the run turns it off.
       stepAgents: {
         [READ_IMAGES_STEP_ID]: IMAGE_READER_AGENT_KEY,
-        'interpret-follow-up': RESULT_EXPLORER_AGENT_KEY,
         plan: ANALYSIS_PLANNER_AGENT_KEY,
         'write-answer': ANSWER_WRITER_AGENT_KEY,
         'build-visual': VISUALIZATION_AGENT_KEY,
       },
       edges: ANSWER_BUSINESS_QUESTION_EDGES,
+      bar: 'steps',
+    },
+    {
+      // Avery, the Chief of Staff, chooses which agents answer the question
+      // and is the only one who talks to the user (workflows R45; agents.md
+      // 5.22). The run host stays Michael's: Avery's analyse_data runs his
+      // turn there, as Analyse does.
+      id: ORCHESTRATED_ANSWER_WORKFLOW_ID,
+      name: ORCHESTRATED_ANSWER_WORKFLOW_NAME,
+      description:
+        'The same question as Answer a Business Question, answered by Avery, a Chief of Staff who decides which agents to call and is the only one you talk to.',
+      primaryFor: INSIGHTS_ANALYST_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
+        IMAGES_FIELD,
+        DATASETS_FIELD,
+        BUILD_VISUAL_FIELD,
+      ],
+      steps: ORCHESTRATED_ANSWER_STEPS,
+      stepAgents: { orchestrate: CHIEF_OF_STAFF_AGENT_KEY },
+      edges: ORCHESTRATED_ANSWER_EDGES,
       bar: 'steps',
     },
     {
@@ -500,6 +540,8 @@ export interface AgentRunTurn {
   careful: boolean;
   /** Answer a Business Question's `buildVisual`: Build visual runs. */
   buildVisual?: true;
+  /** Answer a Business Question's `approveSteps` (workflows R44). */
+  approveSteps?: true;
   /** Map a Dashboard to Data's `artifact`: the saved dashboard it maps. */
   artifact?: string;
 }
@@ -519,6 +561,7 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
     ...(values['buildVisual'] === true ? { buildVisual: true as const } : {}),
+    ...(values['approveSteps'] === true ? { approveSteps: true as const } : {}),
     ...(text(values['artifact']) ? { artifact: text(values['artifact']) } : {}),
   };
 }

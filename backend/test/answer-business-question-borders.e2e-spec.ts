@@ -82,7 +82,13 @@ describe('Answer a Business Question: border cases (API, no Postgres)', () => {
   const client = runClient(() => backend!.url);
   const ask = (question: string, extra: Record<string, unknown> = {}) =>
     client.run(WORKFLOW, {
-      input: { question, datasets: [DATASET], buildVisual: false, ...extra },
+      input: {
+        question,
+        datasets: [DATASET],
+        buildVisual: false,
+        approveSteps: false,
+        ...extra,
+      },
     });
 
   /** The model requests `act` made, in order. */
@@ -209,7 +215,7 @@ describe('Answer a Business Question: border cases (API, no Postgres)', () => {
         clarification: null,
       },
     });
-    expect(res.steps).not.toContain('clarify:suspended:1');
+    expect(res.steps).not.toContain('plan:suspended:1');
   });
 
   it('a clarification with fewer than two options is no question: the run does not wait', async () => {
@@ -223,7 +229,8 @@ describe('Answer a Business Question: border cases (API, no Postgres)', () => {
     const res = await ask('Which team was best?');
     expect(res.run?.status).toBe('success');
     expect(res.frames.some((f) => f.type === 'input-required')).toBe(false);
-    expect(res.steps).toContain('clarify:skipped');
+    expect(res.steps).not.toContain('plan:suspended:1');
+    expect(res.steps).toContain('plan:success');
   });
 
   it('Plan never asks twice: a plan that asks again after the answer goes on to the analysis', async () => {
@@ -238,7 +245,7 @@ describe('Answer a Business Question: border cases (API, no Postgres)', () => {
     const first = await ask('Which team was most dominant?');
     expect(first.run?.status).toBe('suspended');
     const { result: second, requests } = await recorded(() =>
-      client.resume(first.run!.id, { stepId: 'clarify', answer: 'Most wins' }),
+      client.resume(first.run!.id, { stepId: 'plan', answer: 'Most wins' }),
     );
     expect(second.status).toBe(200);
     expect(second.run).toMatchObject({
@@ -247,20 +254,18 @@ describe('Answer a Business Question: border cases (API, no Postgres)', () => {
       answer: { content: STUB_ANSWER },
     });
     expect(second.frames.some((f) => f.type === 'input-required')).toBe(false);
-    // Plan ran once more and the run did not wait at Clarify again.
+    // Plan ran once more and the run did not wait at Plan again.
     expect(requests.filter(isPlanRequest)).toHaveLength(1);
     expect(second.steps).toEqual(
-      expect.arrayContaining(['plan:success:2', 'write-answer:success']),
+      expect.arrayContaining(['plan:success', 'write-answer:success']),
     );
-    const replanned = second.run!.steps.find(
-      (step) => step.id === 'plan' && step.attempt === 2,
-    )!;
+    const replanned = second.run!.steps.find((step) => step.id === 'plan')!;
     expect(replanned.output).toMatchObject({
       plan: { needsClarification: false, clarification: null },
     });
   });
 
-  it('Stop on a run waiting at Clarify stores it stopped as expired; it can no longer be answered', async () => {
+  it('Stop on a run waiting at Plan stores it stopped as expired; it can no longer be answered', async () => {
     useV2Steps(stub, () => ({ text: STUB_ANSWER }), {
       plan: () =>
         stubPlan('Which team was best?', {
@@ -281,10 +286,10 @@ describe('Answer a Business Question: border cases (API, no Postgres)', () => {
       message: 'Run stopped',
       run: { id: runId, status: 'stopped', waitingFor: { expired: true } },
     });
-    const clarify = stopped.body.run.steps.find((s) => s.id === 'clarify');
-    expect(clarify?.status).toBe('stopped');
+    const planStep = stopped.body.run.steps.find((s) => s.id === 'plan');
+    expect(planStep?.status).toBe('stopped');
     const late = await client.resume(runId, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Most wins',
     });
     // api.md 138: a stopped run that waited reads as expired.

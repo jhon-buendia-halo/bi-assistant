@@ -26,14 +26,6 @@ type Told = Omit<StepStory, 'source'>;
 /** The SQL tool every query of the analysis runs through. */
 const SQL_TOOL = 'run_readonly_sql';
 
-/** The output of a step's last attempt in the run so far, if it kept one. */
-function lastOutput(
-  context: StoryContext,
-  id: string,
-): Record<string, unknown> | undefined {
-  return context.steps.filter((step) => step.id === id).at(-1)?.output;
-}
-
 /** `"text"`, clipped. */
 function quoted(text: string, max?: number): string {
   return `“${clip(text, max)}”`;
@@ -112,50 +104,12 @@ function plan(step: StoryStep): Told | undefined {
   if (assumptions.length) {
     facts.push({ label: 'Assumed', values: assumptions.map((a) => clip(a)) });
   }
-  const clarification = record(planned['clarification']);
-  const ask = clarification?.['question'];
-  const answered = record(step.input?.['clarification']);
-  let next: string;
-  let brief: string | undefined;
-  if (planned['needsClarification'] === true && typeof ask === 'string') {
-    next = `Something in the question changes the analysis, so Clarify asks you: ${quoted(ask)}`;
-    brief = 'Needs your answer';
-  } else if (answered && typeof answered['answer'] === 'string') {
-    next = `It planned with your answer ${quoted(answered['answer'], 120)}, then Analyse ran.`;
-    brief = 'Planned with your answer';
-  } else {
-    next =
-      'Nothing was ambiguous, so Clarify was skipped and Analyse ran next.';
-  }
+  // Since 2026-11-19 Plan asks in its own step: a plan it passes on is
+  // clear, made with the user's answer when it asked one.
   return {
     headline: `Read the question as ${quoted(restated)}`,
     ...(facts.length ? { facts } : {}),
-    next,
-    ...(brief ? { brief } : {}),
-  };
-}
-
-function clarify(step: StoryStep, context: StoryContext): Told | undefined {
-  if (step.status === 'skipped') {
-    const planned = planOf(lastOutput(context, 'plan'));
-    if (!planned) return undefined;
-    return planned['needsClarification'] === true
-      ? undefined
-      : {
-          headline: 'Skipped: nothing in the plan needed your answer.',
-          brief: 'Nothing to clarify',
-        };
-  }
-  const clarification = record(step.output?.['clarification']);
-  const question = clarification?.['question'];
-  const answer = clarification?.['answer'];
-  if (typeof question !== 'string' || typeof answer !== 'string') {
-    return undefined;
-  }
-  return {
-    headline: `Asked you ${quoted(question)} and you answered ${quoted(answer, 120)}.`,
-    next: 'Plan planned again with your answer.',
-    brief: 'You answered',
+    next: 'Analyse ran next with this plan.',
   };
 }
 
@@ -412,7 +366,6 @@ const TELLERS: Record<
   'receive-question': receiveQuestion,
   'load-catalog': loadCatalog,
   plan,
-  clarify,
   analyse,
   validate,
   'write-answer': writeAnswer,
