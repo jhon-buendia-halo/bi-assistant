@@ -27,6 +27,9 @@ export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
   // How to apply the curated-knowledge block: the model loads it with
   // Mastra's skill tool when a call carries the block (ADR-0025).
   assistant: ['curated-knowledge'],
+  // Avery's router and playbooks: which playbook fits the request, each
+  // with the steps for its case and how to close (agents.md 2.21, 7.4).
+  'chief-of-staff': ['avery-playbooks'],
   // The Data Readiness Agent's skills: assessing and explaining, then
   // drilling into findings with read-only SQL (agents.md 7.4, ADR-0035).
   'data-readiness': ['data-readiness', 'readiness-drilldown'],
