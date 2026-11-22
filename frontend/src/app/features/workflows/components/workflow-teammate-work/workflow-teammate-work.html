@@ -1,0 +1,205 @@
+<div class="flex flex-col gap-4" data-testid="workflow-teammate-work">
+  @for (call of calls(); track $index) {
+    <article
+      class="flex flex-col gap-3"
+      data-testid="workflow-teammate-call"
+      [attr.aria-label]="call.heading ?? null"
+    >
+      @if (call.heading) {
+        <p class="m-0 text-[13px] font-semibold text-fg-strong">
+          {{ call.heading }}
+          @if (call.duration) {
+            <span class="font-normal text-fg-muted">
+              · {{ call.duration }}</span
+            >
+          }
+        </p>
+      }
+
+      <!-- 1. What the orchestrator asked -->
+      <section
+        class="rounded-xl border border-border bg-surface p-4"
+        data-testid="workflow-teammate-asked"
+      >
+        <h3
+          class="m-0 mb-2 text-[11px] font-semibold tracking-wide text-fg-muted uppercase"
+        >
+          1 · What {{ lead() }} asked
+        </h3>
+        @if (call.asked; as asked) {
+          <p
+            class="m-0 rounded-lg bg-surface-muted px-3 py-2 text-[13px] leading-5 break-words whitespace-pre-wrap text-fg"
+          >
+            {{ asked }}
+          </p>
+        } @else {
+          <p class="m-0 text-[13px] text-fg-muted">
+            {{ lead() }}'s request was not kept.
+          </p>
+        }
+      </section>
+
+      <!-- 2. What the teammate did -->
+      <section
+        class="rounded-xl border border-border bg-surface p-4"
+        data-testid="workflow-teammate-did"
+      >
+        <h3
+          class="m-0 mb-2 text-[11px] font-semibold tracking-wide text-fg-muted uppercase"
+        >
+          2 · What {{ name() }} did
+          @if (call.queries > 0) {
+            · {{ call.queries }} {{ call.queries === 1 ? "query" : "queries" }}
+          }
+        </h3>
+        @if (call.steps.length > 0) {
+          <ol class="m-0 flex list-none flex-col gap-1.5 p-0">
+            @for (step of call.steps; track $index) {
+              <li
+                class="flex min-w-0 items-start gap-2.5 rounded-lg border border-border px-3 py-2 text-[13px] leading-5"
+                data-testid="workflow-teammate-step"
+                [attr.data-state]="step.state"
+              >
+                <span class="mt-[3px] flex shrink-0" aria-hidden="true">
+                  @switch (step.state) {
+                    @case ("current") {
+                      <lucide-angular
+                        [img]="Loader2"
+                        [size]="13"
+                        class="animate-spin text-primary"
+                      />
+                    }
+                    @case ("failed") {
+                      <lucide-angular
+                        [img]="X"
+                        [size]="13"
+                        class="text-on-danger-soft"
+                      />
+                    }
+                    @default {
+                      <lucide-angular
+                        [img]="Check"
+                        [size]="13"
+                        class="text-on-success-soft"
+                      />
+                    }
+                  }
+                </span>
+                <span
+                  class="min-w-0 flex-1 break-words text-fg"
+                  [class.text-on-danger-soft]="step.state === 'failed'"
+                  >{{ step.label }}</span
+                >
+                @if (step.rows) {
+                  <span
+                    class="shrink-0 text-[12px] text-fg-muted tabular-nums"
+                    >{{ step.rows }}</span
+                  >
+                }
+                @if (queryIndex(step) >= 0) {
+                  <button
+                    type="button"
+                    class="flex shrink-0 items-center gap-0.5 text-[12px] text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+                    data-testid="workflow-teammate-open-query"
+                    [attr.aria-label]="'Open the query: ' + step.label"
+                    (click)="pick(step, $event)"
+                  >
+                    Open query
+                    <lucide-angular [img]="ChevronRight" [size]="12" />
+                  </button>
+                }
+              </li>
+            }
+          </ol>
+        } @else if (call.running) {
+          <p class="m-0 text-[13px] text-fg-muted" role="status">
+            {{ name() }} is working on it…
+          </p>
+        } @else {
+          <p class="m-0 text-[13px] text-fg-muted">
+            {{ name() }} answered without running a query.
+          </p>
+        }
+      </section>
+
+      <!-- 3. What the teammate handed back -->
+      <section
+        class="rounded-xl border border-border bg-surface p-4"
+        data-testid="workflow-teammate-reply"
+      >
+        <h3
+          class="m-0 mb-2 text-[11px] font-semibold tracking-wide text-fg-muted uppercase"
+        >
+          3 · What {{ name() }} handed back to {{ lead() }}
+        </h3>
+        @if (call.error; as error) {
+          <p
+            role="alert"
+            class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+          >
+            {{ lead() }} couldn't reach {{ name() }}: {{ error }}
+          </p>
+        } @else if (call.running) {
+          <p class="m-0 text-[13px] text-fg-muted" role="status">
+            Not yet: {{ name() }} is still working.
+          </p>
+        } @else if (call.reply; as reply) {
+          <div
+            class="prose-dark max-h-[360px] overflow-y-auto text-[13px] text-fg"
+            tabindex="0"
+            role="region"
+            [attr.aria-label]="'What ' + name() + ' handed back'"
+            [innerHTML]="reply | markdown"
+          ></div>
+        } @else {
+          <p class="m-0 text-[13px] text-fg-muted">
+            What {{ name() }} handed back was not kept for this run.
+          </p>
+        }
+      </section>
+    </article>
+  } @empty {
+    <p
+      class="m-0 rounded-xl border border-border bg-surface p-4 text-[13px] text-fg-muted"
+      data-testid="workflow-teammate-empty"
+    >
+      {{ empty() }}
+    </p>
+  }
+
+  <!-- The tool behind the hand-off, for whoever builds the journey -->
+  <details
+    class="text-[12px] text-fg-muted"
+    data-testid="workflow-teammate-tech"
+  >
+    <summary
+      class="cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-focus"
+    >
+      Technical details
+    </summary>
+    <dl
+      class="m-0 mt-2 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[12px]"
+    >
+      <dt>Tool</dt>
+      <dd class="m-0 font-mono text-fg">{{ tool().name }}</dd>
+      <dt>Inputs</dt>
+      <dd class="m-0 font-mono text-fg">
+        {{ tool().inputs.join(", ") || "None" }}
+      </dd>
+      <dt>Description</dt>
+      <dd class="m-0 text-fg">{{ tool().description || "None" }}</dd>
+      <dt>Step</dt>
+      <dd class="m-0">
+        <button
+          type="button"
+          class="inline-flex items-center gap-0.5 text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+          data-testid="workflow-teammate-step-link"
+          (click)="openStep.emit(tool().stepId)"
+        >
+          {{ tool().stepTitle }}
+          <lucide-angular [img]="ChevronRight" [size]="12" />
+        </button>
+      </dd>
+    </dl>
+  </details>
+</div>

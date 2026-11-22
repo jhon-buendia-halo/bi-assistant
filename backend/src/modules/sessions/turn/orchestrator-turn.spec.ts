@@ -420,9 +420,49 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
       },
       {
         type: 'tool-result',
-        content: JSON.stringify({ tool: 'analyse_data' }),
+        content: JSON.stringify({ tool: 'analyse_data', reply: 'ok' }),
       },
     ]);
+  });
+
+  it("keeps a team call's whole brief (up to 2,000 characters) and what the teammate handed back; no reply on her own calls", async () => {
+    const brief = `Who scored most? ${'x'.repeat(2_500)}`;
+    const { deps, events } = fixture([
+      {
+        type: 'tool-call',
+        payload: {
+          toolCallId: 'c1',
+          toolName: 'answer_from_data',
+          args: { brief },
+        },
+      },
+      {
+        type: 'tool-result',
+        payload: { toolCallId: 'c1', result: { result: 'France, 14.' } },
+      },
+      {
+        type: 'tool-call',
+        payload: {
+          toolCallId: 'c2',
+          toolName: 'skill',
+          args: { name: 'avery-playbooks' },
+        },
+      },
+      {
+        type: 'tool-result',
+        payload: { toolCallId: 'c2', result: 'the skill' },
+      },
+    ]);
+    await runOrchestratorTurn(deps, { question: 'q' });
+    const frames = events.map(
+      (e) => JSON.parse(e.content as string) as Record<string, string>,
+    );
+    expect(frames[0].input).toBe(brief.slice(0, 2_000));
+    expect(frames[1]).toEqual({
+      tool: 'answer_from_data',
+      reply: 'France, 14.',
+    });
+    expect(frames[3]).toEqual({ tool: 'skill' });
   });
 
   it('fails the step on a model error, and answers stopped when the run is stopped', async () => {

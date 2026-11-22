@@ -190,6 +190,16 @@ export class WorkflowDetailPage {
     focusQueryOpener(this.designer.closeQuery());
   }
 
+  /** The relay of the open teammate's orchestrator step, in the run shown (ui.md 4.4b). */
+  readonly openRelay = computed(() => {
+    const stepId = this.designer.openInspection()?.tool?.teammate
+      ? this.designer.openInspection()?.tool?.stepId
+      : undefined;
+    return stepId
+      ? (this.designer.agentStories().get(stepId)?.relay ?? null)
+      : null;
+  });
+
   /** The answer's records a node's Story links its queries to; null when the page does not inspect queries. */
   readonly storyAnswerData = computed(() =>
     this.designer.inspectsQueries() ? (this.answer()?.data ?? null) : null,

@@ -381,6 +381,46 @@ describe('WorkflowNodeDialog', () => {
     expect(keys).toEqual(['qti']);
   });
 
+  it("opens a teammate's sub-node as their work: portrait and name, status, who they work for, and their agent definition one link away", () => {
+    const tool = FIXTURE_TOOL.tool!;
+    open({
+      ...FIXTURE_TOOL,
+      tool: {
+        ...tool,
+        name: 'answer_from_data',
+        agentName: 'Avery',
+        agentRole: 'Chief of Staff',
+        calls: [
+          {
+            tool: 'answer_from_data',
+            input: 'Which team scored most?',
+            reply: 'France, 14.',
+            durationMs: 21_900,
+            finished: true,
+          },
+        ],
+        totalDurationMs: 21_900,
+        teammate: {
+          key: 'insights-analyst',
+          name: 'Michael',
+          role: 'Insights Analyst',
+        },
+      },
+    });
+    expect(text('workflow-ndv-title')).toBe('Michael · Insights Analyst');
+    expect(text('workflow-ndv-teammate-status')).toBe('Done · 21.9 s');
+    expect(byId('workflow-ndv')?.textContent).toContain(
+      'Works for Avery, Chief of Staff · Analyse',
+    );
+    expect(byId('workflow-ndv')?.textContent).not.toContain('TOOL');
+    expect(byId('workflow-teammate-work')).not.toBeNull();
+    expect(text('workflow-teammate-reply')).toContain('France, 14.');
+    const keys: string[] = [];
+    fixture.componentInstance.openAgent.subscribe((k) => keys.push(k));
+    byId('workflow-ndv-teammate-definition')!.click();
+    expect(keys).toEqual(['insights-analyst']);
+  });
+
   it('shows a code step without agent fields', () => {
     open(node('receive'));
     expect(text('workflow-step-field-kind')).toBe('Code');

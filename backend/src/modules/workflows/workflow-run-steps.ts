@@ -83,6 +83,11 @@ export interface WorkflowRunToolCall {
   agent?: string;
   /** A team call (Avery's): the registry key of the agent it calls. */
   teammate?: string;
+  /**
+   * A team call's result: what the teammate handed back, in their words (the
+   * `tool-result` event's `reply`); at most `TOOL_CALL_INPUT_CAP` characters.
+   */
+  reply?: string;
 }
 
 /**
@@ -674,6 +679,7 @@ export class RunStepTracker {
     input?: string;
     rowCount?: number;
     error?: string;
+    reply?: string;
   }): void {
     const key = this.runningAgentStep();
     if (!key) return;
@@ -696,6 +702,9 @@ export class RunStepTracker {
         : {}),
       ...(typeof result.error === 'string' && result.error
         ? { error: result.error }
+        : {}),
+      ...(typeof result.reply === 'string' && result.reply
+        ? { reply: result.reply.slice(0, TOOL_CALL_INPUT_CAP) }
         : {}),
       ...(tracked.startedAt !== undefined
         ? { durationMs: Math.max(0, this.now().getTime() - tracked.startedAt) }
@@ -916,6 +925,7 @@ export function noteToolFrame(
     input: text(frame['input']),
     ...(typeof rowCount === 'number' ? { rowCount } : {}),
     error: text(frame['error']),
+    reply: text(frame['reply']),
   });
 }
 

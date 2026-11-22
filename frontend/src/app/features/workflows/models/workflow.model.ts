@@ -298,6 +298,8 @@ export interface WorkflowRunToolCall {
   agent?: string;
   /** A team call (Avery's): the agent it hands the work to. */
   teammate?: string;
+  /** A team call's result: what the teammate handed back, in their words (at most 2 000 characters). */
+  reply?: string;
 }
 
 /** One labelled fact under a step story's headline (api.md 3.6 `step.story`). */

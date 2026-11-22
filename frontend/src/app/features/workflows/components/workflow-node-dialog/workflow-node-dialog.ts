@@ -65,6 +65,8 @@ import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
 import { WorkflowStepOutputView } from '../workflow-step-output-view/workflow-step-output-view';
 import { WorkflowNodeChat } from '../workflow-node-chat/workflow-node-chat';
 import { WorkflowStepEvidence } from '../workflow-step-evidence/workflow-step-evidence';
+import { WorkflowTeammateWork } from '../workflow-teammate-work/workflow-teammate-work';
+import { RelayItem } from '../../services/team-relay';
 import {
   StoryQueryOpen,
   WorkflowStepStory,
@@ -125,6 +127,7 @@ const SUMMARY_FIELDS = 4;
     WorkflowStepEvidence,
     WorkflowStepOutputView,
     WorkflowStepStory,
+    WorkflowTeammateWork,
   ],
   templateUrl: './workflow-node-dialog.html',
   host: {
@@ -177,6 +180,11 @@ export class WorkflowNodeDialog {
   readonly answerData = input<readonly ToolDataRecord[] | null>(null);
   /** A Story's query was picked: its index among the answer's queries. */
   readonly openQuery = output<StoryQueryOpen>();
+  /**
+   * The orchestrator step's relay in the run shown (ui.md 4.4b *relay*): a
+   * teammate's dialog tells their work from it. Null without one.
+   */
+  readonly relay = input<readonly RelayItem[] | null>(null);
   /** Where a statement is among the answer's queries; null when none can be opened. */
   readonly queryIndexOf = computed(() => {
     const data = this.answerData();
@@ -209,6 +217,7 @@ export class WorkflowNodeDialog {
 
   readonly icon = computed(() => KIND_ICONS[this.node().kind]);
   readonly badge = computed(() => {
+    if (this.teammate()) return null;
     const kind: WorkflowNodeKind = this.node().kind;
     return kind === 'code'
       ? 'CODE'
@@ -225,7 +234,9 @@ export class WorkflowNodeDialog {
         name: tool.agentName,
         role: tool.agentRole,
       });
-      return `Tool of ${persona} · ${tool.stepTitle}`;
+      return tool.teammate
+        ? `Works for ${persona} · ${tool.stepTitle}`
+        : `Tool of ${persona} · ${tool.stepTitle}`;
     }
     const agent = this.node().step?.agent;
     if (!agent) return null;
@@ -237,6 +248,21 @@ export class WorkflowNodeDialog {
 
   /** A tool opened from its sub-node; null for any other node. */
   readonly tool = computed(() => this.node().tool ?? null);
+  /** A team tool's teammate (their portrait sub-node): the dialog tells their work. */
+  readonly teammate = computed(() => this.tool()?.teammate ?? null);
+  /** The teammate's chip in the run shown: `Working`, `Failed`, `Done · 27.1 s`; null when not called. */
+  readonly teammateStatus = computed(() => {
+    const calls = this.teammate() ? (this.tool()?.calls ?? []) : [];
+    if (calls.length === 0) return null;
+    if (calls.some((call) => !call.finished))
+      return { label: 'Working', chip: nodeStatusChip('running') };
+    if (calls.some((call) => call.error))
+      return { label: 'Failed', chip: nodeStatusChip('failed') };
+    return {
+      label: `Done · ${this.toolDuration()}`,
+      chip: nodeStatusChip('success'),
+    };
+  });
   readonly toolNotRun = TOOL_NOT_RUN;
   readonly toolDuration = computed(() =>
     formatNodeDuration(this.tool()?.totalDurationMs),

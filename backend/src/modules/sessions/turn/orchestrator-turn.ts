@@ -147,6 +147,19 @@ function averyToolInput(
   return undefined;
 }
 
+/**
+ * The most a team call's brief or its teammate's reply keeps in a tool event,
+ * as a run stores a call's input (`TOOL_CALL_INPUT_CAP`, api.md 3.1).
+ */
+export const TEAM_EVENT_TEXT_CAP = 2_000;
+
+/** A tool's result as text: `{ result }` (the team tools'), or a string. */
+function toolResultText(result: unknown): string | undefined {
+  if (typeof result === 'string') return result;
+  const text = (result as { result?: unknown } | null)?.result;
+  return typeof text === 'string' ? text : undefined;
+}
+
 /** Michael on his own (Avery + Michael): told he plans and writes the answer. */
 export const MICHAEL_ALONE_LINE =
   'You work alone with Avery in this run: no one plans before you and no one writes after you. Plan the analysis yourself from her brief, and write your reply as the answer the user reads.';
@@ -253,6 +266,8 @@ export function orchestratorTools(
   deps: OrchestratorTurnDeps,
   question: string,
   answered: AnsweredClarification | undefined,
+  /** Michael's own words for Avery, which his team call hands back (ui.md 4.4b). */
+  said?: (reply: string) => void,
 ): OrchestratorToolsRuntime {
   const { state, team } = deps;
   const earlier = conversationQueriesBlock(deps.earlierQueries);
@@ -310,6 +325,9 @@ export function orchestratorTools(
       imageNotes: state.imageNotes,
     });
     if (attempt.clarification) {
+      said?.(
+        `Needs an answer before going on: ${attempt.clarification.question}`,
+      );
       return [
         `Michael needs an answer before he can go on: ${attempt.clarification.question}`,
         ...attempt.clarification.options.map((option) => `- ${option}`),
@@ -324,6 +342,7 @@ export function orchestratorTools(
     state.queries = [...state.queries, ...attempt.queries];
     state.findings = findings;
     state.analystNote = attempt.text;
+    if (attempt.text.trim()) said?.(attempt.text);
     // On his own, his reply is the run's answer (the last one he wrote).
     if (alone && attempt.text.trim()) state.answer = attempt.text;
     return [
@@ -408,7 +427,9 @@ export async function runOrchestratorTurn(
   const requestContext = new RequestContext();
   requestContext.set(
     ORCHESTRATOR_TOOLS_RUNTIME_KEY,
-    orchestratorTools(deps, question, answered),
+    orchestratorTools(deps, question, answered, (reply) => {
+      said = reply;
+    }),
   );
   if (deps.orchestratorModel) {
     requestContext.set(STEP_MODEL_CONTEXT_KEY, deps.orchestratorModel);
@@ -437,6 +458,8 @@ export async function runOrchestratorTurn(
   let asked: { question: string; options: string[] } | undefined;
   let failure: unknown;
   const names = new Map<string, string>();
+  // What the teammate of the call under way said, in their own words.
+  let said: string | undefined;
   try {
     const stream = await deps
       .getAgent(CHIEF_OF_STAFF_AGENT_KEY)
@@ -489,7 +512,7 @@ export async function runOrchestratorTurn(
           type: 'tool',
           content: JSON.stringify({
             name,
-            ...(input ? { input: input.slice(0, 200) } : {}),
+            ...(input ? { input: input.slice(0, TEAM_EVENT_TEXT_CAP) } : {}),
             agent: CHIEF_OF_STAFF_AGENT_KEY,
             ...(teammate ? { teammate } : {}),
           }),
@@ -499,9 +522,19 @@ export async function runOrchestratorTurn(
           payload.toolName ??
           (payload.toolCallId ? names.get(payload.toolCallId) : undefined) ??
           'tool';
+        // A team call's result: what the teammate handed back (ui.md 4.4b).
+        const reply = teammateOfTool(name)
+          ? (said ?? toolResultText(payload.result))
+          : undefined;
+        said = undefined;
         deps.emit({
           type: 'tool-result',
-          content: JSON.stringify({ tool: name }),
+          content: JSON.stringify({
+            tool: name,
+            ...(reply?.trim()
+              ? { reply: reply.trim().slice(0, TEAM_EVENT_TEXT_CAP) }
+              : {}),
+          }),
         });
       }
     }
