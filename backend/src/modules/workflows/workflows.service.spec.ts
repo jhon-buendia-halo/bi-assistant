@@ -329,7 +329,32 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         { from: 'start', to: 'orchestrate', kind: 'next' },
         { from: 'orchestrate', to: 'end', kind: 'next' },
       ]);
+      // Avery's step shows her own tools and limit, and the agent behind
+      // each tool of her team, never Michael's tools (agents.md 2.21).
+      expect(orchestrated.steps[0].agent).toMatchObject({
+        key: 'chief-of-staff',
+        name: 'Avery',
+        tools: [
+          'read_reference_images',
+          'plan_analysis',
+          'analyse_data',
+          'write_answer',
+          'build_visual',
+          'ask_clarification',
+        ],
+        maxSteps: 16,
+        team: [
+          { tool: 'read_reference_images', key: 'image-reader', name: 'Zoe' },
+          { tool: 'plan_analysis', key: 'analysis-planner', name: 'Olivia' },
+          { tool: 'analyse_data', key: 'insights-analyst', name: 'Michael' },
+          { tool: 'write_answer', key: 'answer-writer', name: 'Jessica' },
+          { tool: 'build_visual', key: 'visualization', name: 'Ryan' },
+        ],
+      });
       const answer = await ctx.service.get('answer-business-question');
+      expect(
+        answer.steps.find((s) => s.id === 'analyse')?.agent,
+      ).not.toHaveProperty('team');
       expect(answer.steps.map((step) => step.id)).toEqual([
         'read-images',
         'receive-question',

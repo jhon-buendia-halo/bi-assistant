@@ -774,7 +774,8 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     toolDetails: { name: string; description: string; inputs: string[] }[];   // 34's AgentDetail.toolDetails, as is (sorted by name; inputs: top-level input param names)
   };
   type WorkflowDetailStep = Omit<AgentWorkflowStep, 'agent'> & {
-    agent?: { key: string; name: string; role: string; tools: string[]; maxSteps: number };   // `key`: the agent's registry key or user-agent id; `name`, `role`: its persona (agents.md 1.1)
+    agent?: { key: string; name: string; role: string; tools: string[]; maxSteps: number;   // `key`: the agent's registry key or user-agent id; `name`, `role`: its persona (agents.md 1.1); `tools`, `maxSteps`: the step's own agent's (Avery's own six tools and 16 steps on orchestrated-answer's Orchestrate, never the workflow's primary agent's)
+      team?: { tool: string; key: string; name: string; role: string }[] };   // an orchestrator only (Avery, agents.md 2.21): each of her tools that calls an agent, with that agent's key and persona, in her tools' order; absent on every other step
     inputSchema: JsonSchema;          // the step's declared input (agents.md 5.12); `input` is its property names, in order
     outputSchema: JsonSchema;         // the step's declared output; `output` is its property names, in order
   };

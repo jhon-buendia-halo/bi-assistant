@@ -34,6 +34,7 @@ import {
   type ValidationFinding,
 } from '../../../mastra/workflows/answer-business-question.steps';
 import {
+  ORCHESTRATOR_MAX_STEPS,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   type OrchestratorToolsRuntime,
 } from '../../../mastra/workflows/orchestrated-answer.steps';
@@ -44,8 +45,8 @@ import {
 } from '../../../mastra/step-model';
 import type { StreamEvent } from './stream-events';
 
-/** The most model steps Avery takes in one turn. */
-export const ORCHESTRATOR_MAX_STEPS = 16;
+/** The most model steps Avery takes in one turn (defined with her catalogue data). */
+export { ORCHESTRATOR_MAX_STEPS };
 
 /** The team's calls, as the turn makes them for Answer a Business Question. */
 export interface OrchestratorTeam {
