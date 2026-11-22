@@ -1365,8 +1365,21 @@ export class WorkflowRunsService implements OnModuleInit {
    * code, any other by one call to `query-explainer`. A second request for
    * the same run and index while one runs waits for the same result.
    */
-  async explainQuery(id: string, index: number): Promise<WorkflowRun> {
-    return this.answers.explain(this.answerHost(id), index);
+  async explainQuery(
+    id: string,
+    index: number,
+    refresh = false,
+  ): Promise<WorkflowRun> {
+    return this.answers.explain(this.answerHost(id), index, refresh);
+  }
+
+  /** The first rows one step of an explained query leaves (api.md 161). */
+  async previewQueryStep(
+    id: string,
+    index: number,
+    step: number,
+  ): Promise<WorkflowRun> {
+    return this.answers.previewStep(this.answerHost(id), index, step);
   }
 
   /**

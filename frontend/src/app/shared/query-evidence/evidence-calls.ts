@@ -15,8 +15,9 @@ import {
  */
 export interface EvidenceCalls<T, U> {
   prepare(target: T): Observable<U>;
-  explain(target: T, index: number): Observable<U>;
+  explain(target: T, index: number, refresh?: boolean): Observable<U>;
   countStages(target: T, index: number): Observable<U>;
+  previewStep(target: T, index: number, step: number): Observable<U>;
   rerun(target: T, index: number): Observable<{ result: QueryRerunResult }>;
   downloadCsv(target: T, index: number): Observable<Blob>;
   page(
@@ -57,9 +58,12 @@ export function queryEvidenceApiOver<T, U>(
       );
   return {
     prepare: () => withTarget((t) => calls.prepare(t).pipe(apply())),
-    explain: (i) => withTarget((t) => calls.explain(t, i).pipe(apply())),
+    explain: (i, refresh) =>
+      withTarget((t) => calls.explain(t, i, refresh).pipe(apply())),
     countStages: (i) =>
       withTarget((t) => calls.countStages(t, i).pipe(apply())),
+    previewStep: (i, step) =>
+      withTarget((t) => calls.previewStep(t, i, step).pipe(apply())),
     rerun: (i) =>
       withTarget((t) =>
         calls.rerun(t, i).pipe(map((response) => response.result)),

@@ -21,6 +21,9 @@ import { pageResultOf, preparePage, type PageSource } from './result-view';
 
 /** Table counts in flight at once (api.md 139). */
 export const TABLE_COUNT_CONCURRENCY = 3;
+
+/** The most rows a step's preview keeps (ui.md 4.4b). */
+export const STEP_PREVIEW_ROWS = 10;
 /** The tool defaults, for a record stored before its cap was recorded. */
 const SQL_DEFAULT_LIMIT = 100;
 const SAMPLE_DEFAULT_LIMIT = 10;
@@ -357,6 +360,39 @@ export class QueryEvidenceService {
    * One count statement's result (table sizes here, the step counts of
    * 1.25.3): a single integer of 0 or more, else it throws.
    */
+  /**
+   * The first rows a step's preview statement returns (api.md 161, 162): at
+   * most `STEP_PREVIEW_ROWS`, whether there were more, and the total the
+   * datasource reports.
+   */
+  async previewRows(
+    datasourceId: string,
+    sql: string,
+  ): Promise<{
+    columns: string[];
+    rows: Record<string, unknown>[];
+    more: boolean;
+    total?: number;
+  }> {
+    const result = await this.datasources.runReadOnlySql(
+      datasourceId,
+      sql,
+      STEP_PREVIEW_ROWS,
+    );
+    const rows = (result.rows ?? []).slice(0, STEP_PREVIEW_ROWS);
+    const total = result.totalRows;
+    return {
+      columns: result.columns?.length
+        ? result.columns
+        : Object.keys(rows[0] ?? {}),
+      rows,
+      more:
+        (total !== undefined && total > rows.length) ||
+        (result.rows ?? []).length > STEP_PREVIEW_ROWS,
+      ...(total !== undefined ? { total } : {}),
+    };
+  }
+
   async countRows(datasourceId: string, sql: string): Promise<number> {
     const result = await this.datasources.runReadOnlySql(datasourceId, sql, 1);
     const n = countOf(result.rows ?? []);

@@ -131,6 +131,7 @@ Controller prefix `/sessions`. Capability: past-chats, visuals, agent-panel, wor
 | 144 | `POST /sessions/:id/messages/:message/answer/evidence` | Build the query evidence of a message's answer, and size the tables its queries read | no |
 | 145 | `POST /sessions/:id/messages/:message/answer/queries/:index/explanation` | Explain one of the message's queries step by step (cached in the message) | no |
 | 146 | `POST /sessions/:id/messages/:message/answer/queries/:index/stage-counts` | Count the rows after each step of an explained query, checked | no |
+| 162 | `POST /sessions/:id/messages/:message/answer/queries/:index/steps/:step/preview` | The first rows one step of an explained query leaves | no |
 | 147 | `POST /sessions/:id/messages/:message/answer/queries/:index/rerun` | Run one of the message's queries again; nothing stored | no |
 | 148 | `GET /sessions/:id/messages/:message/answer/queries/:index/csv` | One query's rows as CSV, up to 50,000 | no |
 | 154 | `POST /sessions/:id/messages/:message/answer/queries/:index/page` | One page of one of the message's queries, filtered and sorted; nothing stored | no |
@@ -225,7 +226,7 @@ The query inspector over a session's assistant message (1.25.9; plan `docs/plans
 - Errors: the shared ones.
 
 #### 145. `POST /sessions/:id/messages/:message/answer/queries/:index/explanation`
-- Body: none. As 140: the stored explanation when there is one, else `sample_rows` by code or one call to `query-explainer`, stored at `messages[<message>].evidence[k].explanation`. A second request for the same session, message and index while one runs waits for the same result.
+- Body: none, or `{ refresh: true }` (as 140). As 140: the stored explanation when there is one, else `sample_rows` by code or one call to `query-explainer`, stored at `messages[<message>].evidence[k].explanation`. A second request for the same session, message and index while one runs waits for the same result.
 - Success `201`: `{ ok: true, message: ChatMessage }`.
 - Errors: the shared ones; `400 "Query <index> has no SQL to explain"`; `400 "The query could not be explained: <model error>"`.
 
@@ -233,6 +234,11 @@ The query inspector over a session's assistant message (1.25.9; plan `docs/plans
 - Body: none. As 141, stored in the message.
 - Success `201`: `{ ok: true, message: ChatMessage }`.
 - Errors: the shared ones; `400 "Explain query <index> first"`.
+
+#### 162. `POST /sessions/:id/messages/:message/answer/queries/:index/steps/:step/preview`
+- Body: none. As 161, stored in the message.
+- Success `201`: `{ ok: true, message: ChatMessage }`.
+- Errors: as 161.
 
 #### 147. `POST /sessions/:id/messages/:message/answer/queries/:index/rerun`
 - Body: none. As 142. **Nothing is stored.**
@@ -885,6 +891,7 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 | 139 | `POST /workflow-runs/:id/answer/evidence` | Build the query evidence of an answer stored before it, and size the tables its queries read | yes |
 | 140 | `POST /workflow-runs/:id/answer/queries/:index/explanation` | Explain one of the answer's queries step by step (cached with the answer) | yes |
 | 141 | `POST /workflow-runs/:id/answer/queries/:index/stage-counts` | Count the rows after each step of an explained query, checked | yes |
+| 161 | `POST /workflow-runs/:id/answer/queries/:index/steps/:step/preview` | The first rows one step of an explained query leaves | yes |
 | 142 | `POST /workflow-runs/:id/answer/queries/:index/rerun` | Run one of the answer's queries again; nothing stored | yes |
 | 143 | `GET /workflow-runs/:id/answer/queries/:index/csv` | One query's rows as CSV, up to 50,000 | yes |
 | 152 | `POST /workflow-runs/:id/answer/queries/:index/page` | One page of one of the answer's queries, filtered and sorted; nothing stored | no |
@@ -1056,7 +1063,7 @@ The query inspector's endpoints over a run's stored answer and its `evidence` (3
 - Errors: the shared ones.
 
 #### 140. `POST /workflow-runs/:id/answer/queries/:index/explanation`
-- Body: none. Returns the stored `evidence[index].explanation` when there is one. Otherwise: for a `sample_rows` record, code builds the steps; for SQL, one call to the System agent `query-explainer` ([agents.md](agents.md)), whose request holds the dialect, the rationale, the tables with their sizes, the columns and the SQL, never result rows. The explanation is stored at `answer.evidence[index].explanation` under the lock. A second request for the same run and index while one is running waits for the same result.
+- Body: none, or `{ refresh: true }` to explain the query again: its stored explanation, counts and step rows are replaced (161). Without it, returns the stored `evidence[index].explanation` when there is one. Otherwise: for a `sample_rows` record, code builds the steps; for SQL, one call to the System agent `query-explainer` ([agents.md](agents.md)), whose request holds the dialect, the rationale, the tables with their sizes, the columns and the SQL, never result rows. The explanation is stored at `answer.evidence[index].explanation` under the lock. A second request for the same run and index while one is running waits for the same result.
 - Success `201`: `{ ok: true, run }`.
 - A reply that is no JSON object is stored with `fallback: true` (steps built by code) and answers 201.
 - Errors: the shared ones; `400 "Query <index> has no SQL to explain"` (a failed record); `400 "The query could not be explained: <model error>"`.
@@ -1065,6 +1072,12 @@ The query inspector's endpoints over a run's stored answer and its `evidence` (3
 - Body: none. Runs each step's `countSql` in turn, at most 8, and checks them (the start count equals the table size; every statement reads only tables the query reads and returns one whole number of 0 or more; `keep` and `group` never increase the count; the last count, with the outer limit, equals the rows produced). Stores each step's `rows` and `explanation.stageCounts` (`verified`, or `unverified` with its `reason`, when no step count but the start and show counts is stored). `unverified` is a stored result, not an error. Called again once verified, it returns the stored result.
 - Success `201`: `{ ok: true, run }`.
 - Errors: the shared ones; `400 "Explain query <index> first"`.
+
+
+#### 161. `POST /workflow-runs/:id/answer/queries/:index/steps/:step/preview`
+- Body: none. `:step` is the 0-based index of a step of the query's stored explanation, never its Show step (whose rows are the query's own). Runs that step's `previewSql` once, read-only and capped at 10 rows, after checking it reads only tables the query reads, and stores on the step `preview: { columns, rows (at most 10), more, total?, at, check? }` (`check` `matches` or `differs` against the step's verified count; absent when the counts are not verified; agents.md 2, *Step rows*). Called again, it returns the stored preview.
+- Success `201`: `{ ok: true, run }`.
+- Errors: the shared ones; `400 "Explain query <index> first"`; `400 "Query <index> has no step <step>"` (out of range, or the Show step); `400 "Step <n> has no preview: explain the query again"` (an explanation stored before step rows: 140 with `{ refresh: true }`); `400 "Step <n> reads <table>, which the query does not read"`; `400 "Step <n> could not be previewed: <error>"`.
 
 #### 142. `POST /workflow-runs/:id/answer/queries/:index/rerun`
 - Body: none. Runs the record's statement again, with no repair, at its `rowLimit` (default 100; a `sample_rows` record samples its entity again, default 10). **Nothing is stored**: the answer keeps pointing at the rows it was written from.

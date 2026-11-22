@@ -285,9 +285,23 @@ export class SessionsApiService {
     id: string,
     message: number,
     index: number,
+    refresh = false,
   ): Observable<{ ok: boolean; message: ChatMessage }> {
     return this.http.post<{ ok: boolean; message: ChatMessage }>(
       `${this.answerUrl(id, message)}/queries/${index}/explanation`,
+      refresh ? { refresh: true } : {},
+    );
+  }
+
+  /** The first rows one step of a query leaves (api.md 162). */
+  previewQueryStep(
+    id: string,
+    message: number,
+    index: number,
+    step: number,
+  ): Observable<{ ok: boolean; message: ChatMessage }> {
+    return this.http.post<{ ok: boolean; message: ChatMessage }>(
+      `${this.answerUrl(id, message)}/queries/${index}/steps/${step}/preview`,
       {},
     );
   }

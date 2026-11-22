@@ -314,9 +314,22 @@ export class WorkflowRunsApiService {
   explainQuery(
     id: string,
     index: number,
+    refresh = false,
   ): Observable<{ ok: boolean; run: WorkflowRun }> {
     return this.http.post<{ ok: boolean; run: WorkflowRun }>(
       `${this.answerUrl(id)}/queries/${index}/explanation`,
+      refresh ? { refresh: true } : {},
+    );
+  }
+
+  /** The first rows one step of a query leaves (api.md 161). Answers the updated run. */
+  previewQueryStep(
+    id: string,
+    index: number,
+    step: number,
+  ): Observable<{ ok: boolean; run: WorkflowRun }> {
+    return this.http.post<{ ok: boolean; run: WorkflowRun }>(
+      `${this.answerUrl(id)}/queries/${index}/steps/${step}/preview`,
       {},
     );
   }
@@ -362,7 +375,10 @@ export class WorkflowRunsApiService {
     text: string,
     view: ResultView | null,
   ): Observable<{ ok: boolean; interpretation: FilterInterpretation }> {
-    return this.http.post<{ ok: boolean; interpretation: FilterInterpretation }>(
+    return this.http.post<{
+      ok: boolean;
+      interpretation: FilterInterpretation;
+    }>(
       `${this.answerUrl(id)}/queries/${index}/interpret-filter`,
       view === null ? { text } : { text, view },
     );

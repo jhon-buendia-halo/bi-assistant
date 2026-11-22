@@ -37,8 +37,23 @@ export class SessionEvidenceService {
   }
 
   /** 145: explain one query step by step. */
-  explain(id: string, message: number, index: number): Promise<ChatMessage> {
-    return this.answers.explain(this.host(id, message), index);
+  explain(
+    id: string,
+    message: number,
+    index: number,
+    refresh = false,
+  ): Promise<ChatMessage> {
+    return this.answers.explain(this.host(id, message), index, refresh);
+  }
+
+  /** 162: the first rows one step of an explained query leaves. */
+  previewStep(
+    id: string,
+    message: number,
+    index: number,
+    step: number,
+  ): Promise<ChatMessage> {
+    return this.answers.previewStep(this.host(id, message), index, step);
   }
 
   /** 146: count the rows after each step of an explained query. */
