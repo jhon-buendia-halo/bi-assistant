@@ -1,0 +1,107 @@
+@if (set(); as s) {
+  @if (s.playbooks.length > 0) {
+    <section
+      data-testid="agent-cv-section-playbooks"
+      aria-labelledby="agent-cv-heading-playbooks"
+      class="grid gap-x-6 gap-y-2 border-t border-border py-4 last:pb-0 @2xl:grid-cols-[132px_minmax(0,1fr)]"
+    >
+      <h4
+        id="agent-cv-heading-playbooks"
+        class="m-0 pt-0.5 text-[12px] font-semibold tracking-wider text-on-primary-soft uppercase"
+      >
+        Playbooks
+      </h4>
+      <div class="flex min-w-0 flex-col gap-2">
+        <p class="m-0 text-[14px] leading-relaxed text-fg-muted">
+          Before calling the team, {{ agentName() }} follows the playbook that
+          fits the question, and reads another when something happens during the
+          run. Each ends with what {{ agentName() }}'s reply must say.
+        </p>
+        <ul class="m-0 flex list-none flex-col gap-2 p-0">
+          @for (p of s.playbooks; track p.path; let first = $first) {
+            <li
+              class="rounded-lg border bg-surface"
+              data-testid="agent-playbook"
+              [attr.data-path]="p.path"
+              [class.border-border]="!isOpen(p.path, first)"
+              [class.border-primary]="isOpen(p.path, first)"
+            >
+              <button
+                type="button"
+                class="flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
+                data-testid="agent-playbook-toggle"
+                [attr.aria-expanded]="isOpen(p.path, first)"
+                (click)="toggle(p.path, first)"
+              >
+                <lucide-angular
+                  [img]="isOpen(p.path, first) ? ChevronDown : ChevronRight"
+                  [size]="14"
+                  class="mt-[3px] shrink-0 text-fg-muted"
+                  aria-hidden="true"
+                />
+                <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span class="flex flex-wrap items-center gap-2">
+                    <span class="text-[14px] font-semibold text-fg-strong">{{
+                      p.title
+                    }}</span>
+                    @if (p.phase === "first") {
+                      <span class="chip chip-neutral">Picked first</span>
+                    } @else if (p.phase === "during") {
+                      <span class="chip chip-neutral">During the run</span>
+                    }
+                  </span>
+                  @if (p.trigger) {
+                    <span class="text-[13px] text-fg-muted">{{
+                      p.trigger
+                    }}</span>
+                  }
+                </span>
+                @if (p.steps > 0) {
+                  <span class="shrink-0 pt-0.5 text-[12px] text-fg-muted"
+                    >{{ p.steps }} {{ p.steps === 1 ? "step" : "steps" }}</span
+                  >
+                }
+              </button>
+              @if (isOpen(p.path, first)) {
+                <div class="px-3 pb-3 pl-9" data-testid="agent-playbook-body">
+                  <div
+                    class="prose-dark text-[13px] text-fg"
+                    [innerHTML]="p.body | markdown"
+                  ></div>
+                  @if (p.reply) {
+                    <p
+                      class="m-0 mt-2 rounded-md bg-primary-soft px-3 py-2 text-[13px] text-fg"
+                      data-testid="agent-playbook-reply"
+                    >
+                      <strong class="font-semibold text-fg-strong"
+                        >Reply:</strong
+                      >
+                      {{ p.reply }}
+                    </p>
+                  }
+                  <p class="m-0 mt-1.5 font-mono text-[11px] text-fg-muted">
+                    {{ s.skill }}/{{ p.path }}
+                  </p>
+                </div>
+              }
+            </li>
+          }
+        </ul>
+        @for (note of s.notes; track $index) {
+          <p
+            class="m-0 text-[13px] text-fg-muted"
+            data-testid="agent-playbooks-note"
+          >
+            {{ note }}
+          </p>
+        }
+        <p class="m-0 text-[12px] text-fg-muted">
+          From the <code class="font-mono">{{ s.skill }}</code> skill:
+          <code class="font-mono">SKILL.md</code> picks the playbook, each one
+          is a file in <code class="font-mono">reference/</code>. Its files are
+          in the Skills tab.
+        </p>
+      </div>
+    </section>
+  }
+}

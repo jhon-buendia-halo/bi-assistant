@@ -139,6 +139,14 @@
           </div>
         </section>
       }
+      <!-- The playbooks it follows, from its playbooks skill (ui.md 4.5) -->
+      @if (playbooksSkill(); as skill) {
+        <app-agent-playbooks
+          [agentKey]="a.key"
+          [agentName]="a.name"
+          [skill]="skill"
+        />
+      }
     </div>
   </div>
 </div>

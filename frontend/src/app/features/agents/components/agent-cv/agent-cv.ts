@@ -1,9 +1,11 @@
 import { Component, computed, input } from '@angular/core';
-import { AgentDetail } from '../../services/agents-api.service';
+import { AgentDetail, AgentSkill } from '../../services/agents-api.service';
+import { isPlaybooksSkill } from '../../services/agent-playbooks';
 import { agentDomain, domainInfo } from '../../services/agent-domains';
 import { jobDescriptionCv } from '../../services/job-description-cv';
 import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import { LinkedText } from '../linked-text/linked-text';
+import { AgentPlaybooks } from '../agent-playbooks/agent-playbooks';
 
 /**
  * The job description laid out as a two-column CV (ui.md 4.5, *CV view*):
@@ -14,7 +16,7 @@ import { LinkedText } from '../linked-text/linked-text';
  */
 @Component({
   selector: 'app-agent-cv',
-  imports: [AgentAvatar, LinkedText],
+  imports: [AgentAvatar, AgentPlaybooks, LinkedText],
   templateUrl: './agent-cv.html',
   styles: `
     .cv-label {
@@ -46,6 +48,11 @@ export class AgentCv {
   readonly text = input.required<string>();
   /** The links that exist, as `kind:name` (the text view's chips). */
   readonly known = input.required<ReadonlySet<string>>();
+  /** The skills the agent gets; its playbooks skill becomes the Playbooks section. */
+  readonly skills = input<readonly AgentSkill[] | null>(null);
+  readonly playbooksSkill = computed(
+    () => this.skills()?.find((skill) => isPlaybooksSkill(skill.name)) ?? null,
+  );
   /** The test id of the column that holds the job description's words. */
   readonly bodyTestId = input('agent-cv-body');
 

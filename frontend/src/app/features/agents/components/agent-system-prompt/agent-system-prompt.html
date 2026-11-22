@@ -128,6 +128,7 @@
       @defer (on immediate) {
         <app-agent-cv
           [agent]="agent()"
+          [skills]="agentSkills()"
           [text]="instructions()"
           [known]="known()"
           bodyTestId="agent-instructions"
@@ -304,6 +305,7 @@
       @defer (on immediate) {
         <app-agent-cv
           [agent]="agent()"
+          [skills]="agentSkills()"
           [text]="prompt.editable"
           [known]="builtInKnown()"
           bodyTestId="agent-prompt-view"
@@ -336,6 +338,7 @@
       @defer (on immediate) {
         <app-agent-cv
           [agent]="agent()"
+          [skills]="agentSkills()"
           [text]="agent().instructions"
           [known]="builtInKnown()"
           bodyTestId="agent-prompt-view"
