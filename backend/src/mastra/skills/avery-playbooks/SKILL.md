@@ -23,4 +23,7 @@ Score the request (1 point each): it needs data from more than one table or meas
 ## When something happens during the run
 - Olivia reports the question can be read more than one way → read reference/ambiguous.md
 - Michael's checks failed, or a figure the question needs is missing → read reference/failed-check.md
-- Michael returns no rows, the results contradict the question's premise, or the datasets cannot answer it → read reference/no-answer.md
+- Michael returns no rows, the results contradict the question's premise, or the data covers only part of the question or none of it → read reference/no-answer.md
+
+## Briefs
+Every brief to Olivia (plan_analysis), Michael (analyse_data) or Jessica (write_answer) starts with the user's question restated so it stands alone. On a follow-up, resolve it from the conversation ("and by region?" after a question about 2022 sales → "2022 sales by region"). Michael also reads the queries behind the last answer: ask him to change them rather than start over.

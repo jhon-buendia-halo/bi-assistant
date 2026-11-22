@@ -171,6 +171,72 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
     expect(deps.state.answer).toBe('There were 64 matches.');
   });
 
+  it('hands Olivia and Jessica her brief (the question restated to stand alone), and none when she gives none', async () => {
+    const { deps, members } = fixture(async (tools) => {
+      await tools.plan('Who won the 2018 and 2022 World Cups?');
+      await tools.analyse('The champion of each tournament.');
+      await tools.writeAnswer(
+        'Who won the 2018 and 2022 World Cups? The user already knows there are two.',
+      );
+      return [text('Done.')];
+    });
+    await runOrchestratorTurn(deps, { question: 'And who won each one?' });
+    // The user's own words stay the question; her brief rides along.
+    expect(members.plan.mock.calls[0][0]).toMatchObject({
+      question: 'And who won each one?',
+      brief: 'Who won the 2018 and 2022 World Cups?',
+    });
+    expect(members.writeAnswer.mock.calls[0][0]).toMatchObject({
+      question: 'And who won each one?',
+      brief:
+        'Who won the 2018 and 2022 World Cups? The user already knows there are two.',
+    });
+
+    const bare = fixture(async (tools) => {
+      await tools.plan();
+      await tools.analyse('Count.');
+      await tools.writeAnswer('  ');
+      return [text('Done.')];
+    });
+    await runOrchestratorTurn(bare.deps, { question: 'How many matches?' });
+    expect(bare.members.plan.mock.calls[0][0]).not.toHaveProperty('brief');
+    expect(bare.members.writeAnswer.mock.calls[0][0]).not.toHaveProperty(
+      'brief',
+    );
+  });
+
+  it("on a follow-up, Michael reads the last answer's queries as a block after her brief", async () => {
+    const { deps, members } = fixture(
+      async (tools) => {
+        await tools.plan();
+        await tools.analyse('Now by stage.');
+        return [text('Done.')];
+      },
+      {
+        deps: {
+          earlierQueries: [
+            {
+              ref: 'Q1',
+              sql: 'SELECT count(*) FROM matches',
+              rationale: 'Counts every match.',
+            },
+          ],
+        },
+      },
+    );
+    await runOrchestratorTurn(deps, { question: 'And by stage?' });
+    const block = members.analyse.mock.calls[0][0].planBlock;
+    expect(block).toContain(
+      'Brief from Avery, the Chief of Staff: Now by stage.',
+    );
+    expect(block).toContain(
+      'Queries behind the answer the user just read (reuse or change them rather than starting over; explore_result reads their rows by ref):\n- Q1: Counts every match.\n  SQL: SELECT count(*) FROM matches',
+    );
+    expect(block.indexOf('Brief from Avery')).toBeLessThan(
+      block.indexOf('Queries behind'),
+    );
+  });
+
   it("answers Jessica's answer followed by Avery's closing words", async () => {
     const { deps } = fixture(async (tools) => {
       await tools.plan();

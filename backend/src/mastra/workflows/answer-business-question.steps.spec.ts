@@ -51,6 +51,7 @@ import {
   analyseSystemBlocks,
   earlierQueriesBlock,
   findingStatus,
+  orchestratorBriefBlock,
   planMessages,
   visualCued,
   writeAnswerRequest,
@@ -546,6 +547,28 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       ]);
     });
 
+    it("ends the request with an orchestrator's brief, after the user's own words; nothing without one", () => {
+      const BRIEF_BLOCK =
+        "Request from Avery, the Chief of Staff who coordinates the team (the user's own words are above): Who won the 2018 and 2022 World Cups?";
+      expect(
+        planMessages({
+          messages: 'And who won each one?',
+          question: 'And who won each one?',
+          catalogBlock: 'CAT',
+          brief: ' Who won the 2018 and 2022 World Cups? ',
+        }).messages,
+      ).toBe(`Question: And who won each one?\n\nCAT\n\n${BRIEF_BLOCK}`);
+      expect(
+        planMessages({
+          messages: 'Q',
+          question: 'Q',
+          catalogBlock: 'CAT',
+          brief: '   ',
+        }).messages,
+      ).toBe('Question: Q\n\nCAT');
+      expect(orchestratorBriefBlock(undefined)).toBe('');
+    });
+
     it('after Clarify: the question, the clarifying question Plan asked, then the answer with the catalog', () => {
       expect(
         planMessages({
@@ -954,6 +977,25 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       expect(request).toContain('[{"player":"Kane","goals":6}]');
       expect(request).toContain('2. (no rationale given) (failed: boom)');
       expect(request).toContain('- passed: Ran a query. 1 of 2.');
+    });
+
+    it("ends Write answer's request with an orchestrator's brief; without one the request is unchanged", () => {
+      const base = {
+        question: 'And who won each one?',
+        plan: PLAN,
+        queries: [query()],
+        findings: [],
+      };
+      const plain = writeAnswerRequest(base);
+      const briefed = writeAnswerRequest({
+        ...base,
+        brief:
+          'Who won the 2018 and 2022 World Cups? The user knows there are two.',
+      });
+      expect(briefed).toBe(
+        `${plain}\n\nRequest from Avery, the Chief of Staff who coordinates the team (the user's own words are above): Who won the 2018 and 2022 World Cups? The user knows there are two.`,
+      );
+      expect(writeAnswerRequest({ ...base, brief: '' })).toBe(plain);
     });
 
     it('says how many rows a long result has and how many Write answer is shown (plan 1.25.6)', () => {

@@ -2109,6 +2109,8 @@ describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 1
       { role: 'user', content: 'Who won in 2002?' },
       { role: 'assistant', content: 'Brazil won in 2002.' },
     ]);
+    // Avery holds the conversation: her team starts from no copied thread.
+    expect(spec).not.toHaveProperty('continuesThreadsOf');
 
     const third = await streamed(ctx, ORCHESTRATED, {
       input: { question: 'And 2010?', datasets: ['World Cup Core'] },

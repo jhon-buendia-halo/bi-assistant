@@ -39,6 +39,7 @@ import {
   type OrchestratorToolsRuntime,
 } from '../../../mastra/workflows/orchestrated-answer.steps';
 import type { ReadImagesOutcome } from '../../../mastra/workflows/read-images.steps';
+import type { ExplorableQuery } from '../query-evidence/explorable-queries';
 import {
   STEP_MODEL_CONTEXT_KEY,
   type StepModel,
@@ -113,6 +114,40 @@ export interface OrchestratorTurnDeps {
    * answers, oldest first; empty on a conversation's first message.
    */
   history?: { role: 'user' | 'assistant'; content: string }[];
+  /**
+   * The queries behind the conversation's last answer (workflows R45): on a
+   * follow-up, Michael reads them as a block and can explore their rows,
+   * instead of going on from a copy of his earlier thread.
+   */
+  earlierQueries?: readonly Pick<
+    ExplorableQuery,
+    'ref' | 'sql' | 'rationale'
+  >[];
+}
+
+/** At most this many earlier queries, each SQL cut at this length, reach Michael. */
+const EARLIER_QUERIES_MAX = 8;
+const EARLIER_SQL_MAX = 1500;
+
+/**
+ * The conversation's earlier queries for Michael (workflows R45): what they
+ * were for and their SQL, so a follow-up changes them rather than starting
+ * over; '' when there are none.
+ */
+export function conversationQueriesBlock(
+  queries: OrchestratorTurnDeps['earlierQueries'],
+): string {
+  if (!queries?.length) return '';
+  const shown = queries.slice(-EARLIER_QUERIES_MAX);
+  return [
+    'Queries behind the answer the user just read (reuse or change them rather than starting over; explore_result reads their rows by ref):',
+    ...shown.map((query) =>
+      [
+        `- ${query.ref}: ${query.rationale?.trim() || '(no rationale given)'}`,
+        `  SQL: ${query.sql.length > EARLIER_SQL_MAX ? `${query.sql.slice(0, EARLIER_SQL_MAX)} …` : query.sql}`,
+      ].join('\n'),
+    ),
+  ].join('\n');
 }
 
 /** The most messages of the conversation so far Avery reads (20 turns). */
@@ -181,6 +216,7 @@ export function orchestratorTools(
   answered: AnsweredClarification | undefined,
 ): OrchestratorToolsRuntime {
   const { state, team } = deps;
+  const earlier = conversationQueriesBlock(deps.earlierQueries);
   const catalogOf = async () => {
     if (!state.catalog || !state.columns) {
       const loaded = await loadCatalog(deps.datasets);
@@ -189,7 +225,7 @@ export function orchestratorTools(
     }
     return { catalog: state.catalog, columns: state.columns };
   };
-  const plan = async (): Promise<string> => {
+  const plan = async (brief?: string): Promise<string> => {
     const { catalog, columns } = await catalogOf();
     const planned = await team.plan({
       question,
@@ -197,6 +233,8 @@ export function orchestratorTools(
       catalogBlock: planCatalogBlock(catalog, columns, { question }),
       ...(answered ? { clarification: answered } : {}),
       imageNotes: state.imageNotes,
+      // Avery's request: the question restated to stand alone (R45).
+      ...(brief?.trim() ? { brief } : {}),
     });
     state.plan = planned.plan;
     return planForAvery(planned.plan);
@@ -210,7 +248,7 @@ export function orchestratorTools(
       state.imageNotes = read.stopped ? '' : read.imageNotes;
       return state.imageNotes || 'Zoe found nothing to describe.';
     },
-    plan,
+    plan: (brief?: string) => plan(brief),
     analyse: async (brief: string) => {
       if (state.attempts >= 2) {
         return 'Michael already analysed twice in this run: write the answer from his results.';
@@ -229,6 +267,7 @@ export function orchestratorTools(
           analysePlanBlock(current),
           '',
           `Brief from Avery, the Chief of Staff: ${brief}`,
+          ...(earlier ? ['', earlier] : []),
         ].join('\n'),
         ...(answered ? { answered } : {}),
         imageNotes: state.imageNotes,
@@ -254,7 +293,7 @@ export function orchestratorTools(
         findingsForAvery(findings),
       ].join('\n');
     },
-    writeAnswer: async () => {
+    writeAnswer: async (brief?: string) => {
       if (!state.plan || !state.queries.length) {
         return 'Michael has no results yet: call analyse_data first.';
       }
@@ -264,6 +303,8 @@ export function orchestratorTools(
         queries: state.queries,
         findings: state.findings,
         imageNotes: state.imageNotes,
+        // Avery's request: the question restated, what the user knows (R45).
+        ...(brief?.trim() ? { brief } : {}),
         // The answer is delivered once Avery is done (only she talks to
         // the user): it is not streamed as it is written.
         quiet: true,

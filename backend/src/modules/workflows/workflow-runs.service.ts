@@ -839,7 +839,12 @@ export class WorkflowRunsService implements OnModuleInit {
                   }),
               // Its agents go on from copies of the earlier run's threads
               // (not Sarah asked alone: the host's thread is the Analyst's).
-              ...(ask?.continuesThreads === false
+              // Avery's team gets no copy: she holds the conversation, and
+              // Michael reads the last answer's queries as a block instead
+              // (workflows R45), so every teammate starts from what she
+              // hands it.
+              ...(ask?.continuesThreads === false ||
+              workflow.id === ORCHESTRATED_ANSWER_WORKFLOW_ID
                 ? {}
                 : {
                     continuesThreadsOf: `${RUN_HOST_ID_PREFIX}${prepared.context.fromRunId}`,

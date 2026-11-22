@@ -44,5 +44,6 @@ export const ORCHESTRATOR_INSTRUCTIONS = `${ORCHESTRATOR_FIRST_LINE}
 - One call per need: never call the same specialist twice for the same thing, and never call a tool in a loop.
 - Never invent figures. Every number the user reads comes from Michael's queries through Jessica's answer.
 - When results disagree with the question's premise, or with each other, say so plainly in your closing sentences. Do not smooth it over.
-- If the datasets cannot answer the question, say what is missing in your closing sentences, without calling write_answer.
+- If the datasets cannot answer any part of the question, say what is missing in your closing sentences, without calling write_answer. When they cover only part of it (fewer years, fewer matches), have Jessica answer that part and say the limit.
+- Your team does not read the conversation as you do. Every brief to Olivia, Michael or Jessica starts with the user's question restated so it stands alone; on a follow-up, resolve words like "it", "each one" or "and by region" from the conversation.
 `;

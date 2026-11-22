@@ -128,6 +128,19 @@ export function planRequest(
   ].join('\n');
 }
 
+/**
+ * An orchestrator's request to a teammate (Avery, agents.md 2.21): the
+ * question restated to stand alone, then what she needs. It ends Plan's
+ * and Write answer's request; '' when there is none (Answer a Business
+ * Question sends none, so its requests are unchanged).
+ */
+export function orchestratorBriefBlock(brief: string | undefined): string {
+  const text = brief?.trim();
+  return text
+    ? `Request from Avery, the Chief of Staff who coordinates the team (the user's own words are above): ${text}`
+    : '';
+}
+
 /** A message of the Plan step's request. */
 export interface PlanMessage {
   role: 'user' | 'assistant';
@@ -156,13 +169,20 @@ export function planMessages(input: {
    * the request ends with the earlier plan and their words.
    */
   revision?: Revision;
+  /** An orchestrator's request (Avery): it ends the request. */
+  brief?: string;
 }): { messages: string | PlanMessage[]; fallback: string } {
   const before = Array.isArray(input.messages)
     ? (input.messages as PlanMessage[]).slice(0, -1)
     : [];
   const { answered } = input;
+  const briefBlock = orchestratorBriefBlock(input.brief);
   const revised = (request: string) =>
-    input.revision ? `${request}\n\n${revisionBlock(input.revision)}` : request;
+    [
+      request,
+      ...(input.revision ? [revisionBlock(input.revision)] : []),
+      ...(briefBlock ? [briefBlock] : []),
+    ].join('\n\n');
   if (answered) {
     return {
       messages: [
@@ -251,10 +271,14 @@ export function writeAnswerRequest(input: {
   canAsk?: boolean;
   answered?: { question: string; answer: string };
   revision?: Revision;
+  /** An orchestrator's request (Avery): it ends the request. */
+  brief?: string;
 }): string {
   const interactive = interactiveBlocks(input);
   const request = writeAnswerBody(input);
-  return interactive.length ? [request, ...interactive].join('\n\n') : request;
+  const briefBlock = orchestratorBriefBlock(input.brief);
+  const blocks = [...interactive, ...(briefBlock ? [briefBlock] : [])];
+  return blocks.length ? [request, ...blocks].join('\n\n') : request;
 }
 
 /** The Write answer request before any interactive block. */

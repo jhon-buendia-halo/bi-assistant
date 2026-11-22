@@ -140,12 +140,20 @@ export interface OrchestratorToolsRuntime {
   buildsVisual: boolean;
   /** Zoe reads the run's images; her notes, or why there are none. */
   readImages(): Promise<string>;
-  /** Olivia's plan in words, with her clarifying question when she has one. */
-  plan(): Promise<string>;
+  /**
+   * Olivia's plan in words, with her clarifying question when she has one.
+   * `brief`: Avery's request to her (the question restated to stand alone,
+   * then what the plan must cover); it ends Olivia's request.
+   */
+  plan(brief?: string): Promise<string>;
   /** Michael's analysis for `brief`: each query, its rows and the checks. */
   analyse(brief: string): Promise<string>;
-  /** Jessica writes the answer; a short confirmation for Avery. */
-  writeAnswer(): Promise<string>;
+  /**
+   * Jessica writes the answer; a short confirmation for Avery. `brief`:
+   * Avery's request to her (the question restated to stand alone, what the
+   * user already knows); it ends Jessica's request.
+   */
+  writeAnswer(brief?: string): Promise<string>;
   /** Ryan charts the answer's rows; what he built, or why not. */
   buildVisual(instruction: string): Promise<string>;
 }
