@@ -4,9 +4,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 
 ## Process and hand-over
 - When a request names a UI concept or region ("layer for…", "right panel"), ask which screen and which object it attaches to in the first clarifying question, quoting the user's screenshot.
-- Ask only the questions with no safe default, all in one picker call; state the defaults for the rest and proceed.
 - When a request could become a repo change, ask whether the result lives in the repo (fixture, seed) or only on this machine before building it.
-- Answer an out-of-band question in the very next reply, before any status update.
 - Hand over the running app after the wave check (`node scripts/qa.mjs --wave <ids> --base <ref>`; add `--demo <id>` and `node scripts/demo-page.mjs <id>` for the wave's user-visible milestone), and after a restart tell the user to hard-reload the open tab (Ctrl+Shift+R / Cmd+Shift+R).
 - Before an L epic or an unclear M feature, show a cheap prototype, then ask one batched confirmation per epic (spec, ADR, questions with recommendations, branch); re-plan a direction change once, not story by story.
 - Before planning a change to a shared component, list its hosts (`grep -rn "<app-<name>" frontend/src`) and open the real app on each entry point: a stored item may open on another page than the one you are changing.

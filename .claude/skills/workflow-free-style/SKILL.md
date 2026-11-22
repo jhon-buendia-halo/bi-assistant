@@ -5,7 +5,7 @@ description: Use when the session's workflow is Free style (the user picked it, 
 
 # Free style workflow
 
-One of the two workflows in [CLAUDE.md](../../../CLAUDE.md); the other is [`workflow-strict`](../workflow-strict/SKILL.md). The rules in CLAUDE.md under *Rules for both workflows* apply here too.
+One of the two workflows in [CLAUDE.md](../../../CLAUDE.md); the other is [`workflow-strict`](../workflow-strict/SKILL.md). The rules in CLAUDE.md under *Non-negotiables*, *Autonomy* and *Writing the reply* apply here too, and its *Choose the playbook* section picks the playbook whose steps fill these steps for the task at hand.
 
 ## Workflow
 
