@@ -998,6 +998,150 @@ describe('Insights Analyst as the API returns it (roomy canvas)', () => {
   });
 });
 
+/** `orchestrated-answer` as the API returns it: Avery's one step with her team (api.md 117). */
+const ORCHESTRATED: Source & Pick<WorkflowDetail, 'edges'> = {
+  input: [
+    field('question'),
+    field('images'),
+    field('datasets'),
+    field('buildVisual'),
+  ],
+  agents: [
+    {
+      key: 'chief-of-staff',
+      name: 'Avery',
+      model: 'custom/claude-opus-5-5',
+    },
+  ],
+  steps: [
+    {
+      ...code(
+        'orchestrate',
+        ['question', 'datasets'],
+        ['answer'],
+        [
+          ...MODEL_EXITS,
+          { label: 'if it asks you a question', outcome: 'waits' },
+        ],
+      ),
+      title: 'Orchestrate',
+      kind: 'agent',
+      agent: {
+        key: 'chief-of-staff',
+        name: 'Avery',
+        role: 'Chief of Staff',
+        tools: [
+          'read_reference_images',
+          'plan_analysis',
+          'analyse_data',
+          'write_answer',
+          'build_visual',
+          'ask_clarification',
+        ],
+        maxSteps: 16,
+        team: [
+          {
+            tool: 'read_reference_images',
+            key: 'image-reader',
+            name: 'Zoe',
+            role: 'Image Analyst',
+          },
+          {
+            tool: 'plan_analysis',
+            key: 'analysis-planner',
+            name: 'Olivia',
+            role: 'Analysis Lead',
+          },
+          {
+            tool: 'analyse_data',
+            key: 'insights-analyst',
+            name: 'Michael',
+            role: 'Insights Analyst',
+          },
+          {
+            tool: 'write_answer',
+            key: 'answer-writer',
+            name: 'Jessica',
+            role: 'Insights Writer',
+          },
+          {
+            tool: 'build_visual',
+            key: 'visualization',
+            name: 'Ryan',
+            role: 'Visualization Designer',
+          },
+        ],
+      },
+    },
+  ],
+  edges: [
+    { from: 'start', to: 'orchestrate', kind: 'next' },
+    { from: 'orchestrate', to: 'end', kind: 'next' },
+  ],
+};
+
+describe("an orchestrator's team (Avery, api.md 117 team)", () => {
+  const layout = workflowCanvasLayout(ORCHESTRATED);
+  const avery = layout.nodes.find((n) => n.id === 'orchestrate')!;
+
+  it('hangs one sub-node per teammate between Model and Tools, in her tools’ order', () => {
+    expect(
+      avery.subNodes.map((s) => [s.kind, s.id, s.label, s.subtitle]),
+    ).toEqual([
+      ['model', 'orchestrate-model', 'claude-opus-5-5', 'model'],
+      [
+        'agent',
+        'orchestrate-agent-read_reference_images',
+        'Zoe',
+        'read_reference_images',
+      ],
+      ['agent', 'orchestrate-agent-plan_analysis', 'Olivia', 'plan_analysis'],
+      ['agent', 'orchestrate-agent-analyse_data', 'Michael', 'analyse_data'],
+      ['agent', 'orchestrate-agent-write_answer', 'Jessica', 'write_answer'],
+      ['agent', 'orchestrate-agent-build_visual', 'Ryan', 'build_visual'],
+      // Tools keeps only the tools that call no agent.
+      ['tools', 'orchestrate-tools', 'Tools', '1 tool'],
+    ]);
+    expect(avery.subNodes[3].agent).toEqual({
+      key: 'insights-analyst',
+      name: 'Michael',
+      role: 'Insights Analyst',
+    });
+    expect(avery.subNodes[3].tools).toEqual(['analyse_data']);
+    expect(avery.subNodes[6].tools).toEqual(['ask_clarification']);
+  });
+
+  it('centres the row under Avery, one row, left to right', () => {
+    const centres = avery.subNodes.map((s) => s.x + s.size / 2);
+    expect([...centres].sort((a, b) => a - b)).toEqual(centres);
+    expect(new Set(avery.subNodes.map((s) => s.y)).size).toBe(1);
+    const mid = (centres[0] + centres[centres.length - 1]) / 2;
+    // Model's and Tools' labels differ in width, so the row's middle sits near, not on, Avery's.
+    expect(Math.abs(mid - (avery.x + avery.width / 2))).toBeLessThan(30);
+  });
+
+  it('draws every teammate and Tools from the Tools port, the Model from the Model port', () => {
+    const tool = avery.ports.find((p) => p.kind === 'tool')!;
+    const model = avery.ports.find((p) => p.kind === 'model')!;
+    for (const edge of layout.subEdges) {
+      const from = edge.subNodeId === 'orchestrate-model' ? model : tool;
+      expect(edge.path.startsWith(`M ${from.x} ${from.y} `)).toBe(true);
+    }
+    expect(layout.subEdges.length).toBe(7);
+  });
+
+  it('overlaps nothing: Start’s label and exit note stay clear of the row', () => {
+    expect(overlapping(layout)).toEqual([]);
+  });
+
+  it('a step without a team keeps its Model and Tools only', () => {
+    const plain = workflowCanvasLayout(V2).nodes.find(
+      (n) => n.id === 'analyse',
+    )!;
+    expect(plain.subNodes.map((s) => s.kind)).toEqual(['model', 'tools']);
+  });
+});
+
 describe('canvas zoom', () => {
   const layout = { width: 1000, height: 500 };
 

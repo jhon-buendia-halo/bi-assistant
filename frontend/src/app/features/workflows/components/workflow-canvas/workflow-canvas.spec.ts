@@ -290,6 +290,69 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     expect(text(q('workflow-node-agent'))).toBe('Michael');
   });
 
+  it("an orchestrator's teammates hang as sub-nodes with their portraits; one opens the tool that calls it", () => {
+    fixture.componentRef.setInput('workflow', {
+      ...V2,
+      steps: [
+        {
+          ...V2.steps[2],
+          id: 'orchestrate',
+          agent: {
+            key: 'chief-of-staff',
+            name: 'Avery',
+            role: 'Chief of Staff',
+            tools: ['plan_analysis', 'analyse_data', 'ask_clarification'],
+            maxSteps: 16,
+            team: [
+              {
+                tool: 'plan_analysis',
+                key: 'analysis-planner',
+                name: 'Olivia',
+                role: 'Analysis Lead',
+              },
+              {
+                tool: 'analyse_data',
+                key: 'insights-analyst',
+                name: 'Michael',
+                role: 'Insights Analyst',
+              },
+            ],
+          },
+        },
+      ],
+    });
+    fixture.detectChanges();
+    expect(
+      Array.from(el.querySelectorAll('.sub-node')).map((s) =>
+        s.getAttribute('data-testid'),
+      ),
+    ).toEqual([
+      'workflow-subnode-orchestrate-model',
+      'workflow-subnode-orchestrate-agent-plan_analysis',
+      'workflow-subnode-orchestrate-agent-analyse_data',
+      'workflow-subnode-orchestrate-tools',
+    ]);
+    const michael = q('workflow-subnode-orchestrate-agent-analyse_data')!;
+    expect(michael.getAttribute('aria-label')).toBe(
+      'Michael, Insights Analyst, called by Analyse through analyse_data',
+    );
+    expect(michael.getAttribute('title')).toBe(
+      'Michael · Insights Analyst: analyse_data',
+    );
+    expect(michael.getAttribute('aria-haspopup')).toBeNull();
+    expect(
+      michael.querySelector('[data-testid="workflow-subnode-portrait"]'),
+    ).not.toBeNull();
+    expect(text(michael)).toContain('Michael');
+    expect(text(michael)).toContain('analyse_data');
+    expect(q('workflow-subnode-orchestrate-tools')!.getAttribute('title')).toBe(
+      'ask_clarification',
+    );
+    michael.click();
+    expect(opened).toEqual(['orchestrate-tool-analyse_data']);
+    expect(el.querySelectorAll('path.sub-edge').length).toBe(4);
+  });
+
   describe('the Tools sub-node opens a list of its tools', () => {
     const tools = () => q('workflow-subnode-analyse-tools')!;
     const menu = () => q('workflow-tools-menu-analyse');

@@ -73,6 +73,8 @@ const NODE_ICONS: Record<CanvasNodeKind, LucideIconData> = {
 const SUB_ICONS: Record<CanvasSubNode['kind'], LucideIconData> = {
   model: Cpu,
   tools: Wrench,
+  // A teammate shows its portrait; the icon is the fallback.
+  agent: Wrench,
 };
 
 /** The Tools sub-node's open list: its step, the tools and where it shows in the host. */
@@ -296,9 +298,22 @@ export class WorkflowCanvas {
   }
 
   protected subNodeLabel(node: CanvasNode, sub: CanvasSubNode): string {
+    if (sub.agent) {
+      const role = sub.agent.role ? `, ${sub.agent.role}` : '';
+      return `${sub.agent.name}${role}, called by ${node.title} through ${sub.subtitle}`;
+    }
     return sub.kind === 'model'
       ? `Model ${sub.label} of ${node.title}`
       : `Tools of ${node.title}: ${sub.subtitle}`;
+  }
+
+  /** The tooltip: the Tools' list, a teammate's name, role and tool, else the label. */
+  protected subNodeTitle(sub: CanvasSubNode): string {
+    if (sub.agent) {
+      const role = sub.agent.role ? ` · ${sub.agent.role}` : '';
+      return `${sub.agent.name}${role}: ${sub.subtitle}`;
+    }
+    return sub.kind === 'tools' ? sub.tools.join(', ') : sub.label;
   }
 
   protected zoomOut(): void {
@@ -377,6 +392,11 @@ export class WorkflowCanvas {
   ): void {
     if (sub.kind === 'model') {
       this.openNode.emit(node.id);
+      return;
+    }
+    if (sub.kind === 'agent') {
+      // A teammate opens the details of the tool that calls it.
+      this.openNode.emit(toolNodeId(node.id, sub.tools[0]));
       return;
     }
     this.openToolsMenu(node, sub, event.currentTarget as HTMLElement);

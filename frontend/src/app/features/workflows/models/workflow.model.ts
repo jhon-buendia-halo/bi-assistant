@@ -179,6 +179,14 @@ export interface JsonSchema {
   [keyword: string]: unknown;
 }
 
+/** One tool of an orchestrator and the agent behind it (api.md 117). */
+export interface WorkflowTeamMember {
+  tool: string;
+  key: string;
+  name: string;
+  role: string;
+}
+
 /** One step of a workflow detail: an agent step also names its agent's key (api.md 117). */
 export type WorkflowDetailStep = Omit<
   AgentWorkflow['steps'][number],
@@ -186,6 +194,11 @@ export type WorkflowDetailStep = Omit<
 > & {
   agent?: NonNullable<AgentWorkflow['steps'][number]['agent']> & {
     key?: string;
+    /**
+     * An orchestrator's team (Avery, api.md 117): each of its tools that
+     * calls an agent, with that agent's key and persona.
+     */
+    team?: WorkflowTeamMember[];
   };
   /** The step's declared input contract; absent from an older backend. */
   inputSchema?: JsonSchema;

@@ -380,9 +380,7 @@
             [attr.aria-expanded]="
               sub.kind === 'tools' ? toolsMenu()?.stepId === node.id : null
             "
-            [attr.title]="
-              sub.kind === 'tools' ? sub.tools.join(', ') : sub.label
-            "
+            [attr.title]="subNodeTitle(sub)"
             [style.left.px]="sub.x"
             [style.top.px]="sub.y"
             [style.width.px]="sub.size"
@@ -393,11 +391,23 @@
             "
           >
             <span class="diamond top" aria-hidden="true"></span>
-            <lucide-angular
-              [img]="subIcons[sub.kind]"
-              [size]="20"
-              aria-hidden="true"
-            />
+            @if (sub.agent; as teammate) {
+              <!-- A teammate behind one of the orchestrator's tools: its portrait -->
+              <app-agent-avatar
+                class="pointer-events-none flex-none"
+                data-testid="workflow-subnode-portrait"
+                aria-hidden="true"
+                [agentKey]="teammate.key"
+                [name]="teammate.name"
+                [size]="44"
+              />
+            } @else {
+              <lucide-angular
+                [img]="subIcons[sub.kind]"
+                [size]="20"
+                aria-hidden="true"
+              />
+            }
             <span
               class="pointer-events-none absolute top-[calc(100%+6px)] left-1/2 flex -translate-x-1/2 flex-col items-center text-center"
               aria-hidden="true"
@@ -409,7 +419,9 @@
               >
               @if (sub.subtitle) {
                 <span
-                  class="node-subtitle text-[11px] leading-[14px] text-fg-muted"
+                  class="node-subtitle max-w-full text-[11px] leading-[14px] [overflow-wrap:anywhere] text-fg-muted"
+                  [class.font-mono]="sub.kind === 'agent'"
+                  [class.line-clamp-2]="sub.kind === 'agent'"
                   >{{ sub.subtitle }}</span
                 >
               }
