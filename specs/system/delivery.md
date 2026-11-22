@@ -302,7 +302,7 @@ Runs on every pull request, on every push to `main`, and on manual dispatch. It 
 | Check | Fails when |
 |---|---|
 | Layout | a product or system spec is missing, or the capability or epic tables in `specs/README.md` don't match the folders on disk |
-| Links | a relative link in `CLAUDE.md`, `README.md`, `roadmap.md`, any spec, any project skill (`.claude/skills/*/SKILL.md`), any playbook (`.claude/playbooks/*.md`) or any tool README (`.claude/tools/**/*.md`) doesn't resolve. `changelog.md` and `retrospective.md` are skipped, because their past entries are never rewritten. |
+| Links | a relative link in `CLAUDE.md`, `README.md`, `roadmap.md`, any spec, any project skill (`.claude/skills/*/SKILL.md`), any playbook (`.claude/playbooks/*.md`), `.claude/worker.md` or any tool README (`.claude/tools/**/*.md`) doesn't resolve. `changelog.md` and `retrospective.md` are skipped, because their past entries are never rewritten. |
 | Capability format | a capability spec lacks one of the required sections |
 | E2E mirror | a `frontend/e2e/*.spec.ts` file is not the `E2E:` line of exactly one capability spec, or an `E2E:` line names a missing file |
 | API | a backend controller route is not written as `` `METHOD /path` `` in `system/api.md` |
@@ -480,7 +480,7 @@ Opens a **Workflow** pane (the right-hand sidebar in a wide fullscreen terminal 
 
 Developer tooling for people who work on this repository in Claude Code, not part of the app or its releases. Epic [BA-119](../epics/BA-119/spec.md); merged from nine skills into four by roadmap 0.5.2 ([M0-5](../epics/M0-5/spec.md)); two workflows since roadmap 0.6.1–0.6.3 ([M0-6](../epics/M0-6/spec.md)).
 
-**Two workflows (roadmap 0.6.1).** `CLAUDE.md` is a router: what the app is, the mandatory first action (read `lessons.md`), then five sections. *Non-negotiables* holds one line per rule both workflows share (never on `main`, specs change with the code, a local instance is ready to test, workflows start from Mastra's docs, the query inspector, repo-only planning, read and output rules, automatic versioning, session hygiene), each naming the skill or playbook that carries it out, then bootstrap and *Choose the brand*. *Principles* points at `lessons.md` and `retrospective.md`. *Autonomy* holds when to stop and ask (the app or Postgres from a worktree). *Writing the reply* holds the reply rules. *Playbooks* holds *Choose the workflow* and *Choose the playbook*. The process documents and the model routing table follow. In a new session, after `lessons.md`, Claude reads `.context/workflow-mode` (`strict` or `free-style`, per workspace, git-ignored): when it exists, Claude names the mode in one line and goes on; otherwise it asks with one picker and writes the answer. It then loads the matching skill. "Switch to strict" or "switch to free style" rewrites the file and loads the other skill; going to Strict mid-change adds the roadmap story for the work already done. `builder` and `reviewer` skip the choice (they work from a brief).
+**Two workflows (roadmap 0.6.1).** `CLAUDE.md` is a router: what the app is, the mandatory first action (read `lessons.md`), then five sections. *Non-negotiables* holds one line per rule both workflows share (never on `main`, specs change with the code, a local instance is ready to test, workflows start from Mastra's docs, the query inspector, repo-only planning, read and output rules, automatic versioning, session hygiene, the first line of every subagent brief), each naming the skill or playbook that carries it out, then bootstrap and *Choose the brand*. *Principles* points at `lessons.md` and `retrospective.md`. *Autonomy* holds when to stop and ask (the app or Postgres from a worktree). *Writing the reply* holds the reply rules. *Playbooks* holds *Choose the workflow* and *Choose the playbook*. The process documents and the model routing table follow. In a new session, after `lessons.md`, Claude reads `.context/workflow-mode` (`strict` or `free-style`, per workspace, git-ignored): when it exists, Claude names the mode in one line and goes on; otherwise it asks with one picker and writes the answer. It then loads the matching skill. "Switch to strict" or "switch to free style" rewrites the file and loads the other skill; going to Strict mid-change adds the roadmap story for the work already done. `builder` and `reviewer` skip the choice (they work from a brief).
 
 | Workflow skill | Holds |
 |---|---|
@@ -523,7 +523,7 @@ The steps' conventions live in four step skills. Claude loads a skill before its
 
 **Process records.** `lessons.md` (about 80 lines, the distilled rules) is the mandatory first read; `retrospective.md` stays the full append-only history, one entry per epic. `changelog.md` gets one entry per epic, when its PR opens, with a bullet per story linking its evidence folder. Each story's `evidence/<roadmap-id>/` holds what `qa.mjs` writes plus a one-line `README.md` with the demo artifact URL.
 
-Other project skills are task runbooks, not workflow steps: `deploy-labs-site` (section 8). Each step line in `workflow-strict` keeps the `<n>. **<title>** — <description>` form, followed by `Skill: \`<name>\``, so the `workflow-steps` mod (section 9) still parses it. `check-specs.py` checks the relative links inside `CLAUDE.md`, `lessons.md`, every `SKILL.md`, every playbook and every Markdown file under `.claude/tools/` (section 5).
+Other project skills are task runbooks, not workflow steps: `deploy-labs-site` (section 8). Each step line in `workflow-strict` keeps the `<n>. **<title>** — <description>` form, followed by `Skill: \`<name>\``, so the `workflow-steps` mod (section 9) still parses it. `check-specs.py` checks the relative links inside `CLAUDE.md`, `lessons.md`, every `SKILL.md`, every playbook, `.claude/worker.md` and every Markdown file under `.claude/tools/` (section 5).
 
 ## 11. Claude Code tools (`.claude/tools/`)
 
@@ -548,9 +548,9 @@ Developer tooling for people who work on this repository in Claude Code, not par
 
 `builder` and `reviewer` set `omitClaudeMd: true`: they work from their brief, so they don't load `CLAUDE.md` (roadmap 0.5.2).
 
-Rules every builder follows (from the retrospective):
-- Write files with Edit/Write, or in a scratch folder of its own; never use shared `/tmp` names.
-- Never stop a process it did not start; record the PIDs it starts.
+**Worker rules (`.claude/worker.md`).** The rules every subagent follows, in one file: write with Edit/Write or in a scratch folder of its own (never shared `/tmp` names), never stop a process it did not start (record PIDs, stop by PID), report a build or budget block instead of changing build config, use the brand the brief names, read ranges and keep output quiet, never edit `version`, never commit a placeholder message. `CLAUDE.md` (*Non-negotiables*) makes `Read .claude/worker.md before anything else.` the first line of every subagent brief, and the file asks each subagent to pass that line on to any subagent it starts. `builder` reads it first (it sets `omitClaudeMd: true`, so it would not see the rule in `CLAUDE.md`). `reviewer` and `manager` cannot write files or run commands, so they skip it. The story pack's builder rules (`BUILDER_RULES` in `scripts/spec-index-lib.mjs`) repeat a short form of it.
+
+Rules every builder follows on top (from the retrospective):
 - Run Playwright with `E2E_SKIP_DOCKER=1` when a Postgres is already listening on 55432.
 - Never run `npm test`/`build` alongside `test:e2e` in the same worktree.
 - Never start the app on the default ports.

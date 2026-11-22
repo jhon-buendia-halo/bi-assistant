@@ -23,6 +23,7 @@ specs/      the complete specification of the app
 - **Read and output.** Never read a file over 500 lines whole: `grep -n` or use [specs/INDEX.md](specs/INDEX.md), then read the range. Run builds and tests quietly, to a log file, and read back only the summary or the failure block.
 - **Versioning is automatic:** Conventional Commit subjects drive the bump. Never edit `version` by hand; installers and the npm package are built manually. See [delivery.md](specs/system/delivery.md).
 - **Session hygiene.** Before starting a new session, write `.context/handoff.md`. Playbook: `session-handoff`.
+- **Starting any subagent** → the first line of its brief is `Read .claude/worker.md before anything else.`; the rest is the goal, the task and the brand. [worker.md](.claude/worker.md) holds the rules every subagent follows.
 
 New checkout or worktree: run `node scripts/bootstrap.mjs` once (installs, builds the backend and web UI, reports whether the shared Postgres on 55432 is up; never starts the app).
 

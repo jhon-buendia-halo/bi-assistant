@@ -16,7 +16,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 
 ## Subagents and parallel units
 - Give parallel units one written contract first (types, routes copied from `specs/system/api.md`, test ids, copy); a helper or Feature file two units might both add belongs to exactly one of them, and each unit that adds endpoints gets its own `api.md` number range. In a roadmap entry cite the plan by story id (`plan 1.25.3`) or link, never `plan section 2`: that pulls section 2 of every plan file into the story pack.
-- Brief every subagent: Edit/Write tools only, a private scratch subfolder (never shared `/tmp` names), never kill a process it did not start, and "if a build or budget blocks you, report it; do not change build config".
+- Open every subagent brief with `Read .claude/worker.md before anything else.`, then the goal, the task and the brand; the rules every subagent follows live in [.claude/worker.md](.claude/worker.md).
 - Do not trust a subagent's report: the lead's wave check (`qa.mjs --wave`) re-runs the gates (build, related unit tests, the Features' E2E, `check-specs`) once over the merged wave, especially after a builder was stopped and resumed.
 - On "keep going" with no context, check for another live session on the epic (commits in the last minutes, files changing under you) and ask who owns the work.
 - At the gate, run `git merge-base --is-ancestor <branch> HEAD` for every `unit/<EPIC-ID>-*` branch and merge anything missing before E2E or evals.
