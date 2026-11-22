@@ -757,6 +757,33 @@ describe('noteToolFrame (api.md 3.1 `tool`, `tool-result`)', () => {
       { tool: 'describe_entity' },
     ]);
   });
+
+  it("keeps Avery's signature and the teammate a team call hands; a teammate's own call stays unsigned", () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    tracker.apply(start('answer', {}));
+    noteToolFrame(tracker, {
+      type: 'tool',
+      content: JSON.stringify({
+        name: 'answer_from_data',
+        input: 'How many goals?',
+        agent: 'chief-of-staff',
+        teammate: 'insights-analyst',
+      }),
+    });
+    noteToolFrame(tracker, {
+      type: 'tool',
+      content: JSON.stringify({ name: 'run_readonly_sql', rationale: 'Sum' }),
+    });
+    expect(tracker.finish('success').steps[1].toolCalls).toEqual([
+      {
+        tool: 'answer_from_data',
+        input: 'How many goals?',
+        agent: 'chief-of-staff',
+        teammate: 'insights-analyst',
+      },
+      { tool: 'run_readonly_sql', rationale: 'Sum' },
+    ]);
+  });
 });
 
 describe('RunStepTracker: step stories (ui.md 4.4b, Logs Story)', () => {

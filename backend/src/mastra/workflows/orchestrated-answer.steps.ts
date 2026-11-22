@@ -83,6 +83,18 @@ export const ORCHESTRATOR_TEAMS: Readonly<
   },
 };
 
+/**
+ * The agent one of Avery's team tools calls, in any of her workflows
+ * (`plan_analysis` → `analysis-planner`); undefined for any other tool.
+ */
+export function teammateOfTool(tool: string): string | undefined {
+  for (const spec of Object.values(ORCHESTRATOR_TEAMS)) {
+    const member = spec.team.find((m) => m.tool === tool);
+    if (member) return member.agent;
+  }
+  return undefined;
+}
+
 /** Whether a workflow is one of Avery's (a conversation with her, R45). */
 export function isOrchestratedWorkflow(id: string | undefined): boolean {
   return !!id && Object.hasOwn(ORCHESTRATOR_TEAMS, id);

@@ -8,6 +8,7 @@ import {
   upNextLine,
 } from '../../services/agent-step-story';
 import { AgentActivity } from '../agent-activity/agent-activity';
+import { WorkflowRunRelay } from '../workflow-run-relay/workflow-run-relay';
 
 /** One row of the team: an agent, and the handoff into it from the one before. */
 interface TeamRow {
@@ -28,7 +29,7 @@ interface TeamRow {
  */
 @Component({
   selector: 'app-workflow-run-team',
-  imports: [AgentAvatar, AgentActivity, LucideAngularModule],
+  imports: [AgentAvatar, AgentActivity, LucideAngularModule, WorkflowRunRelay],
   templateUrl: './workflow-run-team.html',
   host: { class: 'block' },
 })
@@ -70,6 +71,13 @@ export class WorkflowRunTeam {
 
   /** `Jessica writes the answer, then Ryan builds the visual`; null when none waits. */
   readonly upNext = computed(() => upNextLine(this.waiting()));
+
+  /** A relay whose teammates ran queries: their link is under their work, not here. */
+  protected relayQueries(story: AgentStepStory): boolean {
+    return !!story.relay?.some(
+      (item) => item.kind === 'teammate' && item.queries > 0,
+    );
+  }
 
   protected readonly Brain = Brain;
   protected readonly Loader2 = Loader2;

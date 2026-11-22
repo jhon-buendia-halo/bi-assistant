@@ -33,6 +33,10 @@ export interface ToolCallEvent {
   rationale?: string;
   /** What the call is about: the skill a skill tool loads, else its first text argument. */
   input?: string;
+  /** Who made it, when the step's agent delegates (Avery signs her own calls). */
+  agent?: string;
+  /** A team call: the agent it hands the work to. */
+  teammate?: string;
 }
 
 /**
@@ -44,10 +48,12 @@ export function parseToolEvent(content: string): ToolCallEvent {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (parsed && typeof parsed === 'object') {
-      const { name, rationale, input } = parsed as {
+      const { name, rationale, input, agent, teammate } = parsed as {
         name?: unknown;
         rationale?: unknown;
         input?: unknown;
+        agent?: unknown;
+        teammate?: unknown;
       };
       if (typeof name === 'string' && name.trim()) {
         return {
@@ -58,6 +64,8 @@ export function parseToolEvent(content: string): ToolCallEvent {
           ...(typeof input === 'string' && input.trim()
             ? { input: input.trim() }
             : {}),
+          ...(typeof agent === 'string' && agent ? { agent } : {}),
+          ...(typeof teammate === 'string' && teammate ? { teammate } : {}),
         };
       }
     }
@@ -329,7 +337,10 @@ export class SessionsApiService {
     text: string,
     view: ResultView | null,
   ): Observable<{ ok: boolean; interpretation: FilterInterpretation }> {
-    return this.http.post<{ ok: boolean; interpretation: FilterInterpretation }>(
+    return this.http.post<{
+      ok: boolean;
+      interpretation: FilterInterpretation;
+    }>(
       `${this.answerUrl(id, message)}/queries/${index}/interpret-filter`,
       view === null ? { text } : { text, view },
     );

@@ -44,6 +44,87 @@ describe('WorkflowRunTeam (ui.md 4.4b, Agents at work)', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
+  it("tells an orchestrator's step as a relay: her steps, Michael's work under her hand-off, his queries one click away", () => {
+    const done = (label: string, tool: string, over = {}) => ({
+      label,
+      state: 'done' as const,
+      rows: null,
+      query: false,
+      tool,
+      detail: '',
+      ...over,
+    });
+    const el = render([
+      story('orchestrate', 'Avery', 'done', {
+        sentence:
+          'I asked Michael to work on your question, then checked the answer before handing it to you.',
+        queries: 1,
+        relay: [
+          {
+            kind: 'step',
+            step: done(
+              'Checked my playbook for this kind of question',
+              'skill',
+            ),
+          },
+          {
+            kind: 'step',
+            step: done('Asked Michael: “How many goals?”', 'answer_from_data'),
+          },
+          {
+            kind: 'teammate',
+            teammate: {
+              key: 'insights-analyst',
+              name: 'Michael',
+              role: 'Insights Analyst',
+            },
+            steps: [
+              done('Added up the goals', 'run_readonly_sql', {
+                query: true,
+                rows: '2 rows',
+              }),
+              done('Wrote the answer', ''),
+            ],
+            queries: 1,
+            state: 'done',
+          },
+        ],
+      }),
+    ]);
+    const opened: string[] = [];
+    fixture.componentInstance.openNode.subscribe((id) => opened.push(id));
+    // Folded once she is done; the row's own data link gives way to his.
+    expect(el.querySelector('[data-testid="agent-activity"]')).toBeNull();
+    expect(
+      el.querySelector('[data-testid="workflow-run-team-open-orchestrate"]'),
+    ).toBeNull();
+    const toggle = el.querySelector<HTMLButtonElement>(
+      '[data-testid="workflow-run-relay-toggle"]',
+    )!;
+    expect(toggle.textContent?.trim()).toBe('Show what the team did');
+    toggle.click();
+    fixture.detectChanges();
+    const steps = Array.from(
+      el.querySelectorAll('[data-testid="workflow-run-relay-step"]'),
+    ).map((s) => s.textContent?.replace(/\s+/g, ' ').trim());
+    expect(steps).toEqual([
+      'Checked my playbook for this kind of question',
+      'Asked Michael: “How many goals?”',
+    ]);
+    const michael = el.querySelector<HTMLElement>(
+      '[data-testid="workflow-run-relay-teammate"]',
+    )!;
+    expect(michael.getAttribute('data-agent')).toBe('insights-analyst');
+    expect(michael.textContent).toContain('Michael');
+    expect(michael.textContent).toContain('Wrote the answer');
+    const link = michael.querySelector<HTMLButtonElement>(
+      '[data-testid="workflow-run-relay-queries"]',
+    )!;
+    expect(link.textContent?.trim()).toBe("See Michael's query and data");
+    link.click();
+    expect(opened).toEqual(['orchestrate']);
+  });
+
   it('names each agent persona with its role, and none when it has no role (R39)', () => {
     const el = render([
       story('write', 'Jessica', 'done', {

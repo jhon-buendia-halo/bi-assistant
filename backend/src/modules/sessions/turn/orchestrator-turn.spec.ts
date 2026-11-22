@@ -373,8 +373,19 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
     );
   });
 
-  it('shows her tool calls as the step activity', async () => {
+  it('shows her tool calls as the step activity, signed, a team call naming its teammate and a skill call its file', async () => {
     const { deps, events } = fixture([
+      {
+        type: 'tool-call',
+        payload: {
+          toolCallId: 'c0',
+          toolName: 'skill_read',
+          args: {
+            skillName: 'avery-playbooks',
+            path: 'references/ranking.md',
+          },
+        },
+      },
       {
         type: 'tool-call',
         payload: {
@@ -393,8 +404,18 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
       {
         type: 'tool',
         content: JSON.stringify({
+          name: 'skill_read',
+          input: 'references/ranking.md',
+          agent: 'chief-of-staff',
+        }),
+      },
+      {
+        type: 'tool',
+        content: JSON.stringify({
           name: 'analyse_data',
           input: 'Count matches',
+          agent: 'chief-of-staff',
+          teammate: 'insights-analyst',
         }),
       },
       {

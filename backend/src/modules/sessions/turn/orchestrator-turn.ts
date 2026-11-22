@@ -37,6 +37,7 @@ import {
   ORCHESTRATOR_MAX_STEPS,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   orchestratorTeamOf,
+  teammateOfTool,
   type OrchestratorToolsRuntime,
 } from '../../../mastra/workflows/orchestrated-answer.steps';
 import type { ReadImagesOutcome } from '../../../mastra/workflows/read-images.steps';
@@ -129,6 +130,21 @@ export interface OrchestratorTurnDeps {
    * whole team's when absent.
    */
   tools?: readonly string[];
+}
+
+/**
+ * What one of Avery's calls is about, for its `tool` event: her brief or
+ * instruction to a teammate, the skill she loads (`skill { name }`) or the
+ * file she reads in it (`skill_read { path }`).
+ */
+function averyToolInput(
+  args: Record<string, unknown> | undefined,
+): string | undefined {
+  for (const key of ['brief', 'instruction', 'path', 'name', 'query']) {
+    const value = args?.[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
 }
 
 /** Michael on his own (Avery + Michael): told he plans and writes the answer. */
@@ -465,17 +481,17 @@ export async function runOrchestratorTurn(
           }
         }
         if (payload.toolCallId) names.set(payload.toolCallId, name);
-        const brief =
-          typeof payload.args?.['brief'] === 'string'
-            ? payload.args['brief']
-            : typeof payload.args?.['instruction'] === 'string'
-              ? payload.args['instruction']
-              : undefined;
+        const input = averyToolInput(payload.args);
+        const teammate = teammateOfTool(name);
+        // Her own call, signed (ui.md 4.4b *relay*): the calls that follow
+        // a team tool's, unsigned, are that teammate's.
         deps.emit({
           type: 'tool',
           content: JSON.stringify({
             name,
-            ...(brief ? { input: brief.slice(0, 200) } : {}),
+            ...(input ? { input: input.slice(0, 200) } : {}),
+            agent: CHIEF_OF_STAFF_AGENT_KEY,
+            ...(teammate ? { teammate } : {}),
           }),
         });
       } else if (chunk.type === 'tool-result') {

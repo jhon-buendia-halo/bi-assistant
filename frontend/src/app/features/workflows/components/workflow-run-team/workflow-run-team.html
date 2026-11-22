@@ -86,11 +86,20 @@
                     <span class="line-clamp-2 min-w-0">{{ thought() }}</span>
                   </p>
                 }
-                <app-agent-activity
-                  [steps]="s.activity"
-                  [live]="s.state === 'active' || s.state === 'asking'"
-                  (openQuery)="openNode.emit(s.stepId)"
-                />
+                @if (s.relay; as relay) {
+                  <!-- An orchestrator: her steps, each teammate's work under its hand-off -->
+                  <app-workflow-run-relay
+                    [items]="relay"
+                    [live]="s.state === 'active' || s.state === 'asking'"
+                    (openQuery)="openNode.emit(s.stepId)"
+                  />
+                } @else {
+                  <app-agent-activity
+                    [steps]="s.activity"
+                    [live]="s.state === 'active' || s.state === 'asking'"
+                    (openQuery)="openNode.emit(s.stepId)"
+                  />
+                }
               } @else if (row.now; as now) {
                 <!-- Business: the step under way, in words (R38) -->
                 <p
@@ -105,21 +114,24 @@
                   <span class="min-w-0 truncate">{{ now.label }}</span>
                 </p>
               }
-              <button
-                type="button"
-                class="w-fit text-[12px] text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
-                [attr.data-testid]="'workflow-run-team-open-' + s.stepId"
-                (click)="openNode.emit(s.stepId)"
-              >
-                {{
-                  s.queries > 0
-                    ? "See " +
-                      s.queries +
-                      (s.queries === 1 ? " query" : " queries") +
-                      " and data"
-                    : "See its data"
-                }}
-              </button>
+              <!-- A relay's queries are its teammates': their link is under their work -->
+              @if (!relayQueries(s)) {
+                <button
+                  type="button"
+                  class="w-fit text-[12px] text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+                  [attr.data-testid]="'workflow-run-team-open-' + s.stepId"
+                  (click)="openNode.emit(s.stepId)"
+                >
+                  {{
+                    s.queries > 0
+                      ? "See " +
+                        s.queries +
+                        (s.queries === 1 ? " query" : " queries") +
+                        " and data"
+                      : "See its data"
+                  }}
+                </button>
+              }
             </div>
           </li>
         }
