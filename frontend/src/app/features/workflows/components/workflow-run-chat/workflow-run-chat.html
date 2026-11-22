@@ -261,6 +261,9 @@
           (rerun)="designer.rerunWithAnswer($event)"
         />
       }
+      <!-- How the run went and who did what. Once there is an answer it
+           follows it (ui.md 4.4b, Answer first): the bottom line comes first. -->
+      <ng-template #process>
       <p
         data-testid="workflow-run-status"
         role="status"
@@ -279,6 +282,10 @@
           (openNode)="openStep($event)"
           (openQuery)="openTeamQuery($event)"
         />
+      }
+      </ng-template>
+      @if (!answerFirst()) {
+        <ng-container [ngTemplateOutlet]="process" />
       }
 
       @if (liveCodeProgress(); as progress) {
@@ -384,6 +391,7 @@
           </ng-template>
           <app-answer-view
             [message]="answer"
+            [bluf]="true"
             [latest]="true"
             [busy]="designer.running()"
             [showRating]="true"
@@ -456,6 +464,10 @@
             </app-panel-readiness-view>
           </section>
         }
+      }
+
+      @if (answerFirst()) {
+        <ng-container [ngTemplateOutlet]="process" />
       }
 
       <!-- How it ran (ui.md 4.4b): the ended run read step by step, folded under the answer. -->

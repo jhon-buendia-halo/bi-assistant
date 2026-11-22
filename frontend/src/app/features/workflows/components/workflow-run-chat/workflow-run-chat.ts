@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   ElementRef,
@@ -109,6 +110,7 @@ const FORM_CONTROLS =
   selector: 'app-workflow-run-chat',
   imports: [
     AnswerView,
+    NgTemplateOutlet,
     DatasetPicker,
     ExecutionId,
     LucideAngularModule,
@@ -763,6 +765,19 @@ export class WorkflowRunChat {
       : 'Type a question below.';
   });
 
+  /**
+   * The run ended with an answer: the answer leads and how the run went
+   * follows it (ui.md 4.4b, *Answer first*).
+   */
+  protected readonly answerFirst = computed(() => {
+    const result = this.designer.runResult();
+    return (
+      !!result?.answer &&
+      result.status !== 'running' &&
+      result.status !== 'suspended' &&
+      !this.designer.running()
+    );
+  });
   protected readonly runStatus = computed(() => {
     const result = this.designer.runResult();
     return result === null ? '' : runStatusLine(result);

@@ -50,6 +50,7 @@ import {
   questionNumbers,
   sampleQueriesOf,
 } from '../../../../shared/query-evidence/figure-refs';
+import { blufParts } from './answer-bluf';
 import {
   SourceInfo,
   sourceInfos,
@@ -162,17 +163,41 @@ export class AnswerView {
   );
 
   /** The answer body with a chip after each figure (inspector mode only). */
-  readonly inspectorBody = computed<SafeHtml>(() => {
+  private readonly inspectorHtml = computed(() => {
     const msg = this.message();
-    const html = linkFigures(
+    return linkFigures(
       renderMarkdown(msg.content),
       figureIndex(msg.data),
       sampleQueriesOf(msg.evidence),
       questionNumbers(this.question()),
       sourceInfos(msg),
     );
-    // Sanitized first; only code-made integers and labels were added after.
-    return this.sanitizer.bypassSecurityTrustHtml(html);
+  });
+  // Sanitized first; only code-made integers and labels were added after.
+  readonly inspectorBody = computed<SafeHtml>(() =>
+    this.sanitizer.bypassSecurityTrustHtml(this.inspectorHtml()),
+  );
+
+  /**
+   * The host lays the answer out bottom line first (ui.md 4.4b *Answer
+   * first*): the run chat. Only with the query inspector, whose figure
+   * chips the parts keep.
+   */
+  readonly bluf = input(false);
+  /** The answer's parts when laid out bottom line first; null to read it as written. */
+  readonly blufView = computed(() => {
+    if (!this.bluf() || !this.queryInspector()) return null;
+    const parts = blufParts(this.inspectorHtml());
+    if (!parts) return null;
+    const safe = (html: string) => this.sanitizer.bypassSecurityTrustHtml(html);
+    return {
+      headline: safe(parts.headline),
+      context: parts.context ? safe(parts.context) : null,
+      body: safe(parts.body),
+      folded: parts.folded
+        ? { titles: parts.folded.titles, html: safe(parts.folded.html) }
+        : null,
+    };
   });
 
   /** A clarification answer: an option label, a custom answer or Skip. */
