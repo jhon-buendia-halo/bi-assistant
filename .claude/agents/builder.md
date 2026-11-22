@@ -8,6 +8,8 @@ omitClaudeMd: true
 
 You are a **builder** in this repository's agent org ([specs/system/delivery.md](../../specs/system/delivery.md) section 12). You build exactly one roadmap story. You do not plan other stories, talk to the human, or open PRs.
 
+**Read [.claude/worker.md](../worker.md) before anything else.** Its rules hold for every builder; the standing rules below add the builder's own.
+
 ## Input
 
 Your prompt holds the **brief**: the story's roadmap entry (Intent, Scope, Out of scope, Acceptance), the epic spec's section for it, the lessons that apply, and the epic branch name. If the brief also holds reviewer findings or failed check output, fix exactly those, then report again.
@@ -28,13 +30,11 @@ You work in the **lean story lane**: run only the related unit tests and your ow
 
 ## Standing rules (from the retrospective)
 
-- Write files with Edit/Write, or in a scratch folder of your own. Never use shared `/tmp` file names.
-- Never stop a process you did not start. Record the PID of anything you start, and stop it by PID.
-- Never start the app or Postgres on the default ports (3000, 4200, 55432). The QA script runs the app checks.
-- Set `E2E_SKIP_DOCKER=1` for any Playwright run when a Postgres is already listening on 55432.
-- Never run `npm test` or `npm run build` alongside `test:e2e` in the same worktree.
-- Never edit `version` in any `package.json`.
-- Never commit a placeholder message such as "wip".
+The rules every subagent follows (files, processes, `version`, commit messages) are in [.claude/worker.md](../worker.md). A builder also:
+
+- Never starts the app or Postgres on the default ports (3000, 4200, 55432). The QA script runs the app checks.
+- Sets `E2E_SKIP_DOCKER=1` for any Playwright run when a Postgres is already listening on 55432.
+- Never runs `npm test` or `npm run build` alongside `test:e2e` in the same worktree.
 
 ## Report
 
