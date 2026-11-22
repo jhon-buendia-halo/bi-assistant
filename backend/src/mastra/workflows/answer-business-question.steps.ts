@@ -401,6 +401,11 @@ export interface AnswerBusinessQuestionRuntime {
     revision?: Revision;
     /** Read images' notes (agents.md 2.15); absent or `''` without images. */
     imageNotes?: string;
+    /**
+     * An orchestrator's request (Avery, agents.md 2.21): it ends the plan
+     * request. Absent in Answer a Business Question.
+     */
+    brief?: string;
   }): Promise<{ plan: AnalysisPlan; stopped: boolean }>;
   /**
    * One attempt of the Analyse step: the agent turn with its tools. When
@@ -490,6 +495,11 @@ export interface AnswerBusinessQuestionRuntime {
      * run's answer; `deliverAnswer` hands it over once approved.
      */
     quiet?: boolean;
+    /**
+     * An orchestrator's request (Avery, agents.md 2.21): it ends the
+     * answer request. Absent in Answer a Business Question.
+     */
+    brief?: string;
   }): Promise<{
     answer: BusinessAnswer;
     stopped: boolean;

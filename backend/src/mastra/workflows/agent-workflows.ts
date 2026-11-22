@@ -29,6 +29,12 @@ import {
   SITE_REVIEWER_AGENT_NAME,
 } from '../agent-constants';
 import { builtinAgentPersona } from '../agent-personas';
+import { CHIEF_OF_STAFF_AGENT_KEY } from '../agent-constants';
+import {
+  ORCHESTRATOR_MAX_STEPS,
+  ORCHESTRATOR_TEAM,
+  ORCHESTRATOR_TOOL_NAMES,
+} from './orchestrated-answer.steps';
 import type { WorkflowStepExit } from './answer-business-question.steps';
 import { CODE_WORKFLOWS, stepAgentKey } from './workflow-catalog';
 
@@ -50,8 +56,21 @@ export interface AgentWorkflowStep {
     role: string;
     tools: string[];
     maxSteps: number;
+    /**
+     * An orchestrator's team (Avery, agents.md 2.21): each of its tools that
+     * calls another agent, with that agent's key, persona name and job title.
+     */
+    team?: AgentWorkflowTeamMember[];
   };
   exits: WorkflowStepExit[];
+}
+
+/** One tool of an orchestrator and the agent behind it (api.md 117). */
+export interface AgentWorkflowTeamMember {
+  tool: string;
+  key: string;
+  name: string;
+  role: string;
 }
 
 export interface AgentWorkflow {
@@ -62,8 +81,21 @@ export interface AgentWorkflow {
 /** The agent each code workflow's agent step runs, by its registry key. */
 const STEP_AGENTS: Record<
   string,
-  { name: string; tools: readonly string[]; maxSteps: number }
+  {
+    name: string;
+    tools: readonly string[];
+    maxSteps: number;
+    team?: readonly { tool: string; agent: string }[];
+  }
 > = {
+  // Avery's Orchestrate step (agents.md 2.21, 5.22): her own tools, each but
+  // ask_clarification calling an agent of her team.
+  [CHIEF_OF_STAFF_AGENT_KEY]: {
+    name: 'Avery',
+    tools: ORCHESTRATOR_TOOL_NAMES,
+    maxSteps: ORCHESTRATOR_MAX_STEPS,
+    team: ORCHESTRATOR_TEAM,
+  },
   [INSIGHTS_ANALYST_AGENT_KEY]: {
     name: INSIGHTS_ANALYST_NAME,
     tools: INSIGHTS_ANALYST_TOOL_NAMES,
@@ -173,18 +205,38 @@ export function codeWorkflowView(
   };
 }
 
-/** An agent step's agent: its key, its persona, its tools and step limit. */
+/**
+ * An agent step's agent: its key, its persona, its tools and step limit.
+ * A step agent with a catalogue entry of its own (Avery) shows its own tools;
+ * any other shows the workflow's primary agent's.
+ */
 function stepAgent(
   key: string,
   step: { modelOnly?: true },
   primary: { name: string; tools: readonly string[]; maxSteps: number },
 ): NonNullable<AgentWorkflowStep['agent']> {
   const persona = builtinAgentPersona(key);
+  const own: (typeof STEP_AGENTS)[string] = Object.hasOwn(STEP_AGENTS, key)
+    ? STEP_AGENTS[key]
+    : primary;
   return {
     key,
-    name: persona?.name ?? primary.name,
+    name: persona?.name ?? own.name,
     role: persona?.role ?? '',
-    tools: step.modelOnly ? [] : [...primary.tools],
-    maxSteps: step.modelOnly ? 1 : primary.maxSteps,
+    tools: step.modelOnly ? [] : [...own.tools],
+    maxSteps: step.modelOnly ? 1 : own.maxSteps,
+    ...(!step.modelOnly && own.team
+      ? {
+          team: own.team.map((member) => {
+            const teammate = builtinAgentPersona(member.agent);
+            return {
+              tool: member.tool,
+              key: member.agent,
+              name: teammate?.name ?? member.agent,
+              role: teammate?.role ?? '',
+            };
+          }),
+        }
+      : {}),
   };
 }

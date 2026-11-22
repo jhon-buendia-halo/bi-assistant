@@ -19,8 +19,37 @@ import {
   type WorkflowEdge,
 } from './answer-business-question.steps';
 
+import {
+  ANALYSIS_PLANNER_AGENT_KEY,
+  ANSWER_WRITER_AGENT_KEY,
+  IMAGE_READER_AGENT_KEY,
+  VISUALIZATION_AGENT_KEY,
+} from '../agent-constants';
+import { INSIGHTS_ANALYST_AGENT_KEY } from '../agents/insights-analyst-catalog';
+
 /** The workflow's registry key and id. */
 export const ORCHESTRATED_ANSWER_WORKFLOW_ID = 'orchestrated-answer';
+
+/** The most model steps Avery takes in one turn. */
+export const ORCHESTRATOR_MAX_STEPS = 16;
+
+/**
+ * Avery's team as her tools (agents.md 2.21): each tool of
+ * mastra/tools/orchestrator.tools.ts and the agent it calls, in her order.
+ */
+export const ORCHESTRATOR_TEAM: readonly { tool: string; agent: string }[] = [
+  { tool: 'read_reference_images', agent: IMAGE_READER_AGENT_KEY },
+  { tool: 'plan_analysis', agent: ANALYSIS_PLANNER_AGENT_KEY },
+  { tool: 'analyse_data', agent: INSIGHTS_ANALYST_AGENT_KEY },
+  { tool: 'write_answer', agent: ANSWER_WRITER_AGENT_KEY },
+  { tool: 'build_visual', agent: VISUALIZATION_AGENT_KEY },
+];
+
+/** Avery's tools, in order: her team's, then `ask_clarification`. */
+export const ORCHESTRATOR_TOOL_NAMES: readonly string[] = [
+  ...ORCHESTRATOR_TEAM.map((member) => member.tool),
+  'ask_clarification',
+];
 
 /** The name the app shows for the workflow. */
 export const ORCHESTRATED_ANSWER_WORKFLOW_NAME =
@@ -111,12 +140,20 @@ export interface OrchestratorToolsRuntime {
   buildsVisual: boolean;
   /** Zoe reads the run's images; her notes, or why there are none. */
   readImages(): Promise<string>;
-  /** Olivia's plan in words, with her clarifying question when she has one. */
-  plan(): Promise<string>;
+  /**
+   * Olivia's plan in words, with her clarifying question when she has one.
+   * `brief`: Avery's request to her (the question restated to stand alone,
+   * then what the plan must cover); it ends Olivia's request.
+   */
+  plan(brief?: string): Promise<string>;
   /** Michael's analysis for `brief`: each query, its rows and the checks. */
   analyse(brief: string): Promise<string>;
-  /** Jessica writes the answer; a short confirmation for Avery. */
-  writeAnswer(): Promise<string>;
+  /**
+   * Jessica writes the answer; a short confirmation for Avery. `brief`:
+   * Avery's request to her (the question restated to stand alone, what the
+   * user already knows); it ends Jessica's request.
+   */
+  writeAnswer(brief?: string): Promise<string>;
   /** Ryan charts the answer's rows; what he built, or why not. */
   buildVisual(instruction: string): Promise<string>;
 }

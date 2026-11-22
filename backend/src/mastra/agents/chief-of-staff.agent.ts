@@ -5,6 +5,7 @@ import { resolveAgentModel } from '../model-resolver';
 import { stepModelFrom } from '../step-model';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { orchestratorTools } from '../tools/orchestrator.tools';
+import { catalogFrameworkSkills } from '../skill-sources';
 import { ORCHESTRATOR_INSTRUCTIONS } from '../workflows/orchestrated-answer.prompts';
 
 /**
@@ -26,6 +27,9 @@ export const chiefOfStaffAgent = new Agent({
     "Orchestrates Answer a Business Question (orchestrated): decides which agents work on the user's question, briefs them and hands back one answer.",
   instructions: () =>
     agentInstructions(CHIEF_OF_STAFF_AGENT_KEY, ORCHESTRATOR_INSTRUCTIONS),
+  // Her router and playbooks, loaded on demand through Mastra's skill tools
+  // (agents.md 7.4, ADR-0025).
+  skills: () => catalogFrameworkSkills(CHIEF_OF_STAFF_AGENT_KEY),
   model: async ({ requestContext }) =>
     resolveAgentModel(stepModelFrom(requestContext)?.model),
   tools: ({ requestContext }) => ({

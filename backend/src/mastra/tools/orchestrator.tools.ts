@@ -44,10 +44,17 @@ export const planAnalysisTool = createTool({
   id: 'plan_analysis',
   description:
     "Olivia, Analysis Lead: plans the analysis of the user's question over their datasets (measures, tables, scope, assumptions). Reads no data. Call it before analyse_data. Returns the plan, and her clarifying question with its options when the question can be read more than one way.",
-  inputSchema: z.object({}),
+  inputSchema: z.object({
+    brief: z
+      .string()
+      .optional()
+      .describe(
+        "Your request to Olivia. First the user's question restated so it stands alone (on a follow-up, resolve words like 'it', 'each one' or 'and by region' from the conversation), then anything the plan must cover. She also reads the user's own words.",
+      ),
+  }),
   outputSchema: reply,
-  execute: async (_input, context) => ({
-    result: await runtimeOf(context?.requestContext).plan(),
+  execute: async (input, context) => ({
+    result: await runtimeOf(context?.requestContext).plan(input.brief),
   }),
 });
 
@@ -72,10 +79,17 @@ export const writeAnswerTool = createTool({
   id: 'write_answer',
   description:
     "Jessica, Insights Writer: writes the user's answer from Michael's results, every figure linked to its query. Call it once the results cover the question. Returns a short confirmation; the user reads her answer.",
-  inputSchema: z.object({}),
+  inputSchema: z.object({
+    brief: z
+      .string()
+      .optional()
+      .describe(
+        "Your request to Jessica. First the user's question restated so it stands alone, then what she should know: what the user already learnt from earlier answers (so she does not repeat it), and the part the data covers when it covers only part of the question. She also reads the user's own words.",
+      ),
+  }),
   outputSchema: reply,
-  execute: async (_input, context) => ({
-    result: await runtimeOf(context?.requestContext).writeAnswer(),
+  execute: async (input, context) => ({
+    result: await runtimeOf(context?.requestContext).writeAnswer(input.brief),
   }),
 });
 

@@ -48,6 +48,7 @@ describe('BuiltInSkillsService', () => {
     const { service } = build();
     const list = await service.list();
     expect(list.map((skill) => skill.name)).toEqual([
+      'avery-playbooks',
       'curated-knowledge',
       'data-readiness',
       'interactive-visuals',
@@ -57,16 +58,20 @@ describe('BuiltInSkillsService', () => {
     ]);
     expect(list[0]).toMatchObject({
       loading: 'on-demand',
+      agents: ['chief-of-staff'],
+    });
+    expect(list[1]).toMatchObject({
+      loading: 'on-demand',
       agents: ['assistant', 'insights-analyst'],
       modified: false,
       builtInChanged: false,
       updatedAt: null,
     });
-    expect(list[1]).toMatchObject({
+    expect(list[2]).toMatchObject({
       loading: 'on-demand',
       agents: ['data-readiness'],
     });
-    expect(list[2]).toMatchObject({
+    expect(list[3]).toMatchObject({
       loading: 'harness',
       agents: ['visualization'],
     });

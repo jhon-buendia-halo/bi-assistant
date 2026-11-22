@@ -90,9 +90,11 @@
           />
         }
         @for (sub of l.subEdges; track sub.id) {
+          @let teammate = teamRun().get(sub.subNodeId);
           <path
             class="sub-edge"
             [class.done]="done(sub.nodeId)"
+            [attr.data-run]="teammate?.state ?? null"
             [attr.d]="sub.path"
             [attr.data-subnode]="sub.subNodeId"
             [attr.data-done]="done(sub.nodeId) ? 'true' : 'false'"
@@ -373,6 +375,7 @@
             type="button"
             class="sub-node"
             [attr.data-kind]="sub.kind"
+            [attr.data-run]="teammateRun(sub)?.state ?? null"
             [attr.data-step]="node.id"
             [attr.data-testid]="'workflow-subnode-' + sub.id"
             [attr.aria-label]="subNodeLabel(node, sub)"
@@ -380,9 +383,7 @@
             [attr.aria-expanded]="
               sub.kind === 'tools' ? toolsMenu()?.stepId === node.id : null
             "
-            [attr.title]="
-              sub.kind === 'tools' ? sub.tools.join(', ') : sub.label
-            "
+            [attr.title]="subNodeTitle(sub)"
             [style.left.px]="sub.x"
             [style.top.px]="sub.y"
             [style.width.px]="sub.size"
@@ -393,11 +394,33 @@
             "
           >
             <span class="diamond top" aria-hidden="true"></span>
-            <lucide-angular
-              [img]="subIcons[sub.kind]"
-              [size]="20"
-              aria-hidden="true"
-            />
+            @let run = teammateRun(sub);
+            @if (run && run.calls > 0) {
+              <!-- How many times Avery called this teammate in the run shown -->
+              <span
+                class="sub-calls pointer-events-none"
+                data-testid="workflow-subnode-calls"
+                aria-hidden="true"
+                >{{ run.calls }}</span
+              >
+            }
+            @if (sub.agent; as teammate) {
+              <!-- A teammate behind one of the orchestrator's tools: its portrait -->
+              <app-agent-avatar
+                class="pointer-events-none flex-none"
+                data-testid="workflow-subnode-portrait"
+                aria-hidden="true"
+                [agentKey]="teammate.key"
+                [name]="teammate.name"
+                [size]="44"
+              />
+            } @else {
+              <lucide-angular
+                [img]="subIcons[sub.kind]"
+                [size]="20"
+                aria-hidden="true"
+              />
+            }
             <span
               class="pointer-events-none absolute top-[calc(100%+6px)] left-1/2 flex -translate-x-1/2 flex-col items-center text-center"
               aria-hidden="true"
@@ -409,7 +432,9 @@
               >
               @if (sub.subtitle) {
                 <span
-                  class="node-subtitle text-[11px] leading-[14px] text-fg-muted"
+                  class="node-subtitle max-w-full text-[11px] leading-[14px] [overflow-wrap:anywhere] text-fg-muted"
+                  [class.font-mono]="sub.kind === 'agent'"
+                  [class.line-clamp-2]="sub.kind === 'agent'"
                   >{{ sub.subtitle }}</span
                 >
               }

@@ -115,6 +115,8 @@ const LABEL_ROW_GAP = 1;
 const SUB_LABEL_GAP = 4;
 /** The ports' places along the agent's bottom edge, as a fraction of its width. */
 const PORT_AT = { model: 0.25, tool: 0.75 } as const;
+/** A teammate sub-node's label box: its name, then the tool that calls it (mono, wraps). */
+const TEAM_LABEL_WIDTH = 104;
 
 /** A tool is reached through its agent's Tools sub-node, never a node of its own. */
 export type CanvasNodeKind = Exclude<WorkflowNodeKind, 'tool'>;
@@ -128,15 +130,18 @@ export interface CanvasPort {
 }
 
 export interface CanvasSubNode {
-  /** `<stepId>-model` | `<stepId>-tools`. */
+  /** `<stepId>-model` | `<stepId>-tools` | `<stepId>-agent-<tool>`. */
   id: string;
-  kind: 'model' | 'tools';
-  /** The model's last `/` segment or `No model set`; `Tools`. */
+  /** `agent`: an orchestrator's teammate, called through one of its tools (api.md 117 `team`). */
+  kind: 'model' | 'tools' | 'agent';
+  /** The model's last `/` segment or `No model set`; `Tools`; the teammate's name. */
   label: string;
-  /** `model`; `1 tool` / `<n> tools`. */
+  /** `model`; `1 tool` / `<n> tools`; the tool that calls the teammate. */
   subtitle: string;
-  /** The tools its menu lists (Tools only); else empty. */
+  /** The tools its menu lists (Tools); the one tool (a teammate); else empty. */
   tools: string[];
+  /** A teammate's agent: its key (for its portrait), name and job title. */
+  agent?: CanvasNodeAgent;
   /** Top-left of the circle. */
   x: number;
   y: number;
@@ -406,6 +411,7 @@ function subNodesOf(
   const agent = step.agent;
   if (step.kind !== 'agent' || !agent) return [];
   const top = bottom + CANVAS.subTop;
+  if (agent.team?.length) return teamSubNodes(w, step, x, top);
   const at = (port: keyof typeof PORT_AT) =>
     x + CANVAS.agentWidth * PORT_AT[port] - CANVAS.subSize / 2;
   const subs: CanvasSubNode[] = [
@@ -435,6 +441,66 @@ function subNodesOf(
   return subs;
 }
 
+/**
+ * An orchestrator's sub-nodes (Avery, api.md 117 `team`): its Model, one
+ * sub-node per teammate (the agent behind one of its tools, in its tools'
+ * order), then Tools with the tools that call no agent, when there are any.
+ * One row centred under the agent, labels side by side.
+ */
+function teamSubNodes(
+  w: Pick<WorkflowDetail, 'agents'>,
+  step: WorkflowDetailStep,
+  x: number,
+  top: number,
+): CanvasSubNode[] {
+  const agent = step.agent!;
+  const team = agent.team ?? [];
+  const called = new Set(team.map((member) => member.tool));
+  const rest = agent.tools.filter((tool) => !called.has(tool));
+  const subs: Omit<CanvasSubNode, 'x' | 'y' | 'size'>[] = [
+    {
+      id: `${step.id}-model`,
+      kind: 'model',
+      label: modelLabel(w, step),
+      subtitle: 'model',
+      tools: [],
+    },
+    ...team.map((member) => ({
+      id: `${step.id}-agent-${member.tool}`,
+      kind: 'agent' as const,
+      label: member.name,
+      subtitle: member.tool,
+      tools: [member.tool],
+      agent: { key: member.key, name: member.name, role: member.role },
+    })),
+    ...(rest.length
+      ? [
+          {
+            id: `${step.id}-tools`,
+            kind: 'tools' as const,
+            label: 'Tools',
+            subtitle: toolsLabel(rest.length),
+            tools: rest,
+          },
+        ]
+      : []),
+  ];
+  const total =
+    subs.reduce((sum, sub) => sum + subLabelWidth(sub), 0) +
+    SUB_LABEL_GAP * (subs.length - 1);
+  let left = x + CANVAS.agentWidth / 2 - total / 2;
+  return subs.map((sub) => {
+    const centre = left + subLabelWidth(sub) / 2;
+    left += subLabelWidth(sub) + SUB_LABEL_GAP;
+    return {
+      ...sub,
+      x: centre - CANVAS.subSize / 2,
+      y: top,
+      size: CANVAS.subSize,
+    };
+  });
+}
+
 /** Vertical S-curve from a port down to the top of a sub-node. */
 function subPath(x1: number, y1: number, x2: number, y2: number): string {
   const mid = (y1 + y2) / 2;
@@ -443,6 +509,7 @@ function subPath(x1: number, y1: number, x2: number, y2: number): string {
 
 /** The left and right edges of a sub-node's label box. */
 export function subLabelWidth(sub: Pick<CanvasSubNode, 'kind'>): number {
+  if (sub.kind === 'agent') return TEAM_LABEL_WIDTH;
   return sub.kind === 'tools' ? CANVAS.toolsLabelWidth : CANVAS.subLabelWidth;
 }
 
@@ -526,27 +593,36 @@ export function workflowCanvasLayout(
     const fields = prev.step
       ? prev.step.output.length
       : (stepsById.get(id)?.input.length ?? 0);
-    return (
+    // After an orchestrator, the next column starts past its row of
+    // teammates, so their lines never cross the next square's label.
+    const team = prev.subNodes.filter((s) => s.kind === 'agent');
+    const pastTeam = team.length
+      ? Math.max(...prev.subNodes.map((s) => subLabelSpan(s)[1])) +
+        SUB_LABEL_GAP +
+        (CANVAS.labelWidth - CANVAS.square) / 2
+      : -Infinity;
+    return Math.max(
+      pastTeam,
       prev.x +
-      prev.width +
-      columnGap(
-        fieldsLabel(fields),
-        widest(
-          edgeLines(edge),
-          // An edge that skips the columns before (Start past Read images)
-          // shows its label in this gap, the last before its target.
-          ...graph
-            .filter(
-              (e) =>
-                e.to === id &&
-                e.kind !== 'loop' &&
-                e.from !== prev.id &&
-                onPath.has(e.from),
-            )
-            .map(edgeLines),
+        prev.width +
+        columnGap(
+          fieldsLabel(fields),
+          widest(
+            edgeLines(edge),
+            // An edge that skips the columns before (Start past Read images)
+            // shows its label in this gap, the last before its target.
+            ...graph
+              .filter(
+                (e) =>
+                  e.to === id &&
+                  e.kind !== 'loop' &&
+                  e.from !== prev.id &&
+                  onPath.has(e.from),
+              )
+              .map(edgeLines),
+          ),
+          dropsFrom.has(prev.id),
         ),
-        dropsFrom.has(prev.id),
-      )
     );
   };
 
@@ -577,9 +653,25 @@ export function workflowCanvasLayout(
           n.subNodes.map((s) => subLabelSpan(s)[1] + SUB_LABEL_GAP),
         ),
       );
-      const firstLeft =
+      let firstLeft =
         x + CANVAS.agentWidth * PORT_AT.model - CANVAS.subLabelWidth / 2;
-      if (firstLeft < taken) x += taken - firstLeft;
+      let clear = taken;
+      if (step.agent?.team?.length) {
+        // An orchestrator's row of teammates runs past its agent on both
+        // sides: keep it clear of whatever sits at its height before it
+        // (Start's label and exit note).
+        const row = stepNode(w, step, null, x, centerY).subNodes;
+        firstLeft = Math.min(...row.map((s) => subLabelSpan(s)[0]));
+        const rowTop = row[0].y;
+        const rowBottom = rowTop + CANVAS.subSize + CANVAS.subLabelHeight;
+        clear = Math.max(
+          taken,
+          ...canvasBoxes({ nodes, edges: [] })
+            .filter((b) => b.y < rowBottom && b.y + b.h > rowTop)
+            .map((b) => b.x + b.w + SUB_LABEL_GAP),
+        );
+      }
+      if (firstLeft < clear) x += clear - firstLeft;
     }
     nodes.push(stepNode(w, step, numbers.get(step.id) ?? null, x, centerY));
   }

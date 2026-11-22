@@ -951,6 +951,7 @@ export class TurnEngine {
             clarification: answered,
             imageNotes,
             revision,
+            brief,
           }) => {
             try {
               // After Clarify, Plan plans with its question and the answer;
@@ -962,6 +963,8 @@ export class TurnEngine {
                   catalogBlock,
                   ...(answered ? { answered } : {}),
                   ...(revision ? { revision } : {}),
+                  // Avery's request, in the orchestrated workflow only.
+                  ...(brief ? { brief } : {}),
                   imageNotes,
                 }),
                 stepModelOf(ANALYSIS_PLANNER_AGENT_KEY),
@@ -1270,6 +1273,10 @@ export class TurnEngine {
                     role: message.role,
                     content: message.content,
                   })),
+                // The last answer's queries, for Michael on a follow-up.
+                ...(session.contextQueries?.length
+                  ? { earlierQueries: session.contextQueries }
+                  : {}),
                 ...(orchestratorModel ? { orchestratorModel } : {}),
                 ...(orchestratorProviderOptions
                   ? { providerOptions: orchestratorProviderOptions }

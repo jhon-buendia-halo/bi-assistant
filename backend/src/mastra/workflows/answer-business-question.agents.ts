@@ -126,6 +126,8 @@ export async function planWithModel(
     imageNotes?: string;
     /** The changes the user asked for on Plan's approval gate (R44). */
     revision?: Revision;
+    /** An orchestrator's request (Avery, agents.md 2.21): it ends the request. */
+    brief?: string;
   },
   options: StepModelOptions,
 ): Promise<{ plan: AnalysisPlan; stopped: boolean }> {
@@ -240,6 +242,8 @@ export async function writeAnswerWithModel(
     canAsk?: boolean;
     answered?: { question: string; answer: string };
     revision?: Revision;
+    /** An orchestrator's request (Avery, agents.md 2.21): it ends the request. */
+    brief?: string;
   },
   options: StepModelOptions & { onText?: (delta: string) => void },
 ): Promise<{
