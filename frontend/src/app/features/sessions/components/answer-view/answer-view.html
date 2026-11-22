@@ -167,16 +167,66 @@
       @if (queryInspector()) {
         <!-- Sanitized markdown plus a chip after each figure (figure-refs.ts) -->
         <div class="relative" data-testid="answer-prose">
-          <div
-            class="prose-dark"
-            [innerHTML]="inspectorBody()"
-            (click)="onProseClick($event)"
-            (mouseover)="onProseOver($event)"
-            (mouseout)="onProseOut($event)"
-            (focusin)="onProseOver($event)"
-            (focusout)="onProseOut($event)"
-            (keydown)="onProseKeydown($event)"
-          ></div>
+          @if (blufView(); as b) {
+            <!-- Bottom line first (ui.md 4.4b): the answer, its scope, the body, how it was worked out folded -->
+            <div
+              class="flex flex-col gap-3"
+              (click)="onProseClick($event)"
+              (mouseover)="onProseOver($event)"
+              (mouseout)="onProseOut($event)"
+              (focusin)="onProseOver($event)"
+              (focusout)="onProseOut($event)"
+              (keydown)="onProseKeydown($event)"
+            >
+              <section
+                class="prose-dark rounded-xl border border-border bg-surface px-4 py-3"
+                data-testid="answer-bluf"
+                aria-labelledby="answer-bluf-label"
+              >
+                <!-- prose-dark keeps the figure chips styled; divs keep the card's own spacing -->
+                <div
+                  id="answer-bluf-label"
+                  class="text-[11px] font-semibold tracking-wide text-fg-muted uppercase"
+                >
+                  Answer
+                </div>
+                <div
+                  class="mt-1 text-[17px] leading-snug font-semibold text-fg-strong"
+                  data-testid="answer-bluf-headline"
+                  [innerHTML]="b.headline"
+                ></div>
+                @if (b.context) {
+                  <div
+                    class="mt-2 text-[13px] leading-5 text-fg-muted"
+                    data-testid="answer-bluf-context"
+                    [innerHTML]="b.context"
+                  ></div>
+                }
+              </section>
+              <div class="prose-dark" [innerHTML]="b.body"></div>
+              @if (b.folded; as more) {
+                <details data-testid="answer-bluf-more">
+                  <summary
+                    class="cursor-pointer rounded text-[13px] text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-focus"
+                  >
+                    {{ more.titles.join(" · ") }}
+                  </summary>
+                  <div class="prose-dark mt-2" [innerHTML]="more.html"></div>
+                </details>
+              }
+            </div>
+          } @else {
+            <div
+              class="prose-dark"
+              [innerHTML]="inspectorBody()"
+              (click)="onProseClick($event)"
+              (mouseover)="onProseOver($event)"
+              (mouseout)="onProseOut($event)"
+              (focusin)="onProseOver($event)"
+              (focusout)="onProseOut($event)"
+              (keydown)="onProseKeydown($event)"
+            ></div>
+          }
           @if (card(); as c) {
             <div
               role="tooltip"

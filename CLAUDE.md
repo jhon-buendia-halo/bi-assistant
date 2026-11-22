@@ -15,6 +15,7 @@ specs/      the complete specification of the app
 ## Non-negotiables
 
 - **Never on `main`.** Work on a branch; nothing goes directly on `main`.
+- **Every session starts up to date with `main` and in its own worktree (mandatory).** Before the first change of a session: `git fetch origin`, then work in a git worktree of its own (never in the main checkout), on a branch that holds the latest `origin/main` (a new branch starts from it; an existing one merges it in first, and the session stops to ask when the merge conflicts). Playbook: `session-handoff`, *Start*.
 - **Specs change with the code, on the same branch.** `python3 scripts/check-specs.py` must pass. Skill: `workflow-start` (where a fact belongs).
 - **Every local instance is ready to test.** Never leave an instance without an LLM. Playbook: `local-instance`.
 - **New or changed workflows start from Mastra's docs.** Read them, check what can be reused, offer the user three approaches with a recommendation, and build only after the user picks one. Playbook: `mastra-workflow`.
@@ -116,7 +117,9 @@ The workflow decides which steps run; the playbook says how to do this kind of t
 | A defect in shipped behaviour | [`bug-fix`](.claude/playbooks/bug-fix.md) |
 | Starting the app for the user or a check | [`local-instance`](.claude/playbooks/local-instance.md) |
 | Recording what shipped, the PR, post-merge cleanup | [`ship`](.claude/playbooks/ship.md) |
-| Pausing work, or picking up a previous session's work | [`session-handoff`](.claude/playbooks/session-handoff.md) |
+| Starting any session (worktree, up to date with `main`), pausing work, or picking up a previous session's work | [`session-handoff`](.claude/playbooks/session-handoff.md) |
+| Suggesting options for a change that can be seen (a screen, dialog, layout, chart) | [`visual-options`](.claude/playbooks/visual-options.md) |
+| Finishing any new feature or change: images that prove it, shown in the chat | [`show-the-change`](.claude/playbooks/show-the-change.md) |
 
 ## Process documents
 

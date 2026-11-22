@@ -260,6 +260,7 @@ export function buildToolInspection(
     const calls = runs
       .flatMap((run) => run.toolCalls)
       .filter((call) => call.tool === name);
+    const member = stepAgent.team?.find((m) => m.tool === name);
     const durations = calls.flatMap((call) =>
       call.durationMs !== undefined ? [call.durationMs] : [],
     );
@@ -287,6 +288,15 @@ export function buildToolInspection(
         totalDurationMs: durations.length
           ? durations.reduce((sum, ms) => sum + ms, 0)
           : null,
+        ...(member
+          ? {
+              teammate: {
+                key: member.key,
+                name: member.name,
+                role: member.role,
+              },
+            }
+          : {}),
       },
     };
   }

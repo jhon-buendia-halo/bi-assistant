@@ -149,6 +149,29 @@ describe('checkStageCounts (plan 3f)', () => {
 describe('explanationOf', () => {
   const reply = (steps: unknown[]) => ({ steps });
 
+  it("keeps each step's preview statement; writes the start's when the model did not; drops one that is no read", () => {
+    const e = explanationOf(
+      reply([
+        { verb: 'start', text: 'Begin', table: 'returns' },
+        {
+          verb: 'group',
+          text: 'By product',
+          previewSql:
+            'SELECT product, COUNT(*) AS n FROM shop.public.returns GROUP BY product',
+        },
+        { verb: 'sort', text: 'Most first', previewSql: 'DELETE FROM x' },
+      ]),
+      record,
+      evidence,
+    );
+    expect(e.steps.map((s) => s.previewSql)).toEqual([
+      'SELECT * FROM "public"."returns"',
+      'SELECT product, COUNT(*) AS n FROM shop.public.returns GROUP BY product',
+      undefined,
+      undefined,
+    ]);
+  });
+
   it('drops a show step the model wrote and adds the code-built one', () => {
     const e = explanationOf(
       reply([

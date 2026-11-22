@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   DestroyRef,
@@ -28,6 +29,8 @@ import { WorkflowNodeDialog } from '../workflow-node-dialog/workflow-node-dialog
 import { StoryQueryOpen } from '../workflow-step-story/workflow-step-story';
 import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
 import { WorkflowRunChat } from '../workflow-run-chat/workflow-run-chat';
+import { relayQueryOf } from '../../services/team-relay';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import {
   WorkflowView,
   readWorkflowView,
@@ -47,7 +50,9 @@ import {
 @Component({
   selector: 'app-workflow-detail',
   imports: [
+    AgentAvatar,
     LucideAngularModule,
+    NgTemplateOutlet,
     QueryInspector,
     WorkflowCanvas,
     WorkflowNodeDialog,
@@ -162,12 +167,42 @@ export class WorkflowDetailPage {
   });
 
   /**
+   * Who ran the open query, when a teammate ran it in an orchestrator's
+   * relay (ui.md 4.4b *relay*): the teammate, for whom, which of their
+   * queries and what they were asked; null for any other query.
+   */
+  readonly queryContext = computed(() => {
+    const open = this.openQuery();
+    if (!open) return null;
+    const record = open.answer.data?.[open.index];
+    for (const story of this.designer.agentStories().values()) {
+      const place = relayQueryOf(story.relay, record);
+      if (place) return { ...place, lead: story.agent };
+    }
+    return null;
+  });
+
+  /**
    * The sheet closes; the focus goes back to the chip or row that opened it
    * (found again by its test id when the answer was redrawn meanwhile).
    */
   closeQuery(): void {
     focusQueryOpener(this.designer.closeQuery());
   }
+
+  /** The relay of the open orchestrator step or teammate, in the run shown (ui.md 4.4b). */
+  readonly openRelay = computed(() => {
+    const open = this.designer.openInspection();
+    // A teammate's tool opens their orchestrator's relay; her own step, hers.
+    const stepId = open?.tool?.teammate
+      ? open.tool.stepId
+      : open?.kind === 'agent'
+        ? open.step?.id
+        : undefined;
+    return stepId
+      ? (this.designer.agentStories().get(stepId)?.relay ?? null)
+      : null;
+  });
 
   /** The answer's records a node's Story links its queries to; null when the page does not inspect queries. */
   readonly storyAnswerData = computed(() =>

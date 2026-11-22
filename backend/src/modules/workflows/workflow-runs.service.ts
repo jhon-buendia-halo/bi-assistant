@@ -31,7 +31,7 @@ import {
   type WorkflowInputError,
 } from '../../mastra/workflows/workflow-input';
 import { REVIEW_WEBSITE_WORKFLOW_ID } from '../../mastra/workflows/review-website.steps';
-import { ORCHESTRATED_ANSWER_WORKFLOW_ID } from '../../mastra/workflows/orchestrated-answer.steps';
+import { isOrchestratedWorkflow } from '../../mastra/workflows/orchestrated-answer.steps';
 
 /** The most turns of a conversation Avery reads (workflows R45). */
 export const CONVERSATION_TURNS = 20;
@@ -844,7 +844,7 @@ export class WorkflowRunsService implements OnModuleInit {
               // (workflows R45), so every teammate starts from what she
               // hands it.
               ...(ask?.continuesThreads === false ||
-              workflow.id === ORCHESTRATED_ANSWER_WORKFLOW_ID
+              isOrchestratedWorkflow(workflow.id)
                 ? {}
                 : {
                     continuesThreadsOf: `${RUN_HOST_ID_PREFIX}${prepared.context.fromRunId}`,
@@ -1365,8 +1365,21 @@ export class WorkflowRunsService implements OnModuleInit {
    * code, any other by one call to `query-explainer`. A second request for
    * the same run and index while one runs waits for the same result.
    */
-  async explainQuery(id: string, index: number): Promise<WorkflowRun> {
-    return this.answers.explain(this.answerHost(id), index);
+  async explainQuery(
+    id: string,
+    index: number,
+    refresh = false,
+  ): Promise<WorkflowRun> {
+    return this.answers.explain(this.answerHost(id), index, refresh);
+  }
+
+  /** The first rows one step of an explained query leaves (api.md 161). */
+  async previewQueryStep(
+    id: string,
+    index: number,
+    step: number,
+  ): Promise<WorkflowRun> {
+    return this.answers.previewStep(this.answerHost(id), index, step);
   }
 
   /**
@@ -1826,7 +1839,7 @@ export class WorkflowRunsService implements OnModuleInit {
       input: prepared.values,
       // Avery's runs belong to a conversation (workflows R45): a first
       // message starts one (its own id), a follow-up joins its earlier run's.
-      ...(prepared.workflow.id === ORCHESTRATED_ANSWER_WORKFLOW_ID
+      ...(isOrchestratedWorkflow(prepared.workflow.id)
         ? { conversationId: prepared.context?.conversationId ?? id }
         : {}),
       ...(prepared.context
@@ -1927,7 +1940,7 @@ export class WorkflowRunsService implements OnModuleInit {
       answer: earlier.answer.content,
       ...(queries.length ? { queries } : {}),
       ...(ask ? { ask } : {}),
-      ...(workflowId === ORCHESTRATED_ANSWER_WORKFLOW_ID
+      ...(isOrchestratedWorkflow(workflowId)
         ? await this.conversationOf(earlier)
         : {}),
     };

@@ -33,6 +33,7 @@ class FakeApi implements QueryEvidenceApi {
   prepare = jasmine.createSpy('prepare');
   explain = jasmine.createSpy('explain');
   countStages = jasmine.createSpy('countStages');
+  previewStep = jasmine.createSpy('previewStep');
   rerun = jasmine.createSpy('rerun');
   downloadCsv = jasmine.createSpy('downloadCsv');
   interpretFilter = jasmine.createSpy('interpretFilter');
@@ -121,7 +122,9 @@ describe('QueryResult (ui.md 4.12.2; agent-answers R76, R79 to R81)', () => {
       filters: [{ column: 'country', op: 'contains', value: 'br' }],
       sort: [{ column: 'country', direction: 'asc' }],
     });
-    expect(text('query-result-page-label')).toBe('Rows 51–100 of 2,034 matching');
+    expect(text('query-result-page-label')).toBe(
+      'Rows 51–100 of 2,034 matching',
+    );
     click('query-result-prev-page');
     expect(api.page.calls.mostRecent().args[1].page).toBe(1);
   });
@@ -170,9 +173,9 @@ describe('QueryResult (ui.md 4.12.2; agent-answers R76, R79 to R81)', () => {
     setup();
     addFilter('country', 'eq', 'Brazil');
     expect(text('query-filter-chip')).toContain('country is Brazil');
-    expect(
-      el('query-filter-chip-remove')?.getAttribute('aria-label'),
-    ).toBe('Remove filter country is Brazil');
+    expect(el('query-filter-chip-remove')?.getAttribute('aria-label')).toBe(
+      'Remove filter country is Brazil',
+    );
     expect(api.page.calls.mostRecent().args[1].filters).toEqual([
       { column: 'country', op: 'eq', value: 'Brazil' },
     ]);
@@ -206,7 +209,11 @@ describe('QueryResult (ui.md 4.12.2; agent-answers R76, R79 to R81)', () => {
       { column: 'country', op: 'in', values: ['Brazil', 'Chile'] },
       { column: 'country', op: 'is_null' },
     ]);
-    expect(all('query-filter-chip').map((c) => c.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+    expect(
+      all('query-filter-chip').map((c) =>
+        c.textContent?.replace(/\s+/g, ' ').trim(),
+      ),
+    ).toEqual([
       'goals between 1 and 3 ×',
       'country is one of Brazil, Chile ×',
       'country is empty ×',
@@ -241,7 +248,9 @@ describe('QueryResult (ui.md 4.12.2; agent-answers R76, R79 to R81)', () => {
   });
 
   it('shows an alert on failure and Retry repeats the request', () => {
-    api.page.and.returnValue(throwError(() => new Error('Page 99 is past the limit')));
+    api.page.and.returnValue(
+      throwError(() => new Error('Page 99 is past the limit')),
+    );
     setup();
     click('query-result-next-page');
     expect(el('query-page-error')?.getAttribute('role')).toBe('alert');
@@ -286,7 +295,11 @@ describe('QueryResult (ui.md 4.12.2; agent-answers R76, R79 to R81)', () => {
       setup();
       type('query-filter-text', 'only Brazil');
       click('query-filter-text-apply');
-      expect(api.interpretFilter).toHaveBeenCalledOnceWith(0, 'only Brazil', null);
+      expect(api.interpretFilter).toHaveBeenCalledOnceWith(
+        0,
+        'only Brazil',
+        null,
+      );
       expect(api.page).toHaveBeenCalledOnceWith(0, {
         page: 1,
         pageSize: 50,
@@ -342,11 +355,15 @@ describe('QueryResult (ui.md 4.12.2; agent-answers R76, R79 to R81)', () => {
       setup();
       type('query-filter-text', 'x');
       click('query-filter-text-apply');
-      expect((el('query-filter-text-apply') as HTMLButtonElement).disabled).toBeTrue();
+      expect(
+        (el('query-filter-text-apply') as HTMLButtonElement).disabled,
+      ).toBeTrue();
       wait.next(interpretation);
       wait.complete();
       fixture.detectChanges();
-      expect((el('query-filter-text-apply') as HTMLButtonElement).disabled).toBeFalse();
+      expect(
+        (el('query-filter-text-apply') as HTMLButtonElement).disabled,
+      ).toBeFalse();
     });
 
     it('is not offered for a sample', () => {

@@ -7,7 +7,10 @@
  */
 import { z } from 'zod';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
-import { countStatement } from '../../modules/sessions/query-evidence/query-tables';
+import {
+  countStatement,
+  previewStatement,
+} from '../../modules/sessions/query-evidence/query-tables';
 import type {
   QueryEvidence,
   QueryExplanation,
@@ -42,8 +45,9 @@ Explain what the query does to the rows, in the order a business reader would fo
 - Name what the rows are after the step in "unit", in the plural (for example "orders", "products").
 - For every step write "countSql": one statement in the query's dialect that returns one row with one integer, the number of rows after that step. A step that totals all the rows without groups leaves one row: its count is 1, not the total. Read only the tables the query reads. Start with SELECT or WITH, no semicolon.
 - Never write a step for the LIMIT or for the final list: the code adds it.
+- For every step also write "previewSql": one statement in the query's dialect that returns the rows after that step, with the columns they have at that point (for a group step, the group columns; for a count step, the groups with their totals). Same rules as "countSql": read only the tables the query reads, start with SELECT or WITH, no semicolon, no LIMIT.
 
-Reply with one JSON object: {"steps":[{"verb":"start","text":"...","table":"...","unit":"...","countSql":"..."}, ...]}. At most ${MAX_EXPLAINED_STEPS} steps.`;
+Reply with one JSON object: {"steps":[{"verb":"start","text":"...","table":"...","unit":"...","countSql":"...","previewSql":"..."}, ...]}. At most ${MAX_EXPLAINED_STEPS} steps.`;
 
 /** The reply schema (by JSON prompt injection; read leniently by `explanationOf`). */
 export const explainReplySchema = z.object({
@@ -54,6 +58,7 @@ export const explainReplySchema = z.object({
       table: z.string().optional(),
       unit: z.string().optional(),
       countSql: z.string().optional(),
+      previewSql: z.string().optional(),
     }),
   ),
 });
@@ -268,6 +273,8 @@ export function explanationOf(
     const table = clean(o['table']);
     const unit = clean(o['unit']);
     const countSql = countSqlOf(o['countSql']);
+    // The same checks as a count statement (read-only shape, no `;`, size).
+    const previewSql = countSqlOf(o['previewSql']);
     read.push({
       verb: (MODEL_VERBS as readonly string[]).includes(verb)
         ? (verb as QueryStepVerb)
@@ -276,6 +283,7 @@ export function explanationOf(
       ...(table ? { table } : {}),
       ...(unit ? { unit } : {}),
       ...(countSql ? { countSql } : {}),
+      ...(previewSql ? { previewSql } : {}),
     });
   }
   if (!read.length) return fallbackExplanation(record, evidence, at);
@@ -299,9 +307,14 @@ export function explanationOf(
         ...(size && size.rows !== null ? { rows: size.rows } : {}),
       }
     : startOf(tables, undefined, kind);
+  // The start step's rows are its table's: code writes its preview when the model did not.
+  const startWithPreview: QueryStep =
+    start.previewSql || !start.table
+      ? start
+      : { ...start, previewSql: previewStatement(start.table, kind) };
   return {
     steps: [
-      start,
+      startWithPreview,
       ...body.slice(0, MAX_EXPLAINED_STEPS - 1),
       showStep(evidence, record),
     ],

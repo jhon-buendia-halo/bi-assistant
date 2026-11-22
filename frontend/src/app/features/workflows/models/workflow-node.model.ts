@@ -47,6 +47,18 @@ export interface NodeToolView {
   calls: NodeToolCallView[];
   /** The calls' durations added up; null when none has one. */
   totalDurationMs: number | null;
+  /**
+   * A team tool of an orchestrator (her canvas sub-node with a portrait): the
+   * teammate it calls. Its dialog then tells the teammate's work (ui.md 4.4b).
+   */
+  teammate?: NodeTeammate;
+}
+
+/** A teammate an orchestrator's team tool calls: registry key, name, job title. */
+export interface NodeTeammate {
+  key: string;
+  name: string;
+  role: string;
 }
 
 /** A tool call shown in a node's Output: stored, or live while the step runs. */

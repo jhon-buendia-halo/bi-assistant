@@ -33,9 +33,15 @@ export abstract class RunEvidenceApi implements QueryEvidenceApi {
     );
   }
 
-  explain(index: number): Observable<void> {
+  explain(index: number, refresh = false): Observable<void> {
     return this.withRun((id) =>
-      this.runs.explainQuery(id, index).pipe(this.apply()),
+      this.runs.explainQuery(id, index, refresh).pipe(this.apply()),
+    );
+  }
+
+  previewStep(index: number, step: number): Observable<void> {
+    return this.withRun((id) =>
+      this.runs.previewQueryStep(id, index, step).pipe(this.apply()),
     );
   }
 

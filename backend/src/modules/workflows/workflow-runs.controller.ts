@@ -135,15 +135,37 @@ export class WorkflowRunsController {
     return { ok: true, run: await this.runs.prepareEvidence(id) };
   }
 
-  /** Explain one query step by step (api.md 140). */
+  /** Explain one query step by step (api.md 140); `{ refresh: true }` explains it again. */
   @Post(':id/answer/queries/:index/explanation')
   async explainQuery(
     @Param('id') id: string,
     @Param('index') index: string,
+    @Body() body?: { refresh?: unknown },
   ): Promise<{ ok: true; run: WorkflowRun }> {
     return {
       ok: true,
-      run: await this.runs.explainQuery(id, parseQueryIndex(index)),
+      run: await this.runs.explainQuery(
+        id,
+        parseQueryIndex(index),
+        body?.refresh === true,
+      ),
+    };
+  }
+
+  /** The first rows one step of an explained query leaves (api.md 161). */
+  @Post(':id/answer/queries/:index/steps/:step/preview')
+  async previewQueryStep(
+    @Param('id') id: string,
+    @Param('index') index: string,
+    @Param('step') step: string,
+  ): Promise<{ ok: true; run: WorkflowRun }> {
+    return {
+      ok: true,
+      run: await this.runs.previewQueryStep(
+        id,
+        parseQueryIndex(index),
+        parseQueryIndex(step),
+      ),
     };
   }
 

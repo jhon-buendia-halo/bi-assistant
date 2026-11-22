@@ -26,6 +26,7 @@ import {
 } from '../../services/agent-page.util';
 import {
   AgentDetail,
+  AgentSkill,
   AgentsApiService,
 } from '../../services/agents-api.service';
 import {
@@ -77,6 +78,8 @@ export class AgentSystemPrompt implements OnDestroy {
   readonly library = input<SkillSummary[] | null>(null);
   /** The built-in skills, linkable as mentions; null while loading. */
   readonly builtInSkills = input<BuiltInSkillSummary[] | null>(null);
+  /** The skills the agent gets (api.md 34a): its CV shows its playbooks skill. */
+  readonly agentSkills = input<readonly AgentSkill[] | null>(null);
   /** Emitted after the draft is saved; the page reloads the agent. */
   readonly saved = output<void>();
 

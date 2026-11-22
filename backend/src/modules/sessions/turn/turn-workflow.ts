@@ -56,7 +56,8 @@ export function turnWorkflowOf(session: SessionDoc): TurnWorkflow {
   if (parsed?.kind === 'code' && !session.contextBlock) {
     return {
       id,
-      engineId: parsed.source.id,
+      // A workflow may run on another one's engine (Avery + Michael).
+      engineId: parsed.source.engine ?? parsed.source.id,
       bar: parsed.source.bar,
       stepIds: parsed.source.steps.map((step) => step.id),
     };

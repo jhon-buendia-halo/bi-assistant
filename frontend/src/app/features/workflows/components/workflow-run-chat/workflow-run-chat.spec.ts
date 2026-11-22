@@ -1181,7 +1181,22 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
   });
 
   describe('Avery, the never-ending conversation (orchestrated-answer)', () => {
-    const AVERY: WorkflowDetail = { ...ASSISTANT, id: 'orchestrated-answer', name: 'Answer a Business Question (orchestrated)' };
+    // A workflow whose step runs Avery (chief-of-staff) is her conversation.
+    const AVERY: WorkflowDetail = {
+      ...ASSISTANT,
+      id: 'orchestrated-answer',
+      name: 'Answer a Business Question (orchestrated)',
+      steps: ASSISTANT.steps.map((step) => ({
+        ...step,
+        agent: {
+          key: 'chief-of-staff',
+          name: 'Avery',
+          role: 'Chief of Staff',
+          tools: ['answer_from_data', 'ask_clarification'],
+          maxSteps: 16,
+        },
+      })),
+    };
     const DATASETS = [{ name: 'World Cup Core', tables: ['a'], datasourceKind: 'postgres' }];
     const ended = (overrides: Partial<WorkflowRun> = {}) =>
       assistantRun({

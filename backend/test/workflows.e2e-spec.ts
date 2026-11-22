@@ -136,21 +136,23 @@ describe('The workflow catalogue (API)', () => {
     expect(avery).toMatchObject({ name: 'Avery' });
     expect(avery.usedInWorkflows.map((w) => w.id)).toEqual([
       'orchestrated-answer',
+      'orchestrated-answer-michael',
     ]);
   });
 
-  it('lists the seven code workflows, Answer a Business Question, its orchestrated version and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
+  it('lists the eight code workflows, Answer a Business Question, its orchestrated and Avery + Michael versions and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
     const listed = await workflows();
     expect(listed.map((w) => w.id)).toEqual([
       'answer-business-question',
       'orchestrated-answer',
+      'orchestrated-answer-michael',
       'data-readiness-assessment',
       'recreate-dashboard',
       'map-dashboard-data',
       'review-website',
       'consumption-gap-analysis',
     ]);
-    expect([listed[0], listed[2]]).toEqual([
+    expect([listed[0], listed[3]]).toEqual([
       {
         id: 'answer-business-question',
         name: 'Answer a Business Question',
@@ -380,6 +382,7 @@ describe('The workflow catalogue (API)', () => {
       expect((await workflows()).map((w) => w.id)).toEqual([
         'answer-business-question',
         'orchestrated-answer',
+        'orchestrated-answer-michael',
         'data-readiness-assessment',
         'recreate-dashboard',
         'map-dashboard-data',
@@ -684,6 +687,10 @@ describe('The workflow catalogue (API)', () => {
                   {
                     id: 'orchestrated-answer',
                     name: 'Answer a Business Question (orchestrated)',
+                  },
+                  {
+                    id: 'orchestrated-answer-michael',
+                    name: 'Answer a Business Question (Avery + Michael)',
                   },
                 ]
               : []),

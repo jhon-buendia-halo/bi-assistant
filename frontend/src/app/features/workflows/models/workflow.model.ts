@@ -294,6 +294,12 @@ export interface WorkflowRunToolCall {
   durationMs?: number;
   /** Why the agent made the call, in its words (the `tool` event's `rationale`). */
   rationale?: string;
+  /** Who made it, when the step's agent delegates: Avery signs her own calls. */
+  agent?: string;
+  /** A team call (Avery's): the agent it hands the work to. */
+  teammate?: string;
+  /** A team call's result: what the teammate handed back, in their words (at most 2 000 characters). */
+  reply?: string;
 }
 
 /** One labelled fact under a step story's headline (api.md 3.6 `step.story`). */
@@ -481,6 +487,10 @@ export interface LiveToolCall {
   progress?: string;
   /** Its `tool-result` arrived. */
   finished: boolean;
+  /** Who made it, when the step's agent delegates: Avery signs her own calls. */
+  agent?: string;
+  /** A team call (Avery's): the agent it hands the work to. */
+  teammate?: string;
 }
 
 /** One step of the run shown, in the workflow's order. */

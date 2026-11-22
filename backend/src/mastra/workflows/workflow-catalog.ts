@@ -36,6 +36,9 @@ import {
   ORCHESTRATED_ANSWER_STEPS,
   ORCHESTRATED_ANSWER_WORKFLOW_ID,
   ORCHESTRATED_ANSWER_WORKFLOW_NAME,
+  ORCHESTRATED_MICHAEL_STEPS,
+  ORCHESTRATED_MICHAEL_WORKFLOW_ID,
+  ORCHESTRATED_MICHAEL_WORKFLOW_NAME,
 } from './orchestrated-answer.steps';
 import {
   CONSUMPTION_GAP_DESCRIPTION,
@@ -208,6 +211,12 @@ export interface CodeWorkflowSource {
    * keys (agents.md 5.11). Every other agent step runs `primaryFor`.
    */
   stepAgents?: Readonly<Record<string, string>>;
+  /**
+   * The registered Mastra workflow its runs run on, when it is another
+   * workflow's (Avery + Michael runs on `orchestrated-answer`); its own id
+   * otherwise.
+   */
+  engine?: string;
   trigger: WorkflowTrigger;
   /** The typed input of a run, in form order. */
   input: readonly WorkflowInputField[];
@@ -277,6 +286,25 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         BUILD_VISUAL_FIELD,
       ],
       steps: ORCHESTRATED_ANSWER_STEPS,
+      stepAgents: { orchestrate: CHIEF_OF_STAFF_AGENT_KEY },
+      edges: ORCHESTRATED_ANSWER_EDGES,
+      bar: 'steps',
+    },
+    {
+      // Avery with Michael alone (agents.md 5.23): the same Orchestrate step
+      // on the same engine; Michael plans, queries and writes the answer.
+      id: ORCHESTRATED_MICHAEL_WORKFLOW_ID,
+      name: ORCHESTRATED_MICHAEL_WORKFLOW_NAME,
+      description:
+        'The same question answered by Avery, the Chief of Staff, with Michael alone: he plans, queries the data and writes the answer; she briefs him, checks it and is the only one you talk to.',
+      primaryFor: INSIGHTS_ANALYST_AGENT_KEY,
+      engine: ORCHESTRATED_ANSWER_WORKFLOW_ID,
+      trigger: 'run',
+      input: [
+        { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
+        DATASETS_FIELD,
+      ],
+      steps: ORCHESTRATED_MICHAEL_STEPS,
       stepAgents: { orchestrate: CHIEF_OF_STAFF_AGENT_KEY },
       edges: ORCHESTRATED_ANSWER_EDGES,
       bar: 'steps',

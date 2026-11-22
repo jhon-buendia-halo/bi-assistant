@@ -10,6 +10,7 @@ import {
   activitySteps,
   toolPhrase,
 } from './agent-activity';
+import { RelayItem, relayOf, relaySentence } from './team-relay';
 
 /**
  * What each agent of a run is doing, told as a person would (ui.md 4.4b,
@@ -64,6 +65,12 @@ export interface AgentStepStory {
   passes: string[];
   /** Its tool calls as plain-language steps (`agent-activity.ts`); empty when none. */
   activity: ActivityStep[];
+  /**
+   * An orchestrator's step told as a relay (`team-relay.ts`): her steps and
+   * each teammate's work under its hand-off; null for any other step, or
+   * before her first signed call.
+   */
+  relay?: RelayItem[] | null;
 }
 
 /** A step of the run shown; a step that never started has no status. */
@@ -110,6 +117,15 @@ export function agentStepStories(
         : between
           ? 'working out the next step'
           : activeDoing(live, step.title);
+    const activity = activitySteps(
+      streamed ?? run?.toolCalls ?? [],
+      !!streamed,
+    );
+    // Avery's step (her agent carries a team): told as a relay.
+    const relayed = step.agent?.team?.length
+      ? relayOf(activity, step.agent.team)
+      : [];
+    const relay = relayed.length ? relayed : null;
     out.set(step.id, {
       stepId: step.id,
       title: step.title,
@@ -118,11 +134,14 @@ export function agentStepStories(
       line: '',
       concern: state === 'done' && run?.story?.concern === true,
       doing,
-      sentence: sentenceFor(state, run, live, doing),
+      sentence:
+        (relay && relaySentence(state, relay)) ??
+        sentenceFor(state, run, live, doing),
       durationMs: durationOf(run),
       queries: live.filter(isQuery).length,
       passes: [...(step.output ?? [])],
-      activity: activitySteps(streamed ?? run?.toolCalls ?? [], !!streamed),
+      activity,
+      relay,
     });
   }
   // The lines name who works now, so they come once every state is known.
@@ -337,6 +356,8 @@ function activityOfLive(call: LiveToolCall): ActivityCall {
     ...(call.rowCount !== undefined ? { rowCount: call.rowCount } : {}),
     ...(call.error !== undefined ? { error: call.error } : {}),
     ...(call.progress ? { progress: call.progress } : {}),
+    ...(call.agent ? { agent: call.agent } : {}),
+    ...(call.teammate ? { teammate: call.teammate } : {}),
     finished: call.finished,
   };
 }

@@ -28,6 +28,7 @@ import type {
 } from '../../../mastra/workflows/answer-business-question.steps';
 import { orchestratorTools as avertTools } from '../../../mastra/tools/orchestrator.tools';
 import {
+  MICHAEL_ALONE_LINE,
   ORCHESTRATOR_HISTORY_MESSAGES,
   orchestratorState,
   orchestratorTools,
@@ -372,8 +373,19 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
     );
   });
 
-  it('shows her tool calls as the step activity', async () => {
+  it('shows her tool calls as the step activity, signed, a team call naming its teammate and a skill call its file', async () => {
     const { deps, events } = fixture([
+      {
+        type: 'tool-call',
+        payload: {
+          toolCallId: 'c0',
+          toolName: 'skill_read',
+          args: {
+            skillName: 'avery-playbooks',
+            path: 'references/ranking.md',
+          },
+        },
+      },
       {
         type: 'tool-call',
         payload: {
@@ -392,15 +404,65 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
       {
         type: 'tool',
         content: JSON.stringify({
+          name: 'skill_read',
+          input: 'references/ranking.md',
+          agent: 'chief-of-staff',
+        }),
+      },
+      {
+        type: 'tool',
+        content: JSON.stringify({
           name: 'analyse_data',
           input: 'Count matches',
+          agent: 'chief-of-staff',
+          teammate: 'insights-analyst',
         }),
       },
       {
         type: 'tool-result',
-        content: JSON.stringify({ tool: 'analyse_data' }),
+        content: JSON.stringify({ tool: 'analyse_data', reply: 'ok' }),
       },
     ]);
+  });
+
+  it("keeps a team call's whole brief (up to 2,000 characters) and what the teammate handed back; no reply on her own calls", async () => {
+    const brief = `Who scored most? ${'x'.repeat(2_500)}`;
+    const { deps, events } = fixture([
+      {
+        type: 'tool-call',
+        payload: {
+          toolCallId: 'c1',
+          toolName: 'answer_from_data',
+          args: { brief },
+        },
+      },
+      {
+        type: 'tool-result',
+        payload: { toolCallId: 'c1', result: { result: 'France, 14.' } },
+      },
+      {
+        type: 'tool-call',
+        payload: {
+          toolCallId: 'c2',
+          toolName: 'skill',
+          args: { name: 'avery-playbooks' },
+        },
+      },
+      {
+        type: 'tool-result',
+        payload: { toolCallId: 'c2', result: 'the skill' },
+      },
+    ]);
+    await runOrchestratorTurn(deps, { question: 'q' });
+    const frames = events.map(
+      (e) => JSON.parse(e.content as string) as Record<string, string>,
+    );
+    expect(frames[0].input).toBe(brief.slice(0, 2_000));
+    expect(frames[1]).toEqual({
+      tool: 'answer_from_data',
+      reply: 'France, 14.',
+    });
+    expect(frames[3]).toEqual({ tool: 'skill' });
   });
 
   it('fails the step on a model error, and answers stopped when the run is stopped', async () => {
@@ -419,6 +481,64 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
     expect(await runOrchestratorTurn(stopped.deps, { question: 'q' })).toEqual({
       answer: 'partial',
       stopped: true,
+    });
+  });
+
+  it('Avery + Michael (5.23): offers only answer_from_data, and every team tool with no run', () => {
+    const alone = new RequestContext();
+    alone.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, {
+      hasImages: false,
+      buildsVisual: false,
+      tools: ['answer_from_data', 'ask_clarification'],
+    });
+    expect(Object.keys(avertTools(alone))).toEqual(['answer_from_data']);
+    expect(Object.keys(avertTools(new RequestContext()))).toEqual([
+      'read_reference_images',
+      'plan_analysis',
+      'analyse_data',
+      'answer_from_data',
+      'write_answer',
+      'build_visual',
+    ]);
+  });
+
+  it('Avery + Michael (5.23): Michael works from her brief alone, and his reply is the answer, then her closing words', async () => {
+    const { deps, members } = fixture(
+      async (tools) => {
+        const said = await tools.answerFromData(
+          'How many matches were played? Count every match.',
+        );
+        expect(said).toContain(
+          "Michael's reply above is the answer the user reads: do not repeat it.",
+        );
+        return [text('Want it by stage?')];
+      },
+      {
+        deps: {
+          tools: ['answer_from_data', 'ask_clarification'],
+          earlierQueries: [
+            { ref: 'Q1', sql: 'SELECT 1', rationale: 'Earlier.' },
+          ],
+        },
+      },
+    );
+    const done = await runOrchestratorTurn(deps, { question: 'How many?' });
+    // No Olivia: no plan call, no plan block; her brief, then the alone line.
+    expect(members.plan).not.toHaveBeenCalled();
+    const call = members.analyse.mock.calls[0][0];
+    expect(call.planBlock).not.toContain('Analysis plan for this turn');
+    expect(call.planBlock).toContain(
+      'Brief from Avery, the Chief of Staff: How many matches were played? Count every match.',
+    );
+    expect(call.planBlock).toContain(MICHAEL_ALONE_LINE);
+    expect(call.planBlock).toContain(
+      'Queries behind the answer the user just read',
+    );
+    expect(call.plan).toMatchObject({ question: 'How many?', measures: [] });
+    expect(members.writeAnswer).not.toHaveBeenCalled();
+    expect(done).toEqual({
+      answer: 'There are 64 matches.\n\nWant it by stage?',
+      stopped: false,
     });
   });
 

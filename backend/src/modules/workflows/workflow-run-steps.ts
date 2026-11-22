@@ -75,6 +75,19 @@ export interface WorkflowRunToolCall {
   durationMs?: number;
   /** Why the agent made the call, in its words (the `tool` event's `rationale`). */
   rationale?: string;
+  /**
+   * Who made the call, when the step's agent delegates (Avery, agents.md
+   * 2.21): her registry key on her own calls; absent on a teammate's, which
+   * follow the team call that hands them the work.
+   */
+  agent?: string;
+  /** A team call (Avery's): the registry key of the agent it calls. */
+  teammate?: string;
+  /**
+   * A team call's result: what the teammate handed back, in their words (the
+   * `tool-result` event's `reply`); at most `TOOL_CALL_INPUT_CAP` characters.
+   */
+  reply?: string;
 }
 
 /**
@@ -631,7 +644,12 @@ export class RunStepTracker {
    * agent step that is running (its current attempt); none running, or the
    * step holding `STEP_TOOL_CALL_CAP` calls already, drops it.
    */
-  noteTool(name: string, input?: string, rationale?: string): void {
+  noteTool(
+    name: string,
+    input?: string,
+    rationale?: string,
+    signed?: { agent?: string; teammate?: string },
+  ): void {
     const key = this.runningAgentStep();
     if (!key) return;
     const calls = this.calls.get(key) ?? [];
@@ -641,6 +659,8 @@ export class RunStepTracker {
         tool: name,
         ...callInput(input),
         ...(rationale ? { rationale: rationale.slice(0, RATIONALE_CAP) } : {}),
+        ...(signed?.agent ? { agent: signed.agent } : {}),
+        ...(signed?.teammate ? { teammate: signed.teammate } : {}),
       },
       startedAt: this.now().getTime(),
       done: false,
@@ -659,6 +679,7 @@ export class RunStepTracker {
     input?: string;
     rowCount?: number;
     error?: string;
+    reply?: string;
   }): void {
     const key = this.runningAgentStep();
     if (!key) return;
@@ -681,6 +702,9 @@ export class RunStepTracker {
         : {}),
       ...(typeof result.error === 'string' && result.error
         ? { error: result.error }
+        : {}),
+      ...(typeof result.reply === 'string' && result.reply
+        ? { reply: result.reply.slice(0, TOOL_CALL_INPUT_CAP) }
         : {}),
       ...(tracked.startedAt !== undefined
         ? { durationMs: Math.max(0, this.now().getTime() - tracked.startedAt) }
@@ -881,7 +905,15 @@ export function noteToolFrame(
   if (event.type === 'tool') {
     const name = text(frame['name']);
     if (name) {
-      tracker.noteTool(name, text(frame['input']), text(frame['rationale']));
+      // Avery signs her own calls, and names the teammate a team call hands.
+      const agent = text(frame['agent']);
+      const teammate = text(frame['teammate']);
+      tracker.noteTool(
+        name,
+        text(frame['input']),
+        text(frame['rationale']),
+        agent || teammate ? { agent, teammate } : undefined,
+      );
     }
     return;
   }
@@ -893,6 +925,7 @@ export function noteToolFrame(
     input: text(frame['input']),
     ...(typeof rowCount === 'number' ? { rowCount } : {}),
     error: text(frame['error']),
+    reply: text(frame['reply']),
   });
 }
 

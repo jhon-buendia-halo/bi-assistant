@@ -102,11 +102,37 @@ export class SessionsController {
     @Param('id') id: string,
     @Param('message') message: string,
     @Param('index') index: string,
+    @Body() body?: { refresh?: unknown },
   ): Promise<{ ok: true; message: ChatMessage }> {
     const at = parseMessageIndex(message);
     return {
       ok: true,
-      message: await this.evidence.explain(id, at, parseQueryIndex(index)),
+      message: await this.evidence.explain(
+        id,
+        at,
+        parseQueryIndex(index),
+        body?.refresh === true,
+      ),
+    };
+  }
+
+  /** The first rows one step of an explained query of a message leaves (api.md 162). */
+  @Post(':id/messages/:message/answer/queries/:index/steps/:step/preview')
+  async previewQueryStep(
+    @Param('id') id: string,
+    @Param('message') message: string,
+    @Param('index') index: string,
+    @Param('step') step: string,
+  ): Promise<{ ok: true; message: ChatMessage }> {
+    const at = parseMessageIndex(message);
+    return {
+      ok: true,
+      message: await this.evidence.previewStep(
+        id,
+        at,
+        parseQueryIndex(index),
+        parseQueryIndex(step),
+      ),
     };
   }
 

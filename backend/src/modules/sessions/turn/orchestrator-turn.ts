@@ -36,6 +36,8 @@ import {
 import {
   ORCHESTRATOR_MAX_STEPS,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+  orchestratorTeamOf,
+  teammateOfTool,
   type OrchestratorToolsRuntime,
 } from '../../../mastra/workflows/orchestrated-answer.steps';
 import type { ReadImagesOutcome } from '../../../mastra/workflows/read-images.steps';
@@ -123,6 +125,56 @@ export interface OrchestratorTurnDeps {
     ExplorableQuery,
     'ref' | 'sql' | 'rationale'
   >[];
+  /**
+   * Avery's tools in this run, her workflow's (`orchestratorTeamOf`); her
+   * whole team's when absent.
+   */
+  tools?: readonly string[];
+}
+
+/**
+ * What one of Avery's calls is about, for its `tool` event: her brief or
+ * instruction to a teammate, the skill she loads (`skill { name }`) or the
+ * file she reads in it (`skill_read { path }`).
+ */
+function averyToolInput(
+  args: Record<string, unknown> | undefined,
+): string | undefined {
+  for (const key of ['brief', 'instruction', 'path', 'name', 'query']) {
+    const value = args?.[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+/**
+ * The most a team call's brief or its teammate's reply keeps in a tool event,
+ * as a run stores a call's input (`TOOL_CALL_INPUT_CAP`, api.md 3.1).
+ */
+export const TEAM_EVENT_TEXT_CAP = 2_000;
+
+/** A tool's result as text: `{ result }` (the team tools'), or a string. */
+function toolResultText(result: unknown): string | undefined {
+  if (typeof result === 'string') return result;
+  const text = (result as { result?: unknown } | null)?.result;
+  return typeof text === 'string' ? text : undefined;
+}
+
+/** Michael on his own (Avery + Michael): told he plans and writes the answer. */
+export const MICHAEL_ALONE_LINE =
+  'You work alone with Avery in this run: no one plans before you and no one writes after you. Plan the analysis yourself from her brief, and write your reply as the answer the user reads.';
+
+/** The plan Michael works from on his own: the user's question, nothing planned. */
+function briefPlan(question: string): AnalysisPlan {
+  return {
+    question,
+    measures: [],
+    entities: [],
+    scope: '',
+    assumptions: [],
+    needsClarification: false,
+    clarification: null,
+  };
 }
 
 /** At most this many earlier queries, each SQL cut at this length, reach Michael. */
@@ -177,7 +229,7 @@ function workSoFar(state: OrchestratorState): string | undefined {
       analysisReview({ queries: state.queries, text: state.analystNote }),
     );
   }
-  if (state.answer) lines.push('Jessica already wrote the answer.');
+  if (state.answer) lines.push('The answer the user reads is already written.');
   if (state.visual) lines.push(`Ryan: ${state.visual}`);
   return lines.length
     ? ['Work done so far in this run (do not redo it):', ...lines].join('\n')
@@ -214,6 +266,8 @@ export function orchestratorTools(
   deps: OrchestratorTurnDeps,
   question: string,
   answered: AnsweredClarification | undefined,
+  /** Michael's own words for Avery, which his team call hands back (ui.md 4.4b). */
+  said?: (reply: string) => void,
 ): OrchestratorToolsRuntime {
   const { state, team } = deps;
   const earlier = conversationQueriesBlock(deps.earlierQueries);
@@ -239,6 +293,72 @@ export function orchestratorTools(
     state.plan = planned.plan;
     return planForAvery(planned.plan);
   };
+  /**
+   * One analysis by Michael. With the team, he follows Olivia's plan (made
+   * first when there is none) and Jessica writes the answer. `alone` (Avery
+   * + Michael, agents.md 5.23): no plan but Avery's brief, and his reply is
+   * the answer the user reads.
+   */
+  const analysis = async (brief: string, alone: boolean): Promise<string> => {
+    if (state.attempts >= 2) {
+      return alone
+        ? 'Michael already answered twice in this run: close from his answer.'
+        : 'Michael already analysed twice in this run: write the answer from his results.';
+    }
+    if (!alone && !state.plan) await plan();
+    const { catalog, columns } = await catalogOf();
+    const current = alone ? (state.plan ??= briefPlan(question)) : state.plan!;
+    state.attempts += 1;
+    const attempt: AnalyseAttempt = await team.analyse({
+      question,
+      catalog,
+      catalogBlock: planCatalogBlock(catalog, columns, { question }),
+      plan: current,
+      attempt: state.attempts,
+      planBlock: [
+        ...(alone ? [] : [analysePlanBlock(current), '']),
+        `Brief from Avery, the Chief of Staff: ${brief}`,
+        ...(alone ? ['', MICHAEL_ALONE_LINE] : []),
+        ...(earlier ? ['', earlier] : []),
+      ].join('\n'),
+      ...(answered ? { answered } : {}),
+      imageNotes: state.imageNotes,
+    });
+    if (attempt.clarification) {
+      said?.(
+        `Needs an answer before going on: ${attempt.clarification.question}`,
+      );
+      return [
+        `Michael needs an answer before he can go on: ${attempt.clarification.question}`,
+        ...attempt.clarification.options.map((option) => `- ${option}`),
+      ].join('\n');
+    }
+    const { findings } = validateAttempt({
+      plan: current,
+      calls: attempt.calls,
+      queries: attempt.queries,
+    });
+    // The kept queries: this attempt's, after any earlier one's.
+    state.queries = [...state.queries, ...attempt.queries];
+    state.findings = findings;
+    state.analystNote = attempt.text;
+    if (attempt.text.trim()) said?.(attempt.text);
+    // On his own, his reply is the run's answer (the last one he wrote).
+    if (alone && attempt.text.trim()) state.answer = attempt.text;
+    return [
+      analysisReview({ queries: attempt.queries, text: attempt.text }),
+      '',
+      findingsForAvery(findings),
+      ...(alone
+        ? [
+            '',
+            state.answer
+              ? "Michael's reply above is the answer the user reads: do not repeat it."
+              : 'Michael wrote no answer.',
+          ]
+        : []),
+    ].join('\n');
+  };
   return {
     hasImages: deps.images.length > 0,
     buildsVisual: deps.buildsVisual,
@@ -248,51 +368,10 @@ export function orchestratorTools(
       state.imageNotes = read.stopped ? '' : read.imageNotes;
       return state.imageNotes || 'Zoe found nothing to describe.';
     },
+    tools: deps.tools ?? orchestratorTeamOf(undefined).tools,
     plan: (brief?: string) => plan(brief),
-    analyse: async (brief: string) => {
-      if (state.attempts >= 2) {
-        return 'Michael already analysed twice in this run: write the answer from his results.';
-      }
-      if (!state.plan) await plan();
-      const { catalog, columns } = await catalogOf();
-      const current = state.plan!;
-      state.attempts += 1;
-      const attempt: AnalyseAttempt = await team.analyse({
-        question,
-        catalog,
-        catalogBlock: planCatalogBlock(catalog, columns, { question }),
-        plan: current,
-        attempt: state.attempts,
-        planBlock: [
-          analysePlanBlock(current),
-          '',
-          `Brief from Avery, the Chief of Staff: ${brief}`,
-          ...(earlier ? ['', earlier] : []),
-        ].join('\n'),
-        ...(answered ? { answered } : {}),
-        imageNotes: state.imageNotes,
-      });
-      if (attempt.clarification) {
-        return [
-          `Michael needs an answer before he can go on: ${attempt.clarification.question}`,
-          ...attempt.clarification.options.map((option) => `- ${option}`),
-        ].join('\n');
-      }
-      const { findings } = validateAttempt({
-        plan: current,
-        calls: attempt.calls,
-        queries: attempt.queries,
-      });
-      // The kept queries: this attempt's, after any earlier one's.
-      state.queries = [...state.queries, ...attempt.queries];
-      state.findings = findings;
-      state.analystNote = attempt.text;
-      return [
-        analysisReview({ queries: attempt.queries, text: attempt.text }),
-        '',
-        findingsForAvery(findings),
-      ].join('\n');
-    },
+    analyse: (brief: string) => analysis(brief, false),
+    answerFromData: (brief: string) => analysis(brief, true),
     writeAnswer: async (brief?: string) => {
       if (!state.plan || !state.queries.length) {
         return 'Michael has no results yet: call analyse_data first.';
@@ -348,7 +427,9 @@ export async function runOrchestratorTurn(
   const requestContext = new RequestContext();
   requestContext.set(
     ORCHESTRATOR_TOOLS_RUNTIME_KEY,
-    orchestratorTools(deps, question, answered),
+    orchestratorTools(deps, question, answered, (reply) => {
+      said = reply;
+    }),
   );
   if (deps.orchestratorModel) {
     requestContext.set(STEP_MODEL_CONTEXT_KEY, deps.orchestratorModel);
@@ -377,6 +458,8 @@ export async function runOrchestratorTurn(
   let asked: { question: string; options: string[] } | undefined;
   let failure: unknown;
   const names = new Map<string, string>();
+  // What the teammate of the call under way said, in their own words.
+  let said: string | undefined;
   try {
     const stream = await deps
       .getAgent(CHIEF_OF_STAFF_AGENT_KEY)
@@ -421,17 +504,17 @@ export async function runOrchestratorTurn(
           }
         }
         if (payload.toolCallId) names.set(payload.toolCallId, name);
-        const brief =
-          typeof payload.args?.['brief'] === 'string'
-            ? payload.args['brief']
-            : typeof payload.args?.['instruction'] === 'string'
-              ? payload.args['instruction']
-              : undefined;
+        const input = averyToolInput(payload.args);
+        const teammate = teammateOfTool(name);
+        // Her own call, signed (ui.md 4.4b *relay*): the calls that follow
+        // a team tool's, unsigned, are that teammate's.
         deps.emit({
           type: 'tool',
           content: JSON.stringify({
             name,
-            ...(brief ? { input: brief.slice(0, 200) } : {}),
+            ...(input ? { input: input.slice(0, TEAM_EVENT_TEXT_CAP) } : {}),
+            agent: CHIEF_OF_STAFF_AGENT_KEY,
+            ...(teammate ? { teammate } : {}),
           }),
         });
       } else if (chunk.type === 'tool-result') {
@@ -439,9 +522,19 @@ export async function runOrchestratorTurn(
           payload.toolName ??
           (payload.toolCallId ? names.get(payload.toolCallId) : undefined) ??
           'tool';
+        // A team call's result: what the teammate handed back (ui.md 4.4b).
+        const reply = teammateOfTool(name)
+          ? (said ?? toolResultText(payload.result))
+          : undefined;
+        said = undefined;
         deps.emit({
           type: 'tool-result',
-          content: JSON.stringify({ tool: name }),
+          content: JSON.stringify({
+            tool: name,
+            ...(reply?.trim()
+              ? { reply: reply.trim().slice(0, TEAM_EVENT_TEXT_CAP) }
+              : {}),
+          }),
         });
       }
     }

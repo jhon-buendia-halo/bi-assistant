@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   ElementRef,
@@ -64,6 +65,8 @@ import {
 import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflow-run-input-required';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { WorkflowRunTeam } from '../workflow-run-team/workflow-run-team';
+import { RelayQueryOpen } from '../workflow-run-relay/workflow-run-relay';
+import { recordIndexOf } from '../../services/team-relay';
 import { AgentActivity } from '../agent-activity/agent-activity';
 import { activitySteps } from '../../services/agent-activity';
 import { WorkflowRunStory } from '../workflow-run-story/workflow-run-story';
@@ -87,8 +90,8 @@ import {
 
 /** The workflow a saved dashboard is mapped in, and its artifact field. */
 const MAP_WORKFLOW_ID = 'map-dashboard-data';
-/** The never-ending conversation with Avery, the Chief of Staff. */
-const AVERY_WORKFLOW_ID = 'orchestrated-answer';
+/** Avery, the Chief of Staff: a workflow she runs is a never-ending conversation. */
+const AVERY_AGENT_KEY = 'chief-of-staff';
 const MAP_ARTIFACT_FIELD = 'artifact';
 
 /** The composer's controls Execute workflow may focus, in order. */
@@ -107,6 +110,7 @@ const FORM_CONTROLS =
   selector: 'app-workflow-run-chat',
   imports: [
     AnswerView,
+    NgTemplateOutlet,
     DatasetPicker,
     ExecutionId,
     LucideAngularModule,
@@ -223,8 +227,13 @@ export class WorkflowRunChat {
   protected readonly threaded = computed(
     () => this.business() || this.isAveryWorkflow(),
   );
+  // Answer a Business Question (orchestrated) and (Avery + Michael): any
+  // workflow whose step runs Avery (workflows R45).
   private readonly isAveryWorkflow = computed(
-    () => this.designer.workflow()?.id === AVERY_WORKFLOW_ID,
+    () =>
+      this.designer
+        .workflow()
+        ?.steps.some((step) => step.agent?.key === AVERY_AGENT_KEY) ?? false,
   );
 
   /** The shown run is an ended, not archived run of Avery's conversation. */
@@ -328,6 +337,21 @@ export class WorkflowRunChat {
     else this.designer.openNode(id);
   }
 
+  /**
+   * A teammate's query picked in Avery's relay (ui.md 4.4b *relay*): that
+   * query opens in the query inspector; while the answer is not stored yet
+   * (the run still works), the step's dialog opens instead.
+   */
+  protected openTeamQuery(event: {
+    stepId: string;
+    query: RelayQueryOpen;
+  }): void {
+    const data = this.designer.runResult()?.answer?.data;
+    const index = recordIndexOf(data, event.query.step);
+    if (index >= 0) this.designer.openQuery(index, event.query.opener);
+    else this.openStep(event.stepId);
+  }
+
   protected readonly designer = inject(WorkflowDesigner);
   protected readonly visuals = inject(RunVisualsState);
   private readonly artifactsApi = inject(ArtifactsApiService);
@@ -402,7 +426,6 @@ export class WorkflowRunChat {
 
   /** The conversation navigation's questions; empty under two (R38). */
   protected readonly navItems = computed<ChatHistoryItem[]>(() => {
-    if (!this.business()) return [];
     const current = this.designer.shownQuestion();
     const items: ChatHistoryItem[] = this.conversation
       .earlier()
@@ -741,6 +764,19 @@ export class WorkflowRunChat {
       : 'Type a question below.';
   });
 
+  /**
+   * The run ended with an answer: the answer leads and how the run went
+   * follows it (ui.md 4.4b, *Answer first*).
+   */
+  protected readonly answerFirst = computed(() => {
+    const result = this.designer.runResult();
+    return (
+      !!result?.answer &&
+      result.status !== 'running' &&
+      result.status !== 'suspended' &&
+      !this.designer.running()
+    );
+  });
   protected readonly runStatus = computed(() => {
     const result = this.designer.runResult();
     return result === null ? '' : runStatusLine(result);

@@ -1,3 +1,29 @@
+<!-- Who ran the open query, when a teammate ran it in Avery's relay (ui.md 4.4b relay) -->
+<ng-template #queryContextBar>
+  @if (queryContext(); as c) {
+    <div
+      class="flex shrink-0 items-center gap-2 border-b border-border bg-surface-muted px-4 py-2 text-[12px] text-fg-muted"
+      data-testid="query-inspector-context"
+    >
+      <app-agent-avatar
+        [agentKey]="c.teammate.key"
+        [name]="c.teammate.name"
+        [size]="20"
+      />
+      <span class="min-w-0 shrink-0"
+        ><span class="font-medium text-fg-strong">{{ c.teammate.name }}</span
+        >{{ c.teammate.role ? " · " + c.teammate.role : "" }} ran this for
+        {{ c.lead.name }} · query {{ c.position }} of {{ c.of }}</span
+      >
+      @if (c.asked) {
+        <span class="ml-auto min-w-0 truncate" [title]="c.asked"
+          >Asked: “{{ c.asked }}”</span
+        >
+      }
+    </div>
+  }
+</ng-template>
+
 <div class="flex min-h-0 flex-1 flex-col" data-testid="workflow-detail-page">
   <!-- Header, one line: the breadcrumb ending in the name, the kind, the id
        and missing datasets (Execute is on the canvas) -->
@@ -131,10 +157,12 @@
         @if (openQuery(); as open) {
           <div
             data-testid="query-inspector-sheet"
-            class="absolute inset-y-0 right-0 z-20 w-full max-w-[720px] border-l border-border shadow-lg"
+            class="absolute inset-y-0 right-0 z-20 flex w-full max-w-[720px] flex-col border-l border-border shadow-lg"
           >
+            <ng-container *ngTemplateOutlet="queryContextBar" />
             @defer (on immediate) {
               <app-query-inspector
+                class="min-h-0 flex-1"
                 [message]="open.answer"
                 [index]="open.index"
                 (close)="closeQuery()"
@@ -170,11 +198,13 @@
                with the page's right edge, never over the Run panel. -->
             <div
               data-testid="query-inspector-sheet"
-              class="absolute inset-y-0 right-0 z-20 w-full max-w-[720px] border-l border-border shadow-lg"
+              class="absolute inset-y-0 right-0 z-20 flex w-full max-w-[720px] flex-col border-l border-border shadow-lg"
             >
+              <ng-container *ngTemplateOutlet="queryContextBar" />
               <!-- Deferred: the inspector loads when a query is first opened, not with the page. -->
               @defer (on immediate) {
                 <app-query-inspector
+                  class="min-h-0 flex-1"
                   [message]="open.answer"
                   [index]="open.index"
                   (close)="closeQuery()"
@@ -194,6 +224,7 @@
         [runContractHash]="designer.runContractHash()"
         [chat]="designer.nodeChat()"
         [answerData]="storyAnswerData()"
+        [relay]="openRelay()"
         (openQuery)="openStoryQuery($event)"
         (close)="closeNode()"
         (openAgent)="onOpenAgent($event)"

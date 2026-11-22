@@ -42,6 +42,23 @@ export interface QueryStep {
   countSql?: string;
   /** start = the table's size, show = rows produced; others only once verified. */
   rows?: number;
+  /** A statement returning the rows after this step: the step can be previewed. */
+  previewSql?: string;
+  /** The first rows after this step, once asked for. */
+  preview?: StepPreview;
+}
+
+/** The rows a step leaves, as its preview shows them (ui.md 4.4b). */
+export interface StepPreview {
+  columns: string[];
+  rows: Record<string, unknown>[];
+  /** More rows than these came back. */
+  more: boolean;
+  /** The rows the statement produced, when the datasource says. */
+  total?: number;
+  at: string;
+  /** Against the step's verified count: `differs` means it may not be the step's rows. */
+  check?: 'matches' | 'differs';
 }
 
 export interface QueryExplanation {
@@ -188,10 +205,12 @@ export const PAGE_MAX_ROWS = 50_000;
 export interface QueryEvidenceApi {
   /** Builds the evidence of an answer stored before the feature and sizes its tables. */
   prepare(): Observable<void>;
-  /** Explains one query step by step (cached with the answer). */
-  explain(index: number): Observable<void>;
+  /** Explains one query step by step (cached with the answer); `refresh` explains it again. */
+  explain(index: number, refresh?: boolean): Observable<void>;
   /** Counts the rows after each step, on demand. */
   countStages(index: number): Observable<void>;
+  /** The first rows one step leaves, on demand (`step` 0-based; api.md 161, 162). */
+  previewStep(index: number, step: number): Observable<void>;
   rerun(index: number): Observable<QueryRerunResult>;
   downloadCsv(index: number): Observable<Blob>;
   /** One page of the query's full result, filtered and sorted; stores nothing. */

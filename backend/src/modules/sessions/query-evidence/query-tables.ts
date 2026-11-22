@@ -53,15 +53,25 @@ export function tablesOfQuery(
  * its SQLite layer resolves.
  */
 export function countStatement(entity: string, kind?: string): string {
+  return `SELECT COUNT(*) AS n FROM ${quotedEntity(entity, kind)}`;
+}
+
+/** The start step's preview statement: every row of its table (the cap is the runner's). */
+export function previewStatement(entity: string, kind?: string): string {
+  return `SELECT * FROM ${quotedEntity(entity, kind)}`;
+}
+
+/** An entity as the datasource's dialect quotes it in a FROM. */
+function quotedEntity(entity: string, kind?: string): string {
   const parts = entity.split('.');
-  let from = entity;
   if (kind === 'postgres') {
-    from = parts
+    return parts
       .slice(-2)
       .map((p) => `"${p.replace(/"/g, '""')}"`)
       .join('.');
-  } else if (kind === 'databricks') {
-    from = parts.map((p) => `\`${p.replace(/`/g, '``')}\``).join('.');
   }
-  return `SELECT COUNT(*) AS n FROM ${from}`;
+  if (kind === 'databricks') {
+    return parts.map((p) => `\`${p.replace(/`/g, '``')}\``).join('.');
+  }
+  return entity;
 }

@@ -51,12 +51,15 @@ const V2_STEPS = V2_STEP_IDS.map(([, title]) => title);
 const V2_STEP_COUNT = `${V2_STEP_IDS.length} steps`;
 const ORCHESTRATED_ID = 'orchestrated-answer';
 const ORCHESTRATED = 'Answer a Business Question (orchestrated)';
+const AVERY_MICHAEL_ID = 'orchestrated-answer-michael';
+const AVERY_MICHAEL = 'Answer a Business Question (Avery + Michael)';
 const READINESS_ID = 'data-readiness-assessment';
 const READINESS = 'Assess Data Readiness';
 /** The Official workflows in catalogue order (workflows R1). */
 const OFFICIAL = [
   [V2_ID, V2],
   [ORCHESTRATED_ID, ORCHESTRATED],
+  [AVERY_MICHAEL_ID, AVERY_MICHAEL],
   [READINESS_ID, READINESS],
   ['recreate-dashboard', 'Dashboard Image to Artifact'],
   ['map-dashboard-data', 'Map a Dashboard to Data'],
@@ -315,7 +318,7 @@ test.describe('Feature: Workflows', () => {
       );
       await scenarioStep(
         page,
-        'Then I see "Answer a Business Question", its orchestrated version, "Assess Data Readiness", "Dashboard Image to Artifact", "Map a Dashboard to Data" and "Review a Website" under Official, and no Mine section',
+        'Then I see "Answer a Business Question", its orchestrated and Avery + Michael versions, "Assess Data Readiness", "Dashboard Image to Artifact", "Map a Dashboard to Data" and "Review a Website" under Official, and no Mine section',
         async () => {
           await expect(railItem(page, 'User journeys')).toHaveAttribute(
             'aria-current',
@@ -458,13 +461,16 @@ test.describe('Feature: Workflows', () => {
       );
       await search.fill('business');
     });
-    await test.step('Then only the "Answer a Business Question" card and its orchestrated version are shown', async () => {
+    await test.step('Then only the "Answer a Business Question" card and its orchestrated and Avery + Michael versions are shown', async () => {
       await expect(page.getByTestId(`workflow-card-${V2_ID}`)).toBeVisible();
       await expect(
         page.getByTestId(`workflow-card-${ORCHESTRATED_ID}`),
       ).toBeVisible();
+      await expect(
+        page.getByTestId(`workflow-card-${AVERY_MICHAEL_ID}`),
+      ).toBeVisible();
       await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(
-        2,
+        3,
       );
       await expect(section(page, 'mine')).toHaveCount(0);
     });

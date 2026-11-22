@@ -8,6 +8,10 @@ import {
   upNextLine,
 } from '../../services/agent-step-story';
 import { AgentActivity } from '../agent-activity/agent-activity';
+import {
+  RelayQueryOpen,
+  WorkflowRunRelay,
+} from '../workflow-run-relay/workflow-run-relay';
 
 /** One row of the team: an agent, and the handoff into it from the one before. */
 interface TeamRow {
@@ -28,7 +32,7 @@ interface TeamRow {
  */
 @Component({
   selector: 'app-workflow-run-team',
-  imports: [AgentAvatar, AgentActivity, LucideAngularModule],
+  imports: [AgentAvatar, AgentActivity, LucideAngularModule, WorkflowRunRelay],
   templateUrl: './workflow-run-team.html',
   host: { class: 'block' },
 })
@@ -44,6 +48,8 @@ export class WorkflowRunTeam {
   readonly showWork = input(true);
   /** Open an agent step's node dialog (its data, its queries). */
   readonly openNode = output<string>();
+  /** A teammate's query picked in a relay: it opens in the query inspector. */
+  readonly openQuery = output<{ stepId: string; query: RelayQueryOpen }>();
 
   /** The agents the run reached; none before a run. */
   readonly rows = computed<TeamRow[]>(() => {
@@ -70,6 +76,13 @@ export class WorkflowRunTeam {
 
   /** `Jessica writes the answer, then Ryan builds the visual`; null when none waits. */
   readonly upNext = computed(() => upNextLine(this.waiting()));
+
+  /** A relay whose teammates ran queries: their link is under their work, not here. */
+  protected relayQueries(story: AgentStepStory): boolean {
+    return !!story.relay?.some(
+      (item) => item.kind === 'teammate' && item.queries > 0,
+    );
+  }
 
   protected readonly Brain = Brain;
   protected readonly Loader2 = Loader2;
