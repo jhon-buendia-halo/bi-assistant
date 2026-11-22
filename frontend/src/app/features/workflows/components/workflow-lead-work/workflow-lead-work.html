@@ -1,0 +1,186 @@
+<!-- One step's line: its state icon, its words, its rows, and Open query when the answer holds it -->
+<ng-template #line let-step>
+  <span class="mt-[3px] flex shrink-0" aria-hidden="true">
+    @switch (step.state) {
+      @case ("current") {
+        <lucide-angular
+          [img]="Loader2"
+          [size]="13"
+          class="animate-spin text-primary"
+        />
+      }
+      @case ("failed") {
+        <lucide-angular [img]="X" [size]="13" class="text-on-danger-soft" />
+      }
+      @default {
+        <lucide-angular
+          [img]="Check"
+          [size]="13"
+          class="text-on-success-soft"
+        />
+      }
+    }
+  </span>
+  <span
+    class="min-w-0 flex-1 break-words text-fg"
+    [class.text-on-danger-soft]="step.state === 'failed'"
+    >{{ step.label }}</span
+  >
+  @if (step.rows) {
+    <span class="shrink-0 text-[12px] text-fg-muted tabular-nums">{{
+      step.rows
+    }}</span>
+  }
+  @if (queryIndex(step) >= 0) {
+    <button
+      type="button"
+      class="flex shrink-0 items-center gap-0.5 text-[12px] text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+      data-testid="workflow-lead-open-query"
+      [attr.aria-label]="'Open the query: ' + step.label"
+      (click)="pick(step, $event)"
+    >
+      Open query
+      <lucide-angular [img]="ChevronRight" [size]="12" />
+    </button>
+  }
+</ng-template>
+
+<div class="flex flex-col gap-4" data-testid="workflow-lead-work">
+  <!-- 1. What the user asked -->
+  <section
+    class="rounded-xl border border-border bg-surface p-4"
+    data-testid="workflow-lead-asked"
+  >
+    <h3
+      class="m-0 mb-2 text-[11px] font-semibold tracking-wide text-fg-muted uppercase"
+    >
+      1 · What you asked
+    </h3>
+    @if (question(); as q) {
+      <p
+        class="m-0 rounded-lg bg-surface-muted px-3 py-2 text-[13px] leading-5 break-words whitespace-pre-wrap text-fg"
+      >
+        {{ q }}
+      </p>
+    } @else {
+      <p class="m-0 text-[13px] text-fg-muted">
+        The run's question was not kept.
+      </p>
+    }
+  </section>
+
+  <!-- 2. What the orchestrator did, each teammate's work under her hand-off -->
+  <section
+    class="rounded-xl border border-border bg-surface p-4"
+    data-testid="workflow-lead-did"
+  >
+    <h3
+      class="m-0 mb-2 text-[11px] font-semibold tracking-wide text-fg-muted uppercase"
+    >
+      2 · What {{ lead() }} did
+      @if (queries() > 0) {
+        · {{ queries() }} {{ queries() === 1 ? "query" : "queries" }}
+      }
+    </h3>
+    <ol class="m-0 flex list-none flex-col gap-1.5 p-0">
+      @for (item of relay(); track $index) {
+        @if (item.kind === "step") {
+          <li
+            class="flex min-w-0 items-start gap-2.5 rounded-lg border border-border px-3 py-2 text-[13px] leading-5"
+            data-testid="workflow-lead-step"
+            [attr.data-state]="item.step.state"
+          >
+            <ng-container
+              [ngTemplateOutlet]="line"
+              [ngTemplateOutletContext]="{ $implicit: item.step }"
+            />
+          </li>
+        } @else {
+          <li
+            class="ml-4 flex flex-col gap-1.5 rounded-lg border-l-2 bg-surface-muted py-2 pr-2 pl-3"
+            data-testid="workflow-lead-teammate"
+            [attr.data-agent]="item.teammate.key"
+            [class.border-primary]="item.state === 'current'"
+            [class.border-on-danger-soft]="item.state === 'failed'"
+            [class.border-on-success-soft]="item.state === 'done'"
+          >
+            <p class="m-0 flex min-w-0 items-center gap-2 text-[13px]">
+              <app-agent-avatar
+                [agentKey]="item.teammate.key"
+                [name]="item.teammate.name"
+                [size]="24"
+              />
+              <span class="font-medium text-fg-strong">{{
+                item.teammate.name
+              }}</span>
+              @if (item.teammate.role) {
+                <span class="truncate text-fg-muted"
+                  >· {{ item.teammate.role }}</span
+                >
+              }
+              @if (teammateNode(item); as node) {
+                <button
+                  type="button"
+                  class="ml-auto flex shrink-0 items-center gap-0.5 text-[12px] text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+                  data-testid="workflow-lead-teammate-open"
+                  (click)="openTeammate.emit(node)"
+                >
+                  See {{ item.teammate.name }}'s work
+                  <lucide-angular [img]="ChevronRight" [size]="12" />
+                </button>
+              }
+            </p>
+            <ol
+              class="m-0 flex list-none flex-col gap-1 p-0"
+              [attr.aria-label]="item.teammate.name + '’s work'"
+            >
+              @for (step of item.steps; track $index) {
+                <li
+                  class="flex min-w-0 items-start gap-2.5 rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] leading-5"
+                  data-testid="workflow-lead-teammate-step"
+                  [attr.data-state]="step.state"
+                >
+                  <ng-container
+                    [ngTemplateOutlet]="line"
+                    [ngTemplateOutletContext]="{ $implicit: step }"
+                  />
+                </li>
+              }
+            </ol>
+          </li>
+        }
+      } @empty {
+        <li class="text-[13px] text-fg-muted">
+          {{ running() ? lead() + " is starting…" : "Nothing was kept." }}
+        </li>
+      }
+    </ol>
+  </section>
+
+  <!-- 3. What the orchestrator handed back: the answer -->
+  <section
+    class="rounded-xl border border-border bg-surface p-4"
+    data-testid="workflow-lead-answer"
+  >
+    <h3
+      class="m-0 mb-2 text-[11px] font-semibold tracking-wide text-fg-muted uppercase"
+    >
+      3 · What {{ lead() }} handed back to you
+    </h3>
+    @if (answer(); as text) {
+      <div
+        class="prose-dark max-h-[480px] overflow-y-auto text-[13px] text-fg"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'What ' + lead() + ' handed back'"
+        [innerHTML]="text | markdown"
+      ></div>
+    } @else if (running()) {
+      <p class="m-0 text-[13px] text-fg-muted" role="status">
+        Not yet: {{ lead() }} is still working.
+      </p>
+    } @else {
+      <p class="m-0 text-[13px] text-fg-muted">No answer was handed back.</p>
+    }
+  </section>
+</div>

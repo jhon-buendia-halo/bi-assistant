@@ -190,11 +190,15 @@ export class WorkflowDetailPage {
     focusQueryOpener(this.designer.closeQuery());
   }
 
-  /** The relay of the open teammate's orchestrator step, in the run shown (ui.md 4.4b). */
+  /** The relay of the open orchestrator step or teammate, in the run shown (ui.md 4.4b). */
   readonly openRelay = computed(() => {
-    const stepId = this.designer.openInspection()?.tool?.teammate
-      ? this.designer.openInspection()?.tool?.stepId
-      : undefined;
+    const open = this.designer.openInspection();
+    // A teammate's tool opens their orchestrator's relay; her own step, hers.
+    const stepId = open?.tool?.teammate
+      ? open.tool.stepId
+      : open?.kind === 'agent'
+        ? open.step?.id
+        : undefined;
     return stepId
       ? (this.designer.agentStories().get(stepId)?.relay ?? null)
       : null;

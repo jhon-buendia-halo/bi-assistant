@@ -66,6 +66,7 @@ import { WorkflowStepOutputView } from '../workflow-step-output-view/workflow-st
 import { WorkflowNodeChat } from '../workflow-node-chat/workflow-node-chat';
 import { WorkflowStepEvidence } from '../workflow-step-evidence/workflow-step-evidence';
 import { WorkflowTeammateWork } from '../workflow-teammate-work/workflow-teammate-work';
+import { WorkflowLeadWork } from '../workflow-lead-work/workflow-lead-work';
 import { RelayItem } from '../../services/team-relay';
 import {
   StoryQueryOpen,
@@ -128,6 +129,7 @@ const SUMMARY_FIELDS = 4;
     WorkflowStepOutputView,
     WorkflowStepStory,
     WorkflowTeammateWork,
+    WorkflowLeadWork,
   ],
   templateUrl: './workflow-node-dialog.html',
   host: {
@@ -217,7 +219,7 @@ export class WorkflowNodeDialog {
 
   readonly icon = computed(() => KIND_ICONS[this.node().kind]);
   readonly badge = computed(() => {
-    if (this.teammate()) return null;
+    if (this.persona()) return null;
     const kind: WorkflowNodeKind = this.node().kind;
     return kind === 'code'
       ? 'CODE'
@@ -240,6 +242,8 @@ export class WorkflowNodeDialog {
     }
     const agent = this.node().step?.agent;
     if (!agent) return null;
+    // An orchestrator told as her work: her portrait and name head it, the step names what she does.
+    if (this.leadWork()) return this.node().title;
     // A one-call step (Plan, Write answer) names its agent alone, with its role (R39).
     return agent.maxSteps > 1
       ? `${personaLabel(agent)} · ≤ ${agent.maxSteps} steps`
@@ -248,6 +252,45 @@ export class WorkflowNodeDialog {
 
   /** A tool opened from its sub-node; null for any other node. */
   readonly tool = computed(() => this.node().tool ?? null);
+  /**
+   * An orchestrator's step with her relay in the run shown (ui.md 4.4b): the
+   * dialog tells her work as a teammate's tells theirs, instead of its Story
+   * and tool calls. Null for any other node.
+   */
+  readonly leadWork = computed(() => {
+    const step = this.node().step;
+    const relay = this.relay();
+    const run = this.run();
+    if (
+      !this.artifact() ||
+      !step?.agent?.team?.length ||
+      !relay?.length ||
+      !run
+    )
+      return null;
+    const text = (value: unknown) =>
+      typeof value === 'string' && value.trim() ? value : null;
+    return {
+      stepId: step.id,
+      team: step.agent.team,
+      relay,
+      question: text(run.input?.['question']),
+      answer: text(run.output?.['answer']),
+      running: run.status === 'running',
+    };
+  });
+  /**
+   * Who heads a dialog told as someone's work (a teammate, an orchestrator):
+   * their portrait, name and role, and their agent definition one link away.
+   */
+  readonly persona = computed(() => {
+    const mate = this.teammate();
+    if (mate) return mate;
+    const key = this.agentKey();
+    return this.leadWork() && key
+      ? { key, name: this.agentName(), role: this.agentRole() }
+      : null;
+  });
   /** A team tool's teammate (their portrait sub-node): the dialog tells their work. */
   readonly teammate = computed(() => this.tool()?.teammate ?? null);
   /** The teammate's chip in the run shown: `Working`, `Failed`, `Done · 27.1 s`; null when not called. */

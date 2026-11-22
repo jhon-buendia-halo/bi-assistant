@@ -18,7 +18,7 @@
   <header
     class="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3"
   >
-    @if (teammate(); as mate) {
+    @if (persona(); as mate) {
       <app-agent-avatar [agentKey]="mate.key" [name]="mate.name" [size]="32" />
       <h2
         id="workflow-ndv-title"
@@ -65,8 +65,8 @@
       [selected]="selectedAttempt()"
       (selectAttempt)="selectedAttempt.set($event)"
     />
-    @if (teammate(); as mate) {
-      <!-- The teammate's agent definition (their persona page) -->
+    @if (persona(); as mate) {
+      <!-- The persona's agent definition (their persona page) -->
       <button
         type="button"
         class="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded text-[13px] text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
@@ -82,7 +82,7 @@
       type="button"
       data-testid="workflow-ndv-close"
       aria-label="Close"
-      [class.ml-auto]="!teammate()"
+      [class.ml-auto]="!persona()"
       class="flex h-8 w-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-muted hover:text-fg-strong"
       (click)="close.emit()"
     >
@@ -115,54 +115,70 @@
         class="mx-auto flex w-full max-w-[820px] flex-col gap-4 px-6 py-6"
         data-testid="workflow-ndv-column"
       >
-        <!-- The Story, as an answer from the persona -->
-        <section
-          class="rounded-xl border border-border bg-surface p-4"
-          data-testid="workflow-ndv-story"
-          aria-label="Story"
-        >
-          <div class="mb-3 flex items-center gap-2.5">
-            <app-agent-avatar
-              [agentKey]="agentKey() ?? agentName()"
-              [name]="agentName()"
-              [size]="32"
-            />
-            <h3
-              id="workflow-ndv-story-heading"
-              class="m-0 flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-[13px] font-normal"
-              data-testid="workflow-ndv-story-persona"
-            >
-              <span class="font-semibold text-fg-strong">{{ agentName() }}</span>
-              @if (agentRole(); as role) {
-                <span class="text-fg-muted">· {{ role }}</span>
-              }
-            </h3>
-            <button
-              type="button"
-              class="btn btn-secondary ml-auto shrink-0 px-2.5 py-0.5 text-[12px]"
-              data-testid="workflow-ndv-copy"
-              aria-label="Copy the story"
-              [disabled]="!canCopy('story')"
-              (click)="copy('story')"
-            >
-              <lucide-angular
-                [img]="copied() === 'story' ? Check : Copy"
-                [size]="12"
-              />
-              {{ copied() === "story" ? "Copied" : "Copy" }}
-            </button>
-          </div>
-          <ng-container *ngTemplateOutlet="storyBody" />
-        </section>
-
-        @if (run()) {
-          <!-- What the persona used: its tool calls as evidence rows -->
-          <app-workflow-step-evidence
-            [calls]="toolCalls()"
-            [agentName]="agentName()"
-            [output]="run()?.output"
-            [summary]="evidenceSummary()"
+        @if (leadWork(); as work) {
+          <!-- An orchestrator: what you asked, what she did with her team, what she handed back (ui.md 4.4b) -->
+          <app-workflow-lead-work
+            [lead]="agentName()"
+            [stepId]="work.stepId"
+            [team]="work.team"
+            [question]="work.question"
+            [relay]="work.relay"
+            [answer]="work.answer"
+            [running]="work.running"
+            [answerData]="answerData()"
+            (openQuery)="openQuery.emit($event)"
+            (openTeammate)="openStep.emit($event)"
           />
+        } @else {
+          <!-- The Story, as an answer from the persona -->
+          <section
+            class="rounded-xl border border-border bg-surface p-4"
+            data-testid="workflow-ndv-story"
+            aria-label="Story"
+          >
+            <div class="mb-3 flex items-center gap-2.5">
+              <app-agent-avatar
+                [agentKey]="agentKey() ?? agentName()"
+                [name]="agentName()"
+                [size]="32"
+              />
+              <h3
+                id="workflow-ndv-story-heading"
+                class="m-0 flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-[13px] font-normal"
+                data-testid="workflow-ndv-story-persona"
+              >
+                <span class="font-semibold text-fg-strong">{{ agentName() }}</span>
+                @if (agentRole(); as role) {
+                  <span class="text-fg-muted">· {{ role }}</span>
+                }
+              </h3>
+              <button
+                type="button"
+                class="btn btn-secondary ml-auto shrink-0 px-2.5 py-0.5 text-[12px]"
+                data-testid="workflow-ndv-copy"
+                aria-label="Copy the story"
+                [disabled]="!canCopy('story')"
+                (click)="copy('story')"
+              >
+                <lucide-angular
+                  [img]="copied() === 'story' ? Check : Copy"
+                  [size]="12"
+                />
+                {{ copied() === "story" ? "Copied" : "Copy" }}
+              </button>
+            </div>
+            <ng-container *ngTemplateOutlet="storyBody" />
+          </section>
+
+          @if (run()) {
+            <!-- What the persona used: its tool calls as evidence rows -->
+            <app-workflow-step-evidence
+              [calls]="toolCalls()"
+              [agentName]="agentName()"
+              [output]="run()?.output"
+              [summary]="evidenceSummary()"
+            />
+          }
         }
 
         <!-- What it received -->

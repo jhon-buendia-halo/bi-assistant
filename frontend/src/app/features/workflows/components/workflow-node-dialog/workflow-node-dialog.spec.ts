@@ -421,6 +421,58 @@ describe('WorkflowNodeDialog', () => {
     expect(keys).toEqual(['insights-analyst']);
   });
 
+  it("tells an orchestrator's step as her work, headed by her portrait, with her agent definition one link away", () => {
+    const analyse = node('analyse');
+    const step = analyse.step!;
+    open({
+      ...analyse,
+      step: {
+        ...step,
+        agent: {
+          ...step.agent!,
+          team: [
+            {
+              tool: 'answer_from_data',
+              key: 'insights-analyst',
+              name: 'Michael',
+              role: 'Insights Analyst',
+            },
+          ],
+        },
+      },
+      run: {
+        ...analyse.run!,
+        input: { question: 'Who scored most?' },
+        output: { answer: '**France, 14.**' },
+      },
+    });
+    fixture.componentRef.setInput('relay', [
+      {
+        kind: 'teammate',
+        teammate: {
+          key: 'insights-analyst',
+          name: 'Michael',
+          role: 'Insights Analyst',
+        },
+        steps: [],
+        queries: 0,
+        state: 'done',
+      },
+    ]);
+    fixture.detectChanges();
+    expect(byId('workflow-lead-work')).not.toBeNull();
+    expect(byId('workflow-ndv-story')).toBeNull();
+    expect(text('workflow-lead-asked')).toContain('Who scored most?');
+    expect(text('workflow-ndv-title')).toContain(
+      fixture.componentInstance.agentName(),
+    );
+    expect(byId('workflow-ndv')?.querySelector('header')?.textContent).not.toContain('LLM');
+    const keys: string[] = [];
+    fixture.componentInstance.openAgent.subscribe((k) => keys.push(k));
+    byId('workflow-ndv-teammate-definition')!.click();
+    expect(keys).toEqual([step.agent!.key!]);
+  });
+
   it('shows a code step without agent fields', () => {
     open(node('receive'));
     expect(text('workflow-step-field-kind')).toBe('Code');
