@@ -302,7 +302,7 @@ Runs on every pull request, on every push to `main`, and on manual dispatch. It 
 | Check | Fails when |
 |---|---|
 | Layout | a product or system spec is missing, or the capability or epic tables in `specs/README.md` don't match the folders on disk |
-| Links | a relative link in `CLAUDE.md`, `README.md`, `roadmap.md`, any spec, any project skill (`.claude/skills/*/SKILL.md`) or any tool README (`.claude/tools/**/*.md`) doesn't resolve. `changelog.md` and `retrospective.md` are skipped, because their past entries are never rewritten. |
+| Links | a relative link in `CLAUDE.md`, `README.md`, `roadmap.md`, any spec, any project skill (`.claude/skills/*/SKILL.md`), any playbook (`.claude/playbooks/*.md`), `.claude/worker.md` or any tool README (`.claude/tools/**/*.md`) doesn't resolve. `changelog.md` and `retrospective.md` are skipped, because their past entries are never rewritten. |
 | Capability format | a capability spec lacks one of the required sections |
 | E2E mirror | a `frontend/e2e/*.spec.ts` file is not the `E2E:` line of exactly one capability spec, or an `E2E:` line names a missing file |
 | API | a backend controller route is not written as `` `METHOD /path` `` in `system/api.md` |
@@ -480,7 +480,7 @@ Opens a **Workflow** pane (the right-hand sidebar in a wide fullscreen terminal 
 
 Developer tooling for people who work on this repository in Claude Code, not part of the app or its releases. Epic [BA-119](../epics/BA-119/spec.md); merged from nine skills into four by roadmap 0.5.2 ([M0-5](../epics/M0-5/spec.md)); two workflows since roadmap 0.6.1–0.6.3 ([M0-6](../epics/M0-6/spec.md)).
 
-**Two workflows (roadmap 0.6.1).** `CLAUDE.md` is a router of under 60 lines: what the app is, the mandatory first action (read `lessons.md`), *Choose the workflow*, the rules both workflows share (never on `main`, specs change with the code, ports and Postgres from a worktree, repo-only planning, read and output rules, automatic versioning, session hygiene), bootstrap, the process documents and the model routing table. In a new session, after `lessons.md`, Claude reads `.context/workflow-mode` (`strict` or `free-style`, per workspace, git-ignored): when it exists, Claude names the mode in one line and goes on; otherwise it asks with one picker and writes the answer. It then loads the matching skill. "Switch to strict" or "switch to free style" rewrites the file and loads the other skill; going to Strict mid-change adds the roadmap story for the work already done. `builder` and `reviewer` skip the choice (they work from a brief).
+**Two workflows (roadmap 0.6.1).** `CLAUDE.md` is a router: what the app is, the mandatory first action (read `lessons.md`), then five sections. *Non-negotiables* holds one line per rule both workflows share (never on `main`, specs change with the code, a local instance is ready to test, workflows start from Mastra's docs, the query inspector, repo-only planning, read and output rules, automatic versioning, session hygiene, the first line of every subagent brief), each naming the skill or playbook that carries it out, then bootstrap and *Choose the brand*. *Principles* points at `lessons.md` and `retrospective.md`, then lists the principles in five groups, one line each: when it applies, then the rule. *Core*: Laziness Protocol, Foundational Thinking, Redesign from First Principles, Attack the Premise, Subtract Before You Add, Minimize Reader Load, Outcome-Oriented Execution, Experience First, Exhaust the Design Space, Build the Lever. *Architecture*: Model the Domain, Boundary Discipline, Type System Discipline, Make Operations Idempotent, Migrate Callers Then Delete Legacy APIs, Separate Before Serializing Shared State. *Verification*: Prove It Works, Fix Root Causes, Sequence Work into Verifiable Units, Test Behavior Not Implementation, Explain the Number. *Delegation*: Guard the Context Window, Never Block on the Human. *Meta*: Encode Lessons in Structure. *Autonomy* holds when to stop and ask (the app or Postgres from a worktree), and that an explicit pause (a rule, a playbook step that waits for the user, the user's instruction) wins over *Never Block on the Human*. *Writing the reply* holds the reply rules. *Playbooks* holds *Choose the workflow* and *Choose the playbook*. The process documents and the model routing table follow. In a new session, after `lessons.md`, Claude reads `.context/workflow-mode` (`strict` or `free-style`, per workspace, git-ignored): when it exists, Claude names the mode in one line and goes on; otherwise it asks with one picker and writes the answer. It then loads the matching skill. "Switch to strict" or "switch to free style" rewrites the file and loads the other skill; going to Strict mid-change adds the roadmap story for the work already done. `builder` and `reviewer` skip the choice (they work from a brief).
 
 | Workflow skill | Holds |
 |---|---|
@@ -496,6 +496,17 @@ The steps' conventions live in four step skills. Claude loads a skill before its
 | `verify` | wave check, 9 | `qa.mjs --wave` (agent-built stories), `--fast` (plain session, S change) and `--gate`, the eval bar (base vs branch, parallel runs), checking a change in the running web app |
 | `workflow-gate` | 6, 7, 10, 11 | E2E impact analysis and test conventions, Test target convention, per-story evidence, the per-epic changelog entry and PR, the demo artifact, the `.context/handoff.md` template, post-merge cleanup, the per-epic retrospective and `lessons.md` |
 
+**Playbooks (`.claude/playbooks/`).** A workflow decides which steps run; a playbook says how to do one kind of task inside them. Both workflows share the playbooks. A playbook is a Markdown file with no frontmatter, so it is not a skill and has no `/<name>`: Claude opens it when *Choose the playbook* in `CLAUDE.md` matches the task, and copies its steps into the todo list. Each step names, in brackets, the workflow step it fills; a playbook points at skill sections and `lessons.md` rather than copying them, and ends with what the reply reports. Skills stay techniques a playbook calls; a skill does not call a playbook. A task no playbook fits follows the workflow's steps alone.
+
+| Playbook | For | Holds (moved from `CLAUDE.md`) |
+|---|---|---|
+| `mastra-workflow` | a new or changed Mastra workflow | the order of the `mastra-workflows` skill's sections, from docs to hand-over |
+| `agent-change` | a new agent, or a change to what an agent receives | the full *query inspector* rule, the eval decision and the eval run |
+| `bug-fix` | a defect in shipped behaviour | reproduce with real traffic, flake rate, failing test first |
+| `local-instance` | starting the app for the user or a check | the default LLM and `setup-local.mjs`, ports, web-mode build, stop by PID |
+| `ship` | recording what shipped, the PR, post-merge cleanup | the order of `workflow-gate` steps 10 and 11 for each workflow |
+| `session-handoff` | pausing work or picking it up | the handoff file and the checks on pick-up |
+
 **The story lane (roadmap 1.23.28, [M1-23](../epics/M1-23/spec.md)).** It replaces the per-story fast loop for agent-built stories. A `builder` starts from its story pack, writes the code, its unit tests, for a UI story one Playwright scenario (`@demo @story-<id>`) and only the spec lines its change makes false, and runs only the related unit tests and its own Playwright file, with no axe scan, screenshots, evidence, demo or `qa.mjs` unless the brief asks. The lead merges the wave (the stories built in parallel) and runs one `qa.mjs --wave`, then hands over the running app, with a demo only for the wave's user-visible milestone. Evidence and demos are recorded per wave; the acceptance gate stays per epic. A plain session without a builder, and every S change, may run `qa.mjs <id> --fast` instead.
 
 **Decide before you build.** Before an L epic, or an M feature whose end state is unclear, the lead shows a cheap prototype (an HTML mock or a sketch, at most 10 minutes, no spec, no ADR), then asks one batched confirmation per epic: spec, ADR, open questions with recommendations, and branch. A direction change afterwards is re-planned once.
@@ -506,13 +517,13 @@ The steps' conventions live in four step skills. Claude loads a skill before its
 
 **Read and output rules, for every agent.** Never read a file over 500 lines whole: `grep -n` or the generated section index [specs/INDEX.md](../INDEX.md) (`path:start-end heading`), then read the range. Run Playwright with `--reporter=dot` (or `line`) and Jest with `--silent`, send builds and test runs to a log file, and read back only the summary or the failure block.
 
-**Session hygiene.** One lead session per epic wave; before a new session, write `.context/handoff.md` (template in `workflow-gate`).
+**Session hygiene.** One lead session per epic wave; before a new session, write `.context/handoff.md` (template in `workflow-gate`, steps in the `session-handoff` playbook).
 
 **Change sizes.** S (a fix, copy, config, dependency, docs or process change with no new user flow, endpoint, persisted shape or agent input) runs a reduced set of steps with no demo (`qa.mjs --no-demo`), no new epic spec and one changelog bullet; M (a story) runs every step; L (architectural) adds an ADR and a written plan. The table is in `workflow-strict`.
 
 **Process records.** `lessons.md` (about 80 lines, the distilled rules) is the mandatory first read; `retrospective.md` stays the full append-only history, one entry per epic. `changelog.md` gets one entry per epic, when its PR opens, with a bullet per story linking its evidence folder. Each story's `evidence/<roadmap-id>/` holds what `qa.mjs` writes plus a one-line `README.md` with the demo artifact URL.
 
-Other project skills are task runbooks, not workflow steps: `deploy-labs-site` (section 8). Each step line in `workflow-strict` keeps the `<n>. **<title>** — <description>` form, followed by `Skill: \`<name>\``, so the `workflow-steps` mod (section 9) still parses it. `check-specs.py` checks the relative links inside `CLAUDE.md`, `lessons.md`, every `SKILL.md` and every Markdown file under `.claude/tools/` (section 5).
+Other project skills are task runbooks, not workflow steps: `deploy-labs-site` (section 8). Each step line in `workflow-strict` keeps the `<n>. **<title>** — <description>` form, followed by `Skill: \`<name>\``, so the `workflow-steps` mod (section 9) still parses it. `check-specs.py` checks the relative links inside `CLAUDE.md`, `lessons.md`, every `SKILL.md`, every playbook, `.claude/worker.md` and every Markdown file under `.claude/tools/` (section 5).
 
 ## 11. Claude Code tools (`.claude/tools/`)
 
@@ -537,9 +548,9 @@ Developer tooling for people who work on this repository in Claude Code, not par
 
 `builder` and `reviewer` set `omitClaudeMd: true`: they work from their brief, so they don't load `CLAUDE.md` (roadmap 0.5.2).
 
-Rules every builder follows (from the retrospective):
-- Write files with Edit/Write, or in a scratch folder of its own; never use shared `/tmp` names.
-- Never stop a process it did not start; record the PIDs it starts.
+**Worker rules (`.claude/worker.md`).** The rules every subagent follows, in one file: write with Edit/Write or in a scratch folder of its own (never shared `/tmp` names), never stop a process it did not start (record PIDs, stop by PID), report a build or budget block instead of changing build config, use the brand the brief names, read ranges and keep output quiet, never edit `version`, never commit a placeholder message. `CLAUDE.md` (*Non-negotiables*) makes `Read .claude/worker.md before anything else.` the first line of every subagent brief, and the file asks each subagent to pass that line on to any subagent it starts. `builder` reads it first (it sets `omitClaudeMd: true`, so it would not see the rule in `CLAUDE.md`). `reviewer` and `manager` cannot write files or run commands, so they skip it. The story pack's builder rules (`BUILDER_RULES` in `scripts/spec-index-lib.mjs`) repeat a short form of it.
+
+Rules every builder follows on top (from the retrospective):
 - Run Playwright with `E2E_SKIP_DOCKER=1` when a Postgres is already listening on 55432.
 - Never run `npm test`/`build` alongside `test:e2e` in the same worktree.
 - Never start the app on the default ports.
