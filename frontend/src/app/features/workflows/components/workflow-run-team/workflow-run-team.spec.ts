@@ -93,6 +93,10 @@ describe('WorkflowRunTeam (ui.md 4.4b, Agents at work)', () => {
     ]);
     const opened: string[] = [];
     fixture.componentInstance.openNode.subscribe((id) => opened.push(id));
+    const queried: string[] = [];
+    fixture.componentInstance.openQuery.subscribe((e) =>
+      queried.push(`${e.stepId}: ${e.query.step.label}`),
+    );
     // Folded once she is done; the row's own data link gives way to his.
     expect(el.querySelector('[data-testid="agent-activity"]')).toBeNull();
     expect(
@@ -121,8 +125,18 @@ describe('WorkflowRunTeam (ui.md 4.4b, Agents at work)', () => {
       '[data-testid="workflow-run-relay-queries"]',
     )!;
     expect(link.textContent?.trim()).toBe("See Michael's query and data");
+    // His queries open in the query inspector, never the step's dialog.
     link.click();
-    expect(opened).toEqual(['orchestrate']);
+    michael
+      .querySelector<HTMLButtonElement>(
+        'button[data-testid="workflow-run-relay-teammate-step"]',
+      )!
+      .click();
+    expect(queried).toEqual([
+      'orchestrate: Added up the goals',
+      'orchestrate: Added up the goals',
+    ]);
+    expect(opened).toEqual([]);
   });
 
   it('names each agent persona with its role, and none when it has no role (R39)', () => {

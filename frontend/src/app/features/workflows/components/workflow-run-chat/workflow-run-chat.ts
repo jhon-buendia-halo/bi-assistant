@@ -64,6 +64,8 @@ import {
 import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflow-run-input-required';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { WorkflowRunTeam } from '../workflow-run-team/workflow-run-team';
+import { RelayQueryOpen } from '../workflow-run-relay/workflow-run-relay';
+import { recordIndexOf } from '../../services/team-relay';
 import { AgentActivity } from '../agent-activity/agent-activity';
 import { activitySteps } from '../../services/agent-activity';
 import { WorkflowRunStory } from '../workflow-run-story/workflow-run-story';
@@ -331,6 +333,21 @@ export class WorkflowRunChat {
   protected openStep(id: string): void {
     if (this.business()) this.openInBuilder.emit(id);
     else this.designer.openNode(id);
+  }
+
+  /**
+   * A teammate's query picked in Avery's relay (ui.md 4.4b *relay*): that
+   * query opens in the query inspector; while the answer is not stored yet
+   * (the run still works), the step's dialog opens instead.
+   */
+  protected openTeamQuery(event: {
+    stepId: string;
+    query: RelayQueryOpen;
+  }): void {
+    const data = this.designer.runResult()?.answer?.data;
+    const index = recordIndexOf(data, event.query.step);
+    if (index >= 0) this.designer.openQuery(index, event.query.opener);
+    else this.openStep(event.stepId);
   }
 
   protected readonly designer = inject(WorkflowDesigner);

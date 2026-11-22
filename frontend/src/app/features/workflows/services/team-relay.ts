@@ -33,9 +33,72 @@ export interface RelayHandOff {
   queries: number;
   /** The team call's state: `current` while the teammate works. */
   state: ActivityState;
+  /** What Avery asked them, in a line (her brief's question); absent without a brief. */
+  asked?: string;
 }
 
 export type RelayItem = RelayStep | RelayHandOff;
+
+/** A stored query of the answer (`answer.data`), as a relay matches it. */
+export interface RelayRecord {
+  tool: string;
+  input?: string;
+  rationale?: string;
+}
+
+/** Where a query sits in a relay: whose it is, and which of their queries. */
+export interface RelayQueryPlace {
+  teammate: RelayTeammate;
+  /** 1-based, among the teammate's queries in this hand-off. */
+  position: number;
+  of: number;
+  asked?: string;
+}
+
+/**
+ * Whether a stored record and a relay step are the same query: their SQL,
+ * whitespace aside (a step's is clipped at 2 000 characters), else, with no
+ * SQL on one side, their stated reason.
+ */
+export function sameQuery(record: RelayRecord, step: ActivityStep): boolean {
+  if (!record.tool.endsWith('run_readonly_sql') || !step.query) return false;
+  const flat = (text: string | undefined) =>
+    (text ?? '').replace(/\s+/g, ' ').trim().slice(0, 1900);
+  if (record.input && step.input)
+    return flat(record.input) === flat(step.input);
+  const reason = flat(record.rationale);
+  return !!reason && flat(step.label).startsWith(reason.slice(0, 120));
+}
+
+/** The answer record (`answer.data` index) of a relay's query step; -1 when none matches. */
+export function recordIndexOf(
+  data: readonly RelayRecord[] | undefined,
+  step: ActivityStep,
+): number {
+  return (data ?? []).findIndex((record) => sameQuery(record, step));
+}
+
+/** Whose query a stored record is in a relay, and which of theirs; null when no teammate ran it. */
+export function relayQueryOf(
+  items: readonly RelayItem[] | null | undefined,
+  record: RelayRecord | undefined,
+): RelayQueryPlace | null {
+  if (!items || !record) return null;
+  for (const item of items) {
+    if (item.kind !== 'teammate') continue;
+    const queries = item.steps.filter((s) => s.query);
+    const at = queries.findIndex((s) => sameQuery(record, s));
+    if (at >= 0) {
+      return {
+        teammate: item.teammate,
+        position: at + 1,
+        of: queries.length,
+        ...(item.asked ? { asked: item.asked } : {}),
+      };
+    }
+  }
+  return null;
+}
 
 /** Avery's playbooks (avery-playbooks `reference/`), as she would name them. */
 const PLAYBOOKS: Record<string, string> = {
@@ -98,6 +161,7 @@ export function relayOf(
         steps: [],
         queries: 0,
         state: step.state,
+        ...(step.input ? { asked: briefLead(step.input) } : {}),
       };
       items.push(open);
     }

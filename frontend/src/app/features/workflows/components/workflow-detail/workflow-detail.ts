@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   DestroyRef,
@@ -28,6 +29,8 @@ import { WorkflowNodeDialog } from '../workflow-node-dialog/workflow-node-dialog
 import { StoryQueryOpen } from '../workflow-step-story/workflow-step-story';
 import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
 import { WorkflowRunChat } from '../workflow-run-chat/workflow-run-chat';
+import { relayQueryOf } from '../../services/team-relay';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import {
   WorkflowView,
   readWorkflowView,
@@ -47,7 +50,9 @@ import {
 @Component({
   selector: 'app-workflow-detail',
   imports: [
+    AgentAvatar,
     LucideAngularModule,
+    NgTemplateOutlet,
     QueryInspector,
     WorkflowCanvas,
     WorkflowNodeDialog,
@@ -159,6 +164,22 @@ export class WorkflowDetailPage {
       answer.data?.[index] !== undefined
       ? { index, answer }
       : null;
+  });
+
+  /**
+   * Who ran the open query, when a teammate ran it in an orchestrator's
+   * relay (ui.md 4.4b *relay*): the teammate, for whom, which of their
+   * queries and what they were asked; null for any other query.
+   */
+  readonly queryContext = computed(() => {
+    const open = this.openQuery();
+    if (!open) return null;
+    const record = open.answer.data?.[open.index];
+    for (const story of this.designer.agentStories().values()) {
+      const place = relayQueryOf(story.relay, record);
+      if (place) return { ...place, lead: story.agent };
+    }
+    return null;
   });
 
   /**

@@ -91,7 +91,9 @@
                   <app-workflow-run-relay
                     [items]="relay"
                     [live]="s.state === 'active' || s.state === 'asking'"
-                    (openQuery)="openNode.emit(s.stepId)"
+                    (openQuery)="
+                      openQuery.emit({ stepId: s.stepId, query: $event })
+                    "
                   />
                 } @else {
                   <app-agent-activity

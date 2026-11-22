@@ -277,6 +277,7 @@
           [thought]="reasoningSnippet()"
           [showWork]="!business()"
           (openNode)="openStep($event)"
+          (openQuery)="openTeamQuery($event)"
         />
       }
 
@@ -569,420 +570,396 @@
   @if (canRun() && composerShown()) {
     <!-- The run's input, while no run is shown (no follow-up since 2026-11-20) -->
     <div class="shrink-0 px-3 pb-3">
-        <form
-          data-testid="workflow-run-composer"
-          aria-label="Input"
-          class="composer composer-form flex flex-col gap-2"
-          [class.composer-dragging]="dragging()"
-          (submit)="$event.preventDefault(); designer.execute()"
-          (paste)="onPaste($event)"
-          (dragover)="onDragOver($event)"
-          (dragleave)="dragging.set(false)"
-          (drop)="onDrop($event)"
-        >
-            <!-- One labelled section per field, divided (ui.md 4.4b) -->
-            <div class="composer-fields">
-              @for (field of composerFields(); track field.name) {
-                @switch (field.type) {
-                  @case ("boolean") {
-                    <div class="flex flex-col gap-1">
-                      <label class="flex items-start gap-2 text-[13px] text-fg">
-                        <input
-                          type="checkbox"
-                          [id]="inputId(field.name)"
-                          [attr.data-testid]="inputId(field.name)"
-                          [checked]="designer.checked(field.name)"
-                          [attr.aria-invalid]="
-                            fieldError(field.name) ? 'true' : null
-                          "
-                          [attr.aria-describedby]="describedBy(field.name)"
-                          (change)="onCheck(field.name, $event)"
-                          class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                        />
-                        <span>{{ field.label }}</span>
-                      </label>
-                      @if (field.help) {
-                        <p class="m-0 text-[12px] text-fg-muted">
-                          {{ field.help }}
-                        </p>
-                      }
-                      @if (fieldError(field.name); as message) {
-                        <p
-                          [id]="errorId(field.name)"
-                          [attr.data-testid]="errorId(field.name)"
-                          class="m-0 text-[12px] text-on-danger-soft"
-                        >
-                          {{ message }}
-                        </p>
-                      }
-                    </div>
-                  }
-                  @case ("datasets") {
-                    <div
-                      role="group"
-                      tabindex="-1"
-                      [attr.aria-labelledby]="inputId(field.name) + '-label'"
+      <form
+        data-testid="workflow-run-composer"
+        aria-label="Input"
+        class="composer composer-form flex flex-col gap-2"
+        [class.composer-dragging]="dragging()"
+        (submit)="$event.preventDefault(); designer.execute()"
+        (paste)="onPaste($event)"
+        (dragover)="onDragOver($event)"
+        (dragleave)="dragging.set(false)"
+        (drop)="onDrop($event)"
+      >
+        <!-- One labelled section per field, divided (ui.md 4.4b) -->
+        <div class="composer-fields">
+          @for (field of composerFields(); track field.name) {
+            @switch (field.type) {
+              @case ("boolean") {
+                <div class="flex flex-col gap-1">
+                  <label class="flex items-start gap-2 text-[13px] text-fg">
+                    <input
+                      type="checkbox"
+                      [id]="inputId(field.name)"
+                      [attr.data-testid]="inputId(field.name)"
+                      [checked]="designer.checked(field.name)"
                       [attr.aria-invalid]="
                         fieldError(field.name) ? 'true' : null
                       "
                       [attr.aria-describedby]="describedBy(field.name)"
-                      data-testid="workflow-input-datasets"
-                      class="flex flex-col gap-1 outline-none"
+                      (change)="onCheck(field.name, $event)"
+                      class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                    />
+                    <span>{{ field.label }}</span>
+                  </label>
+                  @if (field.help) {
+                    <p class="m-0 text-[12px] text-fg-muted">
+                      {{ field.help }}
+                    </p>
+                  }
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
                     >
-                      <div class="composer-head">
-                        <span
-                          [id]="inputId(field.name) + '-label'"
-                          class="composer-label"
-                          >{{ field.label }}</span
-                        >
-                        <span
-                          aria-hidden="true"
-                          class="composer-tag"
-                          [class.composer-tag-optional]="!field.required"
-                          >{{ field.required ? "Required" : "Optional" }}</span
-                        >
-                      </div>
-                      @if (datasetChoices(field).length === 0) {
-                        <p class="m-0 text-[12px] text-fg-muted">
-                          No datasets yet — create one in Datasets first.
-                        </p>
-                      } @else {
-                        <app-dataset-picker
-                          [datasets]="datasetChoices(field)"
-                          [selected]="designer.picked(field.name)"
-                          [invalid]="fieldError(field.name) !== null"
-                          (selectedChange)="
-                            designer.setInput(field.name, $event)
-                          "
-                        />
-                      }
-                      @if (fieldError(field.name); as message) {
-                        <p
-                          [id]="errorId(field.name)"
-                          [attr.data-testid]="errorId(field.name)"
-                          class="m-0 text-[12px] text-on-danger-soft"
-                        >
-                          {{ message }}
-                        </p>
-                      }
-                    </div>
+                      {{ message }}
+                    </p>
                   }
-                  @case ("dataset") {
-                    <div class="flex flex-col gap-1">
-                      <div class="composer-head">
-                        <label
-                          [for]="inputId(field.name)"
-                          class="composer-label"
-                          >{{ field.label }}</label
-                        >
-                        <span
-                          aria-hidden="true"
-                          class="composer-tag"
-                          [class.composer-tag-optional]="!field.required"
-                          >{{ field.required ? "Required" : "Optional" }}</span
-                        >
-                      </div>
-                      <select
-                        [id]="inputId(field.name)"
-                        [attr.data-testid]="inputId(field.name)"
-                        [attr.aria-required]="field.required ? 'true' : null"
-                        [attr.aria-invalid]="
-                          fieldError(field.name) ? 'true' : null
-                        "
-                        [attr.aria-describedby]="describedBy(field.name)"
-                        (change)="onInput(field.name, $event)"
-                        class="field"
-                      >
-                        <!-- Each option marks itself selected: a [value] on the
-                         select would apply before its options exist (a form
-                         opened already holding a dataset, e.g. Run again). -->
-                        <option
-                          value=""
-                          [selected]="designer.inputValue(field.name) === ''"
-                        >
-                          Select a dataset
-                        </option>
-                        @for (
-                          dataset of datasetChoices(field);
-                          track dataset.name
-                        ) {
-                          <option
-                            [value]="dataset.name"
-                            [selected]="
-                              dataset.name === designer.inputValue(field.name)
-                            "
-                          >
-                            {{ dataset.name }}
-                          </option>
-                        }
-                      </select>
-                      @if (fieldError(field.name); as message) {
-                        <p
-                          [id]="errorId(field.name)"
-                          [attr.data-testid]="errorId(field.name)"
-                          class="m-0 text-[12px] text-on-danger-soft"
-                        >
-                          {{ message }}
-                        </p>
-                      }
-                    </div>
-                  }
-                  @case ("artifact") {
-                    <div class="flex flex-col gap-1">
-                      <div class="composer-head">
-                        <label
-                          [for]="inputId(field.name)"
-                          class="composer-label"
-                          >{{ field.label }}</label
-                        >
-                        <span
-                          aria-hidden="true"
-                          class="composer-tag"
-                          [class.composer-tag-optional]="!field.required"
-                          >{{ field.required ? "Required" : "Optional" }}</span
-                        >
-                      </div>
-                      <select
-                        [id]="inputId(field.name)"
-                        [attr.data-testid]="inputId(field.name)"
-                        [attr.aria-required]="field.required ? 'true' : null"
-                        [attr.aria-invalid]="
-                          fieldError(field.name) ? 'true' : null
-                        "
-                        [attr.aria-describedby]="describedBy(field.name)"
-                        (change)="onArtifact(field, $event)"
-                        class="field"
-                      >
-                        <option
-                          value=""
-                          [selected]="designer.inputValue(field.name) === ''"
-                        >
-                          {{
-                            field.requiredWithout
-                              ? "None — upload an image"
-                              : "Select a saved dashboard"
-                          }}
-                        </option>
-                        @for (
-                          artifact of artifactChoices(field);
-                          track artifact.id
-                        ) {
-                          <option
-                            [value]="artifact.id"
-                            [selected]="
-                              artifact.id === designer.inputValue(field.name)
-                            "
-                          >
-                            {{ artifact.name }}
-                          </option>
-                        }
-                      </select>
-                      @if (field.help) {
-                        <p class="m-0 text-[12px] text-fg-muted">
-                          {{ field.help }}
-                        </p>
-                      }
-                      @if (fieldError(field.name); as message) {
-                        <p
-                          [id]="errorId(field.name)"
-                          [attr.data-testid]="errorId(field.name)"
-                          class="m-0 text-[12px] text-on-danger-soft"
-                        >
-                          {{ message }}
-                        </p>
-                      }
-                    </div>
-                  }
-                  @case ("images") {
-                    <app-workflow-run-attachments
-                      [images]="composerThumbs()"
-                      [label]="field.label"
-                      [max]="field.max ?? 4"
-                      [help]="field.help ?? null"
-                      [error]="imagesError()"
-                      (picked)="addImages($event)"
-                      (removed)="removeImage($event)"
+                </div>
+              }
+              @case ("datasets") {
+                <div
+                  role="group"
+                  tabindex="-1"
+                  [attr.aria-labelledby]="inputId(field.name) + '-label'"
+                  [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                  [attr.aria-describedby]="describedBy(field.name)"
+                  data-testid="workflow-input-datasets"
+                  class="flex flex-col gap-1 outline-none"
+                >
+                  <div class="composer-head">
+                    <span
+                      [id]="inputId(field.name) + '-label'"
+                      class="composer-label"
+                      >{{ field.label }}</span
+                    >
+                    <span
+                      aria-hidden="true"
+                      class="composer-tag"
+                      [class.composer-tag-optional]="!field.required"
+                      >{{ field.required ? "Required" : "Optional" }}</span
+                    >
+                  </div>
+                  @if (datasetChoices(field).length === 0) {
+                    <p class="m-0 text-[12px] text-fg-muted">
+                      No datasets yet — create one in Datasets first.
+                    </p>
+                  } @else {
+                    <app-dataset-picker
+                      [datasets]="datasetChoices(field)"
+                      [selected]="designer.picked(field.name)"
+                      [invalid]="fieldError(field.name) !== null"
+                      (selectedChange)="designer.setInput(field.name, $event)"
                     />
                   }
-                  @case ("image") {
-                    <div class="flex flex-col gap-1">
-                      <div class="composer-head">
-                        <label
-                          [for]="inputId(field.name)"
-                          class="composer-label"
-                          >{{ field.label }}</label
-                        >
-                        <span
-                          aria-hidden="true"
-                          class="composer-tag"
-                          [class.composer-tag-optional]="!field.required"
-                          >{{ field.required ? "Required" : "Optional" }}</span
-                        >
-                      </div>
-                      <input
-                        type="file"
-                        [id]="inputId(field.name)"
-                        [attr.data-testid]="inputId(field.name)"
-                        [attr.accept]="imageAccept"
-                        [attr.aria-required]="field.required ? 'true' : null"
-                        [attr.aria-invalid]="
-                          fieldError(field.name) ? 'true' : null
-                        "
-                        [attr.aria-describedby]="describedBy(field.name)"
-                        (change)="onImage(field.name, $event)"
-                        class="text-[13px] text-fg file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-[13px] file:text-fg"
-                      />
-                      @if (imagePreview(field.name); as preview) {
-                        <img
-                          [src]="preview"
-                          [alt]="imageName(field.name) || field.label"
-                          [attr.data-testid]="inputId(field.name) + '-preview'"
-                          class="max-h-40 w-auto self-start rounded-md border border-border object-contain"
-                        />
-                      }
-                      @if (field.help) {
-                        <p class="m-0 text-[12px] text-fg-muted">
-                          {{ field.help }}
-                        </p>
-                      }
-                      @if (fieldError(field.name); as message) {
-                        <p
-                          [id]="errorId(field.name)"
-                          [attr.data-testid]="errorId(field.name)"
-                          class="m-0 text-[12px] text-on-danger-soft"
-                        >
-                          {{ message }}
-                        </p>
-                      }
-                    </div>
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
                   }
-                  @case ("textarea") {
-                    <div class="flex flex-col gap-1">
-                      <div class="composer-head">
-                        <label
-                          [for]="inputId(field.name)"
-                          class="composer-label"
-                          >{{ field.label }}</label
-                        >
-                        <span
-                          aria-hidden="true"
-                          class="composer-tag"
-                          [class.composer-tag-optional]="!field.required"
-                          >{{ field.required ? "Required" : "Optional" }}</span
-                        >
-                      </div>
-                      <textarea
-                        [id]="inputId(field.name)"
-                        [attr.data-testid]="inputId(field.name)"
-                        [attr.placeholder]="field.placeholder ?? null"
-                        [attr.aria-required]="field.required ? 'true' : null"
-                        [attr.aria-invalid]="
-                          fieldError(field.name) ? 'true' : null
-                        "
-                        [attr.aria-describedby]="describedBy(field.name)"
-                        [value]="designer.inputValue(field.name)"
-                        (input)="onInput(field.name, $event)"
-                        (keydown.enter)="onEnter($event)"
-                        [rows]="isPrompt(field) ? 3 : 2"
-                        class="field resize-y"
-                        [class.border-on-danger-soft]="!!fieldError(field.name)"
-                      ></textarea>
-                      @if (fieldError(field.name); as message) {
-                        <p
-                          [id]="errorId(field.name)"
-                          [attr.data-testid]="errorId(field.name)"
-                          class="m-0 text-[12px] text-on-danger-soft"
-                        >
-                          {{ message }}
-                        </p>
-                      }
-                    </div>
-                  }
-                  @default {
-                    <div class="flex flex-col gap-1">
-                      <div class="composer-head">
-                        <label
-                          [for]="inputId(field.name)"
-                          class="composer-label"
-                          >{{ field.label }}</label
-                        >
-                        <span
-                          aria-hidden="true"
-                          class="composer-tag"
-                          [class.composer-tag-optional]="!field.required"
-                          >{{ field.required ? "Required" : "Optional" }}</span
-                        >
-                      </div>
-                      <input
-                        [id]="inputId(field.name)"
-                        [attr.data-testid]="inputId(field.name)"
-                        [type]="field.type === 'number' ? 'number' : 'text'"
-                        [attr.placeholder]="field.placeholder ?? null"
-                        [attr.aria-required]="field.required ? 'true' : null"
-                        [attr.aria-invalid]="
-                          fieldError(field.name) ? 'true' : null
-                        "
-                        [attr.aria-describedby]="describedBy(field.name)"
-                        [value]="designer.inputValue(field.name)"
-                        (input)="onInput(field.name, $event)"
-                        class="field"
-                        [class.border-on-danger-soft]="!!fieldError(field.name)"
-                      />
-                      @if (fieldError(field.name); as message) {
-                        <p
-                          [id]="errorId(field.name)"
-                          [attr.data-testid]="errorId(field.name)"
-                          class="m-0 text-[12px] text-on-danger-soft"
-                        >
-                          {{ message }}
-                        </p>
-                      }
-                    </div>
-                  }
-                }
+                </div>
               }
-            </div>
-          @if (w.runRequirement) {
-            <p
-              data-testid="workflow-run-requirement"
-              class="m-0 text-[12px] text-fg-muted"
-            >
-              {{ w.runRequirement }}
-            </p>
-          }
-          @if (designer.runError(); as message) {
-            <p
-              data-testid="workflow-run-error"
-              role="alert"
-              class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
-            >
-              {{ message }}
-            </p>
-          }
-          <div
-            class="composer-actions flex flex-wrap items-center justify-end gap-2"
-          >
-            <button
-              type="submit"
-              data-testid="workflow-run"
-              [disabled]="designer.running() || !!w.runRequirement"
-              [attr.title]="w.runRequirement ?? null"
-              class="btn btn-primary px-2.5 py-1"
-            >
-              @if (designer.running()) {
-                <lucide-angular
-                  [img]="Loader2"
-                  [size]="14"
-                  class="animate-spin"
+              @case ("dataset") {
+                <div class="flex flex-col gap-1">
+                  <div class="composer-head">
+                    <label [for]="inputId(field.name)" class="composer-label">{{
+                      field.label
+                    }}</label>
+                    <span
+                      aria-hidden="true"
+                      class="composer-tag"
+                      [class.composer-tag-optional]="!field.required"
+                      >{{ field.required ? "Required" : "Optional" }}</span
+                    >
+                  </div>
+                  <select
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    (change)="onInput(field.name, $event)"
+                    class="field"
+                  >
+                    <!-- Each option marks itself selected: a [value] on the
+                         select would apply before its options exist (a form
+                         opened already holding a dataset, e.g. Run again). -->
+                    <option
+                      value=""
+                      [selected]="designer.inputValue(field.name) === ''"
+                    >
+                      Select a dataset
+                    </option>
+                    @for (
+                      dataset of datasetChoices(field);
+                      track dataset.name
+                    ) {
+                      <option
+                        [value]="dataset.name"
+                        [selected]="
+                          dataset.name === designer.inputValue(field.name)
+                        "
+                      >
+                        {{ dataset.name }}
+                      </option>
+                    }
+                  </select>
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+              @case ("artifact") {
+                <div class="flex flex-col gap-1">
+                  <div class="composer-head">
+                    <label [for]="inputId(field.name)" class="composer-label">{{
+                      field.label
+                    }}</label>
+                    <span
+                      aria-hidden="true"
+                      class="composer-tag"
+                      [class.composer-tag-optional]="!field.required"
+                      >{{ field.required ? "Required" : "Optional" }}</span
+                    >
+                  </div>
+                  <select
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    (change)="onArtifact(field, $event)"
+                    class="field"
+                  >
+                    <option
+                      value=""
+                      [selected]="designer.inputValue(field.name) === ''"
+                    >
+                      {{
+                        field.requiredWithout
+                          ? "None — upload an image"
+                          : "Select a saved dashboard"
+                      }}
+                    </option>
+                    @for (
+                      artifact of artifactChoices(field);
+                      track artifact.id
+                    ) {
+                      <option
+                        [value]="artifact.id"
+                        [selected]="
+                          artifact.id === designer.inputValue(field.name)
+                        "
+                      >
+                        {{ artifact.name }}
+                      </option>
+                    }
+                  </select>
+                  @if (field.help) {
+                    <p class="m-0 text-[12px] text-fg-muted">
+                      {{ field.help }}
+                    </p>
+                  }
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+              @case ("images") {
+                <app-workflow-run-attachments
+                  [images]="composerThumbs()"
+                  [label]="field.label"
+                  [max]="field.max ?? 4"
+                  [help]="field.help ?? null"
+                  [error]="imagesError()"
+                  (picked)="addImages($event)"
+                  (removed)="removeImage($event)"
                 />
-                <span>Executing…</span>
-              } @else {
-                <lucide-angular [img]="SendHorizontal" [size]="14" />
-                <span>Execute</span>
               }
-            </button>
-          </div>
-        </form>
+              @case ("image") {
+                <div class="flex flex-col gap-1">
+                  <div class="composer-head">
+                    <label [for]="inputId(field.name)" class="composer-label">{{
+                      field.label
+                    }}</label>
+                    <span
+                      aria-hidden="true"
+                      class="composer-tag"
+                      [class.composer-tag-optional]="!field.required"
+                      >{{ field.required ? "Required" : "Optional" }}</span
+                    >
+                  </div>
+                  <input
+                    type="file"
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [attr.accept]="imageAccept"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    (change)="onImage(field.name, $event)"
+                    class="text-[13px] text-fg file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-[13px] file:text-fg"
+                  />
+                  @if (imagePreview(field.name); as preview) {
+                    <img
+                      [src]="preview"
+                      [alt]="imageName(field.name) || field.label"
+                      [attr.data-testid]="inputId(field.name) + '-preview'"
+                      class="max-h-40 w-auto self-start rounded-md border border-border object-contain"
+                    />
+                  }
+                  @if (field.help) {
+                    <p class="m-0 text-[12px] text-fg-muted">
+                      {{ field.help }}
+                    </p>
+                  }
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+              @case ("textarea") {
+                <div class="flex flex-col gap-1">
+                  <div class="composer-head">
+                    <label [for]="inputId(field.name)" class="composer-label">{{
+                      field.label
+                    }}</label>
+                    <span
+                      aria-hidden="true"
+                      class="composer-tag"
+                      [class.composer-tag-optional]="!field.required"
+                      >{{ field.required ? "Required" : "Optional" }}</span
+                    >
+                  </div>
+                  <textarea
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [attr.placeholder]="field.placeholder ?? null"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    [value]="designer.inputValue(field.name)"
+                    (input)="onInput(field.name, $event)"
+                    (keydown.enter)="onEnter($event)"
+                    [rows]="isPrompt(field) ? 3 : 2"
+                    class="field resize-y"
+                    [class.border-on-danger-soft]="!!fieldError(field.name)"
+                  ></textarea>
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+              @default {
+                <div class="flex flex-col gap-1">
+                  <div class="composer-head">
+                    <label [for]="inputId(field.name)" class="composer-label">{{
+                      field.label
+                    }}</label>
+                    <span
+                      aria-hidden="true"
+                      class="composer-tag"
+                      [class.composer-tag-optional]="!field.required"
+                      >{{ field.required ? "Required" : "Optional" }}</span
+                    >
+                  </div>
+                  <input
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [type]="field.type === 'number' ? 'number' : 'text'"
+                    [attr.placeholder]="field.placeholder ?? null"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    [value]="designer.inputValue(field.name)"
+                    (input)="onInput(field.name, $event)"
+                    class="field"
+                    [class.border-on-danger-soft]="!!fieldError(field.name)"
+                  />
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+            }
+          }
+        </div>
+        @if (w.runRequirement) {
+          <p
+            data-testid="workflow-run-requirement"
+            class="m-0 text-[12px] text-fg-muted"
+          >
+            {{ w.runRequirement }}
+          </p>
+        }
+        @if (designer.runError(); as message) {
+          <p
+            data-testid="workflow-run-error"
+            role="alert"
+            class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+          >
+            {{ message }}
+          </p>
+        }
+        <div
+          class="composer-actions flex flex-wrap items-center justify-end gap-2"
+        >
+          <button
+            type="submit"
+            data-testid="workflow-run"
+            [disabled]="designer.running() || !!w.runRequirement"
+            [attr.title]="w.runRequirement ?? null"
+            class="btn btn-primary px-2.5 py-1"
+          >
+            @if (designer.running()) {
+              <lucide-angular
+                [img]="Loader2"
+                [size]="14"
+                class="animate-spin"
+              />
+              <span>Executing…</span>
+            } @else {
+              <lucide-angular [img]="SendHorizontal" [size]="14" />
+              <span>Execute</span>
+            }
+          </button>
+        </div>
+      </form>
     </div>
   }
 

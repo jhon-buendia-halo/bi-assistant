@@ -108,7 +108,7 @@
                         [attr.data-tool]="step.tool"
                         [attr.data-state]="step.state"
                         [title]="title(step)"
-                        (click)="openQuery.emit()"
+                        (click)="pick(step, $event)"
                       >
                         <ng-container
                           [ngTemplateOutlet]="line"
@@ -137,7 +137,7 @@
                   type="button"
                   class="w-fit text-[12px] text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
                   data-testid="workflow-run-relay-queries"
-                  (click)="openQuery.emit()"
+                  (click)="pick(firstQuery(item), $event)"
                 >
                   {{ queriesLink(item.teammate.name, item.queries) }}
                 </button>

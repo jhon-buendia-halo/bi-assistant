@@ -3,7 +3,12 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  TestBed,
+  fakeAsync,
+  tick,
+} from '@angular/core/testing';
 import { WorkflowDetail } from '../../models/workflow.model';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { FIXTURE_WORKFLOW } from '../workflow-node-dialog/workflow-node.testing';
@@ -29,9 +34,7 @@ const THREE_STEPS: WorkflowDetail = {
   agents: [],
   stepCount: 3,
   trigger: 'run',
-  input: [
-    { name: 'text', label: 'Text', type: 'textarea', required: true },
-  ],
+  input: [{ name: 'text', label: 'Text', type: 'textarea', required: true }],
   datasets: [],
   missingDatasets: [],
   starterQuestions: [],
@@ -82,7 +85,9 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Loading user journey…');
     http
-      .expectOne((r) => r.url.endsWith(`/workflows/${encodeURIComponent(workflow.id)}`))
+      .expectOne((r) =>
+        r.url.endsWith(`/workflows/${encodeURIComponent(workflow.id)}`),
+      )
       .flush(workflow);
     fixture.detectChanges();
   }
@@ -97,9 +102,9 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(nav.textContent?.replace(/\s+/g, ' ').trim()).toBe(
       'User journeys / Three steps',
     );
-    expect(nav.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe(
-      'Three steps',
-    );
+    expect(
+      nav.querySelector('[aria-current="page"]')?.textContent?.trim(),
+    ).toBe('Three steps');
     q('workflow-breadcrumb')!.click();
     expect(events).toEqual(['back']);
     expect(q('workflow-detail-name')?.tagName).toBe('H1');
@@ -112,9 +117,9 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(text('workflow-detail-kind')).toBe('3 steps');
     expect(q('workflow-canvas')).not.toBeNull();
     expect(
-      Array.from(el.querySelectorAll('[data-testid="workflow-node-title"]')).map((n) =>
-        n.textContent?.trim(),
-      ),
+      Array.from(
+        el.querySelectorAll('[data-testid="workflow-node-title"]'),
+      ).map((n) => n.textContent?.trim()),
     ).toEqual(['Clean text', 'Count words', 'Format result']);
   });
 
@@ -122,7 +127,9 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     open(THREE_STEPS);
     expect(q('workflow-start-chat')).toBeNull();
     expect(text('workflow-execute')).toBe('Execute user journey');
-    expect(el.querySelector('header [data-testid="workflow-execute"]')).toBeNull();
+    expect(
+      el.querySelector('header [data-testid="workflow-execute"]'),
+    ).toBeNull();
     designer.stateOpen.set(false);
     designer.setInput('text', 'a b');
     q('workflow-execute')!.click();
@@ -137,8 +144,18 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     open({
       ...V2,
       input: [
-        { name: 'question', label: 'Question', type: 'textarea', required: true },
-        { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
+        {
+          name: 'question',
+          label: 'Question',
+          type: 'textarea',
+          required: true,
+        },
+        {
+          name: 'datasets',
+          label: 'Datasets',
+          type: 'datasets',
+          required: true,
+        },
       ],
     });
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
@@ -155,33 +172,47 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     fixture.detectChanges();
     expect(designer.selectedStepId()).toBe('count-words');
     expect(events).toEqual([]);
-    expect(q('workflow-node-count-words')?.getAttribute('aria-pressed')).toBe('true');
+    expect(q('workflow-node-count-words')?.getAttribute('aria-pressed')).toBe(
+      'true',
+    );
     expect(q('workflow-ndv')).toBeNull();
 
     const canvas = q('workflow-canvas')!;
-    canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
-    canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, button: 0 }),
+    );
+    canvas.dispatchEvent(
+      new PointerEvent('pointerup', { bubbles: true, button: 0 }),
+    );
     fixture.detectChanges();
     expect(designer.selectedStepId()).toBeNull();
-    expect(q('workflow-node-count-words')?.getAttribute('aria-pressed')).toBe('false');
+    expect(q('workflow-node-count-words')?.getAttribute('aria-pressed')).toBe(
+      'false',
+    );
     expect(events).toEqual([]);
   });
 
   it('the Run toggle folds the Chat', () => {
     open(THREE_STEPS);
     expect(text('workflow-state-toggle')).toBe('Run');
-    expect(q('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe('true');
+    expect(q('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe(
+      'true',
+    );
     q('workflow-state-toggle')!.click();
     fixture.detectChanges();
     expect(designer.stateOpen()).toBe(false);
-    expect(q('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe('false');
+    expect(q('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe(
+      'false',
+    );
     expect(q('workflow-run-chat')).toBeNull();
     designer.stateOpen.set(true);
   });
 
   it('a double click opens the node dialog; Close returns the focus to the node', fakeAsync(() => {
     open(THREE_STEPS);
-    q('workflow-node-count-words')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    q('workflow-node-count-words')!.dispatchEvent(
+      new MouseEvent('dblclick', { bubbles: true }),
+    );
     fixture.detectChanges();
     expect(designer.openNodeId()).toBe('count-words');
     expect(q('workflow-ndv')?.getAttribute('role')).toBe('dialog');
@@ -202,11 +233,15 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     fixture.detectChanges();
     el = fixture.nativeElement as HTMLElement;
     http
-      .expectOne((r) => r.url.endsWith(`/workflows/${encodeURIComponent(FIXTURE_WORKFLOW.id)}`))
+      .expectOne((r) =>
+        r.url.endsWith(`/workflows/${encodeURIComponent(FIXTURE_WORKFLOW.id)}`),
+      )
       .flush(FIXTURE_WORKFLOW);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
     fixture.detectChanges();
-    q('workflow-node-start')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    q('workflow-node-start')!.dispatchEvent(
+      new MouseEvent('dblclick', { bubbles: true }),
+    );
     fixture.detectChanges();
     expect(text('workflow-ndv-title')).toBe('Start');
     q('workflow-agent-qti')!.click();
@@ -223,15 +258,19 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       workflowName: 'Three steps',
       input: { text: 'a' },
       status: 'success',
-      steps: THREE_STEPS.steps.map((s) => ({ id: s.id, title: s.title, status: 'success' as const })),
+      steps: THREE_STEPS.steps.map((s) => ({
+        id: s.id,
+        title: s.title,
+        status: 'success' as const,
+      })),
       datasets: [],
       startedAt: '2026-11-11T10:00:00.000Z',
     });
     fixture.detectChanges();
     expect(
-      Array.from(el.querySelectorAll('[data-testid="workflow-node-status"]')).map((n) =>
-        n.textContent?.trim(),
-      ),
+      Array.from(
+        el.querySelectorAll('[data-testid="workflow-node-status"]'),
+      ).map((n) => n.textContent?.trim()),
     ).toEqual(['Done', 'Done', 'Done', 'Done', 'Done']);
     expect(text('workflow-state-progress')).toBe('5 of 5 nodes ran');
     expect(text('workflow-state-run-id')).toBe('Execution ID run-1');
@@ -250,7 +289,9 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     fixture.detectChanges();
     el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Workflow "nope" not found');
-    expect(el.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe('nope');
+    expect(el.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe(
+      'nope',
+    );
 
     fixture.destroy();
     open(THREE_STEPS);
@@ -294,7 +335,14 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
         role: 'assistant',
         content: 'Done',
         at: '2026-11-15T10:00:01.000Z',
-        data: [{ tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, rows: [{ n: 1 }] }],
+        data: [
+          {
+            tool: 'run_readonly_sql',
+            input: 'select 1',
+            rowCount: 1,
+            rows: [{ n: 1 }],
+          },
+        ],
       },
     });
     fixture.detectChanges();
@@ -311,7 +359,9 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(designer.runDockMaximized()).toBe(false);
     const sheet = q('query-inspector-sheet')!;
     expect(sheet.contains(q('query-inspector'))).toBe(true);
-    expect(sheet.parentElement).toBe(el.querySelector('app-workflow-canvas')!.parentElement);
+    expect(sheet.parentElement).toBe(
+      el.querySelector('app-workflow-canvas')!.parentElement,
+    );
     expect(q('query-inspector')!.getAttribute('role')).toBe('dialog');
 
     q('query-inspector')!.dispatchEvent(
@@ -342,7 +392,14 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
           role: 'assistant',
           content: 'Two words',
           at: '2026-11-15T10:00:01.000Z',
-          data: [{ tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, rows: [{ n: 1 }] }],
+          data: [
+            {
+              tool: 'run_readonly_sql',
+              input: 'select 1',
+              rowCount: 1,
+              rows: [{ n: 1 }],
+            },
+          ],
         },
       });
 
@@ -352,10 +409,14 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       const group = el.querySelector('header [data-testid="workflow-view"]')!;
       expect(group.getAttribute('role')).toBe('group');
       expect(
-        el.querySelector(`#${group.getAttribute('aria-labelledby')}`)?.textContent?.trim(),
+        el
+          .querySelector(`#${group.getAttribute('aria-labelledby')}`)
+          ?.textContent?.trim(),
       ).toBe('View');
       expect(
-        Array.from(group.querySelectorAll('button')).map((b) => b.textContent?.trim()),
+        Array.from(group.querySelectorAll('button')).map((b) =>
+          b.textContent?.trim(),
+        ),
       ).toEqual(['Business', 'Builder']);
       expect(pressed('workflow-view-business')).toBe('true');
       expect(pressed('workflow-view-builder')).toBe('false');
@@ -364,10 +425,17 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       const view = q('workflow-business-view')!;
       const chat = view.querySelector('[data-testid="workflow-run-chat"]')!;
       const log = chat.querySelector('[data-testid="workflow-run-chat-log"]')!;
-      const composer = chat.querySelector('[data-testid="workflow-run-composer"]')!;
+      const composer = chat.querySelector(
+        '[data-testid="workflow-run-composer"]',
+      )!;
       // A chat: the conversation, then the composer at the bottom.
-      expect(log.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(chat.querySelector('[data-testid="workflow-input-text"]')).not.toBeNull();
+      expect(
+        log.compareDocumentPosition(composer) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        chat.querySelector('[data-testid="workflow-input-text"]'),
+      ).not.toBeNull();
       expect(text('workflow-run-empty')).toContain('Type a question below.');
       // No run yet: nothing to open in Builder.
       expect(q('workflow-run-open-builder')).toBeNull();
@@ -395,7 +463,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       expect(localStorage.getItem(WORKFLOW_VIEW_STORAGE_KEY)).toBe('business');
     });
 
-    it('Business shows the answer and the agents\' thread but not How it ran; a query still opens in the sheet', fakeAsync(() => {
+    it("Business shows the answer and the agents' thread but not How it ran; a query still opens in the sheet", fakeAsync(() => {
       localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'business');
       open(THREE_STEPS);
       answeredRun();
@@ -403,7 +471,9 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       tick();
       fixture.detectChanges();
       const view = q('workflow-business-view')!;
-      expect(view.querySelector('[data-testid="run-answer"]')?.textContent).toContain('Two words');
+      expect(
+        view.querySelector('[data-testid="run-answer"]')?.textContent,
+      ).toContain('Two words');
       expect(view.querySelector('app-workflow-run-team')).not.toBeNull();
       expect(view.querySelector('app-workflow-run-story')).toBeNull();
       expect(text('workflow-run-open-builder')).toBe('Open in Builder');
@@ -430,9 +500,10 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       fixture.detectChanges();
       expect(pressed('workflow-view-builder')).toBe('true');
       expect(q('workflow-canvas')).not.toBeNull();
-      expect(q('workflow-run-dock')!.querySelector('[data-testid="run-answer"]')?.textContent).toContain(
-        'Two words',
-      );
+      expect(
+        q('workflow-run-dock')!.querySelector('[data-testid="run-answer"]')
+          ?.textContent,
+      ).toContain('Two words');
       expect(localStorage.getItem(WORKFLOW_VIEW_STORAGE_KEY)).toBe('builder');
 
       // An agent's See its data in the Business view: Builder, with that step's dialog.
@@ -458,7 +529,11 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
         datasets: [],
         startedAt: '2026-11-15T10:01:00.000Z',
         question: 'And per word?',
-        answer: { role: 'assistant', content: 'One each', at: '2026-11-15T10:01:01.000Z' },
+        answer: {
+          role: 'assistant',
+          content: 'One each',
+          at: '2026-11-15T10:01:01.000Z',
+        },
       });
       fixture.detectChanges();
       tick();
@@ -478,7 +553,14 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
             role: 'assistant',
             content: 'Two words',
             at: '2026-11-15T10:00:01.000Z',
-            data: [{ tool: 'run_readonly_sql', input: 'select 2', rowCount: 1, rows: [{ n: 2 }] }],
+            data: [
+              {
+                tool: 'run_readonly_sql',
+                input: 'select 2',
+                rowCount: 1,
+                rows: [{ n: 2 }],
+              },
+            ],
           },
         });
       fixture.detectChanges();
@@ -488,9 +570,11 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       const view = q('workflow-business-view')!;
       const turn = view.querySelector('[data-testid="workflow-turn"]')!;
       expect(turn.getAttribute('data-history-id')).toBe('run-1');
-      expect(turn.querySelector('[data-testid="workflow-turn-question"]')?.textContent?.trim()).toBe(
-        'How many words?',
-      );
+      expect(
+        turn
+          .querySelector('[data-testid="workflow-turn-question"]')
+          ?.textContent?.trim(),
+      ).toBe('How many words?');
       expect(turn.textContent).toContain('Two words');
       // The thread replaces the Follows up on line.
       expect(q('workflow-run-context')).toBeNull();
@@ -502,7 +586,23 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
 
       // An earlier figure opens the query of its own run.
       const earlier = designer.run();
-      designer.openQuery(0, null, { ...earlier!, id: 'run-1', answer: { role: 'assistant', content: 'Two words', at: '', data: [{ tool: 'run_readonly_sql', input: 'select 2', rowCount: 1, rows: [{ n: 2 }] }] } });
+      designer.openQuery(0, null, {
+        ...earlier!,
+        id: 'run-1',
+        answer: {
+          role: 'assistant',
+          content: 'Two words',
+          at: '',
+          data: [
+            {
+              tool: 'run_readonly_sql',
+              input: 'select 2',
+              rowCount: 1,
+              rows: [{ n: 2 }],
+            },
+          ],
+        },
+      });
       fixture.detectChanges();
       tick();
       fixture.detectChanges();

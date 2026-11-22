@@ -1,6 +1,12 @@
 import { WorkflowTeamMember } from '../models/workflow.model';
 import { ActivityStep } from './agent-activity';
-import { RelayHandOff, relayOf, relaySentence } from './team-relay';
+import {
+  RelayHandOff,
+  recordIndexOf,
+  relayOf,
+  relayQueryOf,
+  relaySentence,
+} from './team-relay';
 
 const TEAM: WorkflowTeamMember[] = [
   {
@@ -189,5 +195,57 @@ describe('relayOf (ui.md 4.4b relay)', () => {
     const alone = relayOf([step({ tool: 'skill', agent: AVERY })], TEAM);
     expect(alone.length).toBe(1);
     expect(relaySentence('done', alone)).toBeNull();
+  });
+
+  it("links a teammate's query to its answer record by its SQL, and tells whose it is", () => {
+    const sum = 'SELECT team, SUM(goals)\n  FROM goals GROUP BY team';
+    const items = relayOf(
+      [
+        step({
+          tool: 'answer_from_data',
+          input: 'Pregunta: "¿Qué selección marcó más goles?" y más.',
+          agent: AVERY,
+          teammate: 'insights-analyst',
+        }),
+        step({
+          tool: 'run_readonly_sql',
+          query: true,
+          input: 'SELECT 1',
+          label: 'Check',
+        }),
+        step({
+          tool: 'run_readonly_sql',
+          query: true,
+          input: sum,
+          label: 'Sum',
+        }),
+      ],
+      TEAM,
+    );
+    const data = [
+      { tool: 'run_readonly_sql', input: 'SELECT 1' },
+      // Stored with other whitespace: still the same query.
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT team, SUM(goals) FROM goals GROUP BY team',
+      },
+    ];
+    const sumStep = (items[1] as RelayHandOff).steps[1];
+    expect(recordIndexOf(data, sumStep)).toBe(1);
+    expect(recordIndexOf([], sumStep)).toBe(-1);
+    expect(relayQueryOf(items, data[1])).toEqual({
+      teammate: {
+        key: 'insights-analyst',
+        name: 'Michael',
+        role: 'Insights Analyst',
+      },
+      position: 2,
+      of: 2,
+      asked: '¿Qué selección marcó más goles?',
+    });
+    expect(
+      relayQueryOf(items, { tool: 'run_readonly_sql', input: 'SELECT 2' }),
+    ).toBeNull();
+    expect(relayQueryOf(null, data[0])).toBeNull();
   });
 });

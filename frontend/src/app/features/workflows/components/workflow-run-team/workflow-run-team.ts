@@ -8,7 +8,10 @@ import {
   upNextLine,
 } from '../../services/agent-step-story';
 import { AgentActivity } from '../agent-activity/agent-activity';
-import { WorkflowRunRelay } from '../workflow-run-relay/workflow-run-relay';
+import {
+  RelayQueryOpen,
+  WorkflowRunRelay,
+} from '../workflow-run-relay/workflow-run-relay';
 
 /** One row of the team: an agent, and the handoff into it from the one before. */
 interface TeamRow {
@@ -45,6 +48,8 @@ export class WorkflowRunTeam {
   readonly showWork = input(true);
   /** Open an agent step's node dialog (its data, its queries). */
   readonly openNode = output<string>();
+  /** A teammate's query picked in a relay: it opens in the query inspector. */
+  readonly openQuery = output<{ stepId: string; query: RelayQueryOpen }>();
 
   /** The agents the run reached; none before a run. */
   readonly rows = computed<TeamRow[]>(() => {

@@ -10,7 +10,13 @@ import {
 } from 'lucide-angular';
 import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import { ActivityStep } from '../../services/agent-activity';
-import { RelayItem } from '../../services/team-relay';
+import { RelayHandOff, RelayItem } from '../../services/team-relay';
+
+/** A query picked in the relay, and what opened it. */
+export interface RelayQueryOpen {
+  step: ActivityStep;
+  opener: Element | null;
+}
 
 /**
  * An orchestrator's work told as a relay (ui.md 4.4b *relay*), under her
@@ -29,8 +35,11 @@ export class WorkflowRunRelay {
   readonly items = input.required<readonly RelayItem[]>();
   /** She still works: the relay shows; once she is done it folds. */
   readonly live = input(false);
-  /** A query's line, or a teammate's queries link, was used. */
-  readonly openQuery = output<void>();
+  /**
+   * A teammate's query line was used, or their queries link (their first
+   * query): that query opens in the query inspector (ui.md 4.4b *relay*).
+   */
+  readonly openQuery = output<RelayQueryOpen>();
 
   private readonly toggled = signal<boolean | null>(null);
 
@@ -50,6 +59,21 @@ export class WorkflowRunRelay {
     return queries === 1
       ? `See ${name}'s query and data`
       : `See ${name}'s ${queries} queries and data`;
+  }
+
+  /** A query line or link was used: its query, and the element to focus again. */
+  protected pick(step: ActivityStep | undefined, event: Event): void {
+    if (!step) return;
+    this.openQuery.emit({
+      step,
+      opener:
+        event.currentTarget instanceof Element ? event.currentTarget : null,
+    });
+  }
+
+  /** A teammate's first query, which their queries link opens. */
+  protected firstQuery(item: RelayHandOff): ActivityStep | undefined {
+    return item.steps.find((step) => step.query);
   }
 
   protected title(step: ActivityStep): string {
