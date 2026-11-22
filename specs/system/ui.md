@@ -240,15 +240,15 @@ A `section` with `role="dialog"`, `aria-label="Background tasks"` and `data-test
 
 Capability: [workflows](../capabilities/workflows/spec.md) R38. Every chat box SHALL carry the same compact control, in the style of a chat minimap: `app-chat-history-nav` in `shared/components/chat-history-nav/`, shown only when the chat holds two or more messages the user sent. Inputs: the chat's scroll container, the items (`{ id, label }`, oldest first), a landmark label and a test-id prefix; output `picked`. Each user message element in the chat carries `data-history-id="<id>"`.
 
-- **Ticks** (`<prefix>-nav`, a `nav` with the landmark label): a column of 24 x 3 px rounded ticks 7 px apart (`<prefix>-tick`, `aria-hidden`; `border-strong`, the message in view `fg-muted`), on the chat's edge.
-- **List** (`<prefix>-list`): on hover or focus-within, a 288 px popover to the left of the ticks (`surface`, `border`, radius 12, shadow, 6 px padding, 150 ms fade, never wider than the window minus 5 rem), at most 18 rem high with its own scroll, one button per user message (`<prefix>-item-<n>`, 13 px `fg`, one line cut with an ellipsis, the full text as its title, radius 8, oldest at the top and newest at the bottom, the one in view `surface-selected` with `aria-current="true"`). Buttons are reached by Tab; picking one scrolls the chat to that message.
+- **Ticks** (`<prefix>-nav`, a `nav` with the landmark label): a column of 20 x 3 px rounded ticks 7 px apart (`<prefix>-tick`, `aria-hidden`; `border-strong`, the message in view `fg-strong`) in a radius-8 box (`surface-muted` on hover), pinned at the **bottom right** of the chat's scrolling area, as Conductor's chat does.
+- **List** (`<prefix>-list`): on hover or focus-within, a 320 px popover to the left of the ticks, its bottom on theirs so it grows upward (`surface`, `border`, radius 12, shadow, 6 px padding, 150 ms fade, never wider than the window minus 5 rem), at most 24 rem (and 60% of the window) high with its own scroll, one button per user message (`<prefix>-item-<n>`, 14 px `fg`, 10 x 14 px padding, one line cut with an ellipsis, the full text as its title, radius 8, oldest at the top and newest at the bottom, the one in view `surface-selected`, medium `fg-strong`, with `aria-current="true"`). When it opens, the list scrolls the one in view to its middle. Buttons are reached by Tab; picking one scrolls the chat to that message.
 - **In view**: the last message whose top has passed a third of the chat's height, or the last message when the chat is scrolled to its end. It follows scrolling, resizing and added messages.
 
-Hosts (the nav is pinned inside the chat's right edge unless noted):
+Hosts (the nav is pinned at the bottom right inside the chat's scrolling area unless noted):
 
 | Host | Prefix | Landmark label |
 |---|---|---|
-| Business view conversation (4.4b; outside the chat column's right edge) | `workflow-conversation` | Conversation |
+| Run panel conversation (4.4b): the Business view (outside the chat column's right edge) and the Builder's Run panel of a threaded workflow (Avery's) | `workflow-conversation` | Conversation |
 | Chat with a step's agent persona (`workflow-node-chat`, 4.4b) | `node-chat-history` | Chat history |
 | Past chat (`session-chat`, 4.12) | `session-chat-history` | Chat history |
 

@@ -2,12 +2,14 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
   input,
   output,
   signal,
+  viewChild,
 } from '@angular/core';
 
 /** One message the user sent, as the navigation lists it. */
@@ -20,8 +22,9 @@ export interface ChatHistoryItem {
 /**
  * Chat-history navigation, "Conductor style" (ui.md, Chat-history navigation;
  * workflows R38). One short tick per message the user sent, on the chat's
- * edge, the one in view brighter. Hovering it, or tabbing into it, opens the
- * list of those messages (oldest first); picking one scrolls the chat to it.
+ * edge, at the bottom right, the one in view brighter. Hovering it, or tabbing
+ * into it, opens the list of those messages (oldest first), growing up from
+ * the ticks with the one in view in sight; picking one scrolls the chat to it.
  * Shown only when the chat holds two or more user messages.
  *
  * The host passes its scroll container and marks each user message element
@@ -35,20 +38,24 @@ export interface ChatHistoryItem {
       <nav
         [attr.aria-label]="label()"
         [attr.data-testid]="testIdPrefix() + '-nav'"
-        class="group relative flex flex-col items-end gap-[7px] px-1 py-2"
+        class="group relative flex flex-col items-end gap-[7px] rounded-lg px-1.5 py-2 transition-colors hover:bg-surface-muted"
+        (mouseenter)="reveal()"
+        (focusin)="reveal()"
       >
         @for (item of items(); track item.id) {
           <span
             aria-hidden="true"
             [attr.data-testid]="testIdPrefix() + '-tick'"
-            class="block h-[3px] w-6 rounded-full transition-colors"
-            [class.bg-fg-muted]="item.id === current()"
+            class="block h-[3px] w-5 rounded-full transition-colors"
+            [class.bg-fg-strong]="item.id === current()"
             [class.bg-border-strong]="item.id !== current()"
           ></span>
         }
+        <!-- The list grows up from the ticks, the message in view kept in sight -->
         <ul
+          #list
           [attr.data-testid]="testIdPrefix() + '-list'"
-          class="pointer-events-none absolute top-0 right-full z-30 m-0 mr-2 flex max-h-72 w-72 max-w-[calc(100vw-5rem)] list-none flex-col gap-0.5 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 opacity-0 shadow-lg transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
+          class="pointer-events-none absolute right-full bottom-0 z-30 m-0 mr-2 flex max-h-[min(24rem,60vh)] w-80 max-w-[calc(100vw-5rem)] list-none flex-col gap-0.5 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 opacity-0 shadow-lg transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
         >
           @for (item of items(); track item.id) {
             <li>
@@ -58,8 +65,10 @@ export interface ChatHistoryItem {
                 [attr.aria-current]="item.id === current() ? 'true' : null"
                 [title]="item.label"
                 (click)="pick(item.id)"
-                class="block w-full truncate rounded-lg px-3 py-2 text-left text-[13px] text-fg hover:bg-surface-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+                class="block w-full truncate rounded-lg px-3.5 py-2.5 text-left text-[14px] leading-5 text-fg hover:bg-surface-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
                 [class.bg-surface-selected]="item.id === current()"
+                [class.font-medium]="item.id === current()"
+                [class.text-fg-strong]="item.id === current()"
               >
                 {{ item.label }}
               </button>
@@ -137,6 +146,18 @@ export class ChatHistoryNav {
       active = items.at(-1)?.id ?? active;
     }
     this.active.set(active);
+  }
+
+  private readonly list = viewChild<ElementRef<HTMLUListElement>>('list');
+
+  /** The list opens: the message in view is scrolled into sight in it. */
+  protected reveal(): void {
+    const list = this.list()?.nativeElement;
+    const at = this.items().findIndex((item) => item.id === this.current());
+    const row = at < 0 ? null : list?.children.item(at);
+    if (!list || !(row instanceof HTMLElement)) return;
+    const top = row.offsetTop - list.clientHeight / 2 + row.offsetHeight / 2;
+    list.scrollTop = Math.max(0, top);
   }
 
   protected pick(id: string): void {

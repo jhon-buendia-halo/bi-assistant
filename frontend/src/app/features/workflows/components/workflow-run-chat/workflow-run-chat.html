@@ -153,6 +153,8 @@
     </p>
   }
 
+  <!-- The log and, at its bottom right, the conversation navigation (R38). -->
+  <div class="relative flex min-h-0 flex-1 flex-col">
   <!-- Focusable: it scrolls (axe scrollable-region-focusable). -->
   <section
     #log
@@ -545,6 +547,22 @@
       </div>
     }
   </section>
+  @if (navItems().length > 0) {
+    <!-- The conversation navigation (R38): a tick per question at the log's
+         bottom right (outside the column in the Business view), the list of
+         questions growing up from them on hover or focus -->
+    <app-chat-history-nav
+      class="absolute bottom-3 z-20"
+      [class.right-1]="!business()"
+      [class.-right-12]="business()"
+      [container]="logElement()"
+      [items]="navItems()"
+      label="Conversation"
+      testIdPrefix="workflow-conversation"
+      (picked)="onHistoryPicked()"
+    />
+  }
+  </div>
 
   @if (averyOpen() && designer.waitingFor() === null) {
     <!-- Avery's conversation never ends: a compact message box under the
@@ -975,16 +993,4 @@
     </div>
   }
 
-  @if (navItems().length > 0) {
-    <!-- The conversation navigation (R38): a tick per question on the chat's
-         right edge, the list of questions on hover or focus -->
-    <app-chat-history-nav
-      class="absolute top-12 -right-12 z-20"
-      [container]="logElement()"
-      [items]="navItems()"
-      label="Conversation"
-      testIdPrefix="workflow-conversation"
-      (picked)="onHistoryPicked()"
-    />
-  }
 }

@@ -426,7 +426,6 @@ export class WorkflowRunChat {
 
   /** The conversation navigation's questions; empty under two (R38). */
   protected readonly navItems = computed<ChatHistoryItem[]>(() => {
-    if (!this.business()) return [];
     const current = this.designer.shownQuestion();
     const items: ChatHistoryItem[] = this.conversation
       .earlier()
