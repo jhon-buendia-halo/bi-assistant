@@ -118,6 +118,7 @@ The workflow decides which steps run; the playbook says how to do this kind of t
 | Recording what shipped, the PR, post-merge cleanup | [`ship`](.claude/playbooks/ship.md) |
 | Pausing work, or picking up a previous session's work | [`session-handoff`](.claude/playbooks/session-handoff.md) |
 | Suggesting options for a change that can be seen (a screen, dialog, layout, chart) | [`visual-options`](.claude/playbooks/visual-options.md) |
+| Finishing any new feature or change: images that prove it, shown in the chat | [`show-the-change`](.claude/playbooks/show-the-change.md) |
 
 ## Process documents
 
