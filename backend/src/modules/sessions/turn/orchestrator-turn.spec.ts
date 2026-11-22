@@ -28,6 +28,7 @@ import type {
 } from '../../../mastra/workflows/answer-business-question.steps';
 import { orchestratorTools as avertTools } from '../../../mastra/tools/orchestrator.tools';
 import {
+  MICHAEL_ALONE_LINE,
   ORCHESTRATOR_HISTORY_MESSAGES,
   orchestratorState,
   orchestratorTools,
@@ -419,6 +420,64 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
     expect(await runOrchestratorTurn(stopped.deps, { question: 'q' })).toEqual({
       answer: 'partial',
       stopped: true,
+    });
+  });
+
+  it('Avery + Michael (5.23): offers only answer_from_data, and every team tool with no run', () => {
+    const alone = new RequestContext();
+    alone.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, {
+      hasImages: false,
+      buildsVisual: false,
+      tools: ['answer_from_data', 'ask_clarification'],
+    });
+    expect(Object.keys(avertTools(alone))).toEqual(['answer_from_data']);
+    expect(Object.keys(avertTools(new RequestContext()))).toEqual([
+      'read_reference_images',
+      'plan_analysis',
+      'analyse_data',
+      'answer_from_data',
+      'write_answer',
+      'build_visual',
+    ]);
+  });
+
+  it('Avery + Michael (5.23): Michael works from her brief alone, and his reply is the answer, then her closing words', async () => {
+    const { deps, members } = fixture(
+      async (tools) => {
+        const said = await tools.answerFromData(
+          'How many matches were played? Count every match.',
+        );
+        expect(said).toContain(
+          "Michael's reply above is the answer the user reads: do not repeat it.",
+        );
+        return [text('Want it by stage?')];
+      },
+      {
+        deps: {
+          tools: ['answer_from_data', 'ask_clarification'],
+          earlierQueries: [
+            { ref: 'Q1', sql: 'SELECT 1', rationale: 'Earlier.' },
+          ],
+        },
+      },
+    );
+    const done = await runOrchestratorTurn(deps, { question: 'How many?' });
+    // No Olivia: no plan call, no plan block; her brief, then the alone line.
+    expect(members.plan).not.toHaveBeenCalled();
+    const call = members.analyse.mock.calls[0][0];
+    expect(call.planBlock).not.toContain('Analysis plan for this turn');
+    expect(call.planBlock).toContain(
+      'Brief from Avery, the Chief of Staff: How many matches were played? Count every match.',
+    );
+    expect(call.planBlock).toContain(MICHAEL_ALONE_LINE);
+    expect(call.planBlock).toContain(
+      'Queries behind the answer the user just read',
+    );
+    expect(call.plan).toMatchObject({ question: 'How many?', measures: [] });
+    expect(members.writeAnswer).not.toHaveBeenCalled();
+    expect(done).toEqual({
+      answer: 'There are 64 matches.\n\nWant it by stage?',
+      stopped: false,
     });
   });
 

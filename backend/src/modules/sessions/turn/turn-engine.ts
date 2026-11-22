@@ -86,6 +86,7 @@ import {
   ORCHESTRATED_ANSWER_RUNTIME_KEY,
   ORCHESTRATED_ANSWER_WORKFLOW_ID,
   ORCHESTRATOR_MODEL,
+  orchestratorTeamOf,
   type OrchestratedAnswerRuntime,
 } from '../../../mastra/workflows/orchestrated-answer.steps';
 import {
@@ -1277,6 +1278,8 @@ export class TurnEngine {
                 ...(session.contextQueries?.length
                   ? { earlierQueries: session.contextQueries }
                   : {}),
+                // Her team in this workflow (Avery + Michael: Michael alone).
+                tools: orchestratorTeamOf(workflow.id).tools,
                 ...(orchestratorModel ? { orchestratorModel } : {}),
                 ...(orchestratorProviderOptions
                   ? { providerOptions: orchestratorProviderOptions }

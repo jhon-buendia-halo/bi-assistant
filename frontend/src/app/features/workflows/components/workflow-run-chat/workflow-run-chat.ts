@@ -87,8 +87,8 @@ import {
 
 /** The workflow a saved dashboard is mapped in, and its artifact field. */
 const MAP_WORKFLOW_ID = 'map-dashboard-data';
-/** The never-ending conversation with Avery, the Chief of Staff. */
-const AVERY_WORKFLOW_ID = 'orchestrated-answer';
+/** Avery, the Chief of Staff: a workflow she runs is a never-ending conversation. */
+const AVERY_AGENT_KEY = 'chief-of-staff';
 const MAP_ARTIFACT_FIELD = 'artifact';
 
 /** The composer's controls Execute workflow may focus, in order. */
@@ -223,8 +223,13 @@ export class WorkflowRunChat {
   protected readonly threaded = computed(
     () => this.business() || this.isAveryWorkflow(),
   );
+  // Answer a Business Question (orchestrated) and (Avery + Michael): any
+  // workflow whose step runs Avery (workflows R45).
   private readonly isAveryWorkflow = computed(
-    () => this.designer.workflow()?.id === AVERY_WORKFLOW_ID,
+    () =>
+      this.designer
+        .workflow()
+        ?.steps.some((step) => step.agent?.key === AVERY_AGENT_KEY) ?? false,
   );
 
   /** The shown run is an ended, not archived run of Avery's conversation. */

@@ -7,6 +7,8 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import {
+  MICHAEL_ANSWER_TOOL,
+  ORCHESTRATOR_TOOL_NAMES,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   type OrchestratorToolsRuntime,
 } from '../workflows/orchestrated-answer.steps';
@@ -75,6 +77,25 @@ export const analyseDataTool = createTool({
   }),
 });
 
+export const answerFromDataTool = createTool({
+  id: MICHAEL_ANSWER_TOOL,
+  description:
+    "Michael, Insights Analyst, working alone with you: plans the analysis from your brief, runs read-only SQL over the user's datasets and writes the answer the user reads, every figure linked to its query. Returns his queries, their checks and his answer. At most twice per run.",
+  inputSchema: z.object({
+    brief: z
+      .string()
+      .describe(
+        "What Michael must answer: first the user's question restated so it stands alone (on a follow-up, resolved from the conversation), then the measures, the scope and anything his answer must say (a tie to name, a limit of the data to state first). On a second call, exactly what to fix.",
+      ),
+  }),
+  outputSchema: reply,
+  execute: async (input, context) => ({
+    result: await runtimeOf(context?.requestContext).answerFromData(
+      input.brief,
+    ),
+  }),
+});
+
 export const writeAnswerTool = createTool({
   id: 'write_answer',
   description:
@@ -110,18 +131,34 @@ export const buildVisualTool = createTool({
   }),
 });
 
-/** Avery's team, by tool id, without Ryan when the run builds no visual. */
+/** Every team tool Avery has, by tool id (`ask_clarification` is added by her agent). */
+const TEAM_TOOLS = {
+  read_reference_images: readReferenceImagesTool,
+  plan_analysis: planAnalysisTool,
+  analyse_data: analyseDataTool,
+  [MICHAEL_ANSWER_TOOL]: answerFromDataTool,
+  write_answer: writeAnswerTool,
+  build_visual: buildVisualTool,
+};
+
+/**
+ * Avery's team in a run, by tool id: her workflow's tools (agents.md 2.21,
+ * 5.23), without Ryan when the run builds no visual. With no run (her
+ * agent page, a tool's details), every tool she can have.
+ */
 export function orchestratorTools(requestContext: unknown) {
   const runtime = (requestContext as ContextLike | undefined)?.get(
     ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   ) as OrchestratorToolsRuntime | undefined;
-  return {
-    read_reference_images: readReferenceImagesTool,
-    plan_analysis: planAnalysisTool,
-    analyse_data: analyseDataTool,
-    write_answer: writeAnswerTool,
-    ...(runtime?.buildsVisual === false
-      ? {}
-      : { build_visual: buildVisualTool }),
-  };
+  // A run that names no tools is her whole team's.
+  const offered = runtime
+    ? (runtime.tools ?? ORCHESTRATOR_TOOL_NAMES)
+    : undefined;
+  return Object.fromEntries(
+    Object.entries(TEAM_TOOLS).filter(
+      ([id]) =>
+        (!offered || offered.includes(id)) &&
+        !(id === 'build_visual' && runtime?.buildsVisual === false),
+    ),
+  ) as Partial<typeof TEAM_TOOLS>;
 }

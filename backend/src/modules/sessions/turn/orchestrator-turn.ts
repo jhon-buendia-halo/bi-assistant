@@ -36,6 +36,7 @@ import {
 import {
   ORCHESTRATOR_MAX_STEPS,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+  orchestratorTeamOf,
   type OrchestratorToolsRuntime,
 } from '../../../mastra/workflows/orchestrated-answer.steps';
 import type { ReadImagesOutcome } from '../../../mastra/workflows/read-images.steps';
@@ -123,6 +124,28 @@ export interface OrchestratorTurnDeps {
     ExplorableQuery,
     'ref' | 'sql' | 'rationale'
   >[];
+  /**
+   * Avery's tools in this run, her workflow's (`orchestratorTeamOf`); her
+   * whole team's when absent.
+   */
+  tools?: readonly string[];
+}
+
+/** Michael on his own (Avery + Michael): told he plans and writes the answer. */
+export const MICHAEL_ALONE_LINE =
+  'You work alone with Avery in this run: no one plans before you and no one writes after you. Plan the analysis yourself from her brief, and write your reply as the answer the user reads.';
+
+/** The plan Michael works from on his own: the user's question, nothing planned. */
+function briefPlan(question: string): AnalysisPlan {
+  return {
+    question,
+    measures: [],
+    entities: [],
+    scope: '',
+    assumptions: [],
+    needsClarification: false,
+    clarification: null,
+  };
 }
 
 /** At most this many earlier queries, each SQL cut at this length, reach Michael. */
@@ -177,7 +200,7 @@ function workSoFar(state: OrchestratorState): string | undefined {
       analysisReview({ queries: state.queries, text: state.analystNote }),
     );
   }
-  if (state.answer) lines.push('Jessica already wrote the answer.');
+  if (state.answer) lines.push('The answer the user reads is already written.');
   if (state.visual) lines.push(`Ryan: ${state.visual}`);
   return lines.length
     ? ['Work done so far in this run (do not redo it):', ...lines].join('\n')
@@ -239,6 +262,68 @@ export function orchestratorTools(
     state.plan = planned.plan;
     return planForAvery(planned.plan);
   };
+  /**
+   * One analysis by Michael. With the team, he follows Olivia's plan (made
+   * first when there is none) and Jessica writes the answer. `alone` (Avery
+   * + Michael, agents.md 5.23): no plan but Avery's brief, and his reply is
+   * the answer the user reads.
+   */
+  const analysis = async (brief: string, alone: boolean): Promise<string> => {
+    if (state.attempts >= 2) {
+      return alone
+        ? 'Michael already answered twice in this run: close from his answer.'
+        : 'Michael already analysed twice in this run: write the answer from his results.';
+    }
+    if (!alone && !state.plan) await plan();
+    const { catalog, columns } = await catalogOf();
+    const current = alone ? (state.plan ??= briefPlan(question)) : state.plan!;
+    state.attempts += 1;
+    const attempt: AnalyseAttempt = await team.analyse({
+      question,
+      catalog,
+      catalogBlock: planCatalogBlock(catalog, columns, { question }),
+      plan: current,
+      attempt: state.attempts,
+      planBlock: [
+        ...(alone ? [] : [analysePlanBlock(current), '']),
+        `Brief from Avery, the Chief of Staff: ${brief}`,
+        ...(alone ? ['', MICHAEL_ALONE_LINE] : []),
+        ...(earlier ? ['', earlier] : []),
+      ].join('\n'),
+      ...(answered ? { answered } : {}),
+      imageNotes: state.imageNotes,
+    });
+    if (attempt.clarification) {
+      return [
+        `Michael needs an answer before he can go on: ${attempt.clarification.question}`,
+        ...attempt.clarification.options.map((option) => `- ${option}`),
+      ].join('\n');
+    }
+    const { findings } = validateAttempt({
+      plan: current,
+      calls: attempt.calls,
+      queries: attempt.queries,
+    });
+    // The kept queries: this attempt's, after any earlier one's.
+    state.queries = [...state.queries, ...attempt.queries];
+    state.findings = findings;
+    state.analystNote = attempt.text;
+    // On his own, his reply is the run's answer (the last one he wrote).
+    if (alone && attempt.text.trim()) state.answer = attempt.text;
+    return [
+      analysisReview({ queries: attempt.queries, text: attempt.text }),
+      '',
+      findingsForAvery(findings),
+      ...(alone
+        ? [
+            '',
+            state.answer
+              ? "Michael's reply above is the answer the user reads: do not repeat it."
+              : 'Michael wrote no answer.',
+          ]
+        : []),
+    ].join('\n');
+  };
   return {
     hasImages: deps.images.length > 0,
     buildsVisual: deps.buildsVisual,
@@ -248,51 +333,10 @@ export function orchestratorTools(
       state.imageNotes = read.stopped ? '' : read.imageNotes;
       return state.imageNotes || 'Zoe found nothing to describe.';
     },
+    tools: deps.tools ?? orchestratorTeamOf(undefined).tools,
     plan: (brief?: string) => plan(brief),
-    analyse: async (brief: string) => {
-      if (state.attempts >= 2) {
-        return 'Michael already analysed twice in this run: write the answer from his results.';
-      }
-      if (!state.plan) await plan();
-      const { catalog, columns } = await catalogOf();
-      const current = state.plan!;
-      state.attempts += 1;
-      const attempt: AnalyseAttempt = await team.analyse({
-        question,
-        catalog,
-        catalogBlock: planCatalogBlock(catalog, columns, { question }),
-        plan: current,
-        attempt: state.attempts,
-        planBlock: [
-          analysePlanBlock(current),
-          '',
-          `Brief from Avery, the Chief of Staff: ${brief}`,
-          ...(earlier ? ['', earlier] : []),
-        ].join('\n'),
-        ...(answered ? { answered } : {}),
-        imageNotes: state.imageNotes,
-      });
-      if (attempt.clarification) {
-        return [
-          `Michael needs an answer before he can go on: ${attempt.clarification.question}`,
-          ...attempt.clarification.options.map((option) => `- ${option}`),
-        ].join('\n');
-      }
-      const { findings } = validateAttempt({
-        plan: current,
-        calls: attempt.calls,
-        queries: attempt.queries,
-      });
-      // The kept queries: this attempt's, after any earlier one's.
-      state.queries = [...state.queries, ...attempt.queries];
-      state.findings = findings;
-      state.analystNote = attempt.text;
-      return [
-        analysisReview({ queries: attempt.queries, text: attempt.text }),
-        '',
-        findingsForAvery(findings),
-      ].join('\n');
-    },
+    analyse: (brief: string) => analysis(brief, false),
+    answerFromData: (brief: string) => analysis(brief, true),
     writeAnswer: async (brief?: string) => {
       if (!state.plan || !state.queries.length) {
         return 'Michael has no results yet: call analyse_data first.';

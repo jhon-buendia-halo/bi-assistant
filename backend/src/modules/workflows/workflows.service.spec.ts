@@ -263,6 +263,17 @@ const ORCHESTRATED_SUMMARY = expect.objectContaining({
   trigger: 'run',
 }) as unknown;
 
+/** Answer a Business Question (Avery + Michael), as `GET /workflows` lists it (agents.md 5.23). */
+const AVERY_MICHAEL_SUMMARY = expect.objectContaining({
+  id: 'orchestrated-answer-michael',
+  name: 'Answer a Business Question (Avery + Michael)',
+  kind: 'code',
+  owner: 'Official',
+  stepCount: 1,
+  bar: 'steps',
+  trigger: 'run',
+}) as unknown;
+
 describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
@@ -278,13 +289,14 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     expect(await ctx.service.list()).toEqual([
       ANSWER_BUSINESS_QUESTION_SUMMARY,
       ORCHESTRATED_SUMMARY,
+      AVERY_MICHAEL_SUMMARY,
       READINESS_SUMMARY,
     ]);
   });
 
   it('lists Assess Data Readiness on one PostgreSQL or Databricks dataset, its Explain report run by the Data Readiness Agent (agents.md 5.13)', async () => {
     ctx = build();
-    const [, , readiness] = await ctx.service.list();
+    const [, , , readiness] = await ctx.service.list();
     expect(readiness.agents.map((agent) => agent.key)).toEqual([
       'data-readiness',
       'image-reader',
@@ -312,6 +324,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     expect(workflows).toEqual([
       ANSWER_BUSINESS_QUESTION_SUMMARY,
       ORCHESTRATED_SUMMARY,
+      AVERY_MICHAEL_SUMMARY,
       READINESS_SUMMARY,
     ]);
     expect(workflows[0]).not.toHaveProperty('runRequirement');
@@ -319,6 +332,29 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   });
 
   describe('get', () => {
+    it("Avery + Michael's detail (agents.md 5.23): the same Orchestrate step, her tools and team Michael alone, a question and datasets only", async () => {
+      ctx = build();
+      const lean = await ctx.service.get('orchestrated-answer-michael');
+      expect(lean.steps.map((step) => step.id)).toEqual(['orchestrate']);
+      expect(lean.steps[0].agent).toMatchObject({
+        key: 'chief-of-staff',
+        name: 'Avery',
+        tools: ['answer_from_data', 'ask_clarification'],
+        maxSteps: 16,
+        team: [
+          {
+            tool: 'answer_from_data',
+            key: 'insights-analyst',
+            name: 'Michael',
+          },
+        ],
+      });
+      expect(lean.input.map((field) => field.name)).toEqual([
+        'question',
+        'datasets',
+      ]);
+    });
+
     it("orchestrated-answer's detail is its own one step and two edges, and answer-business-question keeps its nine (they share a primary agent)", async () => {
       ctx = build();
       const orchestrated = await ctx.service.get('orchestrated-answer');
@@ -602,6 +638,10 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
         {
           id: 'orchestrated-answer',
           name: 'Answer a Business Question (orchestrated)',
+        },
+        {
+          id: 'orchestrated-answer-michael',
+          name: 'Answer a Business Question (Avery + Michael)',
         },
       ],
     ],

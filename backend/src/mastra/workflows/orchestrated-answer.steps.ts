@@ -51,6 +51,52 @@ export const ORCHESTRATOR_TOOL_NAMES: readonly string[] = [
   'ask_clarification',
 ];
 
+/**
+ * Answer a Business Question (Avery + Michael) (agents.md 5.23): Avery with
+ * Michael alone, on this workflow's engine. Michael plans, queries and
+ * writes the answer himself; she briefs him, reads it and closes.
+ */
+export const ORCHESTRATED_MICHAEL_WORKFLOW_ID = 'orchestrated-answer-michael';
+export const ORCHESTRATED_MICHAEL_WORKFLOW_NAME =
+  'Answer a Business Question (Avery + Michael)';
+
+/** Michael answering on his own: the answer the user reads is his. */
+export const MICHAEL_ANSWER_TOOL = 'answer_from_data';
+
+/** An orchestrator's team and tools, as one of her workflows gives them. */
+export interface OrchestratorTeamSpec {
+  team: readonly { tool: string; agent: string }[];
+  tools: readonly string[];
+}
+
+/** The workflows Avery runs, each with her team and tools, by workflow id. */
+export const ORCHESTRATOR_TEAMS: Readonly<
+  Record<string, OrchestratorTeamSpec>
+> = {
+  [ORCHESTRATED_ANSWER_WORKFLOW_ID]: {
+    team: ORCHESTRATOR_TEAM,
+    tools: ORCHESTRATOR_TOOL_NAMES,
+  },
+  [ORCHESTRATED_MICHAEL_WORKFLOW_ID]: {
+    team: [{ tool: MICHAEL_ANSWER_TOOL, agent: INSIGHTS_ANALYST_AGENT_KEY }],
+    tools: [MICHAEL_ANSWER_TOOL, 'ask_clarification'],
+  },
+};
+
+/** Whether a workflow is one of Avery's (a conversation with her, R45). */
+export function isOrchestratedWorkflow(id: string | undefined): boolean {
+  return !!id && Object.hasOwn(ORCHESTRATOR_TEAMS, id);
+}
+
+/** Avery's team and tools in a workflow; her whole team for any other id. */
+export function orchestratorTeamOf(
+  id: string | undefined,
+): OrchestratorTeamSpec {
+  return id && Object.hasOwn(ORCHESTRATOR_TEAMS, id)
+    ? ORCHESTRATOR_TEAMS[id]
+    : ORCHESTRATOR_TEAMS[ORCHESTRATED_ANSWER_WORKFLOW_ID];
+}
+
 /** The name the app shows for the workflow. */
 export const ORCHESTRATED_ANSWER_WORKFLOW_NAME =
   'Answer a Business Question (orchestrated)';
@@ -100,6 +146,28 @@ export const ORCHESTRATED_ANSWER_STEPS: readonly ContractStepEntry[] = [
   ),
 ];
 
+/**
+ * Answer a Business Question (Avery + Michael)'s steps (agents.md 5.23): the
+ * same Orchestrate step on the same engine, told for her team of one.
+ */
+export const ORCHESTRATED_MICHAEL_STEPS: readonly ContractStepEntry[] = [
+  contractStepEntry(
+    {
+      id: 'orchestrate',
+      title: 'Orchestrate',
+      kind: 'agent',
+      summary:
+        'Avery, the Chief of Staff, briefs Michael, who plans the analysis, queries the data and writes the answer; she reads it and closes. She is the only one who talks to you.',
+      exits: [
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
+        { label: 'if it asks you a question', outcome: 'waits' },
+      ],
+    },
+    ORCHESTRATED_ANSWER_STEP_SCHEMAS.orchestrate,
+  ),
+];
+
 /** The edges (api.md 117): Start → Orchestrate → End. */
 export const ORCHESTRATED_ANSWER_EDGES: readonly WorkflowEdge[] = [
   { from: 'start', to: 'orchestrate', kind: 'next' },
@@ -134,6 +202,8 @@ export const ORCHESTRATOR_TOOLS_RUNTIME_KEY = 'orchestrator-tools-runtime';
  * few lines of text.
  */
 export interface OrchestratorToolsRuntime {
+  /** The tools Avery is offered in this run: her workflow's (`orchestratorTeamOf`). */
+  tools: readonly string[];
   /** The run has reference images (read_reference_images is useful). */
   hasImages: boolean;
   /** The run builds a visual (build_visual is offered). */
@@ -148,6 +218,12 @@ export interface OrchestratorToolsRuntime {
   plan(brief?: string): Promise<string>;
   /** Michael's analysis for `brief`: each query, its rows and the checks. */
   analyse(brief: string): Promise<string>;
+  /**
+   * Michael on his own (Avery + Michael): he plans from `brief`, queries and
+   * writes the answer the user reads; his queries, the checks and that his
+   * answer is written, for Avery.
+   */
+  answerFromData(brief: string): Promise<string>;
   /**
    * Jessica writes the answer; a short confirmation for Avery. `brief`:
    * Avery's request to her (the question restated to stand alone, what the

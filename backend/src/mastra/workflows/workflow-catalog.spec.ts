@@ -44,7 +44,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds seven code workflows: Insights Analyst, its orchestrated version (5.22), Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18), Review a Website (5.19) and Consumption Gap Analysis (5.20)', () => {
+  it('holds eight code workflows: Insights Analyst, its orchestrated version (5.22) and Avery + Michael (5.23), Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18), Review a Website (5.19) and Consumption Gap Analysis (5.20)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -64,6 +64,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       {
         id: 'orchestrated-answer',
         name: 'Answer a Business Question (orchestrated)',
+        primaryFor: 'insights-analyst',
+        bar: 'steps',
+        trigger: 'run',
+      },
+      {
+        id: 'orchestrated-answer-michael',
+        name: 'Answer a Business Question (Avery + Michael)',
         primaryFor: 'insights-analyst',
         bar: 'steps',
         trigger: 'run',
@@ -600,6 +607,10 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         {
           id: 'orchestrated-answer',
           name: 'Answer a Business Question (orchestrated)',
+        },
+        {
+          id: 'orchestrated-answer-michael',
+          name: 'Answer a Business Question (Avery + Michael)',
         },
       ]);
     });

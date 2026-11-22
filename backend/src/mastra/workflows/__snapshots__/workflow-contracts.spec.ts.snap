@@ -18626,6 +18626,81 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 }
 `;
 
+exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) orchestrated-answer-michael's contract (JSON Schemas and hash) is the reviewed one 1`] = `
+{
+  "contractHash": "2217391f68ac",
+  "edges": [
+    {
+      "from": "start",
+      "kind": "next",
+      "to": "orchestrate",
+    },
+    {
+      "from": "orchestrate",
+      "kind": "next",
+      "to": "end",
+    },
+  ],
+  "input": [
+    {
+      "name": "question",
+      "required": true,
+      "type": "textarea",
+    },
+    {
+      "name": "datasets",
+      "required": true,
+      "type": "datasets",
+    },
+  ],
+  "steps": [
+    {
+      "id": "orchestrate",
+      "inputSchema": {
+        "properties": {
+          "datasets": {
+            "description": "The run's dataset names.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "images": {
+            "description": "The run's reference images: their stored paths.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "datasets",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "description": "The run's answer.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "answer",
+        ],
+        "type": "object",
+      },
+    },
+  ],
+}
+`;
+
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) recreate-dashboard's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
   "contractHash": "b74c6e4c4e3c",

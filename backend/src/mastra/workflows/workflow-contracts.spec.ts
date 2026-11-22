@@ -78,6 +78,7 @@ import { ORCHESTRATED_ANSWER_STEP_SCHEMAS } from './orchestrated-answer.steps';
 import {
   ORCHESTRATED_ANSWER_RUNTIME_KEY,
   ORCHESTRATED_ANSWER_WORKFLOW_ID,
+  ORCHESTRATED_MICHAEL_WORKFLOW_ID,
   type OrchestratedAnswerRuntime,
 } from './orchestrated-answer.steps';
 import { orchestratedAnswerWorkflow } from './orchestrated-answer.workflow';
@@ -144,21 +145,25 @@ const GAP_DATASET = {
   ],
 };
 
-const FIXTURES: Record<string, ContractFixture> = {
-  [ORCHESTRATED_ANSWER_WORKFLOW_ID]: {
-    workflow:
-      orchestratedAnswerWorkflow as unknown as ContractFixture['workflow'],
-    schemas: ORCHESTRATED_ANSWER_STEP_SCHEMAS,
-    input: { question: 'How many matches?', datasets: ['World Cup'] },
-    requestContext: () => {
-      const context = new RequestContext();
-      context.set(ORCHESTRATED_ANSWER_RUNTIME_KEY, {
-        orchestrate: () =>
-          Promise.resolve({ answer: 'There were 64 matches.', stopped: false }),
-      } satisfies OrchestratedAnswerRuntime);
-      return context;
-    },
+const ORCHESTRATED_FIXTURE: ContractFixture = {
+  workflow:
+    orchestratedAnswerWorkflow as unknown as ContractFixture['workflow'],
+  schemas: ORCHESTRATED_ANSWER_STEP_SCHEMAS,
+  input: { question: 'How many matches?', datasets: ['World Cup'] },
+  requestContext: () => {
+    const context = new RequestContext();
+    context.set(ORCHESTRATED_ANSWER_RUNTIME_KEY, {
+      orchestrate: () =>
+        Promise.resolve({ answer: 'There were 64 matches.', stopped: false }),
+    } satisfies OrchestratedAnswerRuntime);
+    return context;
   },
+};
+
+const FIXTURES: Record<string, ContractFixture> = {
+  [ORCHESTRATED_ANSWER_WORKFLOW_ID]: ORCHESTRATED_FIXTURE,
+  // Avery + Michael runs on the orchestrated engine (agents.md 5.23).
+  [ORCHESTRATED_MICHAEL_WORKFLOW_ID]: ORCHESTRATED_FIXTURE,
   [ANSWER_BUSINESS_QUESTION_WORKFLOW_ID]: {
     workflow:
       answerBusinessQuestionWorkflow as unknown as ContractFixture['workflow'],

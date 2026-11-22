@@ -6,7 +6,30 @@ import { stepModelFrom } from '../step-model';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { orchestratorTools } from '../tools/orchestrator.tools';
 import { catalogFrameworkSkills } from '../skill-sources';
-import { ORCHESTRATOR_INSTRUCTIONS } from '../workflows/orchestrated-answer.prompts';
+import {
+  ORCHESTRATOR_INSTRUCTIONS,
+  ORCHESTRATOR_MICHAEL_INSTRUCTIONS,
+} from '../workflows/orchestrated-answer.prompts';
+import {
+  MICHAEL_ANSWER_TOOL,
+  ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+  type OrchestratorToolsRuntime,
+} from '../workflows/orchestrated-answer.steps';
+
+/**
+ * Her job description for the run: with Michael alone (Avery + Michael,
+ * agents.md 5.23) the shipped one for her team of one; else her whole
+ * team's, or its in-app override (ADR-0026).
+ */
+export function chiefOfStaffInstructions(requestContext?: {
+  get(key: string): unknown;
+}): string {
+  const runtime = requestContext?.get(ORCHESTRATOR_TOOLS_RUNTIME_KEY) as
+    OrchestratorToolsRuntime | undefined;
+  return runtime?.tools.includes(MICHAEL_ANSWER_TOOL)
+    ? ORCHESTRATOR_MICHAEL_INSTRUCTIONS
+    : agentInstructions(CHIEF_OF_STAFF_AGENT_KEY, ORCHESTRATOR_INSTRUCTIONS);
+}
 
 /**
  * Avery, Chief of Staff (agents.md 2.21, 5.22): the orchestrator of Answer a
@@ -25,8 +48,8 @@ export const chiefOfStaffAgent = new Agent({
   name: 'Chief of Staff',
   description:
     "Orchestrates Answer a Business Question (orchestrated): decides which agents work on the user's question, briefs them and hands back one answer.",
-  instructions: () =>
-    agentInstructions(CHIEF_OF_STAFF_AGENT_KEY, ORCHESTRATOR_INSTRUCTIONS),
+  instructions: ({ requestContext }) =>
+    chiefOfStaffInstructions(requestContext),
   // Her router and playbooks, loaded on demand through Mastra's skill tools
   // (agents.md 7.4, ADR-0025).
   skills: () => catalogFrameworkSkills(CHIEF_OF_STAFF_AGENT_KEY),

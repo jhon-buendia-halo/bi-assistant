@@ -34,6 +34,7 @@ import {
   ORCHESTRATOR_MAX_STEPS,
   ORCHESTRATOR_TEAM,
   ORCHESTRATOR_TOOL_NAMES,
+  orchestratorTeamOf,
 } from './orchestrated-answer.steps';
 import type { WorkflowStepExit } from './answer-business-question.steps';
 import { CODE_WORKFLOWS, stepAgentKey } from './workflow-catalog';
@@ -197,6 +198,7 @@ export function codeWorkflowView(
               stepAgentKey(workflow, step.id),
               step,
               source.agent,
+              workflow.id,
             ),
           }
         : {}),
@@ -214,11 +216,16 @@ function stepAgent(
   key: string,
   step: { modelOnly?: true },
   primary: { name: string; tools: readonly string[]; maxSteps: number },
+  workflowId?: string,
 ): NonNullable<AgentWorkflowStep['agent']> {
   const persona = builtinAgentPersona(key);
-  const own: (typeof STEP_AGENTS)[string] = Object.hasOwn(STEP_AGENTS, key)
+  const entry: (typeof STEP_AGENTS)[string] = Object.hasOwn(STEP_AGENTS, key)
     ? STEP_AGENTS[key]
     : primary;
+  // An orchestrator's team and tools are her workflow's (agents.md 5.23).
+  const own = entry.team
+    ? { ...entry, ...orchestratorTeamOf(workflowId) }
+    : entry;
   return {
     key,
     name: persona?.name ?? own.name,
