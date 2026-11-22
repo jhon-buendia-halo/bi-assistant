@@ -90,9 +90,11 @@
           />
         }
         @for (sub of l.subEdges; track sub.id) {
+          @let teammate = teamRun().get(sub.subNodeId);
           <path
             class="sub-edge"
             [class.done]="done(sub.nodeId)"
+            [attr.data-run]="teammate?.state ?? null"
             [attr.d]="sub.path"
             [attr.data-subnode]="sub.subNodeId"
             [attr.data-done]="done(sub.nodeId) ? 'true' : 'false'"
@@ -373,6 +375,7 @@
             type="button"
             class="sub-node"
             [attr.data-kind]="sub.kind"
+            [attr.data-run]="teammateRun(sub)?.state ?? null"
             [attr.data-step]="node.id"
             [attr.data-testid]="'workflow-subnode-' + sub.id"
             [attr.aria-label]="subNodeLabel(node, sub)"
@@ -391,6 +394,16 @@
             "
           >
             <span class="diamond top" aria-hidden="true"></span>
+            @let run = teammateRun(sub);
+            @if (run && run.calls > 0) {
+              <!-- How many times Avery called this teammate in the run shown -->
+              <span
+                class="sub-calls pointer-events-none"
+                data-testid="workflow-subnode-calls"
+                aria-hidden="true"
+                >{{ run.calls }}</span
+              >
+            }
             @if (sub.agent; as teammate) {
               <!-- A teammate behind one of the orchestrator's tools: its portrait -->
               <app-agent-avatar

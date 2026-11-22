@@ -593,27 +593,36 @@ export function workflowCanvasLayout(
     const fields = prev.step
       ? prev.step.output.length
       : (stepsById.get(id)?.input.length ?? 0);
-    return (
+    // After an orchestrator, the next column starts past its row of
+    // teammates, so their lines never cross the next square's label.
+    const team = prev.subNodes.filter((s) => s.kind === 'agent');
+    const pastTeam = team.length
+      ? Math.max(...prev.subNodes.map((s) => subLabelSpan(s)[1])) +
+        SUB_LABEL_GAP +
+        (CANVAS.labelWidth - CANVAS.square) / 2
+      : -Infinity;
+    return Math.max(
+      pastTeam,
       prev.x +
-      prev.width +
-      columnGap(
-        fieldsLabel(fields),
-        widest(
-          edgeLines(edge),
-          // An edge that skips the columns before (Start past Read images)
-          // shows its label in this gap, the last before its target.
-          ...graph
-            .filter(
-              (e) =>
-                e.to === id &&
-                e.kind !== 'loop' &&
-                e.from !== prev.id &&
-                onPath.has(e.from),
-            )
-            .map(edgeLines),
+        prev.width +
+        columnGap(
+          fieldsLabel(fields),
+          widest(
+            edgeLines(edge),
+            // An edge that skips the columns before (Start past Read images)
+            // shows its label in this gap, the last before its target.
+            ...graph
+              .filter(
+                (e) =>
+                  e.to === id &&
+                  e.kind !== 'loop' &&
+                  e.from !== prev.id &&
+                  onPath.has(e.from),
+              )
+              .map(edgeLines),
+          ),
+          dropsFrom.has(prev.id),
         ),
-        dropsFrom.has(prev.id),
-      )
     );
   };
 

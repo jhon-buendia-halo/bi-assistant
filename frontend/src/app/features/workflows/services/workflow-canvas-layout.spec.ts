@@ -1134,6 +1134,22 @@ describe("an orchestrator's team (Avery, api.md 117 team)", () => {
     expect(overlapping(layout)).toEqual([]);
   });
 
+  it("starts End past the row, so the teammates' lines never cross its label", () => {
+    const end = layout.nodes.find((n) => n.id === 'end')!;
+    const rowRight = Math.max(
+      ...avery.subNodes.map(
+        (s) =>
+          s.x +
+          s.size / 2 +
+          (s.kind === 'tools' ? 40 : s.kind === 'agent' ? 52 : 60),
+      ),
+    );
+    // End's label (150 px) is centred under its 88 px square.
+    expect(end.x + CANVAS.square / 2 - CANVAS.labelWidth / 2).toBeGreaterThan(
+      rowRight,
+    );
+  });
+
   it('a step without a team keeps its Model and Tools only', () => {
     const plain = workflowCanvasLayout(V2).nodes.find(
       (n) => n.id === 'analyse',

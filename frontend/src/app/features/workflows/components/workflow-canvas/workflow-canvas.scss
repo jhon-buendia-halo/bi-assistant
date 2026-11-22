@@ -325,6 +325,74 @@
   &[aria-expanded="true"] {
     border-color: var(--qti-border-selected);
   }
+
+  // A teammate in the run shown (ui.md 4.4b): the node colours of a run.
+  &[data-run="called"] {
+    border-color: var(--qti-on-success-soft);
+  }
+
+  &[data-run="working"] {
+    border-color: var(--qti-on-info-soft);
+  }
+
+  &[data-run="failed"] {
+    border-color: var(--qti-on-danger-soft);
+  }
+
+  // Not called in this run: faded, its label kept readable.
+  &[data-run="not-called"] {
+    border-style: dashed;
+
+    app-agent-avatar {
+      opacity: 0.45;
+    }
+  }
+}
+
+// How many times the teammate was called in the run shown.
+.sub-calls {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--qti-on-success-soft);
+  border-radius: 9px;
+  background: var(--qti-success-soft);
+  color: var(--qti-on-success-soft);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+.sub-node[data-run="working"] .sub-calls {
+  border-color: var(--qti-on-info-soft);
+  background: var(--qti-info-soft);
+  color: var(--qti-on-info-soft);
+}
+
+.sub-node[data-run="failed"] .sub-calls {
+  border-color: var(--qti-on-danger-soft);
+  background: var(--qti-danger-soft);
+  color: var(--qti-on-danger-soft);
+}
+
+.sub-edge[data-run="called"] {
+  stroke: var(--qti-on-success-soft);
+}
+
+.sub-edge[data-run="working"] {
+  stroke: var(--qti-on-info-soft);
+}
+
+.sub-edge[data-run="failed"] {
+  stroke: var(--qti-on-danger-soft);
+}
+
+.sub-edge[data-run="not-called"] {
+  stroke: var(--qti-border);
 }
 
 // The Tools sub-node's list (`.menu` / `.menu-item` from components.css).

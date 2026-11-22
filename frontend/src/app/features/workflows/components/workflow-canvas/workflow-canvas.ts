@@ -77,6 +77,19 @@ const SUB_ICONS: Record<CanvasSubNode['kind'], LucideIconData> = {
   agent: Wrench,
 };
 
+/** A teammate sub-node in the run shown: its state and how many calls its tool had. */
+interface TeammateRun {
+  state: 'working' | 'called' | 'failed' | 'not-called';
+  calls: number;
+}
+
+/** `called once`, `called twice`, `called <n> times`. */
+function callsPhrase(calls: number): string {
+  if (calls === 1) return 'called once';
+  if (calls === 2) return 'called twice';
+  return `called ${calls} times`;
+}
+
 /** The Tools sub-node's open list: its step, the tools and where it shows in the host. */
 interface ToolsMenu {
   stepId: string;
@@ -181,6 +194,45 @@ export class WorkflowCanvas {
   protected readonly layout = computed(() =>
     workflowCanvasLayout(this.workflow()),
   );
+
+  /**
+   * Each teammate sub-node in the run shown (ui.md 4.4b), by sub-node id:
+   * `working` while a call of its tool runs, `called` once its calls are
+   * done (`failed` when the last one failed), `not-called` when its step
+   * ended without calling it. Absent before a run, and while the step has
+   * not started or still runs without having called it.
+   */
+  protected readonly teamRun = computed(() => {
+    const out = new Map<string, TeammateRun>();
+    for (const node of this.layout().nodes) {
+      const story = this.agents().get(node.id);
+      if (!story || story.state === 'idle' || story.state === 'waiting') {
+        continue;
+      }
+      const ended = !['active', 'asking'].includes(story.state);
+      for (const sub of node.subNodes) {
+        if (sub.kind !== 'agent') continue;
+        const calls = story.activity.filter((s) => s.tool === sub.tools[0]);
+        const last = calls.at(-1);
+        if (calls.some((s) => s.state === 'current')) {
+          out.set(sub.id, { state: 'working', calls: calls.length });
+        } else if (last) {
+          out.set(sub.id, {
+            state: last.state === 'failed' ? 'failed' : 'called',
+            calls: calls.length,
+          });
+        } else if (ended && story.state !== 'skipped') {
+          out.set(sub.id, { state: 'not-called', calls: 0 });
+        }
+      }
+    }
+    return out;
+  });
+
+  /** A teammate sub-node's state in the run shown; null when it has none. */
+  protected teammateRun(sub: CanvasSubNode): TeammateRun | null {
+    return this.teamRun().get(sub.id) ?? null;
+  }
 
   readonly zoom = signal(1);
   /** Fit on load and on resize, until the user zooms by hand. */
@@ -300,7 +352,15 @@ export class WorkflowCanvas {
   protected subNodeLabel(node: CanvasNode, sub: CanvasSubNode): string {
     if (sub.agent) {
       const role = sub.agent.role ? `, ${sub.agent.role}` : '';
-      return `${sub.agent.name}${role}, called by ${node.title} through ${sub.subtitle}`;
+      const run = this.teammateRun(sub);
+      const inRun = !run
+        ? ''
+        : run.state === 'working'
+          ? ': working now'
+          : run.state === 'not-called'
+            ? ': not called in this run'
+            : `: ${callsPhrase(run.calls)} in this run${run.state === 'failed' ? ', the last call failed' : ''}`;
+      return `${sub.agent.name}${role}, called by ${node.title} through ${sub.subtitle}${inRun}`;
     }
     return sub.kind === 'model'
       ? `Model ${sub.label} of ${node.title}`
