@@ -16,10 +16,13 @@ import {
 } from './helpers/llm-stub';
 import { seedPastChat } from './helpers/past-chats';
 import {
+  answerPickAsk,
+  composer,
   openRunTab,
   openWorkflowPage,
   railItem,
   runAnswer,
+  sendRun,
 } from './helpers/run-ui';
 import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DB, worldCupKey } from './helpers/world-cup-db';
@@ -426,7 +429,7 @@ test('Assess Data Readiness profiles, scores and explains one dataset @demo', as
   );
   await scenarioStep(
     page,
-    'When I open "Assess Data Readiness" from User journeys and click Execute',
+    'When I open "Assess Data Readiness" from User journeys and click Execute user journey',
     async () => {
       await openWorkflowPage(
         page,
@@ -438,12 +441,16 @@ test('Assess Data Readiness profiles, scores and explains one dataset @demo', as
   );
   await scenarioStep(
     page,
-    `And I pick "${DATASET}", leave the question empty and click Execute`,
+    `And I leave the message empty, click Send and pick "${DATASET}" when the agent asks`,
     async () => {
-      await page
-        .getByTestId('workflow-input-dataset')
-        .selectOption({ label: DATASET });
-      await page.getByTestId('workflow-run').click();
+      // Its question has a default: Send is enabled with an empty box.
+      await expect(composer(page)).toHaveValue('');
+      await sendRun(page);
+      await expect(
+        page.getByTestId('run-intake-dataset').getByTestId('run-agent-message'),
+      ).toContainText('which dataset should');
+      // A single pick continues on its click.
+      await answerPickAsk(page, DATASET, 'dataset');
     },
   );
   await scenarioStep(
@@ -542,10 +549,8 @@ test('@demo @story-1.28.11 Each readiness finding opens the rows behind it', asy
         'Assess Data Readiness',
       );
       await openRunTab(page);
-      await page
-        .getByTestId('workflow-input-dataset')
-        .selectOption({ label: DATASET });
-      await page.getByTestId('workflow-run').click();
+      await sendRun(page);
+      await answerPickAsk(page, DATASET, 'dataset');
       await expect(page.getByTestId('workflow-run-status')).toHaveText(
         'Run succeeded',
         { timeout: 60_000 },
