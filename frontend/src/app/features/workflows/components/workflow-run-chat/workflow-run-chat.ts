@@ -306,13 +306,32 @@ export class WorkflowRunChat {
   protected readonly averyBusy = signal(false);
   protected readonly averyNotice = signal<string | null>(null);
 
+  /** Avery is working on this conversation: the message box stays, with Stop, and queues. */
+  protected readonly averyLive = computed(
+    () =>
+      this.isAveryWorkflow() &&
+      this.designer.running() &&
+      this.designer.run()?.archivedAt === undefined,
+  );
+
+  /** Messages typed while Avery works, sent one by one as each answer ends (oldest first). */
+  protected readonly queued = signal<string[]>([]);
+
   protected sendAvery(): void {
     const text = this.averyText().trim();
-    if (!text || this.designer.running()) return;
+    if (!text) return;
     this.averyError.set(null);
     this.averyNotice.set(null);
     this.averyText.set('');
+    if (this.designer.running()) {
+      this.queued.update((list) => [...list, text]);
+      return;
+    }
     this.designer.followUp(text);
+  }
+
+  protected removeQueued(index: number): void {
+    this.queued.update((list) => list.filter((_, i) => i !== index));
   }
 
   protected archiveConversation(): void {
@@ -404,6 +423,17 @@ export class WorkflowRunChat {
   private shownRunId: string | null = null;
 
   constructor() {
+    // A queued message goes as soon as the answer it waited for has ended
+    // (answered, stopped or failed); a question Avery asks waits for its answer.
+    effect(() => {
+      const next = this.queued()[0];
+      if (next === undefined || !this.averyOpen()) return;
+      if (this.designer.waitingFor() !== null) return;
+      untracked(() => {
+        this.queued.update((list) => list.slice(1));
+        this.designer.followUp(next);
+      });
+    });
     // The Business view reads the whole conversation (R38).
     effect(() => {
       const on = this.threaded();
@@ -1203,6 +1233,7 @@ export class WorkflowRunChat {
 
   /** New question: the chat drops the run shown and starts a new conversation. */
   protected newQuestion(): void {
+    this.queued.set([]);
     this.designer.newQuestion();
     this.resetIntake();
     this.syncDraft();

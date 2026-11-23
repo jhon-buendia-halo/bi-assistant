@@ -8,7 +8,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { LucideAngularModule, Plus, Send } from 'lucide-angular';
+import { LucideAngularModule, Plus, Send, Square } from 'lucide-angular';
 
 /** The tallest the message box grows before it scrolls, in px. */
 const MAX_HEIGHT = 160;
@@ -17,7 +17,8 @@ const MAX_HEIGHT = 160;
  * The run chat's message box (ui.md 4.4b): one pill with a round `+` on the
  * left (the inputs and options menu, projected as `[composerMenu]`), a text
  * area that grows with what is typed, and a round Send on the right. Enter
- * sends, Shift+Enter adds a line. Chips of what is set sit above it
+ * sends, Shift+Enter adds a line. While the agent works (`running`), a round
+ * Stop sits at the right and Send queues the message. Chips of what is set sit above it
  * (`[composerChips]`). Presentational: the host owns the text and what Send
  * does.
  */
@@ -71,22 +72,41 @@ const MAX_HEIGHT = 160;
         (keydown)="onKey($event)"
         class="min-h-[34px] min-w-0 flex-1 resize-none border-0 bg-transparent px-1 py-[7px] text-[14px] leading-5 text-fg-strong outline-none placeholder:text-placeholder"
       ></textarea>
-      <button
-        type="submit"
-        [attr.data-testid]="sendTestId()"
-        aria-label="Send"
-        title="Send"
-        [disabled]="!canSend()"
-        class="flex h-[34px] w-[34px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary text-on-primary transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:bg-surface-selected disabled:text-placeholder"
-      >
-        <lucide-angular [img]="Send" [size]="16" />
-      </button>
+      @if (!running() || canSend()) {
+        <!-- While the agent works, Send queues the message (the host sends it
+           when the answer ends) -->
+        <button
+          type="submit"
+          [attr.data-testid]="sendTestId()"
+          [attr.aria-label]="running() ? 'Queue message' : 'Send'"
+          [title]="
+            running() ? 'Queue: it is sent when this answer ends' : 'Send'
+          "
+          [disabled]="!canSend()"
+          class="flex h-[34px] w-[34px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary text-on-primary transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:bg-surface-selected disabled:text-placeholder"
+        >
+          <lucide-angular [img]="Send" [size]="16" />
+        </button>
+      }
+      @if (running()) {
+        <button
+          type="button"
+          [attr.data-testid]="stopTestId()"
+          aria-label="Stop"
+          title="Stop"
+          (click)="stop.emit()"
+          class="flex h-[34px] w-[34px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-fg-strong text-surface transition-colors hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        >
+          <lucide-angular [img]="Square" [size]="13" class="fill-current" />
+        </button>
+      }
     </form>
   `,
 })
 export class RunComposer {
   protected readonly Plus = Plus;
   protected readonly Send = Send;
+  protected readonly Square = Square;
 
   /** The text in the box; the host keeps it. */
   readonly value = input('');
@@ -101,9 +121,13 @@ export class RunComposer {
   readonly formTestId = input('run-composer');
   readonly inputTestId = input('run-composer-input');
   readonly sendTestId = input('run-composer-send');
+  /** The agent is working: a Stop button shows, and Send queues. */
+  readonly running = input(false);
+  readonly stopTestId = input('run-composer-stop');
 
   readonly valueChange = output<string>();
   readonly send = output<void>();
+  readonly stop = output<void>();
   readonly plus = output<void>();
   readonly pasted = output<ClipboardEvent>();
   readonly dragOver = output<DragEvent>();

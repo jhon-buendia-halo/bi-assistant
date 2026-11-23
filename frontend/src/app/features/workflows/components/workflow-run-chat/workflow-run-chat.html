@@ -83,8 +83,9 @@
         <span>New question</span>
       </button>
     }
-    @if (designer.running()) {
-      <!-- Stop sits in the bar: the input is hidden while a run is shown -->
+    @if (designer.running() && !averyLive()) {
+      <!-- Stop sits in the bar when no message box shows during the run;
+           Avery's conversation has it in its message box -->
       <button
         type="button"
         data-testid="workflow-run-stop"
@@ -605,23 +606,66 @@
     }
   </div>
 
-  @if (averyOpen() && designer.waitingFor() === null) {
+  @if ((averyOpen() || averyLive()) && designer.waitingFor() === null) {
     <!-- Avery's conversation never ends: a compact message box under the
-         last answer (a follow-up run of this conversation) -->
+         last answer (a follow-up run of this conversation). While she works
+         it stays, with Stop, and what is sent waits in a queue. -->
     <div class="shrink-0 px-3 pb-3">
       <app-run-composer
         [value]="averyText()"
-        [placeholder]="'Message ' + (voice()?.name ?? 'Avery')"
+        [placeholder]="
+          averyLive()
+            ? 'Queue a message for ' + (voice()?.name ?? 'Avery')
+            : 'Message ' + (voice()?.name ?? 'Avery')
+        "
         [label]="'Message ' + (voice()?.name ?? 'Avery')"
         [withPlus]="false"
-        [canSend]="averyText().trim() !== '' && !designer.running()"
+        [canSend]="averyText().trim() !== ''"
+        [running]="averyLive()"
         inputId="workflow-avery-input"
         formTestId="workflow-avery-composer"
         inputTestId="workflow-avery-input"
         sendTestId="workflow-avery-send"
+        stopTestId="workflow-run-stop"
         (valueChange)="averyText.set($event)"
         (send)="sendAvery()"
-      />
+        (stop)="designer.stop()"
+      >
+        @if (queued().length > 0) {
+          <ul
+            composerChips
+            aria-label="Queued messages"
+            class="m-0 mb-2 flex list-none flex-col gap-1.5 p-0"
+          >
+            @for (message of queued(); track $index) {
+              <li
+                data-testid="workflow-avery-queued"
+                class="flex items-center gap-2 rounded-xl border border-border bg-surface-muted py-1.5 pr-1.5 pl-3 text-[13px]"
+              >
+                <span
+                  class="shrink-0 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
+                  >Queued</span
+                >
+                <span
+                  class="min-w-0 flex-1 truncate text-fg"
+                  [title]="message"
+                  >{{ message }}</span
+                >
+                <button
+                  type="button"
+                  data-testid="workflow-avery-queued-remove"
+                  aria-label="Remove queued message"
+                  title="Remove"
+                  (click)="removeQueued($index)"
+                  class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-fg-muted hover:bg-surface-selected hover:text-fg"
+                >
+                  <lucide-angular [img]="X" [size]="13" />
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </app-run-composer>
     </div>
   }
 

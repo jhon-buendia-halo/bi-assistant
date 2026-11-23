@@ -1422,7 +1422,66 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(runs.calls.length).toBe(1);
       expect(runs.last.body.context?.fromRunId).toBe('run-1');
       expect(runs.last.body.input['question']).toBe('And in 2022?');
-      expect(q('workflow-avery-input')).toBeNull();
+      // The box stays while she works: it queues, and Stop sits in it.
+      const box = q('workflow-avery-input') as HTMLTextAreaElement;
+      expect(box.value).toBe('');
+      expect(box.placeholder).toBe('Queue a message for Avery');
+      expect(q('workflow-avery-composer')!.contains(q('workflow-run-stop'))).toBeTrue();
+      expect(q('workflow-run-stop')!.getAttribute('aria-label')).toBe('Stop');
+    });
+
+    it('Stop in the box stops the run', () => {
+      openStored(ended());
+      runs.getRun.and.returnValue(of(ended()));
+      typeToAvery('And in 2022?');
+      click('workflow-avery-send');
+      spyOn(designer, 'stop').and.callThrough();
+      click('workflow-run-stop');
+      expect(designer.stop).toHaveBeenCalled();
+    });
+
+    it('a message sent while she works is queued, then sent when the answer ends', () => {
+      openStored(ended());
+      runs.getRun.and.returnValue(of(ended()));
+      typeToAvery('And in 2022?');
+      click('workflow-avery-send');
+      expect(runs.calls.length).toBe(1);
+      const sendButton = q('workflow-avery-send');
+      expect(sendButton).toBeNull(); // nothing typed: only Stop
+      typeToAvery('And by stage?');
+      expect(q('workflow-avery-send')!.getAttribute('aria-label')).toBe('Queue message');
+      click('workflow-avery-send');
+      typeToAvery('Make it a chart');
+      const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      (q('workflow-avery-input') as HTMLTextAreaElement).dispatchEvent(enter);
+      fixture.detectChanges();
+      expect(runs.calls.length).toBe(1);
+      const queued = () => Array.from(el.querySelectorAll('[data-testid="workflow-avery-queued"]'));
+      expect(queued().map((li) => li.querySelector('[title]')!.textContent!.trim())).toEqual([
+        'And by stage?',
+        'Make it a chart',
+      ]);
+      expect(queued()[0].textContent).toContain('Queued');
+      // The first answer ends: the oldest queued message goes, the other waits.
+      runs.last.handlers.onDone!(ended({ id: 'run-2' }));
+      fixture.detectChanges();
+      expect(runs.calls.length).toBe(2);
+      expect(runs.last.body.input['question']).toBe('And by stage?');
+      expect(queued().length).toBe(1);
+    });
+
+    it('a queued message can be removed before it goes', () => {
+      openStored(ended());
+      runs.getRun.and.returnValue(of(ended()));
+      typeToAvery('And in 2022?');
+      click('workflow-avery-send');
+      typeToAvery('And by stage?');
+      click('workflow-avery-send');
+      click('workflow-avery-queued-remove');
+      expect(el.querySelector('[data-testid="workflow-avery-queued"]')).toBeNull();
+      runs.last.handlers.onDone!(ended({ id: 'run-2' }));
+      fixture.detectChanges();
+      expect(runs.calls.length).toBe(1);
     });
 
     it('Enter sends, Shift+Enter does not', () => {
