@@ -4,6 +4,8 @@ jest.mock('@mastra/core/agent', () => ({ Agent: class {} }));
 jest.mock('../model-resolver', () => ({ resolveAgentModel: jest.fn() }));
 
 import { createHash } from 'crypto';
+import { readdirSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { RequestContext } from '@mastra/core/request-context';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { orchestratorTools } from '../tools/orchestrator.tools';
@@ -164,8 +166,45 @@ describe('Avery + Michael: what Avery receives is pinned', () => {
     const digest = createHash('sha256')
       .update(JSON.stringify(cases))
       .digest('hex');
+    // Re-pinned on 2026-11-23: her job description no longer routes playbook
+    // steps for Olivia and Jessica (removed with the whole-team mode).
     expect(digest).toBe(
-      '1697a333be98798a376b5f88076f15f30f12525b4e0d31fb9df8950456f00f6e',
+      '9c4ae187b7bd1e37ed453850f5356013fff5ef200be1e29f86cb83d7f147e36b',
     );
   });
+});
+
+/**
+ * Avery's playbooks (agents.md 5.23) name only the tools she has in Avery +
+ * Michael and the one teammate behind them: a playbook that sends her to a
+ * removed tool or teammate is a prompt that cannot be followed.
+ */
+describe("Avery's playbooks name only her own tools", () => {
+  const dir = join(__dirname, '..', 'skills', 'avery-playbooks');
+  const files = [
+    join(dir, 'SKILL.md'),
+    ...readdirSync(join(dir, 'reference')).map((name) =>
+      join(dir, 'reference', name),
+    ),
+  ];
+  const TOOLS = [
+    'answer_from_data',
+    'build_dashboard',
+    'export_conversation',
+    'ask_clarification',
+  ];
+
+  it.each(files.map((file) => [file.slice(dir.length + 1), file]))(
+    '%s',
+    (_name, file) => {
+      const text = readFileSync(file, 'utf8');
+      const links = [...text.matchAll(/\[\[tool:([a-z_]+)\]\]/g)].map(
+        (m) => m[1],
+      );
+      expect(links.filter((tool) => !TOOLS.includes(tool))).toEqual([]);
+      expect(text).not.toMatch(
+        /plan_analysis|analyse_data|write_answer|build_visual|read_reference_images|\bOlivia\b|\bJessica\b|\bRyan\b|\bZoe\b/,
+      );
+    },
+  );
 });

@@ -36,7 +36,7 @@ export const ORCHESTRATOR_MICHAEL_INSTRUCTIONS = `${ORCHESTRATOR_FIRST_LINE}
 - ask_clarification: asks the user one question with 2-4 options. The run waits for their answer, then you continue.
 
 ## How to work
-1. Before your first call, load the "avery-playbooks" skill and read the playbook that fits the request. For the analysis your team is Michael alone: every step a playbook gives Olivia (the plan) or Jessica (the answer) goes into your brief to Michael.
+1. Before your first call, load the "avery-playbooks" skill and read the playbook that fits the request. Every step of a playbook goes into your brief to Michael.
 2. Read his answer before anything else. When a check failed or a figure is missing, call answer_from_data once more with a brief that says exactly what to fix. When a result surprises you (no rows, a result that contradicts the question), go back to the skill.
 3. Finish with one or two sentences for the user, as the playbook's Reply says: the bottom line first, then anything they should know. Do not repeat Michael's answer: the user sees it.
 
