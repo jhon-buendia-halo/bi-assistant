@@ -25,6 +25,7 @@
       aria-label="Chat with this step's agent persona"
       data-testid="workflow-node-chat-messages"
       tabindex="0"
+      [style.padding-right.px]="historyItems().length >= 2 ? 48 : null"
       class="flex max-h-[60vh] min-h-[120px] flex-col gap-3 overflow-y-auto rounded-lg border border-border p-3"
     >
       @if (loading()) {
@@ -112,7 +113,7 @@
       }
     </div>
     <app-chat-history-nav
-      class="absolute right-4 bottom-2 z-20"
+      class="absolute top-2 right-4 z-20"
       [container]="listElement()"
       [items]="historyItems()"
       label="Chat history"

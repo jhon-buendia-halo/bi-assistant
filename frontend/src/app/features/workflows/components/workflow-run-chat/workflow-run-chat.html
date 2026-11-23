@@ -153,7 +153,7 @@
     </p>
   }
 
-  <!-- The log and, at its bottom right, the conversation navigation (R38). -->
+  <!-- The log and, at its top right, the conversation navigation (R38). -->
   <div class="relative flex min-h-0 flex-1 flex-col">
     <!-- Focusable: it scrolls (axe scrollable-region-focusable). -->
     <section
@@ -162,6 +162,7 @@
       tabindex="0"
       data-testid="workflow-run-chat-log"
       (scroll)="onLogScroll()"
+      [style.padding-right.px]="navInside() ? 48 : null"
       class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3 focus-visible:outline-2 focus-visible:outline-focus"
     >
       @if (designer.runResult(); as result) {
@@ -589,12 +590,12 @@
     </section>
     @if (navItems().length > 0) {
       <!-- The conversation navigation (R38): a tick per question at the log's
-         bottom right (outside the column in the Business view), the list of
-         questions growing up from them on hover or focus -->
+         top right (outside the column in the Business view), the list of
+         questions dropping down beside them on hover or focus -->
       <app-chat-history-nav
-        class="absolute bottom-3 z-20"
-        [class.right-1]="!business() || dashboards.shown() !== null"
-        [class.-right-12]="business() && dashboards.shown() === null"
+        class="absolute top-3 z-20"
+        [class.right-1]="navInside()"
+        [class.-right-12]="!navInside()"
         [container]="logElement()"
         [items]="navItems()"
         label="Conversation"

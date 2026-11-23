@@ -520,6 +520,13 @@ export class WorkflowRunChat {
     return items.length >= 2 ? items : [];
   });
 
+  /** The nav sits inside the log (not in the gutter beside the column): the log keeps a lane for it. */
+  protected readonly navInside = computed(
+    () =>
+      this.navItems().length > 0 &&
+      (!this.business() || this.dashboards.shown() !== null),
+  );
+
   /** A question picked in the navigation: the chat stops following the run. */
   protected onHistoryPicked(): void {
     this.stickToEnd = false;

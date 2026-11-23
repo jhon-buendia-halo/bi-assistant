@@ -1,7 +1,7 @@
 <div class="relative flex h-full min-h-0 flex-col">
   <!-- Chat-history navigation: a tick per user message, the list on hover or focus -->
   <app-chat-history-nav
-    class="absolute right-1.5 bottom-4 z-20"
+    class="absolute top-4 right-1.5 z-20"
     [container]="scrollerElement()"
     [items]="historyItems()"
     label="Chat history"
@@ -9,7 +9,11 @@
   />
 
   <!-- Messages: a past chat is read-only (past-chats R66) -->
-  <div #scroller class="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-4">
+  <div
+    #scroller
+    class="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-4"
+    [style.padding-right.px]="historyItems().length >= 2 ? 56 : null"
+  >
     <div class="flex w-full flex-col gap-6">
       @for (
         message of messages();
