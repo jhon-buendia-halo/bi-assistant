@@ -112,6 +112,7 @@ import {
   imageFilesOf,
 } from './composer-images.util';
 import { WorkflowRunsApiService } from '../../services/workflow-runs-api.service';
+import { RunDashboardState } from '../../../runs/services/run-dashboard-state';
 import {
   IMAGE_ACCEPT,
   isImageDataUrl,
@@ -506,6 +507,8 @@ export class WorkflowRunChat {
 
   /** Business view: the earlier questions of this conversation (R38). */
   protected readonly conversation = inject(WorkflowConversation);
+  /** The dashboard panel beside the chat (dashboard-panel): the nav stays inside the column while it shows. */
+  protected readonly dashboards = inject(RunDashboardState);
 
   /** The conversation navigation's questions; empty under two (R38). */
   protected readonly navItems = computed<ChatHistoryItem[]>(() => {

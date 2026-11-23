@@ -593,8 +593,8 @@
          questions growing up from them on hover or focus -->
       <app-chat-history-nav
         class="absolute bottom-3 z-20"
-        [class.right-1]="!business()"
-        [class.-right-12]="business()"
+        [class.right-1]="!business() || dashboards.shown() !== null"
+        [class.-right-12]="business() && dashboards.shown() === null"
         [container]="logElement()"
         [items]="navItems()"
         label="Conversation"
