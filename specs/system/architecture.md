@@ -1368,6 +1368,30 @@ flowchart LR
   - It is the one askable step whose earlier `skipped` status (Build a visual unticked) or `visual.skipped` does not refuse it: rows are what it needs, and with none the request is refused with `The earlier answer has no query rows to chart`.
   - The Decision and Consequences above stand; the graph and contract hash of `answer-business-question` are still unchanged.
 
+#### ADR-0054 — Live dashboards: a row snapshot per artifact version, drawn by the fixed runtime
+- **Status:** Accepted
+- **Date:** 2026-11-22
+- **Context:**
+  - Avery's team had no way to give the user an interactive dashboard on real data. Dashboard Image to Artifact (agents.md 5.17) draws a dashboard from a screenshot with **invented** values, and Map a Dashboard to Data (5.18) maps one to columns without drawing the rows. The user wants to ask Avery for a dashboard, ask again to change it, and take it away as plain files.
+  - The fixed runtime (`recreate-dashboard.runtime.ts`) already draws any dashboard blueprint with working filters, and the blueprint schema already names columns (a measure's column, a widget's dimension, a filter's column), so the same drawing can run on real rows.
+  - The connectors clamp a query to 500 rows unless a limit is passed, and a turn's stored records keep 200 rows, so neither carries a dashboard's data.
+  - Artifacts had no versions and were rendered at each read.
+- **Decision:**
+  - **A new teammate, Clara (`bi-analyst`), who designs data, not code.** Avery calls her through `build_dashboard`, offered only when the user asks for a dashboard or the conversation has one. Clara explores with the read-only dataset tools and submits one **draft** (title, theme, filters, widgets and measures over columns) together with **one data query** (`submit_dashboard`). Her draft schema is her own; the blueprint schema and the contract hashes of the two dashboard workflows do not change.
+  - **The host runs the query and keeps a row snapshot.** The host runs the submitted query with a row limit of 5,000 (carried to every connector), checks that every column the draft names is in the result, converts numbers and dates, and keeps the rows as the file `artifacts/<id>/v<N>/rows.json`, beside a version of the artifact (not in the document store, whose documents stay small). The snapshot is what the dashboard shows from then on; it is not refreshed.
+  - **A version per turn, the same artifact for the whole conversation.** An artifact holds `versions`: each turn of the conversation that changes the dashboard adds the next one, built from the conversation's current version, which a later turn is handed by the host. A version never changes. The top-level `blueprint` is the current version's, so existing readers keep working, and a legacy document reads as a version 1 without rows. The fields are optional: no migration.
+  - **The fixed runtime draws the rows.** The runtime's `mount` takes the rows and draws on them with its own filter logic; no model writes markup, style or script, as for the other dashboards. A download is the same runtime and the same rows as plain files (`index.html`, `styles.css`, `app.js`, `data.js`, `query.sql`, `README.txt`) that open from the computer's files.
+- **Consequences:**
+  - The dashboard is a **snapshot of at most 5,000 rows and 2 MB**: a question that needs more rows is answered by aggregating in Clara's query. It is stale the moment the data changes; a new version re-runs the query.
+  - Nothing a model wrote is executed in the dashboard or in the zip: the model's text reaches the page only as text, and the data is escaped JSON.
+  - Row files are user data in the app's data directory: they are removed with the artifact and are not part of any export of the document store.
+  - Clara's quality is bounded by the draft schema (the widget and filter kinds the runtime draws) and is measured by her own eval set (agents.md 8.1); Avery's own choices have no eval set (agents.md, open gaps), the gate keeping the tool out of runs without a dashboard.
+  - **Stack-neutral:** a rebuild needs a store for versions with a side file per version, a runtime that draws a blueprint from rows, a way to run one read-only query with a larger row limit, and a zip writer.
+- **Alternatives considered:**
+  - **B. A visual spec per dashboard, drawn by the visual designer's runtime (agents.md 6.8):** reuses Ryan's pipeline and its charts, but a spec describes one visual, not a set of widgets sharing filters over one dataset, so the filters would need a second runtime; rejected.
+  - **C. The model writes the dashboard's code (HTML, CSS and JS):** the most flexible, and the same route Ryan's legacy mode took, but every dashboard would need validation and repair, a follow-up would rewrite the code and drift, and the zip would ship code nobody reviewed; rejected against ADR-0034 (the flow and the code come from the host).
+  - **A (chosen): the blueprint drawn by the fixed runtime on real rows,** which reuses the runtime, its filters and its tests, makes a version a small diffable draft, and keeps the model's output to data.
+
 ## Level 4 — Code
 
 ```mermaid

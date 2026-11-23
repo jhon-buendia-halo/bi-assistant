@@ -75,10 +75,12 @@ Agents' history per run (2026-11-15)
 - R32. Dashboard Image to Artifact SHALL run, fixed in code ([../../system/agents.md](../../system/agents.md) 5.17), on its input `image` (one PNG, JPEG or WebP image of a dashboard, at most 5 MB, required) and `question` (the instructions, optional; empty means `Recreate this dashboard as an interactive mock`), through three steps in this order: **Load image** (code), **Read dashboard** (Grace, the Dashboard Reader, returns the dashboard as data: its filters, its widgets with their measures and breakdowns, and the columns of a mock dataset: the blueprint) and **Save dashboard** (code).
   - The run's result SHALL be an interactive visual of the run, drawn by a fixed runtime: no model SHALL write its markup, style or script. Every filter SHALL change the widgets it filters. It SHALL carry no mapping marks.
   - The run SHALL save the dashboard it read as an artifact (R33) named after the dashboard's title, with the image it was read from, and its answer SHALL list the widgets, name the artifact and point to Map a Dashboard to Data. A run that is stopped or fails SHALL save nothing.
-  - Every value the dashboard shows SHALL be invented, and the answer SHALL say so. The run SHALL NOT read any datasource, and the dashboard SHALL NOT load any external resource.
+  - Every value the dashboard shows SHALL be invented, and the answer SHALL say so. The run SHALL NOT read any datasource, and the dashboard SHALL NOT load any external resource. (A dashboard built on real rows is a different thing, made by Clara in Avery's runs: R33, R45.)
   - The `image` field SHALL accept the image by paste (an image on the clipboard while the composer has focus) and by drop onto the composer, as well as by its file picker; a pasted or dropped image replaces the one chosen. This run has no Read images step (R35).
   - The image SHALL be stored as a file of the run's workspace and SHALL NOT be stored in the run's document nor returned by the API. An image that shows no dashboard SHALL fail Read dashboard with `The image shows no dashboard to recreate`. A follow-up on such a run SHALL run on the same image with the new instructions.
-- R33. **Artifacts** SHALL be reusable context saved from workflow runs, kept in the **Artifacts** area of the navigation rail ([../app-shell/spec.md](../app-shell/spec.md) R3). The one kind today is a **dashboard**: the blueprint a Dashboard Image to Artifact run read (R32). An artifact SHALL NOT hold a data mapping.
+- R33. **Artifacts** SHALL be reusable context saved from workflow runs, kept in the **Artifacts** area of the navigation rail ([../app-shell/spec.md](../app-shell/spec.md) R3). The one kind today is a **dashboard**: the blueprint a Dashboard Image to Artifact run read (R32), or the dashboard Clara built in an Avery run (R45). An artifact SHALL NOT hold a data mapping.
+  - **Versions and live dashboards** (2026-11-22; [../../system/data-model.md](../../system/data-model.md) 3.18, [../../system/architecture.md](../../system/architecture.md) ADR-0054). An artifact SHALL have **versions**: a dashboard built on real data SHALL start at version 1, and each later turn of the conversation that changes it SHALL add the next version to the same artifact; an earlier version SHALL stay readable and SHALL NOT change. A version of a dashboard built by Clara SHALL be **live**: it keeps the rows of its one data query (at most 5,000), the query's SQL and its columns, and the fixed runtime SHALL draw the widgets on those rows (no invented values), every filter recomputing the widgets it filters. An artifact saved by Dashboard Image to Artifact, or one saved before versions existed, SHALL read as a version 1 with no rows, drawn with its invented values as before. A version whose rows file is gone SHALL still open, drawn as a mock, and its page SHALL say its data is missing.
+  - **Download.** A dashboard's page and its card SHALL offer **Download**: a zip of plain files (HTML, CSS and JS, its data and its query) for the version shown, that opens from the computer's files with no server and no internet and loads no external resource ([../../system/api.md](../../system/api.md) 163).
   - A finished run of Dashboard Image to Artifact SHALL show that its dashboard was saved, with **Open** (the artifact's page) and **Map to data** (Map a Dashboard to Data with that artifact chosen).
   - The Artifacts area SHALL list every artifact grouped by kind, one section per kind that has artifacts, headed by the kind's plural (**Dashboards**) and the number of artifacts shown in it, newest first within a section; each artifact SHALL show its name, kind, description, number of widgets and filters and its image when it has one. A search over name and description SHALL filter the list, and a section with no match SHALL NOT be shown. An artifact's page SHALL show the dashboard drawn without mapping marks, and SHALL offer **Rename**, **Delete** (after a confirmation) and **Map to data**. Deleting an artifact SHALL NOT change the runs that used it.
 - R34. Map a Dashboard to Data SHALL run, fixed in code ([../../system/agents.md](../../system/agents.md) 5.18), on its input `artifact` (a dashboard saved in Artifacts, required), `datasets` (at least one, required) `question` (the instructions, optional; empty means `Map this dashboard to the datasets`) and `images` (optional, R35), through five steps in this order: **Read images** (skipped when the run has none; the flow branches to it from Start, R35), **Load dashboard** (code: the saved dashboard), **Load catalog** (code: the entities and columns of the datasets, names and types only), **Map data** (Daniel, the Data Mapper, ties each column the dashboard reads to a column of the datasets or says what is missing) and **Render dashboard** (code).
@@ -152,18 +154,22 @@ Consumption Gap Analysis (2026-11-16, roadmap 1.30; ADR-0051)
   - When Avery asks the user a question the run SHALL be `suspended` with it (R44's wait: [../../system/api.md](../../system/api.md) 138, a snapshot only while it waits, R28); resumed with the answer she SHALL go on with it, and what the team produced so far in the turn SHALL be kept, not redone.
   - It SHALL be listed second, in the Official section of User journeys (R5), its chip reading `1 step` (R5). The home page's Ask SHALL keep running Answer a Business Question.
   - Its catalogue entry's primary agent (`primaryFor`) SHALL be `insights-analyst`, which hosts the run, shared with Answer a Business Question; the Orchestrate step's agent SHALL be Avery. The agent's own workflow ([../../system/api.md](../../system/api.md) 34 `workflow`) SHALL stay Answer a Business Question's, while each catalogue workflow's detail (117) SHALL show its own steps.
-  - **Avery + Michael** (2026-11-22; `orchestrated-answer-michael`; [../../system/agents.md](../../system/agents.md) 5.23). A third version SHALL run the same Orchestrate step on this workflow's engine with Avery's team reduced to Michael: it SHALL take only `question` and `datasets`, offer Avery only `answer_from_data` (Michael plans from her brief, queries and writes the answer the user reads) and `ask_clarification`, and be listed third. Everything this rule and R46 say of Answer a Business Question (orchestrated) (its step, exits, wait, conversation, archive) SHALL hold for it too.
+  - **Dashboards by Clara** (2026-11-22; [../../system/agents.md](../../system/agents.md) 2.22, 3.16, 3.17, 5.22). The team SHALL include **Clara, the Business Intelligence Analyst** (`bi-analyst`), whom Avery calls with `build_dashboard { brief }`. The tool SHALL be offered **only when the user asks for a dashboard or the conversation already has one**: otherwise Avery SHALL NOT have it and her run's facts SHALL NOT mention dashboards, so a plain question (R27 style) is answered as before and builds nothing. Clara SHALL explore the data with the read-only dataset tools and SHALL submit one dashboard draft with the one data query that feeds it; the host SHALL run that query (up to 5,000 rows), refuse a draft that names a column the query does not return, and save the accepted draft as a version of an artifact (R33). Avery SHALL call her at most twice per run.
+  - **The conversation's dashboard** (R46). The first dashboard of a conversation SHALL be created as version 1 (`Created · Version 1`); a follow-up that changes it (a new filter, another breakdown, another measure) SHALL add a version to the **same** artifact (`Updated · Version <n>`): Avery SHALL be told the dashboard the conversation has and Clara SHALL be given it to change, not to start over. A conversation SHALL NOT hold more than one dashboard.
+  - **The card.** The run's answer SHALL carry the dashboard, shown as a **dashboard card** (R33, [../../system/ui.md](../../system/ui.md) 4.4b) with its title, `Created`/`Updated` and version, its widgets, filters and rows, a `Live data` mark, **Open** (the Artifacts page at that version) and **Download**; Avery's closing words SHALL be the answer text. A run that is stopped or fails SHALL save no version. Clara's own words SHALL NOT reach the user.
+  - **Avery + Michael** (2026-11-22; `orchestrated-answer-michael`; [../../system/agents.md](../../system/agents.md) 5.23). A third version SHALL run the same Orchestrate step on this workflow's engine with Avery's team reduced to Michael: it SHALL take only `question` and `datasets`, offer Avery only `answer_from_data` (Michael plans from her brief, queries and writes the answer the user reads), `build_dashboard` (Clara, gated as above) and `ask_clarification`, and be listed third. Everything this rule and R46 say of Answer a Business Question (orchestrated) (its step, exits, wait, conversation, archive) SHALL hold for it too.
 - R46. **Avery's conversation** (2026-11-20; R45). A conversation with Avery SHALL never end unless it is archived:
   - **Runs and conversations.** Each message to Avery SHALL be a run of `orchestrated-answer`. A run with no `context.fromRunId` SHALL start a conversation: its `conversationId` is its own id. A follow-up (`context.fromRunId` naming an earlier run, [../../system/api.md](../../system/api.md) 118, 119) SHALL join the earlier run's conversation (the same `conversationId`) and Avery SHALL read the conversation so far: the questions and answers of its runs in order, the **last 20 turns**, as the host's transcript, then the new message ([../../system/data-model.md](../../system/data-model.md) 3.16).
   - **The run chat** ([../../system/ui.md](../../system/ui.md)) SHALL show, for this workflow, a **Message Avery** box under her last reply (once the run has ended) that sends the text as a follow-up, and **Archive** in the chat's top bar.
   - **Archive.** Archiving ([../../system/api.md](../../system/api.md) 159) SHALL set `archivedAt` on every run of the conversation. An archived conversation SHALL be hidden from the run history (120, which keeps its 120-character titles) and from the home page's recent runs, SHALL be read-only (no Message Avery box, no Run again) and SHALL be listed on the Runs page under an **Archived** filter (120 `?archived=true`), where **Unarchive** (160) brings it back. A message to an archived conversation SHALL be refused with 409 `This conversation is archived`; archiving while a run of the conversation runs or waits SHALL be refused with 409 `The run is still running`; an unknown run answers 404.
   - The archive is a flag: nothing is deleted, and deleting a run (122) works on an archived one as on any other.
+  - **The dashboard travels with the conversation.** The dashboard of a conversation SHALL be the one on its last answer that carries one: a later message of the conversation SHALL be handed that dashboard (R45), so asking for a change in plain words is enough, and archiving the conversation SHALL keep its artifact. Deleting the artifact SHALL end the carry: the next message is read on its own words.
 - R47. **The run chat is a conversation** (2026-11-22; replaces the input form of R12 and R21; [../../system/ui.md](../../system/ui.md) 4.4b). A workflow's run chat (the Run panel's Chat and the Business view) SHALL read as a conversation, not a form:
   - **Composer.** A pill bar at the bottom with a round `+` button (`aria-label` `Add inputs and options`), an auto-growing text box (placeholder `Message <lead agent name>` when the workflow has a lead agent such as Avery, else `Message <workflow name>`; Enter sends, Shift+Enter adds a line) and a round **Send** button. There SHALL be no **Execute** button and no labelled field with a `Required` or `Optional` tag in the chat. The Start node dialog and the API keep listing every field with its `required` flag (R11, R14).
   - **Messages** SHALL be bubbles: the user's turns right-aligned; the agent's turns left-aligned with an avatar initial and a `Name · Role` caption (R39). The answer, the relay, the team and the evidence views of a run that has started are unchanged and show on the agent's side.
   - **The agent asks for what is missing.** On Send the typed text SHALL fill the workflow's prompt field; then each required, non-hidden input still empty SHALL be asked in declared order, one at a time, by an agent message the app writes itself (no model call, no tokens). A `datasets`, `dataset` or `artifact` field SHALL be asked with option cards from the real catalogue (name and a subline such as `PostgreSQL · 9 tables`, each with an Add button that reads `✓ Added` once picked; the first 5 and `Show all N`; typing in the composer filters them; `Continue with N dataset(s)`), a `datasets` ask with the footnote `<lead agent name> only reads your data with read-only SQL.`; an `image` field with an upload card (click, drop or paste); a `text`, `number` or non-prompt `textarea` field in words, answered in the composer; a required `boolean` with Yes and No chips. Each answer SHALL be echoed as a user bubble. When nothing required is missing the run SHALL start with the same request as before (R14 still checks it). A field already filled (through `+`, by its default, or carried by **Run again** or a follow-up) SHALL NOT be asked. A server refusal naming a field SHALL show as an agent message.
   - **Optional inputs** SHALL live behind `+`: a popover with an **ADD** section (datasets, reference images, an artifact, other optional pickers or text) and an **OPTIONS** section (each `boolean` as a row with a switch). Whatever is set SHALL show as removable chips above the composer.
-  - **Empty state.** The workflow's name, a one-line hint built from its agents (`Ask Avery and Michael anything about your data.`) and, when the workflow has `starterQuestions`, them as pills that fill the composer and do not send.
+  - **Empty state.** The workflow's name, a one-line hint built from its agents (`Ask Avery, Michael and Clara anything about your data.` for Avery + Michael) and, when the workflow has `starterQuestions`, them as pills that fill the composer and do not send.
   - Unchanged: Avery's threaded conversation, follow-ups, Run again, the chat-history navigation, the mid-run approval gates and Archive (R44-R46). The welcome page's question box is out of scope.
 ## Edge cases and errors
 
@@ -426,6 +432,52 @@ Feature: Workflow runs
     When I try to attach a fifth image
     Then I see "Reference images must be at most 4 images" and the thumbnails stay 4
 
+```
+
+### Feature: Live dashboards from Avery
+
+Written without an E2E reference until `frontend/e2e/bi-dashboard.spec.ts` exists (the check of `scripts/check-specs.py` refuses an `E2E:` line to a file that is not there).
+
+```gherkin
+Feature: Live dashboards from Avery
+
+  Background:
+    Given a dataset "World Cup Core" and the recording stub model as the LLM
+    And I am in the run chat of "Answer a Business Question (Avery + Michael)"
+
+  @story-bi-dashboard
+  Scenario: I ask Avery for a dashboard and Clara builds it on my data
+    When I send "Create a dashboard of goals by team and tournament"
+    Then the relay shows Avery asking Clara "for a dashboard" and Clara's own steps under it
+    And the answer shows a dashboard card "Created · Version 1" with the mark "Live data"
+    And the card's counts read the dashboard's widgets, filters and rows
+    When I click Open on the card
+    Then the Artifacts page shows the dashboard at version 1, drawn on the query's real rows with no mapping marks
+
+  @story-bi-dashboard
+  Scenario: I evolve the dashboard with a follow-up into version 2
+    Given Avery built a dashboard of goals by team and tournament as version 1
+    When I send "add a filter by stage"
+    Then the answer shows a dashboard card "Updated · Version 2"
+    And the Artifacts page lists the same artifact with versions 1 and 2 in the Version selector
+    And the new filter "Stage" recomputes the widgets it filters in version 2
+    When I choose version 1 in the selector
+    Then version 1 is drawn as it was, without the Stage filter
+
+  @story-bi-dashboard
+  Scenario: I download the dashboard as plain HTML, CSS and JS
+    Given Avery built a dashboard as version 2
+    When I click Download
+    Then I get a zip named after the dashboard and "-v2.zip" with index.html, styles.css, app.js, data.js, query.sql and README.txt
+    And index.html opens from the computer's files with no server and shows the dashboard with its filters working
+    And no file loads a resource from the internet
+
+  @story-bi-dashboard
+  Scenario: A plain question does not build a dashboard
+    When I send "Which team scored the most goals?"
+    Then Michael answers and Avery closes
+    And the relay shows no ask to Clara
+    And the answer has no dashboard card and no artifact is saved
 ```
 
 ### Feature: Ask one agent in a follow-up
