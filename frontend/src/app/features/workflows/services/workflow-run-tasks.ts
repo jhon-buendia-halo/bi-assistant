@@ -261,9 +261,10 @@ export class WorkflowRunTasks {
    * catalogue, which is read the first time; until then, the plain detail.
    */
   private showTeam(run: WorkflowRun, task: BackgroundTaskHandle): void {
-    // The page streams this run: its live team is truer than the stored run.
+    // The page streams this run: its live team is truer than the stored run,
+    // except while it is queued, when the stream has no steps to tell.
     const live = this.liveAt.get(run.id);
-    if (live !== undefined && Date.now() - live < LIVE_FRESH_MS) return;
+    if (run.status !== 'queued' && live !== undefined && Date.now() - live < LIVE_FRESH_MS) return;
     const known = this.catalogue.get(run.workflowId);
     if (known === undefined) {
       this.catalogue.set(run.workflowId, 'loading');

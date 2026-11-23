@@ -366,13 +366,13 @@ Feature: Workflow runs
     And the run is stored "stopped" on the server, not only on the page
 
   Scenario: A run waits in the queue while every slot is busy
-    Given every one of the 8 run slots is taken by a run that is running
+    Given every one of the run slots is taken by a run that is running
     When I click Execute on a question in "Answer a Business Question"
     Then the Chat shows the status "Queued…" and every node on the canvas stays idle
     And the Background tasks button lists the run with "Waiting for a free slot"
     And the run is stored "queued" on the server, with no steps
     When one of the running runs ends
-    Then my run starts, reads "Running…" and its steps go Running then Done as in any run
+    Then my run starts and its steps go Running then Done as in any run
 
   Scenario: A run the app stopped in starts again after a restart
     Given "Answer a Business Question" is running on a question

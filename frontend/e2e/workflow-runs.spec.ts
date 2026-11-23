@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import axe from 'axe-core';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
@@ -12,6 +15,7 @@ import {
   messageText,
   startLlmStub,
 } from './helpers/llm-stub';
+import { runWorkflow, type StoredRun } from './helpers/runs-api';
 import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
 import { fillRun as fillRunDefault, pickDataset, pickedDataset } from './helpers/run-ui';
 
@@ -56,9 +60,29 @@ test.beforeEach(async ({ page }) => {
   await saveLenaiSettings(page, stub.baseUrl);
 });
 
+/** A data directory of a test's own app (the queue test's), removed after it. */
+let ownDir: string | undefined;
+
 test.afterEach(async () => {
   await stub.close();
 });
+
+test.afterAll(() => {
+  if (ownDir) fs.rmSync(ownDir, { recursive: true, force: true });
+  ownDir = undefined;
+});
+
+/** The stored runs' statuses, newest first (api.md 120). */
+async function storedStatuses(page: Page): Promise<string[]> {
+  const res = await page.request.get(`${apiBaseOf(page)}/workflow-runs`);
+  const { runs } = (await res.json()) as { runs: { status: string }[] };
+  return runs.map((run) => run.status);
+}
+
+async function storedRun(page: Page, id: string): Promise<StoredRun> {
+  const res = await page.request.get(`${apiBaseOf(page)}/workflow-runs/${id}`);
+  return (await res.json()) as StoredRun;
+}
 
 // ------------------------------------------------------------------ the stub
 
@@ -725,6 +749,117 @@ test.describe('Feature: Workflow runs', () => {
             return runs.map((run) => run.status);
           })
           .toEqual(['stopped']);
+      });
+    } finally {
+      held.release();
+    }
+  });
+
+  test('A run waits in the queue while every slot is busy', async ({ launchApp }) => {
+    const OTHER = 'How many matches were played per stage?';
+    stub.reply = answerWithSql({ [QUESTION]: ANSWER, [OTHER]: ANSWER });
+    // The run in the only slot waits until the test has seen mine queued.
+    const held = gate();
+    stub.hold = (request) =>
+      isTurn(request, OTHER) && afterToolResult(request) ? held.promise : undefined;
+    // Its own app with one run slot: the default `page` app keeps 8.
+    ownDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qti-e2e-queue-'));
+    const { page } = await launchApp(ownDir, { WORKFLOW_MAX_LIVE_RUNS: '1' });
+    await seedWorldCupDataset(page);
+    await saveLenaiSettings(page, stub.baseUrl);
+    const tasksButton = page
+      .getByRole('complementary', { name: 'Navigation rail' })
+      .getByTestId('background-tasks-button');
+    let busy: ReturnType<typeof runWorkflow> | undefined;
+    try {
+      await test.step('Given every one of the run slots is taken by a run that is running', async () => {
+        busy = runWorkflow(page, V2_ID, {
+          question: OTHER,
+          datasets: [WORLD_CUP_DATASET],
+          buildVisual: false,
+          approveSteps: false,
+        });
+        await expect.poll(() => storedStatuses(page)).toEqual(['running']);
+      });
+      await test.step(`When I click Execute on a question in "${V2}"`, async () => {
+        await openWorkflowPage(page, V2_ID, V2);
+        await openRunTab(page);
+        await fillRun(page, QUESTION, WORLD_CUP_DATASET);
+        await page.getByTestId('workflow-run').click();
+      });
+      await test.step('Then the Chat shows the status "Queued…" and every node on the canvas stays idle', async () => {
+        await expect(page.getByTestId('workflow-run-status')).toHaveText('Queued…');
+        for (const id of V2_STEPS) {
+          await expect(runStep(page, id)).not.toHaveAttribute('data-status', /running|success/);
+        }
+        await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
+      });
+      await test.step('And the Background tasks button lists the run with "Waiting for a free slot"', async () => {
+        // The run in the slot was started through the API, so only mine is a task here.
+        await expect(tasksButton).toHaveAccessibleName('Background tasks, 1 running');
+        await tasksButton.click();
+        const panel = page.getByRole('dialog', { name: 'Background tasks' });
+        const row = panel.getByTestId('background-task').filter({ hasText: QUESTION });
+        await expect(row).toContainText('Waiting for a free slot');
+        await page.keyboard.press('Escape');
+        await expect(panel).toBeHidden();
+      });
+      await test.step('And the run is stored "queued" on the server, with no steps', async () => {
+        await expect.poll(() => storedStatuses(page)).toEqual(['queued', 'running']);
+      });
+      await test.step('When one of the running runs ends', async () => {
+        held.release();
+        const first = await busy!;
+        expect(first.run?.status).toBe('success');
+      });
+      await test.step('Then my run starts and its steps go Running then Done as in any run', async () => {
+        await expect(runAnswer(page)).toContainText(ANSWER);
+        await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+        await expect(runStep(page, 'write-answer')).toHaveAttribute('data-status', 'success');
+        await expect.poll(() => storedStatuses(page)).toEqual(['success', 'success']);
+      });
+    } finally {
+      held.release();
+    }
+  });
+
+  test('A run the app stopped in starts again after a restart', async ({ app, page }) => {
+    test.skip(app.target !== 'web', 'restarting the backend alone needs the web target');
+    stub.reply = answerWithSql({ [QUESTION]: ANSWER });
+    // The first attempt hangs after its query, as a run cut off by a crash.
+    const held = gate();
+    stub.hold = (request) =>
+      isTurn(request, QUESTION) && afterToolResult(request) ? held.promise : undefined;
+    let runId = '';
+    try {
+      await test.step(`Given "${V2}" is running on a question`, async () => {
+        await openWorkflowPage(page, V2_ID, V2);
+        await openRunTab(page);
+        await fillRun(page, QUESTION, WORLD_CUP_DATASET);
+        await page.getByTestId('workflow-run').click();
+        await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
+        const res = await page.request.get(`${apiBaseOf(page)}/workflow-runs`);
+        const { runs } = (await res.json()) as { runs: { id: string; status: string }[] };
+        expect(runs.map((run) => run.status)).toEqual(['running']);
+        runId = runs[0].id;
+        expect((await storedRun(page, runId)).attempts).toBe(1);
+      });
+      await test.step('When the app stops and starts again', async () => {
+        // The second attempt is answered at once.
+        stub.hold = undefined;
+        await app.restartCli();
+      });
+      await test.step('Then the run is queued again and starts from scratch', async () => {
+        await expect.poll(async () => (await storedRun(page, runId)).attempts).toBe(2);
+      });
+      await test.step('And after it ends I see its answer, and the run is stored "success" with 2 attempts', async () => {
+        await expect.poll(async () => (await storedRun(page, runId)).status, { timeout: 30_000 }).toBe('success');
+        const run = await storedRun(page, runId);
+        expect(run.attempts).toBe(2);
+        expect(run.answer?.content).toContain(ANSWER);
+        await railItem(page, 'Runs').click();
+        const row = page.getByTestId(`run-${runId}`);
+        await expect(row.getByTestId('row-run-status')).toHaveText('Done');
       });
     } finally {
       held.release();
