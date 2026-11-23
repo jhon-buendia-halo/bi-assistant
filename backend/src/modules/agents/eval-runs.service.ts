@@ -4,6 +4,7 @@ import { DatasetsRepository } from '../datasets/repositories/datasets.repository
 import { DatasourcesService } from '../datasources/datasources.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { OntologyService } from '../ontology/ontology.service';
+import { LlmService } from '../llm/llm.service';
 import { EvalRunsRepository } from './repositories/eval-runs.repository';
 import {
   computeRegressionDiff,
@@ -19,12 +20,15 @@ import {
   fixtureForCases,
   runAssistantEvalCase,
   selectEvalCases,
+  selectEvalSets,
 } from '../../mastra/evals/assistant.evals';
 import {
   evalSetsFor,
   evalTargetFor,
   evalTargetIdFor,
 } from '../../mastra/evals/eval-sets';
+import { savedLlmLabel } from '../../mastra/evals/eval-cli-run';
+import { inEvalRun } from '../../mastra/evals/eval-run-scope';
 import type { SampleFixture } from '../testing-data/fixtures/registry';
 
 export type EvalRunStatus = 'running' | 'completed' | 'failed';
@@ -46,6 +50,16 @@ export interface EvalRunView {
   error?: string;
   startedAt: string;
   finishedAt?: string;
+  /**
+   * The eval set the questions belong to; null when they span several sets.
+   * Absent on runs recorded before ADR-0054.
+   */
+  setId?: string | null;
+  /** What the run ran on; absent on runs recorded before ADR-0054. */
+  provider?: string;
+  model?: string;
+  /** Absent = 'app'. */
+  source?: 'app' | 'cli';
   /**
    * Regression comparison against the most recent previous completed run
    * for this agent with the same datasource and datasets, computed once this
@@ -80,6 +94,7 @@ export class EvalRunsService {
     private readonly datasources: DatasourcesService,
     private readonly sessions: SessionsService,
     private readonly knowledge: OntologyService,
+    private readonly llm: LlmService,
   ) {}
 
   /** Display name for a datasource id, falling back to the id itself. */
@@ -162,6 +177,9 @@ export class EvalRunsService {
     if (datasetError) return { error: datasetError };
 
     const jobId = randomUUID();
+    // What the run runs on, recorded so pass^3 never mixes models (ADR-0054).
+    const touched = selectEvalSets(caseIds, sets);
+    const { provider, model } = savedLlmLabel(await this.llm.getView());
     const view: EvalRunView = {
       jobId,
       agentKey,
@@ -173,6 +191,10 @@ export class EvalRunsService {
       totalCases: cases.length,
       currentQuestion: cases[0]?.question,
       startedAt: new Date().toISOString(),
+      setId: touched.length === 1 ? touched[0].id : null,
+      provider,
+      model,
+      source: 'app',
     };
     this.runs.set(jobId, view);
     this.active.set(agentKey, jobId);
@@ -225,6 +247,7 @@ export class EvalRunsService {
           evalSession?.id,
           knowledgeBlock,
           target,
+          view.jobId,
         );
         view.results.push(result);
         view.currentQuestion = cases[index + 1]?.question;
@@ -243,8 +266,9 @@ export class EvalRunsService {
       view.finishedAt = new Date().toISOString();
       this.active.delete(view.agentKey);
       await this.repository.save(view);
-      // The agent's own clean-up of what this run created, if any.
-      await target.finish?.(view.datasets);
+      // The agent's own clean-up of what this run created, if any, inside
+      // the run's scope so any model call it makes is marked (ADR-0054).
+      await inEvalRun(view.jobId, async () => target.finish?.(view.datasets));
       await cleanupEvalHost(this.sessions, evalSession);
     }
   }

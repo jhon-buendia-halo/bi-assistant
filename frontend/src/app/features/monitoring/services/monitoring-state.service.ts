@@ -1,5 +1,9 @@
 import { Injectable, computed, signal } from '@angular/core';
 import {
+  EMPTY_QUALITY_FILTERS,
+  QualityFilters,
+} from '../models/agent-quality.model';
+import {
   EMPTY_FILTERS,
   LlmCallFilters,
   PageSize,
@@ -9,7 +13,7 @@ import {
   SessionFilters,
 } from '../models/session-flow.model';
 
-export type MonitoringTab = 'calls' | 'sessions';
+export type MonitoringTab = 'calls' | 'sessions' | 'quality';
 
 /** True when any key differs from its empty value. */
 function differs<T extends object>(values: T, empty: T): boolean {
@@ -33,17 +37,26 @@ export class MonitoringStateService {
   readonly pageSize = signal<PageSize>(25);
 
   /** True when any filter is set (enables Clear filters). */
-  readonly hasFilters = computed(() =>
-    differs(this.filters(), EMPTY_FILTERS),
-  );
+  readonly hasFilters = computed(() => differs(this.filters(), EMPTY_FILTERS));
 
   // Sessions tab
-  readonly sessionFilters = signal<SessionFilters>({ ...EMPTY_SESSION_FILTERS });
+  readonly sessionFilters = signal<SessionFilters>({
+    ...EMPTY_SESSION_FILTERS,
+  });
   readonly sessionPage = signal(1);
   readonly sessionPageSize = signal<PageSize>(25);
 
   readonly hasSessionFilters = computed(() =>
     differs(this.sessionFilters(), EMPTY_SESSION_FILTERS),
+  );
+
+  // Agent quality tab
+  readonly qualityFilters = signal<QualityFilters>({
+    ...EMPTY_QUALITY_FILTERS,
+  });
+
+  readonly hasQualityFilters = computed(() =>
+    differs(this.qualityFilters(), EMPTY_QUALITY_FILTERS),
   );
 
   setTab(tab: MonitoringTab): void {
@@ -109,5 +122,21 @@ export class MonitoringStateService {
 
   setSessionPage(page: number): void {
     this.sessionPage.set(Math.max(1, page));
+  }
+
+  /** Changes one quality filter; choosing another agent clears the set. */
+  setQualityFilter<K extends keyof QualityFilters>(
+    key: K,
+    value: QualityFilters[K],
+  ): void {
+    this.qualityFilters.update((filters) => {
+      const next = { ...filters, [key]: value };
+      if (key === 'agent') next.set = '';
+      return next;
+    });
+  }
+
+  clearQualityFilters(): void {
+    this.qualityFilters.set({ ...EMPTY_QUALITY_FILTERS });
   }
 }

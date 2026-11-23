@@ -7,6 +7,7 @@ jest.mock('../sessions/sessions.service', () => ({
 jest.mock('../ontology/ontology.service', () => ({
   OntologyService: class {},
 }));
+jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 // One set per agent: a set's agent is its `agentKey`, `assistant` by default.
 jest.mock('../../mastra/evals/eval-sets', () => {
   const sets = [
@@ -32,6 +33,7 @@ jest.mock('../../mastra/evals/eval-sets', () => {
   };
 });
 jest.mock('../../mastra/evals/assistant.evals', () => ({
+  selectEvalSets: jest.fn((_ids: unknown, sets: unknown[]) => sets),
   selectEvalCases: jest.fn(() => [
     { id: 'champion-2022', question: 'Who won the 2022 World Cup?' },
   ]),
@@ -57,8 +59,10 @@ import {
   fixtureForCases,
   runAssistantEvalCase,
   selectEvalCases,
+  selectEvalSets,
 } from '../../mastra/evals/assistant.evals';
 import { evalTargetFor } from '../../mastra/evals/eval-sets';
+import { currentEvalRunId } from '../../mastra/evals/eval-run-scope';
 
 describe('EvalRunsService dataset validation', () => {
   const datasets = { list: jest.fn() };
@@ -68,6 +72,11 @@ describe('EvalRunsService dataset validation', () => {
     mostRecentCompleted: jest.fn(),
   };
   const knowledge = { definitionBlock: jest.fn().mockResolvedValue('') };
+  const llm = {
+    getView: jest
+      .fn()
+      .mockResolvedValue({ provider: 'copilot', model: 'gpt-5' }),
+  };
   /** A test body, kept as a wrapper so the cases read as before. */
   const asDemoUser =
     <T>(fn: () => Promise<T>) =>
@@ -80,6 +89,7 @@ describe('EvalRunsService dataset validation', () => {
       {} as never,
       {} as never,
       knowledge as never,
+      llm as never,
     );
 
   beforeEach(() => jest.clearAllMocks());
@@ -136,14 +146,23 @@ describe('EvalRunsService dataset validation', () => {
       const result = await runner.start('assistant', 'wc');
       expect(result).toEqual({ jobId: expect.any(String) as string });
       await new Promise((resolve) => setImmediate(resolve));
+      if (!('jobId' in result)) throw new Error('Run did not start');
       expect(runAssistantEvalCase).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'champion-2022' }),
         ['Sample'],
         'session',
         '',
         { agentKey: 'assistant' },
+        result.jobId,
       );
-      if (!('jobId' in result)) throw new Error('Run did not start');
+      expect(repository.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'app',
+          setId: 'world-cup',
+          provider: 'copilot',
+          model: 'gpt-5',
+        }),
+      );
       expect((await runner.status(result.jobId))?.status).toBe('completed');
       expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
         'assistant',
@@ -156,6 +175,9 @@ describe('EvalRunsService dataset validation', () => {
 });
 
 describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
+  const llm = {
+    getView: jest.fn().mockResolvedValue({ provider: null, model: null }),
+  };
   const sample = [
     {
       name: 'Sample',
@@ -186,9 +208,20 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
       {} as never,
       {} as never,
       { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      llm as never,
     );
 
   beforeEach(() => jest.clearAllMocks());
+
+  it('records no set when the questions span several sets', async () => {
+    jest
+      .mocked(selectEvalSets)
+      .mockReturnValueOnce([{ id: 'a' }, { id: 'b' }] as never);
+    await service().start('assistant', 'wc');
+    expect(repository.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ setId: null }),
+    );
+  });
 
   it('refuses an agent with no eval set', async () => {
     await expect(service().start('visualization', 'wc')).resolves.toEqual({
@@ -206,6 +239,14 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
     jest
       .mocked(runAssistantEvalCase)
       .mockResolvedValueOnce({ id: 'dr-first', passed: true } as never);
+    // The clean-up runs in the run's scope, so its model calls are marked.
+    const finishScopes: (string | undefined)[] = [];
+    (
+      evalTargetFor('data-readiness') as unknown as { finish: jest.Mock }
+    ).finish.mockImplementationOnce(() => {
+      finishScopes.push(currentEvalRunId());
+      return Promise.resolve();
+    });
 
     const started = await service().start('data-readiness', 'wc', ['dr-first']);
 
@@ -224,6 +265,10 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
         agentKey: 'data-readiness',
         caseIds: ['dr-first'],
         totalCases: 1,
+        setId: 'data-readiness',
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        source: 'app',
       }),
     );
     for (let i = 0; i < 5; i++) {
@@ -238,12 +283,17 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
       'session',
       '',
       target,
+      (started as { jobId: string }).jobId,
     );
     expect(target.finish).toHaveBeenCalledWith(['Sample']);
+    expect(finishScopes).toEqual([(started as { jobId: string }).jobId]);
   });
 });
 
 describe('EvalRunsService one running run per agent', () => {
+  const llm = {
+    getView: jest.fn().mockResolvedValue({ provider: null, model: null }),
+  };
   const sample = [
     {
       name: 'Sample',
@@ -285,6 +335,7 @@ describe('EvalRunsService one running run per agent', () => {
       {} as never,
       {} as never,
       { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      llm as never,
     );
 
     const started = await service.start('assistant', 'wc');

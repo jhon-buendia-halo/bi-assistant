@@ -2,6 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
+import { AgentQualityPage, QualityQuery } from '../models/agent-quality.model';
 import {
   LlmCallDetail,
   LlmCallPage,
@@ -62,6 +63,13 @@ export class MonitoringApiService {
     return this.http.get<TraceDetail>(
       `${API_BASE_URL}/monitoring/traces/${encodeURIComponent(traceId)}`,
       { params: paramsOf({ framework }) },
+    );
+  }
+
+  getAgentQuality(query: QualityQuery): Observable<AgentQualityPage> {
+    return this.http.get<AgentQualityPage>(
+      `${API_BASE_URL}/monitoring/agent-quality`,
+      { params: paramsOf(query) },
     );
   }
 }
