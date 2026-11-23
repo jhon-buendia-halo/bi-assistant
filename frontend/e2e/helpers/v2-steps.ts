@@ -1,10 +1,16 @@
 /**
- * The structured model calls of Insights Analyst (`answer-business-question`):
- * Plan and Write answer each call the model once with no tools and ask for
- * JSON, and their instructions start with a fixed first line. The LLM stubs
- * recognise them by that line and answer with a plan or an answer, so every
- * v2 run in the E2E suite gets through both steps; any other call (Analyse,
- * a step chat) gets the test's own scripted reply.
+ * How the LLM stubs tell the app's special model calls apart.
+ *
+ * Avery (the Chief of Staff of Answer a Business Question (Avery + Michael),
+ * the one question-answering workflow) is recognised by her instructions'
+ * first line and moved automatically (`averyMove`): she briefs Michael
+ * through `answer_from_data`, so a spec scripts Michael's turn only.
+ *
+ * Plan and Write answer (Olivia's and Jessica's structured calls, which only
+ * the evals still make) each call the model once with no tools and ask for
+ * JSON, and their instructions start with a fixed first line. The stubs
+ * recognise them by that line and answer with a plan or an answer; any other
+ * call (Michael's turn, a step chat) gets the test's own scripted reply.
  *
  * Structured output reaches a provider in one of two forms, and the stubs
  * answer both: as JSON text (OpenAI `response_format`, Anthropic
@@ -153,4 +159,94 @@ export function dataQualityReply(request: string): {
         ],
       }
     : { issues: [] };
+}
+
+// ------------------------------------------------------------------ Avery
+
+/**
+ * The first line of Avery's shipped instructions (backend
+ * `orchestrated-answer-michael.prompts.ts`, `ORCHESTRATOR_FIRST_LINE`). Keep
+ * it equal to that line: the stubs tell her calls apart by it.
+ */
+export const AVERY_FIRST_LINE =
+  'You are Avery, the Chief of Staff of a data team. You are the only person the user talks to: you decide who on the team works on their question, brief them, check what they bring back and hand the user one answer.';
+
+/** Avery's tool that runs Michael (Insights Analyst) on her brief. */
+export const AVERY_ANSWER_TOOL = 'answer_from_data';
+
+/** How `answer_from_data` starts when Michael asked a question (orchestrator-turn.ts). */
+export const MICHAEL_ASKS_PREFIX =
+  'Michael needs an answer before he can go on: ';
+
+/** Avery's closing words in the stubs: none, so the run's answer is Michael's. */
+export const AVERY_CLOSING = '';
+
+/** Whether one of these system texts starts Avery's instructions. */
+export function isAveryCall(systemTexts: string[]): boolean {
+  return systemTexts.some((text) => firstLine(text) === AVERY_FIRST_LINE);
+}
+
+/**
+ * Avery's scripted move, from her turn so far:
+ *
+ * - no `answer_from_data` result yet: she calls it with the user's words as
+ *   her brief (Michael's own request still carries the question as its user
+ *   message, so a reply script keyed on the question answers him);
+ * - Michael asked the user a question (his `ask_clarification`): she asks it
+ *   with her own `ask_clarification`, and the run waits;
+ * - Michael answered: she closes with `AVERY_CLOSING` (no words), so the
+ *   run's answer is exactly his.
+ */
+export type AveryMove =
+  | { toolCall: { name: string; arguments: Record<string, unknown> } }
+  | { text: string };
+
+export function averyMove(question: string, michaelResult?: string): AveryMove {
+  if (michaelResult === undefined) {
+    return {
+      toolCall: {
+        name: AVERY_ANSWER_TOOL,
+        arguments: { brief: question.trim() || 'Answer the user.' },
+      },
+    };
+  }
+  if (michaelResult.startsWith(MICHAEL_ASKS_PREFIX)) {
+    const [first, ...rest] = michaelResult.split('\n');
+    return {
+      toolCall: {
+        name: 'ask_clarification',
+        arguments: {
+          question: first.slice(MICHAEL_ASKS_PREFIX.length).trim(),
+          options: rest
+            .filter((line) => line.startsWith('- '))
+            .map((line) => line.slice(2).trim())
+            .join('\n'),
+        },
+      },
+    };
+  }
+  return { text: AVERY_CLOSING };
+}
+
+/** A tool result's text, from a string, JSON text, content parts or `{ result }`. */
+export function toolResultText(content: unknown): string {
+  if (typeof content === 'string') {
+    const trimmed = content.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        return toolResultText(JSON.parse(trimmed));
+      } catch {
+        return content;
+      }
+    }
+    return content;
+  }
+  if (Array.isArray(content)) return content.map(toolResultText).join('');
+  if (content && typeof content === 'object') {
+    const record = content as Record<string, unknown>;
+    for (const key of ['result', 'text', 'value', 'content', 'output']) {
+      if (key in record) return toolResultText(record[key]);
+    }
+  }
+  return '';
 }

@@ -1,10 +1,14 @@
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
 import {
+  AVERY_ANSWER_TOOL,
   JSON_TOOL,
   answerFrom,
+  averyMove,
   clearPlan,
   dataQualityReply,
+  isAveryCall,
+  toolResultText,
   v2StepOf,
 } from './v2-steps';
 
@@ -25,6 +29,12 @@ import {
  * apart from the probe by their system prompt's first line
  * (helpers/v2-steps.ts): Plan gets a clear plan, Write answer an answer whose
  * Markdown is the last text reply, in the form the call asked for.
+ *
+ * Avery's calls (Answer a Business Question (Avery + Michael)) are told apart
+ * by her instructions' first line and answered by `averyMove`
+ * (helpers/v2-steps.ts), never by `reply`: she briefs Michael through
+ * `answer_from_data` and closes with no words, so the run's answer is
+ * Michael's reply (the scripted one).
  *
  * Every request is recorded with its lower-cased headers, so a test can check
  * the `x-api-key` / `authorization` / `anthropic-version` the backend sent.
@@ -154,6 +164,68 @@ function lastUserText(body: any): string {
   if (typeof user?.content === 'string') return user.content;
   if (!Array.isArray(user?.content)) return '';
   return user.content
+    .map((block: { text?: unknown }) =>
+      typeof block?.text === 'string' ? block.text : '',
+    )
+    .join('');
+}
+
+/** Whether a message holds only tool results (the AI SDK sends them as `user`). */
+function isToolResults(message: { content?: unknown }): boolean {
+  return (
+    Array.isArray(message.content) &&
+    message.content.length > 0 &&
+    message.content.every(
+      (block: { type?: string }) => block?.type === 'tool_result',
+    )
+  );
+}
+
+/**
+ * Avery's move for this request: her brief to Michael, the question he asked,
+ * or her (empty) closing once `answer_from_data` returned in this turn.
+ */
+function averyContent(body: any): ContentBlock[] {
+  const messages: { role?: string; content?: unknown }[] = Array.isArray(
+    body?.messages,
+  )
+    ? body.messages
+    : [];
+  let lastUser = -1;
+  messages.forEach((message, index) => {
+    if (message.role === 'user' && !isToolResults(message)) lastUser = index;
+  });
+  const turn = messages.slice(lastUser + 1);
+  const ids = new Set<string>();
+  for (const message of turn) {
+    if (message.role !== 'assistant' || !Array.isArray(message.content)) continue;
+    for (const block of message.content as { type?: string; name?: string; id?: string }[]) {
+      if (block?.type === 'tool_use' && block.name === AVERY_ANSWER_TOOL && block.id) {
+        ids.add(block.id);
+      }
+    }
+  }
+  let result: string | undefined;
+  for (const message of turn) {
+    if (!Array.isArray(message.content)) continue;
+    for (const block of message.content as { type?: string; tool_use_id?: string; content?: unknown }[]) {
+      if (block?.type === 'tool_result' && block.tool_use_id && ids.has(block.tool_use_id)) {
+        result = toolResultText(block.content);
+      }
+    }
+  }
+  const question = lastUser >= 0 ? textOf(messages[lastUser].content) : '';
+  const move = averyMove(question, result);
+  return 'text' in move
+    ? [{ type: 'text', text: move.text }]
+    : [toolUse(move.toolCall.name, move.toolCall.arguments)];
+}
+
+/** A message content's text: a string, or its text blocks joined. */
+function textOf(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
     .map((block: { text?: unknown }) =>
       typeof block?.text === 'string' ? block.text : '',
     )
@@ -365,8 +437,10 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
             : step === 'quality'
               ? dataQualityReply(lastUserText(body))
               : null;
-      const content: ContentBlock[] =
-        v2 !== null
+      const avery = step === null && isAveryCall(systemTexts(body));
+      const content: ContentBlock[] = avery
+        ? averyContent(body)
+        : v2 !== null
           ? form === 'jsonTool' && !carriesToolResults(body)
             ? [toolUse(JSON_TOOL, v2)]
             : [{ type: 'text', text: JSON.stringify(v2) }]

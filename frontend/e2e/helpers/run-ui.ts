@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { ASK_WORKFLOW_ID, ASK_WORKFLOW_NAME } from './runs-api';
 
 /**
  * The run chat of a workflow page (workflows R21, ui.md 4.4b), driven from
@@ -126,7 +127,7 @@ export async function setRunField(
   await closeComposerMenu(page);
 }
 
-/** Sets an option switch of the `+` menu (`approveSteps`, `buildVisual`…), then closes the menu. */
+/** Sets an option switch of the `+` menu (a workflow's yes/no input), then closes the menu. */
 export async function setRunOption(
   page: Page,
   name: string,
@@ -140,10 +141,8 @@ export async function setRunOption(
 }
 
 /**
- * Adds the dataset (when given) through `+`, turns Approve each step off
- * when the workflow has it (Answer a Business Question has it on by
- * default: a run that is not about approvals goes straight through), closes
- * the menu and types the question in the composer. Does not send.
+ * Adds the dataset (when given) through `+` (the menu is closed again) and
+ * types the question in the composer. Does not send.
  */
 export async function fillRun(
   page: Page,
@@ -152,11 +151,8 @@ export async function fillRun(
 ): Promise<void> {
   if (dataset !== undefined) {
     await pickDataset(page, dataset);
+    await closeComposerMenu(page);
   }
-  await openComposerMenu(page);
-  const approve = composerMenu(page).getByTestId('workflow-input-approveSteps');
-  if ((await approve.count()) > 0) await approve.setChecked(false);
-  await closeComposerMenu(page);
   await composer(page).fill(question);
 }
 
@@ -194,17 +190,13 @@ export async function answerPickAsk(
   await next.click();
 }
 
-/** Opens Answer a Business Question's Run tab, fills it and clicks Send. */
+/** Opens Answer a Business Question (Avery + Michael)'s Run tab, fills it and clicks Send. */
 export async function runQuestionInTab(
   page: Page,
   question: string,
   dataset: string,
 ): Promise<void> {
-  await openWorkflowPage(
-    page,
-    'answer-business-question',
-    'Answer a Business Question',
-  );
+  await openWorkflowPage(page, ASK_WORKFLOW_ID, ASK_WORKFLOW_NAME);
   await openRunTab(page);
   await fillRun(page, question, dataset);
   await sendRun(page);

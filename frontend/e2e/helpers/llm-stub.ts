@@ -1,15 +1,19 @@
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
 import {
+  AVERY_ANSWER_TOOL,
   JSON_TOOL,
   V2Answer,
   V2Plan,
   V2Step,
   answerFrom,
+  averyMove,
   clearPlan,
   dataQualityReply,
   ExplorerReply,
+  isAveryCall,
   isResultExplorerCall,
+  toolResultText,
   v2StepOf,
 } from './v2-steps';
 
@@ -31,6 +35,14 @@ import {
  * recorded with their `step`. By default the plan is clear and the answer is
  * the last text `reply` gave (Analyse's final text), so a test that scripts
  * Analyse's answer sees it as the run's answer.
+ *
+ * Avery's calls (Answer a Business Question (Avery + Michael), told apart by
+ * her instructions' first line) are recorded with `avery: true` and answered
+ * by `averyReply`, never by `reply`: by default she briefs Michael through
+ * `answer_from_data`, relays a question he asks with `ask_clarification` and
+ * closes with no words of her own (`averyMove`, helpers/v2-steps.ts). So a
+ * spec scripts Michael's turn with `reply` and reads his reply as the run's
+ * answer. `hold` and `intercept` see her calls too.
  */
 
 export interface StubMessage {
@@ -52,6 +64,8 @@ export interface StubRequest {
   model?: string;
   /** A structured call of Insights Analyst (Plan, Write answer); absent for any other. */
   step?: V2Step;
+  /** True for a call of Avery, the Chief of Staff (never sent to `reply`). */
+  avery?: boolean;
 }
 
 /** Any request the stub received (served or answered 404), oldest first. */
@@ -96,6 +110,11 @@ export interface LlmStub {
   models: string[];
   /** Decides each agent call's reply; the default answers `STUB_ANSWER`. */
   reply: (request: StubRequest) => StubReply;
+  /**
+   * Avery's reply; the default is `averyAuto` (brief Michael, relay his
+   * question, close with no words). A spec that scripts her sets it.
+   */
+  averyReply: (request: StubRequest) => StubReply;
   /**
    * Optional: a promise the stub awaits before answering `request` (the
    * request is recorded at once). Lets a test hold a turn open, e.g. to check
@@ -161,14 +180,52 @@ export function lastUserText(request: StubRequest): string {
 }
 
 /**
+ * The text `answer_from_data` returned in Avery's current turn (the calls
+ * after the user's last message), or undefined before she called it.
+ */
+export function averyToolResult(request: StubRequest): string | undefined {
+  const messages = request.messages;
+  let lastUser = -1;
+  messages.forEach((message, index) => {
+    if (message.role === 'user') lastUser = index;
+  });
+  const ids = new Set<string>();
+  for (const message of messages.slice(lastUser + 1)) {
+    for (const call of (message.tool_calls ?? []) as {
+      id?: string;
+      function?: { name?: string };
+    }[]) {
+      if (call.function?.name === AVERY_ANSWER_TOOL && call.id) ids.add(call.id);
+    }
+  }
+  const results = messages
+    .slice(lastUser + 1)
+    .filter(
+      (message) =>
+        message.role === 'tool' &&
+        ids.has(String((message as { tool_call_id?: unknown }).tool_call_id)),
+    );
+  return results.length
+    ? toolResultText(results[results.length - 1].content)
+    : undefined;
+}
+
+/** Avery's default move (`averyMove`) for one of her calls. */
+export function averyAuto(request: StubRequest): StubReply {
+  return averyMove(lastUserText(request), averyToolResult(request));
+}
+
+/**
  * The streamed (chat-turn) requests whose user messages include `question`,
- * leaving out v2's structured Plan and Write answer calls (`step`).
+ * leaving out v2's structured Plan and Write answer calls (`step`) and
+ * Avery's calls (`avery`).
  */
 export function turnRequests(stub: LlmStub, question: string): StubRequest[] {
   return stub.requests.filter(
     (request) =>
       request.stream &&
       request.step === undefined &&
+      !request.avery &&
       request.messages.some(
         (message) =>
           message.role === 'user' && messageText(message).includes(question),
@@ -268,6 +325,7 @@ export async function startLlmStub(
     calls: [],
     models: [...(options.models ?? STUB_MODELS)],
     reply: () => ({ text: STUB_ANSWER }),
+    averyReply: averyAuto,
     plan: (request) => clearPlan(lastUserText(request)),
     answer: () => answerFrom(stub.lastText),
     explore: () => ({
@@ -396,6 +454,9 @@ export async function startLlmStub(
         reasoningEffort: body.reasoning_effort,
         model: body.model,
         ...(step !== null ? { step } : {}),
+        ...(isAveryCall(systemTexts({ messages } as StubRequest))
+          ? { avery: true }
+          : {}),
       };
       stub.requests.push(request);
       const intercepted = stub.intercept?.(request);
@@ -426,15 +487,17 @@ export async function startLlmStub(
         respond(res, request.stream, structured(request, step));
         return;
       }
+      const answer = (): StubReply =>
+        request.avery ? stub.averyReply(request) : scripted(request);
       const held = stub.hold?.(request);
       if (held) {
         void held.then(
-          () => respond(res, request.stream, scripted(request)),
+          () => respond(res, request.stream, answer()),
           () => res.destroy(),
         );
         return;
       }
-      respond(res, request.stream, scripted(request));
+      respond(res, request.stream, answer());
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
