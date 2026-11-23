@@ -2,6 +2,7 @@ import type { KnowledgeUse } from '../../ontology/entities/ontology-item.entity'
 import type { Maturity } from '../../data-readiness/engine/types';
 import type { QueryEvidence } from '../query-evidence/query-evidence.types';
 import type { ExplorableQuery } from '../query-evidence/explorable-queries';
+import type { DashboardRef } from '../../artifacts/entities/artifact.entity';
 
 export type { KnowledgeUse };
 
@@ -113,6 +114,11 @@ export interface ChatMessage {
   };
   /** Present when this turn created, updated or reverted a visual. */
   visual?: VisualEvent;
+  /**
+   * Present when Clara built or changed a dashboard in this turn (Avery's
+   * `build_dashboard`, agents.md 5.22): the artifact version it saved.
+   */
+  dashboard?: DashboardRef;
   /**
    * The answer's final SQL matches a stored verified query, or the user
    * promoted it with a thumbs-up.
@@ -416,6 +422,12 @@ export interface SessionDoc {
    * 5.17): the artifact's id. In memory only, like the host.
    */
   inputArtifact?: string;
+  /**
+   * A message to Avery in a conversation that holds a dashboard (agents.md
+   * 5.22, the follow-up carry): the artifact's id, whose current version
+   * Clara changes. In memory only, like the host.
+   */
+  contextDashboard?: string;
   /**
    * A run host's whole checked input, field by field, for a workflow whose
    * steps read more than the question (Review a Website, agents.md 5.19).

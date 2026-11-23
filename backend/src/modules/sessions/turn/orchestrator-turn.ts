@@ -41,6 +41,14 @@ import {
   type OrchestratorToolsRuntime,
 } from '../../../mastra/workflows/orchestrated-answer.steps';
 import type { ReadImagesOutcome } from '../../../mastra/workflows/read-images.steps';
+import {
+  BUILD_DASHBOARD_MAX_CALLS,
+  draftOf,
+} from '../../../mastra/workflows/bi-dashboard.schemas';
+import type {
+  CurrentDashboard,
+  DashboardRef,
+} from '../../artifacts/entities/artifact.entity';
 import type { ExplorableQuery } from '../query-evidence/explorable-queries';
 import {
   STEP_MODEL_CONTEXT_KEY,
@@ -61,6 +69,25 @@ export interface OrchestratorTeam {
   analyse: AnswerBusinessQuestionRuntime['analyse'];
   writeAnswer: AnswerBusinessQuestionRuntime['writeAnswer'];
   buildVisual?: AnswerBusinessQuestionRuntime['buildVisual'];
+  /**
+   * Clara's build (agents.md 2.22, 5.22): her turn on Avery's brief, the
+   * host's run of her data query and the saved artifact version. `current`
+   * is the dashboard she changes (its next version), absent for a new one.
+   * `saved` is the version just saved, as a later call of the run changes it.
+   */
+  buildDashboard?(input: {
+    question: string;
+    brief: string;
+    catalogBlock: string;
+    current?: CurrentDashboard;
+    earlierBlock: string;
+  }): Promise<{
+    dashboard?: DashboardRef;
+    saved?: CurrentDashboard;
+    reply: string;
+    error?: string;
+    stopped: boolean;
+  }>;
 }
 
 /** What the team produced so far in this turn. */
@@ -76,6 +103,12 @@ export interface OrchestratorState {
   analystNote: string;
   answer?: string;
   visual?: string;
+  /** The dashboard Clara saved last in this turn: the answer carries it. */
+  dashboard?: DashboardRef;
+  /** That version, read back: a second build changes it. */
+  builtDashboard?: CurrentDashboard;
+  /** Clara's builds made (at most `BUILD_DASHBOARD_MAX_CALLS`). */
+  dashboardCalls: number;
 }
 
 /** A fresh state, for a new turn. */
@@ -86,6 +119,7 @@ export function orchestratorState(): OrchestratorState {
     queries: [],
     findings: [],
     analystNote: '',
+    dashboardCalls: 0,
   };
 }
 
@@ -107,6 +141,14 @@ export interface OrchestratorTurnDeps {
   datasets: string[];
   images: string[];
   buildsVisual: boolean;
+  /**
+   * The dashboard gate (agents.md 2.21): the user asked for a dashboard or
+   * the conversation has one. Closed, build_dashboard is hidden and the
+   * run's facts say nothing of dashboards.
+   */
+  buildsDashboard: boolean;
+  /** The conversation's dashboard (its current version), on a follow-up. */
+  currentDashboard?: CurrentDashboard;
   /** Avery's own model and effort (Opus 5.5 high), when it applies. */
   orchestratorModel?: StepModel;
   /** The provider options for that model and effort (or the turn's). */
@@ -215,6 +257,31 @@ function runFacts(deps: OrchestratorTurnDeps): string {
     deps.buildsVisual
       ? 'The run builds a visual (build_visual is available).'
       : 'The run builds no visual.',
+    // Only with the gate open: a run that is not about a dashboard sends
+    // her what it sent before (agents.md 2.21).
+    ...(deps.buildsDashboard ? [dashboardFact(deps.currentDashboard)] : []),
+  ].join('\n');
+}
+
+/** The run's dashboard fact, when the gate is open (agents.md 2.21). */
+function dashboardFact(current: CurrentDashboard | undefined): string {
+  return current
+    ? `The conversation has a dashboard: "${current.title}", version ${current.version} (${current.widgetCount} widgets, ${current.filterCount} filters). build_dashboard changes it into version ${current.version + 1}.`
+    : 'The user asked for a dashboard: build_dashboard is available.';
+}
+
+/**
+ * The dashboard Clara changes (agents.md 2.22): its draft (ids kept), its
+ * stored data query, columns and row count, with the instruction to change
+ * only what the brief asks.
+ */
+export function currentDashboardBlock(current: CurrentDashboard): string {
+  return [
+    `The current dashboard: "${current.title}", version ${current.version}. Change it into version ${current.version + 1}: keep every id, title and binding, and change only what the brief asks. Submit the whole dashboard.`,
+    `Its draft: ${JSON.stringify(draftOf(current.blueprint))}`,
+    `Its data query (datasource ${current.query.datasourceId}): ${current.query.sql}`,
+    `Its columns: ${current.columns.join(', ') || '(none)'}`,
+    `Its rows: ${current.rowCount}`,
   ].join('\n');
 }
 
@@ -231,6 +298,11 @@ function workSoFar(state: OrchestratorState): string | undefined {
   }
   if (state.answer) lines.push('The answer the user reads is already written.');
   if (state.visual) lines.push(`Ryan: ${state.visual}`);
+  if (state.dashboard) {
+    lines.push(
+      `Clara already built the dashboard "${state.dashboard.title}", version ${state.dashboard.version}.`,
+    );
+  }
   return lines.length
     ? ['Work done so far in this run (do not redo it):', ...lines].join('\n')
     : undefined;
@@ -407,11 +479,42 @@ export function orchestratorTools(
         : `Ryan built no visual: ${built.visual.error ?? built.visual.skipped ?? 'no reason given'}`;
       return state.visual;
     },
-    // Clara's build is wired in plan bi-dashboard U3; until then no run
-    // offers build_dashboard.
-    buildsDashboard: false,
-    buildDashboard: () =>
-      Promise.resolve('This run cannot build a dashboard yet.'),
+    buildsDashboard: deps.buildsDashboard && !!team.buildDashboard,
+    // Clara (agents.md 2.22, 5.22): at most twice per run; a second build
+    // changes the version the first one saved.
+    buildDashboard: async (brief: string) => {
+      if (!deps.buildsDashboard || !team.buildDashboard) {
+        return 'This run builds no dashboard.';
+      }
+      if (state.dashboardCalls >= BUILD_DASHBOARD_MAX_CALLS) {
+        return 'Clara already built twice in this run: close from the dashboard she has.';
+      }
+      state.dashboardCalls += 1;
+      const { catalog, columns } = await catalogOf();
+      const current = state.builtDashboard ?? deps.currentDashboard;
+      const built = await team.buildDashboard({
+        question,
+        brief,
+        catalogBlock: planCatalogBlock(catalog, columns, { question }),
+        ...(current ? { current } : {}),
+        earlierBlock: earlier,
+      });
+      if (built.reply.trim()) said?.(built.reply);
+      if (built.stopped) return 'The run was stopped.';
+      if (!built.dashboard) {
+        return `Clara built no dashboard: ${built.error ?? 'she submitted none'}`;
+      }
+      const ref = built.dashboard;
+      state.dashboard = ref;
+      if (built.saved) state.builtDashboard = built.saved;
+      return [
+        `Built dashboard "${ref.title}", version ${ref.version} (${ref.action}): ${ref.widgetCount} widgets, ${ref.filterCount} filters, ${ref.rowCount} rows.`,
+        ...(built.saved?.columns.length
+          ? [`Its columns: ${built.saved.columns.join(', ')}.`]
+          : []),
+        'The user sees the dashboard with the answer: do not describe it in figures.',
+      ].join('\n');
+    },
   };
 }
 

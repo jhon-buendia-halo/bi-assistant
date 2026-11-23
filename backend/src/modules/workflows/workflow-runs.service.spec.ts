@@ -2163,6 +2163,87 @@ describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 1
     );
   });
 
+  it("hands a follow-up the conversation's last dashboard, however many turns ago (agents.md 5.22)", async () => {
+    const { first, second } = await conversation();
+    const dashboard = {
+      artifactId: 'a-1',
+      version: 1,
+      title: 'Goals by team',
+      action: 'created' as const,
+      widgetCount: 3,
+      filterCount: 1,
+      rowCount: 32,
+    };
+    // The first answer built it; the second carries none of its own.
+    const answered = await ctx.repository.get(first.id);
+    await ctx.repository.update(first.id, {
+      answer: { ...answered!.answer!, dashboard },
+    });
+    await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'Add a stage filter', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      contextDashboard?: string;
+    };
+    expect(spec.contextDashboard).toBe('a-1');
+
+    // A later version replaces it as the one the next message changes.
+    const latest = await ctx.repository.get(second.id);
+    await ctx.repository.update(second.id, {
+      answer: {
+        ...latest!.answer!,
+        dashboard: { ...dashboard, artifactId: 'a-2', version: 2 },
+      },
+    });
+    await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'Make it dark', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.id },
+    });
+    expect(
+      (
+        ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+          contextDashboard?: string;
+        }
+      ).contextDashboard,
+    ).toBe('a-2');
+  });
+
+  it('carries no dashboard into a conversation that has none, and an archived one still takes no message', async () => {
+    const { second } = await conversation();
+    await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'And 2010?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    expect(
+      ctx.sessions.createRunHost.mock.calls.at(-1)?.[0],
+    ).not.toHaveProperty('contextDashboard');
+    const answered = await ctx.repository.get(second.id);
+    await ctx.repository.update(second.id, {
+      answer: {
+        ...answered!.answer!,
+        dashboard: {
+          artifactId: 'a-1',
+          version: 1,
+          title: 'Goals',
+          action: 'created',
+          widgetCount: 1,
+          filterCount: 0,
+          rowCount: 1,
+        },
+      },
+    });
+    await ctx.service.archive(second.id);
+    const hosts = ctx.sessions.createRunHost.mock.calls.length;
+    await expect(
+      ctx.service.prepare(ORCHESTRATED, {
+        input: { question: 'More?', datasets: ['World Cup Core'] },
+        context: { fromRunId: second.id },
+      }),
+    ).rejects.toThrow('This conversation is archived');
+    expect(ctx.sessions.createRunHost.mock.calls).toHaveLength(hosts);
+  });
+
   it('refuses a follow-up to an archived conversation (409)', async () => {
     const { second } = await conversation();
     await ctx.service.archive(second.id);
