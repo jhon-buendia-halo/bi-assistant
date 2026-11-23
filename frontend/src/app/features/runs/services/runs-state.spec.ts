@@ -5,6 +5,7 @@ import {
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ShellState } from '../../../core/shell/shell-state';
+import { ToastService } from '../../../core/toast/toast.service';
 import { WorkflowRun } from '../../workflows/models/workflow.model';
 import { WorkflowDesigner } from '../../workflows/services/workflow-designer.service';
 import { WorkflowsNavState } from '../../workflows/services/workflows-nav-state';
@@ -135,6 +136,19 @@ describe('RunsState (plan 1.24.11)', () => {
     expect(shell.mainView()).toBe('workflow-detail');
     expect(state.activeRun()).toBeNull();
     expect(state.loadingRun()).toBeFalse();
+  });
+
+  it('refuses to delete a queued run, like a running one', () => {
+    const toast = spyOn(TestBed.inject(ToastService), 'error');
+    state.deleteRun({
+      id: 'r1',
+      workflowId: 'answer-business-question',
+      workflowName: 'Insights Analyst',
+      status: 'queued',
+      title: 'Most goals?',
+      startedAt: '2026-01-01T00:00:00Z',
+    });
+    expect(toast).toHaveBeenCalledWith('Stop the run before deleting it');
   });
 
   it('a newer open or another view wins over a run still being opened', () => {

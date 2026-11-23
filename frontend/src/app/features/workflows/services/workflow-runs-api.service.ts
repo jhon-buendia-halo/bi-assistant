@@ -39,8 +39,10 @@ export interface RunVisualResult {
 
 /** What a streamed run reports (api.md 3.6), beside the agent turn's events. */
 export interface RunStreamHandlers extends AgentStreamHandlers {
-  /** First frame: the run started and is stored as `running`. */
+  /** First frame: the run was accepted and is stored (`queued`, then `running` once it starts). */
   onRun?: (run: { runId: string; workflowId: string }) => void;
+  /** No slot was free: the run waits `queued`; its step events follow once it starts. */
+  onQueued?: () => void;
   /** A step started (`running`) or ended. */
   onStep?: (step: WorkflowRunStep) => void;
   /** The run suspended: the question it waits on (api.md 3.6 `input-required`); `done` follows. */
@@ -554,6 +556,9 @@ export class WorkflowRunsApiService {
             runId: String(event['runId'] ?? ''),
             workflowId: String(event['workflowId'] ?? workflowId),
           });
+          return false;
+        case 'queued':
+          handlers.onQueued?.();
           return false;
         case 'step':
           handlers.onStep?.(stepOf(event));

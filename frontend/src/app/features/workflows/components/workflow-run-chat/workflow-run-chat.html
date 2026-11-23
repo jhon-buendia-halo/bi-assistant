@@ -475,9 +475,7 @@
       <!-- How it ran (ui.md 4.4b): the ended run read step by step, folded under the answer. -->
       @if (
         !business() &&
-        result.status !== "running" &&
-        result.status !== "suspended" &&
-        !designer.running()
+        !isActive(result.status) && !designer.running()
       ) {
         <app-workflow-run-story
           [nodes]="designer.nodes()"
