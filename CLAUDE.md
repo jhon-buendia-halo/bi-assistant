@@ -107,7 +107,7 @@ Subagents that work from a brief (`builder`, `reviewer`) skip this.
 
 ### Task skills
 
-The workflow decides which steps run; a task skill says how to do one kind of task inside them (`bug-fix`, `agent-change`, `mastra-workflows`, `local-instance`, `visual-options`, `show-the-change`, `ship`). Its `description` says when it applies: load every one that matches the task and copy its steps into the todo list. A step that names a workflow step in brackets fills that step. A task no skill fits (a feature, a UI change) follows the workflow's steps alone.
+The workflow decides which steps run; a task skill says how to do one kind of task inside them (`bug-fix`, `agent-change`, `mastra-workflows`, `local-instance`, `visual-options`, `show-the-change`, `walkthrough-video`, `ship`). Its `description` says when it applies: load every one that matches the task and copy its steps into the todo list. A step that names a workflow step in brackets fills that step. A task no skill fits (a feature, a UI change) follows the workflow's steps alone.
 
 ## Process documents
 

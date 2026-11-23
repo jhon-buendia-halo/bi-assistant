@@ -12,5 +12,6 @@ Every new feature or change ends with **images that prove it works**, shown to t
 3. **[Checks]** A change with nothing on screen (an endpoint, a stored field, a prompt) is shown where its effect surfaces: the screen that reads it, a run's result, the API's answer in the app. Only when nothing surfaces anywhere, say so and show the check that proves it instead.
 4. **[Checks]** Run axe on what changed, in both themes, and say the result next to the images.
 5. **[Checks]** Show the images in the chat, never as file paths: **one Conductor artifact per image** (`.context/artifacts/<name>-<n>/index.html`, published with `PublishArtifact`), the image embedded as JPEG under a title that says what it proves. Never stack several images in one artifact: the chat shows only its top.
+6. **[Checks]** Then record the walkthrough video of the change with subtitles ([`walkthrough-video`](../walkthrough-video/SKILL.md)) and publish it as its own artifact.
 
-**Reply:** each artifact followed by one line on what it proves, then what changed, the checks and their results, and the commit.
+**Reply:** each artifact followed by one line on what it proves, then the walkthrough video, then what changed, the checks and their results, and the commit.
