@@ -962,7 +962,7 @@ test.describe('Feature: Workflow runs', () => {
       .getByTestId('background-tasks-button');
     let busy: ReturnType<typeof runWorkflow> | undefined;
     try {
-      await test.step('Given every one of the run slots is taken by a run that is running', async () => {
+      await scenarioStep(page, 'Given every one of the run slots is taken by a run that is running', async () => {
         busy = runWorkflow(page, V2_ID, {
           question: OTHER,
           datasets: [WORLD_CUP_DATASET],
@@ -971,20 +971,20 @@ test.describe('Feature: Workflow runs', () => {
         });
         await expect.poll(() => storedStatuses(page)).toEqual(['running']);
       });
-      await test.step(`When I click Execute on a question in "${V2}"`, async () => {
+      await scenarioStep(page, `When I click Execute on a question in "${V2}"`, async () => {
         await openWorkflowPage(page, V2_ID, V2);
         await openRunTab(page);
         await fillRun(page, QUESTION, WORLD_CUP_DATASET);
-        await page.getByTestId('workflow-run').click();
+        await sendRun(page);
       });
-      await test.step('Then the Chat shows the status "Queued…" and every node on the canvas stays idle', async () => {
+      await scenarioStep(page, 'Then the Chat shows the status "Queued…" and every node on the canvas stays idle', async () => {
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Queued…');
         for (const id of V2_STEPS) {
           await expect(runStep(page, id)).not.toHaveAttribute('data-status', /running|success/);
         }
         await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
       });
-      await test.step('And the Background tasks button lists the run with "Waiting for a free slot"', async () => {
+      await scenarioStep(page, 'And the Background tasks button lists the run with "Waiting for a free slot"', async () => {
         // The run in the slot was started through the API, so only mine is a task here.
         await expect(tasksButton).toHaveAccessibleName('Background tasks, 1 running');
         await tasksButton.click();
@@ -994,15 +994,15 @@ test.describe('Feature: Workflow runs', () => {
         await page.keyboard.press('Escape');
         await expect(panel).toBeHidden();
       });
-      await test.step('And the run is stored "queued" on the server, with no steps', async () => {
+      await scenarioStep(page, 'And the run is stored "queued" on the server, with no steps', async () => {
         await expect.poll(() => storedStatuses(page)).toEqual(['queued', 'running']);
       });
-      await test.step('When one of the running runs ends', async () => {
+      await scenarioStep(page, 'When one of the running runs ends', async () => {
         held.release();
         const first = await busy!;
         expect(first.run?.status).toBe('success');
       });
-      await test.step('Then my run starts and its steps go Running then Done as in any run', async () => {
+      await scenarioStep(page, 'Then my run starts and its steps go Running then Done as in any run', async () => {
         await expect(runAnswer(page)).toContainText(ANSWER);
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
         await expect(runStep(page, 'write-answer')).toHaveAttribute('data-status', 'success');
@@ -1022,11 +1022,11 @@ test.describe('Feature: Workflow runs', () => {
       isTurn(request, QUESTION) && afterToolResult(request) ? held.promise : undefined;
     let runId = '';
     try {
-      await test.step(`Given "${V2}" is running on a question`, async () => {
+      await scenarioStep(page, `Given "${V2}" is running on a question`, async () => {
         await openWorkflowPage(page, V2_ID, V2);
         await openRunTab(page);
         await fillRun(page, QUESTION, WORLD_CUP_DATASET);
-        await page.getByTestId('workflow-run').click();
+        await sendRun(page);
         await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
         const res = await page.request.get(`${apiBaseOf(page)}/workflow-runs`);
         const { runs } = (await res.json()) as { runs: { id: string; status: string }[] };
@@ -1034,15 +1034,15 @@ test.describe('Feature: Workflow runs', () => {
         runId = runs[0].id;
         expect((await storedRun(page, runId)).attempts).toBe(1);
       });
-      await test.step('When the app stops and starts again', async () => {
+      await scenarioStep(page, 'When the app stops and starts again', async () => {
         // The second attempt is answered at once.
         stub.hold = undefined;
         await app.restartCli();
       });
-      await test.step('Then the run is queued again and starts from scratch', async () => {
+      await scenarioStep(page, 'Then the run is queued again and starts from scratch', async () => {
         await expect.poll(async () => (await storedRun(page, runId)).attempts).toBe(2);
       });
-      await test.step('And after it ends I see its answer, and the run is stored "success" with 2 attempts', async () => {
+      await scenarioStep(page, 'And after it ends I see its answer, and the run is stored "success" with 2 attempts', async () => {
         await expect.poll(async () => (await storedRun(page, runId)).status, { timeout: 30_000 }).toBe('success');
         const run = await storedRun(page, runId);
         expect(run.attempts).toBe(2);
