@@ -9,11 +9,15 @@ export class ArtifactsNavState {
   /** Id of the artifact open on its page. */
   readonly activeArtifactId = signal<string | null>(null);
 
+  /** The version the page opens at; null is the current one. */
+  readonly activeArtifactVersion = signal<number | null>(null);
+
   /** A card's name, or Open under a saved run, shows the artifact's page. */
-  openArtifact(id: string): void {
+  openArtifact(id: string, version?: number): void {
     if (!this.shell.confirmLeaveAgentEditor()) return;
     this.shell.settingsOpen.set(false);
     this.activeArtifactId.set(id);
+    this.activeArtifactVersion.set(version ?? null);
     this.shell.mainView.set('artifact-detail');
   }
 

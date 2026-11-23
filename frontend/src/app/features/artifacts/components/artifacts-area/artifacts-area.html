@@ -13,6 +13,7 @@
     <app-artifact-detail
       class="flex w-full max-w-[960px] flex-col"
       [artifactId]="artifacts.activeArtifactId()!"
+      [version]="artifacts.activeArtifactVersion()"
       (back)="artifacts.closeArtifactDetail()"
     />
   </div>

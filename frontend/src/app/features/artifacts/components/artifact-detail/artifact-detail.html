@@ -1,4 +1,7 @@
-<div class="flex min-h-0 flex-1 flex-col gap-3" data-testid="artifact-detail-page">
+<div
+  class="flex min-h-0 flex-1 flex-col gap-3"
+  data-testid="artifact-detail-page"
+>
   <button
     type="button"
     data-testid="artifact-back"
@@ -73,8 +76,51 @@
           <span class="chip chip-info" data-testid="artifact-detail-kind">{{
             kind()
           }}</span>
+          @if (a.hasData || (versionInfo()?.rowCount ?? 0) > 0) {
+            <span class="chip chip-success" data-testid="artifact-detail-live"
+              >Live data</span
+            >
+          }
           <span class="text-[12px] text-fg-muted">{{ counts() }}</span>
         </div>
+        @if (versionOptions().length > 0) {
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <label for="artifact-version" class="text-[12px] text-fg-muted"
+              >Version</label
+            >
+            <select
+              id="artifact-version"
+              data-testid="artifact-version-select"
+              class="field w-auto py-1 text-[12px]"
+              (change)="onVersionChange($event)"
+            >
+              @for (o of versionOptions(); track o.version) {
+                <option
+                  [value]="o.version"
+                  [selected]="o.version === a.version"
+                >
+                  {{ o.label }}
+                </option>
+              }
+            </select>
+          </div>
+          @if (versionInfo()?.instruction; as instruction) {
+            <p
+              data-testid="artifact-version-instruction"
+              class="m-0 mt-1 text-[12px] text-fg-muted"
+            >
+              {{ instruction }}
+            </p>
+          }
+        }
+        @if (a.dataMissing) {
+          <p
+            data-testid="artifact-data-missing"
+            class="m-0 mt-2 rounded-md bg-warning-soft px-3 py-2 text-[12px] text-on-warning-soft"
+          >
+            This version has no data saved, so it is drawn with example values.
+          </p>
+        }
         @if (a.description) {
           <p class="m-0 mt-2 text-[13px] text-fg-muted">{{ a.description }}</p>
         }
@@ -101,6 +147,18 @@
           <lucide-angular [img]="Trash2" [size]="13" />
           <span>Delete</span>
         </button>
+        @if (a.versions?.length) {
+          <button
+            type="button"
+            data-testid="artifact-download"
+            [disabled]="downloading()"
+            (click)="download()"
+            class="btn btn-outline px-2.5 py-1"
+          >
+            <lucide-angular [img]="Download" [size]="13" />
+            <span>Download</span>
+          </button>
+        }
         <button
           type="button"
           data-testid="artifact-use"

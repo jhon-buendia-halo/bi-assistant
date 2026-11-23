@@ -17,6 +17,10 @@ export interface ArtifactSummary {
   source?: { runId: string; workflowId: string };
   createdAt: string;
   updatedAt: string;
+  /** Live dashboards: the current version, how many exist, whether it has data. */
+  currentVersion?: number;
+  versionCount?: number;
+  hasData?: boolean;
 }
 
 /** One artifact with its blueprint and its document. */
@@ -25,4 +29,19 @@ export interface Artifact extends ArtifactSummary {
   blueprint: Record<string, unknown>;
   /** A self-contained HTML document, shown in a sandboxed iframe. */
   document: string;
+  /** The version shown (the current one when none was asked). */
+  version?: number;
+  versions?: ArtifactVersionInfo[];
+  /** The version was built before data snapshots: drawn with the mock. */
+  dataMissing?: true;
+}
+
+/** One version in an artifact's history. */
+export interface ArtifactVersionInfo {
+  version: number;
+  createdAt: string;
+  instruction?: string;
+  rowCount?: number;
+  widgetCount: number;
+  filterCount: number;
 }

@@ -20,9 +20,22 @@ export class ArtifactsApiService {
     return this.http.get<ArtifactSummary[]>(`${API_BASE_URL}/artifacts`);
   }
 
-  get(id: string): Observable<Artifact> {
+  /** The artifact at `version` (the current one when absent). */
+  get(id: string, version?: number): Observable<Artifact> {
     return this.http.get<Artifact>(
       `${API_BASE_URL}/artifacts/${encodeURIComponent(id)}`,
+      version === undefined ? {} : { params: { version } },
+    );
+  }
+
+  /** The version's zip (index.html, data.js, app.js, query.sql). */
+  download(id: string, version?: number): Observable<Blob> {
+    return this.http.get(
+      `${API_BASE_URL}/artifacts/${encodeURIComponent(id)}/download`,
+      {
+        responseType: 'blob',
+        ...(version === undefined ? {} : { params: { version } }),
+      },
     );
   }
 

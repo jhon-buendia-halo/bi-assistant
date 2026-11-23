@@ -155,66 +155,80 @@
 
   <!-- The log and, at its bottom right, the conversation navigation (R38). -->
   <div class="relative flex min-h-0 flex-1 flex-col">
-  <!-- Focusable: it scrolls (axe scrollable-region-focusable). -->
-  <section
-    #log
-    aria-label="Chat"
-    tabindex="0"
-    data-testid="workflow-run-chat-log"
-    (scroll)="onLogScroll()"
-    class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3 focus-visible:outline-2 focus-visible:outline-focus"
-  >
-    @if (designer.runResult(); as result) {
-      @if (threaded()) {
-        <!-- The conversation so far (R38): each earlier question and its
+    <!-- Focusable: it scrolls (axe scrollable-region-focusable). -->
+    <section
+      #log
+      aria-label="Chat"
+      tabindex="0"
+      data-testid="workflow-run-chat-log"
+      (scroll)="onLogScroll()"
+      class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3 focus-visible:outline-2 focus-visible:outline-focus"
+    >
+      @if (designer.runResult(); as result) {
+        @if (threaded()) {
+          <!-- The conversation so far (R38): each earlier question and its
              answer, read-only; their figures open the inspector on that run. -->
-        @for (turn of conversation.earlier(); track turn.runId) {
-          <section
-            class="flex flex-col gap-3 border-b border-border pb-4"
-            data-testid="workflow-turn"
-            [attr.data-history-id]="turn.runId"
-            [attr.aria-label]="'Earlier question: ' + turn.question"
-          >
-            <p
-              data-testid="workflow-turn-question"
-              class="m-0 max-w-[85%] self-end rounded-[18px] bg-primary-soft px-4 py-2.5 text-[14px] break-words whitespace-pre-wrap text-fg-strong"
+          @for (turn of conversation.earlier(); track turn.runId) {
+            <section
+              class="flex flex-col gap-3 border-b border-border pb-4"
+              data-testid="workflow-turn"
+              [attr.data-history-id]="turn.runId"
+              [attr.aria-label]="'Earlier question: ' + turn.question"
             >
-              {{ turn.question }}
-            </p>
-            <app-run-message
-              [name]="voice()?.name ?? ''"
-              [role]="voice()?.role ?? ''"
-              [bubble]="false"
-            >
-              @if (turn.answer; as answer) {
-                <app-answer-view
-                  [message]="answer"
-                  [queryInspector]="hasQueries(answer)"
-                  [question]="turn.question"
-                  (inspectQuery)="inspectEarlierQuery(turn, $event)"
-                />
-              } @else {
-                <p class="m-0 text-[13px] text-fg-muted">
-                  This run {{ turn.status }} without an answer.
-                </p>
-              }
-            </app-run-message>
-          </section>
+              <p
+                data-testid="workflow-turn-question"
+                class="m-0 max-w-[85%] self-end rounded-[18px] bg-primary-soft px-4 py-2.5 text-[14px] break-words whitespace-pre-wrap text-fg-strong"
+              >
+                {{ turn.question }}
+              </p>
+              <app-run-message
+                [name]="voice()?.name ?? ''"
+                [role]="voice()?.role ?? ''"
+                [bubble]="false"
+              >
+                @if (turn.answer; as answer) {
+                  <app-answer-view
+                    [message]="answer"
+                    [queryInspector]="hasQueries(answer)"
+                    [question]="turn.question"
+                    (inspectQuery)="inspectEarlierQuery(turn, $event)"
+                  />
+                  @if (answer.dashboard; as dashboard) {
+                    <app-run-dashboard-card
+                      class="mt-2 block"
+                      [dashboard]="dashboard"
+                    />
+                  }
+                } @else {
+                  <p class="m-0 text-[13px] text-fg-muted">
+                    This run {{ turn.status }} without an answer.
+                  </p>
+                }
+              </app-run-message>
+            </section>
+          }
         }
-      }
-      @if (designer.contextRun(); as earlier) {
-        <!-- In the Business view's thread the earlier question is shown above;
+        @if (designer.contextRun(); as earlier) {
+          <!-- In the Business view's thread the earlier question is shown above;
              only the agent asked, if one was, is still said -->
-        @if (!threaded() || conversation.earlier().length === 0) {
-          <p
-            data-testid="workflow-run-context"
-            class="m-0 text-[12px] text-fg-muted"
-          >
-            @if (designer.contextAgent(); as agent) {
-              <span>Asked {{ agent }} · </span>
-            }
-            <span>Follows up on “{{ earlier.question }}”</span>
-          </p>
+          @if (!threaded() || conversation.earlier().length === 0) {
+            <p
+              data-testid="workflow-run-context"
+              class="m-0 text-[12px] text-fg-muted"
+            >
+              @if (designer.contextAgent(); as agent) {
+                <span>Asked {{ agent }} · </span>
+              }
+              <span>Follows up on “{{ earlier.question }}”</span>
+            </p>
+          } @else if (designer.contextAgent(); as agent) {
+            <p
+              data-testid="workflow-run-context"
+              class="m-0 text-[12px] text-fg-muted"
+            >
+              Asked {{ agent }}
+            </p>
+          }
         } @else if (designer.contextAgent(); as agent) {
           <p
             data-testid="workflow-run-context"
@@ -223,220 +237,160 @@
             Asked {{ agent }}
           </p>
         }
-      } @else if (designer.contextAgent(); as agent) {
-        <p
-          data-testid="workflow-run-context"
-          class="m-0 text-[12px] text-fg-muted"
-        >
-          Asked {{ agent }}
-        </p>
-      }
-      @if (designer.shownQuestion(); as question) {
-        <p
-          [attr.data-history-id]="business() ? 'current' : null"
-          data-testid="workflow-run-question"
-          class="m-0 max-w-[85%] self-end rounded-[18px] bg-primary-soft px-4 py-2.5 text-[14px] break-words whitespace-pre-wrap text-fg-strong"
-        >
-          {{ question }}
-        </p>
-        @if (questionImages().length > 0) {
-          <ul
-            data-testid="workflow-run-question-images"
-            aria-label="Reference images"
-            class="m-0 flex max-w-[85%] list-none flex-wrap justify-end gap-2 self-end p-0"
-          >
-            @for (src of questionImages(); track $index) {
-              <li>
-                <img
-                  [src]="src"
-                  [alt]="'Reference image ' + ($index + 1)"
-                  [attr.data-testid]="'workflow-run-question-image-' + $index"
-                  class="block h-16 w-16 rounded-md border border-border object-cover"
-                />
-              </li>
-            }
-          </ul>
-        }
-      }
-      <!-- The turns that led to this run: the agent's questions and the picks -->
-      <ng-container
-        [ngTemplateOutlet]="turns"
-        [ngTemplateOutletContext]="{ $implicit: runTranscript() }"
-      />
-      <!-- The run itself is the agent's turn: its team, its answer (ui.md 4.4b) -->
-      <app-run-message
-        data-testid="run-agent-turn"
-        [name]="voice()?.name ?? ''"
-        [role]="voice()?.role ?? ''"
-        [bubble]="false"
-      >
-      @if (designer.waitingFor(); as waiting) {
-        <app-workflow-run-input-required
-          [waiting]="waiting"
-          [busy]="designer.running()"
-          [error]="designer.resumeError()"
-          (answered)="designer.resume($event)"
-          (answeredWithImages)="designer.resume($event.answer, $event.images)"
-          (openVisual)="openGateVisual($event)"
-          (rerun)="designer.rerunWithAnswer($event)"
-        />
-      }
-      <!-- How the run went and who did what. Once there is an answer it
-           follows it (ui.md 4.4b, Answer first): the bottom line comes first. -->
-      <ng-template #process>
-      <p
-        data-testid="workflow-run-status"
-        role="status"
-        class="m-0 text-[13px] font-medium text-fg-strong"
-      >
-        {{ runStatus() }}
-      </p>
-
-      <!-- The run's agents as a team: who did what, and the handoffs (ui.md
-           4.4b). In the Business view (R38) a step's data opens in Builder. -->
-      @defer (on immediate) {
-        <app-workflow-run-team
-          [stories]="designer.agentStories()"
-          [thought]="reasoningSnippet()"
-          [showWork]="!business()"
-          (openNode)="openStep($event)"
-          (openQuery)="openTeamQuery($event)"
-        />
-      }
-      </ng-template>
-      @if (!answerFirst()) {
-        <ng-container [ngTemplateOutlet]="process" />
-      }
-
-      @if (liveCodeProgress(); as progress) {
-        <!-- A running code step's own progress (Review a Website's pages) -->
-        <div
-          class="flex flex-col gap-1.5"
-          data-testid="workflow-run-progress"
-          role="status"
-          aria-live="polite"
-        >
-          <div class="flex min-w-0 items-center gap-2">
-            <lucide-angular
-              [img]="Loader2"
-              [size]="14"
-              class="shrink-0 animate-spin text-fg-muted"
-            />
-            <span class="text-[13px] font-medium text-fg">{{
-              progress.title
-            }}</span>
-          </div>
+        @if (designer.shownQuestion(); as question) {
           <p
-            class="m-0 min-w-0 truncate rounded bg-surface-muted px-2 py-1 text-[12px] text-fg"
-            data-testid="workflow-run-progress-latest"
+            [attr.data-history-id]="business() ? 'current' : null"
+            data-testid="workflow-run-question"
+            class="m-0 max-w-[85%] self-end rounded-[18px] bg-primary-soft px-4 py-2.5 text-[14px] break-words whitespace-pre-wrap text-fg-strong"
           >
-            {{ progress.latest }}
+            {{ question }}
           </p>
-          @if (progress.recent.length) {
-            <ul class="m-0 flex list-none flex-col gap-0.5 p-0 pl-2">
-              @for (line of progress.recent; track $index) {
-                <li class="min-w-0 truncate text-[12px] text-fg-muted">
-                  {{ line }}
+          @if (questionImages().length > 0) {
+            <ul
+              data-testid="workflow-run-question-images"
+              aria-label="Reference images"
+              class="m-0 flex max-w-[85%] list-none flex-wrap justify-end gap-2 self-end p-0"
+            >
+              @for (src of questionImages(); track $index) {
+                <li>
+                  <img
+                    [src]="src"
+                    [alt]="'Reference image ' + ($index + 1)"
+                    [attr.data-testid]="'workflow-run-question-image-' + $index"
+                    class="block h-16 w-16 rounded-md border border-border object-cover"
+                  />
                 </li>
               }
             </ul>
           }
-        </div>
-      }
-
-      @if (liveAgentStep()) {
-        <!-- The running agent step, live: the answer forming. Its thought and
-             steps show under its agent in the team; an agent step with no
-             persona shows them here (ui.md 4.4b). -->
-        <div class="flex flex-col gap-2" data-testid="workflow-run-live">
-          <!-- The Business view shows the answer forming, not the agent's work (R38) -->
-          @if (!business() && !liveStepInTeam()) {
-            @if (reasoningSnippet()) {
-              <p
-                class="m-0 flex min-w-0 items-start gap-1.5 text-[12px] leading-snug text-fg-muted italic"
-                data-testid="workflow-run-thought"
-              >
-                <lucide-angular
-                  [img]="Brain"
-                  [size]="12"
-                  class="mt-px shrink-0"
-                />
-                <span class="line-clamp-2 min-w-0">{{
-                  reasoningSnippet()
-                }}</span>
-              </p>
-            }
-            <app-agent-activity
-              [steps]="liveActivity()"
-              (openQuery)="openRunningStep()"
+        }
+        <!-- The turns that led to this run: the agent's questions and the picks -->
+        <ng-container
+          [ngTemplateOutlet]="turns"
+          [ngTemplateOutletContext]="{ $implicit: runTranscript() }"
+        />
+        <!-- The run itself is the agent's turn: its team, its answer (ui.md 4.4b) -->
+        <app-run-message
+          data-testid="run-agent-turn"
+          [name]="voice()?.name ?? ''"
+          [role]="voice()?.role ?? ''"
+          [bubble]="false"
+        >
+          @if (designer.waitingFor(); as waiting) {
+            <app-workflow-run-input-required
+              [waiting]="waiting"
+              [busy]="designer.running()"
+              [error]="designer.resumeError()"
+              (answered)="designer.resume($event)"
+              (answeredWithImages)="
+                designer.resume($event.answer, $event.images)
+              "
+              (openVisual)="openGateVisual($event)"
+              (rerun)="designer.rerunWithAnswer($event)"
             />
           }
-          @if (designer.streamingText()) {
-            <div
-              class="prose-dark text-[13px]"
-              [innerHTML]="designer.streamingText() | markdown"
-            ></div>
-          }
-        </div>
-      }
+          <!-- How the run went and who did what. Once there is an answer it
+           follows it (ui.md 4.4b, Answer first): the bottom line comes first. -->
+          <ng-template #process>
+            <p
+              data-testid="workflow-run-status"
+              role="status"
+              class="m-0 text-[13px] font-medium text-fg-strong"
+            >
+              {{ runStatus() }}
+            </p>
 
-      @if (result.answer === undefined && designer.run(); as stored) {
-        <!-- A suspended run with no answer yet (Build visual's gate): the
-             visual's side panel opens from the waiting card. -->
-        @defer (
-          when visuals.shown() !== null || visuals.loading() || visuals.error() !== null
-        ) {
-          <app-run-visual
-            [run]="stored"
-            [sheet]="true"
-            (runChange)="applyRun($event)"
-          />
-        }
-      }
-
-      @if (result.answer; as answer) {
-        <div data-testid="run-answer">
-          <!-- A visual the run made: its artifact card, where it was made (visuals R42) -->
-          <ng-template #artifactCard let-visual>
-            @if (designer.run(); as stored) {
-              <app-run-artifact-card
-                [run]="stored"
-                [visual]="visual"
-                [savedArtifactId]="savedArtifactId()"
-                (open)="viewVisual($event)"
-                (mapToData)="mapSavedArtifact($event)"
-                (openArtifact)="openSavedArtifact($event)"
+            <!-- The run's agents as a team: who did what, and the handoffs (ui.md
+           4.4b). In the Business view (R38) a step's data opens in Builder. -->
+            @defer (on immediate) {
+              <app-workflow-run-team
+                [stories]="designer.agentStories()"
+                [thought]="reasoningSnippet()"
+                [showWork]="!business()"
+                (openNode)="openStep($event)"
+                (openQuery)="openTeamQuery($event)"
               />
             }
           </ng-template>
-          <app-answer-view
-            [message]="answer"
-            [bluf]="true"
-            [latest]="true"
-            [busy]="designer.running()"
-            [showRating]="true"
-            [ratingPending]="designer.ratingPending()"
-            [queryInspector]="hasQueries(answer)"
-            [question]="designer.shownQuestion()"
-            [visualCard]="designer.run() ? artifactCard : null"
-            (inspectQuery)="inspectQuery($event)"
-            (rate)="designer.rateAnswer($event)"
-            (optionPicked)="designer.followUp($event)"
-            (viewVisual)="viewVisual($event)"
-            (openScorecard)="openScorecard($event)"
-          />
-          @if (designer.run(); as stored) {
-            @for (event of stored.events ?? []; track event.at) {
-              <app-answer-view
-                class="mt-2 block"
-                [message]="event"
-                [busy]="designer.running()"
-                [visualCard]="artifactCard"
-                (viewVisual)="viewVisual($event)"
-              />
-            }
-            <!-- Deferred: the interactive panel stays out of the initial bundle.
-                 It opens as a side panel on the window's right edge (R42). -->
+          @if (!answerFirst()) {
+            <ng-container [ngTemplateOutlet]="process" />
+          }
+
+          @if (liveCodeProgress(); as progress) {
+            <!-- A running code step's own progress (Review a Website's pages) -->
+            <div
+              class="flex flex-col gap-1.5"
+              data-testid="workflow-run-progress"
+              role="status"
+              aria-live="polite"
+            >
+              <div class="flex min-w-0 items-center gap-2">
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="14"
+                  class="shrink-0 animate-spin text-fg-muted"
+                />
+                <span class="text-[13px] font-medium text-fg">{{
+                  progress.title
+                }}</span>
+              </div>
+              <p
+                class="m-0 min-w-0 truncate rounded bg-surface-muted px-2 py-1 text-[12px] text-fg"
+                data-testid="workflow-run-progress-latest"
+              >
+                {{ progress.latest }}
+              </p>
+              @if (progress.recent.length) {
+                <ul class="m-0 flex list-none flex-col gap-0.5 p-0 pl-2">
+                  @for (line of progress.recent; track $index) {
+                    <li class="min-w-0 truncate text-[12px] text-fg-muted">
+                      {{ line }}
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+
+          @if (liveAgentStep()) {
+            <!-- The running agent step, live: the answer forming. Its thought and
+             steps show under its agent in the team; an agent step with no
+             persona shows them here (ui.md 4.4b). -->
+            <div class="flex flex-col gap-2" data-testid="workflow-run-live">
+              <!-- The Business view shows the answer forming, not the agent's work (R38) -->
+              @if (!business() && !liveStepInTeam()) {
+                @if (reasoningSnippet()) {
+                  <p
+                    class="m-0 flex min-w-0 items-start gap-1.5 text-[12px] leading-snug text-fg-muted italic"
+                    data-testid="workflow-run-thought"
+                  >
+                    <lucide-angular
+                      [img]="Brain"
+                      [size]="12"
+                      class="mt-px shrink-0"
+                    />
+                    <span class="line-clamp-2 min-w-0">{{
+                      reasoningSnippet()
+                    }}</span>
+                  </p>
+                }
+                <app-agent-activity
+                  [steps]="liveActivity()"
+                  (openQuery)="openRunningStep()"
+                />
+              }
+              @if (designer.streamingText()) {
+                <div
+                  class="prose-dark text-[13px]"
+                  [innerHTML]="designer.streamingText() | markdown"
+                ></div>
+              }
+            </div>
+          }
+
+          @if (result.answer === undefined && designer.run(); as stored) {
+            <!-- A suspended run with no answer yet (Build visual's gate): the
+             visual's side panel opens from the waiting card. -->
             @defer (
               when visuals.shown() !== null || visuals.loading() || visuals.error() !== null
             ) {
@@ -447,147 +401,207 @@
               />
             }
           }
-        </div>
-        @if (shownScorecard(); as readiness) {
-          <!-- Data Readiness: the report's scorecard, with Past assessments -->
-          <section
-            class="mt-4 rounded-lg border border-border"
-            data-testid="workflow-run-scorecard"
-            aria-label="Readiness scorecard"
-          >
-            <div
-              class="flex items-center justify-between gap-2 border-b border-border px-4 py-2"
-            >
-              <h3 class="m-0 text-[12px] font-medium text-fg-muted">
-                Scorecard
-              </h3>
-              <button
-                type="button"
-                data-testid="workflow-run-scorecard-close"
-                class="btn btn-ghost btn-icon"
-                aria-label="Close scorecard"
-                title="Close scorecard"
-                (click)="closeScorecard()"
-              >
-                <lucide-angular [img]="X" [size]="14" />
-              </button>
-            </div>
-            <app-panel-readiness-view #scorecard [item]="readiness">
-              @if (scorecard.report(); as shown) {
-                <app-readiness-history
-                  readinessHistory
-                  [datasourceId]="shown.datasourceId"
-                  [currentReportId]="scorecard.shownReportId()"
-                  (openReport)="scorecard.showReport($event.id)"
+
+          @if (result.answer; as answer) {
+            <div data-testid="run-answer">
+              <!-- A visual the run made: its artifact card, where it was made (visuals R42) -->
+              <ng-template #artifactCard let-visual>
+                @if (designer.run(); as stored) {
+                  <app-run-artifact-card
+                    [run]="stored"
+                    [visual]="visual"
+                    [savedArtifactId]="savedArtifactId()"
+                    (open)="viewVisual($event)"
+                    (mapToData)="mapSavedArtifact($event)"
+                    (openArtifact)="openSavedArtifact($event)"
+                  />
+                }
+              </ng-template>
+              <app-answer-view
+                [message]="answer"
+                [bluf]="true"
+                [latest]="true"
+                [busy]="designer.running()"
+                [showRating]="true"
+                [ratingPending]="designer.ratingPending()"
+                [queryInspector]="hasQueries(answer)"
+                [question]="designer.shownQuestion()"
+                [visualCard]="designer.run() ? artifactCard : null"
+                (inspectQuery)="inspectQuery($event)"
+                (rate)="designer.rateAnswer($event)"
+                (optionPicked)="designer.followUp($event)"
+                (viewVisual)="viewVisual($event)"
+                (openScorecard)="openScorecard($event)"
+              />
+              @if (answer.dashboard; as dashboard) {
+                <app-run-dashboard-card
+                  class="mt-2 block"
+                  [dashboard]="dashboard"
                 />
               }
-            </app-panel-readiness-view>
-          </section>
-        }
-      }
-
-      @if (answerFirst()) {
-        <ng-container [ngTemplateOutlet]="process" />
-      }
-
-      <!-- How it ran (ui.md 4.4b): the ended run read step by step, folded under the answer. -->
-      @if (
-        !business() &&
-        result.status !== "running" &&
-        result.status !== "suspended" &&
-        !designer.running()
-      ) {
-        <app-workflow-run-story
-          [nodes]="designer.nodes()"
-          (openNode)="designer.openNode($event)"
-        />
-      }
-
-      @if (runOutput().length > 0) {
-        <div data-testid="workflow-run-output">
-          <h4 class="m-0 text-[12px] font-medium text-fg-muted">Output</h4>
-          <dl class="m-0 mt-2 flex flex-col gap-1.5">
-            @for (entry of runOutput(); track entry.key) {
-              <div class="flex flex-wrap gap-x-3 gap-y-0.5">
-                <dt class="font-mono text-[12px] text-fg-muted">
-                  {{ entry.key }}
-                </dt>
-                @if (entry.structured) {
-                  <dd
-                    class="m-0 max-h-48 w-full overflow-auto rounded bg-surface-muted px-2 py-1 font-mono text-[11px] break-words whitespace-pre-wrap text-fg"
-                  >
-                    {{ entry.value }}
-                  </dd>
-                } @else {
-                  <dd class="m-0 text-[13px] break-words text-fg-strong">
-                    {{ entry.value }}
-                  </dd>
+              @if (designer.run(); as stored) {
+                @for (event of stored.events ?? []; track event.at) {
+                  <app-answer-view
+                    class="mt-2 block"
+                    [message]="event"
+                    [busy]="designer.running()"
+                    [visualCard]="artifactCard"
+                    (viewVisual)="viewVisual($event)"
+                  />
                 }
-              </div>
+                <!-- Deferred: the interactive panel stays out of the initial bundle.
+                 It opens as a side panel on the window's right edge (R42). -->
+                @defer (
+                  when visuals.shown() !== null || visuals.loading() || visuals.error() !== null
+                ) {
+                  <app-run-visual
+                    [run]="stored"
+                    [sheet]="true"
+                    (runChange)="applyRun($event)"
+                  />
+                }
+              }
+            </div>
+            @if (shownScorecard(); as readiness) {
+              <!-- Data Readiness: the report's scorecard, with Past assessments -->
+              <section
+                class="mt-4 rounded-lg border border-border"
+                data-testid="workflow-run-scorecard"
+                aria-label="Readiness scorecard"
+              >
+                <div
+                  class="flex items-center justify-between gap-2 border-b border-border px-4 py-2"
+                >
+                  <h3 class="m-0 text-[12px] font-medium text-fg-muted">
+                    Scorecard
+                  </h3>
+                  <button
+                    type="button"
+                    data-testid="workflow-run-scorecard-close"
+                    class="btn btn-ghost btn-icon"
+                    aria-label="Close scorecard"
+                    title="Close scorecard"
+                    (click)="closeScorecard()"
+                  >
+                    <lucide-angular [img]="X" [size]="14" />
+                  </button>
+                </div>
+                <app-panel-readiness-view #scorecard [item]="readiness">
+                  @if (scorecard.report(); as shown) {
+                    <app-readiness-history
+                      readinessHistory
+                      [datasourceId]="shown.datasourceId"
+                      [currentReportId]="scorecard.shownReportId()"
+                      (openReport)="scorecard.showReport($event.id)"
+                    />
+                  }
+                </app-panel-readiness-view>
+              </section>
             }
-          </dl>
+          }
+
+          @if (answerFirst()) {
+            <ng-container [ngTemplateOutlet]="process" />
+          }
+
+          <!-- How it ran (ui.md 4.4b): the ended run read step by step, folded under the answer. -->
+          @if (
+            !business() &&
+            result.status !== "running" &&
+            result.status !== "suspended" &&
+            !designer.running()
+          ) {
+            <app-workflow-run-story
+              [nodes]="designer.nodes()"
+              (openNode)="designer.openNode($event)"
+            />
+          }
+
+          @if (runOutput().length > 0) {
+            <div data-testid="workflow-run-output">
+              <h4 class="m-0 text-[12px] font-medium text-fg-muted">Output</h4>
+              <dl class="m-0 mt-2 flex flex-col gap-1.5">
+                @for (entry of runOutput(); track entry.key) {
+                  <div class="flex flex-wrap gap-x-3 gap-y-0.5">
+                    <dt class="font-mono text-[12px] text-fg-muted">
+                      {{ entry.key }}
+                    </dt>
+                    @if (entry.structured) {
+                      <dd
+                        class="m-0 max-h-48 w-full overflow-auto rounded bg-surface-muted px-2 py-1 font-mono text-[11px] break-words whitespace-pre-wrap text-fg"
+                      >
+                        {{ entry.value }}
+                      </dd>
+                    } @else {
+                      <dd class="m-0 text-[13px] break-words text-fg-strong">
+                        {{ entry.value }}
+                      </dd>
+                    }
+                  </div>
+                }
+              </dl>
+            </div>
+          }
+        </app-run-message>
+      } @else if (transcript().length > 0) {
+        <!-- The conversation before the run: what was sent, what the agent asks -->
+        <div class="mt-auto"></div>
+        <ng-container
+          [ngTemplateOutlet]="turns"
+          [ngTemplateOutletContext]="{ $implicit: transcript() }"
+        />
+      } @else {
+        <div
+          class="my-auto flex flex-col items-center gap-1.5 py-6 text-center"
+          data-testid="workflow-run-empty"
+        >
+          <p class="m-0 text-[22px] leading-tight font-semibold text-fg-strong">
+            {{ w.name }}
+          </p>
+          <p class="m-0 text-[14px] text-fg-muted">{{ emptyHint() }}</p>
+          @if (
+            designer.questionField() !== null && w.starterQuestions.length > 0
+          ) {
+            <ul
+              class="m-0 mt-3 flex list-none flex-wrap justify-center gap-2 p-0"
+              aria-label="Example questions"
+            >
+              @for (
+                example of w.starterQuestions;
+                track example;
+                let n = $index
+              ) {
+                <li>
+                  <button
+                    type="button"
+                    [attr.data-testid]="'workflow-example-' + n"
+                    (click)="pickExample(example)"
+                    class="cursor-pointer rounded-full border border-border bg-surface px-3.5 py-[7px] text-left text-[13px] text-fg hover:border-border-strong hover:bg-surface-muted"
+                  >
+                    {{ example }}
+                  </button>
+                </li>
+              }
+            </ul>
+          }
         </div>
       }
-      </app-run-message>
-    } @else if (transcript().length > 0) {
-      <!-- The conversation before the run: what was sent, what the agent asks -->
-      <div class="mt-auto"></div>
-      <ng-container
-        [ngTemplateOutlet]="turns"
-        [ngTemplateOutletContext]="{ $implicit: transcript() }"
-      />
-    } @else {
-      <div
-        class="my-auto flex flex-col items-center gap-1.5 py-6 text-center"
-        data-testid="workflow-run-empty"
-      >
-        <p class="m-0 text-[22px] leading-tight font-semibold text-fg-strong">
-          {{ w.name }}
-        </p>
-        <p class="m-0 text-[14px] text-fg-muted">{{ emptyHint() }}</p>
-        @if (
-          designer.questionField() !== null && w.starterQuestions.length > 0
-        ) {
-          <ul
-            class="m-0 mt-3 flex list-none flex-wrap justify-center gap-2 p-0"
-            aria-label="Example questions"
-          >
-            @for (
-              example of w.starterQuestions;
-              track example;
-              let n = $index
-            ) {
-              <li>
-                <button
-                  type="button"
-                  [attr.data-testid]="'workflow-example-' + n"
-                  (click)="pickExample(example)"
-                  class="cursor-pointer rounded-full border border-border bg-surface px-3.5 py-[7px] text-left text-[13px] text-fg hover:border-border-strong hover:bg-surface-muted"
-                >
-                  {{ example }}
-                </button>
-              </li>
-            }
-          </ul>
-        }
-      </div>
-    }
-  </section>
-  @if (navItems().length > 0) {
-    <!-- The conversation navigation (R38): a tick per question at the log's
+    </section>
+    @if (navItems().length > 0) {
+      <!-- The conversation navigation (R38): a tick per question at the log's
          bottom right (outside the column in the Business view), the list of
          questions growing up from them on hover or focus -->
-    <app-chat-history-nav
-      class="absolute bottom-3 z-20"
-      [class.right-1]="!business()"
-      [class.-right-12]="business()"
-      [container]="logElement()"
-      [items]="navItems()"
-      label="Conversation"
-      testIdPrefix="workflow-conversation"
-      (picked)="onHistoryPicked()"
-    />
-  }
+      <app-chat-history-nav
+        class="absolute bottom-3 z-20"
+        [class.right-1]="!business()"
+        [class.-right-12]="business()"
+        [container]="logElement()"
+        [items]="navItems()"
+        label="Conversation"
+        testIdPrefix="workflow-conversation"
+        (picked)="onHistoryPicked()"
+      />
+    }
   </div>
 
   @if (averyOpen() && designer.waitingFor() === null) {
@@ -727,7 +741,9 @@
                             [id]="inputId(field.name)"
                             [attr.data-testid]="inputId(field.name)"
                             [attr.accept]="imageAccept"
-                            [attr.aria-required]="field.required ? 'true' : null"
+                            [attr.aria-required]="
+                              field.required ? 'true' : null
+                            "
                             [attr.aria-invalid]="
                               fieldError(field.name) ? 'true' : null
                             "
@@ -754,7 +770,9 @@
                             [id]="inputId(field.name)"
                             [attr.data-testid]="inputId(field.name)"
                             [attr.placeholder]="field.placeholder ?? null"
-                            [attr.aria-required]="field.required ? 'true' : null"
+                            [attr.aria-required]="
+                              field.required ? 'true' : null
+                            "
                             [attr.aria-invalid]="
                               fieldError(field.name) ? 'true' : null
                             "
@@ -774,7 +792,9 @@
                             [attr.data-testid]="inputId(field.name)"
                             [type]="field.type === 'number' ? 'number' : 'text'"
                             [attr.placeholder]="field.placeholder ?? null"
-                            [attr.aria-required]="field.required ? 'true' : null"
+                            [attr.aria-required]="
+                              field.required ? 'true' : null
+                            "
                             [attr.aria-invalid]="
                               fieldError(field.name) ? 'true' : null
                             "
@@ -1035,7 +1055,9 @@
                           <span>{{ continueLabel(pick.selected.length) }}</span>
                         </button>
                       }
-                      @if (!showAllOptions() && pick.total > pick.shown.length) {
+                      @if (
+                        !showAllOptions() && pick.total > pick.shown.length
+                      ) {
                         <button
                           type="button"
                           data-testid="run-intake-show-all"

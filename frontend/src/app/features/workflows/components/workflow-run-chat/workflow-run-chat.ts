@@ -36,6 +36,7 @@ import {
 } from 'lucide-angular';
 import { ExecutionId } from '../../../../shared/execution-id/execution-id';
 import { RunArtifactCard } from '../../../runs/components/run-artifact-card/run-artifact-card';
+import { RunDashboardCard } from '../../../runs/components/run-dashboard-card/run-dashboard-card';
 import {
   ConversationTurn,
   WorkflowConversation,
@@ -181,6 +182,7 @@ interface PendingAsk {
     AgentActivity,
     ChatHistoryNav,
     RunArtifactCard,
+    RunDashboardCard,
   ],
   providers: [WorkflowConversation],
   templateUrl: './workflow-run-chat.html',
