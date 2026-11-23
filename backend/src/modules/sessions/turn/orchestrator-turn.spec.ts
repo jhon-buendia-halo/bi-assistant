@@ -499,6 +499,7 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
       'answer_from_data',
       'write_answer',
       'build_visual',
+      'build_dashboard',
     ]);
   });
 
