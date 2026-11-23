@@ -25,6 +25,7 @@ jest.mock('../src/modules/datasets/datasets.service', () => ({
 }));
 
 import { Client } from 'pg';
+import { IAR_CASES } from '../src/mastra/evals/insights-analyst-retail-reference';
 import { findFixture } from '../src/modules/testing-data/fixtures/registry';
 import {
   SEED_TIMEOUT_MS,
@@ -485,6 +486,126 @@ describeSmoke('Retail Ops sample, seeded on a live server', () => {
       .filter((r) => r.actual !== String(r.expected))
       .map((r) => `${r.trap} @ ${r.where}: ${r.actual} ≠ ${r.expected}`);
     expect(wrong).toEqual([]);
+  });
+
+  describe('the reference SQL of the insights-analyst-retail set', () => {
+    /** The eval SQL names `database.schema.table`; the smoke database may differ. */
+    const local = (sql: string): string =>
+      sql.split('retail_ops.retail_ops.').join('retail_ops.');
+    const query = async (sql: string) =>
+      (await client.query(local(sql))).rows as Record<string, unknown>[];
+    const numeric = (value: unknown): number | undefined =>
+      value !== null && value !== '' && Number.isFinite(Number(value))
+        ? Number(value)
+        : undefined;
+    const withReference = Object.entries(IAR_CASES).filter(
+      ([, c]) => c.referenceSql,
+    );
+    const values: Record<string, Record<string, unknown>[]> = {};
+
+    it.each(withReference)(
+      '%s: the reference SQL returns a row with no NULL',
+      async (id, c) => {
+        const result = await query(c.referenceSql!);
+        values[id] = result;
+        console.log(`REF ${id} ${JSON.stringify(result).slice(0, 400)}`);
+        expect(result.length).toBeGreaterThanOrEqual(1);
+        for (const row of result) {
+          for (const [column, cell] of Object.entries(row)) {
+            expect({ id, column, isNull: cell === null }).toEqual({
+              id,
+              column,
+              isNull: false,
+            });
+          }
+        }
+      },
+    );
+
+    it.each(withReference.filter(([, c]) => c.naiveSql))(
+      '%s: the naive SQL differs from the reference by the plan margin',
+      async (id, c) => {
+        const reference = values[id] ?? (await query(c.referenceSql!));
+        const naive = await query(c.naiveSql!);
+        console.log(`NAIVE ${id} ${JSON.stringify(naive).slice(0, 400)}`);
+        if (reference.length !== naive.length) return;
+        // A column differs by 5% (money), 2 points (a percentage) or 1 (a count).
+        const differs = Object.keys(reference[0]).some((column) => {
+          const a = numeric(reference[0][column]);
+          const b = numeric(naive[0][column]);
+          if (a === undefined || b === undefined) return false;
+          const gap = Math.abs(a - b);
+          if (/_pct$/.test(column)) return gap >= 2;
+          if (Number.isInteger(a) && Number.isInteger(b)) return gap >= 1;
+          // The refunds case is graded at 0.4%: the naive total only has to clear 1%.
+          const margin =
+            id === 'iar-refunds-net-after-returns-2024' ? 0.01 : 0.05;
+          return gap >= margin * Math.abs(a);
+        });
+        expect({ id, differs }).toEqual({ id, differs: true });
+      },
+    );
+
+    it('holds the per-case assert notes of the plan', async () => {
+      const read = async (id: string) =>
+        values[id] ?? (await query(IAR_CASES[id].referenceSql!));
+      const first = async (id: string, name: string) =>
+        (await read(id))[0][name];
+      const netOf2024 = `FROM retail_ops.order_lines l JOIN retail_ops.orders o ON o.order_id = l.order_id AND o.status = 'completed' WHERE o.order_date BETWEEN date '2024-01-01' AND date '2024-12-31'`;
+      const notes: Record<string, unknown> = {};
+
+      notes['topn rows'] = (
+        await read('iar-topn-product-per-department-2024')
+      ).length;
+      const tie = await read('iar-tie-top-3-products-units-2024');
+      notes['tie rows'] = tie.length;
+      notes['tie units'] = tie
+        .map((r) => `${String(r.product_name)}=${String(r.units)}`)
+        .join(', ');
+      const promos = await read('iar-tie-most-used-promotion');
+      notes['promotions'] = promos
+        .map((r) => `${String(r.promotion_name)}=${String(r.orders)}`)
+        .join(', ');
+      const stores = await query(
+        `SELECT sum(l.net_amount_usd) AS net ${netOf2024} GROUP BY o.store_id ORDER BY 1 DESC LIMIT 2`,
+      );
+      notes['top store gap'] = Number(stores[0].net) > Number(stores[1].net);
+      const storeProducts = await query(
+        `WITH top AS (SELECT o.store_id ${netOf2024} GROUP BY 1 ORDER BY sum(l.net_amount_usd) DESC LIMIT 1) SELECT sum(l.quantity) AS units ${netOf2024} AND o.store_id = (SELECT store_id FROM top) GROUP BY l.product_id ORDER BY 1 DESC LIMIT 2`,
+      );
+      notes['top store product gap'] =
+        Number(storeProducts[0].units) > Number(storeProducts[1].units);
+      const customers = await query(
+        `SELECT sum(l.net_amount_usd) AS net FROM retail_ops.order_lines l JOIN retail_ops.orders o ON o.order_id = l.order_id AND o.status = 'completed' GROUP BY o.customer_id ORDER BY 1 DESC LIMIT 6`,
+      );
+      notes['5th and 6th customer differ'] =
+        Number(customers[4].net) !== Number(customers[5].net);
+      const net = Number(await first('iar-agg-net-revenue-2024', 'net'));
+      const after = Number(
+        await first('iar-refunds-net-after-returns-2024', 'net_after_refunds'),
+      );
+      notes['refund share'] = (net - after) / net;
+      const before = await query(
+        `SELECT count(*) AS n FROM retail_ops.orders WHERE order_date < date '2022-01-01'`,
+      );
+      notes['orders before 2022'] = Number(before[0].n);
+      const targets = await query(
+        `SELECT count(*) AS n FROM retail_ops.store_targets WHERE target_month < date '2023-01-01'`,
+      );
+      notes['targets before 2023'] = Number(targets[0].n);
+      console.log(JSON.stringify(notes, null, 1));
+
+      expect(notes['topn rows']).toBe(3);
+      expect(notes['tie rows']).toBe(4);
+      expect(promos).toHaveLength(2);
+      expect(promos.map((r) => Number(r.orders))).toEqual([400, 400]);
+      expect(notes['top store gap']).toBe(true);
+      expect(notes['top store product gap']).toBe(true);
+      expect(notes['5th and 6th customer differ']).toBe(true);
+      expect(notes['refund share']).toBeGreaterThan(0.01);
+      expect(notes['orders before 2022']).toBe(0);
+      expect(notes['targets before 2023']).toBe(0);
+    });
   });
 
   it('holds the same data after a second load', async () => {
