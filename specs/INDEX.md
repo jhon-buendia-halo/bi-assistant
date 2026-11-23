@@ -2292,10 +2292,10 @@ specs/system/delivery.md:380-397  ## 7. Running a second instance (worktrees and
 specs/system/delivery.md:399-414  ## 8. The product page (`site/`)
 specs/system/delivery.md:416-477  ## 9. Claude Code mods (`.claude/mods/`)
 specs/system/delivery.md:429-477  ### `workflow-steps`
-specs/system/delivery.md:479-526  ## 10. Claude Code project skills (`.claude/skills/`)
-specs/system/delivery.md:528-537  ## 11. Claude Code tools (`.claude/tools/`)
-specs/system/delivery.md:539-558  ## 12. Claude Code agents (`.claude/agents/`)
-specs/system/delivery.md:560-617  ## 13. Deterministic QA (`scripts/qa.mjs`)
+specs/system/delivery.md:479-529  ## 10. Claude Code project skills (`.claude/skills/`)
+specs/system/delivery.md:531-540  ## 11. Claude Code tools (`.claude/tools/`)
+specs/system/delivery.md:542-561  ## 12. Claude Code agents (`.claude/agents/`)
+specs/system/delivery.md:563-620  ## 13. Deterministic QA (`scripts/qa.mjs`)
 
 specs/system/tech-stack.md:7-15  ## Languages and runtime
 specs/system/tech-stack.md:17-42  ## Frontend (`frontend/`)

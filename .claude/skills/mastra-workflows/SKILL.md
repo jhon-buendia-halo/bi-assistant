@@ -110,6 +110,7 @@ This split exists because Jest cannot load Mastra's ESM: catalogue data lives in
 
 - A new agent is a file in `backend/src/mastra/agents/`, registered in `index.ts`, with an entry in agents.md. Its `model` is `async () => resolveAgentModel()`; never a hardcoded provider. Its instructions go through `agentInstructions(<key>, <shipped text>)` as in [analysis-planner.agent.ts](../../../backend/src/mastra/agents/analysis-planner.agent.ts).
 - An agent's catalogue data (key, name, tool names, step limit) lives in a framework-free module, as `insights-analyst-catalog.ts` does.
+- When the workflow's answer runs queries, it reaches the user through the shared query inspector layer: [`agent-change`](../agent-change/SKILL.md), step 3.
 - The existing workflows call their agents through the runtime or a function in `<name>.agents.ts`, inside `execute`. `createStep(agent)`, `.agent()` and `.tool()` exist in 1.66.0 but nothing here uses them, and the stub does not run them: choosing one is part of an approach, with its cost.
 
 **Tests**
@@ -127,8 +128,14 @@ This split exists because Jest cannot load Mastra's ESM: catalogue data lives in
 **Evals**
 
 - A workflow change that alters what an agent receives (its prompt, tools, context blocks, the messages a step builds) needs that agent's evals. Decide by hashing `getInstructions()` and the tool list on base and branch ([lessons.md](../../../lessons.md)); the `insights-analyst` eval target runs the whole `answer-business-question` (`backend/src/mastra/evals/insights-analyst-workflow-target.ts`), so a change to its steps reaches those evals even when no prompt changed.
-- How to run and the pass bar: [`verify`](../verify/SKILL.md), *Evals*.
+- How to run and the pass bar: [`verify`](../verify/SKILL.md), *Evals*, and [`agent-change`](../agent-change/SKILL.md), steps 1 and 5.
 
 ## 5. Checks
 
 Load [`verify`](../verify/SKILL.md) and run what it says: `node scripts/qa.mjs --free` in Free style, `node scripts/qa.mjs <roadmap-id> --gate` in Strict. While coding, `npx jest --findRelatedTests <files> --silent` in `backend/`, output to a log file.
+
+## 6. Hand over
+
+Start an instance with [`local-instance`](../local-instance/SKILL.md) so the user can run the workflow.
+
+**Reply:** the approach the user picked, what changed in the workflow's steps and edges, how you verified it, and the instance URL.
