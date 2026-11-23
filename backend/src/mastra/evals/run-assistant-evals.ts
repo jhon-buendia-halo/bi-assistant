@@ -2,7 +2,12 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
 import { SessionsService } from '../../modules/sessions/sessions.service';
 import { OntologyService } from '../../modules/ontology/ontology.service';
+import { DatasetsRepository } from '../../modules/datasets/repositories/datasets.repository';
+import { EvalRunsRepository } from '../../modules/agents/repositories/eval-runs.repository';
+import { LlmService } from '../../modules/llm/llm.service';
 import { writeFileSync } from 'fs';
+import { cliRun, savedLlmLabel } from './eval-cli-run';
+import { selectEvalSets } from './assistant.evals';
 import { runAssistantEvals } from './assistant.evals';
 import { selectCliEvalCases } from './eval-cli-selection';
 import { EVAL_SETS, agentForCases, evalTargetFor } from './eval-sets';
@@ -75,7 +80,15 @@ async function main(): Promise<void> {
   }
 
   try {
-    await runEvals(app, datasets, selection.caseIds, agent.agentKey);
+    await runEvals(
+      app,
+      datasets,
+      selection.caseIds,
+      agent.agentKey,
+      llmTarget.kind === 'custom'
+        ? { provider: 'custom', model: llmTarget.endpoint.model }
+        : undefined,
+    );
   } finally {
     await app.close();
   }
@@ -86,6 +99,8 @@ async function runEvals(
   datasets: string[],
   caseIds: string[],
   agentKey: string,
+  /** The EVAL_LLM_* endpoint's label; the saved settings when omitted. */
+  customLabel?: { provider: string; model: string },
 ): Promise<void> {
   // Same Nest app the eval-runs.service in-app runner uses, so a throwaway
   // run host for create_visual/update_visual works here too — no CLI-only
@@ -96,26 +111,65 @@ async function runEvals(
   const knowledgeBlock = await app
     .get(OntologyService)
     .definitionBlock(datasets);
-  const results = await runAssistantEvals(
-    datasets,
-    (result) => {
-      const mark = result.passed ? 'PASS' : 'FAIL';
-      console.log(`${mark}  ${result.id}  (${result.durationMs}ms)`);
-      if (result.error) console.log(`      error: ${result.error}`);
-      // Every check, built-in, custom or judge, with why a failed one failed.
-      for (const check of result.checkResults) {
-        const verdict = check.passed ? 'pass' : 'FAIL';
-        console.log(
-          `      ${verdict} ${check.id}: ${check.description.slice(0, 120)}` +
-            (check.reason ? `\n           ↳ ${check.reason}` : ''),
-        );
+  const target = evalTargetFor(agentKey, caseIds);
+  // The run is saved like an app run (agents.md 8.5). A store failure is
+  // reported once and never changes the exit code.
+  let saveError: string | undefined;
+  // Steps are chained so a question's save lands before the next one's.
+  let pending: Promise<void> = Promise.resolve();
+  const remember = (step: () => Promise<void>): Promise<void> => {
+    pending = pending.then(async () => {
+      if (saveError) return;
+      try {
+        await step();
+      } catch (err) {
+        saveError = err instanceof Error ? err.message : String(err);
       }
-    },
+    });
+    return pending;
+  };
+  const sets = selectEvalSets(caseIds, target.sets);
+  const run = cliRun(app.get(EvalRunsRepository), {
+    agentKey,
+    datasets,
     caseIds,
-    sessions,
-    knowledgeBlock,
-    evalTargetFor(agentKey, caseIds),
-  );
+    setId: sets.length === 1 ? sets[0].id : null,
+    ...(customLabel ?? savedLlmLabel(await app.get(LlmService).getView())),
+    datasetList: await app.get(DatasetsRepository).list(),
+  });
+  let results: Awaited<ReturnType<typeof runAssistantEvals>>;
+  try {
+    results = await runAssistantEvals(
+      datasets,
+      (result) => {
+        const mark = result.passed ? 'PASS' : 'FAIL';
+        console.log(`${mark}  ${result.id}  (${result.durationMs}ms)`);
+        if (result.error) console.log(`      error: ${result.error}`);
+        void remember(() => run.add(result));
+        // Every check, built-in, custom or judge, with why a failed one failed.
+        for (const check of result.checkResults) {
+          const verdict = check.passed ? 'pass' : 'FAIL';
+          console.log(
+            `      ${verdict} ${check.id}: ${check.description.slice(0, 120)}` +
+              (check.reason ? `\n           ↳ ${check.reason}` : ''),
+          );
+        }
+      },
+      caseIds,
+      sessions,
+      knowledgeBlock,
+      target,
+      run.jobId,
+    );
+  } catch (err) {
+    await remember(() =>
+      run.finish(err instanceof Error ? err.message : String(err)),
+    );
+    throw err;
+  }
+  await remember(() => run.finish());
+  if (saveError) console.log(`Could not save the run: ${saveError}`);
+  else console.log(`Saved as eval run ${run.jobId}`);
   // The whole run (answers and tool calls included) for reading failures.
   const resultsFile = process.env['EVAL_RESULTS_FILE'];
   if (resultsFile) writeFileSync(resultsFile, JSON.stringify(results, null, 2));
