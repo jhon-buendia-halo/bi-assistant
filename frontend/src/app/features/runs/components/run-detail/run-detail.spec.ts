@@ -207,6 +207,37 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     req.flush({});
   });
 
+  it('shows the export card when the answer exported the conversation', async () => {
+    const el = mount({
+      ...RUN,
+      answer: {
+        ...RUN.answer!,
+        export: {
+          id: 'ex-1',
+          title: 'World Cup review',
+          createdAt: '2026-11-23T10:00:00Z',
+          files: [
+            { format: 'pptx', fileName: 'world-cup-review.pptx', bytes: 820000, slides: 1 },
+          ],
+        },
+      },
+    });
+    // The card is deferred (@defer): wait for it to render.
+    await lastFixture.whenStable();
+    lastFixture.detectChanges();
+    expect(
+      el
+        .querySelector('[data-testid="run-export-card"]')
+        ?.getAttribute('aria-label'),
+    ).toBe('Export: World Cup review');
+  });
+
+  it('shows no export card when the answer has no export', () => {
+    expect(
+      mount(RUN).querySelector('[data-testid="run-export-card"]'),
+    ).toBeNull();
+  });
+
   it('turns an input into one entry per field', () => {
     expect(runInputEntries({ a: 'x', b: ['y', 'z'], c: true })).toEqual([
       { name: 'a', value: 'x' },

@@ -975,6 +975,37 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
         fixture.detectChanges();
         expect(text('workflow-run-context')).toContain('Asked Jessica');
       });
+
+      it('an answer that exported the conversation shows the export card; one that did not shows none', async () => {
+        showAnswer();
+        expect(q('run-export-card')).toBeNull();
+        designer.run.set(
+          assistantRun({
+            id: 'run-2',
+            steps: ranSteps,
+            answer: {
+              role: 'assistant',
+              content: 'Done.',
+              at: 'x',
+              export: {
+                id: 'ex-1',
+                title: 'World Cup review',
+                createdAt: '2026-11-23T10:00:00Z',
+                files: [
+                  { format: 'pdf', fileName: 'world-cup-review.pdf', bytes: 1700000, pages: 6 },
+                ],
+              },
+            },
+          }),
+        );
+        fixture.detectChanges();
+        // The card is deferred (@defer): wait for it to render.
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(q('run-export-card')?.getAttribute('aria-label')).toBe(
+          'Export: World Cup review',
+        );
+      });
     });
 
     it('Stop ends the run: the run reads "Run stopped"', () => {

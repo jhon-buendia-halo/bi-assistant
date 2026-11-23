@@ -36,6 +36,7 @@ import { RunsState } from '../../services/runs-state';
 import { RunVisual } from '../run-visual/run-visual';
 import { RunArtifactCard } from '../run-artifact-card/run-artifact-card';
 import { RunDashboardCard } from '../run-dashboard-card/run-dashboard-card';
+import { RunExportCard } from '../run-export-card/run-export-card';
 import { RunDashboardPanel } from '../run-dashboard-panel/run-dashboard-panel';
 import { RunDashboardState } from '../../services/run-dashboard-state';
 import { WorkflowRun } from '../../../workflows/models/workflow.model';
@@ -79,6 +80,7 @@ export function runInputEntries(
     RunVisual,
     RunArtifactCard,
     RunDashboardCard,
+    RunExportCard,
     RunDashboardPanel,
   ],
   templateUrl: './run-detail.html',

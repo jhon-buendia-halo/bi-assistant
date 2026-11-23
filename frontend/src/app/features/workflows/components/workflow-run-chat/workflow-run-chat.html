@@ -201,6 +201,11 @@
                       [dashboard]="dashboard"
                     />
                   }
+                  @if (answer.export; as exported) {
+                    @defer (on immediate) {
+                      <app-run-export-card class="mt-2 block" [export]="exported" />
+                    }
+                  }
                 } @else {
                   <p class="m-0 text-[13px] text-fg-muted">
                     This run {{ turn.status }} without an answer.
@@ -440,6 +445,11 @@
                   class="mt-2 block"
                   [dashboard]="dashboard"
                 />
+              }
+              @if (answer.export; as exported) {
+                @defer (on immediate) {
+                  <app-run-export-card class="mt-2 block" [export]="exported" />
+                }
               }
               @if (designer.run(); as stored) {
                 @for (event of stored.events ?? []; track event.at) {

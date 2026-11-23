@@ -37,6 +37,7 @@ import {
 import { ExecutionId } from '../../../../shared/execution-id/execution-id';
 import { RunArtifactCard } from '../../../runs/components/run-artifact-card/run-artifact-card';
 import { RunDashboardCard } from '../../../runs/components/run-dashboard-card/run-dashboard-card';
+import { RunExportCard } from '../../../runs/components/run-export-card/run-export-card';
 import {
   ConversationTurn,
   WorkflowConversation,
@@ -184,6 +185,7 @@ interface PendingAsk {
     ChatHistoryNav,
     RunArtifactCard,
     RunDashboardCard,
+    RunExportCard,
   ],
   providers: [WorkflowConversation],
   templateUrl: './workflow-run-chat.html',
