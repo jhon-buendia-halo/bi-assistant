@@ -335,6 +335,45 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
 
   var STATUS_TEXT = { mapped: 'Mapped', partial: 'Partly mapped', unmapped: 'No data' };
 
+  // A bar chart of many categories reads as a ranking (ui.md 4.4b): more
+  // than RANK_AFTER categories of a dimension with no order of its own
+  // (not a date, a number or keys that start with a digit, such as years)
+  // are drawn horizontal, the largest first, without the categories whose
+  // values are all zero, and the top RANK_TOP unless expanded. Null when the
+  // chart keeps its own order. Pure.
+  var RANK_AFTER = 8;
+  var RANK_TOP = 10;
+  function rankGroups(groups, column, expanded) {
+    if (groups.length <= RANK_AFTER) return null;
+    if (!column || column.type === 'date' || column.type === 'number') return null;
+    var digits = groups.every(function (group) {
+      var first = String(group.key).charAt(0);
+      return first >= '0' && first <= '9';
+    });
+    if (digits) return null;
+    var shown = groups.filter(function (group) {
+      return group.values.some(function (value) { return value !== 0; });
+    });
+    shown = shown.slice().sort(function (a, b) { return (b.values[0] || 0) - (a.values[0] || 0); });
+    return {
+      groups: expanded ? shown : shown.slice(0, RANK_TOP),
+      total: shown.length,
+      zero: groups.length - shown.length,
+    };
+  }
+
+  // The axis of a chart: a round top and its four steps (0, 1, 2, 2.5 or 5 times a power of ten).
+  function niceTop(value) {
+    if (!(value > 0)) return 1;
+    var raw = value / 4;
+    var power = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+    var steps = [1, 2, 2.5, 5, 10];
+    for (var i = 0; i < steps.length; i += 1) {
+      if (steps[i] * power >= raw) return steps[i] * power * 4;
+    }
+    return power * 40;
+  }
+
   function mount(root, input) {
     var blueprint = input.blueprint || {};
     // Without a mapping the dashboard is drawn alone: no status, no sources.
@@ -409,10 +448,12 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
       groups.forEach(function (group) {
         group.values.forEach(function (value) { top = Math.max(top, value); });
       });
-      top = top || 1;
-      var left = horizontal ? 120 : 8;
-      var bottom = horizontal ? 8 : 28;
-      var innerW = width - left - 8;
+      top = niceTop(top);
+      // One measure: each bar carries its value, and the axis its numbers.
+      var labelled = measures.length === 1;
+      var left = horizontal ? 120 : 44;
+      var bottom = horizontal ? 24 : 28;
+      var innerW = width - left - (horizontal && labelled ? 44 : 8);
       var innerH = height - bottom - 18;
       for (var line = 0; line <= 4; line += 1) {
         var at = horizontal ? left + (innerW * line) / 4 : 18 + (innerH * line) / 4;
@@ -421,6 +462,11 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
             ? svg('line', { x1: at, y1: 18, x2: at, y2: 18 + innerH, class: 'dmk-grid' })
             : svg('line', { x1: left, y1: at, x2: left + innerW, y2: at, class: 'dmk-grid' })
         );
+        var tick = horizontal
+          ? svg('text', { x: at, y: height - 6, 'text-anchor': 'middle', class: 'dmk-axis' })
+          : svg('text', { x: left - 6, y: at + 4, 'text-anchor': 'end', class: 'dmk-axis' });
+        tick.textContent = formatValue(horizontal ? (top * line) / 4 : top - (top * line) / 4, measures[0], false);
+        chart.appendChild(tick);
       }
       var slot = (horizontal ? innerH : innerW) / groups.length;
       var bar = Math.max(2, (slot * 0.72) / measures.length);
@@ -433,6 +479,13 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
             ? svg('rect', { x: left, y: 18 + offset, width: size, height: bar, rx: 3, fill: palette[m % palette.length] })
             : svg('rect', { x: left + offset, y: 18 + innerH - size, width: bar, height: size, rx: 3, fill: palette[m % palette.length] });
           chart.appendChild(mark(rect, label));
+          if (labelled && (horizontal || slot >= 26)) {
+            var figure = horizontal
+              ? svg('text', { x: left + size + 6, y: 18 + offset + bar / 2 + 4, class: 'dmk-axis dmk-value' })
+              : svg('text', { x: left + offset + bar / 2, y: 18 + innerH - size - 5, 'text-anchor': 'middle', class: 'dmk-axis dmk-value' });
+            figure.textContent = formatValue(value, measures[m], false);
+            chart.appendChild(figure);
+          }
         });
         var caption = horizontal
           ? svg('text', { x: left - 6, y: 18 + slot * g + slot / 2 + 4, 'text-anchor': 'end', class: 'dmk-axis' })
@@ -442,6 +495,33 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
       });
       body.appendChild(chart);
       drawLegend(body, measures.map(function (measure) { return measure.label; }));
+    }
+
+    // A bar widget: its own order, or a ranking when it has many categories.
+    var expandedRank = {};
+    function drawBarWidget(body, widget, data) {
+      var column = widget.dimension ? columnOf(blueprint, widget.dimension) : null;
+      var expanded = !!expandedRank[widget.id];
+      var ranked = rankGroups(data.groups, column, expanded);
+      if (!ranked) return drawBars(body, widget, data, false);
+      drawBars(body, widget, { rowCount: data.rowCount, totals: data.totals, groups: ranked.groups }, true);
+      var parts = [];
+      if (ranked.total > RANK_TOP) parts.push(expanded ? 'All ' + ranked.total : 'Top ' + RANK_TOP + ' of ' + ranked.total);
+      if (ranked.zero) parts.push(ranked.zero + ' at zero not shown');
+      if (!parts.length) return;
+      var foot = el('div', 'dmk-rank-foot');
+      foot.appendChild(el('span', 'dmk-rank-note', parts.join(' · ')));
+      if (ranked.total > RANK_TOP) {
+        var toggle = el('button', 'dmk-reset', expanded ? 'Show top ' + RANK_TOP : 'Show all ' + ranked.total);
+        toggle.setAttribute('type', 'button');
+        toggle.setAttribute('data-rank-toggle', widget.id);
+        toggle.addEventListener('click', function () {
+          expandedRank[widget.id] = !expanded;
+          drawWidget(widget, data);
+        });
+        foot.appendChild(toggle);
+      }
+      body.appendChild(foot);
     }
 
     function drawLines(body, widget, data, area) {
@@ -632,7 +712,7 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
         return;
       }
       if (widget.kind === 'kpi') drawKpi(body, widget, data);
-      else if (widget.kind === 'bar') drawBars(body, widget, data, false);
+      else if (widget.kind === 'bar') drawBarWidget(body, widget, data);
       else if (widget.kind === 'funnel') drawBars(body, widget, data, true);
       else if (widget.kind === 'line') drawLines(body, widget, data, false);
       else if (widget.kind === 'area') drawLines(body, widget, data, true);
@@ -759,7 +839,7 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
     render();
   }
 
-  window.dashMock = { buildRows: buildRows, compute: compute, formatValue: formatValue, mount: mount };
+  window.dashMock = { buildRows: buildRows, compute: compute, formatValue: formatValue, rankGroups: rankGroups, niceTop: niceTop, mount: mount };
 })();`;
 
 export const DASHBOARD_MOCK_CSS = `.dmk { position: relative; color: var(--qti-fg); font-size: 13px; line-height: 1.4; }
@@ -801,6 +881,9 @@ export const DASHBOARD_MOCK_CSS = `.dmk { position: relative; color: var(--qti-f
 .dmk-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .dmk-table th, .dmk-table td { padding: 6px 8px; border-top: 1px solid var(--qti-border); text-align: left; font-weight: 400; }
 .dmk-table thead th { border-top: 0; }
+.dmk-rank-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.dmk-rank-note { font-size: 12px; color: var(--qti-fg-muted); }
+.dmk-value { font-weight: 600; fill: var(--qti-fg-strong); }
 .dmk-sort { padding: 0; border: 0; background: none; color: var(--qti-fg-muted); font: inherit; font-weight: 600; cursor: pointer; text-transform: capitalize; }
 .dmk-note { margin: 0; color: var(--qti-fg-muted); }
 .dmk-source { font-size: 12px; color: var(--qti-fg-muted); }

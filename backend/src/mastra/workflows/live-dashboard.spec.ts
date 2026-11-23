@@ -218,6 +218,16 @@ interface DashMock {
     groups: { key: string; values: number[] }[];
   }[];
   mount(root: unknown, input: unknown): void;
+  rankGroups(
+    groups: { key: string; values: number[] }[],
+    column: { name: string; type: string } | null,
+    expanded: boolean,
+  ): {
+    groups: { key: string; values: number[] }[];
+    total: number;
+    zero: number;
+  } | null;
+  niceTop(value: number): number;
 }
 
 /** Just enough of a DOM for the runtime to draw into. */
@@ -347,6 +357,139 @@ describe('the fixed runtime on live rows', () => {
     select.listeners['change'].forEach((listener) => listener());
     const after = root.all().find((node) => node.className === 'dmk-kpi-value');
     expect(after?.textContent).toBe('12');
+  });
+
+  describe('a bar chart of many categories reads as a ranking (ui.md 4.4b)', () => {
+    const TEAMS = [
+      'Ferrari',
+      'Alfa Romeo',
+      'Cooper',
+      'Maserati',
+      'Mercedes',
+      'Lancia',
+      'BRM',
+      'Lotus',
+      'Lola',
+      'Brabham',
+      'McLaren',
+      'Williams',
+      'Red Bull',
+    ];
+    const TITLES = [15, 2, 2, 1, 9, 0, 1, 6, 0, 4, 13, 7, 8];
+    const groups = TEAMS.map((key, i) => ({ key, values: [TITLES[i]] }));
+    const team = { name: 'team', type: 'string' };
+
+    it('sorts the largest first, leaves out the zeros and keeps the top 10', () => {
+      const ranked = dash.rankGroups(groups, team, false)!;
+      expect(ranked.groups.map((g) => g.key)).toEqual([
+        'Ferrari',
+        'McLaren',
+        'Mercedes',
+        'Red Bull',
+        'Williams',
+        'Lotus',
+        'Brabham',
+        'Alfa Romeo',
+        'Cooper',
+        'Maserati',
+      ]);
+      expect(ranked.total).toBe(11);
+      expect(ranked.zero).toBe(2);
+      expect(dash.rankGroups(groups, team, true)!.groups).toHaveLength(11);
+    });
+
+    it('keeps the order of a short list, a date, a number or year-like keys', () => {
+      expect(dash.rankGroups(groups.slice(0, 8), team, false)).toBeNull();
+      expect(
+        dash.rankGroups(groups, { name: 'day', type: 'date' }, false),
+      ).toBeNull();
+      expect(
+        dash.rankGroups(groups, { name: 'n', type: 'number' }, false),
+      ).toBeNull();
+      const years = groups.map((g, i) => ({ ...g, key: String(1990 + i) }));
+      expect(dash.rankGroups(years, team, false)).toBeNull();
+    });
+
+    it('gives the axis a round top', () => {
+      expect(dash.niceTop(15)).toBe(20);
+      expect(dash.niceTop(1000)).toBe(1000);
+      expect(dash.niceTop(7)).toBe(8);
+      expect(dash.niceTop(0)).toBe(1);
+    });
+
+    it('draws it horizontal with each value, the note, and Show all', () => {
+      const blueprint = {
+        title: 'F1',
+        summary: '',
+        theme: { mode: 'light', accent: '#e10600', palette: [] },
+        layout: '',
+        filters: [],
+        columns: [
+          {
+            name: 'team',
+            type: 'string',
+            description: '',
+            values: [],
+            min: null,
+            max: null,
+          },
+          {
+            name: 'titles',
+            type: 'number',
+            description: '',
+            values: [],
+            min: null,
+            max: null,
+          },
+        ],
+        widgets: [
+          {
+            id: 'titles-by-team',
+            title: 'Titles by team',
+            kind: 'bar',
+            span: 6,
+            measures: [
+              {
+                label: 'Titles',
+                column: 'titles',
+                aggregation: 'sum',
+                format: 'number',
+                unit: '',
+                total: null,
+              },
+            ],
+            dimension: 'team',
+            description: '',
+            observed: '',
+            filteredBy: [],
+          },
+        ],
+      };
+      const root = new FakeNode('div');
+      dash.mount(root, {
+        blueprint,
+        mapping: null,
+        rows: TEAMS.map((team, i) => ({ team, titles: TITLES[i] })),
+        live: true,
+      });
+      const note = () =>
+        root.all().find((node) => node.className === 'dmk-rank-note')
+          ?.textContent;
+      expect(note()).toBe('Top 10 of 11 · 2 at zero not shown');
+      const values = root
+        .all()
+        .filter((node) => node.attributes['class'] === 'dmk-axis dmk-value')
+        .map((node) => node.textContent);
+      expect(values.slice(0, 3)).toEqual(['15', '13', '9']);
+      const toggle = root
+        .all()
+        .find(
+          (node) => node.attributes['data-rank-toggle'] === 'titles-by-team',
+        ) as FakeNode;
+      expect(toggle.textContent).toBe('Show all 11');
+      toggle.listeners['click'].forEach((listener) => listener());
+      expect(note()).toBe('All 11 · 2 at zero not shown');
+    });
   });
 
   it('still draws the mock without rows', () => {
