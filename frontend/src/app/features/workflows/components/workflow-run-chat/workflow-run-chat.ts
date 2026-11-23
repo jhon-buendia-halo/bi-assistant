@@ -164,6 +164,20 @@ interface PendingAsk {
  * an ended run's answer. Each step's state is on the canvas beside it. It shares its state with the page through the
  * designer.
  */
+/** Words that tell a Spanish question from an English one (the export's own heuristic, agents.md 3.18). */
+const SPANISH_WORDS =
+  /\b(?:que|qué|los|las|del|por|para|una|con|el|la|de|es|en|y|cómo|cuál|cuántos|ahora|crea|haz|muestra)\b/g;
+const ENGLISH_WORDS =
+  /\b(?:the|of|and|by|for|with|is|are|what|which|how|show|create|now|to|in|a)\b/g;
+
+/** The conversation is in Spanish when its questions' words mostly are. */
+export function conversationIsSpanish(questions: readonly string[]): boolean {
+  const text = questions.join(' ').toLowerCase();
+  const es = text.match(SPANISH_WORDS)?.length ?? 0;
+  const en = text.match(ENGLISH_WORDS)?.length ?? 0;
+  return es > en;
+}
+
 @Component({
   selector: 'app-workflow-run-chat',
   imports: [
@@ -330,23 +344,30 @@ export class WorkflowRunChat {
 
   /** The Export menu (workflows R45): always in the bar of Avery's conversation. */
   protected readonly exportOpen = signal(false);
-  protected readonly exportOptions = [
-    {
-      id: 'both',
-      label: 'PDF and PowerPoint',
-      message: 'Export this conversation to PDF and PowerPoint',
-    },
-    {
-      id: 'pdf',
-      label: 'PDF only',
-      message: 'Export this conversation to PDF',
-    },
-    {
-      id: 'pptx',
-      label: 'PowerPoint only',
-      message: 'Export this conversation to PowerPoint',
-    },
-  ] as const;
+  /**
+   * The Export options. What each sends is in the conversation's language
+   * (Spanish when its questions mostly are), so Avery answers in it too.
+   */
+  protected readonly exportOptions = computed(() => {
+    const questions = [
+      ...this.conversation.earlier().map((turn) => turn.question),
+      this.designer.shownQuestion() ?? '',
+    ];
+    const es = conversationIsSpanish(questions);
+    const ask = es
+      ? 'Exporta esta conversación a'
+      : 'Export this conversation to';
+    const and = es ? 'y' : 'and';
+    return [
+      {
+        id: 'both',
+        label: 'PDF and PowerPoint',
+        message: `${ask} PDF ${and} PowerPoint`,
+      },
+      { id: 'pdf', label: 'PDF only', message: `${ask} PDF` },
+      { id: 'pptx', label: 'PowerPoint only', message: `${ask} PowerPoint` },
+    ];
+  });
 
   /** An Export option asks Avery for the export, as a message of the conversation (queued while she works). */
   protected exportConversation(message: string): void {

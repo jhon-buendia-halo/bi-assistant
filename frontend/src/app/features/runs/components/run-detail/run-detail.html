@@ -151,6 +151,12 @@
                 (open)="visuals.view(run, $event)"
               />
             </ng-template>
+            <!-- The export first: Avery's words under it speak of it -->
+            @if (answer.export; as exported) {
+              @defer (on immediate) {
+                <app-run-export-card class="mb-2 block" [export]="exported" />
+              }
+            }
             <app-answer-view
               [visualCard]="artifactCard"
               [message]="answer"
@@ -169,11 +175,6 @@
                 class="mt-2 block"
                 [dashboard]="dashboard"
               />
-            }
-            @if (answer.export; as exported) {
-              @defer (on immediate) {
-                <app-run-export-card class="mt-2 block" [export]="exported" />
-              }
             }
             @for (event of run.events ?? []; track event.at) {
               <app-answer-view

@@ -1005,6 +1005,14 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
         expect(q('run-export-card')?.getAttribute('aria-label')).toBe(
           'Export: World Cup review',
         );
+        // The card comes first: Avery's words under it speak of it.
+        const answerText = Array.from(el.querySelectorAll('p')).find(
+          (p) => p.textContent?.trim() === 'Done.',
+        )!;
+        expect(
+          q('run-export-card')!.compareDocumentPosition(answerText) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
       });
     });
 
@@ -1493,6 +1501,15 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(runs.calls.length).toBe(1);
       const queued = el.querySelector('[data-testid="workflow-avery-queued"] [title]');
       expect(queued!.textContent!.trim()).toBe('Export this conversation to PDF and PowerPoint');
+    });
+
+    it('Export asks in the conversation\'s language', () => {
+      const question = 'cuáles son los mejores pilotos de la historia de la F1';
+      openStored(ended({ question, input: { question, datasets: [], verbose: false } }));
+      runs.getRun.and.returnValue(of(ended()));
+      click('workflow-run-export');
+      click('workflow-run-export-both');
+      expect(runs.last.body.input['question']).toBe('Exporta esta conversación a PDF y PowerPoint');
     });
 
     it('Escape closes the Export menu', () => {

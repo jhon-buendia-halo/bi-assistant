@@ -230,6 +230,12 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
         .querySelector('[data-testid="run-export-card"]')
         ?.getAttribute('aria-label'),
     ).toBe('Export: World Cup review');
+    // The card comes before the answer view: Avery's words under it speak of it.
+    const card = el.querySelector('[data-testid="run-export-card"]')!;
+    const answer = el.querySelector('app-answer-view')!;
+    expect(
+      card.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('shows no export card when the answer has no export', () => {

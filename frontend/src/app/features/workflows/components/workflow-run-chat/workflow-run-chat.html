@@ -112,7 +112,7 @@
             data-testid="workflow-run-export-menu"
             class="absolute top-full right-0 z-30 mt-1 flex w-52 flex-col gap-0.5 rounded-xl border border-border bg-surface p-1.5 shadow-lg"
           >
-            @for (option of exportOptions; track option.id) {
+            @for (option of exportOptions(); track option.id) {
               <button
                 type="button"
                 role="menuitem"
@@ -233,6 +233,15 @@
                 [bubble]="false"
               >
                 @if (turn.answer; as answer) {
+                  <!-- The export first: Avery's words under it speak of it -->
+                  @if (answer.export; as exported) {
+                    @defer (on immediate) {
+                      <app-run-export-card
+                        class="mb-2 block"
+                        [export]="exported"
+                      />
+                    }
+                  }
                   <app-answer-view
                     [message]="answer"
                     [queryInspector]="hasQueries(answer)"
@@ -244,14 +253,6 @@
                       class="mt-2 block"
                       [dashboard]="dashboard"
                     />
-                  }
-                  @if (answer.export; as exported) {
-                    @defer (on immediate) {
-                      <app-run-export-card
-                        class="mt-2 block"
-                        [export]="exported"
-                      />
-                    }
                   }
                 } @else {
                   <p class="m-0 text-[13px] text-fg-muted">
@@ -471,6 +472,12 @@
                   />
                 }
               </ng-template>
+              <!-- The export first: Avery's words under it speak of it -->
+              @if (answer.export; as exported) {
+                @defer (on immediate) {
+                  <app-run-export-card class="mb-2 block" [export]="exported" />
+                }
+              }
               <app-answer-view
                 [message]="answer"
                 [bluf]="true"
@@ -492,11 +499,6 @@
                   class="mt-2 block"
                   [dashboard]="dashboard"
                 />
-              }
-              @if (answer.export; as exported) {
-                @defer (on immediate) {
-                  <app-run-export-card class="mt-2 block" [export]="exported" />
-                }
               }
               @if (designer.run(); as stored) {
                 @for (event of stored.events ?? []; track event.at) {
