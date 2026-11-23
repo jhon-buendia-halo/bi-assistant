@@ -49,6 +49,7 @@ describe('BuiltInSkillsService', () => {
     const list = await service.list();
     expect(list.map((skill) => skill.name)).toEqual([
       'avery-playbooks',
+      'conversation-export',
       'curated-knowledge',
       'data-readiness',
       'interactive-visuals',
@@ -60,18 +61,23 @@ describe('BuiltInSkillsService', () => {
       loading: 'on-demand',
       agents: ['chief-of-staff'],
     });
+    // Avery's export rules: listed for her, offered only on an export.
     expect(list[1]).toMatchObject({
+      loading: 'on-demand',
+      agents: ['chief-of-staff'],
+    });
+    expect(list[2]).toMatchObject({
       loading: 'on-demand',
       agents: ['assistant', 'insights-analyst'],
       modified: false,
       builtInChanged: false,
       updatedAt: null,
     });
-    expect(list[2]).toMatchObject({
+    expect(list[3]).toMatchObject({
       loading: 'on-demand',
       agents: ['data-readiness'],
     });
-    expect(list[3]).toMatchObject({
+    expect(list[4]).toMatchObject({
       loading: 'harness',
       agents: ['visualization'],
     });

@@ -5,6 +5,7 @@ import { assistantAgent } from './agents/assistant.agent';
 import { analysisPlannerAgent } from './agents/analysis-planner.agent';
 import { answerWriterAgent } from './agents/answer-writer.agent';
 import { chiefOfStaffAgent } from './agents/chief-of-staff.agent';
+import { biAnalystAgent } from './agents/bi-analyst.agent';
 import { queryExplainerAgent } from './agents/query-explainer.agent';
 import { resultExplorerAgent } from './agents/result-explorer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
@@ -59,6 +60,8 @@ export const mastra = new Mastra({
     'answer-writer': answerWriterAgent,
     // Avery, the orchestrator of Answer a Business Question (orchestrated).
     'chief-of-staff': chiefOfStaffAgent,
+    // Clara, Avery's teammate behind build_dashboard (plan bi-dashboard).
+    'bi-analyst': biAnalystAgent,
     // The agents of Dashboard Image to Artifact's two model steps (agents.md 5.17).
     'dashboard-reader': dashboardReaderAgent,
     'data-mapper': dataMapperAgent,

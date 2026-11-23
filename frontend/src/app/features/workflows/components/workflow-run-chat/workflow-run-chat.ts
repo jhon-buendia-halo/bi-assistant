@@ -14,20 +14,31 @@ import {
 import {
   Archive,
   Brain,
+  ChevronDown,
   CircleCheck,
+  Database,
+  Download,
+  Image as ImageIcon,
+  ImagePlus,
+  LayoutDashboard,
   Loader2,
   LucideAngularModule,
   MessageSquare,
   MessageSquareReply,
   RotateCcw,
-  SendHorizontal,
+  Send,
+  ShieldCheck,
   Square,
   SquarePen,
+  ToggleRight,
+  Type,
   Workflow,
   X,
 } from 'lucide-angular';
 import { ExecutionId } from '../../../../shared/execution-id/execution-id';
 import { RunArtifactCard } from '../../../runs/components/run-artifact-card/run-artifact-card';
+import { RunDashboardCard } from '../../../runs/components/run-dashboard-card/run-dashboard-card';
+import { RunExportCard } from '../../../runs/components/run-export-card/run-export-card';
 import {
   ConversationTurn,
   WorkflowConversation,
@@ -41,7 +52,10 @@ import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.s
 import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
 import { WorkflowsNavState } from '../../services/workflows-nav-state';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
-import { DatasetPicker } from '../../../datasets/components/dataset-picker/dataset-picker';
+import {
+  DatasourceKind,
+  kindLabel,
+} from '../../../datasources/models/datasource.model';
 import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
 import {
   ReadinessPanelItem,
@@ -71,12 +85,36 @@ import { AgentActivity } from '../agent-activity/agent-activity';
 import { activitySteps } from '../../services/agent-activity';
 import { WorkflowRunStory } from '../workflow-run-story/workflow-run-story';
 import { WorkflowRunAttachments } from './workflow-run-attachments';
+import { RunComposer } from '../run-composer/run-composer';
+import { RunMessage } from '../run-message/run-message';
+import { RunOptionCards } from '../run-option-cards/run-option-cards';
+import {
+  IntakeKind,
+  IntakeOption,
+  artifactOption,
+  askText,
+  composerPlaceholder,
+  continueLabel,
+  datasetOption,
+  emptyHint,
+  hasInputValue,
+  intakeKind,
+  leadVoice,
+  missingFields,
+  optionLabel,
+  pendingPlaceholder,
+  promptField,
+  refusalText,
+  shownOptions,
+  typedOption,
+} from './run-intake.util';
 import {
   addImageFiles,
   dragHasFiles,
   imageFilesOf,
 } from './composer-images.util';
 import { WorkflowRunsApiService } from '../../services/workflow-runs-api.service';
+import { RunDashboardState } from '../../../runs/services/run-dashboard-state';
 import {
   IMAGE_ACCEPT,
   isImageDataUrl,
@@ -94,9 +132,29 @@ const MAP_WORKFLOW_ID = 'map-dashboard-data';
 const AVERY_AGENT_KEY = 'chief-of-staff';
 const MAP_ARTIFACT_FIELD = 'artifact';
 
-/** The composer's controls Execute workflow may focus, in order. */
-const FORM_CONTROLS =
-  'form input:not([disabled]):not([type="hidden"]), form textarea:not([disabled]), form select:not([disabled]), form button:not([disabled])';
+/** One turn of the conversation before a run starts (the intake). */
+interface ChatEntry {
+  id: number;
+  /** Each Send from an empty composer starts a round. */
+  round: number;
+  from: 'user' | 'agent';
+  text: string;
+  /** A user turn: the names picked, as chips. */
+  chips?: string[];
+  /** The message that filled the run's prompt. */
+  question?: boolean;
+  /** An agent turn that asks for this field. */
+  field?: string;
+  /** An agent turn that says the run was refused. */
+  error?: boolean;
+}
+
+/** The field the agent waits on, and the turn that asked for it. */
+interface PendingAsk {
+  field: WorkflowInputField;
+  kind: IntakeKind;
+  entryId: number;
+}
 
 /**
  * The Chat column of a workflow's Run panel, under the canvas (workflows
@@ -106,12 +164,28 @@ const FORM_CONTROLS =
  * an ended run's answer. Each step's state is on the canvas beside it. It shares its state with the page through the
  * designer.
  */
+/** Words that tell a Spanish question from an English one (the export's own heuristic, agents.md 3.18). */
+const SPANISH_WORDS =
+  /\b(?:que|qué|los|las|del|por|para|una|con|el|la|de|es|en|y|cómo|cuál|cuántos|ahora|crea|haz|muestra)\b/g;
+const ENGLISH_WORDS =
+  /\b(?:the|of|and|by|for|with|is|are|what|which|how|show|create|now|to|in|a)\b/g;
+
+/** The conversation is in Spanish when its questions' words mostly are. */
+export function conversationIsSpanish(questions: readonly string[]): boolean {
+  const text = questions.join(' ').toLowerCase();
+  const es = text.match(SPANISH_WORDS)?.length ?? 0;
+  const en = text.match(ENGLISH_WORDS)?.length ?? 0;
+  return es > en;
+}
+
 @Component({
   selector: 'app-workflow-run-chat',
   imports: [
     AnswerView,
     NgTemplateOutlet,
-    DatasetPicker,
+    RunComposer,
+    RunMessage,
+    RunOptionCards,
     ExecutionId,
     LucideAngularModule,
     MarkdownPipe,
@@ -125,86 +199,74 @@ const FORM_CONTROLS =
     AgentActivity,
     ChatHistoryNav,
     RunArtifactCard,
+    RunDashboardCard,
+    RunExportCard,
   ],
   providers: [WorkflowConversation],
   templateUrl: './workflow-run-chat.html',
   styles: `
-    .composer {
-      border: 1px solid var(--qti-border);
-      border-radius: 0.75rem;
+    /* A checkbox drawn as a switch (the inputs menu's options). */
+    .run-switch {
+      appearance: none;
+      position: relative;
+      flex: none;
+      width: 30px;
+      height: 18px;
+      margin: 0;
+      border-radius: 9999px;
+      background-color: var(--qti-border-strong);
+      cursor: pointer;
+      transition: background-color 120ms ease;
+    }
+    .run-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 9999px;
       background-color: var(--qti-surface);
-      padding: 0.5rem 0.625rem;
-      box-shadow: var(--qti-shadow-card);
+      transition: transform 120ms ease;
     }
-    .composer:focus-within,
-    .composer-dragging {
-      border-color: var(--qti-border-selected);
+    .run-switch:checked {
+      background-color: var(--qti-primary);
     }
-    /* A long input (Review a Website has eleven fields) scrolls inside the
-       composer, so the chat above keeps its room; Execute stays in view. */
-    .composer-form {
-      max-height: 35vh;
-      overflow-y: auto;
+    .run-switch:checked::after {
+      transform: translateX(12px);
+      background-color: var(--qti-on-primary);
     }
-    /* The actions are the form's footer: the fields scroll under its
-       divider, never under the button alone. */
-    .composer-actions {
-      position: sticky;
-      bottom: -0.5rem;
-      z-index: 1;
-      margin-top: 0.5rem;
-      margin-bottom: -0.5rem;
-      border-top: 1px solid var(--qti-border);
-      padding-top: 0.5rem;
-      padding-bottom: 0.5rem;
-      background-color: var(--qti-surface);
-    }
-    .composer-dragging {
-      background-color: var(--qti-surface-selected);
-    }
-    .composer-input {
-      width: 100%;
-      resize: none;
-      border: 0;
-      background: transparent;
-      padding: 0.125rem 0.125rem;
-      font-size: 13px;
-      line-height: 1.25rem;
-      color: var(--qti-fg);
-      outline: none;
-    }
-    .composer-input::placeholder {
-      color: var(--qti-fg-muted);
-    }
-    /* The input form: one section per field, a line between them. */
-    .composer-fields > * {
-      padding-block: 0.75rem;
-    }
-    .composer-fields > :first-child {
-      padding-top: 0.25rem;
-    }
-    .composer-fields > * + * {
-      border-top: 1px solid var(--qti-border);
-    }
-    .composer-input-invalid {
-      box-shadow: inset 0 -1px 0 var(--qti-on-danger-soft);
+    .run-switch:focus-visible {
+      outline: 2px solid var(--qti-focus);
+      outline-offset: 2px;
     }
   `,
   host: {
     class: 'relative flex min-h-0 flex-col',
     'data-testid': 'workflow-run-chat',
+    '(document:keydown.escape)': 'closeMenu()',
   },
 })
 export class WorkflowRunChat {
   protected readonly hasQueries = answerHasQueries;
   protected readonly Archive = Archive;
+  protected readonly Download = Download;
   protected readonly Brain = Brain;
   protected readonly CircleCheck = CircleCheck;
   protected readonly Loader2 = Loader2;
   protected readonly MessageSquare = MessageSquare;
   protected readonly MessageSquareReply = MessageSquareReply;
   protected readonly RotateCcw = RotateCcw;
-  protected readonly SendHorizontal = SendHorizontal;
+  protected readonly Send = Send;
+  protected readonly ChevronDown = ChevronDown;
+  protected readonly Database = Database;
+  protected readonly ImageIcon = ImageIcon;
+  protected readonly ImagePlus = ImagePlus;
+  protected readonly LayoutDashboard = LayoutDashboard;
+  protected readonly ShieldCheck = ShieldCheck;
+  protected readonly Type = Type;
+  protected readonly optionLabel = optionLabel;
+  protected readonly continueLabel = continueLabel;
   protected readonly Square = Square;
   protected readonly SquarePen = SquarePen;
   protected readonly Workflow = Workflow;
@@ -262,19 +324,77 @@ export class WorkflowRunChat {
   protected readonly averyBusy = signal(false);
   protected readonly averyNotice = signal<string | null>(null);
 
+  /** Avery is working on this conversation: the message box stays, with Stop, and queues. */
+  protected readonly averyLive = computed(
+    () =>
+      this.isAveryWorkflow() &&
+      this.designer.running() &&
+      this.designer.run()?.archivedAt === undefined,
+  );
+
+  /** Messages typed while Avery works, sent one by one as each answer ends (oldest first). */
+  protected readonly queued = signal<string[]>([]);
+
   protected sendAvery(): void {
     const text = this.averyText().trim();
-    if (!text || this.designer.running()) return;
+    if (!text) return;
+    this.averyText.set('');
+    this.toAvery(text);
+  }
+
+  /** The Export menu (workflows R45): always in the bar of Avery's conversation. */
+  protected readonly exportOpen = signal(false);
+  /**
+   * The Export options. What each sends is in the conversation's language
+   * (Spanish when its questions mostly are), so Avery answers in it too.
+   */
+  protected readonly exportOptions = computed(() => {
+    const questions = [
+      ...this.conversation.earlier().map((turn) => turn.question),
+      this.designer.shownQuestion() ?? '',
+    ];
+    const es = conversationIsSpanish(questions);
+    const ask = es
+      ? 'Exporta esta conversación a'
+      : 'Export this conversation to';
+    const and = es ? 'y' : 'and';
+    return [
+      {
+        id: 'both',
+        label: 'PDF and PowerPoint',
+        message: `${ask} PDF ${and} PowerPoint`,
+      },
+      { id: 'pdf', label: 'PDF only', message: `${ask} PDF` },
+      { id: 'pptx', label: 'PowerPoint only', message: `${ask} PowerPoint` },
+    ];
+  });
+
+  /** An Export option asks Avery for the export, as a message of the conversation (queued while she works). */
+  protected exportConversation(message: string): void {
+    this.exportOpen.set(false);
+    this.toAvery(message);
+  }
+
+  /** The menu closes when focus leaves it (a click elsewhere, Tab past it). */
+  protected onExportFocusOut(event: FocusEvent): void {
+    const next = event.relatedTarget;
+    const menu = event.currentTarget as HTMLElement;
+    if (!(next instanceof Node) || !menu.contains(next))
+      this.exportOpen.set(false);
+  }
+
+  private toAvery(text: string): void {
     this.averyError.set(null);
     this.averyNotice.set(null);
-    this.averyText.set('');
+    if (this.designer.running()) {
+      this.queued.update((list) => [...list, text]);
+      return;
+    }
     this.designer.followUp(text);
   }
 
-  protected onAveryKey(event: KeyboardEvent): void {
-    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
-    event.preventDefault();
-    this.sendAvery();
+  protected removeQueued(index: number): void {
+    this.queued.update((list) => list.filter((_, i) => i !== index));
   }
 
   protected archiveConversation(): void {
@@ -285,7 +405,7 @@ export class WorkflowRunChat {
     this.runsApi.archive(run.id).subscribe({
       next: () => {
         this.averyBusy.set(false);
-        this.designer.newQuestion();
+        this.newQuestion();
         this.averyNotice.set('Conversation archived');
       },
       error: (err: unknown) => {
@@ -366,6 +486,17 @@ export class WorkflowRunChat {
   private shownRunId: string | null = null;
 
   constructor() {
+    // A queued message goes as soon as the answer it waited for has ended
+    // (answered, stopped or failed); a question Avery asks waits for its answer.
+    effect(() => {
+      const next = this.queued()[0];
+      if (next === undefined || !this.averyOpen()) return;
+      if (this.designer.waitingFor() !== null) return;
+      untracked(() => {
+        this.queued.update((list) => list.slice(1));
+        this.designer.followUp(next);
+      });
+    });
     // The Business view reads the whole conversation (R38).
     effect(() => {
       const on = this.threaded();
@@ -381,13 +512,67 @@ export class WorkflowRunChat {
       const runId = this.designer.run()?.id ?? null;
       untracked(() => setTimeout(() => this.follow(status, runId)));
     });
-    // Execute workflow on the canvas: focus the composer, once per request.
+    // Execute workflow on the canvas, New question, Run again: focus the
+    // composer, once per request, holding the prompt the input holds now.
     effect(() => {
       const request = this.designer.runFormRequest();
       if (request === 0) return;
       untracked(() => {
         this.designer.runFormRequest.set(0);
-        setTimeout(() => this.focusRunForm());
+        // The request can land after the user already typed (the effect runs
+        // on the next change detection): what they typed wins.
+        if (this.pending() === null && this.draft().trim() === '')
+          this.syncDraft();
+        setTimeout(() => this.focusComposer());
+      });
+    });
+    // Another workflow (or the same one opened again): a fresh conversation.
+    // The same workflow loaded again keeps what the user already typed: the
+    // text box shows it, so dropping it here would leave Send disabled.
+    effect(() => {
+      const id = this.designer.workflow()?.id ?? null;
+      untracked(() => {
+        const reloaded = id !== null && id === this.shownWorkflowId;
+        this.shownWorkflowId = id;
+        this.resetIntake();
+        if (!(reloaded && this.draft().trim() !== '')) this.syncDraft();
+      });
+    });
+    // A run the intake started: its turns stay above it once it has an id.
+    effect(() => {
+      const runId = this.designer.runId();
+      untracked(() => {
+        if (runId !== null && this.awaitingStart()) {
+          this.transcriptRunId.set(runId);
+          this.awaitingStart.set(false);
+        }
+      });
+    });
+    // A refused start (the form's own check, or the server's): the agent
+    // says why and asks again for the first field at fault, whoever started
+    // the run (the message box, or the home page's Ask on load). A refusal
+    // with field errors bumps `invalidFocusRequest`; one without sets a new
+    // `runError`.
+    effect(() => {
+      const bump = this.designer.invalidFocusRequest();
+      const message = this.designer.runError();
+      untracked(() => {
+        const fresh =
+          bump > 0 || (message !== null && message !== this.reportedError);
+        this.reportedError = message;
+        if (bump > 0) {
+          this.designer.invalidFocusRequest.set(0);
+          setTimeout(() => this.focusComposer());
+        }
+        if (!fresh) return;
+        this.awaitingStart.set(false);
+        const errors = this.designer.inputErrors();
+        this.onRefused(
+          [...new Set([message, ...errors.map((e) => e.message)])].filter(
+            (m): m is string => m !== null,
+          ),
+          errors.find((e) => e.field !== null)?.field ?? null,
+        );
       });
     });
     // A workflow with an artifact field: load the artifacts it offers.
@@ -404,14 +589,6 @@ export class WorkflowRunChat {
         }),
       );
     });
-    // A refused Execute: focus the first field with an error.
-    effect(() => {
-      if (this.designer.invalidFocusRequest() === 0) return;
-      untracked(() => {
-        this.designer.invalidFocusRequest.set(0);
-        setTimeout(() => this.focusFirstInvalid());
-      });
-    });
   }
 
   /** Scrolling the chat by hand: it follows the run again only near its end. */
@@ -423,6 +600,8 @@ export class WorkflowRunChat {
 
   /** Business view: the earlier questions of this conversation (R38). */
   protected readonly conversation = inject(WorkflowConversation);
+  /** The dashboard panel beside the chat (dashboard-panel): the nav stays inside the column while it shows. */
+  protected readonly dashboards = inject(RunDashboardState);
 
   /** The conversation navigation's questions; empty under two (R38). */
   protected readonly navItems = computed<ChatHistoryItem[]>(() => {
@@ -433,6 +612,13 @@ export class WorkflowRunChat {
     if (current) items.push({ id: 'current', label: current });
     return items.length >= 2 ? items : [];
   });
+
+  /** The nav sits inside the log (not in the gutter beside the column): the log keeps a lane for it. */
+  protected readonly navInside = computed(
+    () =>
+      this.navItems().length > 0 &&
+      (!this.business() || this.dashboards.shown() !== null),
+  );
 
   /** A question picked in the navigation: the chat stops following the run. */
   protected onHistoryPicked(): void {
@@ -472,29 +658,10 @@ export class WorkflowRunChat {
           8;
   }
 
-  /** The first invalid control; a dataset group focuses its first choice, else itself. */
-  private focusFirstInvalid(): void {
-    const invalid = this.host.nativeElement.querySelector<HTMLElement>(
-      'form [aria-invalid="true"]',
-    );
-    if (invalid === null) return;
-    const target =
-      invalid.getAttribute('role') === 'group'
-        ? (invalid.querySelector<HTMLElement>('button') ?? invalid)
-        : invalid;
-    target.focus();
-  }
+  private readonly composer = viewChild<RunComposer>('composer');
 
-  /** The first visible, enabled control of the run form, else its Execute. */
-  private focusRunForm(): void {
-    const root = this.host.nativeElement;
-    const controls = Array.from(
-      root.querySelectorAll<HTMLElement>(FORM_CONTROLS),
-    );
-    const first = controls.find((el) => el.getClientRects().length > 0);
-    (
-      first ?? root.querySelector<HTMLElement>('[data-testid="workflow-run"]')
-    )?.focus();
+  private focusComposer(): void {
+    this.composer()?.focus();
   }
 
   /** Only a workflow with an input runs from its page (R21). */
@@ -747,21 +914,7 @@ export class WorkflowRunChat {
   /** The line under the workflow's name before a run. */
   protected readonly emptyHint = computed(() => {
     const workflow = this.designer.workflow();
-    const datasets = workflow?.input.some(
-      (field) =>
-        !field.hidden &&
-        (field.type === 'datasets' || field.type === 'dataset'),
-    );
-    const image = workflow?.input.some(
-      (field) => !field.hidden && field.type === 'image',
-    );
-    if (image) return 'Upload an image below and press Execute.';
-    if (this.designer.questionField() === null) {
-      return 'Fill in the input below and press Execute.';
-    }
-    return datasets
-      ? 'Pick the datasets below and type a question.'
-      : 'Type a question below.';
+    return workflow === null ? '' : emptyHint(workflow);
   });
 
   /**
@@ -787,32 +940,6 @@ export class WorkflowRunChat {
     if (result === null || result.answer !== undefined) return [];
     return runOutputEntries(result.output);
   });
-
-  /**
-   * The composer's controls: every field the app does not set itself, the
-   * prompt first (`isPrompt`), then the others in order.
-   */
-  protected readonly composerFields = computed(() => {
-    const fields =
-      this.designer.workflow()?.input.filter((field) => !field.hidden) ?? [];
-    return [
-      ...fields.filter((field) => this.isPrompt(field)),
-      ...fields.filter((field) => !this.isPrompt(field)),
-    ];
-  });
-
-  /**
-   * Whether a field is the composer's prompt: the question the user types,
-   * shown first and bare, as a chat's message box. A question the workflow
-   * fills in itself (it has a `default`: optional instructions) is a form
-   * field like the others instead: labelled, boxed and in its own place.
-   */
-  protected isPrompt(field: WorkflowInputField): boolean {
-    return (
-      field.name === this.designer.questionField() &&
-      field.default === undefined
-    );
-  }
 
   /** The latest line of the agent's reasoning, for the Thinking block. */
   protected readonly reasoningSnippet = computed(() => {
@@ -868,17 +995,20 @@ export class WorkflowRunChat {
    * which is what a run sends (api.md 118). Clearing the picker clears it.
    */
   protected onImage(name: string, event: Event): void {
-    this.setImageFile(name, (event.target as HTMLInputElement).files?.[0]);
+    void this.setImageFile(name, (event.target as HTMLInputElement).files?.[0]);
   }
 
-  /** Holds `file` as an image field's value (nothing clears it). */
-  private setImageFile(name: string, file: File | undefined): void {
+  /** Holds `file` as an image field's value (nothing clears it); resolves once read. */
+  private setImageFile(name: string, file: File | undefined): Promise<void> {
     if (!file) {
       this.imageNames.update((names) => ({ ...names, [name]: '' }));
       this.designer.setInput(name, '');
-      return;
+      return Promise.resolve();
     }
     const reader = new FileReader();
+    const done = new Promise<void>((resolve) => {
+      reader.onloadend = () => resolve();
+    });
     reader.onload = () => {
       this.imageNames.update((names) => ({ ...names, [name]: file.name }));
       this.designer.setInput(
@@ -896,6 +1026,7 @@ export class WorkflowRunChat {
       this.designer.setInput(name, '');
     };
     reader.readAsDataURL(file);
+    return done;
   }
 
   /** What a thumbnail shows: a new image as it is, a stored path through the run's endpoint. */
@@ -943,13 +1074,22 @@ export class WorkflowRunChat {
       );
       this.setHeldImages([...this.heldImages(), ...accepted].slice(0, max));
       this.attachError.set(error);
+      if (accepted.length > 0) {
+        this.imagesAnswered(
+          field.name,
+          files.slice(0, accepted.length).map((file) => file.name),
+        );
+      }
       return;
     }
     // No `images` field: the one `image` field takes the first file (the
     // run form then checks its type and size on Execute).
     const image = this.imageField();
     if (image === null || files.length === 0) return;
-    this.setImageFile(image.name, files[0]);
+    await this.setImageFile(image.name, files[0]);
+    if (this.designer.inputValue(image.name) !== '') {
+      this.imagesAnswered(image.name, [files[0].name]);
+    }
   }
 
   protected removeImage(index: number): void {
@@ -1000,17 +1140,555 @@ export class WorkflowRunChat {
     );
   }
 
-  /** An example chip fills the question and does not run (plan 4.2). */
+  /** An example chip fills the composer (and the question) and does not run (plan 4.2). */
   protected pickExample(text: string): void {
     const field = this.designer.questionField();
     if (field !== null) this.designer.setInput(field, text);
+    this.draft.set(text);
+    this.focusComposer();
   }
 
-  /** Enter executes; Shift+Enter adds a line. */
-  protected onEnter(event: Event): void {
-    const key = event as KeyboardEvent;
-    if (key.shiftKey || key.isComposing) return;
+  // ---------------------------------------------------------------------
+  // The conversation before a run (ui.md 4.4b): the composer's message fills
+  // the prompt, then the agent asks for each required input still missing,
+  // one at a time, in its own voice (written by the app, no model call).
+  // ---------------------------------------------------------------------
+
+  /** Who speaks for the workflow: its lead agent, else the workflow itself. */
+  protected readonly voice = computed(() => {
+    const workflow = this.designer.workflow();
+    return workflow === null ? null : leadVoice(workflow);
+  });
+
+  /** The field the composer's message fills (the question, else Review a Website's URL). */
+  protected readonly prompt = computed(() => {
+    const workflow = this.designer.workflow();
+    return workflow === null
+      ? null
+      : promptField(workflow.input, this.designer.questionField());
+  });
+
+  /**
+   * A prompt with a default (instructions the workflow fills in itself) is
+   * not mirrored in the composer: it keeps its default unless something is
+   * typed, and is edited in the inputs menu.
+   */
+  private readonly promptHasDefault = computed(
+    () => this.prompt()?.default !== undefined,
+  );
+
+  /** What the composer holds now. */
+  protected readonly draft = signal('');
+
+  /** The workflow the conversation belongs to, to tell a reload from another workflow. */
+  private shownWorkflowId: string | null = null;
+  /** The turns so far, before the run (and above it once it started). */
+  protected readonly transcript = signal<ChatEntry[]>([]);
+  /** The field the agent waits on; null when it waits on nothing. */
+  protected readonly pending = signal<PendingAsk | null>(null);
+  /** Every choice of the pending pick shows, not only the first five. */
+  protected readonly showAllOptions = signal(false);
+  /** A run was asked for and has no id yet. */
+  private readonly awaitingStart = signal(false);
+  /** The run the shown turns led to. */
+  private readonly transcriptRunId = signal<string | null>(null);
+  /** The required checkboxes answered in this conversation. */
+  private readonly answered = signal<ReadonlySet<string>>(new Set());
+  private nextEntryId = 1;
+  /** The last refusal message said in the chat (one per refusal). */
+  private reportedError: string | null = null;
+  private round = 0;
+  /** Questions asked in this round (the first opens with `First,`). */
+  private askedThisRound = 0;
+
+  /** The inputs menu behind `+` is open, and which of its entries is unfolded. */
+  protected readonly menuOpen = signal(false);
+  protected readonly menuSection = signal<string | null>(null);
+  /** The search of the unfolded pick in the inputs menu. */
+  protected readonly menuQuery = signal('');
+
+  /** The composer's placeholder: `Message Avery`, or what the agent waits on. */
+  protected readonly placeholder = computed(() => {
+    const workflow = this.designer.workflow();
+    if (workflow === null) return '';
+    const base = composerPlaceholder(workflow);
+    const pending = this.pending();
+    return pending === null ? base : pendingPlaceholder(pending.field, base);
+  });
+
+  /** The choices of the pending pick, filtered by what is typed. */
+  protected readonly pendingPick = computed(() => {
+    const pending = this.pending();
+    if (pending === null) return null;
+    if (pending.kind !== 'pick-many' && pending.kind !== 'pick-one')
+      return null;
+    const all = this.optionsFor(pending.field);
+    const { shown, total } = shownOptions(
+      all,
+      this.draft(),
+      this.showAllOptions(),
+    );
+    return { all, shown, total, selected: this.selectedFor(pending.field) };
+  });
+
+  /** Whether Send does something now. */
+  protected readonly canSend = computed(() => {
+    const workflow = this.designer.workflow();
+    if (workflow === null || this.designer.running()) return false;
+    if (workflow.runRequirement) return false;
+    const text = this.draft().trim();
+    const pending = this.pending();
+    if (pending !== null) {
+      if (pending.kind === 'text') return text !== '';
+      const pick = this.pendingPick();
+      return pick !== null && typedOption(pick.all, text) !== null;
+    }
+    if (text !== '') return true;
+    const prompt = this.prompt();
+    return (
+      prompt === null ||
+      (this.promptHasDefault() &&
+        hasInputValue(this.designer.inputValues()[prompt.name]))
+    );
+  });
+
+  /**
+   * The turns shown above the run they led to: those after the message
+   * that asked (the run's own question bubble shows that one).
+   */
+  protected readonly runTranscript = computed(() => {
+    const runId = this.designer.runId();
+    const ours =
+      (runId !== null && runId === this.transcriptRunId()) ||
+      (this.awaitingStart() && this.designer.running());
+    if (!ours) return [];
+    const list = this.transcript();
+    const last = list.length ? list[list.length - 1].round : 0;
+    return list.filter((entry) => entry.round === last && !entry.question);
+  });
+
+  /** The composer, emptied after its message is sent. */
+  protected setDraft(text: string): void {
+    this.draft.set(text);
+  }
+
+  /** The composer holds the prompt the input holds (New question, Run again, a new workflow). */
+  private syncDraft(): void {
+    const prompt = this.prompt();
+    this.draft.set(
+      prompt === null || this.promptHasDefault()
+        ? ''
+        : this.designer.inputValue(prompt.name),
+    );
+  }
+
+  /** A new conversation: no turns, nothing pending. */
+  private resetIntake(): void {
+    this.transcript.set([]);
+    this.pending.set(null);
+    this.showAllOptions.set(false);
+    this.awaitingStart.set(false);
+    this.transcriptRunId.set(null);
+    this.answered.set(new Set());
+    this.menuOpen.set(false);
+    this.askedThisRound = 0;
+  }
+
+  /** New question: the chat drops the run shown and starts a new conversation. */
+  protected newQuestion(): void {
+    this.queued.set([]);
+    this.designer.newQuestion();
+    this.resetIntake();
+    this.syncDraft();
+  }
+
+  /** Run again: a new conversation holding the shown run's whole input. */
+  protected runAgain(): void {
+    this.designer.runAgain();
+    this.resetIntake();
+    this.syncDraft();
+  }
+
+  private push(entry: Omit<ChatEntry, 'id' | 'round'>): number {
+    const id = this.nextEntryId++;
+    this.transcript.update((list) => [
+      ...list,
+      { ...entry, id, round: this.round },
+    ]);
+    return id;
+  }
+
+  /** Send: answers what the agent waits on, else sends a message that fills the prompt. */
+  protected send(): void {
+    if (!this.canSend()) return;
+    const pending = this.pending();
+    if (pending !== null) {
+      this.answerTyped(pending);
+      return;
+    }
+    const raw = this.draft();
+    const text = raw.trim();
+    const prompt = this.prompt();
+    this.draft.set('');
+    this.menuOpen.set(false);
+    this.round++;
+    this.askedThisRound = 0;
+    if (text !== '') {
+      // The prompt takes the message as typed, as the form sent it.
+      if (prompt !== null) this.designer.setInput(prompt.name, raw);
+      this.push({ from: 'user', text, question: true });
+    }
+    this.advance(text !== '');
+  }
+
+  /** What was typed answers the pending text field, or picks a choice by name. */
+  private answerTyped(pending: PendingAsk): void {
+    const text = this.draft().trim();
+    if (pending.kind === 'text') {
+      this.draft.set('');
+      this.designer.setInput(pending.field.name, text);
+      this.push({ from: 'user', text });
+      this.advance(true);
+      return;
+    }
+    const pick = this.pendingPick();
+    const option = pick === null ? null : typedOption(pick.all, text);
+    if (option === null) return;
+    this.draft.set('');
+    if (pending.kind === 'pick-many') {
+      if (!pick!.selected.includes(option.id)) {
+        this.designer.toggleDataset(pending.field.name, option.id);
+      }
+      return;
+    }
+    this.pickIntake(pending.field, option);
+  }
+
+  /**
+   * The next required input still missing is asked for; with none, the run
+   * starts on the same request as before (api.md 119).
+   */
+  private advance(typed: boolean): void {
+    const workflow = this.designer.workflow();
+    if (workflow === null) return;
+    const missing = missingFields(
+      workflow.input,
+      this.designer.inputValues(),
+      this.answered(),
+    );
+    if (missing.length === 0) {
+      this.pending.set(null);
+      this.awaitingStart.set(true);
+      this.designer.execute();
+      return;
+    }
+    const field = missing[0];
+    const text = askText(field, workflow, {
+      first: this.askedThisRound === 0,
+      typed,
+    });
+    this.askedThisRound++;
+    this.ask(field, this.push({ from: 'agent', text, field: field.name }));
+  }
+
+  private ask(field: WorkflowInputField, entryId: number): void {
+    this.pending.set({ field, kind: intakeKind(field), entryId });
+    this.showAllOptions.set(false);
+    setTimeout(() => this.focusComposer());
+  }
+
+  /** The run was refused: the agent says why, then asks again for the field at fault. */
+  private onRefused(messages: string[], fieldName: string | null): void {
+    const workflow = this.designer.workflow();
+    const field =
+      fieldName === null
+        ? undefined
+        : workflow?.input.find((f) => f.name === fieldName && !f.hidden);
+    const prompt = this.prompt();
+    const reAsk = field !== undefined && field.name !== prompt?.name;
+    const id = this.push({
+      from: 'agent',
+      text: refusalText(messages),
+      error: true,
+      ...(reAsk ? { field: field.name } : {}),
+    });
+    if (reAsk) this.ask(field, id);
+    else if (field !== undefined && !this.promptHasDefault()) this.syncDraft();
+  }
+
+  /** The pending ask is the turn `entryId`. */
+  protected isPendingEntry(entryId: number): boolean {
+    return this.pending()?.entryId === entryId;
+  }
+
+  /** A choice's Add in the pending pick. */
+  protected pickIntake(field: WorkflowInputField, option: IntakeOption): void {
+    if (field.type === 'datasets') {
+      this.designer.toggleDataset(field.name, option.id);
+      return;
+    }
+    this.designer.setInput(field.name, option.id);
+    if (field.type === 'artifact') this.clearPeer(field);
+    this.push({ from: 'user', text: '', chips: [option.name] });
+    this.advance(true);
+  }
+
+  /** Continue with the datasets picked. */
+  protected continueIntake(): void {
+    const pending = this.pending();
+    if (pending === null) return;
+    const picked = this.selectedFor(pending.field);
+    if (picked.length === 0) return;
+    const names = new Map(
+      this.optionsFor(pending.field).map((option) => [option.id, option.name]),
+    );
+    this.push({
+      from: 'user',
+      text: '',
+      chips: picked.map((id) => names.get(id) ?? id),
+    });
+    this.advance(true);
+  }
+
+  /** Yes or No to a required checkbox. */
+  protected answerYesNo(field: WorkflowInputField, value: boolean): void {
+    this.designer.setInput(field.name, value);
+    this.answered.update((names) => new Set([...names, field.name]));
+    this.push({ from: 'user', text: value ? 'Yes' : 'No' });
+    this.advance(true);
+  }
+
+  /** An image picked in the agent's upload card. */
+  protected onIntakeFile(field: WorkflowInputField, event: Event): void {
+    const files = Array.from((event.target as HTMLInputElement).files ?? []);
+    (event.target as HTMLInputElement).value = '';
+    if (files.length > 0) void this.addImagesTo(field, files);
+  }
+
+  /** Images dropped on the agent's upload card. */
+  protected onIntakeDrop(field: WorkflowInputField, event: DragEvent): void {
+    if (!dragHasFiles(event.dataTransfer)) return;
     event.preventDefault();
-    this.designer.execute();
+    const files = imageFilesOf(event.dataTransfer);
+    if (files.length > 0) void this.addImagesTo(field, files);
+  }
+
+  private async addImagesTo(
+    field: WorkflowInputField,
+    files: readonly File[],
+  ): Promise<void> {
+    if (field.type === 'images') {
+      await this.addImages(files);
+      return;
+    }
+    await this.setImageFile(field.name, files[0]);
+    if (this.designer.inputValue(field.name) !== '') {
+      this.imagesAnswered(field.name, [files[0].name]);
+    }
+  }
+
+  /** Images added while the agent waits on that field: they answer it. */
+  private imagesAnswered(fieldName: string, names: string[]): void {
+    const pending = this.pending();
+    if (pending === null || pending.field.name !== fieldName) return;
+    this.push({ from: 'user', text: '', chips: names });
+    this.advance(true);
+  }
+
+  // ---- The inputs menu behind `+` -----------------------------------
+
+  /** The menu's ADD entries: every input but the checkboxes and the composer's own prompt. */
+  protected readonly menuAddFields = computed(() => {
+    const prompt = this.prompt();
+    return (this.designer.workflow()?.input ?? []).filter(
+      (field) =>
+        !field.hidden &&
+        field.type !== 'boolean' &&
+        (field.name !== prompt?.name || this.promptHasDefault()),
+    );
+  });
+
+  /** The menu's OPTIONS: each checkbox, as a switch. */
+  protected readonly menuOptionFields = computed(() =>
+    (this.designer.workflow()?.input ?? []).filter(
+      (field) => !field.hidden && field.type === 'boolean',
+    ),
+  );
+
+  protected toggleMenu(): void {
+    this.menuOpen.update((open) => !open);
+    this.menuQuery.set('');
+  }
+
+  protected closeMenu(): void {
+    this.exportOpen.set(false);
+    if (!this.menuOpen()) return;
+    this.menuOpen.set(false);
+    this.focusComposer();
+  }
+
+  protected toggleSection(name: string): void {
+    this.menuSection.update((open) => (open === name ? null : name));
+    this.menuQuery.set('');
+  }
+
+  /** The icon of an ADD entry. */
+  protected fieldIcon(field: WorkflowInputField) {
+    switch (field.type) {
+      case 'datasets':
+      case 'dataset':
+        return Database;
+      case 'artifact':
+        return LayoutDashboard;
+      case 'image':
+      case 'images':
+        return ImageIcon;
+      case 'boolean':
+        return ToggleRight;
+      default:
+        return Type;
+    }
+  }
+
+  /** The muted note of an ADD entry: `1 picked`, `up to 4`, the value. */
+  protected fieldNote(field: WorkflowInputField): string {
+    switch (field.type) {
+      case 'datasets':
+      case 'images': {
+        const n = this.designer.picked(field.name).length;
+        if (n > 0) return `${n} picked`;
+        return field.type === 'images' ? `up to ${field.max ?? 4}` : '';
+      }
+      case 'dataset':
+      case 'artifact':
+        return this.selectedFor(field).length > 0 ? '1 picked' : '';
+      case 'image':
+        return this.imageName(field.name);
+      default:
+        return field.required ? '' : 'optional';
+    }
+  }
+
+  /** The menu's choices of a pick, filtered by its search. */
+  protected menuOptions(field: WorkflowInputField): IntakeOption[] {
+    return shownOptions(this.optionsFor(field), this.menuQuery(), true).shown;
+  }
+
+  /** A choice's Add in the inputs menu: a dataset toggles, a single pick replaces or clears. */
+  protected pickInMenu(field: WorkflowInputField, option: IntakeOption): void {
+    if (field.type === 'datasets') {
+      this.designer.toggleDataset(field.name, option.id);
+      return;
+    }
+    const on = this.selectedFor(field).includes(option.id);
+    this.designer.setInput(field.name, on ? '' : option.id);
+    if (!on && field.type === 'artifact') this.clearPeer(field);
+  }
+
+  /** The choices a pick offers: the datasets or artifacts of its kinds. */
+  protected optionsFor(field: WorkflowInputField): IntakeOption[] {
+    if (field.type === 'artifact') {
+      return this.artifactChoices(field).map(artifactOption);
+    }
+    return this.datasetChoices(field).map((dataset) =>
+      datasetOption(dataset, (kind) => kindLabel(kind as DatasourceKind)),
+    );
+  }
+
+  /** The ids a pick holds now. */
+  protected selectedFor(field: WorkflowInputField): string[] {
+    if (field.type === 'datasets') return this.designer.picked(field.name);
+    const value = this.designer.inputValue(field.name);
+    return value === '' ? [] : [value];
+  }
+
+  /** What is set through the menu, as removable chips above the composer. */
+  protected readonly chips = computed(() => {
+    const chips: {
+      field: WorkflowInputField;
+      key: string;
+      label: string;
+      index: number;
+    }[] = [];
+    for (const field of this.menuAddFields()) {
+      if (field.type === 'datasets') {
+        this.designer
+          .picked(field.name)
+          .forEach((name, index) =>
+            chips.push({ field, key: name, label: name, index }),
+          );
+      } else if (field.type === 'images') {
+        this.designer.picked(field.name).forEach((_, index) =>
+          chips.push({
+            field,
+            key: `${index}`,
+            label: `Image ${index + 1}`,
+            index,
+          }),
+        );
+      } else if (field.type === 'image') {
+        if (this.designer.inputValue(field.name) !== '') {
+          const label = this.imageName(field.name) || field.label;
+          chips.push({ field, key: label, label, index: 0 });
+        }
+      } else if (field.type === 'dataset' || field.type === 'artifact') {
+        const id = this.designer.inputValue(field.name);
+        if (id === '') continue;
+        const name =
+          this.optionsFor(field).find((option) => option.id === id)?.name ?? id;
+        chips.push({ field, key: id, label: name, index: 0 });
+      } else {
+        const value = this.designer.inputValue(field.name).trim();
+        const fallback =
+          field.default === undefined ? '' : String(field.default).trim();
+        if (value === '' || value === fallback) continue;
+        const short = value.length > 32 ? `${value.slice(0, 31)}…` : value;
+        chips.push({
+          field,
+          key: field.name,
+          label: `${field.label}: ${short}`,
+          index: 0,
+        });
+      }
+    }
+    // A switch turned away from its default: `Visual review with Iris off`.
+    for (const field of this.menuOptionFields()) {
+      const on = this.designer.checked(field.name);
+      if (on === (field.default === true)) continue;
+      const title = optionLabel(field.label).title;
+      chips.push({
+        field,
+        key: field.name,
+        label: `${title} ${on ? 'on' : 'off'}`,
+        index: 0,
+      });
+    }
+    return chips;
+  });
+
+  protected removeChip(chip: {
+    field: WorkflowInputField;
+    key: string;
+    index: number;
+  }): void {
+    const field = chip.field;
+    if (field.type === 'datasets') {
+      this.designer.toggleDataset(field.name, chip.key);
+    } else if (field.type === 'images') {
+      this.removeImage(chip.index);
+    } else if (field.type === 'boolean') {
+      this.designer.setInput(field.name, field.default === true);
+    } else if (field.type === 'image') {
+      void this.setImageFile(field.name, undefined);
+      const control = this.host.nativeElement.querySelector<HTMLInputElement>(
+        `[id="${this.inputId(field.name)}"]`,
+      );
+      if (control !== null) control.value = '';
+    } else {
+      this.designer.setInput(
+        field.name,
+        field.default === undefined ? '' : String(field.default),
+      );
+    }
   }
 }

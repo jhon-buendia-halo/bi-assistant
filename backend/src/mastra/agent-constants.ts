@@ -96,6 +96,13 @@ export const CHIEF_OF_STAFF_AGENT_KEY = 'chief-of-staff';
 /** Her name: the Orchestrate step's agent. */
 export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
 
+/**
+ * Clara, the Business Intelligence Analyst: Avery's teammate behind
+ * build_dashboard, who builds interactive dashboards on the user's real rows
+ * (plan bi-dashboard). A System agent: Avery's run calls her.
+ */
+export const BI_ANALYST_AGENT_KEY = 'bi-analyst';
+
 /** Ryan, the visual designer: Generate interactive visuals and Build visual (agents.md 5.11). */
 export const VISUALIZATION_AGENT_KEY = 'visualization';
 
@@ -114,6 +121,7 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   GAP_ADVISOR_AGENT_KEY,
   VISUALIZATION_AGENT_KEY,
   CHIEF_OF_STAFF_AGENT_KEY,
+  BI_ANALYST_AGENT_KEY,
   'sql-fixer',
   'sql-verifier',
   'assistant-eval-judge',

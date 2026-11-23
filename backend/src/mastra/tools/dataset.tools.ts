@@ -59,14 +59,14 @@ interface EntityAccess {
   dataset: string;
 }
 
-function datasetNames(requestContext: {
+export function datasetNames(requestContext: {
   get: (key: string) => unknown;
 }): string[] {
   const value = requestContext.get(DATASETS_CONTEXT_KEY);
   return Array.isArray(value) ? value.map((v) => String(v)) : [];
 }
 
-async function sessionDatasets(requestContext: {
+export async function sessionDatasets(requestContext: {
   get: (key: string) => unknown;
 }): Promise<DatasetSnapshot[]> {
   return getDatasetToolServices().getDatasets(datasetNames(requestContext));
@@ -120,7 +120,7 @@ function resolveEntity(
 }
 
 /** Pick the datasource for a SQL call: explicit id, else the only one in scope. */
-function resolveDatasource(
+export function resolveDatasource(
   datasets: DatasetSnapshot[],
   requested?: string,
 ): { id: string } | { error: string } {

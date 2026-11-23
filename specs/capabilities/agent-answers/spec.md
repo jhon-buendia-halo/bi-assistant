@@ -268,8 +268,8 @@ Feature: Chat and visuals
     And the model is the recording stub: it runs one query, then answers "**Argentina** won the 2022 World Cup, while France won in 2018."
 
   Scenario: Renders a streamed run: reasoning, tool activity, final Markdown, and supports stopping
-    When I open the Assistant from Workflows and click Execute
-    And I pick "World Cup Core", type "Who won the last two tournaments?" and click Execute
+    When I open the Assistant from Workflows and click Execute user journey
+    And I type "Who won the last two tournaments?", click Send and add "World Cup Core" when the agent asks
     Then I see "Thinking"
     And I see the tool "run_readonly_sql"
     When the model answers
@@ -278,7 +278,7 @@ Feature: Chat and visuals
     When I click "Data used (1 query)"
     Then I see the SQL
     When I run "Start a slow response" and click Stop
-    Then Execute is shown again and "Thinking" is no longer shown
+    Then the composer is shown again and "Thinking" is no longer shown
 ```
 
 ### Feature: Chat answers and reliability signals

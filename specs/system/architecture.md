@@ -1393,6 +1393,55 @@ flowchart LR
   - The CLI writes to the data dir it boots on, and beside a running app it shares SQLite and Mastra's DuckDB lock, as it already did.
   - **Stack-neutral:** a rebuild needs an async-context scope per eval case whose id a span hook writes onto every span started in it, a run store with set and model, and a read path over both.
 
+#### ADR-0055 — Live dashboards: a row snapshot per artifact version, drawn by the fixed runtime
+- **Status:** Accepted
+- **Date:** 2026-11-22
+- **Context:**
+  - Avery's team had no way to give the user an interactive dashboard on real data. Dashboard Image to Artifact (agents.md 5.17) draws a dashboard from a screenshot with **invented** values, and Map a Dashboard to Data (5.18) maps one to columns without drawing the rows. The user wants to ask Avery for a dashboard, ask again to change it, and take it away as plain files.
+  - The fixed runtime (`recreate-dashboard.runtime.ts`) already draws any dashboard blueprint with working filters, and the blueprint schema already names columns (a measure's column, a widget's dimension, a filter's column), so the same drawing can run on real rows.
+  - The connectors clamp a query to 500 rows unless a limit is passed, and a turn's stored records keep 200 rows, so neither carries a dashboard's data.
+  - Artifacts had no versions and were rendered at each read.
+- **Decision:**
+  - **A new teammate, Clara (`bi-analyst`), who designs data, not code.** Avery calls her through `build_dashboard`, offered only when the user asks for a dashboard or the conversation has one. Clara explores with the read-only dataset tools and submits one **draft** (title, theme, filters, widgets and measures over columns) together with **one data query** (`submit_dashboard`). Her draft schema is her own; the blueprint schema and the contract hashes of the two dashboard workflows do not change.
+  - **The host runs the query and keeps a row snapshot.** The host runs the submitted query with a row limit of 5,000 (carried to every connector), checks that every column the draft names is in the result, converts numbers and dates, and keeps the rows as the file `artifacts/<id>/v<N>/rows.json`, beside a version of the artifact (not in the document store, whose documents stay small). The snapshot is what the dashboard shows from then on; it is not refreshed.
+  - **A version per turn, the same artifact for the whole conversation.** An artifact holds `versions`: each turn of the conversation that changes the dashboard adds the next one, built from the conversation's current version, which a later turn is handed by the host. A version never changes. The top-level `blueprint` is the current version's, so existing readers keep working, and a legacy document reads as a version 1 without rows. The fields are optional: no migration.
+  - **The fixed runtime draws the rows.** The runtime's `mount` takes the rows and draws on them with its own filter logic; no model writes markup, style or script, as for the other dashboards. A download is the same runtime and the same rows as plain files (`index.html`, `styles.css`, `app.js`, `data.js`, `query.sql`, `README.txt`) that open from the computer's files.
+- **Consequences:**
+  - The dashboard is a **snapshot of at most 5,000 rows and 2 MB**: a question that needs more rows is answered by aggregating in Clara's query. It is stale the moment the data changes; a new version re-runs the query.
+  - Nothing a model wrote is executed in the dashboard or in the zip: the model's text reaches the page only as text, and the data is escaped JSON.
+  - Row files are user data in the app's data directory: they are removed with the artifact and are not part of any export of the document store.
+  - Clara's quality is bounded by the draft schema (the widget and filter kinds the runtime draws) and is measured by her own eval set (agents.md 8.1); Avery's own choices have no eval set (agents.md, open gaps), the gate keeping the tool out of runs without a dashboard.
+  - **Stack-neutral:** a rebuild needs a store for versions with a side file per version, a runtime that draws a blueprint from rows, a way to run one read-only query with a larger row limit, and a zip writer.
+- **Alternatives considered:**
+  - **B. A visual spec per dashboard, drawn by the visual designer's runtime (agents.md 6.8):** reuses Ryan's pipeline and its charts, but a spec describes one visual, not a set of widgets sharing filters over one dataset, so the filters would need a second runtime; rejected.
+  - **C. The model writes the dashboard's code (HTML, CSS and JS):** the most flexible, and the same route Ryan's legacy mode took, but every dashboard would need validation and repair, a follow-up would rewrite the code and drift, and the zip would ship code nobody reviewed; rejected against ADR-0034 (the flow and the code come from the host).
+  - **A (chosen): the blueprint drawn by the fixed runtime on real rows,** which reuses the runtime, its filters and its tests, makes a version a small diffable draft, and keeps the model's output to data.
+
+#### ADR-0056 — The conversation export is built by the backend and drawn by the computer's own browser
+- **Status:** Accepted
+- **Date:** 2026-11-23
+- **Context:**
+  - A conversation with Avery (workflows R45) holds answers, their queries and a dashboard that changes version by version. The user wants to take the whole conversation away as a file to share, a PDF and a PowerPoint, **dashboards included**, and asks Avery for it in the conversation itself.
+  - The dashboards are drawn by the fixed runtime (ADR-0055) in a browser: no server-side library draws their charts as the user sees them.
+  - Review a Website (ADR-0049) already drives the computer's own Edge or Chrome headless from the backend through `playwright-core`, which ships no browser.
+  - Avery writes the file's words; a summary is where an invented figure would hide.
+- **Decision:**
+  - **Avery's own tool, behind a gate.** `export_conversation` (agents.md 3.18) is offered only when the message asks to export or share the conversation (`asksForExport`, a pure function of its words, English and Spanish). With the gate closed her tools, run facts, instructions and skills are unchanged. She writes only the title, a summary and one headline (and up to three points) per earlier question, in the conversation's language, following the `conversation-export` skill; the rest of the files is the conversation itself, read by the backend.
+  - **The figures are checked before anything is drawn.** Every number she writes must be one of the conversation's answers (the same string, or the same value under `1,234.5` or `1.234,5` grouping); otherwise the tool names the figures and makes nothing.
+  - **The backend builds the report and the browser draws it** (approach A, chosen by the operator on 2026-11-23). A global `conversation-export` module reads the conversation's runs and their dashboard versions, draws each version in the browser of ADR-0049 at 1280 px and cuts it into **one image per row of widgets** (table widgets read as text), so no page or slide cuts a widget. The PDF is the browser's print of an HTML report; the PowerPoint is written with `pptxgenjs` (MIT) as native text and tables, the dashboard rows as images. The latest version of a dashboard goes in full, each earlier one as its first row. The layout is the operator's accepted prototype.
+  - **The files are kept.** They go to `<data dir>/exports/<id>/`, with a `conversation_exports` document (data-model 3.20), and the answer carries the export (`answer.export`) for its card; api.md 167 serves them.
+- **Consequences:**
+  - Exporting needs Edge or Chrome on the computer, as Review a Website does; without one, Avery says so and no file is made. One export runs at a time.
+  - A table widget shows the rows the dashboard runtime shows (at most 25): its full data stays in the dashboard. An answer's table on a slide is cut at 6 columns and 11 rows, a table widget at 12 rows, each with a note; the full answer is in the slide's notes and the PDF.
+  - The report prints with scripts off and the answers' raw HTML escaped: what a model wrote reaches the files as text only.
+  - A new dependency, `pptxgenjs` 4.0.1, and a new collection and data folder with no way yet to list or delete an export.
+  - The brand comes from `APP_BRAND` (Halo by default): the backend does not otherwise know the build's brand.
+  - **Stack-neutral:** a rebuild needs a headless browser that prints HTML to PDF and screenshots a page region, a PowerPoint writer, and the conversation's runs and dashboard versions.
+- **Alternatives considered:**
+  - **Native PDF (`pdfkit`) and PowerPoint charts (`pptxgenjs` charts):** no browser, but every dashboard widget kind would need a second drawing in two libraries that would never match the runtime's; rejected by the operator.
+  - **The tab exports it (the renderer prints or captures the open conversation):** the browser is already there, but the export would need the conversation and its dashboards open on screen, would not work for Avery from the conversation's words, and would leave nothing on the run; rejected by the operator.
+  - **A (chosen): the backend builds the files and drives the local browser,** which reuses ADR-0049's browser and ADR-0055's runtime, draws the dashboards exactly as the user saw them, and keeps the files with the run.
+
 ## Level 4 — Code
 
 ```mermaid

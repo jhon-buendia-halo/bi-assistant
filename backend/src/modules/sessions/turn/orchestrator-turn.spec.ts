@@ -28,6 +28,15 @@ import type {
 } from '../../../mastra/workflows/answer-business-question.steps';
 import { orchestratorTools as avertTools } from '../../../mastra/tools/orchestrator.tools';
 import {
+  blueprintFromDraft,
+  type DashboardDraft,
+} from '../../../mastra/workflows/bi-dashboard.schemas';
+import type {
+  CurrentDashboard,
+  DashboardRef,
+} from '../../artifacts/entities/artifact.entity';
+import {
+  currentDashboardBlock,
   MICHAEL_ALONE_LINE,
   ORCHESTRATOR_HISTORY_MESSAGES,
   orchestratorState,
@@ -37,6 +46,8 @@ import {
   type OrchestratorTurnDeps,
 } from './orchestrator-turn';
 import type { StreamEvent } from './stream-events';
+import type { ExportContent } from '../../../mastra/workflows/export-request';
+import type { ConversationExportRef } from '../../conversation-export/conversation-export.contract';
 
 const PLAN: AnalysisPlan = {
   question: 'How many matches?',
@@ -126,6 +137,8 @@ function fixture(
     datasets: ['World Cup'],
     images: [],
     buildsVisual: false,
+    buildsDashboard: false,
+    exportsConversation: false,
     ...options.deps,
   };
   return { deps, members, events, streams };
@@ -499,6 +512,8 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
       'answer_from_data',
       'write_answer',
       'build_visual',
+      'build_dashboard',
+      'export_conversation',
     ]);
   });
 
@@ -589,6 +604,441 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
         question: expect.stringContaining('by year') as string,
         answer: 'A.',
       }),
+    );
+  });
+});
+
+/** A small dashboard on goals by team, as Clara would submit it. */
+const GOALS_DRAFT: DashboardDraft = {
+  title: 'Goals by team',
+  summary: 'Goals per team.',
+  theme: { mode: 'light', accent: '#2563eb', palette: ['#2563eb'] },
+  layout: 'A KPI, then a bar chart.',
+  filters: [{ id: 'team', label: 'Team', kind: 'select', column: 'team' }],
+  widgets: [
+    {
+      id: 'goals',
+      title: 'Goals',
+      kind: 'kpi',
+      span: 4,
+      measures: [
+        {
+          label: 'Goals',
+          column: 'goals',
+          aggregation: 'sum',
+          format: 'number',
+          unit: '',
+        },
+      ],
+      dimension: '',
+      description: 'All goals.',
+      filteredBy: ['team'],
+    },
+  ],
+  columns: [
+    { name: 'team', type: 'string', description: 'The team.' },
+    { name: 'goals', type: 'number', description: 'Goals.' },
+  ],
+};
+
+const CURRENT: CurrentDashboard = {
+  artifactId: 'a-1',
+  version: 2,
+  title: 'Goals by team',
+  blueprint: blueprintFromDraft(GOALS_DRAFT, [{ team: 'Brazil', goals: 3 }]),
+  query: {
+    sql: 'SELECT team, sum(goals) AS goals FROM g GROUP BY team',
+    datasourceId: 'ds-pg',
+  },
+  columns: ['team', 'goals'],
+  rowCount: 1,
+  widgetCount: 1,
+  filterCount: 1,
+};
+
+const REF: DashboardRef = {
+  artifactId: 'a-1',
+  version: 1,
+  title: 'Goals by team',
+  action: 'created',
+  widgetCount: 1,
+  filterCount: 1,
+  rowCount: 32,
+  saved: false,
+};
+
+/** The run's facts block Avery's stream got. */
+function factsOf(streams: { options: Record<string, unknown> }[]): string {
+  const context = streams[0].options['context'] as { content: string }[];
+  return context[0].content;
+}
+
+describe('Avery hands dashboards to Clara (agents.md 2.21, 5.22)', () => {
+  it('with the gate closed: build_dashboard is hidden and the facts say nothing of dashboards', async () => {
+    const { deps, streams } = fixture([text('Done.')], {
+      team: team({ buildDashboard: jest.fn() }),
+    });
+    await runOrchestratorTurn(deps, { question: 'How many matches?' });
+    expect(factsOf(streams)).not.toContain('dashboard');
+    const runtime = orchestratorTools(deps, 'q', undefined);
+    expect(runtime.buildsDashboard).toBe(false);
+    const context = new RequestContext();
+    context.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, runtime);
+    expect(Object.keys(avertTools(context))).not.toContain('build_dashboard');
+    expect(await runtime.buildDashboard('Goals')).toBe(
+      'This run builds no dashboard.',
+    );
+  });
+
+  it("with the gate open: offers build_dashboard and says the user asked for one, or names the conversation's dashboard", async () => {
+    const asked = fixture([text('Done.')], {
+      team: team({ buildDashboard: jest.fn() }),
+      deps: { buildsDashboard: true },
+    });
+    await runOrchestratorTurn(asked.deps, { question: 'A dashboard of goals' });
+    expect(factsOf(asked.streams).split('\n').at(-1)).toBe(
+      'The user asked for a dashboard: build_dashboard is available.',
+    );
+    const runtime = orchestratorTools(asked.deps, 'q', undefined);
+    const context = new RequestContext();
+    context.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, runtime);
+    expect(Object.keys(avertTools(context))).toContain('build_dashboard');
+
+    const carried = fixture([text('Done.')], {
+      team: team({ buildDashboard: jest.fn() }),
+      deps: { buildsDashboard: true, currentDashboard: CURRENT },
+    });
+    await runOrchestratorTurn(carried.deps, { question: 'Add a stage filter' });
+    expect(factsOf(carried.streams).split('\n').at(-1)).toBe(
+      'The conversation has a dashboard: "Goals by team", version 2 (1 widgets, 1 filters). build_dashboard changes it into version 3.',
+    );
+  });
+
+  it('briefs Clara with the catalog, the current dashboard and the earlier queries, and tells Avery what she built', async () => {
+    const buildDashboard = jest.fn(() =>
+      Promise.resolve({
+        dashboard: { ...REF, version: 3, action: 'updated' as const },
+        saved: { ...CURRENT, version: 3 },
+        reply: 'I added a stage filter.',
+        stopped: false,
+      }),
+    );
+    const { deps, events } = fixture(
+      async (tools) => {
+        await tools.buildDashboard('Add a filter by stage.');
+        return [
+          {
+            type: 'tool-call',
+            payload: {
+              toolCallId: 'b1',
+              toolName: 'build_dashboard',
+              args: { brief: 'Add a filter by stage.' },
+            },
+          },
+          {
+            type: 'tool-result',
+            payload: {
+              toolCallId: 'b1',
+              toolName: 'build_dashboard',
+              result: { result: 'Built.' },
+            },
+          },
+          text('Your dashboard now filters by stage.'),
+        ];
+      },
+      {
+        team: team({ buildDashboard }),
+        deps: {
+          buildsDashboard: true,
+          currentDashboard: CURRENT,
+          earlierQueries: [{ ref: 'Q1', sql: 'SELECT 1', rationale: 'One.' }],
+        },
+      },
+    );
+    const done = await runOrchestratorTurn(deps, {
+      question: 'add a filter by stage',
+    });
+    const input = (buildDashboard.mock.calls[0] as unknown[])[0] as {
+      question: string;
+      brief: string;
+      catalogBlock: string;
+      current?: CurrentDashboard;
+      earlierBlock: string;
+    };
+    expect(input).toMatchObject({
+      question: 'add a filter by stage',
+      brief: 'Add a filter by stage.',
+      current: CURRENT,
+    });
+    expect(input.catalogBlock).toContain('World Cup');
+    expect(input.earlierBlock).toContain('Q1');
+    expect(deps.state.dashboard).toMatchObject({ version: 3 });
+    expect(deps.state.dashboardCalls).toBe(1);
+    // Her words are what she handed back to Avery, not the user's answer.
+    const result = events.find((e) => e.type === 'tool-result');
+    expect(JSON.parse(result?.content ?? '{}')).toEqual({
+      tool: 'build_dashboard',
+      reply: 'I added a stage filter.',
+    });
+    expect(done).toEqual({
+      answer: 'Your dashboard now filters by stage.',
+      stopped: false,
+    });
+  });
+
+  it('builds at most twice per run, the second changing the first one, and names it in the work so far', async () => {
+    const buildDashboard = jest
+      .fn()
+      .mockResolvedValueOnce({
+        dashboard: REF,
+        saved: { ...CURRENT, version: 1 },
+        reply: '',
+        stopped: false,
+      })
+      .mockResolvedValueOnce({
+        dashboard: { ...REF, version: 2, action: 'updated' },
+        saved: { ...CURRENT, version: 2 },
+        reply: '',
+        stopped: false,
+      });
+    const { deps } = fixture([], {
+      team: team({ buildDashboard }),
+      deps: { buildsDashboard: true },
+    });
+    const runtime = orchestratorTools(deps, 'A dashboard of goals', undefined);
+    const first = await runtime.buildDashboard('Goals by team.');
+    expect(first).toBe(
+      [
+        'Built dashboard "Goals by team", version 1 (created): 1 widgets, 1 filters, 32 rows.',
+        'Its columns: team, goals.',
+        'The user sees the dashboard with the answer: do not describe it in figures.',
+      ].join('\n'),
+    );
+    const calls = buildDashboard.mock.calls as {
+      current?: CurrentDashboard;
+    }[][];
+    expect(calls[0][0].current).toBeUndefined();
+    await runtime.buildDashboard('Make it dark.');
+    expect(calls[1][0].current?.version).toBe(1);
+    expect(await runtime.buildDashboard('Again.')).toBe(
+      'Clara already built twice in this run: close from the dashboard she has.',
+    );
+    expect(buildDashboard).toHaveBeenCalledTimes(2);
+
+    const resumed = fixture([text('Done.')], {
+      deps: { state: deps.state },
+    });
+    await runOrchestratorTurn(resumed.deps, {
+      question: 'q',
+      answered: { question: 'Which?', options: ['A'], answer: 'A' },
+    });
+    const context = resumed.streams[0].options['context'] as {
+      content: string;
+    }[];
+    expect(context[1].content).toContain(
+      'Clara already built the dashboard "Goals by team", version 2.',
+    );
+  });
+
+  it('tells Avery when Clara built nothing, or the run was stopped', async () => {
+    const failing = fixture([], {
+      team: team({
+        buildDashboard: jest.fn().mockResolvedValue({
+          reply: 'I could not bind the stage.',
+          error: 'Clara submitted no dashboard.',
+          stopped: false,
+        }),
+      }),
+      deps: { buildsDashboard: true },
+    });
+    const runtime = orchestratorTools(failing.deps, 'q', undefined);
+    expect(await runtime.buildDashboard('Goals.')).toBe(
+      'Clara built no dashboard: Clara submitted no dashboard.',
+    );
+    expect(failing.deps.state.dashboard).toBeUndefined();
+
+    const stopped = fixture([], {
+      team: team({
+        buildDashboard: jest
+          .fn()
+          .mockResolvedValue({ reply: '', stopped: true }),
+      }),
+      deps: { buildsDashboard: true },
+    });
+    expect(
+      await orchestratorTools(stopped.deps, 'q', undefined).buildDashboard(
+        'Goals.',
+      ),
+    ).toBe('The run was stopped.');
+  });
+
+  it("gives Clara the current dashboard's draft with its ids, its query, columns and row count", () => {
+    const block = currentDashboardBlock(CURRENT);
+    expect(block).toContain('version 2. Change it into version 3');
+    expect(block).toContain('keep every id');
+    expect(block).toContain('"id":"goals"');
+    expect(block).toContain(
+      'Its data query (datasource ds-pg): SELECT team, sum(goals) AS goals FROM g GROUP BY team',
+    );
+    expect(block).toContain('Its columns: team, goals');
+    expect(block).toContain('Its rows: 1');
+  });
+});
+
+/** What Avery writes for an export: every figure copied from TURNS' answers. */
+const CONTENT: ExportContent = {
+  formats: ['pdf', 'pptx'],
+  title: 'Penetración de productos en Intellify',
+  summary: [
+    'Los 38 clientes activos tienen de media 6,3 de los 11 productos.',
+    'El dashboard está en la versión 2.',
+  ],
+  turns: [
+    { number: 1, headline: 'Media de 6,3 productos por cliente', points: [] },
+    { number: 2, headline: 'Dashboard, versión 2', points: [] },
+  ],
+  includeSql: false,
+};
+
+const TURNS = {
+  questions: [
+    'haz una comparacion por clientes usando las metricas de penetracion y coberturas',
+    'ahora crea un dashboard',
+  ],
+  answers: [
+    '**Los 38 clientes activos tienen de media 6,3 de los 11 productos (58% de penetración).**',
+    'He creado el dashboard (versión 1). El dashboard está ya en la versión 2 y tiene 11 widgets.',
+  ],
+};
+
+const EXPORTED: ConversationExportRef = {
+  id: 'x-1',
+  title: CONTENT.title,
+  createdAt: '2026-11-23T10:00:00.000Z',
+  files: [
+    { format: 'pdf', fileName: 'p.pdf', bytes: 10, pages: 9 },
+    { format: 'pptx', fileName: 'p.pptx', bytes: 20, slides: 8 },
+  ],
+};
+
+describe("Avery's export_conversation (agents.md 2.21, 3.18)", () => {
+  it('with the gate closed: the tool is hidden and the facts say nothing of an export', async () => {
+    const exportConversation = jest.fn();
+    const { deps, streams } = fixture([text('Done.')], {
+      team: team({ exportConversation }),
+    });
+    await runOrchestratorTurn(deps, { question: 'How many matches?' });
+    expect(factsOf(streams)).not.toContain('export');
+    const runtime = orchestratorTools(deps, 'q', undefined);
+    expect(runtime.exportsConversation).toBe(false);
+    const context = new RequestContext();
+    context.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, runtime);
+    expect(Object.keys(avertTools(context))).not.toContain(
+      'export_conversation',
+    );
+    expect(await runtime.exportConversation(CONTENT)).toBe(
+      'This run exports nothing.',
+    );
+    expect(exportConversation).not.toHaveBeenCalled();
+  });
+
+  it('with the gate open: offers the tool and lists the earlier questions, in order', async () => {
+    const { deps, streams } = fixture([text('Done.')], {
+      team: team({ exportConversation: jest.fn() }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    await runOrchestratorTurn(deps, { question: 'Exporta la conversación' });
+    expect(factsOf(streams).split('\n').at(-1)).toBe(
+      'The user asked to export the conversation: export_conversation is available. Its earlier questions, in order: 1. "haz una comparacion por clientes usando las metricas de penetracion y coberturas" 2. "ahora crea un dashboard"',
+    );
+    const runtime = orchestratorTools(deps, 'q', undefined);
+    const context = new RequestContext();
+    context.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, runtime);
+    expect(Object.keys(avertTools(context))).toContain('export_conversation');
+  });
+
+  it('cuts each earlier question at 140 characters in the facts', async () => {
+    const long = 'q'.repeat(200);
+    const { deps, streams } = fixture([text('Done.')], {
+      team: team({ exportConversation: jest.fn() }),
+      deps: {
+        exportsConversation: true,
+        earlierTurns: { questions: [long], answers: ['A.'] },
+      },
+    });
+    await runOrchestratorTurn(deps, { question: 'Export it to PDF' });
+    expect(factsOf(streams)).toContain(`1. "${'q'.repeat(140)}…"`);
+  });
+
+  it('exports with checked figures, keeps the export on the state and tells Avery the counts', async () => {
+    const exportConversation = jest
+      .fn()
+      .mockResolvedValue({ export: EXPORTED });
+    const { deps } = fixture([text('Done.')], {
+      team: team({ exportConversation }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    const runtime = orchestratorTools(deps, 'q', undefined);
+    expect(await runtime.exportConversation(CONTENT)).toBe(
+      'Exported "Penetración de productos en Intellify": PDF (9 pages), PowerPoint (8 slides). The user sees the download card with the answer: do not repeat the summary.',
+    );
+    expect(exportConversation).toHaveBeenCalledWith(CONTENT);
+    expect(deps.state.export).toEqual(EXPORTED);
+  });
+
+  it('refuses figures that no answer gives, before anything is drawn', async () => {
+    const exportConversation = jest.fn();
+    const { deps } = fixture([text('Done.')], {
+      team: team({ exportConversation }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    const runtime = orchestratorTools(deps, 'q', undefined);
+    expect(
+      await runtime.exportConversation({
+        ...CONTENT,
+        summary: [
+          'Medical llega al 97,4% de los clientes.',
+          'Hay 38 clientes.',
+        ],
+      }),
+    ).toBe(
+      "These figures are not in the conversation's answers: 97,4. Use only figures from the answers, then call export_conversation again.",
+    );
+    expect(exportConversation).not.toHaveBeenCalled();
+    expect(deps.state.export).toBeUndefined();
+  });
+
+  it('runs at most twice in a run, a refused call included', async () => {
+    const exportConversation = jest
+      .fn()
+      .mockResolvedValue({ export: EXPORTED });
+    const { deps } = fixture([text('Done.')], {
+      team: team({ exportConversation }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    const runtime = orchestratorTools(deps, 'q', undefined);
+    await runtime.exportConversation({ ...CONTENT, title: 'Top 99 clients' });
+    await runtime.exportConversation(CONTENT);
+    expect(await runtime.exportConversation(CONTENT)).toBe(
+      'export_conversation already ran twice in this run: close from what it said.',
+    );
+    expect(exportConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells Avery why when no file was made (no browser)', async () => {
+    const { deps } = fixture([text('Done.')], {
+      team: team({
+        exportConversation: jest.fn().mockResolvedValue({
+          error:
+            'Exporting needs Microsoft Edge or Google Chrome on this computer.',
+        }),
+      }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    expect(
+      await orchestratorTools(deps, 'q', undefined).exportConversation(CONTENT),
+    ).toBe(
+      'The conversation was not exported: Exporting needs Microsoft Edge or Google Chrome on this computer.',
     );
   });
 });

@@ -416,6 +416,11 @@ function build(
     rerun: jest.fn(),
     exportRows: jest.fn(),
   };
+  const artifacts = {
+    list: () => Promise.resolve([]),
+    // A dashboard card's saved state is read when a run is (api.md 121).
+    isVersionSaved: jest.fn().mockResolvedValue(null),
+  };
   const service = new WorkflowRunsService(
     workflows,
     sessions as unknown as SessionsService,
@@ -425,11 +430,12 @@ function build(
     nodeChats,
     queryEvidence as unknown as QueryEvidenceService,
     // No stored artifact: no workflow here takes one.
-    { list: () => Promise.resolve([]) } as never,
+    artifacts as never,
   );
   return {
     db,
     service,
+    artifacts,
     repository,
     nodeChats,
     queryEvidence,
@@ -2161,6 +2167,118 @@ describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 1
     await expect(ctx.service.archive('nope')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it("hands a follow-up the conversation's last dashboard, however many turns ago (agents.md 5.22)", async () => {
+    const { first, second } = await conversation();
+    const dashboard = {
+      artifactId: 'a-1',
+      version: 1,
+      title: 'Goals by team',
+      action: 'created' as const,
+      widgetCount: 3,
+      filterCount: 1,
+      rowCount: 32,
+      saved: false,
+    };
+    // The first answer built it; the second carries none of its own.
+    const answered = await ctx.repository.get(first.id);
+    await ctx.repository.update(first.id, {
+      answer: { ...answered!.answer!, dashboard },
+    });
+    await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'Add a stage filter', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      contextDashboard?: string;
+    };
+    expect(spec.contextDashboard).toBe('a-1');
+
+    // A later version replaces it as the one the next message changes.
+    const latest = await ctx.repository.get(second.id);
+    await ctx.repository.update(second.id, {
+      answer: {
+        ...latest!.answer!,
+        dashboard: { ...dashboard, artifactId: 'a-2', version: 2 },
+      },
+    });
+    await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'Make it dark', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.id },
+    });
+    expect(
+      (
+        ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+          contextDashboard?: string;
+        }
+      ).contextDashboard,
+    ).toBe('a-2');
+  });
+
+  it("reads a dashboard card's saved state when the run is read, not the run's snapshot", async () => {
+    const { second } = await conversation();
+    const answered = await ctx.repository.get(second.id);
+    await ctx.repository.update(second.id, {
+      answer: {
+        ...answered!.answer!,
+        dashboard: {
+          artifactId: 'a-1',
+          version: 2,
+          title: 'Goals',
+          action: 'updated',
+          widgetCount: 1,
+          filterCount: 0,
+          rowCount: 1,
+          saved: false,
+        },
+      },
+    });
+    ctx.artifacts.isVersionSaved.mockResolvedValue(true);
+    const run = await ctx.service.get(second.id);
+    expect(run.answer?.dashboard?.saved).toBe(true);
+    expect(ctx.artifacts.isVersionSaved).toHaveBeenCalledWith('a-1', 2);
+    // A deleted artifact leaves the snapshot as it was.
+    ctx.artifacts.isVersionSaved.mockResolvedValue(null);
+    expect((await ctx.service.get(second.id)).answer?.dashboard?.saved).toBe(
+      false,
+    );
+  });
+
+  it('carries no dashboard into a conversation that has none, and an archived one still takes no message', async () => {
+    const { second } = await conversation();
+    await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'And 2010?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    expect(
+      ctx.sessions.createRunHost.mock.calls.at(-1)?.[0],
+    ).not.toHaveProperty('contextDashboard');
+    const answered = await ctx.repository.get(second.id);
+    await ctx.repository.update(second.id, {
+      answer: {
+        ...answered!.answer!,
+        dashboard: {
+          artifactId: 'a-1',
+          version: 1,
+          title: 'Goals',
+          action: 'created',
+          widgetCount: 1,
+          filterCount: 0,
+          rowCount: 1,
+          saved: false,
+        },
+      },
+    });
+    await ctx.service.archive(second.id);
+    const hosts = ctx.sessions.createRunHost.mock.calls.length;
+    await expect(
+      ctx.service.prepare(ORCHESTRATED, {
+        input: { question: 'More?', datasets: ['World Cup Core'] },
+        context: { fromRunId: second.id },
+      }),
+    ).rejects.toThrow('This conversation is archived');
+    expect(ctx.sessions.createRunHost.mock.calls).toHaveLength(hosts);
   });
 
   it('refuses a follow-up to an archived conversation (409)', async () => {

@@ -37,6 +37,7 @@ import { isOrchestratedWorkflow } from '../../mastra/workflows/orchestrated-answ
 export const CONVERSATION_TURNS = 20;
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import { ArtifactsService } from '../artifacts/artifacts.service';
+import type { DashboardRef } from '../artifacts/entities/artifact.entity';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { clarifyingQuestionText } from '../sessions/turn/turn-workflow';
 import type {
@@ -298,6 +299,11 @@ export interface PreparedRun {
      */
     conversationId?: string;
     transcript?: { role: 'user' | 'assistant'; content: string }[];
+    /**
+     * The conversation's dashboard (agents.md 5.22, the follow-up carry):
+     * the last one an answer of the conversation carries.
+     */
+    dashboard?: DashboardRef;
   };
   /**
    * A draft run (api.md R12; agents-evals R60): the user agent whose saved
@@ -825,6 +831,8 @@ export class WorkflowRunsService implements OnModuleInit {
         ...(workflow.id === REVIEW_WEBSITE_WORKFLOW_ID
           ? { inputValues: prepared.values }
           : {}),
+        // Avery's run reads its conversation for an export (agents.md 3.18).
+        ...(base.conversationId ? { conversationId: base.conversationId } : {}),
         ...(prepared.context
           ? {
               // A message to Avery reads the whole conversation so far
@@ -852,6 +860,10 @@ export class WorkflowRunsService implements OnModuleInit {
               // "Next page" or "only Brazil" explores its queries.
               ...(prepared.context.queries?.length
                 ? { contextQueries: prepared.context.queries }
+                : {}),
+              // A message to Avery changes the conversation's dashboard.
+              ...(prepared.context.dashboard
+                ? { contextDashboard: prepared.context.dashboard.artifactId }
                 : {}),
             }
           : {}),
@@ -1751,6 +1763,16 @@ export class WorkflowRunsService implements OnModuleInit {
       ),
     };
     delete run.rfpId;
+    // A dashboard card's `saved` is a snapshot from its run: read it now.
+    const dashboard = run.answer?.dashboard;
+    if (dashboard) {
+      const saved = await this.artifacts
+        .isVersionSaved(dashboard.artifactId, dashboard.version)
+        .catch(() => null);
+      if (saved !== null && saved !== dashboard.saved) {
+        run.answer = { ...run.answer!, dashboard: { ...dashboard, saved } };
+      }
+    }
     if (run.question === undefined) return run;
     const view = await this.sessions.toView(runHostDoc(run));
     return {
@@ -1949,12 +1971,14 @@ export class WorkflowRunsService implements OnModuleInit {
   /**
    * The conversation a message to Avery joins (workflows R45): the earlier
    * run's, and its turns so far (each run's question and answer, oldest
-   * first, the last `CONVERSATION_TURNS`). An archived conversation takes
-   * no new message (409).
+   * first, the last `CONVERSATION_TURNS`), and its dashboard: the last
+   * one an answer of it carries (agents.md 5.22). An archived conversation
+   * takes no new message (409).
    */
   private async conversationOf(earlier: WorkflowRunDoc): Promise<{
     conversationId: string;
     transcript: { role: 'user' | 'assistant'; content: string }[];
+    dashboard?: DashboardRef;
   }> {
     if (earlier.archivedAt) {
       throw new ConflictException('This conversation is archived');
@@ -1962,12 +1986,18 @@ export class WorkflowRunsService implements OnModuleInit {
     const conversationId = earlier.conversationId ?? earlier.id;
     const runs = await this.repository.listConversation(conversationId);
     if (!runs.some((run) => run.id === earlier.id)) runs.push(earlier);
-    const turns = runs
+    const ordered = [...runs].sort((a, b) =>
+      a.startedAt.localeCompare(b.startedAt),
+    );
+    const turns = ordered
       .filter((run) => run.question && run.answer?.content)
-      .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
       .slice(-CONVERSATION_TURNS);
+    // However old: a conversation keeps one dashboard (agents.md 5.22).
+    const dashboard = ordered.findLast((run) => run.answer?.dashboard)?.answer
+      ?.dashboard;
     return {
       conversationId,
+      ...(dashboard ? { dashboard } : {}),
       transcript: turns.flatMap((run) => [
         { role: 'user' as const, content: run.question ?? '' },
         { role: 'assistant' as const, content: run.answer?.content ?? '' },

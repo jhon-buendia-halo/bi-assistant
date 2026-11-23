@@ -143,6 +143,20 @@ import type { WorkflowsService } from '../workflows/workflows.service';
 import type { SessionDoc } from './entities/session.entity';
 import { SessionsService, type StreamEvent } from './sessions.service';
 import { streamStored } from './testing/stream-stored';
+import {
+  ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+  type OrchestratorToolsRuntime,
+} from '../../mastra/workflows/orchestrated-answer.steps';
+import {
+  DASHBOARD_TOOLS_RUNTIME_KEY,
+  type DashboardToolsRuntime,
+} from '../../mastra/tools/dashboard.tools';
+import type { DashboardDraft } from '../../mastra/workflows/bi-dashboard.schemas';
+import type { NewDashboardVersion } from '../artifacts/artifacts.service';
+import type {
+  DashboardRef,
+  DashboardVersionData,
+} from '../artifacts/entities/artifact.entity';
 
 async function* streamOf(chunks: unknown[]): AsyncGenerator<unknown> {
   for (const chunk of chunks) {
@@ -309,6 +323,18 @@ interface BuildOptions {
   visuals?: object;
   /** The datasources service's guarded read-only SQL (roadmap 1.28.11). */
   runReadOnlySql?: jest.Mock;
+  /**
+   * An agent's own scripted stream, by its key: it may call the tools'
+   * runtimes on the call's requestContext as the real tools would.
+   */
+  streams?: Record<
+    string,
+    (opts: StreamCall['options']) => AsyncIterable<unknown>
+  >;
+  /** The artifacts service (Clara's dashboards, agents.md 5.22). */
+  artifacts?: object;
+  /** Avery's conversation exporter (agents.md 3.18). */
+  exporter?: object;
 }
 
 /** v2's Analyse turn: one successful query, then its note. */
@@ -356,6 +382,13 @@ function build(options: BuildOptions = {}) {
       }),
       stream: jest.fn((input: unknown, opts: StreamCall['options']) => {
         calls[key].push({ input, options: opts });
+        const scripted = options.streams?.[key];
+        if (scripted) {
+          return Promise.resolve({
+            fullStream: scripted(opts),
+            text: Promise.resolve(''),
+          });
+        }
         if (options.holdUntilAbort) {
           return Promise.resolve({
             fullStream: (async function* () {
@@ -405,6 +438,7 @@ function build(options: BuildOptions = {}) {
     'insights-analyst': agentFor('insights-analyst', 'Insights Analyst'),
     'data-readiness': agentFor('data-readiness', 'Data Readiness Agent'),
     'chief-of-staff': agentFor('chief-of-staff', 'Avery'),
+    'bi-analyst': agentFor('bi-analyst', 'Business Intelligence Analyst'),
   };
   // Suspended v2 runs dropped (their snapshots deleted, ADR-0043).
   const discards = { count: 0 };
@@ -545,6 +579,10 @@ function build(options: BuildOptions = {}) {
     } as never,
     userAgents as never,
     options.readiness as never,
+    undefined,
+    options.artifacts as never,
+    undefined,
+    options.exporter as never,
   );
   const workflows = {
     definition: jest.fn((id: string) =>
@@ -573,8 +611,11 @@ function build(options: BuildOptions = {}) {
       ),
     ),
     {} as never,
-    // No stored artifact: no workflow here takes one.
-    { list: () => Promise.resolve([]) } as never,
+    // No stored artifact: no workflow here takes one; nothing is saved.
+    {
+      list: () => Promise.resolve([]),
+      isVersionSaved: () => Promise.resolve(null),
+    } as never,
   );
   /** A chat session over the same input as `workflow`'s run. */
   const chat = (workflow: Workflow): SessionDoc => {
@@ -2686,5 +2727,619 @@ describe('a v2 run with reference images (workflows R35; agents.md 2.15, 5.11)',
       { reference?: string },
     ];
     expect(source.reference).toBe(IMAGE_NOTES);
+  });
+});
+
+/** Clara's dashboard of goals by team, bound to her data query's columns. */
+const GOALS_DRAFT: DashboardDraft = {
+  title: 'Goals by team',
+  summary: 'Goals per team.',
+  theme: { mode: 'light', accent: '#2563eb', palette: ['#2563eb', '#16a34a'] },
+  layout: 'A KPI, then goals by team.',
+  filters: [{ id: 'team', label: 'Team', kind: 'select', column: 'team' }],
+  widgets: [
+    {
+      id: 'goals',
+      title: 'Goals',
+      kind: 'kpi',
+      span: 4,
+      measures: [
+        {
+          label: 'Goals',
+          column: 'goals',
+          aggregation: 'sum',
+          format: 'number',
+          unit: '',
+        },
+      ],
+      dimension: '',
+      description: 'All goals.',
+      filteredBy: ['team'],
+    },
+    {
+      id: 'by-team',
+      title: 'Goals by team',
+      kind: 'bar',
+      span: 8,
+      measures: [
+        {
+          label: 'Goals',
+          column: 'goals',
+          aggregation: 'sum',
+          format: 'number',
+          unit: '',
+        },
+      ],
+      dimension: 'team',
+      description: 'Goals per team.',
+      filteredBy: ['team'],
+    },
+  ],
+  columns: [
+    { name: 'team', type: 'string', description: 'The team.' },
+    { name: 'goals', type: 'number', description: 'Goals scored.' },
+  ],
+};
+const GOALS_SQL =
+  'SELECT team, sum(goals) AS goals FROM wc.public.goals GROUP BY team';
+const GOALS_BRIEF = 'A dashboard of goals by team, filterable by team.';
+
+/** The artifacts service, as Clara's saves reach it (plan bi-dashboard 2.5). */
+function dashboardArtifacts() {
+  const versions: (NewDashboardVersion & { version: number })[] = [];
+  const refOf = (
+    input: NewDashboardVersion,
+    version: number,
+    action: DashboardRef['action'],
+  ): DashboardRef => ({
+    artifactId: 'a-1',
+    version,
+    title: input.blueprint.title,
+    action,
+    widgetCount: input.blueprint.widgets.length,
+    filterCount: input.blueprint.filters.length,
+    rowCount: input.rows.length,
+    saved: false,
+  });
+  return {
+    versions,
+    createDashboard: jest.fn((input: NewDashboardVersion) => {
+      versions.push({ ...input, version: 1 });
+      return Promise.resolve(refOf(input, 1, 'created'));
+    }),
+    addDashboardVersion: jest.fn((_id: string, input: NewDashboardVersion) => {
+      const version = versions.length + 1;
+      versions.push({ ...input, version });
+      return Promise.resolve(refOf(input, version, 'updated'));
+    }),
+    dashboardVersion: jest.fn((id: string): Promise<DashboardVersionData> => {
+      const last = versions.at(-1);
+      if (id !== 'a-1' || !last) {
+        return Promise.reject(new Error(`Artifact "${id}" not found`));
+      }
+      return Promise.resolve({
+        artifactId: id,
+        version: last.version,
+        title: last.blueprint.title,
+        name: last.blueprint.title,
+        blueprint: last.blueprint,
+        query: last.query,
+        columns: last.columns,
+        rowCount: last.rows.length,
+        widgetCount: last.blueprint.widgets.length,
+        filterCount: last.blueprint.filters.length,
+        createdAt: '2026-11-22T10:00:00.000Z',
+        rows: last.rows,
+      });
+    }),
+  };
+}
+
+/**
+ * Avery calls build_dashboard with `brief` (her tool runs Clara through the
+ * runtime, as the real tool does), then closes with `closing`; `told` gets
+ * what the tool answered her.
+ */
+function averyBuilds(
+  brief: string,
+  closing: string,
+  told: string[],
+): (opts: StreamCall['options']) => AsyncIterable<unknown> {
+  return (opts) =>
+    (async function* () {
+      const tools = opts.requestContext.values.get(
+        ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+      ) as OrchestratorToolsRuntime;
+      yield {
+        type: 'tool-call',
+        payload: {
+          toolCallId: 'b1',
+          toolName: 'build_dashboard',
+          args: { brief },
+        },
+      };
+      const result = await tools.buildDashboard(brief);
+      told.push(result);
+      yield {
+        type: 'tool-result',
+        payload: {
+          toolCallId: 'b1',
+          toolName: 'build_dashboard',
+          result: { result },
+        },
+      };
+      yield { type: 'text-delta', payload: { text: closing } };
+    })();
+}
+
+/**
+ * Clara submits `draft` with `sql` (her submit_dashboard runs through the
+ * runtime, as the real tool does), then replies to Avery; `outcomes` gets
+ * what the host answered, and `afterSubmit` runs once it has.
+ */
+function claraSubmits(
+  outcomes: unknown[],
+  draft: DashboardDraft = GOALS_DRAFT,
+  sql: string = GOALS_SQL,
+  afterSubmit?: () => void,
+): (opts: StreamCall['options']) => AsyncIterable<unknown> {
+  return (opts) =>
+    (async function* () {
+      const runtime = opts.requestContext.values.get(
+        DASHBOARD_TOOLS_RUNTIME_KEY,
+      ) as DashboardToolsRuntime;
+      const args = { dashboard: draft, sql, rationale: 'Goals per team.' };
+      yield {
+        type: 'tool-call',
+        payload: { toolCallId: 's1', toolName: 'submit_dashboard', args },
+      };
+      const outcome = await runtime.submit({ ...args, datasourceId: 'ds-pg' });
+      outcomes.push(outcome);
+      afterSubmit?.();
+      yield {
+        type: 'tool-result',
+        payload: {
+          toolCallId: 's1',
+          toolName: 'submit_dashboard',
+          result: outcome.accepted
+            ? { result: 'Accepted.' }
+            : { error: outcome.error },
+        },
+      };
+      yield {
+        type: 'text-delta',
+        payload: { text: 'I built goals by team with a team filter.' },
+      };
+    })();
+}
+
+/** The goals query's rows, numbers as Postgres sends a sum (text). */
+const goalsRows = () =>
+  jest.fn().mockResolvedValue({
+    columns: ['team', 'goals'],
+    rows: [
+      { team: 'Brazil', goals: '12' },
+      { team: 'Germany', goals: '9' },
+    ],
+    totalRows: 2,
+  });
+
+/** A run event as `<type>:<tool name>`, for the activity's order. */
+function activityOf(events: RunStreamEvent[]): string[] {
+  return events
+    .filter((e) => e.type === 'tool' || e.type === 'tool-result')
+    .map((e) => {
+      const body = JSON.parse((e as { content: string }).content) as {
+        name?: string;
+        tool?: string;
+      };
+      return `${e.type}:${body.name ?? body.tool}`;
+    });
+}
+
+describe("Clara builds Avery's dashboards (agents.md 2.22, 5.22)", () => {
+  it('runs her data query with 5,000 rows, saves the dashboard on its rows and carries it on the answer, with her query as a source', async () => {
+    const artifacts = dashboardArtifacts();
+    const runReadOnlySql = goalsRows();
+    const told: string[] = [];
+    const outcomes: unknown[] = [];
+    const ctx = build({
+      artifacts,
+      runReadOnlySql,
+      streams: {
+        'chief-of-staff': averyBuilds(
+          GOALS_BRIEF,
+          'Your dashboard is ready.',
+          told,
+        ),
+        'bi-analyst': claraSubmits(outcomes),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const prepared = await ctx.runs.prepare('orchestrated-answer', {
+      input: {
+        question: 'Create a dashboard of goals by team',
+        datasets: ['World Cup'],
+      },
+    });
+    const events: RunStreamEvent[] = [];
+    const run = await ctx.runs.stream(prepared, (e) => events.push(e));
+
+    expect(run.status).toBe('success');
+    // The host ran her query itself, past the 500-row clamp, with the stop.
+    expect(runReadOnlySql).toHaveBeenCalledWith(
+      'ds-pg',
+      GOALS_SQL,
+      5000,
+      5000,
+      { signal: expect.any(AbortSignal) as unknown },
+    );
+    expect(outcomes).toEqual([
+      { accepted: true, rowCount: 2, columns: ['team', 'goals'] },
+    ]);
+    expect(artifacts.createDashboard).toHaveBeenCalledTimes(1);
+    const [saved] = artifacts.versions;
+    expect(saved).toMatchObject({
+      query: {
+        sql: GOALS_SQL,
+        datasourceId: 'ds-pg',
+        rationale: 'Goals per team.',
+      },
+      columns: ['team', 'goals'],
+      rows: [
+        { team: 'Brazil', goals: 12 },
+        { team: 'Germany', goals: 9 },
+      ],
+      instruction: GOALS_BRIEF,
+      source: { runId: run.id, workflowId: 'orchestrated-answer' },
+    });
+    expect(saved.blueprint.widgets.map((w) => w.id)).toEqual([
+      'goals',
+      'by-team',
+    ]);
+    // The answer: Avery's words (never Clara's) and the dashboard's card.
+    expect(run.answer?.content).toBe('Your dashboard is ready.');
+    expect(run.answer?.dashboard).toEqual({
+      artifactId: 'a-1',
+      version: 1,
+      title: 'Goals by team',
+      action: 'created',
+      widgetCount: 2,
+      filterCount: 1,
+      rowCount: 2,
+      // A draft: the user saves it to Artifacts from the panel.
+      saved: false,
+    });
+    expect(told[0]).toContain(
+      'Built dashboard "Goals by team", version 1 (created): 2 widgets, 1 filters, 2 rows.',
+    );
+    // Her query is one of the answer's sources: the inspector opens it.
+    expect(run.answer?.data).toEqual([
+      expect.objectContaining({
+        tool: 'run_readonly_sql',
+        input: GOALS_SQL,
+        rowCount: 2,
+        rationale: 'Goals per team.',
+      }),
+    ]);
+    expect(run.answer?.evidence).toEqual([
+      expect.objectContaining({
+        index: 0,
+        datasourceId: 'ds-pg',
+        rowLimit: 5000,
+        totalRows: 2,
+      }),
+    ]);
+    // Her calls come between Avery's call and its result; the host's
+    // query follows her submit's result, so each call pairs.
+    expect(activityOf(events)).toEqual([
+      'tool:build_dashboard',
+      'tool:submit_dashboard',
+      'tool-result:submit_dashboard',
+      'tool:run_readonly_sql',
+      'tool-result:run_readonly_sql',
+      'tool-result:build_dashboard',
+    ]);
+    // Clara: no memory, her brief and the catalog, the gate's fact for Avery.
+    const [clara] = ctx.calls['bi-analyst'];
+    expect(clara.options.memory).toBeUndefined();
+    expect(clara.input).toEqual([
+      { role: 'user', content: 'Create a dashboard of goals by team' },
+    ]);
+    expect(
+      clara.options.context.some((block) =>
+        block.content.startsWith(
+          `Brief from Avery, the Chief of Staff: ${GOALS_BRIEF}`,
+        ),
+      ),
+    ).toBe(true);
+    const [avery] = ctx.calls['chief-of-staff'];
+    expect(avery.options.context[0].content).toContain(
+      'The user asked for a dashboard: build_dashboard is available.',
+    );
+  });
+
+  it('refuses a query that the 5,000-row cap cut, and a draft bound to a column it does not return; nothing is saved', async () => {
+    const artifacts = dashboardArtifacts();
+    const told: string[] = [];
+    const outcomes: unknown[] = [];
+    const ctx = build({
+      artifacts,
+      runReadOnlySql: jest.fn().mockResolvedValue({
+        columns: ['team', 'goals'],
+        rows: Array.from({ length: 5000 }, (_, n) => ({
+          team: `T${n}`,
+          goals: n,
+        })),
+        totalRows: 7000,
+      }),
+      streams: {
+        'chief-of-staff': averyBuilds(GOALS_BRIEF, 'No dashboard.', told),
+        'bi-analyst': claraSubmits(outcomes),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const prepared = await ctx.runs.prepare('orchestrated-answer', {
+      input: { question: 'A dashboard of goals', datasets: ['World Cup'] },
+    });
+    const run = await ctx.runs.stream(prepared, () => undefined);
+    expect(outcomes).toEqual([
+      {
+        accepted: false,
+        error:
+          'More than 5,000 rows: group the query to the grain the widgets need',
+      },
+    ]);
+    expect(artifacts.createDashboard).not.toHaveBeenCalled();
+    expect(run.answer?.dashboard).toBeUndefined();
+    expect(told[0]).toMatch(/^Clara built no dashboard: /);
+
+    const unbound = build({
+      artifacts,
+      runReadOnlySql: goalsRows(),
+      streams: {
+        'chief-of-staff': averyBuilds(GOALS_BRIEF, 'No dashboard.', told),
+        'bi-analyst': claraSubmits(outcomes, {
+          ...GOALS_DRAFT,
+          filters: [
+            { id: 'stage', label: 'Stage', kind: 'select', column: 'stage' },
+          ],
+        }),
+      },
+    });
+    await unbound.sessions.onModuleInit();
+    const again = await unbound.runs.stream(
+      await unbound.runs.prepare('orchestrated-answer', {
+        input: { question: 'A dashboard of goals', datasets: ['World Cup'] },
+      }),
+      () => undefined,
+    );
+    expect(outcomes[1]).toMatchObject({ accepted: false });
+    expect((outcomes[1] as { error: string }).error).toContain('stage');
+    expect(artifacts.createDashboard).not.toHaveBeenCalled();
+    expect(again.answer?.dashboard).toBeUndefined();
+  });
+
+  it('saves nothing when the run is stopped while Clara works', async () => {
+    const artifacts = dashboardArtifacts();
+    const abort = new AbortController();
+    const outcomes: unknown[] = [];
+    const ctx = build({
+      artifacts,
+      runReadOnlySql: goalsRows(),
+      streams: {
+        'chief-of-staff': averyBuilds(GOALS_BRIEF, 'Ready.', []),
+        'bi-analyst': claraSubmits(outcomes, GOALS_DRAFT, GOALS_SQL, () =>
+          abort.abort(),
+        ),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const prepared = await ctx.runs.prepare('orchestrated-answer', {
+      input: { question: 'A dashboard of goals', datasets: ['World Cup'] },
+    });
+    const run = await ctx.runs.stream(prepared, () => undefined, abort.signal);
+    // Accepted, then stopped before the save.
+    expect(outcomes).toEqual([expect.objectContaining({ accepted: true })]);
+    expect(run.status).toBe('stopped');
+    expect(artifacts.createDashboard).not.toHaveBeenCalled();
+    expect(artifacts.addDashboardVersion).not.toHaveBeenCalled();
+    expect(run.answer?.dashboard).toBeUndefined();
+  });
+
+  it("a follow-up changes the conversation's dashboard into its next version, whatever it says", async () => {
+    const artifacts = dashboardArtifacts();
+    const ctx = build({
+      artifacts,
+      runReadOnlySql: goalsRows(),
+      streams: {
+        'chief-of-staff': averyBuilds(GOALS_BRIEF, 'Ready.', []),
+        'bi-analyst': claraSubmits([]),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const first = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: {
+          question: 'Create a dashboard of goals by team',
+          datasets: ['World Cup'],
+        },
+      }),
+      () => undefined,
+    );
+    expect(first.answer?.dashboard).toMatchObject({ version: 1 });
+
+    const second = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: { question: 'add a filter by team', datasets: ['World Cup'] },
+        context: { fromRunId: first.id },
+      }),
+      () => undefined,
+    );
+    expect(artifacts.dashboardVersion).toHaveBeenCalledWith('a-1');
+    expect(artifacts.addDashboardVersion).toHaveBeenCalledWith(
+      'a-1',
+      expect.objectContaining({ instruction: GOALS_BRIEF }),
+    );
+    expect(second.answer?.dashboard).toMatchObject({
+      artifactId: 'a-1',
+      version: 2,
+      action: 'updated',
+    });
+    // Avery reads the conversation's dashboard; Clara gets it to change.
+    const avery = ctx.calls['chief-of-staff'].at(-1)!;
+    expect(avery.options.context[0].content).toContain(
+      'The conversation has a dashboard: "Goals by team", version 1 (2 widgets, 1 filters). build_dashboard changes it into version 2.',
+    );
+    const clara = ctx.calls['bi-analyst'].at(-1)!;
+    const brief = clara.options.context.find((block) =>
+      block.content.startsWith('Brief from Avery'),
+    );
+    expect(brief?.content).toContain(
+      'The current dashboard: "Goals by team", version 1.',
+    );
+    expect(brief?.content).toContain(
+      `Its data query (datasource ds-pg): ${GOALS_SQL}`,
+    );
+  });
+
+  it('carries nothing when the artifact is gone: the gate reads the message alone', async () => {
+    const artifacts = dashboardArtifacts();
+    const ctx = build({
+      artifacts,
+      runReadOnlySql: goalsRows(),
+      streams: {
+        'chief-of-staff': averyBuilds(GOALS_BRIEF, 'Ready.', []),
+        'bi-analyst': claraSubmits([]),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const first = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: {
+          question: 'Create a dashboard of goals by team',
+          datasets: ['World Cup'],
+        },
+      }),
+      () => undefined,
+    );
+    artifacts.dashboardVersion.mockRejectedValueOnce(
+      new Error('Artifact "a-1" not found'),
+    );
+    // Avery answers in words this time: no dashboard tool call.
+    ctx.registry['chief-of-staff'].stream.mockImplementationOnce(
+      (input: unknown, opts: StreamCall['options']) => {
+        ctx.calls['chief-of-staff'].push({ input, options: opts });
+        return Promise.resolve({
+          fullStream: streamOf([
+            { type: 'text-delta', payload: { text: 'Brazil.' } },
+          ]),
+          text: Promise.resolve(''),
+        });
+      },
+    );
+    const second = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: { question: 'Who scored most?', datasets: ['World Cup'] },
+        context: { fromRunId: first.id },
+      }),
+      () => undefined,
+    );
+    expect(second.status).toBe('success');
+    const avery = ctx.calls['chief-of-staff'].at(-1)!;
+    expect(avery.options.context[0].content).not.toContain('dashboard');
+    const tools = avery.options.requestContext.values.get(
+      ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+    ) as OrchestratorToolsRuntime;
+    expect(tools.buildsDashboard).toBe(false);
+    expect(second.answer?.dashboard).toBeUndefined();
+  });
+});
+
+describe('Avery exports the conversation (agents.md 3.18; workflows R45)', () => {
+  const EXPORT = {
+    id: 'x-1',
+    title: 'Who won the World Cup',
+    createdAt: '2026-11-23T10:00:00.000Z',
+    files: [{ format: 'pdf', fileName: 'w.pdf', bytes: 3, pages: 4 }],
+  };
+
+  /** Avery: on an export request she calls export_conversation, else answers. */
+  function averyExports(told: string[]) {
+    return (opts: StreamCall['options']) =>
+      (async function* () {
+        const tools = opts.requestContext.values.get(
+          ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+        ) as OrchestratorToolsRuntime;
+        if (tools.exportsConversation) {
+          const result = await tools.exportConversation({
+            formats: ['pdf'],
+            title: 'Who won the World Cup',
+            summary: ['Brazil won.', 'The answer named the winner.'],
+            turns: [{ number: 1, headline: 'Brazil won', points: [] }],
+            includeSql: false,
+          });
+          told.push(result);
+        }
+        yield { type: 'text-delta', payload: { text: 'Done.' } };
+      })();
+  }
+
+  it('opens on the request, reads the earlier turns, exports them and carries the export on the answer', async () => {
+    const exporter = {
+      turns: jest.fn().mockResolvedValue({
+        questions: ['Who won?'],
+        answers: ['Brazil won.'],
+      }),
+      export: jest.fn().mockResolvedValue(EXPORT),
+    };
+    const told: string[] = [];
+    const ctx = build({
+      exporter,
+      streams: { 'chief-of-staff': averyExports(told) },
+    });
+    await ctx.sessions.onModuleInit();
+    const first = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: { question: 'Who won?', datasets: ['World Cup'] },
+      }),
+      () => undefined,
+    );
+    // A question that is no export: no export line, no call to the exporter.
+    expect(
+      ctx.calls['chief-of-staff'][0].options.context[0].content,
+    ).not.toContain('export');
+    expect(exporter.turns).not.toHaveBeenCalled();
+    expect(first.answer?.export).toBeUndefined();
+
+    const second = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: {
+          question: 'Export this conversation to PDF',
+          datasets: ['World Cup'],
+        },
+        context: { fromRunId: first.id },
+      }),
+      () => undefined,
+    );
+    expect(second.status).toBe('success');
+    expect(exporter.turns).toHaveBeenCalledWith(first.id, second.id);
+    const avery = ctx.calls['chief-of-staff'].at(-1)!;
+    expect(avery.options.context[0].content).toContain(
+      'The user asked to export the conversation: export_conversation is available. Its earlier questions, in order: 1. "Who won?"',
+    );
+    expect(exporter.export).toHaveBeenCalledWith({
+      conversationId: first.id,
+      beforeRunId: second.id,
+      content: expect.objectContaining({
+        title: 'Who won the World Cup',
+      }) as unknown,
+      brand: 'halo',
+    });
+    expect(told).toEqual([
+      'Exported "Who won the World Cup": PDF (4 pages). The user sees the download card with the answer: do not repeat the summary.',
+    ]);
+    expect(second.answer?.export).toEqual(EXPORT);
+    expect(second.answer?.content).toBe('Done.');
   });
 });

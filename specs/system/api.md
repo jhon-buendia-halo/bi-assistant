@@ -1151,7 +1151,7 @@ The query inspector's endpoints over a run's stored answer and its `evidence` (3
 
 ### 2.6.4 Artifacts
 
-Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R33; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own (144-148 read, rename and delete them), and taken by Map a Dashboard to Data (5.18).
+Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R33; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own (144-148, 165 and 166 read, rename, delete, download and save them), and taken by Map a Dashboard to Data (5.18). A dashboard built on real rows is saved, as a version of its artifact, by a turn of Avery's run (workflows R45; [agents.md](agents.md) 5.22): **no route creates a version**, the turn does, as a **draft**: the user saves it with 166 (since 2026-11-22), and only saved versions are listed (144) and downloaded (165).
 
 ```ts
 type ArtifactSummary = {
@@ -1162,21 +1162,43 @@ type ArtifactSummary = {
   widgetCount: number;
   filterCount: number;
   hasImage: boolean;                // whether 146 answers the image the dashboard was read from
+  currentVersion: number;           // 1 for an artifact with no versions of its own
+  versionCount: number;
+  hasData: boolean;                 // whether the current version keeps the rows of its query (a live dashboard)
   source?: { runId: string; workflowId: string };   // the run it was saved from
   createdAt: string;                // ISO
   updatedAt: string;                // ISO
 };
 type Artifact = ArtifactSummary & {
   blueprint: DashboardBlueprint;    // the dashboard as data (agents.md 5.17)
-  document: string;                 // the dashboard drawn by the fixed runtime with no mapping: a self-contained HTML document for a sandboxed frame
+  document: string;                 // the dashboard drawn by the fixed runtime with no mapping: a self-contained HTML document for a sandboxed frame; on the real rows of the version when it has them (live), else with the mock values
+  version: number;                  // the version shown: the requested one, else the current
+  versions: { version: number; createdAt: string; instruction?: string; rowCount?: number; widgetCount: number; filterCount: number; saved: boolean }[];   // oldest first
+  status: 'draft' | 'saved';        // 'draft' when no version is saved (144 never lists such an artifact)
+  savedVersions: number[];          // the versions saved to Artifacts (166); a legacy artifact with no versions of its own reads [1]
+  query?: DashboardQuery;           // the version's data query (live versions only)
+  dataMissing?: true;               // the version is live but its rows file is gone: drawn with the mock values
+};
+type DashboardQuery = { sql: string; datasourceId: string; rationale?: string };
+// ChatMessage.dashboard (data-model 3.4.1; a run's answer.dashboard): the dashboard a turn of Avery's run created or changed
+type DashboardRef = {
+  artifactId: string;
+  version: number;
+  title: string;
+  action: 'created' | 'updated';   // 'created' = version 1 of a new artifact
+  widgetCount: number;
+  filterCount: number;
+  rowCount: number;
+  saved: boolean;                  // whether this version is saved to Artifacts (false when Clara creates or updates it; 164 saves it); a stored run's ref is read again from the artifact each time the run is read (121, 119's done.run), so a card shows a later save
 };
 ```
 
 #### 144. `GET /artifacts`
-- Response `200`: `ArtifactSummary[]`, newest first (`createdAt` descending).
+- Response `200`: `ArtifactSummary[]`, newest first (`createdAt` descending), of the artifacts with **at least one saved version** (a draft, an artifact with no saved version, is hidden). `currentVersion` and the counts are those of the latest **saved** version.
 
 #### 145. `GET /artifacts/:id`
-- Response `200`: `Artifact`. `404 "Artifact \"<id>\" not found"`.
+- Query: `version` (optional, a positive whole number): the version to read; the latest version, draft or saved, when absent (the dashboard panel uses it). A draft is readable: the panel draws it.
+- Response `200`: `Artifact` at that version (its `blueprint` and `document` are the version's; `version`, `versions`, `query` and `dataMissing` as above) plus `status: 'draft' | 'saved'` (of the artifact: `draft` when it has no saved version), `savedVersions: number[]` and, on each `versions[]` item, `saved: boolean`. `400 "Version must be a positive whole number"`; `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no version <n>"`.
 
 #### 146. `GET /artifacts/:id/image`
 - Response `200`: the bytes of the image the dashboard was read from, with its `Content-Type` (`image/png`, `image/jpeg` or `image/webp`) and `Cache-Control: private, max-age=3600`. `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no image"` when it was saved without one or the file is gone.
@@ -1187,7 +1209,46 @@ type Artifact = ArtifactSummary & {
 
 #### 148. `DELETE /artifacts/:id`
 - Response `204`. `404 "Artifact \"<id>\" not found"`.
-- Side effects: the document and its image file are deleted. Runs that used the artifact are unchanged (they keep the blueprint in their own output).
+- Side effects: the document, its image file and the folder of its versions' rows (data-model 3.18) are deleted. Runs that used the artifact are unchanged (they keep the blueprint in their own output), and a dashboard card of an earlier answer then opens `Artifact "<id>" not found`.
+
+#### 165. `GET /artifacts/:id/download`
+- Query: `version` (optional, a positive whole number; the latest **saved** version when absent).
+- Response `409 "Save the dashboard to Artifacts before downloading it"` when the version asked for is not saved (or, without `version`, the artifact has no saved version).
+- Response `200`: the version as a zip of plain files, `Content-Type: application/zip`, `Content-Disposition: attachment; filename="<slug>-v<N>.zip"`, where the slug is the artifact's name lower-cased to `[a-z0-9-]` and at most 64 characters (`dashboard-<first 8 characters of the id>-v<N>.zip` when nothing is left). Entries, stored uncompressed and dated with the version's `createdAt`: `index.html` (links `styles.css`, loads `data.js` then `app.js`; no `<script>` with code inline, no CSP meta), `styles.css`, `app.js` (the fixed runtime and its mount call), `data.js` (`window.DASHBOARD_DATA = { blueprint, rows, live }`, `</script>` and U+2028/U+2029 escaped), `query.sql` (live versions only) and `README.txt` (how to open it, the version, the date, the row count; a mock version says its values are invented). It opens from `file://` with no server, loads no external resource and draws the dashboard on the rows it holds, so it is a snapshot: it never reads the datasource. `400 "Version must be a positive whole number"`; `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no version <n>"`. FE: yes (the dashboard card's, the panel's and the artifact page's **Download**).
+
+#### 166. `POST /artifacts/:id/save`
+- Body: `{ version?: number }` (a positive whole number; the latest version when absent).
+- Response `200`: the `Artifact` as 145 at that version, with the version now in `savedVersions` (`status: 'saved'`). Idempotent: saving a saved version changes nothing. `400 "Version must be a positive whole number"`; `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no version <n>"`.
+- Side effects: adds the version to the document's `savedVersions` (data-model 3.18); later versions stay drafts until saved. FE: yes (**Save to Artifacts** on the dashboard panel and the card).
+
+### 2.6.5 Conversation exports
+
+Controller prefix `/conversation-exports`. Capability: workflows (R45). Avery makes an export in a run of hers when the user asks to export or share the conversation (`export_conversation`, [agents.md](agents.md) 3.18; ADR-0056): **no route creates one**. The answer of that run carries it as `answer.export` (a session's `ChatMessage.export`, data-model 3.4.1), and the export is stored in `conversation_exports` (data-model 3.20) with its files under `<data dir>/exports/<id>/`.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 167 | `GET /conversation-exports/:id/download` | One file of an export (PDF or PowerPoint) as an attachment | yes |
+
+```ts
+// ChatMessage.export (data-model 3.4.1; a run's answer.export): the conversation Avery exported in that turn
+type ConversationExportRef = {
+  id: string;                      // uuid
+  title: string;                   // Avery's title for the file
+  createdAt: string;               // ISO
+  files: {
+    format: 'pdf' | 'pptx';
+    fileName: string;              // `<slug of the title>.pdf` / `.pptx`: lower case [a-z0-9-], at most 64 characters (`conversation` when nothing is left)
+    bytes: number;
+    pages?: number;                // the PDF's page count
+    slides?: number;               // the PowerPoint's slide count
+  }[];                             // the formats Avery asked for, `pdf` first
+};
+```
+
+#### 167. `GET /conversation-exports/:id/download`
+- Query: `format`: `pdf` or `pptx` (required).
+- Response `200`: the file, `Content-Type: application/pdf` or `application/vnd.openxmlformats-officedocument.presentationml.presentation`, `Content-Disposition: attachment; filename="<fileName>"`, `Content-Length` and `Cache-Control: no-store`.
+- `400 "format must be \"pdf\" or \"pptx\""` for any other `format` (or none); `404 "Export not found"`; `404 "This export has no <format> file"` when the export was made without that format; `404 "The export file is gone"` when its file was removed from the data directory. FE: yes (the export card's **Download PDF** and **Download PowerPoint**, ui.md 4.4b).
 
 ### 2.7 Deep analysis (removed 2026-11-12)
 
@@ -1412,6 +1473,8 @@ interface ChatMessage {
   feedback?: 'up' | 'down'; crossCheck?: { status: 'agree'|'disagree'|'error'; note?: string };
   reasoning?: ReasoningStep[]; knowledge?: KnowledgeUse[]; report?: AnalysisReport;
   evidence?: QueryEvidence[];   // the query inspector's facts, beside `data` (data-model 3.4.2a)
+  dashboard?: DashboardRef;     // the dashboard a turn of Avery's created or changed (2.6.4)
+  export?: ConversationExportRef;   // the conversation Avery exported in that turn (2.6.5, 167)
 }
 interface ToolDataRecord {
   tool: string; input?: string;                       // SQL text or entity name
@@ -1756,6 +1819,7 @@ type WorkflowRun = {
   // Answer a Business Question runs only:
   question?: string;               // the user message the agent received (`question`), trimmed
   answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1): Write answer's text (a run stored before 2026-11-13 may hold a clarifying question with its `clarification`); absent while it waits, and when it stopped or failed before answering
+                                   // an Avery run's `answer.dashboard` (2.6.4) and `answer.export` (2.6.5, 167): the dashboard and the conversation export that turn made
                                    // answer.evidence?: QueryEvidence[] (data-model 3.4.2a): one entry per run_readonly_sql, sample_rows or explore_result record of answer.data (an explore_result entry carries its view: ResultView), failed ones included, in data order; set at persist, built by 139 for an answer stored before it, patched only by 139-141 under the run's answer lock
   datasets: string[];              // the host's datasets 
   agentKey?: string; agentId?: string; agentName?: string;
