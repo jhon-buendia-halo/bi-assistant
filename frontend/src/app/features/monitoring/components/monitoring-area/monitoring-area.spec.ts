@@ -4,9 +4,12 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
+import { By } from '@angular/platform-browser';
 import { App } from '../../../../app';
 import { ShellState } from '../../../../core/shell/shell-state';
 import { MonitoringNavState } from '../../../../features/monitoring/services/monitoring-nav-state';
+import { AgentsNavState } from '../../../agents/services/agents-nav-state';
+import { MonitoringTabs } from '../monitoring-tabs/monitoring-tabs';
 import { MonitoringStateService } from '../../services/monitoring-state.service';
 
 const shellState = () => TestBed.inject(ShellState);
@@ -245,5 +248,18 @@ describe('Monitoring area (app-shell R3b, roadmap 1.21.14-1.21.16)', () => {
     monitoringNav().openLlmCallFromSession('gen-1');
     shellState().selectArea('monitoring');
     expect(shellState().mainView()).toBe('monitoring');
+  });
+
+  it("opens an agent persona's eval executions from an Agent quality row", async () => {
+    const fixture = TestBed.createComponent(App);
+    const nav = TestBed.inject(AgentsNavState);
+    const open = spyOn(nav, 'openAgentEvalRuns');
+    shellState().selectArea('monitoring');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const tabs = fixture.debugElement.query(By.directive(MonitoringTabs));
+    tabs.componentInstance.openAgentEvals.emit('assistant');
+    expect(open).toHaveBeenCalledWith('assistant');
   });
 });

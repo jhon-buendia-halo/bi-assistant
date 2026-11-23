@@ -127,7 +127,7 @@ describe('AgentQualityPage', () => {
     expect(
       byId('agent-quality-pass-assistant')!.querySelector('.chip-warning'),
     ).not.toBeNull();
-    expect(text('agent-quality-pass3-assistant')).toBe('50%(8 of 10)');
+    expect(text('agent-quality-pass3-assistant')).toBe('50% (8 of 10)');
     expect(text('agent-quality-tools-assistant')).toBe('2.5');
     expect(text('agent-quality-tool-errors-assistant')).toBe('4.0 %');
     expect(text('agent-quality-p95-assistant')).toBe('17.3 s');
