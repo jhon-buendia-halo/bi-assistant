@@ -202,7 +202,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
   await expect(
     section(page, 'sql').getByTestId('agent-card-sql-verifier'),
   ).toContainText('Owner: System');
-  // The agents of the Plan and Write answer steps (agents.md 5.11).
+  // Olivia and Jessica stay in the library; no workflow step calls them (agents.md 5.11).
   for (const [key, name, role] of [
     ['analysis-planner', 'Olivia', 'Analysis Lead'],
     ['answer-writer', 'Jessica', 'Insights Writer'],

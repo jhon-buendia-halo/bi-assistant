@@ -23,8 +23,8 @@ import { worldCupScalar } from './helpers/world-cup-db';
 /**
  * Mirrors the Feature "Sessions started from an agent" in
  * specs/capabilities/agent-answers/spec.md. Agents are a library with no Run:
- * the workflow this spec runs is Insights Analyst (`answer-business-question`),
- * whose model request equals a chat turn's. The model is a local
+ * the workflow this spec runs is Answer a Business Question (Avery + Michael)
+ * (`orchestrated-answer-michael`), whose Michael request equals a chat turn's. The model is a local
  * OpenAI-compatible stub that records what the backend sends it.
  */
 
