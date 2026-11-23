@@ -8,7 +8,7 @@ import {
   messageText,
   startLlmStub,
 } from './helpers/llm-stub';
-import { gate, runAnswer, runQuestionInTab } from './helpers/run-ui';
+import { composer, gate, runAnswer, runQuestionInTab, sendRun } from './helpers/run-ui';
 import { worldCupKey } from './helpers/world-cup-db';
 
 /**
@@ -89,18 +89,19 @@ test('renders a streamed run: reasoning, tool activity, final Markdown, and supp
     await expect(page.getByTestId('query-sql')).toHaveText(SQL);
     await page.getByTestId('query-inspector-close').click();
 
-    // A slow run can be stopped (New question brings the run form back).
+    // A slow run can be stopped (New question brings the composer back).
     await page.getByTestId('workflow-run-new').click();
-    await page.getByTestId('workflow-input-question').fill(SLOW_QUESTION);
-    await page.getByTestId('workflow-run').click();
+    await composer(page).fill(SLOW_QUESTION);
+    await sendRun(page);
     await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
     await page.getByTestId('workflow-run-stop').click();
     await expect(page.getByTestId('workflow-run-stop')).toHaveCount(0);
     await expect(page.getByTestId('workflow-run-live')).toHaveCount(0);
     // While a run is shown the input stays hidden: New question brings it back.
-    await expect(page.getByTestId('workflow-run-composer')).toHaveCount(0);
+    await expect(page.getByTestId('run-composer')).toHaveCount(0);
     await page.getByTestId('workflow-run-new').click();
-    await expect(page.getByTestId('workflow-run')).toHaveText('Execute');
+    await expect(composer(page)).toBeVisible();
+    await expect(page.getByTestId('run-composer-send')).toBeDisabled();
   } finally {
     held.release();
     never.release();
