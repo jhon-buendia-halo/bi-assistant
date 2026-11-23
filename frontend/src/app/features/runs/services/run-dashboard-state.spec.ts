@@ -115,7 +115,7 @@ describe('RunDashboardState', () => {
     getReq().flush(dashboardArtifact(2));
   });
 
-  it('save publishes the shown version (api.md 164) and flips it to saved', () => {
+  it('save publishes the shown version (api.md 166) and flips it to saved', () => {
     state.open(DASHBOARD_REF);
     getReq().flush(dashboardArtifact(2));
     state.save();
@@ -129,7 +129,7 @@ describe('RunDashboardState', () => {
     expect(state.isSaved({ ...DASHBOARD_REF, saved: false })).toBeTrue();
   });
 
-  it('download asks for the zip only once the version is saved (api.md 163)', () => {
+  it('download asks for the zip only once the version is saved (api.md 165)', () => {
     state.open(DASHBOARD_REF);
     getReq().flush(dashboardArtifact(2));
     state.download();

@@ -119,7 +119,7 @@ describe('ArtifactsController', () => {
     );
   });
 
-  it('downloads a version as a zip attachment (api.md 163)', async () => {
+  it('downloads a version as a zip attachment (api.md 165)', async () => {
     const { controller, calls } = build(null);
     const { res, headers, body } = response();
     await controller.download('a-1', res, '2');
@@ -133,7 +133,7 @@ describe('ArtifactsController', () => {
     expect(body()).toEqual(Buffer.from('PK-zip'));
   });
 
-  it('saves a version to Artifacts and answers the artifact at it (api.md 164)', async () => {
+  it('saves a version to Artifacts and answers the artifact at it (api.md 166)', async () => {
     const { controller, calls } = build([
       { month: 'Jan', region: 'Europe', revenue: 10 },
     ]);

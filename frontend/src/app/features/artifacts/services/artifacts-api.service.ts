@@ -40,7 +40,7 @@ export class ArtifactsApiService {
   }
 
   /**
-   * Save a dashboard version to Artifacts (api.md 164): `version` defaults to
+   * Save a dashboard version to Artifacts (api.md 166): `version` defaults to
    * the latest. Answers the artifact at that version.
    */
   save(id: string, version?: number): Observable<Artifact> {

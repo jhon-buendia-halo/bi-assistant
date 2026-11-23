@@ -135,7 +135,7 @@ describe('RunDashboardCard', () => {
       .flush({});
   });
 
-  it('Save to Artifacts saves that version (api.md 164) and turns the card Saved', () => {
+  it('Save to Artifacts saves that version (api.md 166) and turns the card Saved', () => {
     const el = render(DRAFT);
     q(el, 'run-dashboard-save')!.click();
     const req = http.expectOne(`${API_BASE_URL}/artifacts/a-1234567890/save`);

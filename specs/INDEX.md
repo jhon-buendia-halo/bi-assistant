@@ -2098,8 +2098,8 @@ specs/system/api.md:1199-1201  #### 145. `GET /artifacts/:id`
 specs/system/api.md:1203-1204  #### 146. `GET /artifacts/:id/image`
 specs/system/api.md:1206-1208  #### 147. `PATCH /artifacts/:id`
 specs/system/api.md:1210-1212  #### 148. `DELETE /artifacts/:id`
-specs/system/api.md:1214-1217  #### 163. `GET /artifacts/:id/download`
-specs/system/api.md:1219-1222  #### 164. `POST /artifacts/:id/save`
+specs/system/api.md:1214-1217  #### 165. `GET /artifacts/:id/download`
+specs/system/api.md:1219-1222  #### 166. `POST /artifacts/:id/save`
 specs/system/api.md:1224-1241  ### 2.7 Deep analysis (removed 2026-11-12)
 specs/system/api.md:1234-1235  #### 46. `POST /sessions/:id/deep-analysis`
 specs/system/api.md:1237-1238  #### 47. `GET /sessions/:id/deep-analysis/:jobId`

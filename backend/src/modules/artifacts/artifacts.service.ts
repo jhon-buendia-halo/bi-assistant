@@ -63,7 +63,7 @@ export interface NewDashboardVersion {
 
 const VERSION_MESSAGE = 'Version must be a positive whole number';
 
-/** Why a version that is not saved to Artifacts is not downloaded (api.md 163). */
+/** Why a version that is not saved to Artifacts is not downloaded (api.md 165). */
 export const DOWNLOAD_DRAFT_MESSAGE =
   'Save the dashboard to Artifacts before downloading it';
 
@@ -231,7 +231,7 @@ export class ArtifactsService {
   }
 
   /**
-   * Save a version to Artifacts (api.md 164), the latest one when the body
+   * Save a version to Artifacts (api.md 166), the latest one when the body
    * names none: from then on the artifact is listed and the version can be
    * downloaded. Saving a saved version changes nothing. 400 for a bad
    * version, 404 when the artifact or the version is unknown. Answers the
@@ -511,7 +511,7 @@ function savedVersionsOf(doc: ArtifactDoc): number[] {
 }
 
 /**
- * The `version` of a save's body (api.md 164): absent for the latest
+ * The `version` of a save's body (api.md 166): absent for the latest
  * version, else a positive whole number; 400 otherwise.
  */
 function savedVersionParam(body: unknown): number | undefined {

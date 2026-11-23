@@ -1151,7 +1151,7 @@ The query inspector's endpoints over a run's stored answer and its `evidence` (3
 
 ### 2.6.4 Artifacts
 
-Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R33; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own (144-148, 163 and 164 read, rename, delete, download and save them), and taken by Map a Dashboard to Data (5.18). A dashboard built on real rows is saved, as a version of its artifact, by a turn of Avery's run (workflows R45; [agents.md](agents.md) 5.22): **no route creates a version**, the turn does, as a **draft**: the user saves it with 164 (since 2026-11-22), and only saved versions are listed (144) and downloaded (163).
+Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R33; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own (144-148, 165 and 166 read, rename, delete, download and save them), and taken by Map a Dashboard to Data (5.18). A dashboard built on real rows is saved, as a version of its artifact, by a turn of Avery's run (workflows R45; [agents.md](agents.md) 5.22): **no route creates a version**, the turn does, as a **draft**: the user saves it with 166 (since 2026-11-22), and only saved versions are listed (144) and downloaded (165).
 
 ```ts
 type ArtifactSummary = {
@@ -1175,7 +1175,7 @@ type Artifact = ArtifactSummary & {
   version: number;                  // the version shown: the requested one, else the current
   versions: { version: number; createdAt: string; instruction?: string; rowCount?: number; widgetCount: number; filterCount: number; saved: boolean }[];   // oldest first
   status: 'draft' | 'saved';        // 'draft' when no version is saved (144 never lists such an artifact)
-  savedVersions: number[];          // the versions saved to Artifacts (164); a legacy artifact with no versions of its own reads [1]
+  savedVersions: number[];          // the versions saved to Artifacts (166); a legacy artifact with no versions of its own reads [1]
   query?: DashboardQuery;           // the version's data query (live versions only)
   dataMissing?: true;               // the version is live but its rows file is gone: drawn with the mock values
 };
@@ -1211,12 +1211,12 @@ type DashboardRef = {
 - Response `204`. `404 "Artifact \"<id>\" not found"`.
 - Side effects: the document, its image file and the folder of its versions' rows (data-model 3.18) are deleted. Runs that used the artifact are unchanged (they keep the blueprint in their own output), and a dashboard card of an earlier answer then opens `Artifact "<id>" not found`.
 
-#### 163. `GET /artifacts/:id/download`
+#### 165. `GET /artifacts/:id/download`
 - Query: `version` (optional, a positive whole number; the latest **saved** version when absent).
 - Response `409 "Save the dashboard to Artifacts before downloading it"` when the version asked for is not saved (or, without `version`, the artifact has no saved version).
 - Response `200`: the version as a zip of plain files, `Content-Type: application/zip`, `Content-Disposition: attachment; filename="<slug>-v<N>.zip"`, where the slug is the artifact's name lower-cased to `[a-z0-9-]` and at most 64 characters (`dashboard-<first 8 characters of the id>-v<N>.zip` when nothing is left). Entries, stored uncompressed and dated with the version's `createdAt`: `index.html` (links `styles.css`, loads `data.js` then `app.js`; no `<script>` with code inline, no CSP meta), `styles.css`, `app.js` (the fixed runtime and its mount call), `data.js` (`window.DASHBOARD_DATA = { blueprint, rows, live }`, `</script>` and U+2028/U+2029 escaped), `query.sql` (live versions only) and `README.txt` (how to open it, the version, the date, the row count; a mock version says its values are invented). It opens from `file://` with no server, loads no external resource and draws the dashboard on the rows it holds, so it is a snapshot: it never reads the datasource. `400 "Version must be a positive whole number"`; `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no version <n>"`. FE: yes (the dashboard card's, the panel's and the artifact page's **Download**).
 
-#### 164. `POST /artifacts/:id/save`
+#### 166. `POST /artifacts/:id/save`
 - Body: `{ version?: number }` (a positive whole number; the latest version when absent).
 - Response `200`: the `Artifact` as 145 at that version, with the version now in `savedVersions` (`status: 'saved'`). Idempotent: saving a saved version changes nothing. `400 "Version must be a positive whole number"`; `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no version <n>"`.
 - Side effects: adds the version to the document's `savedVersions` (data-model 3.18); later versions stay drafts until saved. FE: yes (**Save to Artifacts** on the dashboard panel and the card).

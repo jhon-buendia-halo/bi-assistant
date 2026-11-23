@@ -50,7 +50,7 @@ describe('ArtifactsApiService', () => {
     req.flush({ ...SUMMARY, blueprint: {}, document: '<html></html>' });
   });
 
-  it('saves a version with a POST to /save (api.md 164)', () => {
+  it('saves a version with a POST to /save (api.md 166)', () => {
     service.save('a/1', 3).subscribe();
     const req = http.expectOne(`${API_BASE_URL}/artifacts/a%2F1/save`);
     expect(req.request.method).toBe('POST');

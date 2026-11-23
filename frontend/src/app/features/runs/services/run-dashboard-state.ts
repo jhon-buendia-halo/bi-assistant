@@ -36,7 +36,7 @@ function keyOf(target: { artifactId: string; version: number }): string {
 /**
  * The dashboard Clara built, open in the side panel beside the chat
  * (dashboard-panel): which version is shown, whether it is saved, and the
- * actions on it — Save to Artifacts (api.md 164), Download (163) and Open
+ * actions on it — Save to Artifacts (api.md 166), Download (165) and Open
  * in Artifacts. The panel and the chat's dashboard cards share it, so a
  * save in one shows in the other.
  */
@@ -130,7 +130,7 @@ export class RunDashboardState {
     });
   }
 
-  /** Download that version's zip (api.md 163): only once it is saved. */
+  /** Download that version's zip (api.md 165): only once it is saved. */
   download(target: DashboardTarget | null = this.shown()): void {
     if (target === null || this.downloading() !== null) return;
     if (!this.isSaved(target)) return;

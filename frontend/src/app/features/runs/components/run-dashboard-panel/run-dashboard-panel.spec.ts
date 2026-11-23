@@ -120,7 +120,7 @@ describe('RunDashboardPanel', () => {
     expect(frame.srcdoc).toContain('dashboard v2');
   });
 
-  it('Save to Artifacts calls 164 and flips the panel to saved', () => {
+  it('Save to Artifacts calls 166 and flips the panel to saved', () => {
     render();
     q('run-dashboard-save')!.click();
     const req = http.expectOne(`${API_BASE_URL}/artifacts/a-1/save`);
@@ -133,7 +133,7 @@ describe('RunDashboardPanel', () => {
     expect(q('run-dashboard-panel-download')).not.toBeNull();
   });
 
-  it('Download asks for the saved version’s zip (api.md 163)', () => {
+  it('Download asks for the saved version’s zip (api.md 165)', () => {
     render({ ...REF, saved: true }, [2]);
     spyOn(URL, 'createObjectURL').and.returnValue('blob:x');
     spyOn(HTMLAnchorElement.prototype, 'click');

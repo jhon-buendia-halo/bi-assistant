@@ -75,7 +75,7 @@ export interface ArtifactVersionInfo {
   saved?: boolean;
 }
 
-/** The zip name a dashboard version downloads as: `<slug of the name>-v<N>.zip` (api.md 163). */
+/** The zip name a dashboard version downloads as: `<slug of the name>-v<N>.zip` (api.md 165). */
 export function dashboardZipName(
   name: string,
   id: string,

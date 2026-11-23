@@ -146,7 +146,7 @@ export interface DashboardArchiveInput {
 }
 
 /**
- * A dashboard version as a zip of plain files (api.md 163) that opens from
+ * A dashboard version as a zip of plain files (api.md 165) that opens from
  * the file system: no server, no CDN, no inline script. `data.js` holds the
  * blueprint and the rows as escaped JSON; `app.js` is the fixed runtime.
  */

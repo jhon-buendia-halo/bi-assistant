@@ -52,7 +52,7 @@ export class ArtifactsController {
 
   /**
    * Save a version to Artifacts, the latest one when the body names none
-   * (api.md 164): answers the artifact at that version, as 145 does.
+   * (api.md 166): answers the artifact at that version, as 145 does.
    */
   @Post(':id/save')
   @HttpCode(200)
@@ -66,7 +66,7 @@ export class ArtifactsController {
   /**
    * A saved version of an artifact's dashboard, the latest saved one when
    * `version` is absent, as a zip of plain HTML, JS and CSS that opens from
-   * the file system (api.md 163); 409 for a version not saved.
+   * the file system (api.md 165); 409 for a version not saved.
    */
   @Get(':id/download')
   async download(
