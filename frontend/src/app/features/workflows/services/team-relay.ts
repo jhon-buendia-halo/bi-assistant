@@ -107,6 +107,8 @@ const PLAYBOOKS: Record<string, string> = {
   ambiguous: 'how to handle a question with two readings',
   'failed-check': 'how to fix a check that did not pass',
   'no-answer': "what to do when the data can't answer it all",
+  dashboard: 'how to build a dashboard',
+  export: 'how to export the conversation',
 };
 
 /** What each team call asks for, after the teammate's name. */
@@ -245,6 +247,11 @@ function averyLabel(
     }
     case 'ask_clarification':
       return doing ? 'Asking you a question…' : 'Asked you a question';
+    case 'export_conversation':
+      if (failed) return "Couldn't export the conversation";
+      return doing
+        ? 'Exporting the conversation to PDF and PowerPoint…'
+        : 'Exported the conversation';
     default:
       return step.label;
   }
