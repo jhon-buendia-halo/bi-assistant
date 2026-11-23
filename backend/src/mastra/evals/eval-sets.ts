@@ -32,6 +32,11 @@ import {
   answerWriterEvalTarget,
   imageReaderEvalTarget,
 } from './isolated-call-targets';
+import {
+  BI_ANALYST_EVAL_AGENT_KEY,
+  BI_ANALYST_EVAL_SET,
+} from './bi-analyst.evals';
+import { biAnalystEvalTarget } from './bi-analyst-eval-target';
 import { READINESS_WORKFLOW_EVAL_SET } from './readiness-workflow.evals';
 import { ANALYSIS_PLANNER_EVAL_SET } from './analysis-planner.evals';
 import { ANSWER_WRITER_EVAL_SET } from './answer-writer.evals';
@@ -51,7 +56,7 @@ import {
 /**
  * Every eval set, of every agent that has evals (agents.md 8.1): the
  * assistant's, the Data Readiness Agent's, Insights Analyst's, the Query
- * Explainer's, the Result Explorer's and the Site Reviewer's. A set runs on the agent its
+ * Explainer's, the Result Explorer's, the Site Reviewer's and Clara's. A set runs on the agent its
  * `agentKey` names, the `assistant` when it names none.
  */
 export const EVAL_SETS: AssistantEvalSet[] = [
@@ -68,6 +73,7 @@ export const EVAL_SETS: AssistantEvalSet[] = [
   RESULT_EXPLORER_EVAL_SET,
   RESULT_EXPLORER_EDGE_EVAL_SET,
   SITE_REVIEWER_EVAL_SET,
+  BI_ANALYST_EVAL_SET,
 ];
 
 /** The registry key a set runs on. */
@@ -100,6 +106,7 @@ const EVAL_TARGET_FACTORIES: Record<
   [ANSWER_WRITER_EVAL_TARGET]: (sets) => answerWriterEvalTarget(sets),
   [IMAGE_READER_EVAL_TARGET]: (sets) => imageReaderEvalTarget(sets),
   [READINESS_WORKFLOW_EVAL_TARGET]: (sets) => readinessWorkflowEvalTarget(sets),
+  [BI_ANALYST_EVAL_AGENT_KEY]: (sets) => biAnalystEvalTarget(sets),
 };
 
 /** The target id a set runs on: its `target`, else its agent's key. */
