@@ -2173,6 +2173,7 @@ describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 1
       widgetCount: 3,
       filterCount: 1,
       rowCount: 32,
+      saved: false,
     };
     // The first answer built it; the second carries none of its own.
     const answered = await ctx.repository.get(first.id);
@@ -2230,6 +2231,7 @@ describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 1
           widgetCount: 1,
           filterCount: 0,
           rowCount: 1,
+          saved: false,
         },
       },
     });

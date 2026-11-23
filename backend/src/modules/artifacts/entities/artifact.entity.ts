@@ -40,6 +40,13 @@ export interface ArtifactDoc {
   currentVersion?: number;
   /** Every version, oldest first; `blueprint` is the current one's. */
   versions?: ArtifactVersion[];
+  /**
+   * The versions the user saved to Artifacts. A dashboard a turn builds
+   * starts with none: a draft, hidden from the list and not downloadable.
+   * A doc without `versions` (Grace's, or saved before versions) has every
+   * version saved; a doc with `versions` but no list has none saved.
+   */
+  savedVersions?: number[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -72,6 +79,8 @@ export interface DashboardRef {
   widgetCount: number;
   filterCount: number;
   rowCount: number;
+  /** Whether this version is saved to Artifacts; false from the turn. */
+  saved: boolean;
 }
 
 /** A dashboard version as a turn reads it back to change it. */
@@ -126,7 +135,12 @@ export interface ArtifactVersionSummary {
   rowCount?: number;
   widgetCount: number;
   filterCount: number;
+  /** Whether the user saved this version to Artifacts. */
+  saved: boolean;
 }
+
+/** An artifact with no saved version is a draft (api.md 145). */
+export type ArtifactStatus = 'draft' | 'saved';
 
 /**
  * An artifact in full at one version (api.md 145): the counts, description
@@ -135,6 +149,10 @@ export interface ArtifactVersionSummary {
 export interface ArtifactDetail extends ArtifactSummary {
   /** The version shown. */
   version: number;
+  /** `draft` while the artifact has no saved version. */
+  status: ArtifactStatus;
+  /** The saved versions, oldest first. */
+  savedVersions: number[];
   versions: ArtifactVersionSummary[];
   /** The query the version's rows came from, for a live version. */
   query?: DashboardQuery;
@@ -143,4 +161,26 @@ export interface ArtifactDetail extends ArtifactSummary {
   blueprint: DashboardBlueprint;
   /** The dashboard drawn by the fixed runtime, as a sandboxed document. */
   document: string;
+}
+
+/**
+ * Whether an artifact is a draft: a dashboard a turn built that the user has
+ * not saved to Artifacts yet. A doc without versions is never one.
+ */
+export function isDraft(
+  doc: Pick<ArtifactDoc, 'versions' | 'savedVersions'>,
+): boolean {
+  return Array.isArray(doc.versions) && (doc.savedVersions ?? []).length === 0;
+}
+
+/**
+ * Whether a version of an artifact is saved: every version of a doc without
+ * versions is, else only those in `savedVersions`.
+ */
+export function isSavedVersion(
+  doc: Pick<ArtifactDoc, 'versions' | 'savedVersions'>,
+  version: number,
+): boolean {
+  if (!Array.isArray(doc.versions)) return true;
+  return (doc.savedVersions ?? []).includes(version);
 }

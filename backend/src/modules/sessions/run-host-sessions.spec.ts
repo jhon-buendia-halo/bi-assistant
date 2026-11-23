@@ -2792,6 +2792,7 @@ function dashboardArtifacts() {
     widgetCount: input.blueprint.widgets.length,
     filterCount: input.blueprint.filters.length,
     rowCount: input.rows.length,
+    saved: false,
   });
   return {
     versions,
@@ -2999,6 +3000,8 @@ describe("Clara builds Avery's dashboards (agents.md 2.22, 5.22)", () => {
       widgetCount: 2,
       filterCount: 1,
       rowCount: 2,
+      // A draft: the user saves it to Artifacts from the panel.
+      saved: false,
     });
     expect(told[0]).toContain(
       'Built dashboard "Goals by team", version 1 (created): 2 widgets, 1 filters, 2 rows.',

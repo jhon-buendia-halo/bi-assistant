@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -23,6 +24,8 @@ import {
   type DashboardRef,
   type DashboardRow,
   type DashboardVersionData,
+  isDraft,
+  isSavedVersion,
 } from './entities/artifact.entity';
 import { ArtifactsRepository } from './repositories/artifacts.repository';
 
@@ -60,6 +63,10 @@ export interface NewDashboardVersion {
 
 const VERSION_MESSAGE = 'Version must be a positive whole number';
 
+/** Why a version that is not saved to Artifacts is not downloaded (api.md 163). */
+export const DOWNLOAD_DRAFT_MESSAGE =
+  'Save the dashboard to Artifacts before downloading it';
+
 /**
  * The `version` of a query string (api.md 145, 163): absent or empty for
  * the current version, else a positive whole number; 400 otherwise.
@@ -90,9 +97,14 @@ export class ArtifactsService {
 
   constructor(private readonly repository: ArtifactsRepository) {}
 
-  /** Every artifact, newest first (api.md 144). */
+  /**
+   * Every artifact with a saved version, newest first, each as its latest
+   * saved version (api.md 144): a draft stays out of the list.
+   */
   async list(): Promise<ArtifactSummary[]> {
-    return (await this.repository.list()).map((doc) => summaryOf(doc));
+    return (await this.repository.list())
+      .filter((doc) => !isDraft(doc))
+      .map((doc) => summaryOf(doc));
   }
 
   /**
@@ -107,9 +119,10 @@ export class ArtifactsService {
   }
 
   /**
-   * One artifact at a version with that version's rows (null when it has
-   * none, or its file is gone): 404 when the artifact or the version is
-   * unknown. The controller draws the dashboard: the document builder is
+   * One artifact at a version, the latest one (saved or a draft) when none
+   * is given, with that version's rows (null when it has none, or its file
+   * is gone): 404 when the artifact or the version is unknown. A draft is
+   * read too: the run's dashboard panel draws it. The controller draws the dashboard: the document builder is
    * not loaded here, so the services that use this one stay light.
    */
   async detail(
@@ -122,6 +135,7 @@ export class ArtifactsService {
     const doc = await this.stored(id);
     const shown = versionOf(doc, version);
     const rows = await this.rowsOf(id, shown);
+    const savedVersions = savedVersionsOf(doc);
     return {
       artifact: {
         ...summaryOf(doc),
@@ -130,6 +144,8 @@ export class ArtifactsService {
         filterCount: shown.blueprint.filters.length,
         hasData: rows !== null,
         version: shown.version,
+        status: savedVersions.length ? 'saved' : 'draft',
+        savedVersions,
         versions: versionsOf(doc).map((entry) => ({
           version: entry.version,
           createdAt: entry.createdAt,
@@ -137,6 +153,7 @@ export class ArtifactsService {
           ...(entry.rowCount !== undefined ? { rowCount: entry.rowCount } : {}),
           widgetCount: entry.blueprint.widgets.length,
           filterCount: entry.blueprint.filters.length,
+          saved: isSavedVersion(doc, entry.version),
         })),
         ...(shown.query ? { query: shown.query } : {}),
         ...(shown.dataFile && rows === null
@@ -177,14 +194,23 @@ export class ArtifactsService {
   }
 
   /**
-   * A dashboard version as a zip of plain HTML, JS and CSS (api.md 163):
-   * 404 when the artifact or the version is unknown.
+   * A saved dashboard version as a zip of plain HTML, JS and CSS (api.md
+   * 163), the latest saved one when none is given: 404 when the artifact or
+   * the version is unknown, 409 when the version is not saved (or none is).
    */
   async download(
     id: string,
     version?: number,
   ): Promise<{ filename: string; archive: Buffer }> {
-    const shown = await this.dashboardVersion(id, version);
+    const doc = await this.stored(id);
+    const wanted =
+      version === undefined
+        ? savedVersionsOf(doc).at(-1)
+        : versionOf(doc, version).version;
+    if (wanted === undefined || !isSavedVersion(doc, wanted)) {
+      throw new ConflictException(DOWNLOAD_DRAFT_MESSAGE);
+    }
+    const shown = await this.dashboardVersion(id, wanted);
     const { filename, entries } = dashboardArchive({
       id,
       name: shown.name,
@@ -202,6 +228,30 @@ export class ArtifactsService {
         Number.isNaN(made.getTime()) ? new Date() : made,
       ),
     };
+  }
+
+  /**
+   * Save a version to Artifacts (api.md 164), the latest one when the body
+   * names none: from then on the artifact is listed and the version can be
+   * downloaded. Saving a saved version changes nothing. 400 for a bad
+   * version, 404 when the artifact or the version is unknown. Answers the
+   * artifact at that version, as `detail` does.
+   */
+  async save(
+    id: string,
+    body: unknown,
+  ): Promise<Awaited<ReturnType<ArtifactsService['detail']>>> {
+    const version = savedVersionParam(body);
+    const doc = await this.stored(id);
+    const shown = versionOf(doc, version);
+    if (!isSavedVersion(doc, shown.version)) {
+      const savedVersions = [...(doc.savedVersions ?? []), shown.version].sort(
+        (a, b) => a - b,
+      );
+      const updated = await this.repository.update(id, { savedVersions });
+      if (!updated) throw notFound(id);
+    }
+    return this.detail(id, shown.version);
   }
 
   /** The image an artifact's dashboard was read from (api.md 146); 404. */
@@ -259,8 +309,9 @@ export class ArtifactsService {
 
   /**
    * Store a dashboard a turn built on the user's data as version 1 of a new
-   * artifact: 400 when the blueprint is not a dashboard's or the name is
-   * too long. Its rows go to a file of the data dir first.
+   * artifact, a draft until the user saves it: 400 when the blueprint is
+   * not a dashboard's or the name is too long. Its rows go to a file of the
+   * data dir first.
    */
   async createDashboard(
     input: NewDashboardVersion & { name?: string },
@@ -279,6 +330,7 @@ export class ArtifactsService {
         ...(input.source ? { source: input.source } : {}),
         currentVersion: 1,
         versions: [version],
+        savedVersions: [],
       });
     } catch (error) {
       await this.removeFolder(id);
@@ -289,8 +341,9 @@ export class ArtifactsService {
 
   /**
    * Add the next version to a dashboard artifact; it becomes the current
-   * one. 404 when unknown, 400 when the blueprint is not a dashboard's. A
-   * dashboard saved before versions keeps what it held as version 1.
+   * one, a draft until the user saves it, and the saved versions stay
+   * saved. 404 when unknown, 400 when the blueprint is not a dashboard's. A
+   * dashboard saved before versions keeps what it held as version 1, saved.
    */
   async addDashboardVersion(
     id: string,
@@ -306,6 +359,10 @@ export class ArtifactsService {
       description: blueprint.summary,
       currentVersion: next,
       versions: [...versions, version],
+      // A doc without versions had every version saved: it keeps version 1.
+      ...(Array.isArray(doc.versions)
+        ? {}
+        : { savedVersions: versions.map((entry) => entry.version) }),
     });
     if (!updated) throw notFound(id);
     return refOf(id, version, 'updated');
@@ -432,6 +489,38 @@ function currentOf(doc: ArtifactDoc, versions: ArtifactVersion[]): number {
   return doc.currentVersion ?? versions[versions.length - 1].version;
 }
 
+/**
+ * The saved versions of an artifact, oldest first: every version of a doc
+ * without versions, else those of `savedVersions` that exist.
+ */
+function savedVersionsOf(doc: ArtifactDoc): number[] {
+  return versionsOf(doc)
+    .map((entry) => entry.version)
+    .filter((version) => isSavedVersion(doc, version))
+    .sort((a, b) => a - b);
+}
+
+/**
+ * The `version` of a save's body (api.md 164): absent for the latest
+ * version, else a positive whole number; 400 otherwise.
+ */
+function savedVersionParam(body: unknown): number | undefined {
+  if (body === undefined || body === null) return undefined;
+  if (typeof body !== 'object' || Array.isArray(body)) {
+    throw new BadRequestException(VERSION_MESSAGE);
+  }
+  const version = (body as { version?: unknown }).version;
+  if (version === undefined) return undefined;
+  if (
+    typeof version !== 'number' ||
+    !Number.isSafeInteger(version) ||
+    version < 1
+  ) {
+    throw new BadRequestException(VERSION_MESSAGE);
+  }
+  return version;
+}
+
 /** The version asked for, or the current one; 404 when there is none. */
 function versionOf(doc: ArtifactDoc, version?: number): ArtifactVersion {
   const versions = versionsOf(doc);
@@ -477,6 +566,8 @@ function refOf(
     widgetCount: version.blueprint.widgets.length,
     filterCount: version.blueprint.filters.length,
     rowCount: version.rowCount ?? 0,
+    // A turn's version is never saved: the user saves it to Artifacts.
+    saved: false,
   };
 }
 
@@ -496,24 +587,38 @@ function checkedName(name: string): string {
   return name;
 }
 
-/** An artifact as the list shows it: the counts are the current version's. */
+/**
+ * An artifact as the list shows it (api.md 144): its latest saved version,
+ * with that version's counts and the number of saved versions. A draft,
+ * which has none, shows its current version and every version.
+ */
 export function summaryOf(doc: ArtifactDoc): ArtifactSummary {
   const now = new Date().toISOString();
   const versions = versionsOf(doc);
-  const currentVersion = currentOf(doc, versions);
-  const current = versions.find((entry) => entry.version === currentVersion);
+  const saved = versions.filter((entry) => isSavedVersion(doc, entry.version));
+  const counted = saved.length ? saved : versions;
+  const currentVersion = saved.length
+    ? Math.max(...saved.map((entry) => entry.version))
+    : currentOf(doc, versions);
+  const current =
+    versions.find((entry) => entry.version === currentVersion) ??
+    versions[versions.length - 1];
   return {
     id: doc.id,
     kind: doc.kind,
     name: doc.name,
-    description: doc.description,
-    widgetCount: doc.blueprint.widgets.length,
-    filterCount: doc.blueprint.filters.length,
+    // The top-level description is the current version's.
+    description:
+      current.version === currentOf(doc, versions)
+        ? doc.description
+        : current.blueprint.summary,
+    widgetCount: current.blueprint.widgets.length,
+    filterCount: current.blueprint.filters.length,
     hasImage: doc.image !== undefined,
     ...(doc.source ? { source: doc.source } : {}),
     currentVersion,
-    versionCount: versions.length,
-    hasData: current?.dataFile !== undefined,
+    versionCount: counted.length,
+    hasData: current.dataFile !== undefined,
     createdAt: doc.createdAt ?? now,
     updatedAt: doc.updatedAt ?? doc.createdAt ?? now,
   };
