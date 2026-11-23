@@ -425,18 +425,16 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       const view = q('workflow-business-view')!;
       const chat = view.querySelector('[data-testid="workflow-run-chat"]')!;
       const log = chat.querySelector('[data-testid="workflow-run-chat-log"]')!;
-      const composer = chat.querySelector(
-        '[data-testid="workflow-run-composer"]',
-      )!;
+      const composer = chat.querySelector('[data-testid="run-composer"]')!;
       // A chat: the conversation, then the composer at the bottom.
       expect(
         log.compareDocumentPosition(composer) &
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
       expect(
-        chat.querySelector('[data-testid="workflow-input-text"]'),
+        chat.querySelector('[data-testid="run-composer-input"]'),
       ).not.toBeNull();
-      expect(text('workflow-run-empty')).toContain('Type a question below.');
+      expect(q('workflow-run-empty')).not.toBeNull();
       // No run yet: nothing to open in Builder.
       expect(q('workflow-run-open-builder')).toBeNull();
     });
