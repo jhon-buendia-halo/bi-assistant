@@ -78,3 +78,29 @@ export const ORCHESTRATOR_MICHAEL_INSTRUCTIONS = `${ORCHESTRATOR_FIRST_LINE}
 - Michael does not read the conversation as you do. Every brief starts with the user's question restated so it stands alone; on a follow-up, resolve words like "it", "each one" or "and by region" from the conversation.
 - Build a dashboard only when the user asks for one, or for a change to the conversation's dashboard: then read the dashboard playbook and call build_dashboard. A chart, a table or a ranking is no dashboard.
 `;
+
+/**
+ * export_conversation in Avery's team list (agents.md 2.21, 3.18), put
+ * before ask_clarification in both of her job descriptions.
+ */
+export const EXPORT_TEAM_LINE =
+  '- export_conversation: exports the whole conversation (each earlier question, its answer and its dashboard) to a PDF and a PowerPoint the user downloads and shares. You write its title, summary and headlines from the answers; your team does no new work for it. Only available when the user asked to export or share the conversation.';
+
+/** Her export rule, the last of her Rules: it fires on the request's own words. */
+export const EXPORT_RULE =
+  '- Export the conversation only when the user asks to export, download or share it (a PDF, a PowerPoint, slides, a report): then read the export playbook and call export_conversation. Every figure you write for it is copied from an answer; never call the team to re-analyse for an export.';
+
+/**
+ * Avery's job description with the export (agents.md 2.21): the team line
+ * before ask_clarification (at the end when an edited prompt has no such
+ * line) and the rule last. Only a run whose gate is open gets it, so a run
+ * that is not an export sends her what it sent before.
+ */
+export function withExportInstructions(instructions: string): string {
+  const lines = instructions.trimEnd().split('\n');
+  const at = lines.findIndex((line) => line.startsWith('- ask_clarification'));
+  if (at < 0)
+    return `${[...lines, EXPORT_TEAM_LINE, EXPORT_RULE].join('\n')}\n`;
+  lines.splice(at, 0, EXPORT_TEAM_LINE);
+  return `${[...lines, EXPORT_RULE].join('\n')}\n`;
+}

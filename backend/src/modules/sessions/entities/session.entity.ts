@@ -3,6 +3,7 @@ import type { Maturity } from '../../data-readiness/engine/types';
 import type { QueryEvidence } from '../query-evidence/query-evidence.types';
 import type { ExplorableQuery } from '../query-evidence/explorable-queries';
 import type { DashboardRef } from '../../artifacts/entities/artifact.entity';
+import type { ConversationExportRef } from '../../conversation-export/conversation-export.contract';
 
 export type { KnowledgeUse };
 
@@ -119,6 +120,12 @@ export interface ChatMessage {
    * `build_dashboard`, agents.md 5.22): the artifact version it saved.
    */
   dashboard?: DashboardRef;
+  /**
+   * Present when Avery exported the conversation in this turn
+   * (`export_conversation`, agents.md 3.18): its files, which api.md 167
+   * serves.
+   */
+  export?: ConversationExportRef;
   /**
    * The answer's final SQL matches a stored verified query, or the user
    * promoted it with a thumbs-up.
@@ -428,6 +435,12 @@ export interface SessionDoc {
    * Clara changes. In memory only, like the host.
    */
   contextDashboard?: string;
+  /**
+   * A run host of Avery's (workflows R45): its run and the conversation it
+   * belongs to, which her export reads (agents.md 3.18). In memory only,
+   * like the host.
+   */
+  contextConversation?: { conversationId: string; runId: string };
   /**
    * A run host's whole checked input, field by field, for a workflow whose
    * steps read more than the question (Review a Website, agents.md 5.19).

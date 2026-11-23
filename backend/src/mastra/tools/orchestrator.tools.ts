@@ -13,6 +13,10 @@ import {
   type OrchestratorToolsRuntime,
 } from '../workflows/orchestrated-answer.steps';
 import { BUILD_DASHBOARD_TOOL } from '../workflows/bi-dashboard.schemas';
+import {
+  EXPORT_CONVERSATION_TOOL,
+  exportContentSchema,
+} from '../workflows/export-request';
 
 /** A tool's RequestContext, as the tools read it. */
 interface ContextLike {
@@ -151,6 +155,19 @@ export const buildDashboardTool = createTool({
   }),
 });
 
+export const exportConversationTool = createTool({
+  id: EXPORT_CONVERSATION_TOOL,
+  description:
+    "Exports the whole conversation (each earlier question, Avery's answer to it and its dashboard, and the queries behind them) to a PDF and a PowerPoint the user downloads and shares. You write the title, the summary and one headline per earlier question; every figure in them must be copied from the answers. Call it only when the user asks to export, download or share the conversation; at most twice per run. Returns what was exported, or the figures to fix.",
+  inputSchema: exportContentSchema,
+  outputSchema: reply,
+  execute: async (input, context) => ({
+    result: await runtimeOf(context?.requestContext).exportConversation(
+      exportContentSchema.parse(input),
+    ),
+  }),
+});
+
 /** Every team tool Avery has, by tool id (`ask_clarification` is added by her agent). */
 const TEAM_TOOLS = {
   read_reference_images: readReferenceImagesTool,
@@ -160,9 +177,13 @@ const TEAM_TOOLS = {
   write_answer: writeAnswerTool,
   build_visual: buildVisualTool,
   [BUILD_DASHBOARD_TOOL]: buildDashboardTool,
+  [EXPORT_CONVERSATION_TOOL]: exportConversationTool,
 };
 
-/** Whether the run hides a tool: Ryan with no visual, Clara with no dashboard. */
+/**
+ * Whether the run hides a tool: Ryan with no visual, Clara with no
+ * dashboard, the export unless the user asked for one.
+ */
 function hiddenIn(
   id: string,
   runtime: OrchestratorToolsRuntime | undefined,
@@ -170,13 +191,15 @@ function hiddenIn(
   if (!runtime) return false;
   if (id === 'build_visual') return runtime.buildsVisual === false;
   if (id === BUILD_DASHBOARD_TOOL) return !runtime.buildsDashboard;
+  if (id === EXPORT_CONVERSATION_TOOL) return !runtime.exportsConversation;
   return false;
 }
 
 /**
  * Avery's team in a run, by tool id: her workflow's tools (agents.md 2.21,
- * 5.23), without Ryan when the run builds no visual and without Clara
- * unless it may build a dashboard. With no run (her agent page, a tool's
+ * 5.23), without Ryan when the run builds no visual, without Clara
+ * unless it may build a dashboard and without export_conversation unless
+ * the user asked to export the conversation. With no run (her agent page, a tool's
  * details), every tool she can have.
  */
 export function orchestratorTools(requestContext: unknown) {

@@ -5,7 +5,11 @@ import {
   teammateOfTool,
   type OrchestratorToolsRuntime,
 } from '../workflows/orchestrated-answer.steps';
-import { buildDashboardTool, orchestratorTools } from './orchestrator.tools';
+import {
+  buildDashboardTool,
+  exportConversationTool,
+  orchestratorTools,
+} from './orchestrator.tools';
 
 function runtime(
   overrides: Partial<OrchestratorToolsRuntime> = {},
@@ -22,6 +26,8 @@ function runtime(
     writeAnswer: jest.fn(),
     buildVisual: jest.fn(),
     buildDashboard: jest.fn().mockResolvedValue('Clara built it.'),
+    exportsConversation: false,
+    exportConversation: jest.fn().mockResolvedValue('Exported.'),
     ...overrides,
   };
 }
@@ -83,10 +89,65 @@ describe("Avery's build_dashboard (plan bi-dashboard 2.2)", () => {
     expect(ORCHESTRATOR_TEAMS['orchestrated-answer-michael'].tools).toEqual([
       'answer_from_data',
       'build_dashboard',
+      'export_conversation',
       'ask_clarification',
     ]);
-    expect(ORCHESTRATOR_TEAMS['orchestrated-answer'].tools.at(-2)).toBe(
+    expect(ORCHESTRATOR_TEAMS['orchestrated-answer'].tools.slice(-3)).toEqual([
       'build_dashboard',
+      'export_conversation',
+      'ask_clarification',
+    ]);
+  });
+});
+
+describe("Avery's export_conversation (agents.md 3.18)", () => {
+  const content = {
+    title: 'World Cup goals',
+    summary: ['Version 1 was built.', 'Version 3 has two filters.'],
+    turns: [{ number: 1, headline: 'Built version 1', points: [] }],
+  };
+
+  it('is hidden while the user has not asked to export', () => {
+    expect(
+      Object.keys(orchestratorTools(contextWith(runtime()))),
+    ).not.toContain('export_conversation');
+  });
+
+  it('is offered once the user asks to export, in both of her workflows', () => {
+    for (const id of ['orchestrated-answer', 'orchestrated-answer-michael']) {
+      const tools = orchestratorTools(
+        contextWith(
+          runtime({
+            tools: ORCHESTRATOR_TEAMS[id].tools,
+            exportsConversation: true,
+          }),
+        ),
+      );
+      expect(Object.keys(tools)).toContain('export_conversation');
+    }
+  });
+
+  it('is listed with no run (her agent page) and has no teammate behind it', () => {
+    expect(Object.keys(orchestratorTools(undefined))).toContain(
+      'export_conversation',
     );
+    expect(teammateOfTool('export_conversation')).toBeUndefined();
+  });
+
+  it('hands the runtime the content with its defaults: both formats, no SQL', async () => {
+    const exportConversation = jest.fn().mockResolvedValue('Exported.');
+    const run = runtime({ exportsConversation: true, exportConversation });
+    const execute = exportConversationTool.execute as unknown as (
+      input: unknown,
+      context: { requestContext: RequestContext },
+    ) => Promise<unknown>;
+    await expect(
+      execute(content, { requestContext: contextWith(run) }),
+    ).resolves.toEqual({ result: 'Exported.' });
+    expect(exportConversation).toHaveBeenCalledWith({
+      ...content,
+      formats: ['pdf', 'pptx'],
+      includeSql: false,
+    });
   });
 });

@@ -109,6 +109,12 @@ import {
   type DashboardDraft,
 } from '../../../mastra/workflows/bi-dashboard.schemas';
 import { asksForDashboard } from '../../../mastra/workflows/dashboard-request';
+import { asksForExport } from '../../../mastra/workflows/export-request';
+import type {
+  ConversationExporter,
+  ConversationTurns,
+} from '../../conversation-export/conversation-export.contract';
+import { exportBrand } from '../../conversation-export/export-brand';
 import {
   DASHBOARD_TOOLS_RUNTIME_KEY,
   type DashboardToolsRuntime,
@@ -296,6 +302,11 @@ export interface TurnEngineDeps {
    * the follow-up carry): what Clara changes. Throws when it is unknown.
    */
   dashboardVersion?(artifactId: string): Promise<DashboardVersionData>;
+  /**
+   * Avery's conversation export (agents.md 3.18): the earlier turns and the
+   * files. Absent when its module is not loaded (the export stays closed).
+   */
+  conversationExporter?: ConversationExporter;
   /**
    * Save the dashboard Clara built (agents.md 5.22): a new artifact, or
    * the next version of `artifactId`; the run is its source.
@@ -1533,10 +1544,15 @@ export class TurnEngine {
             // The conversation's dashboard (the follow-up carry, 5.22): its
             // current version, or none when it is gone or holds no query.
             const currentDashboard = await this.currentDashboardOf(session);
+            // The export gate (2.21): the message asks to export the
+            // conversation, and the run knows its conversation.
+            const exporting = await this.exportOf(session, trimmed);
             const done = await runOrchestratorTurn(
               {
                 getAgent: (key) => this.deps.mastra.getAgent(key),
-                team,
+                team: exporting
+                  ? { ...team, exportConversation: exporting.run }
+                  : team,
                 state: orchState,
                 emit: (event) => emit(event),
                 signal: turn.signal,
@@ -1548,6 +1564,8 @@ export class TurnEngine {
                 buildsDashboard:
                   asksForDashboard(trimmed) || currentDashboard !== undefined,
                 ...(currentDashboard ? { currentDashboard } : {}),
+                exportsConversation: exporting !== undefined,
+                ...(exporting ? { earlierTurns: exporting.turns } : {}),
                 // The conversation so far (workflows R45): the host's
                 // transcript before this message.
                 history: session.messages
@@ -2292,6 +2310,8 @@ export class TurnEngine {
       const evidence = evidenceOf(data, factsOf);
       // The dashboard Clara saved in this turn (agents.md 5.22).
       const dashboard = orchState.dashboard;
+      // The conversation Avery exported in this turn (agents.md 3.18).
+      const exported = orchState.export;
       if (clarification) {
         // The turn stops here, but the schema/sample work done before the
         // question is real work — keep it on the card instead of dropping it.
@@ -2307,8 +2327,15 @@ export class TurnEngine {
           ...(knowledge ? { knowledge } : {}),
           ...(readinessReport ? { readinessReport } : {}),
           ...(dashboard ? { dashboard } : {}),
+          ...(exported ? { export: exported } : {}),
         });
-      } else if (text.trim() || visualEvent || readinessReport || dashboard) {
+      } else if (
+        text.trim() ||
+        visualEvent ||
+        readinessReport ||
+        dashboard ||
+        exported
+      ) {
         const interpretation = interpretationLine(data, entities);
         // Careful mode only, and only when there is a result set to corroborate.
         // The assistant's only: another agent runs no SQL to cross-check.
@@ -2329,7 +2356,9 @@ export class TurnEngine {
               ? `${visualEvent.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent.title}" (v${visualEvent.version}).`
               : dashboard
                 ? `${dashboard.action === 'created' ? 'Created' : 'Updated'} dashboard "${dashboard.title}" (version ${dashboard.version}).`
-                : readinessAnswerFallback(readinessReport!)),
+                : exported
+                  ? `Exported "${exported.title}".`
+                  : readinessAnswerFallback(readinessReport!)),
           at: answerAt ?? new Date().toISOString(),
           ...(data.length ? { data } : {}),
           ...(evidence.length ? { evidence } : {}),
@@ -2342,6 +2371,7 @@ export class TurnEngine {
             : {}),
           ...(visualEvent ? { visual: visualEvent } : {}),
           ...(dashboard ? { dashboard } : {}),
+          ...(exported ? { export: exported } : {}),
           ...(crossChecked ? { crossCheck: crossChecked } : {}),
           ...(readinessReport ? { readinessReport } : {}),
         });
@@ -2369,6 +2399,60 @@ export class TurnEngine {
    * hands every step event to `onStepEvent`, whatever the bar (agents.md
    * 5.14).
    */
+  /**
+   * The export a message to Avery opens (agents.md 2.21, 3.18): when it
+   * asks to export the conversation and the run knows its conversation,
+   * the conversation's earlier turns and the team call that makes the
+   * files. None otherwise, or when the turns cannot be read.
+   */
+  private async exportOf(
+    session: SessionDoc,
+    message: string,
+  ): Promise<
+    | {
+        turns: ConversationTurns;
+        run: NonNullable<OrchestratorTeam['exportConversation']>;
+      }
+    | undefined
+  > {
+    const conversation = session.contextConversation;
+    const exporter = this.deps.conversationExporter;
+    if (!conversation || !exporter || !asksForExport(message)) {
+      return undefined;
+    }
+    let turns: ConversationTurns;
+    try {
+      turns = await exporter.turns(
+        conversation.conversationId,
+        conversation.runId,
+      );
+    } catch (error) {
+      this.deps.logger.warn(
+        `The conversation ${conversation.conversationId} cannot be read for an export: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
+    }
+    return {
+      turns,
+      run: async (content) => {
+        try {
+          return {
+            export: await exporter.export({
+              conversationId: conversation.conversationId,
+              beforeRunId: conversation.runId,
+              content,
+              brand: exportBrand(),
+            }),
+          };
+        } catch (error) {
+          return {
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
+    };
+  }
+
   /**
    * The conversation's dashboard, as a message to Avery changes it
    * (agents.md 5.22, the follow-up carry): the current version of the
