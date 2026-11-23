@@ -18,7 +18,7 @@ export interface RunEvent {
 export interface StoredRun {
   id: string;
   status: 'queued' | 'running' | 'suspended' | 'success' | 'failed' | 'stopped';
-  /** How many times the run started (ADR-0055). */
+  /** How many times the run started (ADR-0057). */
   attempts?: number;
   answer?: { content?: string; [key: string]: unknown };
   panelItems?: {

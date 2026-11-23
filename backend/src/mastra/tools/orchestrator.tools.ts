@@ -12,6 +12,11 @@ import {
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   type OrchestratorToolsRuntime,
 } from '../workflows/orchestrated-answer.steps';
+import { BUILD_DASHBOARD_TOOL } from '../workflows/bi-dashboard.schemas';
+import {
+  EXPORT_CONVERSATION_TOOL,
+  exportContentSchema,
+} from '../workflows/export-request';
 
 /** A tool's RequestContext, as the tools read it. */
 interface ContextLike {
@@ -131,6 +136,38 @@ export const buildVisualTool = createTool({
   }),
 });
 
+export const buildDashboardTool = createTool({
+  id: BUILD_DASHBOARD_TOOL,
+  description:
+    "Clara, Business Intelligence Analyst: builds an interactive dashboard on the user's real rows (filters, KPIs and charts that recompute), or changes the conversation's dashboard into its next version. Call it only when the user asks for a dashboard or a change to it. Returns what she built.",
+  inputSchema: z.object({
+    brief: z
+      .string()
+      .describe(
+        'What the dashboard must show, restated so it stands alone: its measures, breakdowns and filters. On a change, exactly what to change and what to keep.',
+      ),
+  }),
+  outputSchema: reply,
+  execute: async (input, context) => ({
+    result: await runtimeOf(context?.requestContext).buildDashboard(
+      input.brief,
+    ),
+  }),
+});
+
+export const exportConversationTool = createTool({
+  id: EXPORT_CONVERSATION_TOOL,
+  description:
+    "Exports the whole conversation (each earlier question, Avery's answer to it and its dashboard, and the queries behind them) to a PDF and a PowerPoint the user downloads and shares. You write the title, the summary and one headline per earlier question; every figure in them must be copied from the answers. Call it only when the user asks to export, download or share the conversation; at most twice per run. Returns what was exported, or the figures to fix.",
+  inputSchema: exportContentSchema,
+  outputSchema: reply,
+  execute: async (input, context) => ({
+    result: await runtimeOf(context?.requestContext).exportConversation(
+      exportContentSchema.parse(input),
+    ),
+  }),
+});
+
 /** Every team tool Avery has, by tool id (`ask_clarification` is added by her agent). */
 const TEAM_TOOLS = {
   read_reference_images: readReferenceImagesTool,
@@ -139,12 +176,31 @@ const TEAM_TOOLS = {
   [MICHAEL_ANSWER_TOOL]: answerFromDataTool,
   write_answer: writeAnswerTool,
   build_visual: buildVisualTool,
+  [BUILD_DASHBOARD_TOOL]: buildDashboardTool,
+  [EXPORT_CONVERSATION_TOOL]: exportConversationTool,
 };
 
 /**
+ * Whether the run hides a tool: Ryan with no visual, Clara with no
+ * dashboard, the export unless the user asked for one.
+ */
+function hiddenIn(
+  id: string,
+  runtime: OrchestratorToolsRuntime | undefined,
+): boolean {
+  if (!runtime) return false;
+  if (id === 'build_visual') return runtime.buildsVisual === false;
+  if (id === BUILD_DASHBOARD_TOOL) return !runtime.buildsDashboard;
+  if (id === EXPORT_CONVERSATION_TOOL) return !runtime.exportsConversation;
+  return false;
+}
+
+/**
  * Avery's team in a run, by tool id: her workflow's tools (agents.md 2.21,
- * 5.23), without Ryan when the run builds no visual. With no run (her
- * agent page, a tool's details), every tool she can have.
+ * 5.23), without Ryan when the run builds no visual, without Clara
+ * unless it may build a dashboard and without export_conversation unless
+ * the user asked to export the conversation. With no run (her agent page, a tool's
+ * details), every tool she can have.
  */
 export function orchestratorTools(requestContext: unknown) {
   const runtime = (requestContext as ContextLike | undefined)?.get(
@@ -156,9 +212,7 @@ export function orchestratorTools(requestContext: unknown) {
     : undefined;
   return Object.fromEntries(
     Object.entries(TEAM_TOOLS).filter(
-      ([id]) =>
-        (!offered || offered.includes(id)) &&
-        !(id === 'build_visual' && runtime?.buildsVisual === false),
+      ([id]) => (!offered || offered.includes(id)) && !hiddenIn(id, runtime),
     ),
   ) as Partial<typeof TEAM_TOOLS>;
 }

@@ -14,7 +14,7 @@
 //    backend/vendor/duckdb-extensions/ (scripts/fetch-duckdb-extensions.mjs).
 // 4. Reports whether the shared Postgres answers on 55432 and whether Docker
 //    runs. It never starts the app or the compose stack: that needs the user's
-//    choice of target (workflow-implement, Worktree deploy convention).
+//    choice of target (the local-instance skill).
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';

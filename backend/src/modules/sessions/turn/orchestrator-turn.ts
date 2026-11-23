@@ -41,6 +41,24 @@ import {
   type OrchestratorToolsRuntime,
 } from '../../../mastra/workflows/orchestrated-answer.steps';
 import type { ReadImagesOutcome } from '../../../mastra/workflows/read-images.steps';
+import { BUILD_DASHBOARD_MAX_CALLS } from '../../../mastra/workflows/bi-dashboard.schemas';
+import {
+  EXPORT_CONVERSATION_MAX_CALLS,
+  exportContentTexts,
+  exportFact,
+  figuresNotInAnswers,
+  refusedFiguresReply,
+  type ExportContent,
+} from '../../../mastra/workflows/export-request';
+import type {
+  ConversationExportRef,
+  ConversationTurns,
+} from '../../conversation-export/conversation-export.contract';
+import { currentDashboardBlock } from '../../../mastra/workflows/bi-analyst.prompts';
+import type {
+  CurrentDashboard,
+  DashboardRef,
+} from '../../artifacts/entities/artifact.entity';
 import type { ExplorableQuery } from '../query-evidence/explorable-queries';
 import {
   STEP_MODEL_CONTEXT_KEY,
@@ -61,6 +79,32 @@ export interface OrchestratorTeam {
   analyse: AnswerBusinessQuestionRuntime['analyse'];
   writeAnswer: AnswerBusinessQuestionRuntime['writeAnswer'];
   buildVisual?: AnswerBusinessQuestionRuntime['buildVisual'];
+  /**
+   * Clara's build (agents.md 2.22, 5.22): her turn on Avery's brief, the
+   * host's run of her data query and the saved artifact version. `current`
+   * is the dashboard she changes (its next version), absent for a new one.
+   * `saved` is the version just saved, as a later call of the run changes it.
+   */
+  buildDashboard?(input: {
+    question: string;
+    brief: string;
+    catalogBlock: string;
+    current?: CurrentDashboard;
+    earlierBlock: string;
+  }): Promise<{
+    dashboard?: DashboardRef;
+    saved?: CurrentDashboard;
+    reply: string;
+    error?: string;
+    stopped: boolean;
+  }>;
+  /**
+   * The conversation's export (agents.md 3.18): the files of Avery's
+   * content, or why there are none.
+   */
+  exportConversation?(
+    content: ExportContent,
+  ): Promise<{ export?: ConversationExportRef; error?: string }>;
 }
 
 /** What the team produced so far in this turn. */
@@ -76,6 +120,16 @@ export interface OrchestratorState {
   analystNote: string;
   answer?: string;
   visual?: string;
+  /** The dashboard Clara saved last in this turn: the answer carries it. */
+  dashboard?: DashboardRef;
+  /** That version, read back: a second build changes it. */
+  builtDashboard?: CurrentDashboard;
+  /** Clara's builds made (at most `BUILD_DASHBOARD_MAX_CALLS`). */
+  dashboardCalls: number;
+  /** The conversation's export made in this turn: the answer carries it. */
+  export?: ConversationExportRef;
+  /** export_conversation calls made (at most `EXPORT_CONVERSATION_MAX_CALLS`). */
+  exportCalls: number;
 }
 
 /** A fresh state, for a new turn. */
@@ -86,6 +140,8 @@ export function orchestratorState(): OrchestratorState {
     queries: [],
     findings: [],
     analystNote: '',
+    dashboardCalls: 0,
+    exportCalls: 0,
   };
 }
 
@@ -107,6 +163,25 @@ export interface OrchestratorTurnDeps {
   datasets: string[];
   images: string[];
   buildsVisual: boolean;
+  /**
+   * The dashboard gate (agents.md 2.21): the user asked for a dashboard or
+   * the conversation has one. Closed, build_dashboard is hidden and the
+   * run's facts say nothing of dashboards.
+   */
+  buildsDashboard: boolean;
+  /** The conversation's dashboard (its current version), on a follow-up. */
+  currentDashboard?: CurrentDashboard;
+  /**
+   * The export gate (agents.md 2.21): the user asked to export the
+   * conversation. Closed, export_conversation is hidden and the run's facts
+   * say nothing of an export.
+   */
+  exportsConversation: boolean;
+  /**
+   * The conversation's ended turns before this run, with the gate open: the
+   * questions Avery's facts list and the answers the figure check reads.
+   */
+  earlierTurns?: ConversationTurns;
   /** Avery's own model and effort (Opus 5.5 high), when it applies. */
   orchestratorModel?: StepModel;
   /** The provider options for that model and effort (or the turn's). */
@@ -134,13 +209,20 @@ export interface OrchestratorTurnDeps {
 
 /**
  * What one of Avery's calls is about, for its `tool` event: her brief or
- * instruction to a teammate, the skill she loads (`skill { name }`) or the
- * file she reads in it (`skill_read { path }`).
+ * instruction to a teammate, the skill she loads (`skill { name }`), the
+ * file she reads in it (`skill_read { path }`) or the title of her export.
  */
 function averyToolInput(
   args: Record<string, unknown> | undefined,
 ): string | undefined {
-  for (const key of ['brief', 'instruction', 'path', 'name', 'query']) {
+  for (const key of [
+    'brief',
+    'instruction',
+    'path',
+    'name',
+    'query',
+    'title',
+  ]) {
     const value = args?.[key];
     if (typeof value === 'string' && value.trim()) return value.trim();
   }
@@ -215,8 +297,24 @@ function runFacts(deps: OrchestratorTurnDeps): string {
     deps.buildsVisual
       ? 'The run builds a visual (build_visual is available).'
       : 'The run builds no visual.',
+    // Only with the gate open: a run that is not about a dashboard sends
+    // her what it sent before (agents.md 2.21).
+    ...(deps.buildsDashboard ? [dashboardFact(deps.currentDashboard)] : []),
+    // The same for the export (agents.md 2.21).
+    ...(deps.exportsConversation
+      ? [exportFact(deps.earlierTurns?.questions ?? [])]
+      : []),
   ].join('\n');
 }
+
+/** The run's dashboard fact, when the gate is open (agents.md 2.21). */
+function dashboardFact(current: CurrentDashboard | undefined): string {
+  return current
+    ? `The conversation has a dashboard: "${current.title}", version ${current.version} (${current.widgetCount} widgets, ${current.filterCount} filters). build_dashboard changes it into version ${current.version + 1}.`
+    : 'The user asked for a dashboard: build_dashboard is available.';
+}
+
+export { currentDashboardBlock };
 
 /** The work done so far, for a resumed Avery. */
 function workSoFar(state: OrchestratorState): string | undefined {
@@ -231,6 +329,16 @@ function workSoFar(state: OrchestratorState): string | undefined {
   }
   if (state.answer) lines.push('The answer the user reads is already written.');
   if (state.visual) lines.push(`Ryan: ${state.visual}`);
+  if (state.dashboard) {
+    lines.push(
+      `Clara already built the dashboard "${state.dashboard.title}", version ${state.dashboard.version}.`,
+    );
+  }
+  if (state.export) {
+    lines.push(
+      `You already exported the conversation: "${state.export.title}".`,
+    );
+  }
   return lines.length
     ? ['Work done so far in this run (do not redo it):', ...lines].join('\n')
     : undefined;
@@ -407,7 +515,76 @@ export function orchestratorTools(
         : `Ryan built no visual: ${built.visual.error ?? built.visual.skipped ?? 'no reason given'}`;
       return state.visual;
     },
+    buildsDashboard: deps.buildsDashboard && !!team.buildDashboard,
+    // Clara (agents.md 2.22, 5.22): at most twice per run; a second build
+    // changes the version the first one saved.
+    buildDashboard: async (brief: string) => {
+      if (!deps.buildsDashboard || !team.buildDashboard) {
+        return 'This run builds no dashboard.';
+      }
+      if (state.dashboardCalls >= BUILD_DASHBOARD_MAX_CALLS) {
+        return 'Clara already built twice in this run: close from the dashboard she has.';
+      }
+      state.dashboardCalls += 1;
+      const { catalog, columns } = await catalogOf();
+      const current = state.builtDashboard ?? deps.currentDashboard;
+      const built = await team.buildDashboard({
+        question,
+        brief,
+        catalogBlock: planCatalogBlock(catalog, columns, { question }),
+        ...(current ? { current } : {}),
+        earlierBlock: earlier,
+      });
+      if (built.reply.trim()) said?.(built.reply);
+      if (built.stopped) return 'The run was stopped.';
+      if (!built.dashboard) {
+        return `Clara built no dashboard: ${built.error ?? 'she submitted none'}`;
+      }
+      const ref = built.dashboard;
+      state.dashboard = ref;
+      if (built.saved) state.builtDashboard = built.saved;
+      return [
+        `Built dashboard "${ref.title}", version ${ref.version} (${ref.action}): ${ref.widgetCount} widgets, ${ref.filterCount} filters, ${ref.rowCount} rows.`,
+        ...(built.saved?.columns.length
+          ? [`Its columns: ${built.saved.columns.join(', ')}.`]
+          : []),
+        'The user sees the dashboard with the answer: do not describe it in figures.',
+      ].join('\n');
+    },
+    exportsConversation: deps.exportsConversation && !!team.exportConversation,
+    // The export (agents.md 3.18): at most twice per run; every figure Avery
+    // wrote is checked against the answers before anything is drawn.
+    exportConversation: async (content: ExportContent) => {
+      if (!deps.exportsConversation || !team.exportConversation) {
+        return 'This run exports nothing.';
+      }
+      if (state.exportCalls >= EXPORT_CONVERSATION_MAX_CALLS) {
+        return 'export_conversation already ran twice in this run: close from what it said.';
+      }
+      state.exportCalls += 1;
+      const refused = figuresNotInAnswers(
+        exportContentTexts(content),
+        deps.earlierTurns?.answers ?? [],
+      );
+      if (refused.length) return refusedFiguresReply(refused);
+      const made = await team.exportConversation(content);
+      if (!made.export) {
+        return `The conversation was not exported: ${made.error ?? 'no file was made'}`;
+      }
+      state.export = made.export;
+      return exportedReply(made.export);
+    },
   };
+}
+
+/** What Avery reads once the files are made (agents.md 3.18). */
+export function exportedReply(made: ConversationExportRef): string {
+  const files = made.files.map((file) =>
+    file.format === 'pdf'
+      ? `PDF (${file.pages ?? 0} pages)`
+      : `PowerPoint (${file.slides ?? 0} slides)`,
+  );
+  return `Exported "${made.title}": ${files.join(', ')}. The user sees the download card with the answer: do not repeat the summary.`;
 }
 
 /**

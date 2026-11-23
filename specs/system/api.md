@@ -856,14 +856,14 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   Two fields that name each other in `requiredWithout`: when neither has a value, one error on the first of the two in field order, `"<label> or <other label> is required"` (no catalogued workflow uses the rule since the two dashboard workflows were split); a value that was refused for another reason is not also reported as missing. When both have a value, an `image` field's value is dropped: the run uses the other one.
 - **An image is not stored in the run.** For each `image` field the checked `data:` URL is taken out: the stored run's `input` holds the path `inputs/<field name>.<png|jpg|webp>` of the file in the run's workspace ([agents.md](agents.md) 5.17), and every response carries that path, never the image. With `context.fromRunId` naming a run of the same workflow, an `image` value equal to that run's stored path stands for that run's image (a follow-up runs on the same image); any other non-image value is refused as above. The same holds for an `images` field: each checked `data:` URL is taken out and the stored `input.images` holds the paths `inputs/images/<n>.<png|jpg|webp>` (`n` from 1, in the order sent), one file each in the run's workspace; with `context.fromRunId` naming a run of the same workflow, a value equal to a path of that run's stored `input.images` stands for that file (a follow-up carries the earlier images, and may add new ones within the 4 allowed). 151 serves one stored image.
 - A refused run is never stored and no step runs.
-- Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before it starts and updated when it ends, with its steps, output or error; an engine failure is stored as `failed` and answered as the error it is. A run is 119's, without the stream. It runs inline: it takes no slot and is never queued (ADR-0055).
+- Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before it starts and updated when it ends, with its steps, output or error; an engine failure is stored as `failed` and answered as the error it is. A run is 119's, without the stream. It runs inline: it takes no slot and is never queued (ADR-0057).
 
 #### 119. `POST /workflows/:id/runs/stream`
 - Body: as 118. Runs the workflow once on `input`, streamed: `answer-business-question` streams its step events, the run being one turn on a run host through the chat turn path ([agents.md](agents.md) 5.11, 5.14): Plan and Write answer call the agent's model without tools, and each Analyse attempt runs one agent turn whose model request equals a chat turn's for the same input, plus the catalog and plan blocks. `data-readiness-assessment` streams its six step events on the same run-host path: its code steps profile, score and store the assessment (the `readiness-report` event, 3.1, when the report is stored), and Explain report runs one Data Readiness Agent turn ([agents.md](agents.md) 5.13). Capability: [workflows](../capabilities/workflows/spec.md) R14-R17, R29.
 - `orchestrated-answer` streams its one Orchestrate step: Avery's tool calls (`tool` / `tool-result` events, one per member of the team she calls) and the answer; when she asks the user a question the run is `suspended` with `waitingFor` (`stepId` `orchestrate`) and is answered through 138 (agents.md 5.22). A message to Avery (118's `context.fromRunId`) is a run of this same endpoint.
-- Refusals: 118's, the same body (`message` and `errors[]`), answered as plain JSON (`application/json`) with their real status (Style B) **before** the stream starts: no SSE frame is sent, no run is stored, no step runs. **Never `429` for the cap** (ADR-0055): a run is not refused for the number of runs in progress, it waits in the queue. `WORKFLOW_MAX_LIVE_RUNS` (default 8, the whole number of at least 1 in the environment variable, read once at start-up) bounds the runs that are `running` at once. A run of 119 holds a slot from its start until it ends, fails, is stopped or waits for the user; a resume (138) takes a slot as today and is never queued; a run waiting for the user, a run of 118 (inline, no slot, never queued) and a draft run (R12) hold none. The check and the slot's taking are one step: of two requests arriving together for the last slot, one starts and the other is queued. A follow-up run (`context`) is queued the same way.
+- Refusals: 118's, the same body (`message` and `errors[]`), answered as plain JSON (`application/json`) with their real status (Style B) **before** the stream starts: no SSE frame is sent, no run is stored, no step runs. **Never `429` for the cap** (ADR-0057): a run is not refused for the number of runs in progress, it waits in the queue. `WORKFLOW_MAX_LIVE_RUNS` (default 8, the whole number of at least 1 in the environment variable, read once at start-up) bounds the runs that are `running` at once. A run of 119 holds a slot from its start until it ends, fails, is stopped or waits for the user; a resume (138) takes a slot as today and is never queued; a run waiting for the user, a run of 118 (inline, no slot, never queued) and a draft run (R12) hold none. The check and the slot's taking are one step: of two requests arriving together for the last slot, one starts and the other is queued. A follow-up run (`context`) is queued the same way.
 - Response `200`, SSE (section 3.6), each frame with its `seq`. **The run is detached from the connection** (ADR-0048): it runs on the server, its events logged in memory; this response only follows it. Closing the connection stops the following, never the run: 149 follows it again, and Stop is 150. The first frame is `run`. When no slot is free a `{type:'queued'}` event follows and the stream waits; when a slot frees, the **oldest queued run (by `queuedAt`)** starts and the normal `step` events follow. The run keeps its id and its `conversationId` while it waits.
-- **Queue** (ADR-0055): the run is inserted `queued` before the `run` frame, and its input images are written to `workspaces/session-run-<id>/inputs/…` at that moment. When it is dispatched it is **re-prepared from its stored doc** (`workflowId`, `input` with its own image paths read back from the workspace, `context`), so a follow-up gets a fresh transcript; when that re-prepare refuses (the dataset or the workflow is gone), the run ends `failed` with the refusal's message. A run that starts is stored `running`, `attempts` one higher and `startedAt` set again.
+- **Queue** (ADR-0057): the run is inserted `queued` before the `run` frame, and its input images are written to `workspaces/session-run-<id>/inputs/…` at that moment. When it is dispatched it is **re-prepared from its stored doc** (`workflowId`, `input` with its own image paths read back from the workspace, `context`), so a follow-up gets a fresh transcript; when that re-prepare refuses (the dataset or the workflow is gone), the run ends `failed` with the refusal's message. A run that starts is stored `running`, `attempts` one higher and `startedAt` set again.
 - Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `queued` before the `run` event is sent, then `running` when it starts (the first start with `attempts: 1`), its `steps` updated at each step change while it runs, and updated when it ends (`success`, `failed` or `stopped`, a stop included) or waits for the user (`suspended`, with `waitingFor`; answered through 138, ADR-0043); a run that throws while it ends is stored `failed` with that error. **No-progress watchdog** (ADR-0048 amendment): a turn that reports no event at all (step, tool, text or reasoning delta, progress, panel item) for 15 minutes, or the minutes above 0 in the environment variable `WORKFLOW_RUN_IDLE_MINUTES` (read once at start-up; `0` turns it off), has its work aborted and is stored `failed` with the error `The run made no progress for <n> minutes and was stopped`, its running step failed with the same error, any partial answer kept as a stopped run keeps it, its host released; the stream ends with `error { content }` carrying that error. Work that has not unwound 10 seconds after that abort is ended without it: the run is stored `failed` as said, with its steps as last tracked. A run waiting for the user is never timed, and neither is a `queued` run: the watchdog times only running time and starts when the run starts. The same watchdog times 118, 138 and the draft runs (R12). A run creates the run host `run-<run id>` (in memory, never listed) and its workspace `workspaces/session-run-<run id>/` (a session workspace's layout, [data-model.md](data-model.md) 4.1); after the turn the host's memory thread is deleted and the host leaves memory (a suspended run's host stays in memory until it is resumed and ends, or expires). The workspace stays with the stored run, so its files download through 123-127, until the run is deleted (122).
 
 ### 2.6.3 Workflow runs
@@ -912,9 +912,9 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
     id: string;
     workflowId: string;
     workflowName: string;            // the name when the run started (a deleted user agent's run still names it)
-    status: 'queued' | 'running' | 'suspended' | 'success' | 'failed' | 'stopped';   // 'queued': accepted, waiting for a free slot (or re-queued after a restart, ADR-0055); 'suspended': waits for the user's answer (138)
+    status: 'queued' | 'running' | 'suspended' | 'success' | 'failed' | 'stopped';   // 'queued': accepted, waiting for a free slot (or re-queued after a restart, ADR-0057); 'suspended': waits for the user's answer (138)
     title: string;                   // see below
-    queuedAt?: string;               // ISO: when 119 accepted it; absent on runs stored before ADR-0055
+    queuedAt?: string;               // ISO: when 119 accepted it; absent on runs stored before ADR-0057
     attempts?: number;               // times the run has started (1 on its first start); absent while never started and on legacy runs; run-level, not a step's `attempt`
     startedAt: string;               // set at insert (= queuedAt), set again each time the run starts
     finishedAt?: string;
@@ -1042,7 +1042,7 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 
 #### 150. `POST /workflow-runs/:id/stop`
 - Body: none. Capability: [workflows](../capabilities/workflows/spec.md) R16, R21; decision: [architecture.md](architecture.md) ADR-0048.
-- **A `queued` run** (ADR-0055) is stored `stopped` at once: no steps, `finishedAt` set, no agent turn to abort; it leaves the queue, its log ends with `done { run }` and the message is `Run stopped`.
+- **A `queued` run** (ADR-0057) is stored `stopped` at once: no steps, `finishedAt` set, no agent turn to abort; it leaves the queue, its log ends with `done { run }` and the message is `Run stopped`.
 - Stops a run started by 119 or resumed by 138: the agent turn aborts (a readiness assessment is cancelled, ADR-0033) and sends nothing more of its own; the run is stored `stopped` with the partial answer the host persisted, if any, as R18 says; its log (149) ends with `done { run }`. A run that waits for the user (`suspended`) is dropped as an expired one (138): stored `stopped`, its waiting step `stopped`, `waitingFor.expired: true`. Answers once the run is stored, at most 10 seconds after the stop.
 - **Stop always ends the run** (ADR-0048 amendment): when the work has not unwound 10 seconds after the stop, the server stores the run `stopped` itself (`finishedAt` set, its running steps `stopped`, its steps as last tracked), ends its log with `done { run }` and answers that run; `run.status` in the answer is never `running`. When the work unwinds later it keeps the run `stopped` (it may add the partial answer and the final step details), releases the run host and sends nothing to the ended log. Such a run can be deleted (122); if its work unwinds after that, nothing is stored again and the run host's workspace and memory thread are deleted then.
 - **Idempotent:** a run that already ended (or ran through 118) answers as it is stored.
@@ -1155,7 +1155,7 @@ The query inspector's endpoints over a run's stored answer and its `evidence` (3
 
 ### 2.6.4 Artifacts
 
-Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R33; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own (144-148 read, rename and delete them), and taken by Map a Dashboard to Data (5.18).
+Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R33; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own (144-148, 165 and 166 read, rename, delete, download and save them), and taken by Map a Dashboard to Data (5.18). A dashboard built on real rows is saved, as a version of its artifact, by a turn of Avery's run (workflows R45; [agents.md](agents.md) 5.22): **no route creates a version**, the turn does, as a **draft**: the user saves it with 166 (since 2026-11-22), and only saved versions are listed (144) and downloaded (165).
 
 ```ts
 type ArtifactSummary = {
@@ -1166,21 +1166,43 @@ type ArtifactSummary = {
   widgetCount: number;
   filterCount: number;
   hasImage: boolean;                // whether 146 answers the image the dashboard was read from
+  currentVersion: number;           // 1 for an artifact with no versions of its own
+  versionCount: number;
+  hasData: boolean;                 // whether the current version keeps the rows of its query (a live dashboard)
   source?: { runId: string; workflowId: string };   // the run it was saved from
   createdAt: string;                // ISO
   updatedAt: string;                // ISO
 };
 type Artifact = ArtifactSummary & {
   blueprint: DashboardBlueprint;    // the dashboard as data (agents.md 5.17)
-  document: string;                 // the dashboard drawn by the fixed runtime with no mapping: a self-contained HTML document for a sandboxed frame
+  document: string;                 // the dashboard drawn by the fixed runtime with no mapping: a self-contained HTML document for a sandboxed frame; on the real rows of the version when it has them (live), else with the mock values
+  version: number;                  // the version shown: the requested one, else the current
+  versions: { version: number; createdAt: string; instruction?: string; rowCount?: number; widgetCount: number; filterCount: number; saved: boolean }[];   // oldest first
+  status: 'draft' | 'saved';        // 'draft' when no version is saved (144 never lists such an artifact)
+  savedVersions: number[];          // the versions saved to Artifacts (166); a legacy artifact with no versions of its own reads [1]
+  query?: DashboardQuery;           // the version's data query (live versions only)
+  dataMissing?: true;               // the version is live but its rows file is gone: drawn with the mock values
+};
+type DashboardQuery = { sql: string; datasourceId: string; rationale?: string };
+// ChatMessage.dashboard (data-model 3.4.1; a run's answer.dashboard): the dashboard a turn of Avery's run created or changed
+type DashboardRef = {
+  artifactId: string;
+  version: number;
+  title: string;
+  action: 'created' | 'updated';   // 'created' = version 1 of a new artifact
+  widgetCount: number;
+  filterCount: number;
+  rowCount: number;
+  saved: boolean;                  // whether this version is saved to Artifacts (false when Clara creates or updates it; 164 saves it); a stored run's ref is read again from the artifact each time the run is read (121, 119's done.run), so a card shows a later save
 };
 ```
 
 #### 144. `GET /artifacts`
-- Response `200`: `ArtifactSummary[]`, newest first (`createdAt` descending).
+- Response `200`: `ArtifactSummary[]`, newest first (`createdAt` descending), of the artifacts with **at least one saved version** (a draft, an artifact with no saved version, is hidden). `currentVersion` and the counts are those of the latest **saved** version.
 
 #### 145. `GET /artifacts/:id`
-- Response `200`: `Artifact`. `404 "Artifact \"<id>\" not found"`.
+- Query: `version` (optional, a positive whole number): the version to read; the latest version, draft or saved, when absent (the dashboard panel uses it). A draft is readable: the panel draws it.
+- Response `200`: `Artifact` at that version (its `blueprint` and `document` are the version's; `version`, `versions`, `query` and `dataMissing` as above) plus `status: 'draft' | 'saved'` (of the artifact: `draft` when it has no saved version), `savedVersions: number[]` and, on each `versions[]` item, `saved: boolean`. `400 "Version must be a positive whole number"`; `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no version <n>"`.
 
 #### 146. `GET /artifacts/:id/image`
 - Response `200`: the bytes of the image the dashboard was read from, with its `Content-Type` (`image/png`, `image/jpeg` or `image/webp`) and `Cache-Control: private, max-age=3600`. `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no image"` when it was saved without one or the file is gone.
@@ -1191,7 +1213,46 @@ type Artifact = ArtifactSummary & {
 
 #### 148. `DELETE /artifacts/:id`
 - Response `204`. `404 "Artifact \"<id>\" not found"`.
-- Side effects: the document and its image file are deleted. Runs that used the artifact are unchanged (they keep the blueprint in their own output).
+- Side effects: the document, its image file and the folder of its versions' rows (data-model 3.18) are deleted. Runs that used the artifact are unchanged (they keep the blueprint in their own output), and a dashboard card of an earlier answer then opens `Artifact "<id>" not found`.
+
+#### 165. `GET /artifacts/:id/download`
+- Query: `version` (optional, a positive whole number; the latest **saved** version when absent).
+- Response `409 "Save the dashboard to Artifacts before downloading it"` when the version asked for is not saved (or, without `version`, the artifact has no saved version).
+- Response `200`: the version as a zip of plain files, `Content-Type: application/zip`, `Content-Disposition: attachment; filename="<slug>-v<N>.zip"`, where the slug is the artifact's name lower-cased to `[a-z0-9-]` and at most 64 characters (`dashboard-<first 8 characters of the id>-v<N>.zip` when nothing is left). Entries, stored uncompressed and dated with the version's `createdAt`: `index.html` (links `styles.css`, loads `data.js` then `app.js`; no `<script>` with code inline, no CSP meta), `styles.css`, `app.js` (the fixed runtime and its mount call), `data.js` (`window.DASHBOARD_DATA = { blueprint, rows, live }`, `</script>` and U+2028/U+2029 escaped), `query.sql` (live versions only) and `README.txt` (how to open it, the version, the date, the row count; a mock version says its values are invented). It opens from `file://` with no server, loads no external resource and draws the dashboard on the rows it holds, so it is a snapshot: it never reads the datasource. `400 "Version must be a positive whole number"`; `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no version <n>"`. FE: yes (the dashboard card's, the panel's and the artifact page's **Download**).
+
+#### 166. `POST /artifacts/:id/save`
+- Body: `{ version?: number }` (a positive whole number; the latest version when absent).
+- Response `200`: the `Artifact` as 145 at that version, with the version now in `savedVersions` (`status: 'saved'`). Idempotent: saving a saved version changes nothing. `400 "Version must be a positive whole number"`; `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no version <n>"`.
+- Side effects: adds the version to the document's `savedVersions` (data-model 3.18); later versions stay drafts until saved. FE: yes (**Save to Artifacts** on the dashboard panel and the card).
+
+### 2.6.5 Conversation exports
+
+Controller prefix `/conversation-exports`. Capability: workflows (R45). Avery makes an export in a run of hers when the user asks to export or share the conversation (`export_conversation`, [agents.md](agents.md) 3.18; ADR-0056): **no route creates one**. The answer of that run carries it as `answer.export` (a session's `ChatMessage.export`, data-model 3.4.1), and the export is stored in `conversation_exports` (data-model 3.20) with its files under `<data dir>/exports/<id>/`.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 167 | `GET /conversation-exports/:id/download` | One file of an export (PDF or PowerPoint) as an attachment | yes |
+
+```ts
+// ChatMessage.export (data-model 3.4.1; a run's answer.export): the conversation Avery exported in that turn
+type ConversationExportRef = {
+  id: string;                      // uuid
+  title: string;                   // Avery's title for the file
+  createdAt: string;               // ISO
+  files: {
+    format: 'pdf' | 'pptx';
+    fileName: string;              // `<slug of the title>.pdf` / `.pptx`: lower case [a-z0-9-], at most 64 characters (`conversation` when nothing is left)
+    bytes: number;
+    pages?: number;                // the PDF's page count
+    slides?: number;               // the PowerPoint's slide count
+  }[];                             // the formats Avery asked for, `pdf` first
+};
+```
+
+#### 167. `GET /conversation-exports/:id/download`
+- Query: `format`: `pdf` or `pptx` (required).
+- Response `200`: the file, `Content-Type: application/pdf` or `application/vnd.openxmlformats-officedocument.presentationml.presentation`, `Content-Disposition: attachment; filename="<fileName>"`, `Content-Length` and `Cache-Control: no-store`.
+- `400 "format must be \"pdf\" or \"pptx\""` for any other `format` (or none); `404 "Export not found"`; `404 "This export has no <format> file"` when the export was made without that format; `404 "The export file is gone"` when its file was removed from the data directory. FE: yes (the export card's **Download PDF** and **Download PowerPoint**, ui.md 4.4b).
 
 ### 2.7 Deep analysis (removed 2026-11-12)
 
@@ -1416,6 +1477,8 @@ interface ChatMessage {
   feedback?: 'up' | 'down'; crossCheck?: { status: 'agree'|'disagree'|'error'; note?: string };
   reasoning?: ReasoningStep[]; knowledge?: KnowledgeUse[]; report?: AnalysisReport;
   evidence?: QueryEvidence[];   // the query inspector's facts, beside `data` (data-model 3.4.2a)
+  dashboard?: DashboardRef;     // the dashboard a turn of Avery's created or changed (2.6.4)
+  export?: ConversationExportRef;   // the conversation Avery exported in that turn (2.6.5, 167)
 }
 interface ToolDataRecord {
   tool: string; input?: string;                       // SQL text or entity name
@@ -1725,7 +1788,7 @@ Note the error text is in **`message`** here but in **`content`** for the chat s
 
 | `type` | Payload (beside `type`) | Meaning |
 |---|---|---|
-| `run` | `runId: string`, `workflowId: string` | First frame: the run was accepted and stored (`queued`, ADR-0055); it may start at once or wait. |
+| `run` | `runId: string`, `workflowId: string` | First frame: the run was accepted and stored (`queued`, ADR-0057); it may start at once or wait. |
 | `queued` | none | Sent after `run` when no slot is free: the run waits for one. When a slot frees and the run starts, the `step` events follow with no further marker. |
 | `step` | `WorkflowRunStep`: `id`, `title`, `status: 'running' \| 'suspended' \| 'success' \| 'failed' \| 'skipped' \| 'stopped'`, `attempt?`, `input?`, `inputTruncated?: true`, `output?`, `outputTruncated?: true`, `error?`, `startedAt?`, `endedAt?`, `toolCalls?`, `story?` (below) | A step of the workflow started (`running`) or ended. A started step carries what it received (`input`, the engine's step-start `payload.payload`; `inputTruncated` instead when it is larger than 20 000 JSON characters) and `startedAt`; an ended one keeps them and adds `endedAt`. `success` carries the step's output (`outputTruncated` instead when it is larger than 20 000 JSON characters); `failed` its error; an agent step fed by an agent turn carries its `toolCalls` so far; `stopped` a step that ended the run early (an agent step stopped by the user or, outside v2, ended on a clarifying question; v2's Plan or Analyse after a stop); `suspended` a step that waits for the user's answer (v2's Plan when the question is ambiguous, or Analyse after the agent's `ask_clarification`; ADR-0043), keeping its `input` and `startedAt`, with no `endedAt`. A resumed step (138) is sent `running` again in the same entry and `attempt`, with its `input`, `startedAt` and earlier `toolCalls`. A step inside a loop (117 `edges`: v2's Analyse and Validate, Validate looping back to Analyse) carries `attempt` (1, then 2 when it runs again) on every event; a new run of it starts a new entry rather than replacing the first. When the run ends, a step that never started is sent as `skipped` (with no `attempt`: the branch not taken, or the steps after a stop or a failure), and one still running as `stopped` (the run stopped) or `failed` (the run failed); a run that waits sends no `skipped` steps. A step that ended or was skipped carries its `story` (below). Every step event of the run is sent, whatever the workflow's `bar`; the engine's events of v2's nested workflows (`plan-round`, `analysis-path`, `analysis-attempt`, `answer-path`) and its mapping step `plan-round-outcome` are not steps and are never sent. |
 | `input-required` | `runId: string`, `stepId: string`, `title: string`, `question: string`, `options: string[]`, `review?: string`, `visualId?: string`, `expiresAt: string` | The run waits for the user (ADR-0043): sent after the waiting step's `suspended` `step` event and before `done`, whose `run` is `suspended` with the same values in `waitingFor`. `options` are the clarifying question's options, each `<title>` or `<title> — <explanation>`; `review` is set only when the run waits on an approval gate (workflows R44): the step agent's outcome in words (Markdown), with `options` `['Approve']`; `visualId` is set only when the gate is Build visual's (Ryan's visual, which can be opened while the run waits; R44); `expiresAt` (ISO) is when the run stops being answerable (30 minutes after it started waiting). Answer it with 138. |
@@ -1743,8 +1806,8 @@ type WorkflowRun = {
   context?: { fromRunId: string; askStep?: string };   // askStep: a follow-up that asked one agent (118; workflows R40)
   conversationId?: string;         // Answer a Business Question (orchestrated) only (workflows R45): the first run's id; a run with no `context.fromRunId` starts a conversation, a follow-up joins its earlier run's
   archivedAt?: string;             // ISO: its conversation was archived (159); set on every run of it, removed by 160
-  status: 'queued' | 'running' | 'suspended' | 'success' | 'failed' | 'stopped';   // 'queued': accepted, waiting for a free slot, or re-queued after a restart (ADR-0055); 'running' only while it runs (121); done.run is never 'queued' or 'running'; 'suspended' while it waits for the user's answer (138)
-  queuedAt?: string;               // ISO: when 119 accepted it; absent on runs stored before ADR-0055 (no migration)
+  status: 'queued' | 'running' | 'suspended' | 'success' | 'failed' | 'stopped';   // 'queued': accepted, waiting for a free slot, or re-queued after a restart (ADR-0057); 'running' only while it runs (121); done.run is never 'queued' or 'running'; 'suspended' while it waits for the user's answer (138)
+  queuedAt?: string;               // ISO: when 119 accepted it; absent on runs stored before ADR-0057 (no migration)
   attempts?: number;               // times the run has started: 1 on its first start, up to 3 (a restart starts it again from scratch); absent while never started and on legacy runs; run-level, distinct from a step's `attempt`
   steps: WorkflowRunStep[];        // status 'success' | 'failed' | 'skipped' | 'stopped' once the run ended; catalogue order, a repeated step's attempts one after the other; a suspended run lists only the steps that ran or wait (no 'skipped')
   output?: Record<string, unknown>;   // success: the last step's output (for v2 Wrap up's `{ sqlQueries, failedQueries, rows, answer }`)
@@ -1763,6 +1826,7 @@ type WorkflowRun = {
   // Answer a Business Question runs only:
   question?: string;               // the user message the agent received (`question`), trimmed
   answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1): Write answer's text (a run stored before 2026-11-13 may hold a clarifying question with its `clarification`); absent while it waits, and when it stopped or failed before answering
+                                   // an Avery run's `answer.dashboard` (2.6.4) and `answer.export` (2.6.5, 167): the dashboard and the conversation export that turn made
                                    // answer.evidence?: QueryEvidence[] (data-model 3.4.2a): one entry per run_readonly_sql, sample_rows or explore_result record of answer.data (an explore_result entry carries its view: ResultView), failed ones included, in data order; set at persist, built by 139 for an answer stored before it, patched only by 139-141 under the run's answer lock
   datasets: string[];              // the host's datasets 
   agentKey?: string; agentId?: string; agentName?: string;

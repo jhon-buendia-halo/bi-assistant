@@ -50,6 +50,10 @@ import { VisualizationService } from './visualization.service';
 import { ArtifactsService } from '../artifacts/artifacts.service';
 import { SiteReviewService } from '../site-review/site-review.service';
 import {
+  CONVERSATION_EXPORTER,
+  type ConversationExporter,
+} from '../conversation-export/conversation-export.contract';
+import {
   buildPanelItem,
   tableCsv,
   titleSlug,
@@ -190,6 +194,16 @@ export interface RunHostSpec {
   inputImages?: string[];
   /** Dashboard Image to Artifact's saved dashboard: the artifact's id. */
   artifact?: string;
+  /**
+   * A message to Avery in a conversation that holds a dashboard (agents.md
+   * 5.22): the artifact's id, whose current version Clara changes.
+   */
+  contextDashboard?: string;
+  /**
+   * A run of Avery's (workflows R45): its conversation, which her export
+   * reads (agents.md 3.18).
+   */
+  conversationId?: string;
   /** The run's whole checked input (Review a Website, agents.md 5.19). */
   inputValues?: Record<string, string | number | boolean | string[]>;
   /**
@@ -242,6 +256,10 @@ export class SessionsService implements OnModuleInit {
     @Optional() private readonly artifacts?: ArtifactsService,
     // Review a Website's browser work (agents.md 5.19).
     @Optional() private readonly siteReview?: SiteReviewService,
+    // Avery's conversation export (agents.md 3.18), a global module's.
+    @Optional()
+    @Inject(CONVERSATION_EXPORTER)
+    private readonly conversationExporter?: ConversationExporter,
   ) {
     // The turn engine (agents.md 5.1) lives in `./turn/`, built on this
     // service's own dependencies and its session reads and writes.
@@ -311,6 +329,32 @@ export class SessionsService implements OnModuleInit {
             : {}),
         });
         return { id: saved.id, name: saved.name };
+      },
+      dashboardVersion: (artifactId) => {
+        if (!this.artifacts) throw new Error('Artifacts are not available');
+        return this.artifacts.dashboardVersion(artifactId);
+      },
+      ...(conversationExporter ? { conversationExporter } : {}),
+      // Clara's dashboard (agents.md 5.22): the conversation's first one is
+      // a new artifact, a later one the next version of the same artifact.
+      saveDashboard: async (sessionId, { artifactId, ...version }) => {
+        if (!this.artifacts) throw new Error('Artifacts are not available');
+        const session = await this.get(sessionId);
+        // A run host is `run-<run id>`: the version names its run.
+        const input = {
+          ...version,
+          ...(sessionId.startsWith(RUN_HOST_ID_PREFIX)
+            ? {
+                source: {
+                  runId: sessionId.slice(RUN_HOST_ID_PREFIX.length),
+                  workflowId: session.workflowId ?? '',
+                },
+              }
+            : {}),
+        };
+        return artifactId
+          ? this.artifacts.addDashboardVersion(artifactId, input)
+          : this.artifacts.createDashboard(input);
       },
       siteReview: (io) => {
         if (!this.siteReview) {
@@ -639,6 +683,17 @@ export class SessionsService implements OnModuleInit {
       ...(spec.image ? { inputImage: spec.image.path } : {}),
       ...(spec.inputImages?.length ? { inputImages: spec.inputImages } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
+      ...(spec.contextDashboard
+        ? { contextDashboard: spec.contextDashboard }
+        : {}),
+      ...(spec.conversationId
+        ? {
+            contextConversation: {
+              conversationId: spec.conversationId,
+              runId: spec.runId,
+            },
+          }
+        : {}),
       ...(spec.inputValues ? { inputValues: { ...spec.inputValues } } : {}),
       ...(spec.ask ? { ask: spec.ask } : {}),
       visualizations: [],

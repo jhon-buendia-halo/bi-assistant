@@ -10,20 +10,37 @@ import {
 import { DomSanitizer } from '@angular/platform-browser';
 import {
   ArrowLeft,
+  Download,
   Loader2,
   LucideAngularModule,
   Pencil,
   Play,
   Trash2,
 } from 'lucide-angular';
+import { saveBlob } from '../../../../shared/query-evidence/rows-csv';
 import { WorkflowDesigner } from '../../../workflows/services/workflow-designer.service';
 import { WorkflowsNavState } from '../../../workflows/services/workflows-nav-state';
-import { Artifact } from '../../models/artifact.model';
+import {
+  Artifact,
+  dashboardZipName,
+  isVersionSaved,
+} from '../../models/artifact.model';
 import { ArtifactsApiService } from '../../services/artifacts-api.service';
 import {
   artifactCountsLabel,
   artifactKindLabel,
 } from '../../services/artifacts.util';
+
+/** `22 Nov 2026`. */
+function formatVersionDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
 
 /** The workflow an artifact is handed to, and the field that takes its id. */
 const USE_WORKFLOW_ID = 'map-dashboard-data';
@@ -40,6 +57,7 @@ const USE_FIELD = 'artifact';
 })
 export class ArtifactDetail implements OnInit {
   protected readonly ArrowLeft = ArrowLeft;
+  protected readonly Download = Download;
   protected readonly Loader2 = Loader2;
   protected readonly Pencil = Pencil;
   protected readonly Play = Play;
@@ -51,6 +69,8 @@ export class ArtifactDetail implements OnInit {
   private readonly workflowsNav = inject(WorkflowsNavState);
 
   readonly artifactId = input.required<string>();
+  /** The version to open at; null is the current one. */
+  readonly version = input<number | null>(null);
   /** Back to the list. */
   readonly back = output<void>();
 
@@ -83,15 +103,72 @@ export class ArtifactDetail implements OnInit {
     this.api.imageUrl(this.artifactId()),
   );
 
+  protected readonly downloading = signal(false);
+  /** Only the saved versions are offered: drafts stay in the chat (dashboard-panel). */
+  protected readonly versionOptions = computed(() => {
+    const artifact = this.artifact();
+    if (artifact === null) return [];
+    return [...(artifact.versions ?? [])]
+      .filter((v) => isVersionSaved(artifact, v.version))
+      .sort((a, b) => b.version - a.version)
+      .map((v) => ({
+        version: v.version,
+        label: `Version ${v.version} · ${formatVersionDate(v.createdAt)}`,
+      }));
+  });
+  /** The shown version's own record (its instruction, rows). */
+  protected readonly versionInfo = computed(() => {
+    const a = this.artifact();
+    return a?.versions?.find((v) => v.version === a.version) ?? null;
+  });
+
   ngOnInit(): void {
-    this.api.get(this.artifactId()).subscribe({
+    this.load(this.version() ?? undefined);
+  }
+
+  private load(version: number | undefined): void {
+    this.api.get(this.artifactId(), version).subscribe({
       next: (artifact) => {
+        // Without a version the server answers the latest, which may be a
+        // draft: the page shows the latest saved one instead.
+        const saved = artifact.savedVersions ?? [];
+        if (
+          version === undefined &&
+          artifact.version !== undefined &&
+          saved.length > 0 &&
+          !isVersionSaved(artifact, artifact.version)
+        ) {
+          this.load(Math.max(...saved));
+          return;
+        }
         this.artifact.set(artifact);
         this.loading.set(false);
       },
       error: (err) => {
         this.error.set(err?.error?.message ?? 'Backend unreachable');
         this.loading.set(false);
+      },
+    });
+  }
+
+  /** The version select: the frame reloads at that version. */
+  protected onVersionChange(event: Event): void {
+    const value = Number((event.target as HTMLSelectElement).value);
+    if (Number.isInteger(value) && value > 0) this.load(value);
+  }
+
+  protected download(): void {
+    const a = this.artifact();
+    if (a === null || this.downloading()) return;
+    this.downloading.set(true);
+    this.api.download(a.id, a.version).subscribe({
+      next: (blob) => {
+        this.downloading.set(false);
+        saveBlob(blob, dashboardZipName(a.name, a.id, a.version ?? 1));
+      },
+      error: (err) => {
+        this.downloading.set(false);
+        this.error.set(err?.error?.message ?? 'Backend unreachable');
       },
     });
   }

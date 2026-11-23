@@ -107,6 +107,8 @@ const PLAYBOOKS: Record<string, string> = {
   ambiguous: 'how to handle a question with two readings',
   'failed-check': 'how to fix a check that did not pass',
   'no-answer': "what to do when the data can't answer it all",
+  dashboard: 'how to build a dashboard',
+  export: 'how to export the conversation',
 };
 
 /** What each team call asks for, after the teammate's name. */
@@ -115,6 +117,7 @@ const ASKS: Record<string, string> = {
   write_answer: ' to write the answer',
   read_reference_images: ' to read the images',
   build_visual: ' for a chart',
+  build_dashboard: ' for a dashboard',
 };
 
 /** What a teammate hands back once their call is done, by the tool that called them. */
@@ -124,6 +127,7 @@ const HANDED_BACK: Record<string, string> = {
   write_answer: 'Wrote the answer',
   read_reference_images: 'Read the images',
   build_visual: 'Built the chart',
+  build_dashboard: 'Built the dashboard',
 };
 
 /** The relay of a delegating step; empty when its activity holds no signed call. */
@@ -243,6 +247,11 @@ function averyLabel(
     }
     case 'ask_clarification':
       return doing ? 'Asking you a question…' : 'Asked you a question';
+    case 'export_conversation':
+      if (failed) return "Couldn't export the conversation";
+      return doing
+        ? 'Exporting the conversation to PDF and PowerPoint…'
+        : 'Exported the conversation';
     default:
       return step.label;
   }

@@ -20,7 +20,7 @@
           type="button"
           data-testid="workflow-run-again"
           title="Run again with this run's input"
-          (click)="designer.runAgain()"
+          (click)="runAgain()"
           class="btn btn-ghost px-2.5 py-1 ml-auto"
         >
           <lucide-angular [img]="RotateCcw" [size]="13" />
@@ -57,6 +57,7 @@
         </span>
       }
       @if (averyOpen()) {
+        <ng-container [ngTemplateOutlet]="exportMenu" />
         <button
           type="button"
           data-testid="workflow-run-archive"
@@ -72,7 +73,7 @@
       <button
         type="button"
         data-testid="workflow-run-new"
-        (click)="designer.newQuestion()"
+        (click)="newQuestion()"
         class="btn btn-ghost px-2.5 py-1"
         [class.ml-auto]="
           (!designer.canRunAgain() || averyArchived()) &&
@@ -83,8 +84,52 @@
         <span>New question</span>
       </button>
     }
-    @if (designer.running()) {
-      <!-- Stop sits in the bar: the input is hidden while a run is shown -->
+    @if (averyLive()) {
+      <!-- While Avery works, Export stays: what it asks waits in the queue -->
+      <ng-container [ngTemplateOutlet]="exportMenu" />
+    }
+    <ng-template #exportMenu>
+      <!-- Export (workflows R45): always in the bar of Avery's conversation;
+           an option asks her for the export as a message -->
+      <div class="relative" (focusout)="onExportFocusOut($event)">
+        <button
+          type="button"
+          data-testid="workflow-run-export"
+          title="Export this conversation to PDF or PowerPoint"
+          aria-haspopup="menu"
+          [attr.aria-expanded]="exportOpen()"
+          (click)="exportOpen.set(!exportOpen())"
+          class="btn btn-ghost px-2.5 py-1"
+        >
+          <lucide-angular [img]="Download" [size]="13" />
+          <span>Export</span>
+          <lucide-angular [img]="ChevronDown" [size]="12" />
+        </button>
+        @if (exportOpen()) {
+          <div
+            role="menu"
+            aria-label="Export this conversation"
+            data-testid="workflow-run-export-menu"
+            class="absolute top-full right-0 z-30 mt-1 flex w-52 flex-col gap-0.5 rounded-xl border border-border bg-surface p-1.5 shadow-lg"
+          >
+            @for (option of exportOptions(); track option.id) {
+              <button
+                type="button"
+                role="menuitem"
+                [attr.data-testid]="'workflow-run-export-' + option.id"
+                (click)="exportConversation(option.message)"
+                class="cursor-pointer rounded-lg px-3 py-2 text-left text-[13px] text-fg hover:bg-surface-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+              >
+                {{ option.label }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </ng-template>
+    @if (designer.running() && !averyLive()) {
+      <!-- Stop sits in the bar when no message box shows during the run;
+           Avery's conversation has it in its message box -->
       <button
         type="button"
         data-testid="workflow-run-stop"
@@ -153,62 +198,92 @@
     </p>
   }
 
-  <!-- The log and, at its bottom right, the conversation navigation (R38). -->
+  <!-- The log and, at its top right, the conversation navigation (R38). -->
   <div class="relative flex min-h-0 flex-1 flex-col">
-  <!-- Focusable: it scrolls (axe scrollable-region-focusable). -->
-  <section
-    #log
-    aria-label="Chat"
-    tabindex="0"
-    data-testid="workflow-run-chat-log"
-    (scroll)="onLogScroll()"
-    class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3 focus-visible:outline-2 focus-visible:outline-focus"
-  >
-    @if (designer.runResult(); as result) {
-      @if (threaded()) {
-        <!-- The conversation so far (R38): each earlier question and its
+    <!-- Focusable: it scrolls (axe scrollable-region-focusable). -->
+    <section
+      #log
+      aria-label="Chat"
+      tabindex="0"
+      data-testid="workflow-run-chat-log"
+      (scroll)="onLogScroll()"
+      [style.padding-right.px]="navInside() ? 48 : null"
+      class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3 focus-visible:outline-2 focus-visible:outline-focus"
+    >
+      @if (designer.runResult(); as result) {
+        @if (threaded()) {
+          <!-- The conversation so far (R38): each earlier question and its
              answer, read-only; their figures open the inspector on that run. -->
-        @for (turn of conversation.earlier(); track turn.runId) {
-          <section
-            class="flex flex-col gap-3 border-b border-border pb-4"
-            data-testid="workflow-turn"
-            [attr.data-history-id]="turn.runId"
-            [attr.aria-label]="'Earlier question: ' + turn.question"
-          >
-            <p
-              data-testid="workflow-turn-question"
-              class="m-0 max-w-[85%] self-end rounded-[12px_12px_2px_12px] bg-primary-soft px-3 py-2 text-[13px] break-words whitespace-pre-wrap text-fg-strong"
+          @for (turn of conversation.earlier(); track turn.runId) {
+            <section
+              class="flex flex-col gap-3 border-b border-border pb-4"
+              data-testid="workflow-turn"
+              [attr.data-history-id]="turn.runId"
+              [attr.aria-label]="'Earlier question: ' + turn.question"
             >
-              {{ turn.question }}
-            </p>
-            @if (turn.answer; as answer) {
-              <app-answer-view
-                [message]="answer"
-                [queryInspector]="hasQueries(answer)"
-                [question]="turn.question"
-                (inspectQuery)="inspectEarlierQuery(turn, $event)"
-              />
-            } @else {
-              <p class="m-0 text-[13px] text-fg-muted">
-                This run {{ turn.status }} without an answer.
+              <p
+                data-testid="workflow-turn-question"
+                class="m-0 max-w-[85%] self-end rounded-[18px] bg-primary-soft px-4 py-2.5 text-[14px] break-words whitespace-pre-wrap text-fg-strong"
+              >
+                {{ turn.question }}
               </p>
-            }
-          </section>
+              <app-run-message
+                [name]="voice()?.name ?? ''"
+                [role]="voice()?.role ?? ''"
+                [bubble]="false"
+              >
+                @if (turn.answer; as answer) {
+                  <!-- The export first: Avery's words under it speak of it -->
+                  @if (answer.export; as exported) {
+                    @defer (on immediate) {
+                      <app-run-export-card
+                        class="mb-2 block"
+                        [export]="exported"
+                      />
+                    }
+                  }
+                  <app-answer-view
+                    [message]="answer"
+                    [queryInspector]="hasQueries(answer)"
+                    [question]="turn.question"
+                    (inspectQuery)="inspectEarlierQuery(turn, $event)"
+                  />
+                  @if (answer.dashboard; as dashboard) {
+                    <app-run-dashboard-card
+                      class="mt-2 block"
+                      [dashboard]="dashboard"
+                    />
+                  }
+                } @else {
+                  <p class="m-0 text-[13px] text-fg-muted">
+                    This run {{ turn.status }} without an answer.
+                  </p>
+                }
+              </app-run-message>
+            </section>
+          }
         }
-      }
-      @if (designer.contextRun(); as earlier) {
-        <!-- In the Business view's thread the earlier question is shown above;
+        @if (designer.contextRun(); as earlier) {
+          <!-- In the Business view's thread the earlier question is shown above;
              only the agent asked, if one was, is still said -->
-        @if (!threaded() || conversation.earlier().length === 0) {
-          <p
-            data-testid="workflow-run-context"
-            class="m-0 text-[12px] text-fg-muted"
-          >
-            @if (designer.contextAgent(); as agent) {
-              <span>Asked {{ agent }} · </span>
-            }
-            <span>Follows up on “{{ earlier.question }}”</span>
-          </p>
+          @if (!threaded() || conversation.earlier().length === 0) {
+            <p
+              data-testid="workflow-run-context"
+              class="m-0 text-[12px] text-fg-muted"
+            >
+              @if (designer.contextAgent(); as agent) {
+                <span>Asked {{ agent }} · </span>
+              }
+              <span>Follows up on “{{ earlier.question }}”</span>
+            </p>
+          } @else if (designer.contextAgent(); as agent) {
+            <p
+              data-testid="workflow-run-context"
+              class="m-0 text-[12px] text-fg-muted"
+            >
+              Asked {{ agent }}
+            </p>
+          }
         } @else if (designer.contextAgent(); as agent) {
           <p
             data-testid="workflow-run-context"
@@ -217,208 +292,160 @@
             Asked {{ agent }}
           </p>
         }
-      } @else if (designer.contextAgent(); as agent) {
-        <p
-          data-testid="workflow-run-context"
-          class="m-0 text-[12px] text-fg-muted"
-        >
-          Asked {{ agent }}
-        </p>
-      }
-      @if (designer.shownQuestion(); as question) {
-        <p
-          [attr.data-history-id]="business() ? 'current' : null"
-          data-testid="workflow-run-question"
-          class="m-0 max-w-[85%] self-end rounded-[12px_12px_2px_12px] bg-primary-soft px-3 py-2 text-[13px] break-words whitespace-pre-wrap text-fg-strong"
-        >
-          {{ question }}
-        </p>
-        @if (questionImages().length > 0) {
-          <ul
-            data-testid="workflow-run-question-images"
-            aria-label="Reference images"
-            class="m-0 flex max-w-[85%] list-none flex-wrap justify-end gap-2 self-end p-0"
-          >
-            @for (src of questionImages(); track $index) {
-              <li>
-                <img
-                  [src]="src"
-                  [alt]="'Reference image ' + ($index + 1)"
-                  [attr.data-testid]="'workflow-run-question-image-' + $index"
-                  class="block h-16 w-16 rounded-md border border-border object-cover"
-                />
-              </li>
-            }
-          </ul>
-        }
-      }
-      @if (designer.waitingFor(); as waiting) {
-        <app-workflow-run-input-required
-          [waiting]="waiting"
-          [busy]="designer.running()"
-          [error]="designer.resumeError()"
-          (answered)="designer.resume($event)"
-          (answeredWithImages)="designer.resume($event.answer, $event.images)"
-          (openVisual)="openGateVisual($event)"
-          (rerun)="designer.rerunWithAnswer($event)"
-        />
-      }
-      <!-- How the run went and who did what. Once there is an answer it
-           follows it (ui.md 4.4b, Answer first): the bottom line comes first. -->
-      <ng-template #process>
-      <p
-        data-testid="workflow-run-status"
-        role="status"
-        class="m-0 text-[13px] font-medium text-fg-strong"
-      >
-        {{ runStatus() }}
-      </p>
-
-      <!-- The run's agents as a team: who did what, and the handoffs (ui.md
-           4.4b). In the Business view (R38) a step's data opens in Builder. -->
-      @defer (on immediate) {
-        <app-workflow-run-team
-          [stories]="designer.agentStories()"
-          [thought]="reasoningSnippet()"
-          [showWork]="!business()"
-          (openNode)="openStep($event)"
-          (openQuery)="openTeamQuery($event)"
-        />
-      }
-      </ng-template>
-      @if (!answerFirst()) {
-        <ng-container [ngTemplateOutlet]="process" />
-      }
-
-      @if (liveCodeProgress(); as progress) {
-        <!-- A running code step's own progress (Review a Website's pages) -->
-        <div
-          class="flex flex-col gap-1.5"
-          data-testid="workflow-run-progress"
-          role="status"
-          aria-live="polite"
-        >
-          <div class="flex min-w-0 items-center gap-2">
-            <lucide-angular
-              [img]="Loader2"
-              [size]="14"
-              class="shrink-0 animate-spin text-fg-muted"
-            />
-            <span class="text-[13px] font-medium text-fg">{{
-              progress.title
-            }}</span>
-          </div>
+        @if (designer.shownQuestion(); as question) {
           <p
-            class="m-0 min-w-0 truncate rounded bg-surface-muted px-2 py-1 text-[12px] text-fg"
-            data-testid="workflow-run-progress-latest"
+            [attr.data-history-id]="business() ? 'current' : null"
+            data-testid="workflow-run-question"
+            class="m-0 max-w-[85%] self-end rounded-[18px] bg-primary-soft px-4 py-2.5 text-[14px] break-words whitespace-pre-wrap text-fg-strong"
           >
-            {{ progress.latest }}
+            {{ question }}
           </p>
-          @if (progress.recent.length) {
-            <ul class="m-0 flex list-none flex-col gap-0.5 p-0 pl-2">
-              @for (line of progress.recent; track $index) {
-                <li class="min-w-0 truncate text-[12px] text-fg-muted">
-                  {{ line }}
+          @if (questionImages().length > 0) {
+            <ul
+              data-testid="workflow-run-question-images"
+              aria-label="Reference images"
+              class="m-0 flex max-w-[85%] list-none flex-wrap justify-end gap-2 self-end p-0"
+            >
+              @for (src of questionImages(); track $index) {
+                <li>
+                  <img
+                    [src]="src"
+                    [alt]="'Reference image ' + ($index + 1)"
+                    [attr.data-testid]="'workflow-run-question-image-' + $index"
+                    class="block h-16 w-16 rounded-md border border-border object-cover"
+                  />
                 </li>
               }
             </ul>
           }
-        </div>
-      }
-
-      @if (liveAgentStep()) {
-        <!-- The running agent step, live: the answer forming. Its thought and
-             steps show under its agent in the team; an agent step with no
-             persona shows them here (ui.md 4.4b). -->
-        <div class="flex flex-col gap-2" data-testid="workflow-run-live">
-          <!-- The Business view shows the answer forming, not the agent's work (R38) -->
-          @if (!business() && !liveStepInTeam()) {
-            @if (reasoningSnippet()) {
-              <p
-                class="m-0 flex min-w-0 items-start gap-1.5 text-[12px] leading-snug text-fg-muted italic"
-                data-testid="workflow-run-thought"
-              >
-                <lucide-angular
-                  [img]="Brain"
-                  [size]="12"
-                  class="mt-px shrink-0"
-                />
-                <span class="line-clamp-2 min-w-0">{{
-                  reasoningSnippet()
-                }}</span>
-              </p>
-            }
-            <app-agent-activity
-              [steps]="liveActivity()"
-              (openQuery)="openRunningStep()"
+        }
+        <!-- The turns that led to this run: the agent's questions and the picks -->
+        <ng-container
+          [ngTemplateOutlet]="turns"
+          [ngTemplateOutletContext]="{ $implicit: runTranscript() }"
+        />
+        <!-- The run itself is the agent's turn: its team, its answer (ui.md 4.4b) -->
+        <app-run-message
+          data-testid="run-agent-turn"
+          [name]="voice()?.name ?? ''"
+          [role]="voice()?.role ?? ''"
+          [bubble]="false"
+        >
+          @if (designer.waitingFor(); as waiting) {
+            <app-workflow-run-input-required
+              [waiting]="waiting"
+              [busy]="designer.running()"
+              [error]="designer.resumeError()"
+              (answered)="designer.resume($event)"
+              (answeredWithImages)="
+                designer.resume($event.answer, $event.images)
+              "
+              (openVisual)="openGateVisual($event)"
+              (rerun)="designer.rerunWithAnswer($event)"
             />
           }
-          @if (designer.streamingText()) {
-            <div
-              class="prose-dark text-[13px]"
-              [innerHTML]="designer.streamingText() | markdown"
-            ></div>
-          }
-        </div>
-      }
+          <!-- How the run went and who did what. Once there is an answer it
+           follows it (ui.md 4.4b, Answer first): the bottom line comes first. -->
+          <ng-template #process>
+            <p
+              data-testid="workflow-run-status"
+              role="status"
+              class="m-0 text-[13px] font-medium text-fg-strong"
+            >
+              {{ runStatus() }}
+            </p>
 
-      @if (result.answer === undefined && designer.run(); as stored) {
-        <!-- A suspended run with no answer yet (Build visual's gate): the
-             visual's side panel opens from the waiting card. -->
-        @defer (
-          when visuals.shown() !== null || visuals.loading() || visuals.error() !== null
-        ) {
-          <app-run-visual
-            [run]="stored"
-            [sheet]="true"
-            (runChange)="applyRun($event)"
-          />
-        }
-      }
-
-      @if (result.answer; as answer) {
-        <div data-testid="run-answer">
-          <!-- A visual the run made: its artifact card, where it was made (visuals R42) -->
-          <ng-template #artifactCard let-visual>
-            @if (designer.run(); as stored) {
-              <app-run-artifact-card
-                [run]="stored"
-                [visual]="visual"
-                [savedArtifactId]="savedArtifactId()"
-                (open)="viewVisual($event)"
-                (mapToData)="mapSavedArtifact($event)"
-                (openArtifact)="openSavedArtifact($event)"
+            <!-- The run's agents as a team: who did what, and the handoffs (ui.md
+           4.4b). In the Business view (R38) a step's data opens in Builder. -->
+            @defer (on immediate) {
+              <app-workflow-run-team
+                [stories]="designer.agentStories()"
+                [thought]="reasoningSnippet()"
+                [showWork]="!business()"
+                (openNode)="openStep($event)"
+                (openQuery)="openTeamQuery($event)"
               />
             }
           </ng-template>
-          <app-answer-view
-            [message]="answer"
-            [bluf]="true"
-            [latest]="true"
-            [busy]="designer.running()"
-            [showRating]="true"
-            [ratingPending]="designer.ratingPending()"
-            [queryInspector]="hasQueries(answer)"
-            [question]="designer.shownQuestion()"
-            [visualCard]="designer.run() ? artifactCard : null"
-            (inspectQuery)="inspectQuery($event)"
-            (rate)="designer.rateAnswer($event)"
-            (optionPicked)="designer.followUp($event)"
-            (viewVisual)="viewVisual($event)"
-            (openScorecard)="openScorecard($event)"
-          />
-          @if (designer.run(); as stored) {
-            @for (event of stored.events ?? []; track event.at) {
-              <app-answer-view
-                class="mt-2 block"
-                [message]="event"
-                [busy]="designer.running()"
-                [visualCard]="artifactCard"
-                (viewVisual)="viewVisual($event)"
-              />
-            }
-            <!-- Deferred: the interactive panel stays out of the initial bundle.
-                 It opens as a side panel on the window's right edge (R42). -->
+          @if (!answerFirst()) {
+            <ng-container [ngTemplateOutlet]="process" />
+          }
+
+          @if (liveCodeProgress(); as progress) {
+            <!-- A running code step's own progress (Review a Website's pages) -->
+            <div
+              class="flex flex-col gap-1.5"
+              data-testid="workflow-run-progress"
+              role="status"
+              aria-live="polite"
+            >
+              <div class="flex min-w-0 items-center gap-2">
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="14"
+                  class="shrink-0 animate-spin text-fg-muted"
+                />
+                <span class="text-[13px] font-medium text-fg">{{
+                  progress.title
+                }}</span>
+              </div>
+              <p
+                class="m-0 min-w-0 truncate rounded bg-surface-muted px-2 py-1 text-[12px] text-fg"
+                data-testid="workflow-run-progress-latest"
+              >
+                {{ progress.latest }}
+              </p>
+              @if (progress.recent.length) {
+                <ul class="m-0 flex list-none flex-col gap-0.5 p-0 pl-2">
+                  @for (line of progress.recent; track $index) {
+                    <li class="min-w-0 truncate text-[12px] text-fg-muted">
+                      {{ line }}
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+
+          @if (liveAgentStep()) {
+            <!-- The running agent step, live: the answer forming. Its thought and
+             steps show under its agent in the team; an agent step with no
+             persona shows them here (ui.md 4.4b). -->
+            <div class="flex flex-col gap-2" data-testid="workflow-run-live">
+              <!-- The Business view shows the answer forming, not the agent's work (R38) -->
+              @if (!business() && !liveStepInTeam()) {
+                @if (reasoningSnippet()) {
+                  <p
+                    class="m-0 flex min-w-0 items-start gap-1.5 text-[12px] leading-snug text-fg-muted italic"
+                    data-testid="workflow-run-thought"
+                  >
+                    <lucide-angular
+                      [img]="Brain"
+                      [size]="12"
+                      class="mt-px shrink-0"
+                    />
+                    <span class="line-clamp-2 min-w-0">{{
+                      reasoningSnippet()
+                    }}</span>
+                  </p>
+                }
+                <app-agent-activity
+                  [steps]="liveActivity()"
+                  (openQuery)="openRunningStep()"
+                />
+              }
+              @if (designer.streamingText()) {
+                <div
+                  class="prose-dark text-[13px]"
+                  [innerHTML]="designer.streamingText() | markdown"
+                ></div>
+              }
+            </div>
+          }
+
+          @if (result.answer === undefined && designer.run(); as stored) {
+            <!-- A suspended run with no answer yet (Build visual's gate): the
+             visual's side panel opens from the waiting card. -->
             @defer (
               when visuals.shown() !== null || visuals.loading() || visuals.error() !== null
             ) {
@@ -429,566 +456,748 @@
               />
             }
           }
-        </div>
-        @if (shownScorecard(); as readiness) {
-          <!-- Data Readiness: the report's scorecard, with Past assessments -->
-          <section
-            class="mt-4 rounded-lg border border-border"
-            data-testid="workflow-run-scorecard"
-            aria-label="Readiness scorecard"
-          >
-            <div
-              class="flex items-center justify-between gap-2 border-b border-border px-4 py-2"
-            >
-              <h3 class="m-0 text-[12px] font-medium text-fg-muted">
-                Scorecard
-              </h3>
-              <button
-                type="button"
-                data-testid="workflow-run-scorecard-close"
-                class="btn btn-ghost btn-icon"
-                aria-label="Close scorecard"
-                title="Close scorecard"
-                (click)="closeScorecard()"
-              >
-                <lucide-angular [img]="X" [size]="14" />
-              </button>
-            </div>
-            <app-panel-readiness-view #scorecard [item]="readiness">
-              @if (scorecard.report(); as shown) {
-                <app-readiness-history
-                  readinessHistory
-                  [datasourceId]="shown.datasourceId"
-                  [currentReportId]="scorecard.shownReportId()"
-                  (openReport)="scorecard.showReport($event.id)"
+
+          @if (result.answer; as answer) {
+            <div data-testid="run-answer">
+              <!-- A visual the run made: its artifact card, where it was made (visuals R42) -->
+              <ng-template #artifactCard let-visual>
+                @if (designer.run(); as stored) {
+                  <app-run-artifact-card
+                    [run]="stored"
+                    [visual]="visual"
+                    [savedArtifactId]="savedArtifactId()"
+                    (open)="viewVisual($event)"
+                    (mapToData)="mapSavedArtifact($event)"
+                    (openArtifact)="openSavedArtifact($event)"
+                  />
+                }
+              </ng-template>
+              <!-- The export first: Avery's words under it speak of it -->
+              @if (answer.export; as exported) {
+                @defer (on immediate) {
+                  <app-run-export-card class="mb-2 block" [export]="exported" />
+                }
+              }
+              <app-answer-view
+                [message]="answer"
+                [bluf]="true"
+                [latest]="true"
+                [busy]="designer.running()"
+                [showRating]="true"
+                [ratingPending]="designer.ratingPending()"
+                [queryInspector]="hasQueries(answer)"
+                [question]="designer.shownQuestion()"
+                [visualCard]="designer.run() ? artifactCard : null"
+                (inspectQuery)="inspectQuery($event)"
+                (rate)="designer.rateAnswer($event)"
+                (optionPicked)="designer.followUp($event)"
+                (viewVisual)="viewVisual($event)"
+                (openScorecard)="openScorecard($event)"
+              />
+              @if (answer.dashboard; as dashboard) {
+                <app-run-dashboard-card
+                  class="mt-2 block"
+                  [dashboard]="dashboard"
                 />
               }
-            </app-panel-readiness-view>
-          </section>
-        }
-      }
-
-      @if (answerFirst()) {
-        <ng-container [ngTemplateOutlet]="process" />
-      }
-
-      <!-- How it ran (ui.md 4.4b): the ended run read step by step, folded under the answer. -->
-      @if (
-        !business() &&
-        !isActive(result.status) && !designer.running()
-      ) {
-        <app-workflow-run-story
-          [nodes]="designer.nodes()"
-          (openNode)="designer.openNode($event)"
-        />
-      }
-
-      @if (runOutput().length > 0) {
-        <div data-testid="workflow-run-output">
-          <h4 class="m-0 text-[12px] font-medium text-fg-muted">Output</h4>
-          <dl class="m-0 mt-2 flex flex-col gap-1.5">
-            @for (entry of runOutput(); track entry.key) {
-              <div class="flex flex-wrap gap-x-3 gap-y-0.5">
-                <dt class="font-mono text-[12px] text-fg-muted">
-                  {{ entry.key }}
-                </dt>
-                @if (entry.structured) {
-                  <dd
-                    class="m-0 max-h-48 w-full overflow-auto rounded bg-surface-muted px-2 py-1 font-mono text-[11px] break-words whitespace-pre-wrap text-fg"
-                  >
-                    {{ entry.value }}
-                  </dd>
-                } @else {
-                  <dd class="m-0 text-[13px] break-words text-fg-strong">
-                    {{ entry.value }}
-                  </dd>
+              @if (designer.run(); as stored) {
+                @for (event of stored.events ?? []; track event.at) {
+                  <app-answer-view
+                    class="mt-2 block"
+                    [message]="event"
+                    [busy]="designer.running()"
+                    [visualCard]="artifactCard"
+                    (viewVisual)="viewVisual($event)"
+                  />
                 }
-              </div>
+                <!-- Deferred: the interactive panel stays out of the initial bundle.
+                 It opens as a side panel on the window's right edge (R42). -->
+                @defer (
+                  when visuals.shown() !== null || visuals.loading() || visuals.error() !== null
+                ) {
+                  <app-run-visual
+                    [run]="stored"
+                    [sheet]="true"
+                    (runChange)="applyRun($event)"
+                  />
+                }
+              }
+            </div>
+            @if (shownScorecard(); as readiness) {
+              <!-- Data Readiness: the report's scorecard, with Past assessments -->
+              <section
+                class="mt-4 rounded-lg border border-border"
+                data-testid="workflow-run-scorecard"
+                aria-label="Readiness scorecard"
+              >
+                <div
+                  class="flex items-center justify-between gap-2 border-b border-border px-4 py-2"
+                >
+                  <h3 class="m-0 text-[12px] font-medium text-fg-muted">
+                    Scorecard
+                  </h3>
+                  <button
+                    type="button"
+                    data-testid="workflow-run-scorecard-close"
+                    class="btn btn-ghost btn-icon"
+                    aria-label="Close scorecard"
+                    title="Close scorecard"
+                    (click)="closeScorecard()"
+                  >
+                    <lucide-angular [img]="X" [size]="14" />
+                  </button>
+                </div>
+                <app-panel-readiness-view #scorecard [item]="readiness">
+                  @if (scorecard.report(); as shown) {
+                    <app-readiness-history
+                      readinessHistory
+                      [datasourceId]="shown.datasourceId"
+                      [currentReportId]="scorecard.shownReportId()"
+                      (openReport)="scorecard.showReport($event.id)"
+                    />
+                  }
+                </app-panel-readiness-view>
+              </section>
             }
-          </dl>
+          }
+
+          @if (answerFirst()) {
+            <ng-container [ngTemplateOutlet]="process" />
+          }
+
+          <!-- How it ran (ui.md 4.4b): the ended run read step by step, folded under the answer. -->
+          @if (
+            !business() &&
+            !isActive(result.status) &&
+            !designer.running()
+          ) {
+            <app-workflow-run-story
+              [nodes]="designer.nodes()"
+              (openNode)="designer.openNode($event)"
+            />
+          }
+
+          @if (runOutput().length > 0) {
+            <div data-testid="workflow-run-output">
+              <h4 class="m-0 text-[12px] font-medium text-fg-muted">Output</h4>
+              <dl class="m-0 mt-2 flex flex-col gap-1.5">
+                @for (entry of runOutput(); track entry.key) {
+                  <div class="flex flex-wrap gap-x-3 gap-y-0.5">
+                    <dt class="font-mono text-[12px] text-fg-muted">
+                      {{ entry.key }}
+                    </dt>
+                    @if (entry.structured) {
+                      <dd
+                        class="m-0 max-h-48 w-full overflow-auto rounded bg-surface-muted px-2 py-1 font-mono text-[11px] break-words whitespace-pre-wrap text-fg"
+                      >
+                        {{ entry.value }}
+                      </dd>
+                    } @else {
+                      <dd class="m-0 text-[13px] break-words text-fg-strong">
+                        {{ entry.value }}
+                      </dd>
+                    }
+                  </div>
+                }
+              </dl>
+            </div>
+          }
+        </app-run-message>
+      } @else if (transcript().length > 0) {
+        <!-- The conversation before the run: what was sent, what the agent asks -->
+        <div class="mt-auto"></div>
+        <ng-container
+          [ngTemplateOutlet]="turns"
+          [ngTemplateOutletContext]="{ $implicit: transcript() }"
+        />
+      } @else {
+        <div
+          class="my-auto flex flex-col items-center gap-1.5 py-6 text-center"
+          data-testid="workflow-run-empty"
+        >
+          <p class="m-0 text-[22px] leading-tight font-semibold text-fg-strong">
+            {{ w.name }}
+          </p>
+          <p class="m-0 text-[14px] text-fg-muted">{{ emptyHint() }}</p>
+          @if (
+            designer.questionField() !== null && w.starterQuestions.length > 0
+          ) {
+            <ul
+              class="m-0 mt-3 flex list-none flex-wrap justify-center gap-2 p-0"
+              aria-label="Example questions"
+            >
+              @for (
+                example of w.starterQuestions;
+                track example;
+                let n = $index
+              ) {
+                <li>
+                  <button
+                    type="button"
+                    [attr.data-testid]="'workflow-example-' + n"
+                    (click)="pickExample(example)"
+                    class="cursor-pointer rounded-full border border-border bg-surface px-3.5 py-[7px] text-left text-[13px] text-fg hover:border-border-strong hover:bg-surface-muted"
+                  >
+                    {{ example }}
+                  </button>
+                </li>
+              }
+            </ul>
+          }
         </div>
       }
-    } @else {
-      <div
-        class="my-auto flex flex-col gap-3 py-4"
-        data-testid="workflow-run-empty"
+    </section>
+    @if (navItems().length > 0) {
+      <!-- The conversation navigation (R38): a tick per question at the log's
+         top right (outside the column in the Business view), the list of
+         questions dropping down beside them on hover or focus -->
+      <app-chat-history-nav
+        class="absolute top-3 z-20"
+        [class.right-1]="navInside()"
+        [class.-right-12]="!navInside()"
+        [container]="logElement()"
+        [items]="navItems()"
+        label="Conversation"
+        testIdPrefix="workflow-conversation"
+        (picked)="onHistoryPicked()"
+      />
+    }
+  </div>
+
+  @if ((averyOpen() || averyLive()) && designer.waitingFor() === null) {
+    <!-- Avery's conversation never ends: a compact message box under the
+         last answer (a follow-up run of this conversation). While she works
+         it stays, with Stop, and what is sent waits in a queue. -->
+    <div class="shrink-0 px-3 pb-3">
+      <app-run-composer
+        [value]="averyText()"
+        [placeholder]="
+          averyLive()
+            ? 'Queue a message for ' + (voice()?.name ?? 'Avery')
+            : 'Message ' + (voice()?.name ?? 'Avery')
+        "
+        [label]="'Message ' + (voice()?.name ?? 'Avery')"
+        [withPlus]="false"
+        [canSend]="averyText().trim() !== ''"
+        [running]="averyLive()"
+        inputId="workflow-avery-input"
+        formTestId="workflow-avery-composer"
+        inputTestId="workflow-avery-input"
+        sendTestId="workflow-avery-send"
+        stopTestId="workflow-run-stop"
+        (valueChange)="averyText.set($event)"
+        (send)="sendAvery()"
+        (stop)="designer.stop()"
       >
-        <div class="text-center">
-          <p class="m-0 text-[14px] font-medium text-fg-strong">{{ w.name }}</p>
-          <p class="m-0 mt-1 text-[13px] text-fg-muted">{{ emptyHint() }}</p>
-        </div>
-        @if (
-          designer.questionField() !== null && w.starterQuestions.length > 0
-        ) {
+        @if (queued().length > 0) {
           <ul
-            class="m-0 flex list-none flex-wrap justify-center gap-1.5 p-0"
-            aria-label="Example questions"
+            composerChips
+            aria-label="Queued messages"
+            class="m-0 mb-2 flex list-none flex-col gap-1.5 p-0"
           >
-            @for (
-              example of w.starterQuestions;
-              track example;
-              let n = $index
-            ) {
-              <li>
+            @for (message of queued(); track $index) {
+              <li
+                data-testid="workflow-avery-queued"
+                class="flex items-center gap-2 rounded-xl border border-border bg-surface-muted py-1.5 pr-1.5 pl-3 text-[13px]"
+              >
+                <span
+                  class="shrink-0 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
+                  >Queued</span
+                >
+                <span
+                  class="min-w-0 flex-1 truncate text-fg"
+                  [title]="message"
+                  >{{ message }}</span
+                >
                 <button
                   type="button"
-                  [attr.data-testid]="'workflow-example-' + n"
-                  (click)="pickExample(example)"
-                  class="rounded-full border border-border px-2.5 py-1 text-left text-[12px] text-fg hover:border-border-strong hover:bg-surface-muted"
+                  data-testid="workflow-avery-queued-remove"
+                  aria-label="Remove queued message"
+                  title="Remove"
+                  (click)="removeQueued($index)"
+                  class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-fg-muted hover:bg-surface-selected hover:text-fg"
                 >
-                  {{ example }}
+                  <lucide-angular [img]="X" [size]="13" />
                 </button>
               </li>
             }
           </ul>
         }
-      </div>
-    }
-  </section>
-  @if (navItems().length > 0) {
-    <!-- The conversation navigation (R38): a tick per question at the log's
-         bottom right (outside the column in the Business view), the list of
-         questions growing up from them on hover or focus -->
-    <app-chat-history-nav
-      class="absolute bottom-3 z-20"
-      [class.right-1]="!business()"
-      [class.-right-12]="business()"
-      [container]="logElement()"
-      [items]="navItems()"
-      label="Conversation"
-      testIdPrefix="workflow-conversation"
-      (picked)="onHistoryPicked()"
-    />
-  }
-  </div>
-
-  @if (averyOpen() && designer.waitingFor() === null) {
-    <!-- Avery's conversation never ends: a compact message box under the
-         last answer (a follow-up run of this conversation) -->
-    <div class="shrink-0 px-3 pb-3">
-      <form
-        class="composer flex items-end gap-2"
-        aria-label="Message Avery"
-        (submit)="$event.preventDefault(); sendAvery()"
-      >
-        <label for="workflow-avery-input" class="sr-only">Message Avery</label>
-        <textarea
-          id="workflow-avery-input"
-          data-testid="workflow-avery-input"
-          rows="2"
-          placeholder="Message Avery…"
-          class="composer-input min-w-0 flex-1"
-          [value]="averyText()"
-          (input)="averyText.set($any($event.target).value)"
-          (keydown)="onAveryKey($event)"
-        ></textarea>
-        <button
-          type="submit"
-          data-testid="workflow-avery-send"
-          class="btn btn-primary px-2.5 py-1"
-          [disabled]="averyText().trim() === '' || designer.running()"
-        >
-          <lucide-angular [img]="SendHorizontal" [size]="13" />
-          <span>Send</span>
-        </button>
-      </form>
+      </app-run-composer>
     </div>
   }
 
   @if (canRun() && composerShown()) {
-    <!-- The run's input, while no run is shown (no follow-up since 2026-11-20) -->
+    <!-- The message box (ui.md 4.4b): a message fills the prompt; the agent
+         asks in the chat for each required input still missing; the rest
+         is behind + -->
     <div class="shrink-0 px-3 pb-3">
-      <form
-        data-testid="workflow-run-composer"
-        aria-label="Input"
-        class="composer composer-form flex flex-col gap-2"
-        [class.composer-dragging]="dragging()"
-        (submit)="$event.preventDefault(); designer.execute()"
-        (paste)="onPaste($event)"
-        (dragover)="onDragOver($event)"
-        (dragleave)="dragging.set(false)"
-        (drop)="onDrop($event)"
+      @if (w.runRequirement) {
+        <p
+          data-testid="workflow-run-requirement"
+          class="m-0 mb-2 px-2 text-[12px] text-fg-muted"
+        >
+          {{ w.runRequirement }}
+        </p>
+      }
+      <app-run-composer
+        #composer
+        [value]="draft()"
+        [placeholder]="placeholder()"
+        [label]="'Message ' + (voice()?.name ?? w.name)"
+        [canSend]="canSend()"
+        [withPlus]="menuAddFields().length + menuOptionFields().length > 0"
+        [menuOpen]="menuOpen()"
+        [dragging]="dragging()"
+        (valueChange)="setDraft($event)"
+        (send)="send()"
+        (plus)="toggleMenu()"
+        (pasted)="onPaste($event)"
+        (dragOver)="onDragOver($event)"
+        (dragLeave)="dragging.set(false)"
+        (dropped)="onDrop($event)"
       >
-        <!-- One labelled section per field, divided (ui.md 4.4b) -->
-        <div class="composer-fields">
-          @for (field of composerFields(); track field.name) {
-            @switch (field.type) {
-              @case ("boolean") {
-                <div class="flex flex-col gap-1">
-                  <label class="flex items-start gap-2 text-[13px] text-fg">
+        @if (menuOpen()) {
+          <div composerMenu>
+            <div
+              class="fixed inset-0 z-30"
+              aria-hidden="true"
+              (click)="closeMenu()"
+            ></div>
+            <div
+              data-testid="run-composer-menu"
+              role="dialog"
+              aria-label="Inputs and options"
+              class="menu absolute bottom-full left-0 z-40 mb-2 max-h-[min(60vh,520px)] w-[min(380px,100%)] overflow-y-auto p-1.5"
+            >
+              @if (menuAddFields().length > 0) {
+                <p
+                  class="m-0 px-2.5 pt-1.5 pb-1 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
+                >
+                  Add
+                </p>
+                @for (field of menuAddFields(); track field.name) {
+                  <button
+                    type="button"
+                    class="menu-item cursor-pointer"
+                    [class.bg-surface-muted]="menuSection() === field.name"
+                    [attr.data-testid]="'run-composer-menu-item-' + field.name"
+                    [attr.aria-expanded]="menuSection() === field.name"
+                    (click)="toggleSection(field.name)"
+                  >
+                    <lucide-angular
+                      [img]="fieldIcon(field)"
+                      [size]="16"
+                      class="shrink-0 text-icon"
+                    />
+                    <span class="min-w-0 flex-1 truncate text-fg-strong">{{
+                      field.label
+                    }}</span>
+                    <span class="shrink-0 text-[12px] text-fg-muted">{{
+                      fieldNote(field)
+                    }}</span>
+                    <lucide-angular
+                      [img]="ChevronDown"
+                      [size]="14"
+                      class="shrink-0 text-icon transition-transform"
+                      [class.rotate-180]="menuSection() === field.name"
+                    />
+                  </button>
+                  @if (menuSection() === field.name) {
+                    <div class="flex flex-col gap-1.5 px-2.5 pt-1 pb-2.5">
+                      @switch (field.type) {
+                        @case ("datasets") {
+                          <ng-container
+                            [ngTemplateOutlet]="menuPick"
+                            [ngTemplateOutletContext]="{ $implicit: field }"
+                          />
+                        }
+                        @case ("dataset") {
+                          <ng-container
+                            [ngTemplateOutlet]="menuPick"
+                            [ngTemplateOutletContext]="{ $implicit: field }"
+                          />
+                        }
+                        @case ("artifact") {
+                          <ng-container
+                            [ngTemplateOutlet]="menuPick"
+                            [ngTemplateOutletContext]="{ $implicit: field }"
+                          />
+                        }
+                        @case ("images") {
+                          <app-workflow-run-attachments
+                            [images]="composerThumbs()"
+                            [label]="field.label"
+                            [max]="field.max ?? 4"
+                            [help]="field.help ?? null"
+                            [error]="imagesError()"
+                            (picked)="addImages($event)"
+                            (removed)="removeImage($event)"
+                          />
+                        }
+                        @case ("image") {
+                          <label [for]="inputId(field.name)" class="sr-only">{{
+                            field.label
+                          }}</label>
+                          <input
+                            type="file"
+                            [id]="inputId(field.name)"
+                            [attr.data-testid]="inputId(field.name)"
+                            [attr.accept]="imageAccept"
+                            [attr.aria-required]="
+                              field.required ? 'true' : null
+                            "
+                            [attr.aria-invalid]="
+                              fieldError(field.name) ? 'true' : null
+                            "
+                            [attr.aria-describedby]="describedBy(field.name)"
+                            (change)="onImage(field.name, $event)"
+                            class="text-[13px] text-fg file:mr-3 file:cursor-pointer file:rounded-full file:border file:border-border-strong file:bg-surface file:px-3 file:py-1 file:text-[13px] file:text-fg"
+                          />
+                          @if (imagePreview(field.name); as preview) {
+                            <img
+                              [src]="preview"
+                              [alt]="imageName(field.name) || field.label"
+                              [attr.data-testid]="
+                                inputId(field.name) + '-preview'
+                              "
+                              class="max-h-32 w-auto self-start rounded-md border border-border object-contain"
+                            />
+                          }
+                        }
+                        @case ("textarea") {
+                          <label [for]="inputId(field.name)" class="sr-only">{{
+                            field.label
+                          }}</label>
+                          <textarea
+                            [id]="inputId(field.name)"
+                            [attr.data-testid]="inputId(field.name)"
+                            [attr.placeholder]="field.placeholder ?? null"
+                            [attr.aria-required]="
+                              field.required ? 'true' : null
+                            "
+                            [attr.aria-invalid]="
+                              fieldError(field.name) ? 'true' : null
+                            "
+                            [attr.aria-describedby]="describedBy(field.name)"
+                            [value]="designer.inputValue(field.name)"
+                            (input)="onInput(field.name, $event)"
+                            rows="3"
+                            class="field resize-y"
+                          ></textarea>
+                        }
+                        @default {
+                          <label [for]="inputId(field.name)" class="sr-only">{{
+                            field.label
+                          }}</label>
+                          <input
+                            [id]="inputId(field.name)"
+                            [attr.data-testid]="inputId(field.name)"
+                            [type]="field.type === 'number' ? 'number' : 'text'"
+                            [attr.placeholder]="field.placeholder ?? null"
+                            [attr.aria-required]="
+                              field.required ? 'true' : null
+                            "
+                            [attr.aria-invalid]="
+                              fieldError(field.name) ? 'true' : null
+                            "
+                            [attr.aria-describedby]="describedBy(field.name)"
+                            [value]="designer.inputValue(field.name)"
+                            (input)="onInput(field.name, $event)"
+                            class="field"
+                          />
+                        }
+                      }
+                      @if (field.help && field.type !== "images") {
+                        <p class="m-0 text-[12px] text-fg-muted">
+                          {{ field.help }}
+                        </p>
+                      }
+                      @if (fieldError(field.name); as message) {
+                        <p
+                          [id]="errorId(field.name)"
+                          [attr.data-testid]="errorId(field.name)"
+                          class="m-0 text-[12px] text-on-danger-soft"
+                        >
+                          {{ message }}
+                        </p>
+                      }
+                    </div>
+                  }
+                }
+              }
+              @if (menuOptionFields().length > 0) {
+                @if (menuAddFields().length > 0) {
+                  <div class="mx-1.5 my-1 h-px shrink-0 bg-border"></div>
+                }
+                <p
+                  class="m-0 px-2.5 pt-1.5 pb-1 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
+                >
+                  Options
+                </p>
+                @for (field of menuOptionFields(); track field.name) {
+                  @let option = optionLabel(field.label);
+                  <label class="menu-item cursor-pointer">
+                    <span class="flex min-w-0 flex-1 flex-col">
+                      <span class="text-fg-strong">{{ option.title }}</span>
+                      @if (option.detail) {
+                        <span class="text-[12px] text-fg-muted">{{
+                          option.detail
+                        }}</span>
+                      }
+                    </span>
                     <input
                       type="checkbox"
+                      role="switch"
+                      class="run-switch"
                       [id]="inputId(field.name)"
                       [attr.data-testid]="inputId(field.name)"
                       [checked]="designer.checked(field.name)"
-                      [attr.aria-invalid]="
-                        fieldError(field.name) ? 'true' : null
-                      "
                       [attr.aria-describedby]="describedBy(field.name)"
                       (change)="onCheck(field.name, $event)"
-                      class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
                     />
-                    <span>{{ field.label }}</span>
                   </label>
-                  @if (field.help) {
-                    <p class="m-0 text-[12px] text-fg-muted">
-                      {{ field.help }}
-                    </p>
-                  }
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
-                    >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
+                }
               }
-              @case ("datasets") {
-                <div
-                  role="group"
-                  tabindex="-1"
-                  [attr.aria-labelledby]="inputId(field.name) + '-label'"
-                  [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                  [attr.aria-describedby]="describedBy(field.name)"
-                  data-testid="workflow-input-datasets"
-                  class="flex flex-col gap-1 outline-none"
-                >
-                  <div class="composer-head">
-                    <span
-                      [id]="inputId(field.name) + '-label'"
-                      class="composer-label"
-                      >{{ field.label }}</span
-                    >
-                    <span
-                      aria-hidden="true"
-                      class="composer-tag"
-                      [class.composer-tag-optional]="!field.required"
-                      >{{ field.required ? "Required" : "Optional" }}</span
-                    >
-                  </div>
-                  @if (datasetChoices(field).length === 0) {
-                    <p class="m-0 text-[12px] text-fg-muted">
-                      No datasets yet — create one in Datasets first.
-                    </p>
-                  } @else {
-                    <app-dataset-picker
-                      [datasets]="datasetChoices(field)"
-                      [selected]="designer.picked(field.name)"
-                      [invalid]="fieldError(field.name) !== null"
-                      (selectedChange)="designer.setInput(field.name, $event)"
-                    />
-                  }
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
-                    >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
-              @case ("dataset") {
-                <div class="flex flex-col gap-1">
-                  <div class="composer-head">
-                    <label [for]="inputId(field.name)" class="composer-label">{{
-                      field.label
-                    }}</label>
-                    <span
-                      aria-hidden="true"
-                      class="composer-tag"
-                      [class.composer-tag-optional]="!field.required"
-                      >{{ field.required ? "Required" : "Optional" }}</span
-                    >
-                  </div>
-                  <select
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                    [attr.aria-describedby]="describedBy(field.name)"
-                    (change)="onInput(field.name, $event)"
-                    class="field"
-                  >
-                    <!-- Each option marks itself selected: a [value] on the
-                         select would apply before its options exist (a form
-                         opened already holding a dataset, e.g. Run again). -->
-                    <option
-                      value=""
-                      [selected]="designer.inputValue(field.name) === ''"
-                    >
-                      Select a dataset
-                    </option>
-                    @for (
-                      dataset of datasetChoices(field);
-                      track dataset.name
-                    ) {
-                      <option
-                        [value]="dataset.name"
-                        [selected]="
-                          dataset.name === designer.inputValue(field.name)
-                        "
-                      >
-                        {{ dataset.name }}
-                      </option>
-                    }
-                  </select>
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
-                    >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
-              @case ("artifact") {
-                <div class="flex flex-col gap-1">
-                  <div class="composer-head">
-                    <label [for]="inputId(field.name)" class="composer-label">{{
-                      field.label
-                    }}</label>
-                    <span
-                      aria-hidden="true"
-                      class="composer-tag"
-                      [class.composer-tag-optional]="!field.required"
-                      >{{ field.required ? "Required" : "Optional" }}</span
-                    >
-                  </div>
-                  <select
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                    [attr.aria-describedby]="describedBy(field.name)"
-                    (change)="onArtifact(field, $event)"
-                    class="field"
-                  >
-                    <option
-                      value=""
-                      [selected]="designer.inputValue(field.name) === ''"
-                    >
-                      {{
-                        field.requiredWithout
-                          ? "None — upload an image"
-                          : "Select a saved dashboard"
-                      }}
-                    </option>
-                    @for (
-                      artifact of artifactChoices(field);
-                      track artifact.id
-                    ) {
-                      <option
-                        [value]="artifact.id"
-                        [selected]="
-                          artifact.id === designer.inputValue(field.name)
-                        "
-                      >
-                        {{ artifact.name }}
-                      </option>
-                    }
-                  </select>
-                  @if (field.help) {
-                    <p class="m-0 text-[12px] text-fg-muted">
-                      {{ field.help }}
-                    </p>
-                  }
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
-                    >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
-              @case ("images") {
-                <app-workflow-run-attachments
-                  [images]="composerThumbs()"
-                  [label]="field.label"
-                  [max]="field.max ?? 4"
-                  [help]="field.help ?? null"
-                  [error]="imagesError()"
-                  (picked)="addImages($event)"
-                  (removed)="removeImage($event)"
+            </div>
+          </div>
+        }
+        @if (chips().length > 0) {
+          <ul
+            composerChips
+            aria-label="Added inputs"
+            class="m-0 mb-2 flex list-none flex-wrap gap-1.5 p-0 pl-1"
+          >
+            @for (chip of chips(); track chip.field.name + ":" + chip.key) {
+              <li
+                [attr.data-testid]="'run-composer-chip-' + chip.field.name"
+                class="flex items-center gap-1.5 rounded-full border border-border bg-surface-muted py-1 pr-1 pl-2.5 text-[12px] text-fg"
+              >
+                <lucide-angular
+                  [img]="fieldIcon(chip.field)"
+                  [size]="12"
+                  class="shrink-0 text-icon"
                 />
-              }
-              @case ("image") {
-                <div class="flex flex-col gap-1">
-                  <div class="composer-head">
-                    <label [for]="inputId(field.name)" class="composer-label">{{
-                      field.label
-                    }}</label>
-                    <span
-                      aria-hidden="true"
-                      class="composer-tag"
-                      [class.composer-tag-optional]="!field.required"
-                      >{{ field.required ? "Required" : "Optional" }}</span
-                    >
-                  </div>
-                  <input
-                    type="file"
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [attr.accept]="imageAccept"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                    [attr.aria-describedby]="describedBy(field.name)"
-                    (change)="onImage(field.name, $event)"
-                    class="text-[13px] text-fg file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-[13px] file:text-fg"
-                  />
-                  @if (imagePreview(field.name); as preview) {
-                    <img
-                      [src]="preview"
-                      [alt]="imageName(field.name) || field.label"
-                      [attr.data-testid]="inputId(field.name) + '-preview'"
-                      class="max-h-40 w-auto self-start rounded-md border border-border object-contain"
-                    />
-                  }
-                  @if (field.help) {
-                    <p class="m-0 text-[12px] text-fg-muted">
-                      {{ field.help }}
-                    </p>
-                  }
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
-                    >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
-              @case ("textarea") {
-                <div class="flex flex-col gap-1">
-                  <div class="composer-head">
-                    <label [for]="inputId(field.name)" class="composer-label">{{
-                      field.label
-                    }}</label>
-                    <span
-                      aria-hidden="true"
-                      class="composer-tag"
-                      [class.composer-tag-optional]="!field.required"
-                      >{{ field.required ? "Required" : "Optional" }}</span
-                    >
-                  </div>
-                  <textarea
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [attr.placeholder]="field.placeholder ?? null"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                    [attr.aria-describedby]="describedBy(field.name)"
-                    [value]="designer.inputValue(field.name)"
-                    (input)="onInput(field.name, $event)"
-                    (keydown.enter)="onEnter($event)"
-                    [rows]="isPrompt(field) ? 3 : 2"
-                    class="field resize-y"
-                    [class.border-on-danger-soft]="!!fieldError(field.name)"
-                  ></textarea>
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
-                    >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
-              @default {
-                <div class="flex flex-col gap-1">
-                  <div class="composer-head">
-                    <label [for]="inputId(field.name)" class="composer-label">{{
-                      field.label
-                    }}</label>
-                    <span
-                      aria-hidden="true"
-                      class="composer-tag"
-                      [class.composer-tag-optional]="!field.required"
-                      >{{ field.required ? "Required" : "Optional" }}</span
-                    >
-                  </div>
-                  <input
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [type]="field.type === 'number' ? 'number' : 'text'"
-                    [attr.placeholder]="field.placeholder ?? null"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                    [attr.aria-describedby]="describedBy(field.name)"
-                    [value]="designer.inputValue(field.name)"
-                    (input)="onInput(field.name, $event)"
-                    class="field"
-                    [class.border-on-danger-soft]="!!fieldError(field.name)"
-                  />
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
-                    >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
+                <span class="max-w-[220px] truncate">{{ chip.label }}</span>
+                <button
+                  type="button"
+                  [attr.aria-label]="'Remove ' + chip.label"
+                  [title]="'Remove ' + chip.label"
+                  (click)="removeChip(chip)"
+                  class="flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-fg-muted hover:bg-surface-selected hover:text-fg"
+                >
+                  <lucide-angular [img]="X" [size]="11" />
+                </button>
+              </li>
             }
-          }
-        </div>
-        @if (w.runRequirement) {
-          <p
-            data-testid="workflow-run-requirement"
-            class="m-0 text-[12px] text-fg-muted"
-          >
-            {{ w.runRequirement }}
-          </p>
+          </ul>
         }
-        @if (designer.runError(); as message) {
-          <p
-            data-testid="workflow-run-error"
-            role="alert"
-            class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
-          >
-            {{ message }}
-          </p>
-        }
-        <div
-          class="composer-actions flex flex-wrap items-center justify-end gap-2"
-        >
-          <button
-            type="submit"
-            data-testid="workflow-run"
-            [disabled]="designer.running() || !!w.runRequirement"
-            [attr.title]="w.runRequirement ?? null"
-            class="btn btn-primary px-2.5 py-1"
-          >
-            @if (designer.running()) {
-              <lucide-angular
-                [img]="Loader2"
-                [size]="14"
-                class="animate-spin"
-              />
-              <span>Executing…</span>
-            } @else {
-              <lucide-angular [img]="SendHorizontal" [size]="14" />
-              <span>Execute</span>
-            }
-          </button>
-        </div>
-      </form>
+      </app-run-composer>
     </div>
   }
 
+  <!-- A pick in the inputs menu: a search when there are many, then the choices -->
+  <ng-template #menuPick let-field>
+    <div
+      role="group"
+      [attr.aria-label]="field.label"
+      [attr.data-testid]="inputId(field.name)"
+      [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+      [attr.aria-describedby]="describedBy(field.name)"
+      class="flex flex-col gap-2"
+    >
+      @if (optionsFor(field).length > 5) {
+        <input
+          type="search"
+          class="field"
+          [attr.aria-label]="'Search ' + field.label"
+          [attr.placeholder]="'Search ' + field.label.toLowerCase()"
+          [attr.data-testid]="'run-composer-search-' + field.name"
+          [value]="menuQuery()"
+          (input)="menuQuery.set($any($event.target).value)"
+        />
+      }
+      <app-run-option-cards
+        [options]="menuOptions(field)"
+        [selected]="selectedFor(field)"
+        [testIdPrefix]="'run-composer-option-' + field.name"
+        [label]="field.label"
+        [compact]="true"
+        [empty]="
+          field.type === 'artifact'
+            ? 'Nothing saved yet.'
+            : 'No datasets yet — create one in Datasets first.'
+        "
+        (toggle)="pickInMenu(field, $event)"
+      />
+    </div>
+  </ng-template>
+
+  <!-- The conversation's turns before a run (and above the run they led to) -->
+  <ng-template #turns let-list>
+    @for (entry of list; track entry.id) {
+      @if (entry.from === "user") {
+        <app-run-message from="user">
+          @if (entry.chips) {
+            <span class="flex flex-wrap justify-end gap-1.5">
+              @for (chip of entry.chips; track $index) {
+                <span
+                  class="rounded-full bg-surface px-2.5 py-0.5 text-[13px] text-fg-strong"
+                  >{{ chip }}</span
+                >
+              }
+            </span>
+          } @else {
+            {{ entry.text }}
+          }
+        </app-run-message>
+      } @else {
+        <app-run-message
+          [name]="voice()?.name ?? ''"
+          [role]="voice()?.role ?? ''"
+          [attr.data-testid]="
+            entry.error
+              ? 'workflow-run-error'
+              : entry.field
+                ? 'run-intake-' + entry.field
+                : null
+          "
+          [attr.role]="entry.error ? 'alert' : null"
+        >
+          {{ entry.text }}
+          @if (
+            isPendingEntry(entry.id) && pending()?.kind !== "text"
+              ? pending()
+              : null;
+            as ask
+          ) {
+            <div messageAfter class="flex flex-col gap-2.5">
+              @switch (ask.kind) {
+                @case ("yes-no") {
+                  <div class="flex gap-2">
+                    <button
+                      type="button"
+                      class="btn btn-outline"
+                      [attr.data-testid]="
+                        'run-intake-option-' + ask.field.name + '-yes'
+                      "
+                      (click)="answerYesNo(ask.field, true)"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-outline"
+                      [attr.data-testid]="
+                        'run-intake-option-' + ask.field.name + '-no'
+                      "
+                      (click)="answerYesNo(ask.field, false)"
+                    >
+                      No
+                    </button>
+                  </div>
+                }
+                @case ("image") {
+                  <div
+                    class="flex flex-col items-center gap-2 rounded-[18px] border border-dashed border-border-strong bg-surface px-4 py-5 text-center"
+                    (dragover)="$event.preventDefault()"
+                    (drop)="onIntakeDrop(ask.field, $event)"
+                  >
+                    <lucide-angular
+                      [img]="ImagePlus"
+                      [size]="20"
+                      class="text-icon"
+                    />
+                    <label
+                      class="btn btn-outline cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus"
+                      [attr.data-testid]="'run-intake-upload-' + ask.field.name"
+                    >
+                      {{
+                        ask.field.type === "images"
+                          ? "Choose images"
+                          : "Choose an image"
+                      }}
+                      <input
+                        type="file"
+                        class="sr-only"
+                        [attr.accept]="imageAccept"
+                        [multiple]="ask.field.type === 'images'"
+                        [attr.data-testid]="'run-intake-file-' + ask.field.name"
+                        (change)="onIntakeFile(ask.field, $event)"
+                      />
+                    </label>
+                    <p class="m-0 text-[12px] text-fg-muted">
+                      Or drop or paste it here. PNG, JPEG or WebP, up to 5 MB.
+                    </p>
+                  </div>
+                }
+                @default {
+                  @if (pendingPick(); as pick) {
+                    <app-run-option-cards
+                      [options]="pick.shown"
+                      [selected]="pick.selected"
+                      [testIdPrefix]="'run-intake-option-' + ask.field.name"
+                      [label]="ask.field.label"
+                      [empty]="
+                        ask.field.type === 'artifact'
+                          ? 'Nothing saved yet.'
+                          : 'No datasets yet — create one in Datasets first.'
+                      "
+                      (toggle)="pickIntake(ask.field, $event)"
+                    />
+                    <div class="flex flex-wrap items-center gap-3">
+                      @if (ask.kind === "pick-many") {
+                        <button
+                          type="button"
+                          data-testid="run-intake-continue"
+                          class="btn btn-primary px-4 py-2"
+                          [disabled]="pick.selected.length === 0"
+                          (click)="continueIntake()"
+                        >
+                          <lucide-angular [img]="Send" [size]="13" />
+                          <span>{{ continueLabel(pick.selected.length) }}</span>
+                        </button>
+                      }
+                      @if (
+                        !showAllOptions() && pick.total > pick.shown.length
+                      ) {
+                        <button
+                          type="button"
+                          data-testid="run-intake-show-all"
+                          class="cursor-pointer text-[13px] text-primary hover:underline"
+                          (click)="showAllOptions.set(true)"
+                        >
+                          Show all {{ pick.total }}
+                        </button>
+                      }
+                    </div>
+                    @if (
+                      ask.field.type === "datasets" ||
+                      ask.field.type === "dataset"
+                    ) {
+                      <p
+                        class="m-0 flex items-center gap-1.5 text-[12px] text-fg-muted"
+                      >
+                        <lucide-angular
+                          [img]="ShieldCheck"
+                          [size]="13"
+                          class="shrink-0"
+                        />
+                        <span
+                          >{{
+                            voice()?.agent ? voice()?.name : "This workflow"
+                          }}
+                          only reads your data with read-only SQL.</span
+                        >
+                      </p>
+                    }
+                  }
+                }
+              }
+            </div>
+          }
+        </app-run-message>
+      }
+    }
+  </ng-template>
 }

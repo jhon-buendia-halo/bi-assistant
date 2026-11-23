@@ -8,22 +8,21 @@ backend/    NestJS API
 specs/      the complete specification of the app
 ```
 
-**What the app does and how it works is specified in [specs/](specs/README.md), not here.** Start there for any question about behaviour, endpoints, stored data, agents, UI, build or release. This file holds only what every session needs; the workflows and their steps live in project skills under [.claude/skills/](.claude/skills/), the recipe for each kind of task in playbooks under [.claude/playbooks/](.claude/playbooks/), and developer tools in [.claude/tools/](.claude/tools/README.md).
+**What the app does and how it works is specified in [specs/](specs/README.md), not here.** Start there for any question about behaviour, endpoints, stored data, agents, UI, build or release. This file holds only what every session needs; the workflows, their steps and the recipe for each kind of task live in project skills under [.claude/skills/](.claude/skills/), and developer tools in [.claude/tools/](.claude/tools/README.md).
 
 > **MANDATORY FIRST ACTION — read [lessons.md](lessons.md) before doing anything else.** Before you restate the goal, ask a question, run a command or touch a file, on every task, read it. It is short on purpose.
 
 ## Non-negotiables
 
 - **Never on `main`.** Work on a branch; nothing goes directly on `main`.
-- **Every session starts up to date with `main` and in its own worktree (mandatory).** Before the first change of a session: `git fetch origin`, then work in a git worktree of its own (never in the main checkout), on a branch that holds the latest `origin/main` (a new branch starts from it; an existing one merges it in first, and the session stops to ask when the merge conflicts). Playbook: `session-handoff`, *Start*.
+- **Every session starts up to date with `main` and in its own worktree (mandatory).** Before the first change of a session: `git fetch origin`, then work in a git worktree of its own (never in the main checkout), on a branch that holds the latest `origin/main` (a new branch starts from it; an existing one merges it in first, and the session stops to ask when the merge conflicts). Say in one line the worktree, the branch and the `origin/main` commit it holds.
 - **Specs change with the code, on the same branch.** `python3 scripts/check-specs.py` must pass. Skill: `workflow-start` (where a fact belongs).
-- **Every local instance is ready to test.** Never leave an instance without an LLM. Playbook: `local-instance`.
-- **New or changed workflows start from Mastra's docs.** Read them, check what can be reused, offer the user three approaches with a recommendation, and build only after the user picks one. Playbook: `mastra-workflow`.
-- **Every agent that answers from data shows its evidence the same way** (the *query inspector* pattern), built once in the shared layer, never in one agent's prompt or screen. Rules: [agent-answers](specs/capabilities/agent-answers/spec.md), *Query inspector*. Playbook: `agent-change`.
+- **Every local instance is ready to test.** Never leave an instance without an LLM. Skill: `local-instance`.
+- **New or changed workflows start from Mastra's docs.** Read them, check what can be reused, offer the user three approaches with a recommendation, and build only after the user picks one. Skill: `mastra-workflows`.
+- **Every agent that answers from data shows its evidence the same way** (the *query inspector* pattern), built once in the shared layer, never in one agent's prompt or screen. Rules: [agent-answers](specs/capabilities/agent-answers/spec.md), *Query inspector*. Skill: `agent-change`.
 - **All planning lives in this repository** ([roadmap.md](roadmap.md), [specs/epics/](specs/README.md)); don't ask for or create Jira issues.
 - **Read and output.** Never read a file over 500 lines whole: `grep -n` or use [specs/INDEX.md](specs/INDEX.md), then read the range. Run builds and tests quietly, to a log file, and read back only the summary or the failure block.
 - **Versioning is automatic:** Conventional Commit subjects drive the bump. Never edit `version` by hand; installers and the npm package are built manually. See [delivery.md](specs/system/delivery.md).
-- **Session hygiene.** Before starting a new session, write `.context/handoff.md`. Playbook: `session-handoff`.
 - **Starting any subagent** → the first line of its brief is `Read .claude/worker.md before anything else.`; the rest is the goal, the task and the brand. [worker.md](.claude/worker.md) holds the rules every subagent follows.
 
 New checkout or worktree: run `node scripts/bootstrap.mjs` once (installs, builds the backend and web UI, reports whether the shared Postgres on 55432 is up; never starts the app).
@@ -85,15 +84,15 @@ Each entry names when it applies, then the rule.
 
 ## Autonomy
 
-- **Ask the target before starting the app or the Postgres stack from a worktree; check the default ports first; stop by PID.** Skill: `workflow-implement`. Playbook: `local-instance`.
-- **Explicit pauses win.** *Never Block on the Human* covers reversible work with no stated pause; a rule here, a playbook step that waits for the user, or the user's own instruction in the session always stops the work.
+- **Ask the target before starting the app or the Postgres stack from a worktree; check the default ports first; stop by PID.** Skill: `local-instance`.
+- **Explicit pauses win.** *Never Block on the Human* covers reversible work with no stated pause; a rule here, a skill step that waits for the user, or the user's own instruction in the session always stops the work.
 
 ## Writing the reply
 
 - Ask only the questions with no safe default, all in one picker call; state the defaults for the rest and proceed.
 - Answer an out-of-band question in the very next reply, before any status update.
 
-## Playbooks
+## How to work
 
 ### Choose the workflow
 
@@ -106,20 +105,9 @@ Right after reading `lessons.md` in a new session, settle which workflow the ses
 
 Subagents that work from a brief (`builder`, `reviewer`) skip this.
 
-### Choose the playbook
+### Task skills
 
-The workflow decides which steps run; the playbook says how to do this kind of task inside them. Match the task to a playbook in [.claude/playbooks/](.claude/playbooks/), open it and copy its steps into the todo list. Each step names, in brackets, the workflow step it fills. A task no playbook fits (a feature, a UI change) follows the workflow's steps alone.
-
-| Task | Playbook |
-|---|---|
-| A new or changed Mastra workflow | [`mastra-workflow`](.claude/playbooks/mastra-workflow.md) |
-| A new agent, or a change to what an agent receives | [`agent-change`](.claude/playbooks/agent-change.md) |
-| A defect in shipped behaviour | [`bug-fix`](.claude/playbooks/bug-fix.md) |
-| Starting the app for the user or a check | [`local-instance`](.claude/playbooks/local-instance.md) |
-| Recording what shipped, the PR, post-merge cleanup | [`ship`](.claude/playbooks/ship.md) |
-| Starting any session (worktree, up to date with `main`), pausing work, or picking up a previous session's work | [`session-handoff`](.claude/playbooks/session-handoff.md) |
-| Suggesting options for a change that can be seen (a screen, dialog, layout, chart) | [`visual-options`](.claude/playbooks/visual-options.md) |
-| Finishing any new feature or change: images that prove it, shown in the chat | [`show-the-change`](.claude/playbooks/show-the-change.md) |
+The workflow decides which steps run; a task skill says how to do one kind of task inside them (`bug-fix`, `agent-change`, `mastra-workflows`, `local-instance`, `visual-options`, `show-the-change`, `ship`). Its `description` says when it applies: load every one that matches the task and copy its steps into the todo list. A step that names a workflow step in brackets fills that step. A task no skill fits (a feature, a UI change) follows the workflow's steps alone.
 
 ## Process documents
 

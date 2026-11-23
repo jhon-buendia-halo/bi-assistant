@@ -5,6 +5,15 @@ import { test, expect } from './fixtures/app.fixture';
 import { scenarioStep } from './support/demo-captions';
 import { saveLenaiSettings } from './helpers/agents-api';
 import { startLlmStub, type StubRequest } from './helpers/llm-stub';
+import {
+  composer,
+  composerMenu,
+  closeComposerMenu,
+  openComposerMenu,
+  sendRun,
+  setRunField,
+  setRunOption,
+} from './helpers/run-ui';
 
 // Review a Website drives a browser from the backend (agents.md 5.19,
 // ADR-0049): the app under test gets Playwright's own Chromium, so the
@@ -59,18 +68,19 @@ test.describe('Feature: Review a Website', () => {
       test.setTimeout(180_000);
       await scenarioStep(
         page,
-        'When I open "Review a Website" from User journeys, enter the site\'s URL, untick "Visual review with Iris" and click Execute',
+        'When I open "Review a Website" from User journeys, switch off "Visual review with Iris" under "+", type the site\'s URL and click Send',
         async () => {
           await railItem(page, 'User journeys').click();
           await page.getByTestId('workflow-review-website').click();
           await expect(page.getByTestId('workflow-detail-name')).toHaveText(
             'Review a Website',
           );
-          await page.getByTestId('workflow-input-url').fill(`${SITE}/`);
-          await page.getByTestId('workflow-input-maxPages').fill('20');
+          await setRunField(page, 'maxPages', '20');
           // Measured checks only: Iris's review has its own scenario.
-          await page.getByTestId('workflow-input-visualReview').uncheck();
-          await page.getByTestId('workflow-run').click();
+          await setRunOption(page, 'visualReview', false);
+          // The composer's message is the entry URL (the workflow has no question).
+          await composer(page).fill(`${SITE}/`);
+          await sendRun(page);
         },
       );
       const answer = page.getByTestId('run-answer');
@@ -203,12 +213,14 @@ test.describe('Feature: Review a Website', () => {
           async () => {
             await railItem(page, 'User journeys').click();
             await page.getByTestId('workflow-review-website').click();
-            await page.getByTestId('workflow-input-url').fill(`${SITE}/`);
-            await page.getByTestId('workflow-input-maxPages').fill('20');
+            await setRunField(page, 'maxPages', '20');
+            await openComposerMenu(page);
             await expect(
-              page.getByTestId('workflow-input-visualReview'),
+              composerMenu(page).getByTestId('workflow-input-visualReview'),
             ).toBeChecked();
-            await page.getByTestId('workflow-run').click();
+            await closeComposerMenu(page);
+            await composer(page).fill(`${SITE}/`);
+            await sendRun(page);
           },
         );
         const answer = page.getByTestId('run-answer');

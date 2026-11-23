@@ -146,7 +146,7 @@
       <div class="relative flex min-h-0 flex-1 overflow-hidden">
         <div
           data-testid="workflow-business-view"
-          class="flex min-h-0 flex-1 justify-center bg-surface"
+          class="flex min-h-0 min-w-0 flex-1 justify-center bg-surface"
         >
           <app-workflow-run-chat
             variant="business"
@@ -154,6 +154,13 @@
             (openInBuilder)="openInBuilder($event)"
           />
         </div>
+        @if (dashboards.shown() !== null) {
+          <!-- The dashboard beside the chat (dashboard-panel): the chat
+               column narrows, it is never covered -->
+          @defer (on immediate) {
+            <app-run-dashboard-panel />
+          }
+        }
         @if (openQuery(); as open) {
           <div
             data-testid="query-inspector-sheet"
@@ -214,6 +221,13 @@
             </div>
           }
         </div>
+        @if (dashboards.shown() !== null) {
+          <!-- The dashboard on the right edge, beside the canvas, never over
+               the Run panel (dashboard-panel) -->
+          @defer (on immediate) {
+            <app-run-dashboard-panel />
+          }
+        }
       </div>
     }
     @if (designer.openInspection(); as node) {

@@ -79,6 +79,7 @@ const TOOL_PHRASES: Record<string, string> = {
   sample_rows: 'Looked at sample rows',
   run_readonly_sql: 'Ran a query',
   ask_clarification: 'Asked you a question',
+  submit_dashboard: 'Submitted the dashboard',
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
