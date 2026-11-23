@@ -24,14 +24,14 @@ Apply the step-6 decisions to [frontend/e2e/](../../../frontend/e2e/) (and backe
 
 ### E2E test convention
 
-Playwright specs hold the Gherkin steps of the Features in [specs/capabilities/](../../../specs/capabilities/) (Gherkin once: the capability spec lists only each scenario's title; existing Features keep their steps until edited): one spec file per `Feature:`. A Feature marked `E2E: none yet` gets its spec the first time a change touches it. Don't ship a flow change without its E2E change, or with an impacted spec red. Unit tests sit beside their source (`*.spec.ts`, Jest in backend, `ng test` in frontend) and are not governed by this rule. Visual baselines (`*-snapshots/`) change only with `npm run test:e2e:update` and only for an intended visual change.
+Playwright specs hold the Gherkin steps of the Features in [specs/capabilities/](../../../specs/capabilities/) (Gherkin once: [`workflow-start`](../workflow-start/SKILL.md), step 5): one spec file per `Feature:`. A Feature marked `E2E: none yet` gets its spec the first time a change touches it. Don't ship a flow change without its E2E change, or with an impacted spec red. Unit tests sit beside their source (`*.spec.ts`, Jest in backend, `ng test` in frontend) and are not governed by this rule. Visual baselines (`*-snapshots/`) change only with `npm run test:e2e:update` and only for an intended visual change.
 
 ### Test target convention — web by default, desktop on request
 
 - **Web (default):** `npm run test:e2e` in `frontend/` builds the backend with the web UI and runs the Playwright `web` project. Each test starts the CLI on a free port with its own temp data dir, at 1440×900. It never touches port 3000 or your data.
 - **Desktop (only when the user asks):** `npm run test:e2e:desktop`, the same specs against Electron; needs port 3000 free.
 - **Desktop-only scenarios** call `desktopOnly()` and are skipped on web (`Desktop only`). List them as **"desktop not run"** in the changelog entry and PR description unless a desktop run was requested and passed.
-- **Manual checks and screenshots:** the web mode (`npm --prefix backend run build:all`, then `node backend/dist/cli.js --no-open --port <free> --data-dir <tmp>`).
+- **Manual checks and screenshots:** an isolated web-mode instance from [`local-instance`](../local-instance/SKILL.md).
 
 ## 10. Changelog, evidence, roadmap, PR
 
@@ -60,20 +60,6 @@ A UI story's demo is shared as a Claude artifact so the video and the work descr
 4. Tell the human to share the link from the page's Share menu; artifacts are private by default.
 
 Re-publish at step 10 only when the demo changed after the wave check. Demos and evidence are recorded per wave; the acceptance gate stays per epic.
-
-### Session handoff
-
-One lead session per epic wave. Before starting a new session, write `.context/handoff.md` (git-ignored scratch; keep it under 30 lines) and start the new session from it:
-
-```
-# Handoff — <EPIC-ID>, <date>
-Branch / worktree: <branch>, <path>
-Done: <story ids merged, wave checks green>
-In flight: <story ids, unit branches, who owns them>
-Next: <the next wave or gate step, with the exact command>
-Open questions for the user: <one line each, with the recommendation>
-Traps: <anything the next session would rediscover>
-```
 
 ### The epic PR
 

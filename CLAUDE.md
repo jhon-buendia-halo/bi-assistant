@@ -85,7 +85,7 @@ Each entry names when it applies, then the rule.
 
 ## Autonomy
 
-- **Ask the target before starting the app or the Postgres stack from a worktree; check the default ports first; stop by PID.** Skills: `workflow-implement`, `local-instance`.
+- **Ask the target before starting the app or the Postgres stack from a worktree; check the default ports first; stop by PID.** Skill: `local-instance`.
 - **Explicit pauses win.** *Never Block on the Human* covers reversible work with no stated pause; a rule here, a skill step that waits for the user, or the user's own instruction in the session always stops the work.
 
 ## Writing the reply

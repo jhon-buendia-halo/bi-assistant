@@ -394,7 +394,7 @@ Defaults are shared state: the desktop app uses Electron's `userData` directory 
 | Observability profile | same project; ports 6006, 3001, 4317, 4318 | `docker compose -p <name>` plus `PHOENIX_PORT`, `GRAFANA_PORT`, `OTLP_GRPC_PORT`, `OTLP_HTTP_PORT` (see *Observability profile* above) |
 | Playwright | needs port 3000 free | one e2e run at a time per machine; each test already gets its own temp profile |
 
-The project rule: when work happens in a worktree, ask which target (shared or isolated) before starting the app or the Compose stack. See *Worktree deploy convention* in the [`workflow-implement`](../../.claude/skills/workflow-implement/SKILL.md) project skill.
+The project rule: when work happens in a worktree, ask which target (shared or isolated) before starting the app or the Compose stack. See the [`local-instance`](../../.claude/skills/local-instance/SKILL.md) project skill.
 
 ## 8. The product page (`site/`)
 
@@ -492,9 +492,9 @@ The steps' conventions live in four step skills. Claude loads a skill before its
 | Skill | Steps | Holds |
 |---|---|---|
 | `workflow-start` | 1–5 | restating the goal and sizing it, clarifying questions, Planning convention, Epic gate (repo-only epics), Branching convention, Architecture convention (C4, ADRs), Spec convention (where facts go, Gherkin, CI coverage) |
-| `workflow-implement` | 8 | Code rules, the lean builder lane, Worktree deploy convention |
-| `verify` | wave check, 9 | `qa.mjs --wave` (agent-built stories), `--fast` (plain session, S change) and `--gate`, the eval bar (base vs branch, parallel runs), checking a change in the running web app |
-| `workflow-gate` | 6, 7, 10, 11 | E2E impact analysis and test conventions, Test target convention, per-story evidence, the per-epic changelog entry and PR, the demo artifact, the `.context/handoff.md` template, post-merge cleanup, the per-epic retrospective and `lessons.md` |
+| `workflow-implement` | 8 | Code rules, the lean builder lane |
+| `verify` | wave check, 9 | `qa.mjs --wave` (agent-built stories), `--fast` (plain session, S change) and `--gate`, the eval bar (base vs branch, parallel runs), driving a running instance with Playwright |
+| `workflow-gate` | 6, 7, 10, 11 | E2E impact analysis and test conventions, Test target convention, per-story evidence, the per-epic changelog entry and PR, the demo artifact, post-merge cleanup, the per-epic retrospective and `lessons.md` |
 
 **Task skills.** A workflow decides which steps run; a task skill says how to do one kind of task inside them. Both workflows share them. They were playbooks (`.claude/playbooks/`, Markdown with no frontmatter, routed by a table in `CLAUDE.md`) until they became skills: a playbook cost the same context as a skill (its table row against a skill's `description`) and loaded the same way (`Read` against `Skill`), but needed a second index kept by hand and had no `/<name>`. A task skill's `description` says when it applies; Claude loads every one that matches the task and copies its steps into the todo list. A step that names a workflow step in brackets (`[Understand]`, `[Implement]`, `[Checks]`) fills that step. A task skill points at other skills' sections and `lessons.md` rather than copying them, and ends with what the reply reports. A task no skill fits follows the workflow's steps alone.
 
@@ -503,9 +503,9 @@ The steps' conventions live in four step skills. Claude loads a skill before its
 | `mastra-workflows` | a new or changed Mastra workflow | Mastra's docs against the installed types, the reuse inventory, three approaches, the build rules, checks and hand-over |
 | `agent-change` | a new agent, or a change to what an agent receives | the full *query inspector* rule, the eval decision and the eval run |
 | `bug-fix` | a defect in shipped behaviour | reproduce with real traffic, flake rate, failing test first |
-| `local-instance` | starting the app for the user or a check | the default LLM and `setup-local.mjs`, ports, web-mode build, stop by PID |
+| `local-instance` | starting the app or the compose stack, for the user or a check | the only place that starts and stops an instance: ask the target (shared or isolated), ports, web-mode build, the default LLM and `setup-local.mjs`, stop by PID |
 | `ship` | recording what shipped, the PR, post-merge cleanup | the order of `workflow-gate` steps 10 and 11 for each workflow |
-| `session-handoff` | starting a session, pausing work or picking it up | the worktree and `origin/main` check, the handoff file and the checks on pick-up |
+| `session-handoff` | starting a session, pausing work or picking it up | the worktree and `origin/main` check, the `.context/handoff.md` template and the checks on pick-up |
 | `visual-options` | options for a change that can be seen | three options drawn as wireframes on a real screenshot, one artifact per option |
 | `show-the-change` | finishing any feature or change | screenshots of the running change with real data, axe, one artifact per image |
 | `deploy-labs-site` | publishing a Labs product page | section 8 |
@@ -520,7 +520,7 @@ The steps' conventions live in four step skills. Claude loads a skill before its
 
 **Read and output rules, for every agent.** Never read a file over 500 lines whole: `grep -n` or the generated section index [specs/INDEX.md](../INDEX.md) (`path:start-end heading`), then read the range. Run Playwright with `--reporter=dot` (or `line`) and Jest with `--silent`, send builds and test runs to a log file, and read back only the summary or the failure block.
 
-**Session hygiene.** One lead session per epic wave; before a new session, write `.context/handoff.md` (template in `workflow-gate`, steps in the `session-handoff` skill).
+**Session hygiene.** One lead session per epic wave; before a new session, write `.context/handoff.md` (template and steps in the `session-handoff` skill).
 
 **Change sizes.** S (a fix, copy, config, dependency, docs or process change with no new user flow, endpoint, persisted shape or agent input) runs a reduced set of steps with no demo (`qa.mjs --no-demo`), no new epic spec and one changelog bullet; M (a story) runs every step; L (architectural) adds an ADR and a written plan. The table is in `workflow-strict`.
 
