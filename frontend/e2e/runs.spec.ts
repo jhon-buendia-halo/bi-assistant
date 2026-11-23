@@ -10,7 +10,7 @@ import {
 } from './helpers/app-actions';
 import { apiJson } from './helpers/api';
 import { seedPastChat } from './helpers/past-chats';
-import { V2_WORKFLOW_ID, V2_WORKFLOW_NAME } from './helpers/runs-api';
+import { ASK_STEP_ID, ASK_WORKFLOW_ID, ASK_WORKFLOW_NAME } from './helpers/runs-api';
 import { worldCupKey } from './helpers/world-cup-db';
 import {
   createUserAgent,
@@ -346,17 +346,16 @@ test.describe('Runs and Past chats', () => {
   const composerBox = (page: Page) =>
     page.getByPlaceholder('Ask a follow-up question…');
 
-  /** A stored run of Insights Analyst, made through the API. */
+  /** A stored run of Answer a Business Question (Avery + Michael), made through the API. */
   async function seedRun(page: Page): Promise<string> {
     const run = await apiJson<{ id: string }>(
       page,
       'POST',
-      `/workflows/${V2_WORKFLOW_ID}/runs`,
+      `/workflows/${ASK_WORKFLOW_ID}/runs`,
       {
         input: {
           question: QUESTION,
           datasets: [WORLD_CUP_DATASET],
-          approveSteps: false,
         },
       },
     );
@@ -414,7 +413,7 @@ test.describe('Runs and Past chats', () => {
         await expect(page.getByTestId('runs-tab-runs')).toHaveAttribute('aria-selected', 'true');
         const row = page.getByTestId(`run-${runId}`);
         await expect(row.getByTestId('row-run-title')).toHaveText(QUESTION);
-        await expect(row.getByTestId('row-run-workflow')).toHaveText(V2_WORKFLOW_NAME);
+        await expect(row.getByTestId('row-run-workflow')).toHaveText(ASK_WORKFLOW_NAME);
         await expect(row.getByTestId('row-run-status')).toHaveText('Done');
       });
       await scenarioStep(page, 'When I open it', async () => {
@@ -422,15 +421,15 @@ test.describe('Runs and Past chats', () => {
       });
       await scenarioStep(
         page,
-        `Then "${V2_WORKFLOW_NAME}" opens drawn with that run: its question, its answer and each node's status`,
+        `Then "${ASK_WORKFLOW_NAME}" opens drawn with that run: its question, its answer and each node's status`,
         async () => {
-          await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2_WORKFLOW_NAME);
+          await expect(page.getByTestId('workflow-detail-name')).toHaveText(ASK_WORKFLOW_NAME);
           await expect(page.getByTestId('run-detail-input')).toHaveCount(0);
           await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
           await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
           await expect(
-            page.getByTestId('workflow-node-receive-question').getByTestId('workflow-node-status'),
+            page.getByTestId(`workflow-node-${ASK_STEP_ID}`).getByTestId('workflow-node-status'),
           ).toHaveText('Done');
           await expect(
             page.getByTestId('workflow-state-run-id').getByTestId('execution-id'),

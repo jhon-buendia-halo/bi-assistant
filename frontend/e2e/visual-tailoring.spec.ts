@@ -12,7 +12,7 @@ import {
 import { apiJson } from './helpers/api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import { seedPastChat } from './helpers/past-chats';
-import { V2_WORKFLOW_ID, V2_WORKFLOW_NAME } from './helpers/runs-api';
+import { ASK_WORKFLOW_ID, ASK_WORKFLOW_NAME } from './helpers/runs-api';
 import {
   LlmStub,
   StubReply,
@@ -309,18 +309,16 @@ test(
     let runId = '';
     await scenarioStep(
       page,
-      `Given a run of ${V2_WORKFLOW_NAME} with an answer`,
+      `Given a run of ${ASK_WORKFLOW_NAME} with an answer`,
       async () => {
         const run = await apiJson<{ id: string }>(
           page,
           'POST',
-          `/workflows/${V2_WORKFLOW_ID}/runs`,
+          `/workflows/${ASK_WORKFLOW_ID}/runs`,
           {
             input: {
               question: QUESTION,
               datasets: [WORLD_CUP_DATASET],
-              buildVisual: false,
-              approveSteps: false,
             },
           },
         );
@@ -581,13 +579,11 @@ test(
         const run = await apiJson<{ id: string }>(
           page,
           'POST',
-          `/workflows/${V2_WORKFLOW_ID}/runs`,
+          `/workflows/${ASK_WORKFLOW_ID}/runs`,
           {
             input: {
               question: DASHBOARD_QUESTION,
               datasets: [WORLD_CUP_DATASET],
-              buildVisual: false,
-              approveSteps: false,
             },
           },
         );

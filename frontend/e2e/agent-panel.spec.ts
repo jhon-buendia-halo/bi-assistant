@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { WORLD_CUP_DATASET } from './helpers/app-actions';
 import { apiFetch, apiJson } from './helpers/api';
-import { RunResult, V2_WORKFLOW_ID, runWorkflow } from './helpers/runs-api';
+import { ASK_STEP_ID, ASK_WORKFLOW_ID, RunResult, runWorkflow } from './helpers/runs-api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import {
   LlmStub,
@@ -18,11 +18,12 @@ import { worldCupKey } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Agent panel" in specs/capabilities/agent-panel/spec.md
- * (roadmap 1.14.18, BA-231), through runs of Insights Analyst
- * (`answer-business-question`, the one runnable workflow): a run's panel items and its
- * code-defined steps are read from the stream and the stored run (api.md
- * 119, 121, 125-126, 130). The model is the recording OpenAI-compatible
- * stub: each scenario scripts the tool calls of its turn (`run_readonly_sql`).
+ * (roadmap 1.14.18, BA-231), through runs of Answer a Business Question
+ * (Avery + Michael): a run's panel items and its code-defined step are read
+ * from the stream and the stored run (api.md 119, 121, 125-126, 130). The
+ * model is the recording OpenAI-compatible stub: it moves Avery itself
+ * (helpers/v2-steps.ts `averyMove`), and each scenario scripts the tool calls
+ * of Michael's turn (`run_readonly_sql`).
  */
 
 /** Marks the designer's (non-streamed) request: it carries its skill. */
@@ -143,12 +144,10 @@ interface RunDoc {
   id: string;
   panelItems: { id: string; kind: string; title: string; visualId?: string }[];
   visualizations?: { id: string; title: string }[];
-  workflow?: {
-    phases: { number: number; title: string }[];
-    current: number | null;
-    done: number[];
-    source: string;
-  };
+  /** Its code-defined steps, as the run stored them. */
+  steps?: { id: string; title: string; status: string }[];
+  /** Which of them ran (api.md 2.1): 1-based numbers. */
+  workflowState?: { current: number | null; done: number[] };
 }
 
 /** Runs the workflow `workflowId` and returns its stored run, expecting `done`. */
@@ -164,13 +163,11 @@ async function runOk(
   return { result, run: result.run as unknown as RunDoc };
 }
 
-/** A run of Insights Analyst on `question` over the World Cup dataset. */
-function runV2On(page: Page, question: string) {
-  return runOk(page, V2_WORKFLOW_ID, {
+/** A run of Answer a Business Question (Avery + Michael) on `question` over the World Cup dataset. */
+function runAskOn(page: Page, question: string) {
+  return runOk(page, ASK_WORKFLOW_ID, {
     question,
     datasets: [WORLD_CUP_DATASET],
-    buildVisual: false,
-    approveSteps: false,
   });
 }
 
@@ -196,27 +193,17 @@ const STAGE_TURN: TurnScript = {
   answer: 'The group stage holds most of the matches.',
 };
 
-/** Its steps in catalogue order. */
-const V2_STEP_TITLES = [
-  'Read images',
-  'Receive question',
-  'Load catalog',
-  'Plan',
-  'Analyse',
-  'Validate',
-  'Write answer',
-  'Build visual',
-  'Wrap up',
-];
+/** Its one step: Avery's turn, Michael's included. */
+const ASK_STEP_TITLES = ['Orchestrate'];
 
 // --------------------------------------------------------------- scenarios
 
-test("a visual generated on a v2 answer is the run's panel item, kept on reopening and downloaded only through its own route", async ({
+test("a visual generated on a run's answer is the run's panel item, kept on reopening and downloaded only through its own route", async ({
   page,
 }) => {
-  // Given an Answer a Business Question run with an answer.
+  // Given an Answer a Business Question (Avery + Michael) run with an answer.
   script([STAGE_TURN]);
-  const { run } = await runV2On(page, STAGE_TURN.question);
+  const { run } = await runAskOn(page, STAGE_TURN.question);
 
   // When I generate an interactive visual from its answer (api.md 130).
   const generated = await apiJson<{
@@ -256,17 +243,15 @@ test("a visual generated on a v2 answer is the run's panel item, kept on reopeni
   expect(zip.status()).toBe(200);
 });
 
-test("a v2 run's workflow never appears among its panel items", async ({
+test("a run's workflow never appears among its panel items", async ({
   page,
 }) => {
-  // Given an Answer a Business Question run, whose steps are its workflow.
+  // Given an Answer a Business Question (Avery + Michael) run, whose step is its workflow.
   script([STAGE_TURN]);
-  const { run } = await runV2On(page, STAGE_TURN.question);
+  const { run } = await runAskOn(page, STAGE_TURN.question);
 
   // Then its steps are kept as the run's workflow, not as a panel item (R10).
-  expect(run.workflow?.phases.map((phase) => phase.title)).toEqual(
-    V2_STEP_TITLES,
-  );
+  expect(run.steps?.map((step) => step.title)).toEqual(ASK_STEP_TITLES);
   expect(run.panelItems).toEqual([]);
   const res = await apiFetch(
     page,
@@ -277,20 +262,10 @@ test("a v2 run's workflow never appears among its panel items", async ({
   expect(await res.text()).toContain('Panel item \\"phases\\" not found');
 });
 
-// ------------------------------------------- Insights Analyst (R8a)
+// ------------------------------- Answer a Business Question (Avery + Michael) (R8a)
 
-/** The steps a clear question runs, in order. */
-const V2_STEPS = [
-  'receive-question',
-  'load-catalog',
-  'plan',
-  'analyse',
-  'validate',
-  'write-answer',
-  'wrap-up',
-];
-// Its five tools and the framework's skill tools (agents.md 2.11, 3.9).
-const V2_TOOLS = [
+// Michael's tools and the framework's skill tools (agents.md 2.11, 3.9).
+const MICHAEL_TOOLS = [
   'list_entities',
   'describe_entity',
   'sample_rows',
@@ -301,14 +276,14 @@ const V2_TOOLS = [
   'skill_search',
   'skill_read',
 ];
-const V2_QUESTION = 'How many matches were played in 2018?';
-const V2_ANSWER = 'There were 64 matches.';
+const ASK_QUESTION = 'How many matches were played in 2018?';
+const ASK_ANSWER = 'There were 64 matches.';
 
-test('Insights Analyst shows its code-defined steps advancing', async ({
+test('Answer a Business Question shows its code-defined step advancing', async ({
   page,
 }) => {
   const turn: TurnScript = {
-    question: V2_QUESTION,
+    question: ASK_QUESTION,
     calls: [
       {
         name: 'run_readonly_sql',
@@ -318,59 +293,48 @@ test('Insights Analyst shows its code-defined steps advancing', async ({
         },
       },
     ],
-    answer: V2_ANSWER,
+    answer: ASK_ANSWER,
   };
   script([turn]);
-  const { result, run } = await runV2On(page, V2_QUESTION);
+  const { result, run } = await runAskOn(page, ASK_QUESTION);
 
-  // Every step runs, in order, and ends done (R19).
-  for (const id of V2_STEPS) {
-    expect(stepStatuses(result, id), id).toEqual(['running', 'success']);
-  }
+  // Its one step runs and ends done (R19).
+  expect(stepStatuses(result, ASK_STEP_ID)).toEqual(['running', 'success']);
   const startOrder = result.events
     .filter((event) => event.type === 'step' && event.status === 'running')
     .map((event) => String(event.id));
-  expect(startOrder).toEqual(V2_STEPS);
-  expect(result.text).toContain(V2_ANSWER);
+  expect(startOrder).toEqual([ASK_STEP_ID]);
+  expect(result.text).toContain(ASK_ANSWER);
 
-  // The run ran v2 with its own tools, never update_workflow (R8a), and
-  // the SQL ran for real.
-  const request = turnRequests(stub, V2_QUESTION)[0];
-  expect([...request.tools].sort()).toEqual([...V2_TOOLS].sort());
-  expect(toolResultsOf(V2_QUESTION).join('\n')).toContain('matches');
+  // Avery briefed Michael through answer_from_data; Michael ran with his own
+  // tools, never update_workflow (R8a), and the SQL ran for real.
+  const avery = stub.requests.find((request) => request.avery);
+  expect(avery?.tools).toContain('answer_from_data');
+  const request = turnRequests(stub, ASK_QUESTION)[0];
+  expect([...request.tools].sort()).toEqual([...MICHAEL_TOOLS].sort());
+  expect(toolResultsOf(ASK_QUESTION).join('\n')).toContain('matches');
 
-  expect(run.workflow?.source).toBe('workflow');
-  expect(run.workflow?.phases.map((phase) => phase.title)).toEqual(
-    V2_STEP_TITLES,
-  );
-  // Every step but Read images (1, no image) and Build visual (8): the
-  // branches a clear question without images or the visual (unticked) skips.
-  expect(run.workflow?.done).toEqual([2, 3, 4, 5, 6, 7, 9]);
-  expect(stepStatuses(result, 'build-visual').at(-1)).toBe('skipped');
+  expect(run.steps?.map((step) => [step.title, step.status])).toEqual([
+    ['Orchestrate', 'success'],
+  ]);
+  expect(run.workflowState?.done).toEqual([1]);
 });
 
-test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
+test('a failing step of the workflow is marked failed', async ({ page }) => {
   // The stub fails every model call: the connection drops before a reply.
   stub.hold = (request) =>
     request.stream ? Promise.reject(new Error('model down')) : undefined;
 
   // The provider retries a dropped connection before the step fails.
-  const result = await runWorkflow(page, V2_WORKFLOW_ID, {
-    question: V2_QUESTION,
+  const result = await runWorkflow(page, ASK_WORKFLOW_ID, {
+    question: ASK_QUESTION,
     datasets: [WORLD_CUP_DATASET],
-    buildVisual: false,
-    approveSteps: false,
   });
   expect(result.status).toBe(200);
-  expect(stepStatuses(result, 'receive-question').at(-1)).toBe('success');
-  expect(stepStatuses(result, 'load-catalog').at(-1)).toBe('success');
-  expect(stepStatuses(result, 'plan').at(-1)).toBe('success');
-  expect(stepStatuses(result, 'analyse').at(-1)).toBe('failed');
-  expect(stepStatuses(result, 'validate').at(-1)).toBe('skipped');
-  expect(stepStatuses(result, 'write-answer').at(-1)).toBe('skipped');
-  expect(stepStatuses(result, 'build-visual').at(-1)).toBe('skipped');
-  expect(stepStatuses(result, 'wrap-up').at(-1)).toBe('skipped');
-  expect(turnRequests(stub, V2_QUESTION).length).toBeGreaterThan(0);
+  expect(stepStatuses(result, ASK_STEP_ID).at(-1)).toBe('failed');
+  expect(
+    stub.requests.filter((request) => request.avery).length,
+  ).toBeGreaterThan(0);
 
   // The run ends with the step's error (R8a, agent-answers R61).
   const last = result.events[result.events.length - 1];
