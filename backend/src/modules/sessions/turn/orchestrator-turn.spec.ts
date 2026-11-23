@@ -19,6 +19,7 @@ import { createHash } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { CHIEF_OF_STAFF_AGENT_KEY } from '../../../mastra/agent-constants';
 import { analyseSystemBlocks } from '../../../mastra/workflows/analysis.prompts';
+import { ModelTimeoutError } from '../../../mastra/workflows/model-call';
 import { MICHAEL_ALONE_LINE } from '../../../mastra/workflows/orchestrated-answer-michael.prompts';
 import {
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
@@ -475,6 +476,94 @@ describe('Avery runs her turn (agents.md 5.23)', () => {
     expect(await runOrchestratorTurn(stopped.deps, { question: 'q' })).toEqual({
       answer: 'partial',
       stopped: true,
+    });
+  });
+
+  it("fails the step when Michael's model fails, naming him, though her tool reads the error and she closes", async () => {
+    // As Mastra does: her tool's throw becomes a tool error she reads, and
+    // her stream goes on to her closing words.
+    const relayed = (tools: ReturnType<typeof orchestratorTools>) =>
+      tools.answerFromData('Count every match.').then(
+        () => [text('Done.')],
+        () => [text('Michael could not answer.')],
+      );
+    const thrown = fixture(relayed, {
+      team: team({
+        analyse: jest.fn(() =>
+          Promise.reject(new Error('The provider is down (503)')),
+        ),
+      }),
+    });
+    await expect(
+      runOrchestratorTurn(thrown.deps, { question: 'q' }),
+    ).rejects.toThrow(
+      'Michael (Insights Analyst) could not answer: The provider is down (503)',
+    );
+
+    // A model timeout is thrown as it is (workflows R43).
+    const timeout = new ModelTimeoutError('Analyse', 5 * 60_000, true);
+    const timed = fixture(relayed, {
+      team: team({ analyse: jest.fn(() => Promise.reject(timeout)) }),
+    });
+    await expect(
+      runOrchestratorTurn(timed.deps, { question: 'q' }),
+    ).rejects.toBe(timeout);
+  });
+
+  it('answers stopped when the run is stopped during Michael, and waits on his clarifying question', async () => {
+    const abort = new AbortController();
+    const stopped = fixture(
+      (tools) =>
+        tools.answerFromData('Count every match.').then(
+          () => [text('Done.')],
+          () => [],
+        ),
+      {
+        deps: { signal: abort.signal },
+        team: team({
+          analyse: jest.fn(() => {
+            abort.abort();
+            return Promise.reject(new Error('This operation was aborted'));
+          }),
+        }),
+      },
+    );
+    expect(await runOrchestratorTurn(stopped.deps, { question: 'q' })).toEqual({
+      answer: '',
+      stopped: true,
+    });
+
+    const asked = fixture(
+      async (tools) => {
+        await tools.answerFromData('Count every match.');
+        return [
+          {
+            type: 'tool-call',
+            payload: {
+              toolName: 'ask_clarification',
+              args: { question: 'Which year?', options: ['2018', '2022'] },
+            },
+          },
+        ];
+      },
+      {
+        team: team({
+          analyse: jest.fn(() =>
+            Promise.resolve({
+              ...ATTEMPT,
+              clarification: {
+                question: 'Which year?',
+                options: ['2018', '2022'],
+              },
+            }),
+          ),
+        }),
+      },
+    );
+    expect(await runOrchestratorTurn(asked.deps, { question: 'q' })).toEqual({
+      answer: '',
+      stopped: false,
+      clarification: { question: 'Which year?', options: ['2018', '2022'] },
     });
   });
 
