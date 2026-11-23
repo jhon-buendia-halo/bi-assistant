@@ -962,20 +962,6 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
         fixture.detectChanges();
       }
 
-      it('a stored run that asked an agent reads Asked <agent>', () => {
-        showAnswer();
-        designer.run.set(
-          assistantRun({
-            id: 'run-2',
-            steps: ranSteps,
-            context: { fromRunId: 'run-1', askStep: 'write-answer' },
-            answer: { role: 'assistant', content: 'Short.', at: 'x' },
-          }),
-        );
-        fixture.detectChanges();
-        expect(text('workflow-run-context')).toContain('Asked Jessica');
-      });
-
       it('an answer that exported the conversation shows the export card; one that did not shows none', async () => {
         showAnswer();
         expect(q('run-export-card')).toBeNull();

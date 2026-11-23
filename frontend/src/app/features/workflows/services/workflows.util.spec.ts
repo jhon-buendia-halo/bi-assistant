@@ -516,15 +516,4 @@ describe('reference images (an images field)', () => {
       question: 'And now?',
     });
   });
-
-  it('a follow-up that asks one agent adds askStep to its context', () => {
-    const run = { id: 'r-1', input: { question: 'Why?' } };
-    expect(
-      followUpRequest(run, 'question', 'Shorter', undefined, 'write-answer')
-        .context,
-    ).toEqual({ fromRunId: 'r-1', askStep: 'write-answer' });
-    expect(
-      followUpRequest(run, 'question', 'Shorter', undefined, '').context,
-    ).toEqual({ fromRunId: 'r-1' });
-  });
 });

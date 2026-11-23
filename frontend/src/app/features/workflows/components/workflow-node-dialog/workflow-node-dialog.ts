@@ -62,7 +62,6 @@ import { ToolDataRecord } from '../../../sessions/models/session.model';
 import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import { WorkflowAttemptSwitcher } from '../workflow-attempt-switcher/workflow-attempt-switcher';
 import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
-import { WorkflowStepOutputView } from '../workflow-step-output-view/workflow-step-output-view';
 import { WorkflowNodeChat } from '../workflow-node-chat/workflow-node-chat';
 import { WorkflowStepEvidence } from '../workflow-step-evidence/workflow-step-evidence';
 import { WorkflowTeammateWork } from '../workflow-teammate-work/workflow-teammate-work';
@@ -126,7 +125,6 @@ const SUMMARY_FIELDS = 4;
     WorkflowDataView,
     WorkflowNodeChat,
     WorkflowStepEvidence,
-    WorkflowStepOutputView,
     WorkflowStepStory,
     WorkflowTeammateWork,
     WorkflowLeadWork,

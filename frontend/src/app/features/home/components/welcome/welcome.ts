@@ -35,7 +35,7 @@ import { WorkflowsNavState } from '../../../workflows/services/workflows-nav-sta
 import { runRowStatus } from '../../../workflows/services/workflows.util';
 
 /** The workflow the home's question box runs (app-shell R51). */
-export const ASK_WORKFLOW_ID = 'answer-business-question';
+export const ASK_WORKFLOW_ID = 'orchestrated-answer-michael';
 
 /** How many runs the home lists; the rest are one click away in Runs. */
 export const HOME_RECENT_RUNS = 5;
@@ -45,7 +45,7 @@ export type SetupGap = 'llm' | 'datasets';
 
 /**
  * The start page (ui.md 4.1, app-shell R51): a question box that runs
- * Answer a Business Question on the picked datasets, the latest runs, the
+ * Answer a Business Question (Avery + Michael) on the picked datasets, the latest runs, the
  * other workflows, and what is still missing before a first question.
  */
 @Component({
@@ -164,7 +164,7 @@ export class Welcome {
   }
 
   /**
-   * Ask: Answer a Business Question opens on its page and runs on the
+   * Ask: Answer a Business Question (Avery + Michael) opens on its page and runs on the
    * question and the picked datasets, with its Run panel and query
    * inspector (workflows R31). Nothing runs from this page itself.
    */

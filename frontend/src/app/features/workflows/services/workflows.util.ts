@@ -246,7 +246,6 @@ export function followUpRequest(
   questionField: string,
   question: string,
   images?: readonly string[],
-  askStep?: string,
 ): WorkflowRunRequest {
   const input = { ...run.input, [questionField]: question.trim() };
   // The composer's attachments (the run's kept paths and the new `data:`
@@ -257,7 +256,7 @@ export function followUpRequest(
   }
   return {
     input,
-    context: { fromRunId: run.id, ...(askStep ? { askStep } : {}) },
+    context: { fromRunId: run.id },
   };
 }
 

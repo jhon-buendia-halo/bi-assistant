@@ -284,13 +284,13 @@ export class WorkflowRunChat {
 
   /**
    * The chat reads the whole thread of earlier turns: always in the Business
-   * view, and for Answer a Business Question (orchestrated) in either view,
+   * view, and for Answer a Business Question (Avery + Michael) in either view,
    * since that conversation never ends.
    */
   protected readonly threaded = computed(
     () => this.business() || this.isAveryWorkflow(),
   );
-  // Answer a Business Question (orchestrated) and (Avery + Michael): any
+  // Answer a Business Question (Avery + Michael): any
   // workflow whose step runs Avery (workflows R45).
   private readonly isAveryWorkflow = computed(
     () =>
