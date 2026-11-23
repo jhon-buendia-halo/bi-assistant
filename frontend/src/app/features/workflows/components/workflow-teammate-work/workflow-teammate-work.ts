@@ -87,7 +87,7 @@ export class WorkflowTeammateWork {
   protected readonly empty = computed(() =>
     this.hasRun()
       ? `${this.lead()} did not call ${this.name()} in the run shown.`
-      : `Run the journey to see what ${this.name()} does when ${this.lead()} calls them.`,
+      : `Run the workflow to see what ${this.name()} does when ${this.lead()} calls them.`,
   );
 
   /** A query step opens in the query inspector when the answer holds it. */

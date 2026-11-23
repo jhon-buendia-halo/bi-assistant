@@ -1884,10 +1884,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await expect(nodeDialog(page)).toHaveCount(0);
 
   // The Orchestrate dialog after a run: what Avery did, its chat with a
-  // question, its answer and a tool call. Left out: "See Michael's work"
-  // (text-primary on the teammate card's muted surface, 4.43:1 in light,
-  // a known contrast defect of the lead view reported with this change).
-  const knownDefect = ['[data-testid="workflow-lead-teammate-open"]'];
+  // question, its answer and a tool call.
   stub.reply = chatOrRun;
   const chatDialog = await openNode(page, 'orchestrate', AVERY_RAN);
   await expect(chatDialog.getByTestId('workflow-lead-work')).toBeVisible();
@@ -1901,17 +1898,14 @@ test('the Workflows pages have no detectable accessibility violations in either 
   ).toHaveCount(1);
   await scan(
     'Answer a Business Question page, Orchestrate dialog: work and chat',
-    knownDefect,
   );
   await unfoldAgentCard(page, 'output');
   await scan(
     'Answer a Business Question page, Orchestrate dialog: What it returned',
-    knownDefect,
   );
   await unfoldAgentCard(page, 'params');
   await scan(
     "Answer a Business Question page, Orchestrate dialog: How it's set up",
-    knownDefect,
   );
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
