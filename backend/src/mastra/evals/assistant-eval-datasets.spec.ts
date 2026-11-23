@@ -244,4 +244,30 @@ describe('the fixture registry is the single source of required entities', () =>
     );
     expect(error).toContain('Missing entities: edge_cases.LegacyOrders.');
   });
+
+  it('accepts the Retail Ops fixture (19 entities) and names what is missing', () => {
+    const retail = evalFixture('retail-ops');
+    expect(retail.datasetName).toBe('Retail Ops');
+    const retailTables = retail.requiredTables.map(
+      (table) => `retail_ops.${retail.schema}.${table}`,
+    );
+    expect(retailTables).toHaveLength(19);
+    const snapshot = fixture({ name: 'Retail Ops', tables: retailTables });
+    expect(check(['Retail Ops'], [snapshot], 'retail-ops')).toBeUndefined();
+    const error = check(
+      ['Retail Ops'],
+      [
+        {
+          ...snapshot,
+          tables: retailTables.filter(
+            (table) => !table.endsWith('.loyalty_redemptions'),
+          ),
+        },
+      ],
+      'retail-ops',
+    );
+    expect(error).toContain(
+      'Missing entities: retail_ops.loyalty_redemptions.',
+    );
+  });
 });

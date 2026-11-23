@@ -36,6 +36,7 @@ import { READINESS_WORKFLOW_EVAL_SET } from './readiness-workflow.evals';
 import { ANALYSIS_PLANNER_EVAL_SET } from './analysis-planner.evals';
 import { ANSWER_WRITER_EVAL_SET } from './answer-writer.evals';
 import { INSIGHTS_ANALYST_EDGE_EVAL_SET } from './insights-analyst-edge.evals';
+import { INSIGHTS_ANALYST_RETAIL_EVAL_SET } from './insights-analyst-retail.evals';
 import { IMAGE_READER_EVAL_SET } from './image-reader.evals';
 import {
   READINESS_WORKFLOW_EVAL_TARGET,
@@ -60,6 +61,7 @@ export const EVAL_SETS: AssistantEvalSet[] = [
   ANALYSIS_PLANNER_EVAL_SET,
   ANSWER_WRITER_EVAL_SET,
   INSIGHTS_ANALYST_EDGE_EVAL_SET,
+  INSIGHTS_ANALYST_RETAIL_EVAL_SET,
   IMAGE_READER_EVAL_SET,
   INSIGHTS_ANALYST_EVAL_SET,
   QUERY_EXPLAINER_EVAL_SET,
