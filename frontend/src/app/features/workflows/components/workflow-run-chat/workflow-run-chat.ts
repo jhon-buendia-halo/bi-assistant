@@ -1195,12 +1195,14 @@ export class WorkflowRunChat {
   protected newQuestion(): void {
     this.designer.newQuestion();
     this.resetIntake();
+    this.syncDraft();
   }
 
   /** Run again: a new conversation holding the shown run's whole input. */
   protected runAgain(): void {
     this.designer.runAgain();
     this.resetIntake();
+    this.syncDraft();
   }
 
   private push(entry: Omit<ChatEntry, 'id' | 'round'>): number {
