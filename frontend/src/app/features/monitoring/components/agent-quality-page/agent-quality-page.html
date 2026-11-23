@@ -1,0 +1,304 @@
+<div class="flex flex-col gap-4" data-testid="agent-quality-page">
+  <!-- Filter bar -->
+  <div
+    class="flex flex-wrap items-end gap-3"
+    role="group"
+    aria-label="Filter agent quality"
+  >
+    <label class="flex w-48 flex-col gap-1">
+      <span class="field-label">Agent persona</span>
+      <select
+        data-testid="quality-filter-agent"
+        class="field"
+        (change)="onSelect('agent', $event)"
+      >
+        <option value="" class="bg-surface" [selected]="filters().agent === ''">
+          All agent personas
+        </option>
+        @for (agent of facets().agents; track agent.key) {
+          <option
+            [value]="agent.key"
+            class="bg-surface"
+            [selected]="filters().agent === agent.key"
+          >
+            {{ agent.name }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="flex w-48 flex-col gap-1">
+      <span class="field-label">Eval set</span>
+      <select
+        data-testid="quality-filter-set"
+        class="field"
+        (change)="onSelect('set', $event)"
+      >
+        <option value="" class="bg-surface" [selected]="filters().set === ''">
+          All sets
+        </option>
+        @for (set of setOptions(); track set.id) {
+          <option
+            [value]="set.id"
+            class="bg-surface"
+            [selected]="filters().set === set.id"
+          >
+            {{ set.name }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="flex w-48 flex-col gap-1">
+      <span class="field-label">Model</span>
+      <select
+        data-testid="quality-filter-model"
+        class="field"
+        (change)="onSelect('model', $event)"
+      >
+        <option value="" class="bg-surface" [selected]="filters().model === ''">
+          All models
+        </option>
+        @for (model of facets().models; track model) {
+          <option
+            [value]="model"
+            class="bg-surface"
+            [selected]="filters().model === model"
+          >
+            {{ model }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="flex w-40 flex-col gap-1">
+      <span class="field-label">Date</span>
+      <select
+        data-testid="quality-filter-range"
+        class="field"
+        (change)="onSelect('range', $event)"
+      >
+        @for (range of ranges; track range.value) {
+          <option
+            [value]="range.value"
+            class="bg-surface"
+            [selected]="filters().range === range.value"
+          >
+            {{ range.label }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <button
+      type="button"
+      data-testid="quality-filters-clear"
+      class="btn btn-ghost"
+      [disabled]="!state.hasQualityFilters()"
+      (click)="state.clearQualityFilters()"
+    >
+      <lucide-angular [img]="X" [size]="14" />
+      <span>Clear filters</span>
+    </button>
+  </div>
+
+  @if (error(); as err) {
+    <p
+      data-testid="monitoring-quality-error"
+      role="alert"
+      class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  }
+
+  @if (result() === null) {
+    @if (loading()) {
+      <div
+        class="mt-6 flex items-center gap-2.5 text-fg-muted"
+        data-testid="monitoring-quality-loading"
+      >
+        <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+        <span>Loading agent quality…</span>
+      </div>
+    }
+  } @else if (rows().length === 0) {
+    <div
+      data-testid="monitoring-quality-empty"
+      class="mt-2 flex flex-col items-start gap-3 rounded-xl border border-dashed border-border px-6 py-8"
+    >
+      <span
+        class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"
+      >
+        <lucide-angular [img]="Gauge" [size]="17" />
+      </span>
+      <p class="text-[13px] text-fg">No agent persona matches these filters.</p>
+    </div>
+  } @else {
+    <div
+      class="card overflow-x-auto"
+      [class.opacity-60]="loading()"
+      [attr.aria-busy]="loading()"
+    >
+      <table
+        data-testid="agent-quality-table"
+        class="w-full border-collapse text-left text-[12px]"
+      >
+        <thead>
+          <tr
+            class="border-b border-border bg-surface-muted text-[12px] font-medium text-fg-muted"
+          >
+            <th scope="col" class="px-3 py-2 font-medium">Agent persona</th>
+            <th scope="col" class="px-3 py-2 font-medium">
+              Eval pass rate (last run)
+            </th>
+            <th scope="col" class="px-3 py-2 font-medium">pass^3</th>
+            <th scope="col" class="px-3 py-2 text-right font-medium">
+              Tool calls per question
+            </th>
+            <th scope="col" class="px-3 py-2 text-right font-medium">
+              Tool errors
+            </th>
+            <th scope="col" class="px-3 py-2 text-right font-medium">
+              p95 latency (live)
+            </th>
+            <th scope="col" class="px-3 py-2 text-right font-medium">
+              Cost per call (live)
+            </th>
+            <th scope="col" class="px-3 py-2 font-medium">Last eval</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.agentKey) {
+            <tr
+              [attr.data-testid]="'agent-quality-row-' + row.agentKey"
+              tabindex="0"
+              [attr.aria-label]="'Open the eval executions of ' + row.name"
+              (click)="open(row)"
+              (keydown.enter)="open(row)"
+              class="cursor-pointer border-b border-border text-fg last:border-b-0 hover:bg-surface-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+            >
+              <td class="px-3 py-2">
+                <div class="text-fg">{{ row.name }}</div>
+                @if (row.role !== "") {
+                  <div class="text-[11px] text-fg-muted">{{ row.role }}</div>
+                }
+              </td>
+
+              <td
+                class="px-3 py-2 whitespace-nowrap"
+                [attr.data-testid]="'agent-quality-pass-' + row.agentKey"
+              >
+                @if (row.eval.state === "none") {
+                  <span class="text-fg-muted">No eval run yet</span>
+                } @else if (row.eval.state === "no-match") {
+                  <span class="text-fg-muted"
+                    >No eval run matches these filters</span
+                  >
+                } @else if (row.eval.lastRun !== null) {
+                  <span
+                    class="chip px-2 py-0.5 text-[11px]"
+                    [class]="
+                      toneChips[
+                        tone(row.eval.lastRun.passed / row.eval.lastRun.total)
+                      ]
+                    "
+                    >{{
+                      formatPassRate(
+                        row.eval.lastRun.passed,
+                        row.eval.lastRun.total
+                      )
+                    }}</span
+                  >
+                } @else {
+                  <span class="text-fg-muted">—</span>
+                }
+              </td>
+
+              <td
+                class="px-3 py-2 whitespace-nowrap"
+                [attr.data-testid]="'agent-quality-pass3-' + row.agentKey"
+              >
+                @if (row.eval.pass3 === null) {
+                  <span class="text-fg-muted">—</span>
+                } @else if (row.eval.pass3.state === "ok") {
+                  <span
+                    class="chip px-2 py-0.5 text-[11px]"
+                    [class]="toneChips[tone(row.eval.pass3.value)]"
+                    >{{ formatPercent(row.eval.pass3.value) }}</span
+                  >
+                  @if (row.eval.pass3.cases < row.eval.pass3.totalCases) {
+                    <span class="text-[11px] text-fg-muted"
+                      >&ngsp;({{ row.eval.pass3.cases }} of
+                      {{ row.eval.pass3.totalCases }})</span
+                    >
+                  }
+                } @else if (row.eval.pass3.state === "needs-runs") {
+                  <span class="text-fg-muted"
+                    >needs 3 runs ({{ row.eval.pass3.runs }} of 3)</span
+                  >
+                } @else {
+                  <span
+                    class="text-fg-muted"
+                    title="Model not recorded for these runs"
+                    >—</span
+                  >
+                }
+              </td>
+
+              <td
+                class="px-3 py-2 text-right whitespace-nowrap tabular-nums"
+                [attr.data-testid]="'agent-quality-tools-' + row.agentKey"
+              >
+                {{ formatPerQuestion(row.eval.toolCallsPerQuestion) }}
+              </td>
+              <td
+                class="px-3 py-2 text-right whitespace-nowrap tabular-nums"
+                [attr.data-testid]="'agent-quality-tool-errors-' + row.agentKey"
+              >
+                {{ formatErrorRate(row.eval.toolErrorRate) }}
+              </td>
+
+              <td
+                class="px-3 py-2 text-right whitespace-nowrap tabular-nums"
+                [attr.data-testid]="'agent-quality-p95-' + row.agentKey"
+                [attr.title]="
+                  row.live.calls === 0 ? 'No live calls in this period' : null
+                "
+              >
+                {{ formatDuration(row.live.p95Ms) }}
+              </td>
+              <td
+                class="px-3 py-2 text-right whitespace-nowrap tabular-nums"
+                [attr.data-testid]="'agent-quality-cost-' + row.agentKey"
+                [attr.title]="
+                  row.live.calls === 0 ? 'No live calls in this period' : null
+                "
+              >
+                {{ formatCost(row.live.costPerCallUsd) }}
+              </td>
+
+              <td
+                class="px-3 py-2 whitespace-nowrap"
+                [attr.data-testid]="'agent-quality-last-' + row.agentKey"
+              >
+                {{
+                  row.eval.lastRun !== null
+                    ? formatLastEval(row.eval.lastRun.at)
+                    : "—"
+                }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <p data-testid="agent-quality-legend" class="text-[12px] text-fg-muted">
+      pass^3: share of questions that passed in each of their last 3 runs on the
+      same model. Eval figures come from the agent persona's eval runs; live
+      figures from its LLM calls outside eval runs. Choose a row to open its
+      eval executions.
+    </p>
+  }
+</div>

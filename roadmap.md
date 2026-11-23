@@ -765,6 +765,12 @@ Each agent of Answer a Business Question and Assess Data Readiness gets its own 
 - **Out of scope:** changing an agent before the baseline shows a failure (1.29.8 owns fixes).
 - **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
 
+#### 1.29.9 — Monitoring: the Agent quality tab  `✅ Done`
+- **Intent:** a third Monitoring tab, **Agent quality**: one row per agent persona with its eval pass rate, pass^3 and tool figures from its eval runs, and its p95 latency and cost per call from live calls; every eval call is marked in the trace so live figures leave it out, and every run (UI and CLI) records its set and model.
+- **Scope:** per plan `monitoring-agent-quality` (`docs/plans/monitoring-agent-quality.md`): the `eval-run-id` marker (ADR-0054), run metadata and CLI-saved runs, endpoint #163, the tab, opening an agent's Executions from a row; monitoring, agents-evals, api, data-model, agents and glossary specs.
+- **Out of scope:** a trend chart over time; per-case drill-down inside Monitoring; pass^k other than 3.
+- **Acceptance:** the Gherkin of `Feature: Agent quality` passes against the running app; backend and frontend unit tests cover the formulas, the marker and the tab; evals still 100 %.
+
 ### Milestone 1.30 — Consumption Gap Analysis: does the medallion's Consumption layer support the business? (M1-30)
 
 A workflow that takes a medallion model (schemas tagged Landing, Normalized, Consumption in the dataset's schema notes), the business questions and reference dashboards (images and/or a saved dashboard), and tells which requirements the Consumption layer supports, traces every gap through lineage inferred without declared lineage (names, types, value overlap), probes the data with bounded read-only queries, and recommends fixes by the layer they start in. Epic spec: [specs/epics/M1-30/spec.md](specs/epics/M1-30/spec.md). Plan: [docs/plans/m1-30-consumption-gap-analysis.md](docs/plans/m1-30-consumption-gap-analysis.md). Requested on 2026-11-16; the user picked approach C (deterministic lineage, bounded probes, a confirmation step) and approved the prototype (`.context/prototype/gap-analysis.html`). ADR-0051.

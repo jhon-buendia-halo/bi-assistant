@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { LlmCallStatus } from '../entities/llm-call.entity';
+import { EVAL_RUN_METADATA_PATH } from '../../../mastra/evals/eval-trace-marker';
 import type { UsageCallRecord } from '../usage-summary';
 
 /**
@@ -45,6 +46,19 @@ export interface LlmCallRecord {
   cacheReadTokens: number | null;
   cacheWriteTokens: number | null;
   reasoningTokens: number | null;
+}
+
+/** One live call of Agent quality (a `model_generation` outside eval runs). */
+export interface LiveCallRecord {
+  agentId: string | null;
+  startedAt: Date;
+  endedAt: Date | null;
+  status: LlmCallStatus;
+  model: string;
+  inputTokens: unknown;
+  outputTokens: unknown;
+  cacheReadTokens: unknown;
+  cacheWriteTokens: unknown;
 }
 
 /** One raw `span_events` row of a trace, JSON columns as stored. */
@@ -204,6 +218,16 @@ calls AS (
   WHERE rowRank = 1
 )`;
 
+/**
+ * A call is an eval call when any span of its trace carries the eval run
+ * marker in its metadata (ADR-0054); every other call is live.
+ */
+const NOT_EVAL_TRACE = `NOT EXISTS (
+  SELECT 1 FROM span_events marked
+   WHERE marked.traceId = calls.traceId
+     AND json_extract_string(marked.metadata, '${EVAL_RUN_METADATA_PATH}') IS NOT NULL
+)`;
+
 function whereClause(filter: LlmCallFilter): {
   sql: string;
   params: unknown[];
@@ -290,6 +314,56 @@ SELECT startedAt, traceId, agentId, agentName, sessionId, model, provider,
   FROM calls ${where.sql}`,
       where.params,
     );
+  }
+
+  /**
+   * The live calls of Agent quality: of the given agent ids, started within
+   * [from, to], of one model when given, in traces without the eval marker.
+   */
+  liveCallRows(filter: {
+    agentIds: string[];
+    model?: string;
+    from?: Date;
+    to?: Date;
+  }): Promise<LiveCallRecord[]> {
+    if (filter.agentIds.length === 0) return Promise.resolve([]);
+    const conditions = [
+      `agentId IN (${filter.agentIds.map(() => '?').join(', ')})`,
+      NOT_EVAL_TRACE,
+    ];
+    const params: unknown[] = [...filter.agentIds];
+    if (filter.model !== undefined) {
+      conditions.push('model = ?');
+      params.push(filter.model);
+    }
+    if (filter.from) {
+      conditions.push('startedAt >= ?');
+      params.push(filter.from);
+    }
+    if (filter.to) {
+      conditions.push('startedAt <= ?');
+      params.push(filter.to);
+    }
+    return this.db.query<LiveCallRecord>(
+      `${CALLS_CTE}
+SELECT agentId, startedAt, endedAt, status, model,
+       inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens
+  FROM calls WHERE ${conditions.join(' AND ')}`,
+      params,
+    );
+  }
+
+  /** The distinct models of the live calls of the given agent ids. */
+  async liveModels(agentIds: string[]): Promise<string[]> {
+    if (agentIds.length === 0) return [];
+    const rows = await this.db.query<{ value: string }>(
+      `${CALLS_CTE}
+SELECT DISTINCT model AS value FROM calls
+ WHERE model <> '' AND agentId IN (${agentIds.map(() => '?').join(', ')})
+   AND ${NOT_EVAL_TRACE}`,
+      agentIds,
+    );
+    return rows.map((r) => r.value);
   }
 
   /** The distinct agents, models, providers and sessions of all calls. */

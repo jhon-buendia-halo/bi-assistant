@@ -15,6 +15,11 @@ export class AgentPageState {
    * Open (the Evals tab); the page takes it once the agent has loaded.
    */
   readonly requestedTab = signal<AgentTabId | null>(null);
+  /**
+   * The Evals sub-tab to apply with `requestedTab` (Monitoring's Agent quality
+   * row opens Executions); the page takes it with the tab, then clears it.
+   */
+  readonly requestedEvalTab = signal<'questions' | 'runs' | null>(null);
   readonly dirty = computed(() => this.promptDirty() || this.skillDirty());
 
   reset(): void {

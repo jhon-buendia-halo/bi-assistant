@@ -560,7 +560,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Body: `{ datasourceId: string; caseIds?: string[] }`. `caseIds` omitted = all questions.
 - Success: `{ ok:true, message:"Eval run started", jobId }`. Returns immediately; the run is long-running (see [3.3](#33-eval-runs)).
 - Failures (Style A, `ok:false`): `"Agent \"<key>\" has no evals to run"` (an agent with no sets: none of `assistant`, `data-readiness`, `insights-analyst`, `query-explainer`); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need).
-- Side effects: persists an initial run record; spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards).
+- Side effects: persists an initial run record, which also records the run's `setId`, `provider`, `model` and `source: 'app'` (data-model 3.8, agents-evals R112); spawns the run, passing the run's `jobId` as the `eval-run-id` marker of every call (ADR-0054; one throwaway session is created for the run to host visual tools and deleted afterwards).
 
 #### 37. `GET /agents/:key/evals/runs`
 - Response `200`: `{ runs: EvalRunView[] }`, newest first; in-flight runs reflect live in-memory state.
@@ -610,6 +610,9 @@ interface EvalRunView {
   results: AssistantEvalCaseResult[];   // finished questions, in order
   currentQuestion?: string; error?: string;
   startedAt: string; finishedAt?: string;
+  setId?: string | null;         // the eval set of the questions; null when they span several sets; absent on old runs
+  provider?: string; model?: string;   // what the run ran on; absent on old runs
+  source?: 'app' | 'cli';        // absent = 'app'
   comparison?: { previousRunId: string; regressions: {id,question}[]; improvements: {id,question}[]; unchanged: {id,question}[] };
 }
 interface AssistantEvalCaseResult {
@@ -1275,7 +1278,7 @@ Bootstrap semantics shared by 53 and 54: the `knowledge-bootstrap` agent (shown 
 
 ### 2.8c Monitoring
 
-Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monitoring/spec.md). Decision: ADR-0038. **Style B throughout** (real status codes, bare bodies). All six routes are read-only and read Mastra's trace store (`observability.duckdb`, data-model 1.2), not an app collection. A data dir with no trace table yet gives an empty page, not an error.
+Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monitoring/spec.md). Decision: ADR-0038. **Style B throughout** (real status codes, bare bodies). All seven routes are read-only and read Mastra's trace store (`observability.duckdb`, data-model 1.2), not an app collection; #163 also reads the `eval_runs` collection (ADR-0054). A data dir with no trace table yet gives an empty page, not an error.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -1285,6 +1288,7 @@ Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monito
 | 114 | `GET /monitoring/sessions/:id` | One session with its turns and each turn's trajectory | yes |
 | 115 | `GET /monitoring/traces/:traceId` | One turn's spans as a depth-first tree for the waterfall | yes |
 | 144 | `GET /monitoring/usage` | The Costs page's estimated cost by day, month, model, workflow and agent | yes |
+| 163 | `GET /monitoring/agent-quality` | The Agent quality tab: per agent persona, eval figures from `eval_runs` and live figures from the trace store | yes |
 
 #### 111. `GET /monitoring/llm-calls`
 - Query (all optional): `page` (whole number >= 1, default 1); `pageSize` (25, 50 or 100, default 25); `agent` (agent id); `model` and `provider` (exact match); `status` (`succeeded`, `failed` or `running`); `session` (session id); `from` and `to` (ISO date-times, inclusive, on the call's start time).
@@ -1325,6 +1329,51 @@ Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monito
 - Response `200`: `UsageSummary` = `{ from: ISO|null, to: ISO, timeZone, today: Amount, thisMonth: Amount, totals: Amount & { pricedCalls, inputTokens, outputTokens }, daily: (Amount & { date: 'YYYY-MM-DD' })[], monthly: (Amount & { month: 'YYYY-MM' })[], byModel: (Amount & { model, provider, inputTokens, outputTokens, priced: boolean })[], byWorkflow: (Amount & { id: string|null, name, kind: 'workflow'|'none', runs: number|null, avgCostUsd: number|null, medianCostUsd: number|null, p95CostUsd: number|null })[], byAgent: (Amount & { id: string|null, name })[], perRun: { count, avgCostUsd }, perQuestion: { count, avgCostUsd }, split: { inputUsd, cacheReadUsd, cacheWriteUsd, outputUsd, cacheSavedUsd, inputTokens, cacheReadTokens, cacheWriteTokens, outputTokens }, topRuns: (Amount & { runId, workflowId: string|null, workflowName, title: string|null, startedAt: ISO })[] }` with `Amount` = `{ costUsd: number, calls: number }`.
 - Every call of `GET /monitoring/llm-calls` counts once; `costUsd` sums the calls' estimates (monitoring R5) and a call without one adds 0 (`totals.calls - totals.pricedCalls` of them). `today`, `thisMonth` and `monthly` (the 12 calendar months ending with the current one) ignore the period; `totals`, `daily` (every day of the period, zero-filled, from the first call when `from` is absent) and the three rankings cover it. Rankings are sorted by cost, then calls, descending. `byWorkflow`: a `run-<runId>` thread, or a step agent's `run-<runId>:<agent key>`, is that run's workflow (`id` = `workflowId`, `name` = the run's `workflowName`, from `workflow_runs`), a deleted run is `{ id: null, name: 'Deleted workflow run', kind: 'workflow' }`, and every other call is `{ id: null, name: 'No workflow', kind: 'none' }`; the run statistics are over the runs' period costs (median; nearest-rank 95th percentile) and null for `none`. `perRun` averages the workflow runs and `perQuestion` the traces of the calls outside runs (avg 0 when count is 0). `split` prices the period's tokens by kind (input = uncached input) and `cacheSavedUsd` is what the cache reads saved against the input price. `topRuns` holds up to 10 runs by cost, then calls; `startedAt` is their first call in the period, and a deleted run has `workflowId` and `title` null and `workflowName` `Deleted workflow run`. `byAgent` names a call with no agent `No agent`.
 - Validation `400` (messages exact): `"From is not a valid date"`, `"To is not a valid date"`, `"From must not be after To"`, `"Time zone is not valid"`.
+
+#### 163. `GET /monitoring/agent-quality`
+- Style B. Read-only. Reads `span_events` and `eval_runs` (ADR-0054). Capability: [monitoring](../capabilities/monitoring/spec.md) R58-R68.
+- Query, all optional: `agent` (a registry key); `set` (a set id); `model` (an exact model string, or `Unknown` for runs that recorded none); `from`, `to` (ISO date-times, inclusive; `to` defaults to now; no `from` = all time).
+- Validation `400` (messages exact): `"From is not a valid date"`, `"To is not a valid date"`, `"From must not be after To"`.
+- An unknown `agent`, `set` or `model` is not an error: it matches nothing. A data dir with no trace table gives live figures of 0 calls, not an error.
+- Response `200`: `AgentQualityPage` (`backend/src/modules/monitoring/entities/agent-quality.entity.ts`):
+
+```ts
+interface AgentQualityPage {
+  from: string | null;            // ISO; null = all time
+  to: string;                     // ISO
+  rows: AgentQualityRow[];        // one per built-in agent with >= 1 eval set; narrowed by agent and by set (a set keeps its own agent only); sorted by persona name
+  facets: {                       // never narrowed by the filters
+    agents: { key: string; name: string }[];                // agents with sets, by name
+    sets: { id: string; name: string; agentKey: string }[];  // every set, by agent name then set name
+    models: string[];             // distinct run models of those agents ('Unknown' last) ∪ distinct live call models of their agent ids; sorted
+  };
+}
+interface AgentQualityRow {
+  agentKey: string;               // registry key (eval_runs.agentKey)
+  agentId: string;                // Mastra agent id (span entityId)
+  name: string;                   // persona name
+  role: string;                   // persona title, '' when none
+  eval: {
+    state: 'none' | 'no-match' | 'ok';   // none: no completed run ever; no-match: runs exist, none in scope
+    model: string | null;         // the model the eval figures are on (M, monitoring R61)
+    provider: string | null;
+    runs: number;                 // completed runs in scope on M
+    lastRun: { jobId: string; at: string; passed: number; total: number } | null;
+    pass3:
+      | { state: 'ok'; value: number; cases: number; totalCases: number }
+      | { state: 'needs-runs'; runs: 0 | 1 | 2 }
+      | { state: 'unknown-model' }
+      | null;                     // null unless eval.state === 'ok'
+    questions: number;            // case results counted for the tool figures
+    toolCalls: number;
+    toolCallsPerQuestion: number | null;
+    toolErrorRate: number | null; // 0..1
+  };
+  live: { calls: number; p95Ms: number | null; pricedCalls: number; costPerCallUsd: number | null };
+}
+```
+
+- Live calls are the `model_generation` calls of the row's `agentId` in the period (and of the model when filtered) whose trace has no span with `metadata."eval-run-id"` (data-model 1.2); the formulas for pass rate, pass^3, tool figures, p95 and cost are monitoring R61-R65.
 
 ### 2.9 Testing data
 
@@ -1658,6 +1707,7 @@ Pattern: **start, poll, list, download, delete**. Endpoints 36-40.
 - Observed by polling `GET /agents/:key/evals/runs/:jobId` (the shipped UI polls every **1500 ms** until `status !== "running"`); the run history (`…/runs`) reads persisted records with live in-memory state overlaid for in-flight runs. Persisted runs survive restart; an interrupted run is not resumed and its stored `status` may stay `running` (G4).
 - On completion the run is compared with the most recent previous completed run for the same agent, datasource and datasets, and `comparison` (regressions, improvements, unchanged by case id) is attached; a comparison failure never fails the run.
 - Cannot delete a run while it is `running`.
+- Runs started by the CLI runner (6.2, `source: 'cli'`) are persisted too and listed here (agents-evals R113).
 
 ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
 
@@ -1924,7 +1974,7 @@ The CLI banner no longer prints an `Intellify API:` line, and the flags `--intel
 | `VISUAL_MODEL` | visual designer agent | Forces the designer model (router id `provider/model`). Unset: reasoning-family models are swapped for `openai/gpt-4.1-mini` and `nano` models upgraded to their `mini` sibling; others kept. | unset |
 | `OPENAI_API_KEY` | Mastra's env-bound model router (via model resolver) | Fallback model credential (`openai/gpt-4o-mini`) when no LLM settings are saved. | unset |
 | `WORLD_CUP_DB_PORT` | testing-data fixture registry | Port of the sample PostgreSQL server in the form prefill and compose stack. | `55432` |
-| `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. | none |
+| `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. Every `EVAL_*` run is saved to `eval_runs` (`source: 'cli'`) and printed as `Saved as eval run <jobId>` (agents-evals R113). | none |
 | `EVAL_SET` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | The question set to run (`world-cup`, `world-cup-rest`, `formula-1`). That script needs this or `EVAL_CASES`, not both ([agents.md](agents.md) 8.5). | none |
 | `EVAL_CASES` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated eval case ids to run instead of a whole set; all from one set's fixture. | none |
 | `EVAL_LLM_PROVIDER`, `EVAL_LLM_API_STYLE`, `EVAL_LLM_BASE_URL`, `EVAL_LLM_API_KEY`, `EVAL_LLM_MODEL` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | `EVAL_LLM_PROVIDER=custom` runs the evals on a custom endpoint instead of the saved LLM settings: API style (`openai` \| `anthropic`), base URL and model required, key optional ([agents.md](agents.md) 8.5). | unset (saved settings) |
