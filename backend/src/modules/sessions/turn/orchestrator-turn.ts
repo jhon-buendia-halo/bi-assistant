@@ -292,7 +292,7 @@ function workSoFar(state: OrchestratorState): string | undefined {
   const lines: string[] = [];
   // Michael's plan, the question with nothing planned, in the words Avery
   // read before her whole team's workflow was removed.
-  if (state.plan) lines.push('Olivia already planned:', planReview(state.plan));
+  if (state.plan) lines.push('Michael worked from this plan:', planReview(state.plan));
   if (state.queries.length) {
     lines.push(
       `Michael already ran ${state.attempts} analysis attempt(s):`,

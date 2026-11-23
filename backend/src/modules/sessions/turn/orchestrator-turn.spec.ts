@@ -361,11 +361,11 @@ describe('Avery runs her turn (agents.md 5.23)', () => {
       { role: 'assistant', content: 'Which tournament?\n- Men\n- Women' },
       { role: 'user', content: 'Men' },
     ]);
-    // The plan Michael worked from, in the words she read before (5.23).
+    // The plan Michael worked from (5.23); no removed teammate is named.
     const context = streams[0].options['context'] as { content: string }[];
-    expect(context.map((c) => c.content).join('\n')).toContain(
-      'Olivia already planned',
-    );
+    const read = context.map((c) => c.content).join('\n');
+    expect(read).toContain('Michael worked from this plan:');
+    expect(read).not.toContain('Olivia');
   });
 
   it('shows her tool calls as the step activity, signed, a team call naming its teammate and a skill call its file', async () => {
