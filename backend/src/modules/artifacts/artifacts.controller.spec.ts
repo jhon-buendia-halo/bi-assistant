@@ -18,7 +18,12 @@ import type { ArtifactsService } from './artifacts.service';
 const BLUEPRINT = blueprintOf(SAMPLE_BLUEPRINT_REPLY)!;
 
 function build(rows: Record<string, unknown>[] | null) {
-  const calls: { method: string; id: string; version?: number }[] = [];
+  const calls: {
+    method: string;
+    id: string;
+    version?: number;
+    body?: unknown;
+  }[] = [];
   const service = {
     detail: (id: string, version?: number) => {
       calls.push({ method: 'detail', id, version });
@@ -29,6 +34,20 @@ function build(rows: Record<string, unknown>[] | null) {
       }
       return Promise.resolve({
         artifact: { id, version: version ?? 2, blueprint: BLUEPRINT },
+        rows,
+      });
+    },
+    save: (id: string, body: unknown) => {
+      calls.push({ method: 'save', id, body });
+      const version = (body as { version?: number } | undefined)?.version;
+      return Promise.resolve({
+        artifact: {
+          id,
+          version: version ?? 2,
+          status: 'saved',
+          savedVersions: [version ?? 2],
+          blueprint: BLUEPRINT,
+        },
         rows,
       });
     },
@@ -112,5 +131,21 @@ describe('ArtifactsController', () => {
       'Cache-Control': 'no-store',
     });
     expect(body()).toEqual(Buffer.from('PK-zip'));
+  });
+
+  it('saves a version to Artifacts and answers the artifact at it (api.md 164)', async () => {
+    const { controller, calls } = build([
+      { month: 'Jan', region: 'Europe', revenue: 10 },
+    ]);
+    const saved = await controller.save('a-1', { version: 1 });
+    expect(calls).toEqual([
+      { method: 'save', id: 'a-1', body: { version: 1 } },
+    ]);
+    expect(saved).toMatchObject({
+      version: 1,
+      status: 'saved',
+      savedVersions: [1],
+    });
+    expect(saved.document).toContain('"revenue":10');
   });
 });

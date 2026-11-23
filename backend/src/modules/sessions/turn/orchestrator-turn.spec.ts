@@ -660,6 +660,7 @@ const REF: DashboardRef = {
   widgetCount: 1,
   filterCount: 1,
   rowCount: 32,
+  saved: false,
 };
 
 /** The run's facts block Avery's stream got. */

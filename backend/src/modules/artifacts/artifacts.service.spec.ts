@@ -9,6 +9,11 @@ jest.mock('../../infrastructure/database/database.module', () => {
   };
 });
 
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA_DIR } from '../../infrastructure/database/database.module';
@@ -196,6 +201,7 @@ describe('ArtifactsService dashboard versions', () => {
       widgetCount: 4,
       filterCount: 2,
       rowCount: 3,
+      saved: false,
     });
     const [doc] = docs;
     expect(doc).toMatchObject({
@@ -230,6 +236,10 @@ describe('ArtifactsService dashboard versions', () => {
       columns: ['month', 'region', 'revenue'],
       rows: liveVersion().rows,
     });
+    // A draft until the user saves it.
+    expect(doc.savedVersions).toEqual([]);
+    expect(await service.list()).toEqual([]);
+    await service.save(ref.artifactId, {});
     expect((await service.list())[0]).toMatchObject({
       currentVersion: 1,
       versionCount: 1,
@@ -264,6 +274,7 @@ describe('ArtifactsService dashboard versions', () => {
       widgetCount: 4,
       filterCount: 1,
       rowCount: 1,
+      saved: false,
     });
     // The top-level blueprint is the current version's; the name stays.
     expect(docs[0]).toMatchObject({
@@ -295,8 +306,7 @@ describe('ArtifactsService dashboard versions', () => {
     expect(detail.rows).toHaveLength(3);
     expect(detail.artifact).toMatchObject({
       version: 1,
-      currentVersion: 2,
-      versionCount: 2,
+      status: 'draft',
       hasData: true,
       filterCount: 2,
       blueprint: SAMPLE,
@@ -311,6 +321,7 @@ describe('ArtifactsService dashboard versions', () => {
         rowCount: 3,
         widgetCount: 4,
         filterCount: 2,
+        saved: false,
       },
       {
         version: 2,
@@ -319,6 +330,7 @@ describe('ArtifactsService dashboard versions', () => {
         rowCount: 1,
         widgetCount: 4,
         filterCount: 1,
+        saved: false,
       },
     ]);
   });
@@ -397,6 +409,7 @@ describe('ArtifactsService dashboard versions', () => {
       ...liveVersion(),
       name: 'Revenue Board',
     });
+    await service.save(artifactId, {});
     const { filename, archive } = await service.download(artifactId);
     expect(filename).toBe('revenue-board-v1.zip');
     // A zip: a local file header first, the six files by name.
@@ -426,5 +439,156 @@ describe('ArtifactsService dashboard versions', () => {
     expect(existsSync(join(folder, 'v2', 'rows.json'))).toBe(true);
     await service.delete(artifactId);
     expect(existsSync(folder)).toBe(false);
+  });
+});
+
+describe('ArtifactsService drafts and Save to Artifacts', () => {
+  const REFUSAL = 'Save the dashboard to Artifacts before downloading it';
+
+  it('keeps a new dashboard a draft: hidden from the list, readable, not downloadable', async () => {
+    const { service } = build();
+    const { artifactId, saved } = await service.createDashboard(liveVersion());
+    expect(saved).toBe(false);
+    expect(await service.list()).toEqual([]);
+    const { artifact, rows } = await service.detail(artifactId);
+    expect(rows).toHaveLength(3);
+    expect(artifact).toMatchObject({
+      version: 1,
+      status: 'draft',
+      savedVersions: [],
+      versions: [expect.objectContaining({ version: 1, saved: false })],
+    });
+    await expect(service.download(artifactId)).rejects.toThrow(
+      new ConflictException(REFUSAL),
+    );
+    await expect(service.download(artifactId, 1)).rejects.toThrow(
+      new ConflictException(REFUSAL),
+    );
+  });
+
+  it('saves the latest version by default, once however often it is asked', async () => {
+    const { service, docs } = build();
+    const { artifactId } = await service.createDashboard(liveVersion());
+    const first = await service.save(artifactId, undefined);
+    expect(first.artifact).toMatchObject({
+      version: 1,
+      status: 'saved',
+      savedVersions: [1],
+      versions: [expect.objectContaining({ version: 1, saved: true })],
+    });
+    expect(first.rows).toHaveLength(3);
+    const updatedAt = docs[0].updatedAt;
+    const again = await service.save(artifactId, { version: 1 });
+    expect(again.artifact.savedVersions).toEqual([1]);
+    expect(docs[0].savedVersions).toEqual([1]);
+    // Saving a saved version writes nothing.
+    expect(docs[0].updatedAt).toBe(updatedAt);
+    expect((await service.list()).map((entry) => entry.id)).toEqual([
+      artifactId,
+    ]);
+    expect((await service.download(artifactId)).filename).toMatch(/-v1\.zip$/);
+  });
+
+  it('makes a later change a new draft version, the list and download staying on the saved one', async () => {
+    const { service, docs } = build();
+    const { artifactId } = await service.createDashboard(liveVersion());
+    await service.save(artifactId, {});
+    const changed = {
+      ...SAMPLE,
+      title: 'Revenue by region',
+      filters: SAMPLE.filters.slice(0, 1),
+    };
+    const ref = await service.addDashboardVersion(
+      artifactId,
+      liveVersion({ blueprint: changed, rows: [{ revenue: 7 }] }),
+    );
+    expect(ref).toMatchObject({ version: 2, saved: false });
+    expect(docs[0].savedVersions).toEqual([1]);
+
+    // The list summarizes the latest saved version.
+    expect((await service.list())[0]).toMatchObject({
+      currentVersion: 1,
+      versionCount: 1,
+      filterCount: 2,
+      description: SAMPLE.summary,
+      hasData: true,
+    });
+    // The detail reads the latest version, saved or not.
+    const { artifact } = await service.detail(artifactId);
+    expect(artifact).toMatchObject({
+      version: 2,
+      currentVersion: 1,
+      status: 'saved',
+      savedVersions: [1],
+      filterCount: 1,
+      blueprint: changed,
+    });
+    expect(artifact.versions.map((entry) => entry.saved)).toEqual([
+      true,
+      false,
+    ]);
+
+    expect((await service.download(artifactId)).filename).toMatch(/-v1\.zip$/);
+    await expect(service.download(artifactId, 2)).rejects.toThrow(REFUSAL);
+
+    const saved = await service.save(artifactId, {});
+    expect(saved.artifact).toMatchObject({
+      version: 2,
+      savedVersions: [1, 2],
+    });
+    expect((await service.list())[0]).toMatchObject({
+      currentVersion: 2,
+      versionCount: 2,
+      filterCount: 1,
+    });
+    expect((await service.download(artifactId)).filename).toMatch(/-v2\.zip$/);
+  });
+
+  it('refuses to save an unknown artifact or version, and a bad version', async () => {
+    const { service } = build();
+    const { artifactId } = await service.createDashboard(liveVersion());
+    await expect(service.save('gone', {})).rejects.toThrow(
+      new NotFoundException('Artifact "gone" not found'),
+    );
+    await expect(service.save(artifactId, { version: 4 })).rejects.toThrow(
+      new NotFoundException(`Artifact "${artifactId}" has no version 4`),
+    );
+    for (const version of [0, -1, 1.5, '1', null, true]) {
+      await expect(service.save(artifactId, { version })).rejects.toThrow(
+        new BadRequestException('Version must be a positive whole number'),
+      );
+    }
+    await expect(service.save(artifactId, 'version 1')).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(await service.list()).toEqual([]);
+  });
+
+  it("keeps Grace's artifacts saved, and an earlier Clara dashboard a draft", async () => {
+    const { service, docs } = build();
+    const { id } = await service.create({ blueprint: SAMPLE });
+    const { artifact } = await service.detail(id);
+    expect(artifact).toMatchObject({
+      status: 'saved',
+      savedVersions: [1],
+      versions: [expect.objectContaining({ version: 1, saved: true })],
+    });
+    expect((await service.save(id, {})).artifact.savedVersions).toEqual([1]);
+    expect(docs[0].savedVersions).toBeUndefined();
+    expect((await service.download(id)).filename).toMatch(/-v1\.zip$/);
+
+    // A change to it keeps version 1 saved; version 2 is a draft.
+    await service.addDashboardVersion(id, liveVersion());
+    expect(docs[0].savedVersions).toEqual([1]);
+    expect((await service.list())[0]).toMatchObject({ id, currentVersion: 1 });
+    await expect(service.download(id, 2)).rejects.toThrow(REFUSAL);
+
+    // A Clara dashboard stored before drafts: versions, no saved list.
+    const { artifactId } = await service.createDashboard(liveVersion());
+    const earlier = docs.find((doc) => doc.id === artifactId)!;
+    delete earlier.savedVersions;
+    expect((await service.list()).map((entry) => entry.id)).toEqual([id]);
+    expect((await service.detail(artifactId)).artifact.status).toBe('draft');
+    await expect(service.download(artifactId)).rejects.toThrow(REFUSAL);
   });
 });

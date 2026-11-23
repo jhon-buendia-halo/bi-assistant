@@ -6,6 +6,7 @@ import {
   HttpCode,
   Param,
   Patch,
+  Post,
   Query,
   Res,
 } from '@nestjs/common';
@@ -16,51 +17,56 @@ import { ArtifactsService, versionParam } from './artifacts.service';
 import type {
   ArtifactDetail,
   ArtifactSummary,
+  DashboardRow,
 } from './entities/artifact.entity';
 
 /**
  * The Artifacts area (api.md 2.6.4): the stored artifacts, read at a
- * version, downloaded, renamed and deleted. No route creates an artifact or
- * a version: a run of Dashboard Image to Artifact saves one (agents.md
- * 5.17), and a turn that builds a dashboard on the user's data saves each
- * version.
+ * version, saved to Artifacts, downloaded, renamed and deleted. No route
+ * creates an artifact or a version: a run of Dashboard Image to Artifact
+ * saves one (agents.md 5.17), and a turn that builds a dashboard on the
+ * user's data stores each version as a draft until the user saves it.
  */
 @Controller('artifacts')
 export class ArtifactsController {
   constructor(private readonly artifacts: ArtifactsService) {}
 
-  /** Every artifact, newest first (api.md 144). */
+  /** Every artifact with a saved version, newest first (api.md 144). */
   @Get()
   list(): Promise<ArtifactSummary[]> {
     return this.artifacts.list();
   }
 
   /**
-   * One artifact at a version, the current one when `version` is absent,
-   * with its dashboard drawn (api.md 145): on the version's rows when it
-   * has them, else on invented values.
+   * One artifact at a version, the latest one (saved or a draft) when
+   * `version` is absent, with its dashboard drawn (api.md 145): on the
+   * version's rows when it has them, else on invented values.
    */
   @Get(':id')
   async get(
     @Param('id') id: string,
     @Query('version') version?: unknown,
   ): Promise<ArtifactDetail> {
-    const { artifact, rows } = await this.artifacts.detail(
-      id,
-      versionParam(version),
-    );
-    return {
-      ...artifact,
-      // No mapping: the dashboard as it was built, with no status badges.
-      document: sandboxedVisualizationDocument(
-        renderLiveDashboardBundle(artifact.blueprint, rows),
-      ),
-    };
+    return drawn(await this.artifacts.detail(id, versionParam(version)));
   }
 
   /**
-   * A version of an artifact's dashboard as a zip of plain HTML, JS and CSS
-   * that opens from the file system (api.md 163).
+   * Save a version to Artifacts, the latest one when the body names none
+   * (api.md 164): answers the artifact at that version, as 145 does.
+   */
+  @Post(':id/save')
+  @HttpCode(200)
+  async save(
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<ArtifactDetail> {
+    return drawn(await this.artifacts.save(id, body));
+  }
+
+  /**
+   * A saved version of an artifact's dashboard, the latest saved one when
+   * `version` is absent, as a zip of plain HTML, JS and CSS that opens from
+   * the file system (api.md 163); 409 for a version not saved.
    */
   @Get(':id/download')
   async download(
@@ -105,4 +111,21 @@ export class ArtifactsController {
   delete(@Param('id') id: string): Promise<void> {
     return this.artifacts.delete(id);
   }
+}
+
+/** An artifact at a version with its dashboard drawn (api.md 145). */
+function drawn({
+  artifact,
+  rows,
+}: {
+  artifact: Omit<ArtifactDetail, 'document'>;
+  rows: DashboardRow[] | null;
+}): ArtifactDetail {
+  return {
+    ...artifact,
+    // No mapping: the dashboard as it was built, with no status badges.
+    document: sandboxedVisualizationDocument(
+      renderLiveDashboardBundle(artifact.blueprint, rows),
+    ),
+  };
 }
