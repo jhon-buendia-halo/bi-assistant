@@ -341,7 +341,7 @@ flowchart LR
   assistant -.->|"model: async resolveAgentModel()"| resolver
 ```
 
-*Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init. Every streamed chat turn is one run of a registered turn workflow ([agents.md](agents.md) 5.1): `qti-v2-turn` for a Answer a Business Question session, `agent-turn` (one `answer` step) for every other session. `SessionsService` starts the run through `MastraService.streamWorkflow` and hands it the turn's agent call on the run's `RequestContext`; the agent step calls back into it, so the agent, its context and its tools are chosen by the session code, never per registered workflow (ADR-0040).*
+*Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init. Every streamed chat turn is one run of a registered turn workflow ([agents.md](agents.md) 5.1): `agent-turn` (one `answer` step) for every other session; the turn workflow of Answer a Business Question (`qti-v2-turn`, then `answer-business-question`) was removed on 2026-11-23, and Avery + Michael's own workflow `orchestrated-answer-michael` (agents.md 5.23) runs the turns of the run host. `SessionsService` starts the run through `MastraService.streamWorkflow` and hands it the turn's agent call on the run's `RequestContext`; the agent step calls back into it, so the agent, its context and its tools are chosen by the session code, never per registered workflow (ADR-0040).*
 
 **Frontend**
 
@@ -822,7 +822,7 @@ flowchart LR
   - The `data-readiness` eval set re-runs once: no prompt or tool description changes, but the tool's behaviour does.
   - Stack-neutral: a rebuild needs a way for a tool to push progress to the client during a call, and connection reuse in its profiling layer.
 #### ADR-0034 — Questions to Insights v2 runs each turn as a code-defined Mastra workflow; the workflow bar shows the run's steps
-- **Status:** Accepted; amended by ADR-0040 (its second turn path becomes the only one); amended by ADR-0041 (v2 runs on an input). Renamed 2026-11-15: the agent `assistant-v2` is `insights-analyst` (Insights Analyst) and the workflow `qti-v2-turn` is `answer-business-question` (Answer a Business Question), with their files; stored ids are rewritten by data-model M16. This ADR keeps the names of its time.
+- **Status:** Accepted; amended by ADR-0040 (its second turn path becomes the only one); amended by ADR-0041 (v2 runs on an input). Renamed 2026-11-15: the agent `assistant-v2` is `insights-analyst` (Insights Analyst) and the workflow `qti-v2-turn` is `answer-business-question` (Answer a Business Question), with their files; stored ids are rewritten by data-model M16. This ADR keeps the names of its time. Removed 2026-11-23: the workflow `answer-business-question` this ADR made the turn path was deleted by the user (workflows R48); `orchestrated-answer-michael` is the one Answer a Business Question left.
 - **Date:** 2026-11-09
 - **Context:**
   - Every agent today runs a turn as one agent call; the order of the work lives in the prompt (the assistant's method rules), and the workflow bar is driven by the model calling `update_workflow` under the prompt's `## Workflow` convention (ADR-0029). The model can skip, reorder or misreport steps.
@@ -1339,7 +1339,7 @@ flowchart LR
   - **Query the original file in place (`read_xlsx` on each query):** rejected; the file can move or change under a saved dataset, and the browser build has no file path.
 
 #### ADR-0053 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
-- **Status:** Accepted
+- **Status:** Accepted. **Removed 2026-11-23:** the user removed Answer a Business Question, the only workflow it served, together with the `ask-agent` engine, `ask-agent-context.ts` and the `context.askStep` follow-up (agents.md 5.21; workflows R40, R48); a request that names `context.askStep` is now refused with 400 for every workflow. Avery + Michael stays. The text below stays as history.
 - **Date:** 2026-11-17
 - **Context:**
   - Every follow-up of Answer a Business Question ran the whole workflow again (Load catalog, Plan, Analyse, Validate, Write answer), so "shorter", "as a table" or "next page" cost about as much as the first question.
