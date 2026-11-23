@@ -335,9 +335,9 @@ Feature: Session flow
 Feature: Runs in Monitoring
 
   Scenario: A workflow run's call is attributed to the run
-    Given I ran the Assistant workflow on a question
+    Given I ran the "Answer a Business Question (Avery + Michael)" workflow on a question
     When I open Monitoring
-    Then the call is listed under the run "Assistant: <title>"
+    Then the call is listed under the run "Answer a Business Question (Avery + Michael): <title>"
     When I open the call and follow its run link
     Then I see the run with one turn, its path and its waterfall
 

@@ -268,17 +268,16 @@ Feature: Chat and visuals
     And the model is the recording stub: it runs one query, then answers "**Argentina** won the 2022 World Cup, while France won in 2018."
 
   Scenario: Renders a streamed run: reasoning, tool activity, final Markdown, and supports stopping
-    When I open the Assistant from Workflows and click Run workflow
+    When I open "Answer a Business Question (Avery + Michael)" from Workflows and click Run workflow
     And I type "Who won the last two tournaments?", click Send and add "World Cup Core" when the agent asks
-    Then I see "Thinking"
-    And I see the tool "run_readonly_sql"
+    Then I see Michael's "run_readonly_sql" call in words under him in Avery's relay
     When the model answers
     Then I see "Argentina" in bold and "France won in 2018."
     And I see "Run succeeded"
-    When I click "Data used (1 query)"
+    When I open the answer's first source in the inspector
     Then I see the SQL
-    When I run "Start a slow response" and click Stop
-    Then the composer is shown again and "Thinking" is no longer shown
+    When I click New question, run "Start a slow response" and click Stop
+    Then Stop is gone, and New question brings the composer back
 ```
 
 ### Feature: Chat answers and reliability signals
@@ -390,23 +389,23 @@ Feature: Sessions started from an agent
   Scenario: only Answer a Business Question can be run, and no agent page offers a chat
     Given a draft user agent "Claims triage" over "World Cup Core"
     When I click "Workflows"
-    Then I see only the workflow "Answer a Business Question"
+    Then I see the workflow "Answer a Business Question (Avery + Michael)"
     And I see no "Cup historian" and no "Claims triage"
     When I click "Agent personas" and show every System agent
     Then no agent card offers Start chat
 
-  Scenario: a Answer a Business Question run can't write: the read-only guard rejects a DELETE
+  Scenario: an Answer a Business Question run can't write: the read-only guard rejects a DELETE
     Given the model answers by running "DELETE FROM world_cup.matches"
-    When I run "Answer a Business Question" on "Tidy up the data" over "World Cup Core"
-    Then the "run_readonly_sql" call shows "failed" with "Only read-only SELECT / WITH queries can be run."
+    When I run "Answer a Business Question (Avery + Michael)" on "Tidy up the data" over "World Cup Core"
+    Then its one query shows "Failed" with "Only read-only SELECT / WITH queries can be run."
     And the matches table still has all its rows
 
-  Scenario: A Answer a Business Question run runs v2 on every question
-    When I run "Answer a Business Question" on "World Cup Core" with "How many matches are there?"
-    Then the model received the prompt starting "You are Questions to Insights" and not the assistant's
-    And the model was offered only "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and the skill tools "skill", "skill_search" and "skill_read"
+  Scenario: an Answer a Business Question run runs Michael on every question
+    When I run "Answer a Business Question (Avery + Michael)" on "World Cup Core" with "How many matches are there?"
+    Then Avery briefed Michael, and Michael received the prompt starting "You are Questions to Insights" and not the assistant's
+    And he was offered only "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification", "explore_result" and the skill tools "skill", "skill_search" and "skill_read"
     When I run it again with "And in 2014?"
-    Then the model again received v2's prompt and only its own tools
+    Then Michael again received his prompt and only his own tools
 ```
 
 ### Feature: Page, sort and filter a query's result
@@ -446,11 +445,11 @@ Feature: Skills the assistant is given
     Given a "World Cup Core" dataset exists
     And the model is the recording stub
 
-  Scenario: a Answer a Business Question run is offered its built-in skills only, and an old skills folder is ignored
+  Scenario: an Answer a Business Question run is offered its built-in skills only, and an old skills folder is ignored
     Given the data dir holds a skills folder from an older version, with a skill "sql-style" described "Use when writing SQL for the World Cup data."
-    When I run "Answer a Business Question" and ask "Who won the 2022 World Cup?"
-    Then the model's system text names "You are Questions to Insights", has no "## Skills" section, and its skill catalog lists "curated-knowledge", "sql-analysis" and "result-validation"
-    And the model is offered the "skill" tool and no "read_file" or "run_skill_script" tool
+    When I run "Answer a Business Question (Avery + Michael)" and ask "Who won the 2022 World Cup?"
+    Then Michael's system text names "You are Questions to Insights", has no "## Skills" section, and its skill catalog lists "curated-knowledge", "sql-analysis" and "result-validation"
+    And Michael is offered the "skill" tool and no "read_file" or "run_skill_script" tool
     And nothing of the "sql-style" skill reaches any model request
 
 ```

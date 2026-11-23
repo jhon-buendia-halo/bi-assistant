@@ -641,9 +641,9 @@ Feature: Agent Hub
     When I open "Agent personas"
     Then no card has "Start chat"
     When I open "Michael"
-    Then I see "Used in" "Answer a Business Question"
-    When I click the "Answer a Business Question" chip
-    Then I see the "Answer a Business Question" workflow page and "Workflows" is the current rail item
+    Then I see "Used in" "Answer a Business Question (Avery + Michael)"
+    When I click the "Answer a Business Question (Avery + Michael)" chip
+    Then I see the "Answer a Business Question (Avery + Michael)" workflow page and "Workflows" is the current rail item
     When I open the "Sarah" agent
     Then I see no "Try it" tab, and "Job Description" is open
 

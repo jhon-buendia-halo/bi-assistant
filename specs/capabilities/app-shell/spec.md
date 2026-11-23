@@ -207,7 +207,7 @@ Feature: Navigation rail
 
   Scenario: The start page asks a question first and links runs, workflows and agents
     When I open the app
-    Then I see "Welcome to Halo Workbench", the question box "What do you want to know?" with Ask, "Recent runs" with no runs yet, and "Other workflows" without Answer a Business Question
+    Then I see "Welcome to Halo Workbench", the question box "What do you want to know?" with Ask, "Recent runs" with no runs yet, and "Other workflows" without Answer a Business Question (Avery + Michael)
     When I click "All workflows"
     Then I see the "Workflows" page
     When I go home and click "Explore agent personas"

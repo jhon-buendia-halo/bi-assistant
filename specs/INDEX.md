@@ -462,15 +462,15 @@ specs/capabilities/agent-answers/spec.md:217-217  R64 Retired (1.24.12). The new
 specs/capabilities/agent-answers/spec.md:219-231  ## Edge cases and errors
 specs/capabilities/agent-answers/spec.md:233-241  ## Contracts
 specs/capabilities/agent-answers/spec.md:243-255  ## UI
-specs/capabilities/agent-answers/spec.md:257-456  ## Flows
-specs/capabilities/agent-answers/spec.md:259-282  ### Feature: Chat and visuals
-specs/capabilities/agent-answers/spec.md:284-374  ### Feature: Chat answers and reliability signals
-specs/capabilities/agent-answers/spec.md:376-410  ### Feature: Sessions started from an agent
-specs/capabilities/agent-answers/spec.md:412-418  ### Feature: Page, sort and filter a query's result
-specs/capabilities/agent-answers/spec.md:420-426  ### Feature: Every workflow whose answer ran queries gets the query inspector
-specs/capabilities/agent-answers/spec.md:428-434  ### Feature: Filter a query's result in words
-specs/capabilities/agent-answers/spec.md:436-456  ### Feature: Skills the assistant is given
-specs/capabilities/agent-answers/spec.md:458-467  ## Acceptance
+specs/capabilities/agent-answers/spec.md:257-455  ## Flows
+specs/capabilities/agent-answers/spec.md:259-281  ### Feature: Chat and visuals
+specs/capabilities/agent-answers/spec.md:283-373  ### Feature: Chat answers and reliability signals
+specs/capabilities/agent-answers/spec.md:375-409  ### Feature: Sessions started from an agent
+specs/capabilities/agent-answers/spec.md:411-417  ### Feature: Page, sort and filter a query's result
+specs/capabilities/agent-answers/spec.md:419-425  ### Feature: Every workflow whose answer ran queries gets the query inspector
+specs/capabilities/agent-answers/spec.md:427-433  ### Feature: Filter a query's result in words
+specs/capabilities/agent-answers/spec.md:435-455  ### Feature: Skills the assistant is given
+specs/capabilities/agent-answers/spec.md:457-466  ## Acceptance
 
 specs/capabilities/agent-panel/spec.md:5-15  ## Concepts
 specs/capabilities/agent-panel/spec.md:17-58  ## Rules
@@ -503,9 +503,9 @@ specs/capabilities/agent-panel/spec.md:58-58  R20 Retired (2026-11-12). The RFP 
 specs/capabilities/agent-panel/spec.md:60-81  ## Edge cases and errors
 specs/capabilities/agent-panel/spec.md:83-88  ## Contracts
 specs/capabilities/agent-panel/spec.md:90-99  ## UI
-specs/capabilities/agent-panel/spec.md:101-138  ## Flows
-specs/capabilities/agent-panel/spec.md:103-138  ### Feature: Agent panel
-specs/capabilities/agent-panel/spec.md:140-151  ## Acceptance
+specs/capabilities/agent-panel/spec.md:101-137  ## Flows
+specs/capabilities/agent-panel/spec.md:103-137  ### Feature: Agent panel
+specs/capabilities/agent-panel/spec.md:139-150  ## Acceptance
 
 specs/capabilities/agents-evals/spec.md:5-16  ## Concepts
 specs/capabilities/agents-evals/spec.md:18-317  ## Rules
@@ -981,10 +981,10 @@ specs/capabilities/datasources/spec.md:144-144  R67 At backend start the system 
 specs/capabilities/datasources/spec.md:146-156  ## Edge cases and errors
 specs/capabilities/datasources/spec.md:158-163  ## Contracts
 specs/capabilities/datasources/spec.md:165-194  ## UI
-specs/capabilities/datasources/spec.md:196-285  ## Flows
-specs/capabilities/datasources/spec.md:198-253  ### Feature: Datasources, datasets, and sessions (World Cup database)
-specs/capabilities/datasources/spec.md:255-285  ### Feature: Excel and CSV datasources
-specs/capabilities/datasources/spec.md:287-297  ## Acceptance
+specs/capabilities/datasources/spec.md:196-286  ## Flows
+specs/capabilities/datasources/spec.md:198-254  ### Feature: Datasources, datasets, and sessions (World Cup database)
+specs/capabilities/datasources/spec.md:256-286  ### Feature: Excel and CSV datasources
+specs/capabilities/datasources/spec.md:288-298  ## Acceptance
 
 specs/capabilities/developer-settings/spec.md:5-13  ## Concepts
 specs/capabilities/developer-settings/spec.md:15-58  ## Rules
@@ -1526,13 +1526,13 @@ specs/capabilities/workflows/spec.md:160-160  R48 **Removed workflows** (2026-11
 specs/capabilities/workflows/spec.md:161-179  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:181-185  ## Contracts
 specs/capabilities/workflows/spec.md:187-195  ## UI
-specs/capabilities/workflows/spec.md:197-580  ## Flows
-specs/capabilities/workflows/spec.md:199-326  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:328-443  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:445-512  ### Feature: Live dashboards from Avery
-specs/capabilities/workflows/spec.md:514-542  ### Feature: Avery exports the conversation
-specs/capabilities/workflows/spec.md:544-580  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:582-601  ## Acceptance
+specs/capabilities/workflows/spec.md:197-582  ## Flows
+specs/capabilities/workflows/spec.md:199-314  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:316-445  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:447-514  ### Feature: Live dashboards from Avery
+specs/capabilities/workflows/spec.md:516-544  ### Feature: Avery exports the conversation
+specs/capabilities/workflows/spec.md:546-582  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:584-603  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope

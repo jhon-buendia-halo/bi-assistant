@@ -207,8 +207,9 @@ Feature: Datasources, datasets, and sessions (World Cup database)
 
   Scenario: Creates a PostgreSQL datasource, dataset, and run using the real World Cup database
     Given I have created the "World Cup PostgreSQL" datasource and the "World Cup Core" dataset
-    When I run the Assistant on "World Cup Core" with "How many World Cup matches are in the data?"
+    When I run "Answer a Business Question (Avery + Michael)" on "World Cup Core" with "How many World Cup matches are in the data?"
     Then I see the answer, its coverage line and a query row, and opening the query shows the SQL that ran on the real database
+    And Orchestrate's lead view opens Michael's query in the same inspector
     When I reload the application
     Then I see "Open system logs"
     When I click "Runs" on the rail

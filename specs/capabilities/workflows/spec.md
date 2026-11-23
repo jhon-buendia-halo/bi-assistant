@@ -209,22 +209,22 @@ Feature: Workflows
   @demo @story-1.23.5
   Scenario: Open a workflow and run it from its page
     When I click "Workflows" on the rail
-    Then I see the workflows grouped by category: "Answer a Business Question" and its orchestrated and Avery + Michael versions under Data Analytics, "Assess Data Readiness" and "Consumption Gap Analysis" under Data Engineering, "Dashboard Image to Artifact" and "Map a Dashboard to Data" under Dashboards, and "Review a Website" under Software Development
-    When I open "Answer a Business Question"
-    Then I see its nine steps on the canvas and the agents Michael, Zoe, Olivia, Jessica and Ryan under Agents in its Start node
+    Then I see the workflows grouped by category: "Answer a Business Question (Avery + Michael)" under Data Analytics, "Assess Data Readiness" and "Consumption Gap Analysis" under Data Engineering, "Dashboard Image to Artifact" and "Map a Dashboard to Data" under Dashboards, and "Review a Website" under Software Development
+    When I open "Answer a Business Question (Avery + Michael)"
+    Then I see its one step, Orchestrate, on the canvas and the agent personas Michael and Avery under Agent personas in its Start node
     When I click "Run workflow"
-    Then the panel opens on Run and no chat is started
+    Then the Run panel is on the left of the canvas, there is no Details panel and no chat is started
 
   Scenario: Workflows can't be edited
     When I open Workflows
     Then I see no Edit, New, Delete or reorder control on the list
-    When I open "Answer a Business Question"
-    Then I see no Edit, New, Delete or step-reorder control on its page or in its panel
+    When I open "Answer a Business Question (Avery + Michael)"
+    Then I see no Edit, New, Delete or step-reorder control on its page or in its Run panel
 
   Scenario: Search filters the list
     Given I am on Workflows
-    When I search for "insights"
-    Then only the "Answer a Business Question" card and its orchestrated and Avery + Michael versions are shown
+    When I search for "business"
+    Then only the "Answer a Business Question (Avery + Michael)" card is shown
     When I search for "zzz"
     Then I see "No workflows match "zzz""
 
@@ -239,57 +239,52 @@ Feature: Workflows
   @demo @story-1.23.9
   Scenario: I run Answer a Business Question on a question from its card
     When I open Workflows
-    Then I see "Answer a Business Question" with "9 steps" and no Start chat
+    Then I see "Answer a Business Question (Avery + Michael)" with "1 step" and no Start chat
     When I click its Run
-    Then I see its nine steps on the canvas, Run workflow and no Start chat
+    Then I see its Orchestrate step on the canvas, Run workflow and no Start chat
     When I click Run workflow
     Then the Run panel's Chat shows the composer with its "+" button and no Execute button
     When I type "How many matches were played in each stage?" and click Send
     Then the agent asks which datasets to use
     When I add "World Cup Core" and click "Continue with 1 dataset"
-    Then I see "Run succeeded" with every step "Done" but "Read images", which is "Skipped"
-    And I see the model's answer and, beside it, the visual Ryan built
-
-  Scenario: Answer a Business Question charts its answer with Ryan
-    Given I am on the "Answer a Business Question" page
-    When I run a question on "World Cup" with "Build a visual" ticked, as it is by default
-    Then "Build visual" is "Done" between "Write answer" and "Wrap up"
-    And the thread shows the visual's card after the answer, and the answer keeps its query evidence
-    When I untick "Build a visual" and run the question again
-    Then "Build visual" is "Skipped" and the run has no visual
+    Then I see "Run succeeded" with "Orchestrate" "Done"
+    And I see Michael's answer, signed by Avery
 
   Scenario: A failing step stops the run
-    Given I am on the "Answer a Business Question" page
+    Given I am on the "Answer a Business Question (Avery + Michael)" page
     When the model fails and I run it on a question
     Then I see "Run failed" with the error
-    And the steps up to "Plan" are "Done", "Analyse" is "Failed" and the steps after it are "Skipped"
-    And the canvas shows "Failed" on "Analyse" and "Skipped" on "Wrap up"
+    And the canvas shows "Failed" on "Orchestrate", and the run reached no end
 
   @demo @story-1.23.10
   Scenario: A workflow opens as a designer
-    When I open "Answer a Business Question" from Workflows
-    Then the canvas shows Start, its steps in order with their badges, and End, left to right, on one line
-    And the Run panel with the Chat is on the left of the canvas, and the app has no right panel and no Logs panel
+    When I open "Answer a Business Question (Avery + Michael)" from Workflows
+    Then the canvas shows Start, Orchestrate with its badge and Avery's team under it, and End, left to right
+    And there is no Details panel and no Logs panel, and the Run panel with the Chat is on the left of the canvas
     When I double-click Start
     Then its dialog shows the trigger, the input parameters and the output
-    When I click "Analyse" on the canvas
-    Then "Analyse" is selected on the canvas
-    When I double-click "Analyse"
-    Then its dialog shows its model, its tools and "Max steps 15"
+    When I click "Orchestrate" on the canvas
+    Then "Orchestrate" is selected on the canvas
+    When I double-click "Orchestrate"
+    Then its dialog shows Avery, her model, her tools and "Max steps 16"
     When I click Run workflow
     Then the Run panel focuses the composer's text box and nothing runs
     When I type a question, click Send and add a dataset when the agent asks
-    Then I see the answer and "Done" on every canvas node but "Read images"
+    Then I see the answer and "Done" on every canvas node
+    When I double-click "Orchestrate" again and unfold "How it's set up"
+    Then its Receives lists "question" and "datasets" with their types
+    And its Output in Schema mode shows the declared contract
+    And its Settings show the contract the run used
 
   @demo
   Scenario: A run shows each node's data in the node dialog
-    Given I am on the "Answer a Business Question" page
+    Given I am on the "Answer a Business Question (Avery + Michael)" page
     When I run it on "How many matches were played in each stage?"
-    Then every connector of the main path is done, the branch to "Read images" is muted, and the Run panel reads "10 of 11 nodes ran" (Build visual included)
-    When I double-click "Wrap up"
-    Then its Output holds the counts of the SQL calls and the answer
+    Then both connectors are done and the Run panel reads "3 of 3 nodes ran"
+    When I double-click "Orchestrate"
+    Then it shows what I asked, what Avery did with Michael and what she handed back, and its Output holds the answer
     When the model fails and I run it again
-    Then the "Analyse" dialog shows the error in its Output
+    Then the "Orchestrate" dialog shows the error in its Output
 
   @demo
   Scenario: A tool sub-node opens the tool's own details
@@ -298,28 +293,21 @@ Feature: Workflows
 
   Scenario: I chat with a step's agent about its run data
 
-  @demo
-  Scenario: A v2 run plans, analyses, validates and writes its answer
-
   Scenario: A question that needs clarification waits for my answer and continues the same run
 
   Scenario: The agent asks mid-analysis and continues after my answer
 
   @demo
   Scenario: I run a workflow in the Business view
-    When I open "Answer a Business Question" from Workflows on a device that never picked a view
+    When I open "Answer a Business Question (Avery + Michael)" from Workflows on a device that never picked a view
     Then it opens in the Business view, first in the header's View control: a chat with no canvas and no Run panel, its composer at the bottom
     When I type "How many matches were played in each stage?", press Enter and add "World Cup Core" when the agent asks
-    Then the workflow runs and I see my question, the agent personas' thread, the answer and the run's execution ID, with no tool calls and no How it ran
-    When I send "Which stage had the most matches?"
-    Then it runs the workflow again, under my earlier question and answer in the same conversation
-    And the conversation navigation shows a tick per question; hovering it lists them
-    When I pick "How many matches were played in each stage?" in it
-    Then the chat scrolls to that question
+    Then the workflow runs and I see my question, Avery's thread, the answer and the run's execution ID, with no tool calls and no How it ran
+    And the run's composer is gone and "Message Avery" takes a follow-up, with Stop gone and New question there
     And the Business view has no detectable accessibility violations
     When I click "Open in Builder"
     Then the Builder view shows the same run on the canvas and in the Run panel
-    When I go back to Workflows and open "Answer a Business Question" again
+    When I go back to Workflows and open "Answer a Business Question (Avery + Michael)" again
     Then it opens in the Builder view I last used
 ```
 
@@ -337,36 +325,73 @@ Feature: Workflow runs
 
   @demo @story-1.23.15
   Scenario: I run Answer a Business Question on a question
-    When I open "Answer a Business Question" from Workflows and click Run workflow
+    When I open "Answer a Business Question (Avery + Michael)" from Workflows and click Run workflow
     Then the Run tab shows the composer and no Careful
     When I type "Which team scored the most goals?", click Send and add "World Cup Core" when the agent asks
-    Then the Analyse step is running on the canvas and in the Run tab, with its SQL call
-    And I see the stub's answer with its SQL, and every step that ran Done
+    Then the Orchestrate step is running on the canvas and in the Run tab, with its SQL call
+    And I see the stub's answer with its SQL, and its step Done
     Then the composer is hidden while the answer shows
     When I click New question, type "And the fewest?" and click Send
     Then I see the second answer
 
+  @demo @story-1.25.4
+  Scenario: I open a query of an answer in the inspector and read how it was built
+    When I run "How many matches does the data hold?" on "World Cup Core"
+    Then I see the coverage line and a query row with its chip
+    And a figure of the answer carries a numbered source
+    When I open the query from the chip
+    Then the inspector opens beside the answer and I read its last step
+    When I switch to Result and to SQL
+    And I copy the SQL
+    And I press Escape
+    Then the inspector closes and the focus is back on the chip
+
+  @demo @story-1.25.5
+  Scenario: I open the query of a stored run from the Runs page
+    Given I ran "How many matches does the data hold?" on "World Cup Core"
+    When I open that run from the Runs page
+    Then I see its coverage line and its query row
+    When I open the query from its row
+    Then the inspector shows its steps and the focus is on its close button
+    When I press Escape
+    Then it closes and the focus is back on the row
+
   @demo @story-1.23.19
   Scenario: I rate a run's answer and it becomes a verified query
-    Given I ran "Answer a Business Question" on "Which team scored the most goals?"
+    Given I ran "Answer a Business Question (Avery + Michael)" on "Which team scored the most goals?"
     When I give the run's answer a thumbs-up
     Then I see "Answer saved as a verified query" and the Verified badge
     When I run the same question again, then its answer shows Verified
 
+  Scenario: Enter runs the question, the run hides the composer and New question brings it back
+    Given I am on the Run panel of "Answer a Business Question (Avery + Michael)" with "World Cup Core" added
+    When I press Shift+Enter, the composer adds a line and nothing runs
+    When I type the question and press Enter
+    Then the workflow runs and I see the answer
+    And the composer and any follow-up are gone under the answer
+    When I click New question
+    Then the run is cleared, the composer is empty and focused, and the dataset stays added
+
   Scenario: Asking on home runs Answer a Business Question on its page
     Given I am on home with "World Cup Core" as the only dataset
     Then that dataset is already picked
-    When I type "Which team scored the most goals?" and press Enter
-    Then "Answer a Business Question" opens, runs on my question and I see the answer
+    When I type the question and press Enter
+    Then "Answer a Business Question (Avery + Michael)" opens, runs on my question and I see the answer
     And home lists the run under Recent runs
 
+  Scenario: The Run panel maximizes, folds and resizes from the keyboard
+    Given I am on the Run panel of "Answer a Business Question (Avery + Michael)"
+    When I maximize it, it grows; when I restore it, it returns
+    When I fold it, it narrows to a strip; when I unfold it, it returns
+    When I press Arrow Right on the resize separator, the panel grows
+
   Scenario: The agent asks for a missing required dataset with option cards
-    Given I am on the Run tab of "Answer a Business Question" and no dataset is added
+    Given I am on the Run tab of "Answer a Business Question (Avery + Michael)" and no dataset is added
     When I type "Which team scored the most goals?" and click Send
     Then I see my message as a bubble on the right
-    And an agent message on the left asks which datasets to use, with option cards from the catalogue, each showing its name and a subline such as "PostgreSQL · 9 tables", and the footnote "Avery only reads your data with read-only SQL."
+    And an agent message on the left asks which datasets to use, with option cards from the catalogue and the read-only footnote
     When I click Add on "World Cup Core"
-    Then its button reads "✓ Added"
+    Then its button reads "Added"
     When I click "Continue with 1 dataset"
     Then I see my answer as a bubble and the run starts with the same request as before
 
@@ -378,22 +403,24 @@ Feature: Workflow runs
     Then a removable chip for it shows above the composer
     When I remove the chip
     Then the switch is back to its default
+    And a text option set in the menu shows as a chip too
+    And a click outside the menu closes it
 
   Scenario: A run needs its datasets
-    Given I am on the Run tab of "Answer a Business Question"
+    Given I am on the Run tab of "Answer a Business Question (Avery + Michael)"
     When I type "Which team scored the most goals?" and click Send
     Then the agent asks which datasets to use and nothing runs
-    And "Continue with 0 datasets" is not offered until I add one
+    And "Continue" is not offered until I add one
 
   Scenario: Stop ends the run
-    Given "Answer a Business Question" is running on a question
+    Given "Answer a Business Question (Avery + Michael)" is running on a question
     When I click Stop
-    Then the run reads "Run stopped" and its Analyse step "Stopped"
+    Then the run reads "Run stopped" and its Orchestrate step "Stopped"
     And the run is stored "stopped" on the server, not only on the page
 
   Scenario: A run waits in the queue while every slot is busy
     Given every one of the run slots is taken by a run that is running
-    When I click Execute on a question in "Answer a Business Question"
+    When I click Execute on a question in "Answer a Business Question (Avery + Michael)"
     Then the Chat shows the status "Queued…" and every node on the canvas stays idle
     And the Background tasks button lists the run with "Waiting for a free slot"
     And the run is stored "queued" on the server, with no steps
@@ -401,45 +428,20 @@ Feature: Workflow runs
     Then my run starts and its steps go Running then Done as in any run
 
   Scenario: A run the app stopped in starts again after a restart
-    Given "Answer a Business Question" is running on a question
+    Given "Answer a Business Question (Avery + Michael)" is running on a question
     When the app stops and starts again
-    Then the run is queued again and starts from scratch, with its earlier steps and answer gone
+    Then the run is queued again and starts from scratch
     And after it ends I see its answer, and the run is stored "success" with 2 attempts
 
   @demo @story-1.26.5
   Scenario: A run keeps running while I am elsewhere, and its page shows it again
-    Given "Answer a Business Question" is running on a question
+    Given "Answer a Business Question (Avery + Michael)" is running on a question
     When I go to another area
     Then the Background tasks button shows the run, 1 running
-    And the stored run is still running
-    When I open "Answer a Business Question" again
-    Then the live view is there: the question, Analyse running and its SQL call
+    When I open "Answer a Business Question (Avery + Michael)" again
+    Then the live view is there: the question, Orchestrate running and its SQL call
     When the model answers
     Then the answer shows and the task ends
-
-  @story-image-reader
-  Scenario: I paste an image and run with reference images
-    Given I am on the Run tab of "Answer a Business Question" with "World Cup Core" added through "+"
-    When I paste a PNG image into the composer and type "What does this chart say?"
-    Then I see a chip with a thumbnail "Reference image 1" and a remove button above the composer
-    When I click Send
-    Then the Read images step is done on the canvas and in the Run tab
-    And the question bubble shows the image's thumbnail
-    And the later model requests carry Zoe's notes as text and no image
-
-  @story-image-reader
-  Scenario: A run with no images shows Read images skipped
-    Given I am on the Run tab of "Answer a Business Question" with "World Cup Core" added through "+"
-    When I type "Which team scored the most goals?" and click Send
-    Then the Read images step is Skipped on the canvas
-    And the model requests are the same as before reference images existed
-
-  @story-image-reader
-  Scenario: A fifth image is refused
-    Given I am on the Run tab of "Answer a Business Question" with 4 reference images attached
-    When I try to attach a fifth image
-    Then I see "Reference images must be at most 4 images" and the thumbnails stay 4
-
 ```
 
 ### Feature: Live dashboards from Avery

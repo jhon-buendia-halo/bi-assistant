@@ -111,29 +111,28 @@ Feature: Agent panel
     Given the app runs with the LLM stub as its provider
     And the World Cup sample dataset is loaded
 
-  Scenario: a visual generated on a v2 answer is the run's panel item, kept on reopening and downloaded only through its own route
-    Given I ran the Assistant on "How many matches were played at each stage?"
-    When I run it again as a follow-up that makes a visual, shows a document and shows the visual by its id
-    Then the run lists the visual "Goals per team" first and "Findings" second, once each
+  Scenario: a visual generated on a run's answer is the run's panel item, kept on reopening and downloaded only through its own route
+    Given an "Answer a Business Question (Avery + Michael)" run on "How many matches were played at each stage?" with an answer
+    When I generate an interactive visual from its answer
+    Then the run holds one panel item, the visual "Goals per team", also after a reload
     And the visual downloads through its own route, never as a panel item
 
-  Scenario: a v2 run's workflow never appears among its panel items
-    Given an agent whose instructions have a "## Workflow" section with the phases "Understand", "Analyse" and "Report"
-    When the stub answers by calling "update_workflow" with current 2 and done "1"
-    And I run that agent on "Go on"
-    Then the run holds no panel item and its workflow has the three phases
+  Scenario: a run's workflow never appears among its panel items
+    Given an "Answer a Business Question (Avery + Michael)" run, whose step is its workflow
+    Then its step "Orchestrate" is kept with the run, and the run holds no panel item
+    And the panel item "phases" is not found
 
-  Scenario: Answer a Business Question shows its code-defined steps advancing
-    When the stub answers by running "run_readonly_sql" and then "There were 64 matches."
-    And I run "Answer a Business Question" on "How many matches were played in 2018?"
-    Then the steps of a clear question, "Receive question", "Load catalog", "Plan", "Analyse", "Validate", "Write answer" and "Wrap up", each report running, then success, in order
-    And the model was offered only v2's own tools: "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and the skill tools, never "update_workflow"
-    And the run's workflow shows every step that ran done
+  Scenario: Answer a Business Question shows its code-defined step advancing
+    When the stub answers Michael by running "run_readonly_sql" and then "There were 64 matches."
+    And I run "Answer a Business Question (Avery + Michael)" on "How many matches were played in 2018?"
+    Then its one step "Orchestrate" reports running, then success
+    And Avery was offered "answer_from_data", and Michael only his own tools: "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "explore_result", "ask_clarification" and the skill tools, never "update_workflow"
+    And the run's workflow shows "Orchestrate" done
 
-  Scenario: A failing step of the v2 workflow is marked failed
+  Scenario: a failing step of the workflow is marked failed
     Given the stub fails the model call with an error
-    When I run "Answer a Business Question" on "How many matches were played in 2018?"
-    Then "Receive question" and "Load catalog" succeed, "Analyse" fails and "Wrap up" is skipped
+    When I run "Answer a Business Question (Avery + Michael)" on "How many matches were played in 2018?"
+    Then "Orchestrate" fails
     And the run ends with the turn's error
 ```
 
