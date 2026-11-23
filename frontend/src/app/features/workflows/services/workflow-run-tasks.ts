@@ -47,8 +47,9 @@ export function runTaskTitle(workflowName: string, title: string): string {
   return cut ? `${workflowName}: ${cut}` : workflowName;
 }
 
-/** What a running run's task row says: `Waiting for you`, or its running step. */
+/** What a running run's task row says: `Waiting for a free slot`, `Waiting for you`, or its running step. */
 export function runTaskDetail(run: WorkflowRun): string | null {
+  if (run.status === 'queued') return 'Waiting for a free slot';
   if (run.status === 'suspended') return 'Waiting for you';
   const step = [...(run.steps ?? [])]
     .reverse()
@@ -133,6 +134,7 @@ export function teamFromSteps(
 }
 
 const ACTIVE: ReadonlySet<WorkflowRun['status']> = new Set([
+  'queued',
   'running',
   'suspended',
 ]);

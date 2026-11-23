@@ -192,6 +192,12 @@ describe('WorkflowRunDock, the Run panel on the left of the canvas (ui.md 4.4b)'
     expect(q('workflow-state-status')!.classList).toContain('chip-danger');
   });
 
+  it('reads a queued run as an info pill labelled Queued', () => {
+    open(storedRun({ status: 'queued', steps: [] }));
+    expect(text('workflow-state-status')).toBe('Queued');
+    expect(q('workflow-state-status')!.classList).toContain('chip-info');
+  });
+
   it('shows the activity line in the header while the run waits for the user', () => {
     open(
       storedRun({

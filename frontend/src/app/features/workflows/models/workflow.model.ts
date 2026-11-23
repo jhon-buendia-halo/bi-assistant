@@ -433,6 +433,10 @@ export interface WorkflowRunRequest {
   context?: { fromRunId: string; askStep?: string };
 }
 
+/** `queued`: accepted, waiting for a free slot (or re-queued after a restart). */
+export type WorkflowRunStatus =
+  'queued' | 'running' | 'suspended' | 'success' | 'failed' | 'stopped';
+
 /**
  * A stored run (api.md 3.6 `WorkflowRun`, 121), as `done.run` carries it.
  * Copied from api.md, not from the backend. Runs stored by a workflow that
@@ -448,7 +452,11 @@ export interface WorkflowRun {
   conversationId?: string;
   /** Set while the run's conversation is archived (hidden, read-only). */
   archivedAt?: string;
-  status: 'running' | 'success' | 'failed' | 'stopped' | 'suspended';
+  status: WorkflowRunStatus;
+  /** When the run was accepted (it may wait queued); legacy runs lack it. */
+  queuedAt?: string;
+  /** Times the run has started (run level, not the step's `attempt`); absent while never started. */
+  attempts?: number;
   /** A suspended run (or an expired one, `expired: true`): the question it waits on. */
   waitingFor?: WorkflowWaitingFor;
   steps: WorkflowRunStep[];
@@ -538,6 +546,8 @@ export interface WorkflowRunSummary {
   workflowName: string;
   status: WorkflowRun['status'];
   title: string;
+  queuedAt?: string;
+  attempts?: number;
   startedAt: string;
   finishedAt?: string;
   conversationId?: string;

@@ -103,6 +103,8 @@ export function runStatusLine(run: {
       return 'Run succeeded';
     case 'stopped':
       return 'Run stopped';
+    case 'queued':
+      return 'Queued…';
     case 'running':
       return 'Running…';
     case 'suspended':
@@ -299,12 +301,23 @@ export function filterRuns<
   );
 }
 
+/** A run that holds the conversation: queued, running or suspended (not finished). */
+export function isActiveRun(status: WorkflowRun['status']): boolean {
+  return status === 'queued' || status === 'running' || status === 'suspended';
+}
+
+/** A run that has not finished and is not waiting on the user: queued or running. */
+export function isLiveRun(status: WorkflowRun['status']): boolean {
+  return status === 'queued' || status === 'running';
+}
+
 /** A run row's status chip text. */
 export function runRowStatus(status: WorkflowRun['status']): string {
   return {
     success: 'Done',
     failed: 'Failed',
     stopped: 'Stopped',
+    queued: 'Queued',
     running: 'Running',
     suspended: 'Waiting for you',
   }[status];

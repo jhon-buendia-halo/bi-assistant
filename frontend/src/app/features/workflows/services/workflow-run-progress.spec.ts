@@ -162,6 +162,10 @@ describe('activityLine (ui.md 4.4b activity copy)', () => {
   const on = (id: string) =>
     progressSteps(W, run('running', [{ id, status: 'running' }]));
 
+  it('says Queued… while the run waits for a free slot', () => {
+    expect(activityLine([], 'queued', [])).toBe('Queued…');
+  });
+
   it('says what the current step is doing', () => {
     expect(activityLine(on('plan'), 'running', [])).toBe(
       'Planning the analysis…',
