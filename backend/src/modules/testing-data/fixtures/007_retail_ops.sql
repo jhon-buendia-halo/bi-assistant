@@ -231,9 +231,9 @@ CREATE TABLE retail_ops.products (
 INSERT INTO retail_ops.products
 SELECT p.id,
        'SKU-' || lpad(p.id::text, 4, '0'),
-       (ARRAY['Alpine','Birch','Cobalt','Dune','Ember','Fjord','Glacier','Harbor','Indigo','Juniper'])[(p.id - 1) % 10 + 1]
+       (ARRAY['Alpine','Birch','Cobalt','Dune','Ember','Fjord'])[(p.id - 1) / 18 + 1]
          || ' ' ||
-       (ARRAY['Bean','Leaf','Brew','Blend','Press','Pour','Steep','Roast','Mill','Kettle'])[(p.id - 1) / 10 + 1],
+       (ARRAY['Origin Beans','House Blend','Pour-Over Dripper','Espresso Machine','Burr Grinder','Coffee Scale','Black Tea','Green Tea','Herbal Infusion','Chai','Teapot','Tea Strainer','Skillet','Stockpot','Mug','Dinner Plate','Storage Jar','Food Container'])[(p.id - 1) % 18 + 1],
        13 + (p.id - 1) % 18,
        CASE p.id % 8
          WHEN 0 THEN CASE p.id % 32 WHEN 0 THEN 'Acme' WHEN 8 THEN 'ACME' WHEN 16 THEN ' acme' ELSE 'Acme ' END
@@ -255,7 +255,7 @@ SELECT p.id,
 INSERT INTO retail_ops.products VALUES
   (101, 'SKU-0101', 'Hero Grinder', 17, 'Halcyon', 66.00, 119.99, date '2021-06-01', false),
   (102, 'SKU-0102', 'Hero Kettle', 23, 'Halcyon', 49.50, 89.99, date '2021-06-01', false),
-  (103, 'SKU-0103', 'Hero Press', 26, 'Halcyon', 33.00, 59.99, date '2021-06-01', false),
+  (103, 'SKU-0103', 'Hero Stockpot', 26, 'Halcyon', 33.00, 59.99, date '2021-06-01', false),
   (104, 'SKU-0104', 'Hero Dripper', 15, 'Halcyon', 27.50, 49.99, date '2021-06-01', false);
 
 -- Price history, type 2: valid_to is the inclusive last day, NULL = current.
