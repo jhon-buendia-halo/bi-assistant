@@ -170,6 +170,11 @@
                 [dashboard]="dashboard"
               />
             }
+            @if (answer.export; as exported) {
+              @defer (on immediate) {
+                <app-run-export-card class="mt-2 block" [export]="exported" />
+              }
+            }
             @for (event of run.events ?? []; track event.at) {
               <app-answer-view
                 class="mt-2 block"

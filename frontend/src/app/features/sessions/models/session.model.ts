@@ -1,3 +1,4 @@
+import { ConversationExportRef } from '../../runs/models/conversation-export.model';
 import type { ReadinessMaturity } from './readiness.model';
 import type { QueryEvidence } from '../../../shared/query-evidence/query-evidence.model';
 
@@ -88,6 +89,8 @@ export interface ChatMessage {
   visual?: VisualEvent;
   /** Present when this turn built or updated a live dashboard in Artifacts. */
   dashboard?: DashboardRef;
+  /** Present when this turn exported the conversation to PDF and PowerPoint. */
+  export?: ConversationExportRef;
   /** User rating of this answer; `up` saves it as a verified query. */
   feedback?: MessageFeedback;
   /**
