@@ -46,6 +46,8 @@ import {
   type OrchestratorTurnDeps,
 } from './orchestrator-turn';
 import type { StreamEvent } from './stream-events';
+import type { ExportContent } from '../../../mastra/workflows/export-request';
+import type { ConversationExportRef } from '../../conversation-export/conversation-export.contract';
 
 const PLAN: AnalysisPlan = {
   question: 'How many matches?',
@@ -136,6 +138,7 @@ function fixture(
     images: [],
     buildsVisual: false,
     buildsDashboard: false,
+    exportsConversation: false,
     ...options.deps,
   };
   return { deps, members, events, streams };
@@ -510,6 +513,7 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
       'write_answer',
       'build_visual',
       'build_dashboard',
+      'export_conversation',
     ]);
   });
 
@@ -878,5 +882,163 @@ describe('Avery hands dashboards to Clara (agents.md 2.21, 5.22)', () => {
     );
     expect(block).toContain('Its columns: team, goals');
     expect(block).toContain('Its rows: 1');
+  });
+});
+
+/** What Avery writes for an export: every figure copied from TURNS' answers. */
+const CONTENT: ExportContent = {
+  formats: ['pdf', 'pptx'],
+  title: 'Penetración de productos en Intellify',
+  summary: [
+    'Los 38 clientes activos tienen de media 6,3 de los 11 productos.',
+    'El dashboard está en la versión 2.',
+  ],
+  turns: [
+    { number: 1, headline: 'Media de 6,3 productos por cliente', points: [] },
+    { number: 2, headline: 'Dashboard, versión 2', points: [] },
+  ],
+  includeSql: false,
+};
+
+const TURNS = {
+  questions: [
+    'haz una comparacion por clientes usando las metricas de penetracion y coberturas',
+    'ahora crea un dashboard',
+  ],
+  answers: [
+    '**Los 38 clientes activos tienen de media 6,3 de los 11 productos (58% de penetración).**',
+    'He creado el dashboard (versión 1). El dashboard está ya en la versión 2 y tiene 11 widgets.',
+  ],
+};
+
+const EXPORTED: ConversationExportRef = {
+  id: 'x-1',
+  title: CONTENT.title,
+  createdAt: '2026-11-23T10:00:00.000Z',
+  files: [
+    { format: 'pdf', fileName: 'p.pdf', bytes: 10, pages: 9 },
+    { format: 'pptx', fileName: 'p.pptx', bytes: 20, slides: 8 },
+  ],
+};
+
+describe("Avery's export_conversation (agents.md 2.21, 3.18)", () => {
+  it('with the gate closed: the tool is hidden and the facts say nothing of an export', async () => {
+    const exportConversation = jest.fn();
+    const { deps, streams } = fixture([text('Done.')], {
+      team: team({ exportConversation }),
+    });
+    await runOrchestratorTurn(deps, { question: 'How many matches?' });
+    expect(factsOf(streams)).not.toContain('export');
+    const runtime = orchestratorTools(deps, 'q', undefined);
+    expect(runtime.exportsConversation).toBe(false);
+    const context = new RequestContext();
+    context.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, runtime);
+    expect(Object.keys(avertTools(context))).not.toContain(
+      'export_conversation',
+    );
+    expect(await runtime.exportConversation(CONTENT)).toBe(
+      'This run exports nothing.',
+    );
+    expect(exportConversation).not.toHaveBeenCalled();
+  });
+
+  it('with the gate open: offers the tool and lists the earlier questions, in order', async () => {
+    const { deps, streams } = fixture([text('Done.')], {
+      team: team({ exportConversation: jest.fn() }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    await runOrchestratorTurn(deps, { question: 'Exporta la conversación' });
+    expect(factsOf(streams).split('\n').at(-1)).toBe(
+      'The user asked to export the conversation: export_conversation is available. Its earlier questions, in order: 1. "haz una comparacion por clientes usando las metricas de penetracion y coberturas" 2. "ahora crea un dashboard"',
+    );
+    const runtime = orchestratorTools(deps, 'q', undefined);
+    const context = new RequestContext();
+    context.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, runtime);
+    expect(Object.keys(avertTools(context))).toContain('export_conversation');
+  });
+
+  it('cuts each earlier question at 140 characters in the facts', async () => {
+    const long = 'q'.repeat(200);
+    const { deps, streams } = fixture([text('Done.')], {
+      team: team({ exportConversation: jest.fn() }),
+      deps: {
+        exportsConversation: true,
+        earlierTurns: { questions: [long], answers: ['A.'] },
+      },
+    });
+    await runOrchestratorTurn(deps, { question: 'Export it to PDF' });
+    expect(factsOf(streams)).toContain(`1. "${'q'.repeat(140)}…"`);
+  });
+
+  it('exports with checked figures, keeps the export on the state and tells Avery the counts', async () => {
+    const exportConversation = jest
+      .fn()
+      .mockResolvedValue({ export: EXPORTED });
+    const { deps } = fixture([text('Done.')], {
+      team: team({ exportConversation }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    const runtime = orchestratorTools(deps, 'q', undefined);
+    expect(await runtime.exportConversation(CONTENT)).toBe(
+      'Exported "Penetración de productos en Intellify": PDF (9 pages), PowerPoint (8 slides). The user sees the download card with the answer: do not repeat the summary.',
+    );
+    expect(exportConversation).toHaveBeenCalledWith(CONTENT);
+    expect(deps.state.export).toEqual(EXPORTED);
+  });
+
+  it('refuses figures that no answer gives, before anything is drawn', async () => {
+    const exportConversation = jest.fn();
+    const { deps } = fixture([text('Done.')], {
+      team: team({ exportConversation }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    const runtime = orchestratorTools(deps, 'q', undefined);
+    expect(
+      await runtime.exportConversation({
+        ...CONTENT,
+        summary: [
+          'Medical llega al 97,4% de los clientes.',
+          'Hay 38 clientes.',
+        ],
+      }),
+    ).toBe(
+      "These figures are not in the conversation's answers: 97,4. Use only figures from the answers, then call export_conversation again.",
+    );
+    expect(exportConversation).not.toHaveBeenCalled();
+    expect(deps.state.export).toBeUndefined();
+  });
+
+  it('runs at most twice in a run, a refused call included', async () => {
+    const exportConversation = jest
+      .fn()
+      .mockResolvedValue({ export: EXPORTED });
+    const { deps } = fixture([text('Done.')], {
+      team: team({ exportConversation }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    const runtime = orchestratorTools(deps, 'q', undefined);
+    await runtime.exportConversation({ ...CONTENT, title: 'Top 99 clients' });
+    await runtime.exportConversation(CONTENT);
+    expect(await runtime.exportConversation(CONTENT)).toBe(
+      'export_conversation already ran twice in this run: close from what it said.',
+    );
+    expect(exportConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells Avery why when no file was made (no browser)', async () => {
+    const { deps } = fixture([text('Done.')], {
+      team: team({
+        exportConversation: jest.fn().mockResolvedValue({
+          error:
+            'Exporting needs Microsoft Edge or Google Chrome on this computer.',
+        }),
+      }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    expect(
+      await orchestratorTools(deps, 'q', undefined).exportConversation(CONTENT),
+    ).toBe(
+      'The conversation was not exported: Exporting needs Microsoft Edge or Google Chrome on this computer.',
+    );
   });
 });

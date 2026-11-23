@@ -339,7 +339,12 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(lean.steps[0].agent).toMatchObject({
         key: 'chief-of-staff',
         name: 'Avery',
-        tools: ['answer_from_data', 'build_dashboard', 'ask_clarification'],
+        tools: [
+          'answer_from_data',
+          'build_dashboard',
+          'export_conversation',
+          'ask_clarification',
+        ],
         maxSteps: 16,
         team: [
           {
@@ -378,6 +383,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
           'write_answer',
           'build_visual',
           'build_dashboard',
+          'export_conversation',
           'ask_clarification',
         ],
         maxSteps: 16,

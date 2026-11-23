@@ -28,8 +28,10 @@ export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
   // Mastra's skill tool when a call carries the block (ADR-0025).
   assistant: ['curated-knowledge'],
   // Avery's router and playbooks: which playbook fits the request, each
-  // with the steps for its case and how to close (agents.md 2.21, 7.4).
-  'chief-of-staff': ['avery-playbooks'],
+  // with the steps for its case and how to close (agents.md 2.21, 7.4);
+  // and the format rules of her conversation export, offered only while
+  // the export gate is open (chief-of-staff.agent.ts).
+  'chief-of-staff': ['avery-playbooks', 'conversation-export'],
   // The Data Readiness Agent's skills: assessing and explaining, then
   // drilling into findings with read-only SQL (agents.md 7.4, ADR-0035).
   'data-readiness': ['data-readiness', 'readiness-drilldown'],

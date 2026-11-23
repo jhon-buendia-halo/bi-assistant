@@ -333,6 +333,8 @@ interface BuildOptions {
   >;
   /** The artifacts service (Clara's dashboards, agents.md 5.22). */
   artifacts?: object;
+  /** Avery's conversation exporter (agents.md 3.18). */
+  exporter?: object;
 }
 
 /** v2's Analyse turn: one successful query, then its note. */
@@ -579,6 +581,8 @@ function build(options: BuildOptions = {}) {
     options.readiness as never,
     undefined,
     options.artifacts as never,
+    undefined,
+    options.exporter as never,
   );
   const workflows = {
     definition: jest.fn((id: string) =>
@@ -3249,5 +3253,93 @@ describe("Clara builds Avery's dashboards (agents.md 2.22, 5.22)", () => {
     ) as OrchestratorToolsRuntime;
     expect(tools.buildsDashboard).toBe(false);
     expect(second.answer?.dashboard).toBeUndefined();
+  });
+});
+
+describe('Avery exports the conversation (agents.md 3.18; workflows R45)', () => {
+  const EXPORT = {
+    id: 'x-1',
+    title: 'Who won the World Cup',
+    createdAt: '2026-11-23T10:00:00.000Z',
+    files: [{ format: 'pdf', fileName: 'w.pdf', bytes: 3, pages: 4 }],
+  };
+
+  /** Avery: on an export request she calls export_conversation, else answers. */
+  function averyExports(told: string[]) {
+    return (opts: StreamCall['options']) =>
+      (async function* () {
+        const tools = opts.requestContext.values.get(
+          ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+        ) as OrchestratorToolsRuntime;
+        if (tools.exportsConversation) {
+          const result = await tools.exportConversation({
+            formats: ['pdf'],
+            title: 'Who won the World Cup',
+            summary: ['Brazil won.', 'The answer named the winner.'],
+            turns: [{ number: 1, headline: 'Brazil won', points: [] }],
+            includeSql: false,
+          });
+          told.push(result);
+        }
+        yield { type: 'text-delta', payload: { text: 'Done.' } };
+      })();
+  }
+
+  it('opens on the request, reads the earlier turns, exports them and carries the export on the answer', async () => {
+    const exporter = {
+      turns: jest.fn().mockResolvedValue({
+        questions: ['Who won?'],
+        answers: ['Brazil won.'],
+      }),
+      export: jest.fn().mockResolvedValue(EXPORT),
+    };
+    const told: string[] = [];
+    const ctx = build({
+      exporter,
+      streams: { 'chief-of-staff': averyExports(told) },
+    });
+    await ctx.sessions.onModuleInit();
+    const first = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: { question: 'Who won?', datasets: ['World Cup'] },
+      }),
+      () => undefined,
+    );
+    // A question that is no export: no export line, no call to the exporter.
+    expect(
+      ctx.calls['chief-of-staff'][0].options.context[0].content,
+    ).not.toContain('export');
+    expect(exporter.turns).not.toHaveBeenCalled();
+    expect(first.answer?.export).toBeUndefined();
+
+    const second = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: {
+          question: 'Export this conversation to PDF',
+          datasets: ['World Cup'],
+        },
+        context: { fromRunId: first.id },
+      }),
+      () => undefined,
+    );
+    expect(second.status).toBe('success');
+    expect(exporter.turns).toHaveBeenCalledWith(first.id, second.id);
+    const avery = ctx.calls['chief-of-staff'].at(-1)!;
+    expect(avery.options.context[0].content).toContain(
+      'The user asked to export the conversation: export_conversation is available. Its earlier questions, in order: 1. "Who won?"',
+    );
+    expect(exporter.export).toHaveBeenCalledWith({
+      conversationId: first.id,
+      beforeRunId: second.id,
+      content: expect.objectContaining({
+        title: 'Who won the World Cup',
+      }) as unknown,
+      brand: 'halo',
+    });
+    expect(told).toEqual([
+      'Exported "Who won the World Cup": PDF (4 pages). The user sees the download card with the answer: do not repeat the summary.',
+    ]);
+    expect(second.answer?.export).toEqual(EXPORT);
+    expect(second.answer?.content).toBe('Done.');
   });
 });

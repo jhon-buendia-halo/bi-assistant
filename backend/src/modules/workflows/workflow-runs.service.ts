@@ -831,6 +831,8 @@ export class WorkflowRunsService implements OnModuleInit {
         ...(workflow.id === REVIEW_WEBSITE_WORKFLOW_ID
           ? { inputValues: prepared.values }
           : {}),
+        // Avery's run reads its conversation for an export (agents.md 3.18).
+        ...(base.conversationId ? { conversationId: base.conversationId } : {}),
         ...(prepared.context
           ? {
               // A message to Avery reads the whole conversation so far

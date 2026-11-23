@@ -28,6 +28,7 @@ import {
 } from '../agent-constants';
 import { INSIGHTS_ANALYST_AGENT_KEY } from '../agents/insights-analyst-catalog';
 import { BUILD_DASHBOARD_TOOL } from './bi-dashboard.schemas';
+import { EXPORT_CONVERSATION_TOOL, type ExportContent } from './export-request';
 
 /** The workflow's registry key and id. */
 export const ORCHESTRATED_ANSWER_WORKFLOW_ID = 'orchestrated-answer';
@@ -48,9 +49,13 @@ export const ORCHESTRATOR_TEAM: readonly { tool: string; agent: string }[] = [
   { tool: BUILD_DASHBOARD_TOOL, agent: BI_ANALYST_AGENT_KEY },
 ];
 
-/** Avery's tools, in order: her team's, then `ask_clarification`. */
+/**
+ * Avery's tools, in order: her team's, then her own `export_conversation`
+ * (agents.md 3.18, no teammate behind it) and `ask_clarification`.
+ */
 export const ORCHESTRATOR_TOOL_NAMES: readonly string[] = [
   ...ORCHESTRATOR_TEAM.map((member) => member.tool),
+  EXPORT_CONVERSATION_TOOL,
   'ask_clarification',
 ];
 
@@ -85,7 +90,12 @@ export const ORCHESTRATOR_TEAMS: Readonly<
       { tool: MICHAEL_ANSWER_TOOL, agent: INSIGHTS_ANALYST_AGENT_KEY },
       { tool: BUILD_DASHBOARD_TOOL, agent: BI_ANALYST_AGENT_KEY },
     ],
-    tools: [MICHAEL_ANSWER_TOOL, BUILD_DASHBOARD_TOOL, 'ask_clarification'],
+    tools: [
+      MICHAEL_ANSWER_TOOL,
+      BUILD_DASHBOARD_TOOL,
+      EXPORT_CONVERSATION_TOOL,
+      'ask_clarification',
+    ],
   },
 };
 
@@ -260,4 +270,14 @@ export interface OrchestratorToolsRuntime {
    * into its next version; what she built, or why not, for Avery.
    */
   buildDashboard(brief: string): Promise<string>;
+  /**
+   * The run may export the conversation (export_conversation is offered):
+   * the user's words ask for it (`asksForExport`).
+   */
+  exportsConversation: boolean;
+  /**
+   * Export the conversation with Avery's content (agents.md 3.18): what was
+   * exported, or why not, for Avery.
+   */
+  exportConversation(content: ExportContent): Promise<string>;
 }

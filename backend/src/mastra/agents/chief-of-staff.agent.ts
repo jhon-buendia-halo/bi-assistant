@@ -9,26 +9,56 @@ import { catalogFrameworkSkills } from '../skill-sources';
 import {
   ORCHESTRATOR_INSTRUCTIONS,
   ORCHESTRATOR_MICHAEL_INSTRUCTIONS,
+  withExportInstructions,
 } from '../workflows/orchestrated-answer.prompts';
+import { CONVERSATION_EXPORT_SKILL } from '../workflows/export-request';
 import {
   MICHAEL_ANSWER_TOOL,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   type OrchestratorToolsRuntime,
 } from '../workflows/orchestrated-answer.steps';
 
+/** The run's tools runtime on a call's context, when it is a run's. */
+function runtimeOf(requestContext?: {
+  get(key: string): unknown;
+}): OrchestratorToolsRuntime | undefined {
+  return requestContext?.get(ORCHESTRATOR_TOOLS_RUNTIME_KEY) as
+    OrchestratorToolsRuntime | undefined;
+}
+
 /**
  * Her job description for the run: with Michael alone (Avery + Michael,
  * agents.md 5.23) the shipped one for her team of one; else her whole
- * team's, or its in-app override (ADR-0026).
+ * team's, or its in-app override (ADR-0026). With the export gate open
+ * (agents.md 2.21) its team line and rule are added; closed, the text is
+ * what it was before the export.
  */
 export function chiefOfStaffInstructions(requestContext?: {
   get(key: string): unknown;
 }): string {
-  const runtime = requestContext?.get(ORCHESTRATOR_TOOLS_RUNTIME_KEY) as
-    OrchestratorToolsRuntime | undefined;
-  return runtime?.tools.includes(MICHAEL_ANSWER_TOOL)
+  const runtime = runtimeOf(requestContext);
+  const base = runtime?.tools.includes(MICHAEL_ANSWER_TOOL)
     ? ORCHESTRATOR_MICHAEL_INSTRUCTIONS
     : agentInstructions(CHIEF_OF_STAFF_AGENT_KEY, ORCHESTRATOR_INSTRUCTIONS);
+  return runtime?.exportsConversation ? withExportInstructions(base) : base;
+}
+
+/**
+ * Her skills for the call (agents.md 7.4): the router and playbooks, and
+ * the export's format rules only while the export gate is open (Mastra
+ * 1.66.0 hands the skills resolver the call's requestContext). With no run
+ * (her agent page), every skill she can have.
+ */
+export function chiefOfStaffSkills(requestContext?: {
+  get(key: string): unknown;
+}) {
+  const runtime = runtimeOf(requestContext);
+  return catalogFrameworkSkills(CHIEF_OF_STAFF_AGENT_KEY).filter(
+    (skill) =>
+      !runtime ||
+      runtime.exportsConversation ||
+      skill.name !== CONVERSATION_EXPORT_SKILL,
+  );
 }
 
 /**
@@ -51,8 +81,8 @@ export const chiefOfStaffAgent = new Agent({
   instructions: ({ requestContext }) =>
     chiefOfStaffInstructions(requestContext),
   // Her router and playbooks, loaded on demand through Mastra's skill tools
-  // (agents.md 7.4, ADR-0025).
-  skills: () => catalogFrameworkSkills(CHIEF_OF_STAFF_AGENT_KEY),
+  // (agents.md 7.4, ADR-0025); the export's rules with the gate open.
+  skills: ({ requestContext }) => chiefOfStaffSkills(requestContext),
   model: async ({ requestContext }) =>
     resolveAgentModel(stepModelFrom(requestContext)?.model),
   tools: ({ requestContext }) => ({
