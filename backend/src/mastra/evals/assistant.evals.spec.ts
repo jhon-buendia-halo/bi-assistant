@@ -10,7 +10,10 @@ jest.mock('../agents/eval-judge.agent', () => ({
   evalJudgeAgent: {},
   evalJudgeOutputSchema: {},
 }));
-jest.mock('../model-resolver', () => ({ resolveAgentModel: jest.fn() }));
+jest.mock('../model-resolver', () => ({
+  resolveAgentModel: jest.fn(),
+  resolveAgentModelConfig: jest.fn().mockResolvedValue('anthropic/claude-test'),
+}));
 jest.mock('../tool-services', () => ({
   getDatasetToolServices: () => ({
     getDatasets: () => Promise.resolve([]),
@@ -23,6 +26,8 @@ jest.mock('../../modules/sessions/turn-data', () => ({
 
 import { runEvals } from '@mastra/core/evals';
 import { appSkillBody } from '../app-skills';
+import { evalJudgeAgent } from '../agents/eval-judge.agent';
+import { EVAL_RUN_CONTEXT_KEY } from './eval-trace-marker';
 import {
   ASSISTANT_EVAL_SETS,
   cleanupEvalHost,
@@ -162,6 +167,50 @@ describe('tool selection in the eval cases (agents.md 8.1, ADR-0022)', () => {
     expect(sentContext()[0].content).toContain(
       'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
     );
+  });
+});
+
+describe('eval trace marker (ADR-0054)', () => {
+  it('sets the run id on the case request context', async () => {
+    await runAssistantEvalCase(
+      evalCase,
+      ['World Cup Core'],
+      undefined,
+      undefined,
+      undefined,
+      'job-1',
+    );
+
+    expect(sentRequestContext().get(EVAL_RUN_CONTEXT_KEY)).toBe('job-1');
+  });
+
+  it('sets no marker without a run id', async () => {
+    await runAssistantEvalCase(evalCase, ['World Cup Core']);
+
+    expect(sentRequestContext().get(EVAL_RUN_CONTEXT_KEY)).toBeUndefined();
+  });
+
+  it('hands the judge the same request context', async () => {
+    const generate = jest.fn().mockResolvedValue({
+      object: { score: 1, reason: 'ok' },
+    });
+    (evalJudgeAgent as unknown as { generate: jest.Mock }).generate = generate;
+
+    await runAssistantEvalCase(
+      { ...evalCase, judgeRubric: 'Answers the question.' },
+      ['World Cup Core'],
+      undefined,
+      undefined,
+      undefined,
+      'job-2',
+    );
+
+    expect(generate).toHaveBeenCalledTimes(1);
+    const options = (generate.mock.calls as unknown[][])[0][1] as {
+      requestContext: { get(key: string): unknown };
+    };
+    expect(options.requestContext).toBe(sentRequestContext());
+    expect(options.requestContext.get(EVAL_RUN_CONTEXT_KEY)).toBe('job-2');
   });
 });
 

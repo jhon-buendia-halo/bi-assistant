@@ -12,6 +12,7 @@ import {
   evalJudgeOutputSchema,
 } from '../agents/eval-judge.agent';
 import { ASSISTANT_MAX_STEPS } from '../agent-constants';
+import { EVAL_RUN_CONTEXT_KEY } from './eval-trace-marker';
 import { DATASETS_CONTEXT_KEY } from '../tools/dataset.tools';
 import {
   SESSION_ID_CONTEXT_KEY,
@@ -1337,8 +1338,11 @@ function evalRequestContext(
   turnRecords: ToolDataRecord[],
   question: string,
   agentTools?: readonly OptionalAgentTool[],
+  /** The eval run's job id; marks the case's traffic in the trace store (ADR-0054). */
+  evalRunId?: string,
 ): RequestContext {
   const requestContext = new RequestContext();
+  if (evalRunId) requestContext.set(EVAL_RUN_CONTEXT_KEY, evalRunId);
   requestContext.set(DATASETS_CONTEXT_KEY, datasets);
   if (sessionId) requestContext.set(SESSION_ID_CONTEXT_KEY, sessionId);
   requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
@@ -1527,6 +1531,8 @@ async function runJudgeCheck(
   history: EvalHistoryMessage[] = [],
   /** What the target reports the assistant was given (`judgeContext`). */
   context?: string,
+  /** The case's request context, so the judge's spans carry the eval marker. */
+  requestContext?: RequestContext,
 ): Promise<EvalCheckResult | undefined> {
   if (!evalCase.judgeRubric) return undefined;
   const description = `LLM judge: ${evalCase.judgeRubric}`;
@@ -1543,6 +1549,7 @@ async function runJudgeCheck(
     const result = await evalJudgeAgent.generate(prompt, {
       maxSteps: 1,
       toolChoice: 'none',
+      requestContext,
       // Deterministic-ish grading: low temperature where the provider
       // supports it, via providerOptions rather than a top-level field the
       // structured-output call overload does not accept.
@@ -1612,6 +1619,8 @@ export async function runAssistantEvalCase(
   knowledgeBlock?: string,
   /** The agent the case runs on; the assistant when omitted (agents.md 8.1). */
   target: EvalTarget = ASSISTANT_EVAL_TARGET,
+  /** The eval run's job id, set on the request context as the trace marker (ADR-0054). */
+  evalRunId?: string,
 ): Promise<AssistantEvalCaseResult> {
   const startedAt = Date.now();
   // The question sent: the case's own, unless the target's setup fills it.
@@ -1650,6 +1659,7 @@ export async function runAssistantEvalCase(
       turnRecords,
       question,
       evalCase.agentTools,
+      evalRunId,
     );
     // The case itself, for a target that reads its frozen `input`.
     requestContext.set(EVAL_CASE_CONTEXT_KEY, evalCase);
@@ -1794,6 +1804,7 @@ export async function runAssistantEvalCase(
       question,
       history,
       details.judgeContext,
+      requestContext,
     );
     if (judgeCheck) checkResults.push(judgeCheck);
 
@@ -1864,6 +1875,8 @@ export async function runAssistantEvals(
   knowledgeBlock?: string,
   /** The agent and sets to run; the assistant's when omitted (agents.md 8.1). */
   target: EvalTarget = ASSISTANT_EVAL_TARGET,
+  /** The eval run's job id, passed to every case as the trace marker (ADR-0054). */
+  evalRunId?: string,
 ): Promise<AssistantEvalCaseResult[]> {
   const datasetError = assistantEvalDatasetError(
     datasets,
@@ -1883,6 +1896,7 @@ export async function runAssistantEvals(
         evalSession?.id,
         knowledgeBlock,
         target,
+        evalRunId,
       );
       results.push(result);
       onCaseComplete?.(result);
