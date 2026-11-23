@@ -19,15 +19,15 @@ export async function openWorkflowPage(
   id: string,
   name: string,
 ): Promise<void> {
-  await railItem(page, 'User journeys').click();
+  await railItem(page, 'Workflows').click();
   await expect(
-    page.getByRole('heading', { name: 'User journeys', exact: true }),
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
   await page.getByTestId(`workflow-${id}`).click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(name);
 }
 
-/** Execute user journey: the Run panel unfolds with the composer. */
+/** Run workflow: the Run panel unfolds with the composer. */
 export async function openRunTab(page: Page): Promise<void> {
   await page.getByTestId('workflow-execute').click();
   await expect(composer(page)).toBeVisible();

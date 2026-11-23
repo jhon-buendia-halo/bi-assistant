@@ -38,10 +38,10 @@ describe('WorkflowBar', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(
       el.querySelector('[data-testid="workflow-bar-empty"]')?.textContent,
-    ).toContain('No user journey yet');
+    ).toContain('No workflow yet');
     expect(steps(el)).toEqual([]);
     expect(
-      el.querySelector('button[aria-label="Hide user journey"]'),
+      el.querySelector('button[aria-label="Hide workflow"]'),
     ).toBeNull();
   });
 
@@ -49,7 +49,7 @@ describe('WorkflowBar', () => {
     const fixture = create({ done: [1], skipped: [2], current: 3 });
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('[role="list"]')?.getAttribute('aria-label')).toBe(
-      'User journey',
+      'Workflow',
     );
     expect(steps(el).map((s) => s.getAttribute('data-status'))).toEqual([
       'done',
@@ -196,7 +196,7 @@ describe('WorkflowBar', () => {
       expect(toggle(el).getAttribute('aria-expanded')).toBe('true');
       const p = panel(el)!;
       expect(p.getAttribute('role')).toBe('region');
-      expect(p.getAttribute('aria-label')).toBe('User journey details');
+      expect(p.getAttribute('aria-label')).toBe('Workflow details');
       expect(p.id).toBe('workflow-details');
       toggle(el).click();
       fixture.detectChanges();
@@ -366,24 +366,24 @@ describe('WorkflowBar', () => {
     const fixture = create();
     const el: HTMLElement = fixture.nativeElement;
     const toggle = el.querySelector<HTMLButtonElement>(
-      'button[title="Hide user journey"]',
+      'button[title="Hide workflow"]',
     )!;
     toggle.click();
     fixture.detectChanges();
     expect(localStorage.getItem(WORKFLOW_BAR_COLLAPSED_KEY)).toBe('1');
     expect(el.querySelector('[role="list"]')).toBeNull();
-    expect(el.textContent).toContain('User journey ·');
+    expect(el.textContent).toContain('Workflow ·');
     expect(el.textContent).toContain('Pricing');
     expect(el.textContent).toContain('1/4');
     expect(
-      el.querySelector('button[title="Show user journey"]'),
+      el.querySelector('button[title="Show workflow"]'),
     ).not.toBeNull();
 
     // A new bar starts folded.
     const again = create();
     expect(again.nativeElement.querySelector('[role="list"]')).toBeNull();
     again.nativeElement
-      .querySelector('button[title="Show user journey"]')
+      .querySelector('button[title="Show workflow"]')
       .click();
     again.detectChanges();
     expect(localStorage.getItem(WORKFLOW_BAR_COLLAPSED_KEY)).toBe('0');

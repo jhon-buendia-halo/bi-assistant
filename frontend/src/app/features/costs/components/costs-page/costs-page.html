@@ -82,7 +82,7 @@
           data-testid="kpi-per-run"
         >
           <span class="text-[12px] text-fg-muted"
-            >Avg per user journey run</span
+            >Avg per workflow run</span
           >
           <span
             class="text-[22px] leading-7 font-light text-fg-strong tabular-nums"
@@ -222,7 +222,7 @@
           data-testid="costs-per-workflow"
         >
           <h3 class="text-[14px] font-medium text-fg-strong">
-            Cost per user journey run
+            Cost per workflow run
             <span class="font-normal text-fg-muted">· {{ periodLabel() }}</span>
           </h3>
           <div class="overflow-x-auto">
@@ -232,7 +232,7 @@
                   class="border-b border-border bg-surface-muted text-fg-muted"
                 >
                   <th scope="col" class="px-3 py-2 font-medium">
-                    User journey
+                    Workflow
                   </th>
                   <th scope="col" class="px-3 py-2 text-right font-medium">
                     Runs
@@ -315,7 +315,7 @@
             </h3>
             @if (topRuns().length === 0) {
               <p class="px-2 py-1.5 text-[12px] text-fg-muted">
-                No user journey runs in this period.
+                No workflow runs in this period.
               </p>
             } @else {
               <ol class="flex flex-col">

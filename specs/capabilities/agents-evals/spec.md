@@ -307,9 +307,9 @@ The Job Description tab (the system prompt) of the Official and System agents, e
   - the **Job Description** tab SHALL be that of an Official agent (R97-R105): `Built-in` and `Modified` chips, the editable text without `## Tools` and **Edit**, **Reset to built-in**, with the hint `Type / to link a tool or a built-in skill. Links here are mentions; Michael keeps every tool.` and the note `The ## Tools list is generated from the tools Michael gets and is inserted before ## Working rules.` Its editor links only its five tools and its three skills; **Save job description** refuses a prompt that does not start with `You are Questions to Insights`, a `[[skill:…]]` link to a skill not its own and an unknown tool, with the backend's message ([api.md](../../system/api.md) 103).
 - R108. *Removed on 2026-11-15* with the Graph tab (R88): the agent page no longer draws a workflow-backed agent's turn. The workflow's steps stay on the workflow page ([workflows](../workflows/spec.md) R7), and the agent detail still returns `workflow` ([api.md](../../system/api.md) 34).
 - R109. The agent detail's header SHALL carry the line **Used in** under the id, from the agent's `usedInWorkflows` ([api.md](../../system/api.md) 34): one chip per workflow whose steps call the agent, reading the workflow's name. Each chip SHALL be a button that opens that workflow's page ([workflows](../workflows/spec.md) R7), with **Workflows** the current rail item ([app-shell](../app-shell/spec.md) R3). Since 2026-11-12 the only workflow is Answer a Business Question (until 2026-11-13 shown as Questions to Insights v2), so only the agents its steps run have a chip (`Answer a Business Question`): `Insights Analyst` (Michael, Analyse), `Analysis Planner` (Olivia, Plan) and `Answer Writer` (Jessica, Write answer). When no workflow uses the agent, the line SHALL instead say:
-  - a user agent, draft-only or Live: `Not used in any user journey.` (publishing it adds no workflow);
-  - a System agent: `Not used in any user journey. The app calls this agent itself.`;
-  - any other agent: `Not used in any user journey.`
+  - a user agent, draft-only or Live: `Not used in any workflow.` (publishing it adds no workflow);
+  - a System agent: `Not used in any workflow. The app calls this agent itself.`;
+  - any other agent: `Not used in any workflow.`
 - R110. **Personas.** Every built-in agent SHALL be a persona: a human first name and a job title, from the catalogue in [agents.md](../../system/agents.md) 1.1 (the assistant is Emily, Data Analyst; Insights Analyst is Michael, Insights Analyst; the Data Readiness Agent is Sarah, Data Quality Analyst; the two System agents of Answer a Business Question's model-only steps are Olivia, Analysis Lead, who plans, and Jessica, Insights Writer, who writes the answer; and so on). The catalogue (`GET /agents`, `GET /agents/:key`) SHALL report the persona's name as `name` and its job title as `role`; everywhere else (traces, monitoring, workflow steps, chat sessions) the agent keeps its technical name, and the model never sees the persona. The hub sorts built-in agents by persona name (R1). A user agent has the name it was given and an optional job title (R43).
 - R111. **Eval runs are background tasks** (ADR-0047, [app-shell](../app-shell/spec.md) R58–R63). **Run N selected** SHALL start an `eval-run` task keyed by the agent key, titled `Running evals · <agent name>`, that starts the job and polls it every 1.5 seconds at the app's root. Leaving the agent page SHALL stop neither the run nor its polling, and no polling timer SHALL belong to the page. The task SHALL report `<finished> of <total> questions` as its progress. When the page is opened again it SHALL show the run live (R18, R26) and, once ended, its results. A run that finishes with failing questions SHALL end as done; a job error or a refused start SHALL end as failed. The task's **Open** SHALL bring the user to the agent's page on its Evals tab; the Executions list SHALL reload at the end when it is open. A run already going on the server that the app did not start (after a reload) is not shown as a task; the Executions list lists it.
 - R112. **Every run records what it ran on** (ADR-0054). A run SHALL carry its `setId` (the id of the eval set its questions belong to, `null` when they span several sets), the `provider` and `model` the agents used, and its `source` (`app` for a run started from the app, `cli` for one started by the CLI runner; a run without `source` is an `app` run). A run started from the app takes the provider and model of the LLM settings (`openai` and `gpt-4o-mini`, the environment fallback, when none are saved); a CLI run with `EVAL_LLM_PROVIDER=custom` records `custom` and `EVAL_LLM_MODEL`. Runs recorded before these fields existed are read as in [../../system/data-model.md](../../system/data-model.md) 3.8.
@@ -643,25 +643,25 @@ Feature: Agent Hub
     When I open "Michael"
     Then I see "Used in" "Answer a Business Question"
     When I click the "Answer a Business Question" chip
-    Then I see the "Answer a Business Question" workflow page and "User journeys" is the current rail item
+    Then I see the "Answer a Business Question" workflow page and "Workflows" is the current rail item
     When I open the "Sarah" agent
     Then I see no "Try it" tab, and "Job Description" is open
 
   Scenario: A user agent is used in no workflow, published or not
     When I click "Agent personas"
     And I open "Claims triage"
-    Then the "Used in" line says "Not used in any user journey."
+    Then the "Used in" line says "Not used in any workflow."
     And the Try it tab is shown
     Given the draft of "Claims triage" uses the dataset "World Cup Core"
     When I click "All agent personas"
     And I open "Claims triage" and click "Publish"
-    Then the "Used in" line still says "Not used in any user journey."
-    And the agent has no "Run" or "Start chat" button and the User journeys page does not list "Claims triage"
+    Then the "Used in" line still says "Not used in any workflow."
+    And the agent has no "Run" or "Start chat" button and the Workflows page does not list "Claims triage"
 
   Scenario: A System agent says the app calls it itself
     When I click "Agent personas"
     And I open "SQL Fixer"
-    Then the "Used in" line says "Not used in any user journey. The app calls this agent persona itself."
+    Then the "Used in" line says "Not used in any workflow. The app calls this agent persona itself."
     And there is no Try it tab and no "Start chat"
 
   Scenario: The agent detail has no detectable accessibility violations in either theme

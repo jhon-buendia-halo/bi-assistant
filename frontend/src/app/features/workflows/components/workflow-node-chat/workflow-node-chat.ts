@@ -29,7 +29,7 @@ import {
 import { WorkflowRunsApiService } from '../../services/workflow-runs-api.service';
 
 export const NODE_CHAT_NO_RUN =
-  "Execute the user journey, then chat with this agent persona about this step's data.";
+  "Run the workflow, then chat with this agent persona about this step's data.";
 export const NODE_CHAT_RUNNING = 'Wait for the run to finish to chat about it.';
 export const NODE_CHAT_EMPTY =
   "No messages yet. Ask about this step's input, output or tool calls.";

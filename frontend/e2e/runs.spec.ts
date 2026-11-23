@@ -242,7 +242,7 @@ test("a deleted agent's chat names its workflow as deleted", async ({
   await openSessions(page);
   const chip = sessionRow(page, HISTORIAN).getByTestId('row-session-workflow');
   await expect(chip).toHaveText(deleted);
-  await expect(chip).toHaveAttribute('title', `User journey: ${deleted}`);
+  await expect(chip).toHaveAttribute('title', `Workflow: ${deleted}`);
 
   await sessionRow(page, HISTORIAN)
     .getByRole('button', { name: new RegExp(`^${HISTORIAN}`) })
@@ -276,7 +276,7 @@ test('a chat saved before workflows names the workflow of its agent', async ({
     `ID ${id.slice(0, 8)}`,
   );
   await expect(
-    page.locator('header').getByText('User journey', { exact: true }),
+    page.locator('header').getByText('Workflow', { exact: true }),
   ).toBeVisible();
   await expect(headerWorkflow(page)).toHaveText('Data Readiness Agent');
 });

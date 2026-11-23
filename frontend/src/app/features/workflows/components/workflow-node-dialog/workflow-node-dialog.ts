@@ -86,10 +86,10 @@ const TAB_LABELS: Record<DialogTab, string> = {
 export type CopyTarget = 'story' | 'input' | 'output';
 
 const NOT_RUN =
-  'This node has not run yet. Execute the user journey to see its data.';
+  'This node has not run yet. Run the workflow to see its data.';
 
 const TOOL_NOT_RUN =
-  'This tool has not run yet. Execute the user journey to see its calls.';
+  'This tool has not run yet. Run the workflow to see its calls.';
 
 const KIND_ICONS = {
   trigger: Zap,

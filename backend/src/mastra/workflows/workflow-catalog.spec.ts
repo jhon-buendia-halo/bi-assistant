@@ -176,7 +176,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     ]);
   });
 
-  it('files every workflow under one category, the User journeys sections (workflows R5)', () => {
+  it('files every workflow under one category, the Workflows sections (workflows R5)', () => {
     expect(CODE_WORKFLOWS.map(({ id, category }) => [id, category])).toEqual([
       ['answer-business-question', 'data-analytics'],
       ['orchestrated-answer', 'data-analytics'],

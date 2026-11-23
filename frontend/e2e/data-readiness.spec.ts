@@ -378,9 +378,9 @@ test('the Data Readiness Agent is an Official library agent used by Assess Data 
   await expect(card.getByRole('button', { name: /Start chat/ })).toHaveCount(0);
 
   // When I open Workflows, then no one-step agent workflow exists for it.
-  await railItem(page, 'User journeys').click();
+  await railItem(page, 'Workflows').click();
   await expect(
-    page.getByRole('heading', { name: 'User journeys', exact: true }),
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
   await expect(
     page.getByTestId('workflow-answer-business-question'),
@@ -429,7 +429,7 @@ test('Assess Data Readiness profiles, scores and explains one dataset @demo', as
   );
   await scenarioStep(
     page,
-    'When I open "Assess Data Readiness" from User journeys and click Execute user journey',
+    'When I open "Assess Data Readiness" from Workflows and click Run workflow',
     async () => {
       await openWorkflowPage(
         page,

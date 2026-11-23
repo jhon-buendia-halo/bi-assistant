@@ -43,9 +43,9 @@ export function hasChatTab(kind: AgentKind): boolean {
  */
 export function usedInEmptyText(kind: AgentKind): string {
   if (kind === 'system') {
-    return 'Not used in any user journey. The app calls this agent persona itself.';
+    return 'Not used in any workflow. The app calls this agent persona itself.';
   }
-  return 'Not used in any user journey.';
+  return 'Not used in any workflow.';
 }
 
 /** The tab ids shown for an agent kind, in order. */

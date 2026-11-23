@@ -8,7 +8,7 @@ import {
 } from '../models/workflow.model';
 import { WorkflowNodeStatus } from '../models/workflow-node.model';
 
-/** One User journeys section: a category and its workflows. */
+/** One Workflows section: a category and its workflows. */
 export interface WorkflowSection {
   /** The category id (`data-analytics`). */
   id: string;
@@ -88,7 +88,7 @@ export function workflowsEmptyMessage(
 ): string | null {
   if (sections.length > 0) return null;
   const trimmed = query.trim();
-  return trimmed ? `No user journeys match "${trimmed}"` : null;
+  return trimmed ? `No workflows match "${trimmed}"` : null;
 }
 
 /** The kind chip: `<n> steps`, `1 step` (workflows R5). */

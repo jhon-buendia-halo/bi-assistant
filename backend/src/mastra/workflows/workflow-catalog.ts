@@ -124,7 +124,7 @@ export type WorkflowBar = 'steps' | 'agent';
 export type WorkflowTrigger = 'run';
 
 /**
- * The categories the User journeys page groups the catalogue by, each with
+ * The categories the Workflows page groups the catalogue by, each with
  * its section heading (workflows R5; api.md 116). Add one here when a
  * workflow needs a new kind of work (Financial, …).
  */
@@ -228,7 +228,7 @@ export interface CodeWorkflowSource {
   id: string;
   name: string;
   description: string;
-  /** The section it is listed under on the User journeys page (workflows R5). */
+  /** The section it is listed under on the Workflows page (workflows R5). */
   category: WorkflowCategoryId;
   /** Registry key of the agent its agent steps run, unless `stepAgents` names another. */
   primaryFor: string;

@@ -79,7 +79,7 @@ describe('SessionPanel', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('app-workflow-tracker')).toBeNull();
     expect(el.textContent).toContain('Nothing to show yet');
-    expect(el.textContent).not.toContain('User journey');
+    expect(el.textContent).not.toContain('Workflow');
     expect(el.querySelector('[title="Shown in this session"]')).toBeNull();
   });
 
@@ -123,7 +123,7 @@ describe('SessionPanel', () => {
     expect(entries.length).toBe(2);
     expect(entries[0]).toContain('Claims chart');
     expect(entries[1]).toContain('Renewal Plan');
-    expect(entries.join(' ')).not.toContain('User journey');
+    expect(entries.join(' ')).not.toContain('Workflow');
     const picked: PanelItem[] = [];
     fixture.componentInstance.selectItem.subscribe((i) => picked.push(i));
     (el.querySelectorAll('.menu-item')[1] as HTMLButtonElement).click();

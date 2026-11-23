@@ -808,7 +808,7 @@ test.describe('Feature: Runs in Monitoring', () => {
       const runName = `${V2_WORKFLOW_NAME}: ${RUN_QUESTION}`;
       await scenarioStep(
         page,
-        `Given I ran the "${V2_WORKFLOW_NAME}" user journey on a question`,
+        `Given I ran the "${V2_WORKFLOW_NAME}" workflow on a question`,
         async () => {
           await runQuestionOk(page, RUN_QUESTION);
         },

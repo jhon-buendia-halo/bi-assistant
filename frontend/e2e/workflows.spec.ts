@@ -65,7 +65,7 @@ const AVERY_MICHAEL_ID = 'orchestrated-answer-michael';
 const AVERY_MICHAEL = 'Answer a Business Question (Avery + Michael)';
 const READINESS_ID = 'data-readiness-assessment';
 const READINESS = 'Assess Data Readiness';
-/** The User journeys sections, each with its workflows in catalogue order (workflows R1, R5). */
+/** The Workflows sections, each with its workflows in catalogue order (workflows R1, R5). */
 const SECTIONS = [
   {
     id: 'data-analytics',
@@ -183,9 +183,9 @@ function railItem(page: Page, name: string): Locator {
 }
 
 async function openWorkflows(page: Page): Promise<void> {
-  await railItem(page, 'User journeys').click();
+  await railItem(page, 'Workflows').click();
   await expect(
-    page.getByRole('heading', { name: 'User journeys', exact: true }),
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
 }
 
@@ -350,16 +350,16 @@ test.describe('Feature: Workflows', () => {
     async ({ page }) => {
       await scenarioStep(
         page,
-        'When I click "User journeys" on the rail',
+        'When I click "Workflows" on the rail',
         async () => {
           await openWorkflows(page);
         },
       );
       await scenarioStep(
         page,
-        'Then I see the user journeys grouped by category: "Answer a Business Question" and its orchestrated and Avery + Michael versions under Data Analytics, "Assess Data Readiness" and "Consumption Gap Analysis" under Data Engineering, "Dashboard Image to Artifact" and "Map a Dashboard to Data" under Dashboards, and "Review a Website" under Software Development',
+        'Then I see the workflows grouped by category: "Answer a Business Question" and its orchestrated and Avery + Michael versions under Data Analytics, "Assess Data Readiness" and "Consumption Gap Analysis" under Data Engineering, "Dashboard Image to Artifact" and "Map a Dashboard to Data" under Dashboards, and "Review a Website" under Software Development',
         async () => {
-          await expect(railItem(page, 'User journeys')).toHaveAttribute(
+          await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
             'page',
           );
@@ -417,7 +417,7 @@ test.describe('Feature: Workflows', () => {
             start.getByTestId('workflow-agent-result-explorer'),
           ).toHaveCount(0);
           await closeNode(page);
-          await expect(railItem(page, 'User journeys')).toHaveAttribute(
+          await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
             'page',
           );
@@ -425,7 +425,7 @@ test.describe('Feature: Workflows', () => {
       );
       await scenarioStep(
         page,
-        'When I click "Execute user journey"',
+        'When I click "Run workflow"',
         async () => {
           await page.getByTestId('workflow-execute').click();
         },
@@ -447,7 +447,7 @@ test.describe('Feature: Workflows', () => {
           // No Logs panel: the canvas takes the column's full height.
           await expect(page.getByTestId('workflow-logs-dock')).toHaveCount(0);
           await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
-          await expect(railItem(page, 'User journeys')).toHaveAttribute(
+          await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
             'page',
           );
@@ -459,7 +459,7 @@ test.describe('Feature: Workflows', () => {
   test("Workflows can't be edited", async ({ page }) => {
     const editing =
       /^(edit|new|delete|remove|add|move|reorder|duplicate|rename|save)\b/i;
-    await test.step('When I open User journeys', async () => {
+    await test.step('When I open Workflows', async () => {
       await openWorkflows(page);
     });
     await test.step('Then I see no Edit, New, Delete or reorder control on the list', async () => {
@@ -493,14 +493,14 @@ test.describe('Feature: Workflows', () => {
   });
 
   test('Search filters the list', async ({ page }) => {
-    await test.step('Given I am on User journeys', async () => {
+    await test.step('Given I am on Workflows', async () => {
       await openWorkflows(page);
     });
     const search = page.getByTestId('workflow-search');
     await test.step('When I search for "business"', async () => {
       await expect(search).toHaveAttribute(
         'placeholder',
-        'Search user journeys by name or description',
+        'Search workflows by name or description',
       );
       await search.fill('business');
     });
@@ -522,9 +522,9 @@ test.describe('Feature: Workflows', () => {
     await test.step('When I search for "zzz"', async () => {
       await search.fill('zzz');
     });
-    await test.step('Then I see "No user journeys match "zzz""', async () => {
+    await test.step('Then I see "No workflows match "zzz""', async () => {
       await expect(
-        page.getByText('No user journeys match "zzz"', { exact: true }),
+        page.getByText('No workflows match "zzz"', { exact: true }),
       ).toBeVisible();
       await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(
         0,
@@ -532,11 +532,11 @@ test.describe('Feature: Workflows', () => {
     });
   });
 
-  test('A category pill shows only its user journeys', async ({ page }) => {
+  test('A category pill shows only its workflows', async ({ page }) => {
     const pills = page.getByRole('group', {
-      name: 'Filter user journeys by category',
+      name: 'Filter workflows by category',
     });
-    await scenarioStep(page, 'Given I am on User journeys', async () => {
+    await scenarioStep(page, 'Given I am on Workflows', async () => {
       await openWorkflows(page);
     });
     await scenarioStep(
@@ -599,7 +599,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
     'I run Answer a Business Question on a question from its card',
     { tag: ['@demo', '@story-1.23.9'] },
     async ({ page }) => {
-      await scenarioStep(page, 'When I open User journeys', async () => {
+      await scenarioStep(page, 'When I open Workflows', async () => {
         await openWorkflows(page);
       });
       await scenarioStep(
@@ -628,14 +628,14 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its nine steps on the canvas, Execute user journey and no Start chat',
+        'Then I see its nine steps on the canvas, Run workflow and no Start chat',
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(page.getByTestId('workflow-detail-kind')).toHaveText(
             V2_STEP_COUNT,
           );
           await expect(page.getByTestId('workflow-execute')).toHaveText(
-            'Execute user journey',
+            'Run workflow',
           );
           await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
           await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
@@ -643,7 +643,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       );
       await scenarioStep(
         page,
-        'When I click Execute user journey',
+        'When I click Run workflow',
         async () => {
           await page.getByTestId('workflow-execute').click();
         },
@@ -654,7 +654,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
         async () => {
           await expectRunPanel(page);
           const box = runDock(page).getByTestId('run-composer-input');
-          // Execute user journey only opens the composer and focuses it; nothing ran.
+          // Run workflow only opens the composer and focuses it; nothing ran.
           await expect(box).toBeFocused();
           await expect(page.getByTestId('workflow-run-status')).toHaveCount(0);
           await expect(box).toHaveAttribute('placeholder', /^Message \S/);
@@ -1228,7 +1228,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       );
       await scenarioStep(
         page,
-        'When I click Execute user journey',
+        'When I click Run workflow',
         async () => {
           await page.getByTestId('workflow-execute').click();
           await expectRunPanel(page);
@@ -1354,7 +1354,7 @@ test.describe('Feature: Workflows (the designer)', () => {
     async ({ page }) => {
       await scenarioStep(
         page,
-        'When I open "Answer a Business Question" from User journeys',
+        'When I open "Answer a Business Question" from Workflows',
         async () => {
           await openWorkflows(page);
           await openWorkflow(page, V2_ID, V2);
@@ -1525,7 +1525,7 @@ test.describe('Feature: Workflows (the designer)', () => {
       );
       await scenarioStep(
         page,
-        'When I click Execute user journey',
+        'When I click Run workflow',
         async () => {
           await page.getByTestId('workflow-execute').click();
         },
@@ -1786,7 +1786,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         ).toHaveCount(0);
         await expandNodeSection(page, 'input');
         await expect(dialog.getByTestId('workflow-ndv-input')).toContainText(
-          'This tool has not run yet. Execute the user journey to see its calls.',
+          'This tool has not run yet. Run the workflow to see its calls.',
         );
         await closeNode(page);
         await expect(
@@ -1839,7 +1839,7 @@ test.describe('Feature: Workflows (the designer)', () => {
       );
       await scenarioStep(
         page,
-        'When I open "Analyse" before any run, its chat says to execute the user journey first',
+        'When I open "Analyse" before any run, its chat says to run the workflow first',
         async () => {
           const dialog = await openNode(page, 'analyse', 'Analyse');
           await expect(dialog.getByTestId('workflow-ndv-chat')).toBeVisible();
@@ -1849,12 +1849,12 @@ test.describe('Feature: Workflows (the designer)', () => {
           await expect(
             dialog.getByTestId('workflow-ndv-story-empty'),
           ).toHaveText(
-            'This node has not run yet. Execute the user journey to see its data.',
+            'This node has not run yet. Run the workflow to see its data.',
           );
           await expect(
             dialog.getByTestId('workflow-node-chat-unavailable'),
           ).toHaveText(
-            "Execute the user journey, then chat with this agent persona about this step's data.",
+            "Run the workflow, then chat with this agent persona about this step's data.",
           );
           await expect(
             dialog.getByTestId('workflow-node-chat-input'),
@@ -2192,7 +2192,7 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
     async ({ page }) => {
       await scenarioStep(
         page,
-        `When I open "${V2}" from User journeys on a device that never picked a view`,
+        `When I open "${V2}" from Workflows on a device that never picked a view`,
         async () => {
           // The theme follows the OS so the axe scan below can try both; it reloads the app.
           await followOsTheme(page);
@@ -2257,7 +2257,7 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
       );
       await scenarioStep(
         page,
-        `Then the user journey runs and I see my question, the agent personas' thread, the answer and the run's execution ID, with no tool calls and no How it ran`,
+        `Then the workflow runs and I see my question, the agent personas' thread, the answer and the run's execution ID, with no tool calls and no How it ran`,
         async () => {
           const view = businessView(page);
           await expect(view.getByTestId('workflow-run-status')).toHaveText(
@@ -2346,7 +2346,7 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
       );
       await scenarioStep(
         page,
-        `When I go back to User journeys and open "${V2}" again`,
+        `When I go back to Workflows and open "${V2}" again`,
         async () => {
           await page.getByTestId('workflow-breadcrumb').click();
           await openWorkflow(page, V2_ID, V2);

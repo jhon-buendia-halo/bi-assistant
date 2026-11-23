@@ -681,9 +681,9 @@ function railItem(page: Page, name: string): Locator {
 }
 
 /** The Used in text of a user agent, or an Official agent no workflow uses. */
-const NOT_USED = 'Not used in any user journey.';
+const NOT_USED = 'Not used in any workflow.';
 const SYSTEM_EMPTY =
-  'Not used in any user journey. The app calls this agent persona itself.';
+  'Not used in any workflow. The app calls this agent persona itself.';
 
 test(
   'An agent shows the workflows that use it',
@@ -715,13 +715,13 @@ test(
     });
     await scenarioStep(
       page,
-      `Then I see the "${V2}" user journey page and "User journeys" is the current rail item`,
+      `Then I see the "${V2}" workflow page and "Workflows" is the current rail item`,
       async () => {
         await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
         await expect(page.getByTestId('workflow-detail-id')).toHaveText(
           'answer-business-question',
         );
-        await expect(railItem(page, 'User journeys')).toHaveAttribute(
+        await expect(railItem(page, 'Workflows')).toHaveAttribute(
           'aria-current',
           'page',
         );

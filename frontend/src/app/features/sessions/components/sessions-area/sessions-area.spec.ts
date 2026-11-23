@@ -124,7 +124,7 @@ describe('Chat header Workflow chip (past-chats R57, R59, roadmap 1.23.6)', () =
       kind: 'agent',
       deleted: false,
     });
-    expect(el.textContent).toContain('User journey');
+    expect(el.textContent).toContain('Workflow');
     expect(
       el.querySelector('[data-testid="session-workflow"]')?.textContent?.trim(),
     ).toBe('Assistant');

@@ -72,10 +72,10 @@ async function openHub(page: Page): Promise<void> {
 async function openWorkflows(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'User journeys', exact: true })
+    .getByRole('button', { name: 'Workflows', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'User journeys', exact: true }),
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
 }
 

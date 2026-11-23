@@ -268,7 +268,7 @@ Feature: Chat and visuals
     And the model is the recording stub: it runs one query, then answers "**Argentina** won the 2022 World Cup, while France won in 2018."
 
   Scenario: Renders a streamed run: reasoning, tool activity, final Markdown, and supports stopping
-    When I open the Assistant from Workflows and click Execute user journey
+    When I open the Assistant from Workflows and click Run workflow
     And I type "Who won the last two tournaments?", click Send and add "World Cup Core" when the agent asks
     Then I see "Thinking"
     And I see the tool "run_readonly_sql"
@@ -389,7 +389,7 @@ Feature: Sessions started from an agent
 
   Scenario: only Answer a Business Question can be run, and no agent page offers a chat
     Given a draft user agent "Claims triage" over "World Cup Core"
-    When I click "User journeys"
+    When I click "Workflows"
     Then I see only the workflow "Answer a Business Question"
     And I see no "Cup historian" and no "Claims triage"
     When I click "Agent personas" and show every System agent

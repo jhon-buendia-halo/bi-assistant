@@ -44,7 +44,7 @@ describe('Workflows area (workflows R5-R8, app-shell R3)', () => {
     expect(shellState().currentArea()).toBe('workflows');
     expect(
       el
-        .querySelector('button[aria-label="User journeys"]')
+        .querySelector('button[aria-label="Workflows"]')
         ?.getAttribute('aria-current'),
     ).toBe('page');
     shellState().selectArea('workflows');

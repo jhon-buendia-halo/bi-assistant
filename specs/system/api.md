@@ -711,7 +711,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     description: string;
     kind: 'code' | 'agent';           // always 'code' since 2026-11-12 (the one-step 'agent' kind is no longer produced)
     owner: 'Official' | 'You';        // always 'Official' since 2026-11-12 ('You' was a user agent's workflow)
-    category: { id: 'data-analytics' | 'data-engineering' | 'dashboards' | 'software-development'; name: string };  // since 2026-11-23: the User journeys section it is listed under (workflows R5), e.g. { id: 'data-analytics', name: 'Data Analytics' }; declared with the workflow in code (WORKFLOW_CATEGORIES)
+    category: { id: 'data-analytics' | 'data-engineering' | 'dashboards' | 'software-development'; name: string };  // since 2026-11-23: the Workflows section it is listed under (workflows R5), e.g. { id: 'data-analytics', name: 'Data Analytics' }; declared with the workflow in code (WORKFLOW_CATEGORIES)
     agents: { key: string; name: string; role: string }[];   // every agent its steps run, in step order, each once, with its persona's role (job title, `''` without one; since 2026-11-17); `answer-business-question`: insights-analyst (Michael), image-reader (Zoe), analysis-planner (Olivia), data-readiness (Sarah), answer-writer (Jessica); `data-readiness-assessment`: data-readiness (Sarah), image-reader (Zoe); `map-dashboard-data`: data-mapper, image-reader (Zoe); `consumption-gap-analysis`: gap-advisor, dashboard-reader (Grace), requirements-analyst, layer-mapper
     stepCount: number;
     bar: 'steps' | 'agent';           // what drove a chat's workflow bar (kept for the stored chats): these steps, or the agent's own phases

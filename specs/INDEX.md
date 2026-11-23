@@ -497,7 +497,7 @@ specs/capabilities/agent-panel/spec.md:51-51  R14 Where the steps come from. An 
 specs/capabilities/agent-panel/spec.md:52-52  R15 One workflow state. `update_workflow` and a workflow-backed agent's tu
 specs/capabilities/agent-panel/spec.md:53-53  R16 The **workflow bar** SHALL be shown in the session's chat view directl
 specs/capabilities/agent-panel/spec.md:54-55  R17 The **next-step row** is ONE line. When the step to do next has an act
-specs/capabilities/agent-panel/spec.md:56-56  R18 The user SHALL be able to fold the bar with the button `Hide user jour
+specs/capabilities/agent-panel/spec.md:56-56  R18 The user SHALL be able to fold the bar with the button `Hide workflow`
 specs/capabilities/agent-panel/spec.md:57-57  R19 The stream SHALL carry a `workflow` event with the whole workflow view
 specs/capabilities/agent-panel/spec.md:58-58  R20 Retired (2026-11-12). The RFP stage auto-drive's note and `waiting` cl
 specs/capabilities/agent-panel/spec.md:60-81  ## Edge cases and errors
@@ -1229,7 +1229,7 @@ specs/capabilities/monitoring/spec.md:115-115  R51 Two rankings over the period 
 specs/capabilities/monitoring/spec.md:116-116  R52 Choosing a model or an agent in a ranking SHALL open Monitoring's LLM
 specs/capabilities/monitoring/spec.md:117-117  R53 With no calls in the period the page SHALL show the tiles, "No LLM cal
 specs/capabilities/monitoring/spec.md:118-118  R54 A **workflow run** is every call whose thread is the run's host `run-<
-specs/capabilities/monitoring/spec.md:119-119  R55 **Cost per user journey run** SHALL list, for each workflow with runs
+specs/capabilities/monitoring/spec.md:119-119  R55 **Cost per workflow run** SHALL list, for each workflow with runs in t
 specs/capabilities/monitoring/spec.md:120-120  R56 **Most expensive runs** SHALL list the period's 10 costliest workflow
 specs/capabilities/monitoring/spec.md:121-123  R57 **Where the cost goes** SHALL split the period's cost into **Input** (
 specs/capabilities/monitoring/spec.md:124-124  R58 The **Agent quality** tab SHALL list one row per built-in agent person
@@ -1479,7 +1479,7 @@ specs/capabilities/workflows/spec.md:16-16  R1 The workflow catalogue SHALL list
 specs/capabilities/workflows/spec.md:17-17  R2 The workflows' ids SHALL be `answer-business-question`, `orchestrated-
 specs/capabilities/workflows/spec.md:18-20  R3 Workflows SHALL be defined in code. The app SHALL NOT offer any contro
 specs/capabilities/workflows/spec.md:21-23  R4 Every session SHALL run one workflow. A session created from this vers
-specs/capabilities/workflows/spec.md:24-24  R5 The **User journeys** area of the navigation rail ([../app-shell/spec.
+specs/capabilities/workflows/spec.md:24-24  R5 The **Workflows** area of the navigation rail ([../app-shell/spec.md](
 specs/capabilities/workflows/spec.md:25-25  R6 Retired (1.23.22). **Start chat** is gone from every workflow card and
 specs/capabilities/workflows/spec.md:26-26  R7 A workflow's page SHALL show, in its Builder view (R38; the page opens
 specs/capabilities/workflows/spec.md:27-27  R8 A workflow's Start node dialog SHALL list, under **Agent personas**, e

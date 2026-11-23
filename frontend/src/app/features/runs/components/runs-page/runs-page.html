@@ -58,7 +58,7 @@
           <input
             type="search"
             data-testid="runs-search"
-            placeholder="Search runs by title, user journey or ID…"
+            placeholder="Search runs by title, workflow or ID…"
             aria-label="Search runs"
             [value]="query()"
             (input)="onSearch($event)"
@@ -93,7 +93,7 @@
           @if (runsState.showArchived()) {
             No archived conversations.
           } @else {
-            No runs yet. Open a user journey and run it.
+            No runs yet. Open a workflow and run it.
           }
         </p>
       } @else if (visible().length === 0) {
@@ -122,7 +122,7 @@
               <span
                 data-testid="row-run-workflow"
                 class="chip chip-neutral min-w-0 max-w-48 shrink-0"
-                [attr.title]="'User journey: ' + run.workflowName"
+                [attr.title]="'Workflow: ' + run.workflowName"
               >
                 <lucide-angular [img]="Workflow" [size]="12" class="shrink-0" />
                 <span class="truncate">{{ run.workflowName }}</span>

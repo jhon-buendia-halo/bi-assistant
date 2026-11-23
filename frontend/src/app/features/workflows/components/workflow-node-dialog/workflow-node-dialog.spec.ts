@@ -596,7 +596,7 @@ describe('WorkflowNodeDialog', () => {
     it('explains why it cannot chat yet before a run', () => {
       openWithChat(node('analyse'), { state: 'no-run' });
       expect(text('workflow-node-chat-unavailable')).toBe(
-        "Execute the user journey, then chat with this agent persona about this step's data.",
+        "Run the workflow, then chat with this agent persona about this step's data.",
       );
       expect(byId('workflow-ndv-suggestion')).toBeNull();
     });
@@ -619,11 +619,11 @@ describe('WorkflowNodeDialog', () => {
   it('shows the not-run states', () => {
     open(FIXTURE_NODES_NOT_RUN[2], null);
     expect(text('workflow-ndv-story-empty')).toBe(
-      'This node has not run yet. Execute the user journey to see its data.',
+      'This node has not run yet. Run the workflow to see its data.',
     );
     expandCards('data');
     expect(byId('workflow-ndv-input')?.textContent).toContain(
-      'This node has not run yet. Execute the user journey to see its data.',
+      'This node has not run yet. Run the workflow to see its data.',
     );
     expect(byId('workflow-ndv-output-status')).toBeNull();
     expandCards('config');
@@ -992,7 +992,7 @@ describe('WorkflowNodeDialog', () => {
     it('says the tool has not run yet before any run', () => {
       open(FIXTURE_TOOL_NOT_RUN, null);
       const notRun =
-        'This tool has not run yet. Execute the user journey to see its calls.';
+        'This tool has not run yet. Run the workflow to see its calls.';
       expect(byId('workflow-ndv-input')?.textContent).toContain(notRun);
       expect(byId('workflow-ndv-output')?.textContent).toContain(notRun);
       expect(byId('workflow-ndv-tool-input')).toBeNull();

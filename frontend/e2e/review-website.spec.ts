@@ -68,9 +68,9 @@ test.describe('Feature: Review a Website', () => {
       test.setTimeout(180_000);
       await scenarioStep(
         page,
-        'When I open "Review a Website" from User journeys, switch off "Visual review with Iris" under "+", type the site\'s URL and click Send',
+        'When I open "Review a Website" from Workflows, switch off "Visual review with Iris" under "+", type the site\'s URL and click Send',
         async () => {
-          await railItem(page, 'User journeys').click();
+          await railItem(page, 'Workflows').click();
           await page.getByTestId('workflow-review-website').click();
           await expect(page.getByTestId('workflow-detail-name')).toHaveText(
             'Review a Website',
@@ -211,7 +211,7 @@ test.describe('Feature: Review a Website', () => {
           page,
           'When I review the site with "Visual review with Iris" ticked',
           async () => {
-            await railItem(page, 'User journeys').click();
+            await railItem(page, 'Workflows').click();
             await page.getByTestId('workflow-review-website').click();
             await setRunField(page, 'maxPages', '20');
             await openComposerMenu(page);

@@ -2,10 +2,10 @@
   <h2
     class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
   >
-    User journeys
+    Workflows
   </h2>
   <p class="mt-1 text-[13px] text-fg-muted">
-    Each user journey runs on an input. Its steps call agent personas, and agent
+    Each workflow runs on an input. Its steps call agent personas, and agent
     personas use skills and tools.
   </p>
 
@@ -19,8 +19,8 @@
     <input
       type="search"
       data-testid="workflow-search"
-      placeholder="Search user journeys by name or description"
-      aria-label="Search user journeys by name or description"
+      placeholder="Search workflows by name or description"
+      aria-label="Search workflows by name or description"
       [value]="query()"
       (input)="onSearch($event)"
       class="field pl-10"
@@ -30,7 +30,7 @@
   <!-- Filters: All, then one pill per category -->
   <div
     role="group"
-    aria-label="Filter user journeys by category"
+    aria-label="Filter workflows by category"
     class="mt-3 flex flex-wrap items-center gap-2"
   >
     @for (item of filters(); track item.id) {
@@ -50,7 +50,7 @@
   @if (loading()) {
     <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
-      <span>Loading user journeys…</span>
+      <span>Loading workflows…</span>
     </div>
   } @else if (error(); as err) {
     <p

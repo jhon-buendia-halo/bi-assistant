@@ -116,7 +116,7 @@ describe('WorkflowNodeChat (ui.md 4.4b; api.md 136, 137)', () => {
     open({ state: 'no-run' });
     expect(text(byId('workflow-node-chat-unavailable'))).toBe(NODE_CHAT_NO_RUN);
     expect(NODE_CHAT_NO_RUN).toBe(
-      "Execute the user journey, then chat with this agent persona about this step's data.",
+      "Run the workflow, then chat with this agent persona about this step's data.",
     );
     expect(byId('workflow-node-chat')).toBeNull();
     expect(api.getNodeChat).not.toHaveBeenCalled();

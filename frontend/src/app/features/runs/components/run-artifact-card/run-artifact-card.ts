@@ -31,7 +31,7 @@ export interface ArtifactKind {
   mock: boolean;
 }
 
-/** A visual's kind from the user journey that made it. */
+/** A visual's kind from the workflow that made it. */
 export function artifactKind(workflowId: string): ArtifactKind {
   if (workflowId === 'recreate-dashboard')
     return { label: 'Dashboard', mock: true };
