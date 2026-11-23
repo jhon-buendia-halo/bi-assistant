@@ -13,6 +13,8 @@ import {
   draftRunInput,
   oneStepWorkflowSteps,
   parseWorkflowId,
+  REMOVED_WORKFLOW_IDS,
+  REMOVED_WORKFLOW_NAMES,
   sessionWorkflowId,
   stepAgentKey,
   wrappedAgentMaxSteps,
@@ -44,7 +46,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds eight code workflows: Insights Analyst, its orchestrated version (5.22) and Avery + Michael (5.23), Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18), Review a Website (5.19) and Consumption Gap Analysis (5.20)', () => {
+  it('holds six code workflows: Avery + Michael (5.23), Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18), Review a Website (5.19) and Consumption Gap Analysis (5.20)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -54,20 +56,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         trigger,
       })),
     ).toEqual([
-      {
-        id: 'answer-business-question',
-        name: 'Answer a Business Question',
-        primaryFor: 'insights-analyst',
-        bar: 'steps',
-        trigger: 'run',
-      },
-      {
-        id: 'orchestrated-answer',
-        name: 'Answer a Business Question (orchestrated)',
-        primaryFor: 'insights-analyst',
-        bar: 'steps',
-        trigger: 'run',
-      },
       {
         id: 'orchestrated-answer-michael',
         name: 'Answer a Business Question (Avery + Michael)',
@@ -111,44 +99,16 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         trigger: 'run',
       },
     ]);
-    expect(CODE_WORKFLOWS[0].steps.map((step) => step.id)).toEqual([
-      'read-images',
-      'receive-question',
-      'load-catalog',
-      'plan',
-      'analyse',
-      'validate',
-      'write-answer',
-      'build-visual',
-      'wrap-up',
+    // Avery + Michael: Avery's one step on its own engine, Start to End.
+    const [avery] = CODE_WORKFLOWS;
+    expect(avery.steps.map((step) => step.id)).toEqual(['orchestrate']);
+    expect(stepAgentKey(avery, 'orchestrate')).toBe('chief-of-staff');
+    expect(avery.edges.map(edgeFlow)).toEqual([
+      { from: 'start', to: 'orchestrate', kind: 'next' },
+      { from: 'orchestrate', to: 'end', kind: 'next' },
     ]);
-    // The flow is its edges (api.md 117): the optional branch to Read
-    // images from Start, a loop back from Validate to Analyse, and the
-    // optional branch from Write answer to Build visual; the rest is one line.
-    expect(CODE_WORKFLOWS[0].edges).toHaveLength(13);
-    expect(
-      CODE_WORKFLOWS[0].edges
-        .filter((edge) => edge.kind !== 'next')
-        .map(edgeFlow),
-    ).toEqual([
-      {
-        from: 'start',
-        to: 'read-images',
-        kind: 'branch',
-        label: 'Reference images',
-      },
-      { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
-      {
-        from: 'write-answer',
-        to: 'build-visual',
-        kind: 'branch',
-        label: 'Build a visual',
-      },
-    ]);
-    expect(CODE_WORKFLOWS[0].description).toBe(
-      'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.',
-    );
-    expect(CODE_WORKFLOWS[0].input).toEqual([
+    expect(avery).not.toHaveProperty('engine');
+    expect(avery.input).toEqual([
       {
         name: 'question',
         label: 'Question',
@@ -157,29 +117,27 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         placeholder: 'Ask a question about your data',
         maxLength: 4000,
       },
-      IMAGES_FIELD,
       { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
-      {
-        name: 'buildVisual',
-        label: 'Build a visual: Ryan charts the results of the answer',
-        type: 'boolean',
-        required: false,
-        default: true,
-      },
-      {
-        name: 'approveSteps',
-        label: "Approve each step: every agent's work waits for your OK",
-        type: 'boolean',
-        required: false,
-        default: true,
-      },
     ]);
+  });
+
+  it('lists none of the removed workflows, and names them for a past chat (data-model 3.16 M18)', () => {
+    expect(REMOVED_WORKFLOW_IDS).toEqual([
+      'answer-business-question',
+      'orchestrated-answer',
+    ]);
+    for (const id of REMOVED_WORKFLOW_IDS) {
+      expect(CODE_WORKFLOWS.some((workflow) => workflow.id === id)).toBe(false);
+      expect(parseWorkflowId(id)).toBeUndefined();
+    }
+    expect(REMOVED_WORKFLOW_NAMES).toEqual({
+      'answer-business-question': 'Answer a Business Question',
+      'orchestrated-answer': 'Answer a Business Question (orchestrated)',
+    });
   });
 
   it('files every workflow under one category, the Workflows sections (workflows R5)', () => {
     expect(CODE_WORKFLOWS.map(({ id, category }) => [id, category])).toEqual([
-      ['answer-business-question', 'data-analytics'],
-      ['orchestrated-answer', 'data-analytics'],
       ['orchestrated-answer-michael', 'data-analytics'],
       ['data-readiness-assessment', 'data-engineering'],
       ['recreate-dashboard', 'dashboards'],
@@ -211,13 +169,9 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
   describe('reference images', () => {
     const byId = (id: string) =>
       CODE_WORKFLOWS.find((workflow) => workflow.id === id)!;
-    const WITH_IMAGES = [
-      'answer-business-question',
-      'data-readiness-assessment',
-      'map-dashboard-data',
-    ];
+    const WITH_IMAGES = ['data-readiness-assessment', 'map-dashboard-data'];
 
-    it('gives Answer a Business Question, Assess Data Readiness and Map a Dashboard to Data an optional images field right after the question', () => {
+    it('gives Assess Data Readiness and Map a Dashboard to Data an optional images field right after the question', () => {
       for (const id of WITH_IMAGES) {
         const names = byId(id).input.map((field) => field.name);
         expect([id, names[names.indexOf('question') + 1]]).toEqual([
@@ -228,6 +182,10 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
           IMAGES_FIELD,
         );
       }
+      // Avery + Michael takes no reference images.
+      expect(
+        byId('orchestrated-answer-michael').input.map((field) => field.name),
+      ).toEqual(['question', 'datasets']);
       // Dashboard Image to Artifact keeps its one image and no Read images.
       expect(
         byId('recreate-dashboard').input.map((field) => field.name),
@@ -237,7 +195,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ).not.toContain('read-images');
     });
 
-    it('runs Read images on Zoe, the Image Reader, in all three: first, or after Score readiness in Assess Data Readiness', () => {
+    it('runs Read images on Zoe, the Image Reader, in both: first, or after Score readiness in Assess Data Readiness', () => {
       for (const id of WITH_IMAGES) {
         const ids = byId(id).steps.map((step) => step.id);
         expect([id, ids.indexOf('read-images')]).toEqual([
@@ -264,12 +222,9 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
             field.usedBy,
           ]),
         );
-      expect(usedBy('answer-business-question')).toEqual({
-        question: ['read-images', 'receive-question'],
-        images: ['read-images'],
-        datasets: ['receive-question'],
-        buildVisual: [],
-        approveSteps: [],
+      expect(usedBy('orchestrated-answer-michael')).toEqual({
+        question: ['orchestrate'],
+        datasets: ['orchestrate'],
       });
       // Resolve dataset starts Zoe's reading of the images (agents.md 5.13).
       expect(usedBy('data-readiness-assessment')).toEqual({
@@ -371,6 +326,16 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         expect(CODE_WORKFLOWS.map((w) => w.id)).not.toContain(id);
         expect(parseWorkflowId(id)).toBeUndefined();
         expect(sessionWorkflowId({ workflowId: id })).toBe('agent:assistant');
+      },
+    );
+
+    it.each(['answer-business-question', 'orchestrated-answer'])(
+      'keeps %s on a past chat that ran it (M18): it is listed nowhere, its id stays',
+      (id) => {
+        expect(parseWorkflowId(id)).toBeUndefined();
+        expect(
+          sessionWorkflowId({ workflowId: id, agentKey: 'insights-analyst' }),
+        ).toBe(id);
       },
     );
   });
@@ -498,7 +463,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     });
 
     it('parses a code workflow id', () => {
-      expect(parseWorkflowId('answer-business-question')).toEqual({
+      expect(parseWorkflowId('orchestrated-answer-michael')).toEqual({
         kind: 'code',
         source: CODE_WORKFLOWS[0],
       });
@@ -553,8 +518,21 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it.each([
       [
         'a stored, resolvable workflowId',
-        { workflowId: 'answer-business-question' },
-        'answer-business-question',
+        { workflowId: 'orchestrated-answer-michael' },
+        'orchestrated-answer-michael',
+      ],
+      [
+        "an Avery + Michael run host's workflowId",
+        {
+          workflowId: 'orchestrated-answer-michael',
+          agentKey: 'insights-analyst',
+        },
+        'orchestrated-answer-michael',
+      ],
+      [
+        "a removed workflow's stored id (a past chat)",
+        { workflowId: 'orchestrated-answer', agentKey: 'insights-analyst' },
+        'orchestrated-answer',
       ],
       [
         "a stored user agent's workflowId",
@@ -562,7 +540,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         'agent:u-1',
       ],
       [
-        'agentKey insights-analyst',
+        "agentKey insights-analyst (Michael's past chat: the removed workflow it ran)",
         { agentKey: 'insights-analyst' },
         'answer-business-question',
       ],
@@ -614,19 +592,17 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
   });
 
   describe('workflowsUsingAgent (api.md 34 usedInWorkflows)', () => {
-    it('insights-analyst is used in Insights Analyst', () => {
-      expect(workflowsUsingAgent('insights-analyst')).toEqual([
-        { id: 'answer-business-question', name: 'Answer a Business Question' },
-        {
-          id: 'orchestrated-answer',
-          name: 'Answer a Business Question (orchestrated)',
-        },
-        {
-          id: 'orchestrated-answer-michael',
-          name: 'Answer a Business Question (Avery + Michael)',
-        },
-      ]);
-    });
+    it.each(['insights-analyst', 'chief-of-staff'])(
+      '%s is used in Avery + Michael only',
+      (key) => {
+        expect(workflowsUsingAgent(key)).toEqual([
+          {
+            id: 'orchestrated-answer-michael',
+            name: 'Answer a Business Question (Avery + Michael)',
+          },
+        ]);
+      },
+    );
 
     it('data-readiness is used in Assess Data Readiness only', () => {
       expect(workflowsUsingAgent('data-readiness')).toEqual([
@@ -634,18 +610,18 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ]);
     });
 
-    it('visualization is used in Answer a Business Question (Build visual)', () => {
-      expect(workflowsUsingAgent('visualization')).toEqual([
-        { id: 'answer-business-question', name: 'Answer a Business Question' },
-      ]);
+    it.each([
+      'assistant',
+      'rfp',
+      'sql-fixer',
+      'u-1',
+      // Olivia, Jessica and Ryan stay in the library, in no workflow.
+      'analysis-planner',
+      'answer-writer',
+      'visualization',
+    ])('%s is used in none: agents are a library', (key) => {
+      expect(workflowsUsingAgent(key)).toEqual([]);
     });
-
-    it.each(['assistant', 'rfp', 'sql-fixer', 'u-1'])(
-      '%s is used in none: agents are a library',
-      (key) => {
-        expect(workflowsUsingAgent(key)).toEqual([]);
-      },
-    );
   });
 
   describe('the one-step workflow (agent-turn)', () => {

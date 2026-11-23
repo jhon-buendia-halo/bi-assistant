@@ -103,7 +103,7 @@ export interface AgentSummary {
   starterQuestions: string[];
   /**
    * The catalogue workflows whose steps call this agent (api.md 33-34):
-   * `answer-business-question` for `insights-analyst`, none for a user agent.
+   * Avery + Michael for `insights-analyst` and `chief-of-staff`, none for a user agent.
    * The hub reads it to say when an agent is busy in a run.
    */
   usedInWorkflows: { id: string; name: string }[];

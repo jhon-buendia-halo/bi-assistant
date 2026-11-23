@@ -30,15 +30,10 @@
  * - prompts: a model step adds `imageNotesBlock(imageNotes)` only when it
  *   is not `''`, so a run without images sends what it sent before.
  *
- * Nothing here imports `./answer-business-question.steps` at run time
- * (types only): that module imports this one, and a cycle would leave one
- * of the two half loaded.
+ * Nothing here imports `./analysis.steps` at run time: that module
+ * imports this one, and a cycle would leave one of the two half loaded.
  */
 import type { z } from 'zod';
-import type {
-  ContractStepEntry,
-  WorkflowStepExit,
-} from './answer-business-question.steps';
 import {
   IMAGE_KINDS,
   READ_IMAGES_STEP_SCHEMAS,
@@ -47,7 +42,9 @@ import {
 import {
   contractJsonSchema,
   schemaFieldNames,
+  type ContractStepEntry,
   type WorkflowEdge,
+  type WorkflowStepExit,
 } from './workflow-contract';
 
 /** The step's id, in every workflow that has it. */
@@ -74,15 +71,6 @@ export interface ReadImagesInput {
   question: string;
   /** The images' paths in the run's workspace (`inputs/images/<n>.<ext>`), in order. */
   images: string[];
-  /**
-   * An interactive run (answer-business-question.review.ts): Zoe may ask
-   * the user one question first. Absent otherwise.
-   */
-  canAsk?: boolean;
-  /** Her question with the user's answer, once answered. */
-  answered?: { question: string; answer: string };
-  /** The changes the user asked for on her approval gate. */
-  revision?: { previous: string; note: string };
 }
 
 /** What Read images gets back from the runtime. */
@@ -97,8 +85,6 @@ export interface ReadImagesOutcome {
    * model step sees the aborted signal and ends the run.
    */
   stopped: boolean;
-  /** Zoe asked the user first (only when `canAsk`): the step waits. */
-  clarification?: { question: string; options: string[] };
 }
 
 /**
@@ -109,12 +95,6 @@ export interface ReadImagesOutcome {
  */
 export interface ReadImagesRuntime {
   readImages(input: ReadImagesInput): Promise<ReadImagesOutcome>;
-  /**
-   * An interactive run of Answer a Business Question (workflows R44): Zoe
-   * may ask first, and her notes wait for the user's approval before they
-   * go on. Absent in every other workflow and in chats.
-   */
-  interactive?: boolean;
 }
 
 /** One image as Read images keeps it from the reply. */

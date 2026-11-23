@@ -5,7 +5,7 @@ import {
   type ExecuteFunctionParams,
 } from '@mastra/core/workflows';
 import type { z } from 'zod';
-import { loadCatalog } from './answer-business-question.steps';
+import { loadCatalog } from './analysis.steps';
 import {
   MAP_DASHBOARD_DATA_STEP_SCHEMAS,
   mapDashboardRunInputSchema,

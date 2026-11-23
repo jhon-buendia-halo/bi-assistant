@@ -39,6 +39,19 @@ export class WorkflowRunsRepository {
     return this.store.find({ conversationId }, { sort: { startedAt: 1 } });
   }
 
+  /**
+   * Every run of these workflows, whatever its status (M18: the runs of the
+   * removed ones).
+   */
+  async listByWorkflowIds(
+    workflowIds: readonly string[],
+  ): Promise<WorkflowRunDoc[]> {
+    const lists = await Promise.all(
+      workflowIds.map((workflowId) => this.store.find({ workflowId })),
+    );
+    return lists.flat();
+  }
+
   /** The runs still `running`: at start-up, the ones the app stopped in. */
   listRunning(): Promise<WorkflowRunDoc[]> {
     return this.store.find({ status: 'running' });

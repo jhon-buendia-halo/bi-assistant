@@ -1,13 +1,12 @@
 /**
- * Avery's turn (agents.md 2.21, 5.22): the Orchestrate step of Answer a
- * Business Question (orchestrated). Avery streams with her tools; each tool
- * calls a member of the team through the same calls Answer a Business
- * Question's steps make (`team`), with no approval gate and no question to
- * the user: only Avery talks to the user. What the team produced is kept in
- * `state`, which lives as long as the turn (a wait for the user included),
- * so a resumed Avery knows the work done so far.
+ * Avery's turn (agents.md 2.21, 5.23): the Orchestrate step of Answer a
+ * Business Question (Avery + Michael). Avery streams with her tools; each
+ * tool calls a member of the team (`team`), with no question to the user:
+ * only Avery talks to the user. What the team produced is kept in `state`,
+ * which lives as long as the turn (a wait for the user included), so a
+ * resumed Avery knows the work done so far.
  *
- * The run's answer is Jessica's written answer (its figures link to the
+ * The run's answer is Michael's written answer (its figures link to the
  * queries behind them, agent-answers R56), followed by Avery's closing
  * words; with no written answer, Avery's words alone.
  */
@@ -15,11 +14,7 @@ import { RequestContext } from '@mastra/core/request-context';
 import { parseClarification } from '../../../mastra/tools/clarification.tool';
 import { CHIEF_OF_STAFF_AGENT_KEY } from '../../../mastra/agent-constants';
 import { runErrorMessage } from '../../../mastra/workflows/workflow-run';
-import {
-  analysisReview,
-  analysePlanBlock,
-  planReview,
-} from '../../../mastra/workflows/answer-business-question.prompts';
+import { analysisReview } from '../../../mastra/workflows/analysis.prompts';
 import {
   loadCatalog,
   planCatalogBlock,
@@ -27,20 +22,24 @@ import {
   type AnalyseAttempt,
   type AnalyseQuery,
   type AnalysisPlan,
+  type AnalyseRuntime,
   type AnsweredClarification,
-  type AnswerBusinessQuestionRuntime,
   type CatalogEntity,
   type EntityColumns,
   type ValidationFinding,
-} from '../../../mastra/workflows/answer-business-question.steps';
+} from '../../../mastra/workflows/analysis.steps';
 import {
+  AVERY_TEAM,
   ORCHESTRATOR_MAX_STEPS,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
-  orchestratorTeamOf,
   teammateOfTool,
   type OrchestratorToolsRuntime,
-} from '../../../mastra/workflows/orchestrated-answer.steps';
-import type { ReadImagesOutcome } from '../../../mastra/workflows/read-images.steps';
+} from '../../../mastra/workflows/orchestrated-answer-michael.steps';
+import {
+  briefPlan,
+  michaelAloneRequest,
+  planReview,
+} from '../../../mastra/workflows/orchestrated-answer-michael.prompts';
 import { BUILD_DASHBOARD_MAX_CALLS } from '../../../mastra/workflows/bi-dashboard.schemas';
 import {
   EXPORT_CONVERSATION_MAX_CALLS,
@@ -69,16 +68,10 @@ import type { StreamEvent } from './stream-events';
 /** The most model steps Avery takes in one turn (defined with her catalogue data). */
 export { ORCHESTRATOR_MAX_STEPS };
 
-/** The team's calls, as the turn makes them for Answer a Business Question. */
+/** The team's calls, as the turn makes them (agents.md 5.23). */
 export interface OrchestratorTeam {
-  readImages(input: {
-    question: string;
-    images: string[];
-  }): Promise<ReadImagesOutcome>;
-  plan: AnswerBusinessQuestionRuntime['plan'];
-  analyse: AnswerBusinessQuestionRuntime['analyse'];
-  writeAnswer: AnswerBusinessQuestionRuntime['writeAnswer'];
-  buildVisual?: AnswerBusinessQuestionRuntime['buildVisual'];
+  /** Michael's analysis: one attempt of his agent turn. */
+  analyse: AnalyseRuntime['analyse'];
   /**
    * Clara's build (agents.md 2.22, 5.22): her turn on Avery's brief, the
    * host's run of her data query and the saved artifact version. `current`
@@ -111,7 +104,7 @@ export interface OrchestratorTeam {
 export interface OrchestratorState {
   catalog?: CatalogEntity[];
   columns?: EntityColumns[];
-  imageNotes: string;
+  /** The plan Michael worked from: the question, nothing planned. */
   plan?: AnalysisPlan;
   /** Analyse attempts made (Avery may call Michael at most twice). */
   attempts: number;
@@ -119,7 +112,6 @@ export interface OrchestratorState {
   findings: ValidationFinding[];
   analystNote: string;
   answer?: string;
-  visual?: string;
   /** The dashboard Clara saved last in this turn: the answer carries it. */
   dashboard?: DashboardRef;
   /** That version, read back: a second build changes it. */
@@ -135,7 +127,6 @@ export interface OrchestratorState {
 /** A fresh state, for a new turn. */
 export function orchestratorState(): OrchestratorState {
   return {
-    imageNotes: '',
     attempts: 0,
     queries: [],
     findings: [],
@@ -162,7 +153,6 @@ export interface OrchestratorTurnDeps {
   signal: AbortSignal;
   datasets: string[];
   images: string[];
-  buildsVisual: boolean;
   /**
    * The dashboard gate (agents.md 2.21): the user asked for a dashboard or
    * the conversation has one. Closed, build_dashboard is hidden and the
@@ -200,10 +190,7 @@ export interface OrchestratorTurnDeps {
     ExplorableQuery,
     'ref' | 'sql' | 'rationale'
   >[];
-  /**
-   * Avery's tools in this run, her workflow's (`orchestratorTeamOf`); her
-   * whole team's when absent.
-   */
+  /** Avery's tools in this run; all of hers (`AVERY_TEAM.tools`) when absent. */
   tools?: readonly string[];
 }
 
@@ -242,23 +229,6 @@ function toolResultText(result: unknown): string | undefined {
   return typeof text === 'string' ? text : undefined;
 }
 
-/** Michael on his own (Avery + Michael): told he plans and writes the answer. */
-export const MICHAEL_ALONE_LINE =
-  'You work alone with Avery in this run: no one plans before you and no one writes after you. Plan the analysis yourself from her brief, and write your reply as the answer the user reads.';
-
-/** The plan Michael works from on his own: the user's question, nothing planned. */
-function briefPlan(question: string): AnalysisPlan {
-  return {
-    question,
-    measures: [],
-    entities: [],
-    scope: '',
-    assumptions: [],
-    needsClarification: false,
-    clarification: null,
-  };
-}
-
 /** At most this many earlier queries, each SQL cut at this length, reach Michael. */
 const EARLIER_QUERIES_MAX = 8;
 const EARLIER_SQL_MAX = 1500;
@@ -294,9 +264,8 @@ function runFacts(deps: OrchestratorTurnDeps): string {
     deps.images.length
       ? `The run has ${deps.images.length} reference image(s).`
       : 'The run has no reference images.',
-    deps.buildsVisual
-      ? 'The run builds a visual (build_visual is available).'
-      : 'The run builds no visual.',
+    // Unchanged since her whole team's workflow: no run builds a visual.
+    'The run builds no visual.',
     // Only with the gate open: a run that is not about a dashboard sends
     // her what it sent before (agents.md 2.21).
     ...(deps.buildsDashboard ? [dashboardFact(deps.currentDashboard)] : []),
@@ -319,7 +288,8 @@ export { currentDashboardBlock };
 /** The work done so far, for a resumed Avery. */
 function workSoFar(state: OrchestratorState): string | undefined {
   const lines: string[] = [];
-  if (state.imageNotes.trim()) lines.push('Zoe already read the images.');
+  // Michael's plan, the question with nothing planned, in the words Avery
+  // read before her whole team's workflow was removed.
   if (state.plan) lines.push('Olivia already planned:', planReview(state.plan));
   if (state.queries.length) {
     lines.push(
@@ -328,7 +298,6 @@ function workSoFar(state: OrchestratorState): string | undefined {
     );
   }
   if (state.answer) lines.push('The answer the user reads is already written.');
-  if (state.visual) lines.push(`Ryan: ${state.visual}`);
   if (state.dashboard) {
     lines.push(
       `Clara already built the dashboard "${state.dashboard.title}", version ${state.dashboard.version}.`,
@@ -342,20 +311,6 @@ function workSoFar(state: OrchestratorState): string | undefined {
   return lines.length
     ? ['Work done so far in this run (do not redo it):', ...lines].join('\n')
     : undefined;
-}
-
-/** A plan for Avery, with Olivia's question when she has one. */
-function planForAvery(plan: AnalysisPlan): string {
-  const asked =
-    plan.needsClarification && plan.clarification
-      ? [
-          '',
-          `Olivia says the question can be read more than one way: ${plan.clarification.question}`,
-          ...plan.clarification.options.map((option) => `- ${option}`),
-          'Ask the user only if the choice changes the answer; else go on with the plan.',
-        ]
-      : [];
-  return [planReview(plan), ...asked].join('\n');
 }
 
 /** Checks for Avery: each failed one, or that they all passed. */
@@ -387,35 +342,16 @@ export function orchestratorTools(
     }
     return { catalog: state.catalog, columns: state.columns };
   };
-  const plan = async (brief?: string): Promise<string> => {
-    const { catalog, columns } = await catalogOf();
-    const planned = await team.plan({
-      question,
-      catalog,
-      catalogBlock: planCatalogBlock(catalog, columns, { question }),
-      ...(answered ? { clarification: answered } : {}),
-      imageNotes: state.imageNotes,
-      // Avery's request: the question restated to stand alone (R45).
-      ...(brief?.trim() ? { brief } : {}),
-    });
-    state.plan = planned.plan;
-    return planForAvery(planned.plan);
-  };
   /**
-   * One analysis by Michael. With the team, he follows Olivia's plan (made
-   * first when there is none) and Jessica writes the answer. `alone` (Avery
-   * + Michael, agents.md 5.23): no plan but Avery's brief, and his reply is
-   * the answer the user reads.
+   * One answer by Michael on his own (agents.md 5.23): no plan but Avery's
+   * brief, and his reply is the answer the user reads.
    */
-  const analysis = async (brief: string, alone: boolean): Promise<string> => {
+  const answerFromData = async (brief: string): Promise<string> => {
     if (state.attempts >= 2) {
-      return alone
-        ? 'Michael already answered twice in this run: close from his answer.'
-        : 'Michael already analysed twice in this run: write the answer from his results.';
+      return 'Michael already answered twice in this run: close from his answer.';
     }
-    if (!alone && !state.plan) await plan();
     const { catalog, columns } = await catalogOf();
-    const current = alone ? (state.plan ??= briefPlan(question)) : state.plan!;
+    const current = (state.plan ??= briefPlan(question));
     state.attempts += 1;
     const attempt: AnalyseAttempt = await team.analyse({
       question,
@@ -423,14 +359,10 @@ export function orchestratorTools(
       catalogBlock: planCatalogBlock(catalog, columns, { question }),
       plan: current,
       attempt: state.attempts,
-      planBlock: [
-        ...(alone ? [] : [analysePlanBlock(current), '']),
-        `Brief from Avery, the Chief of Staff: ${brief}`,
-        ...(alone ? ['', MICHAEL_ALONE_LINE] : []),
-        ...(earlier ? ['', earlier] : []),
-      ].join('\n'),
+      planBlock: michaelAloneRequest(brief, earlier),
       ...(answered ? { answered } : {}),
-      imageNotes: state.imageNotes,
+      // No reference images reach Michael here: the run's input has none.
+      imageNotes: '',
     });
     if (attempt.clarification) {
       said?.(
@@ -451,70 +383,21 @@ export function orchestratorTools(
     state.findings = findings;
     state.analystNote = attempt.text;
     if (attempt.text.trim()) said?.(attempt.text);
-    // On his own, his reply is the run's answer (the last one he wrote).
-    if (alone && attempt.text.trim()) state.answer = attempt.text;
+    // His reply is the run's answer (the last one he wrote).
+    if (attempt.text.trim()) state.answer = attempt.text;
     return [
       analysisReview({ queries: attempt.queries, text: attempt.text }),
       '',
       findingsForAvery(findings),
-      ...(alone
-        ? [
-            '',
-            state.answer
-              ? "Michael's reply above is the answer the user reads: do not repeat it."
-              : 'Michael wrote no answer.',
-          ]
-        : []),
+      '',
+      state.answer
+        ? "Michael's reply above is the answer the user reads: do not repeat it."
+        : 'Michael wrote no answer.',
     ].join('\n');
   };
   return {
-    hasImages: deps.images.length > 0,
-    buildsVisual: deps.buildsVisual,
-    readImages: async () => {
-      if (!deps.images.length) return 'The run has no reference images.';
-      const read = await team.readImages({ question, images: deps.images });
-      state.imageNotes = read.stopped ? '' : read.imageNotes;
-      return state.imageNotes || 'Zoe found nothing to describe.';
-    },
-    tools: deps.tools ?? orchestratorTeamOf(undefined).tools,
-    plan: (brief?: string) => plan(brief),
-    analyse: (brief: string) => analysis(brief, false),
-    answerFromData: (brief: string) => analysis(brief, true),
-    writeAnswer: async (brief?: string) => {
-      if (!state.plan || !state.queries.length) {
-        return 'Michael has no results yet: call analyse_data first.';
-      }
-      const written = await team.writeAnswer({
-        question,
-        plan: state.plan,
-        queries: state.queries,
-        findings: state.findings,
-        imageNotes: state.imageNotes,
-        // Avery's request: the question restated, what the user knows (R45).
-        ...(brief?.trim() ? { brief } : {}),
-        // The answer is delivered once Avery is done (only she talks to
-        // the user): it is not streamed as it is written.
-        quiet: true,
-      });
-      state.answer = written.answer.answer;
-      return `Jessica wrote the answer. Its headline: ${written.answer.headline || '(none)'}`;
-    },
-    buildVisual: async (instruction: string) => {
-      if (!deps.buildsVisual || !team.buildVisual) {
-        return 'This run builds no visual.';
-      }
-      if (!state.answer) return 'No answer yet: call write_answer first.';
-      const built = await team.buildVisual({
-        question: `${question}\n\nWhat the chart should show: ${instruction}`,
-        answer: state.answer,
-        queries: state.queries,
-        ...(state.imageNotes.trim() ? { imageNotes: state.imageNotes } : {}),
-      });
-      state.visual = built.visual.visualId
-        ? `Ryan built the visual "${built.visual.title ?? 'Interactive visual'}".`
-        : `Ryan built no visual: ${built.visual.error ?? built.visual.skipped ?? 'no reason given'}`;
-      return state.visual;
-    },
+    tools: deps.tools ?? AVERY_TEAM.tools,
+    answerFromData,
     buildsDashboard: deps.buildsDashboard && !!team.buildDashboard,
     // Clara (agents.md 2.22, 5.22): at most twice per run; a second build
     // changes the version the first one saved.
@@ -631,6 +514,8 @@ export async function runOrchestratorTurn(
   const stop = new AbortController();
   const forward = () => stop.abort();
   deps.signal.addEventListener('abort', forward, { once: true });
+  // A listener added to an aborted signal never fires: a Stop already in.
+  if (deps.signal.aborted) stop.abort();
   let closing = '';
   let asked: { question: string; options: string[] } | undefined;
   let failure: unknown;

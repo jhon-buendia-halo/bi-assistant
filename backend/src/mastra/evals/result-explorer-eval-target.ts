@@ -7,7 +7,7 @@ import type {
 import { pageCountOf } from '../agents/result-explorer.prompts';
 import { explorerAnswerText } from './result-explorer-eval-checks';
 import { answerResult } from './query-explainer-eval-answer';
-import { lastUserText } from './insights-analyst-workflow-target';
+import { lastUserText } from './insights-analyst-target';
 
 /**
  * The `result-explorer` eval target's turn (agents.md 8.1, 2.17): a case is

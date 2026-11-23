@@ -3,11 +3,6 @@ import type { ResultView } from '../../modules/datasources/connectors/paged-sql.
 import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from '../workflows/workflow-run';
 import { guardedCall } from '../workflows/model-call';
-import {
-  clarificationIn,
-  interactiveBlocks,
-  type Revision,
-} from '../workflows/answer-business-question.review';
 import type { RequestContext } from '@mastra/core/request-context';
 import { agentInstructions } from '../agent-prompt-overrides';
 import { RESULT_EXPLORER_AGENT_KEY } from '../agent-constants';
@@ -54,8 +49,8 @@ export interface InterpretResultInput {
 }
 
 /**
- * The model call (api.md 153, 155; Answer a Business Question's Interpret
- * follow-up step): the request holds no SQL and no whole rows. A model
+ * The model call (api.md 153, 155): the request holds no SQL and no whole
+ * rows. A model
  * error, or a reply that is no JSON object, throws; the reply is read by
  * `specOf`. `onExchange` gets the request and the reply once the agent
  * replied (a run records it in Nathan's thread, agents.md 5.14). The call
@@ -63,16 +58,7 @@ export interface InterpretResultInput {
  * fails with `ModelTimeoutError`; it is not retried.
  */
 export async function interpretResultWithModel(
-  input: InterpretResultInput & {
-    /**
-     * Answer a Business Question's interactive run (workflows R44): he may
-     * ask the user one question first; his answered question or the
-     * user's revision end the request. Absent everywhere else: unchanged.
-     */
-    canAsk?: boolean;
-    answered?: { question: string; answer: string };
-    revision?: Revision;
-  },
+  input: InterpretResultInput,
   options: {
     abortSignal?: AbortSignal;
     onExchange?: (exchange: AgentExchange) => void | Promise<void>;
@@ -80,13 +66,13 @@ export async function interpretResultWithModel(
     providerOptions?: Record<string, unknown>;
     requestContext?: RequestContext;
   } = {},
-): Promise<
-  ExplorerSpec & { clarification?: { question: string; options: string[] } }
-> {
-  const request = [
-    explorerRequest(input.text, input.candidates, input.view, input.pageCount),
-    ...interactiveBlocks(input),
-  ].join('\n\n');
+): Promise<ExplorerSpec> {
+  const request = explorerRequest(
+    input.text,
+    input.candidates,
+    input.view,
+    input.pageCount,
+  );
   // A deadline only (workflows R43): no retry of a failure or a cut reply.
   const guard = { label: 'Result Explorer', canRetry: () => false };
   const result = await guardedCall(
@@ -129,10 +115,5 @@ export async function interpretResultWithModel(
         : JSON.stringify(result.object ?? null),
     });
   }
-  // He asked the user first (only offered when he may).
-  const asked =
-    input.canAsk && !input.answered
-      ? clarificationIn(result.text || result.object)
-      : undefined;
-  return asked ? { ...spec, clarification: asked } : spec;
+  return spec;
 }

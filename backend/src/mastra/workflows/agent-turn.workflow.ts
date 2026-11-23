@@ -19,7 +19,7 @@ const turnInput = z.object({
   datasets: z.array(z.string()),
 });
 
-// The `analyseOutcome` of answer-business-question: what the agent's tool calls were,
+// An analysis attempt's outcome (agents.md 5.11): what the agent's tool calls were,
 // and whether the turn was stopped (Stop or a clarifying question).
 const answerOutcome = z.object({
   calls: z.array(

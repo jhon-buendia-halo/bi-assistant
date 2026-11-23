@@ -26,14 +26,14 @@ import {
   type EvalDetailsToolCall,
   type EvalRunDetails,
 } from './eval-details';
-import { lastUserText } from './insights-analyst-workflow-target';
+import { lastUserText } from './insights-analyst-target';
 import { readinessEvalOrientation } from './data-readiness.evals';
 
 /**
  * The `data-readiness:assessment-workflow` eval target (agents.md 8.1):
  * every case runs the WHOLE Assess Data Readiness workflow (5.13) on the
  * run's first dataset, with the case's question as the workflow's question,
- * as `workflowTurnAgent` runs Answer a Business Question. `runEvals` calls
+ * as `michaelTurnAgent` runs Michael. `runEvals` calls
  * the agent's `generate`; this target is the Data Readiness Agent with
  * `generate` replaced by one run of the workflow, whose runtime is the
  * app's (`TurnEngine`'s readiness runtime, eval-sized):

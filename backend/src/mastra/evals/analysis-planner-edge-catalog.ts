@@ -3,7 +3,7 @@ import {
   planCatalogBlock,
   type CatalogEntity,
   type EntityColumns,
-} from '../workflows/answer-business-question.steps';
+} from '../workflows/analysis.steps';
 
 /**
  * The Edge Cases sample's entities and columns, as Load catalog hands them

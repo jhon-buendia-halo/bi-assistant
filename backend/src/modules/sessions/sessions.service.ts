@@ -16,7 +16,6 @@ import {
   canStartBuiltinSession,
   existingDatasetsFor,
 } from '../agents/builtin-sessions';
-import { INSIGHTS_ANALYST_AGENT_KEY } from '../../mastra/agents/insights-analyst-catalog';
 import { DataReadinessService } from '../data-readiness/data-readiness.service';
 import { setReadinessToolServices } from '../../mastra/readiness-tool-services';
 import { ReadinessBridge } from './readiness-bridge';
@@ -62,10 +61,10 @@ import {
   withVisualItems,
 } from './panel-items';
 import { applyWorkflowUpdate, workflowViewOf } from './workflow-update';
-import { workflowStepPhases } from './workflow-run-state';
-import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/answer-business-question.steps';
 import {
   ASSISTANT_WORKFLOW_NAME,
+  REMOVED_WORKFLOW_NAMES,
+  isRemovedWorkflowId,
   parseWorkflowId,
   sessionWorkflowId,
   WRAPPED_AGENT_KEYS,
@@ -78,7 +77,6 @@ import {
   writeWorkspaceFile,
 } from './workspace-files';
 import {
-  AskedStep,
   ChatMessage,
   CrossCheck,
   FilePanelItem,
@@ -147,7 +145,7 @@ export interface RunVisualOutcome {
 export interface RunHostSpec {
   runId: string;
   /**
-   * The catalogue workflow the run runs (`answer-business-question`). Unused for an agent
+   * The catalogue workflow the run runs (`orchestrated-answer-michael`, ...). Unused for an agent
    * host (`agentKey`) and a draft run (`draftAgentId`).
    */
   workflowId?: string;
@@ -176,10 +174,6 @@ export interface RunHostSpec {
    * run's and earlier turns'.
    */
   contextQueries?: ExplorableQuery[];
-  /** Answer a Business Question's `buildVisual` (agents.md 5.11). */
-  buildVisual?: true;
-  /** Answer a Business Question's `approveSteps` (workflows R44). */
-  approveSteps?: true;
   /**
    * Dashboard Image to Artifact's input image (agents.md 5.17): written to the
    * host's workspace at `path` before the turn.
@@ -211,11 +205,6 @@ export interface RunHostSpec {
    * memory threads the host starts from as copies of its own.
    */
   continuesThreadsOf?: string;
-  /**
-   * A follow-up that asks one agent alone (agents.md 5.21): the host's turn
-   * runs on the `ask-agent` engine. With `agentKey`, that agent is bound.
-   */
-  ask?: AskedStep;
   /**
    * A draft run (agents-evals R60): the user agent whose saved draft the host
    * runs, as a preview does. `workflowId` is then unused.
@@ -364,34 +353,6 @@ export class SessionsService implements OnModuleInit {
       },
       writeFile: (sessionId, path, data) =>
         writeWorkspaceFile(sessionId, path, data),
-      buildVisual: async (sessionId, source, abortSignal) => {
-        const session = await this.get(sessionId);
-        const { metadata } = await this.visuals.createFromAnswer(
-          session,
-          source,
-          abortSignal,
-        );
-        await this.saveVisualMetadata(session, metadata);
-        return metadata;
-      },
-      // A change on Build visual's approval gate (workflows R44): a new
-      // version of the same visual.
-      reviseVisual: async (sessionId, visualId, change, abortSignal) => {
-        const session = await this.get(sessionId);
-        const { metadata } = await this.visuals.update(
-          session,
-          visualId,
-          change.instruction,
-          undefined,
-          {
-            ...(change.reference ? { reference: change.reference } : {}),
-            ...(change.stepModel ? { stepModel: change.stepModel } : {}),
-            ...(abortSignal ? { abortSignal } : {}),
-          },
-        );
-        await this.saveVisualMetadata(session, metadata);
-        return metadata;
-      },
       saveMock: async (sessionId, bundle, instruction) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.createFromBundle(
@@ -678,8 +639,6 @@ export class SessionsService implements OnModuleInit {
       ...(spec.contextQueries?.length
         ? { contextQueries: spec.contextQueries }
         : {}),
-      ...(spec.buildVisual ? { buildVisual: true as const } : {}),
-      ...(spec.approveSteps ? { approveSteps: true as const } : {}),
       ...(spec.image ? { inputImage: spec.image.path } : {}),
       ...(spec.inputImages?.length ? { inputImages: spec.inputImages } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
@@ -695,7 +654,6 @@ export class SessionsService implements OnModuleInit {
           }
         : {}),
       ...(spec.inputValues ? { inputValues: { ...spec.inputValues } } : {}),
-      ...(spec.ask ? { ask: spec.ask } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,
@@ -1060,6 +1018,15 @@ export class SessionsService implements OnModuleInit {
     if (parsed?.kind === 'code') {
       return { id, name: parsed.source.name, kind: 'code', deleted: false };
     }
+    // A past chat of a removed workflow keeps its name on the chip.
+    if (isRemovedWorkflowId(id)) {
+      return {
+        id,
+        name: REMOVED_WORKFLOW_NAMES[id],
+        kind: 'code',
+        deleted: false,
+      };
+    }
     if (parsed?.kind === 'builtin-agent') {
       const name =
         parsed.agentKey === ASSISTANT_AGENT_KEY
@@ -1084,11 +1051,9 @@ export class SessionsService implements OnModuleInit {
     session: SessionDoc,
     config?: AgentConfig,
   ): WorkflowPhase[] {
-    // A workflow-backed agent's steps are its code-defined workflow's
-    // (agents.md 5.11, ADR-0034).
-    if (session.agentKey === INSIGHTS_ANALYST_AGENT_KEY) {
-      return workflowStepPhases(ANSWER_BUSINESS_QUESTION_STEPS);
-    }
+    // A built-in agent's steps are its workflow's run events, never a
+    // prompt's: Michael's (Avery + Michael, or a past chat of a removed
+    // workflow) included.
     if (session.agentKey) return [];
     const own = config ? parseWorkflow(config.instructions) : [];
     if (own.length) return own;

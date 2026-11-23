@@ -1,7 +1,7 @@
 /**
  * A step's story (ui.md 4.4b, Logs *Story*; api.md 3.6 `step.story`): what
  * one step of a run did, told in business words. A workflow tells its own
- * steps (`StepStoryteller`, e.g. answer-business-question.story.ts); any
+ * steps (`StepStoryteller`); any
  * other step gets the generic story, its output fields labelled with their
  * schema descriptions. Built only from the run's data, never by a model
  * call. Plain data and pure functions, no framework import, so the run

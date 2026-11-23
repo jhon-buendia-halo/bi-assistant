@@ -9,8 +9,6 @@ import {
 } from '../../../mastra/tools/clarification.tool';
 import type { MastraService } from '../../../mastra/mastra.service';
 import {
-  ANALYSIS_PLANNER_AGENT_KEY,
-  ANSWER_WRITER_AGENT_KEY,
   DASHBOARD_READER_AGENT_KEY,
   DATA_MAPPER_AGENT_KEY,
   GAP_ADVISOR_AGENT_KEY,
@@ -69,26 +67,19 @@ import type {
 import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
   ANALYSE_RETRY_MAX_STEPS,
-  ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
-  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   clarifyingQuestionOf,
-  keptQueryOrigins,
-  planOf,
-  turnSummaryOf,
-  validateAttempt,
-  type AnalyseQuery,
+  type AnalyseRuntime,
   type AnsweredClarification,
-  type AnswerBusinessQuestionInput,
-  type AnswerBusinessQuestionRuntime,
-} from '../../../mastra/workflows/answer-business-question.steps';
-import { analyseSystemBlocks } from '../../../mastra/workflows/answer-business-question.prompts';
+  type QuestionInput,
+} from '../../../mastra/workflows/analysis.steps';
+import { analyseSystemBlocks } from '../../../mastra/workflows/analysis.prompts';
 import {
-  ORCHESTRATED_ANSWER_RUNTIME_KEY,
-  ORCHESTRATED_ANSWER_WORKFLOW_ID,
+  AVERY_TEAM,
+  ORCHESTRATED_MICHAEL_RUNTIME_KEY,
+  ORCHESTRATED_MICHAEL_WORKFLOW_ID,
   ORCHESTRATOR_MODEL,
-  orchestratorTeamOf,
-  type OrchestratedAnswerRuntime,
-} from '../../../mastra/workflows/orchestrated-answer.steps';
+  type OrchestratedMichaelRuntime,
+} from '../../../mastra/workflows/orchestrated-answer-michael.steps';
 import {
   currentDashboardBlock,
   orchestratorState,
@@ -128,12 +119,11 @@ import type {
   DashboardVersionData,
 } from '../../artifacts/entities/artifact.entity';
 import type { NewDashboardVersion } from '../../artifacts/artifacts.service';
-import { ANSWER_BUSINESS_QUESTION_MODEL } from '../../../mastra/workflows/answer-business-question.review';
 import { resolveAgentModelConfig } from '../../../mastra/model-resolver';
 import {
   STEP_MODEL_CONTEXT_KEY,
+  TEAM_STEP_MODEL,
   servesClaude,
-  type StepModel,
 } from '../../../mastra/step-model';
 import { turnProviderOptions } from './session-datasets';
 import {
@@ -148,17 +138,6 @@ import {
   AGENT_TURN_WORKFLOW_ID,
   type AgentTurnRuntime,
 } from '../../../mastra/workflows/agent-turn.steps';
-import {
-  AGENT_TURN_ASK_STEPS,
-  ASK_AGENT_RUNTIME_KEY,
-  ASK_AGENT_WORKFLOW_ID,
-  type AskAgentInput,
-  type AskAgentRuntime,
-  type AskableStepId,
-  type EarlierAnswerInput,
-  type EarlierVisualInput,
-} from '../../../mastra/workflows/ask-agent.steps';
-import { planSchema } from '../../../mastra/workflows/answer-business-question.schemas';
 import type { LlmService } from '../../llm/llm.service';
 import { chatTurnError } from '../llm-error-message';
 import { sourceEntities } from '../visualization-document';
@@ -239,7 +218,6 @@ import {
 import {
   analyseAttemptOf,
   analyseOutcomeOf,
-  analyseQueriesOf,
   answeredTurnInput,
   attemptEarlierBlock,
   catalogStepId,
@@ -315,39 +293,6 @@ export interface TurnEngineDeps {
     sessionId: string,
     input: Omit<NewDashboardVersion, 'source'> & { artifactId?: string },
   ) => Promise<DashboardRef>;
-  /**
-   * Build visual (agents.md 5.11): Ryan designs a visual from an answer not
-   * stored yet; `at` is the time the answer message is stored with. With
-   * an `instruction` (a follow-up that asks Build visual alone, 5.21),
-   * `question` is the earlier run's and the instruction is the follow-up's.
-   * `reference` is the run's image notes, the design to follow; absent
-   * when the run has none.
-   */
-  buildVisual(
-    sessionId: string,
-    source: {
-      question: string;
-      answer: string;
-      at: string;
-      data: ToolDataRecord[];
-      instruction?: string;
-      reference?: string;
-      /** The workflow's step model (agents.md 1.3), when it has one. */
-      stepModel?: StepModel;
-    },
-    abortSignal?: AbortSignal,
-  ): Promise<SessionVisualization>;
-  /**
-   * A new version of a visual of the session from the user's words (Build
-   * visual's approval gate, workflows R44); `reference` is Zoe's notes on
-   * the reference images they attached, absent without any.
-   */
-  reviseVisual(
-    sessionId: string,
-    visualId: string,
-    change: { instruction: string; reference?: string; stepModel?: StepModel },
-    abortSignal?: AbortSignal,
-  ): Promise<SessionVisualization>;
   /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
   saveMock(
     sessionId: string,
@@ -469,8 +414,6 @@ export class TurnEngine {
     // Set inside `consume`, so typed without narrowing to the initial null.
     let clarification = null as ChatMessage['clarification'] | null;
     let visualEvent: VisualEvent | undefined;
-    // The answer's time, fixed early when Build visual names it as the source.
-    let answerAt: string | undefined;
     // The last report a readiness tool returned this turn (Data Readiness Agent).
     let readinessReport: ReadinessReportRef | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
@@ -479,36 +422,27 @@ export class TurnEngine {
     const calledTools = new Set<string>();
     // The model call's own failure: Mastra reports it as a chunk, not a throw.
     let streamError: unknown;
-    // While v2's Analyse step streams: its text, kept out of the answer.
+    // While Michael's analysis or Clara's build streams: its text, kept out
+    // of the answer (Avery's is the run's).
     let notes: string | undefined;
-    // While v2's Analyse step streams: what a clarifying question stops (the
-    // attempt's agent stream, not the turn: the step waits for the answer).
+    // While Michael's analysis streams: what a clarifying question stops
+    // (the attempt's agent stream, not the turn).
     let attemptStop: AbortController | undefined;
-    // Where v2's current analysis attempt's records start: a resumed
+    // Where Michael's current analysis attempt's records start: a resumed
     // attempt keeps the queries it ran before it asked.
     let attemptStart = 0;
-    // Where each of v2's analysis attempts started, by attempt number: after
-    // a retry, Build visual takes the records of the kept queries.
-    const attemptStarts = new Map<number, number>();
     // The agent's clarifying questions this turn, each with the answer:
     // every later attempt goes on with them.
     const answers: AnsweredClarification[] = [];
     const workflow = turnWorkflowOf(session);
-    // v2's answer is its Write answer step's only (agents.md 5.11).
-    const v2 = workflow.engineId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID;
-    // v2 runs its step agents on its own model and effort (agents.md 1.3)
-    // when the saved model is served as a Claude model: its agents read it
-    // from the context, and every step call and Analyse's turn send its
-    // effort. Otherwise the saved model and effort, as every agent.
-    // Answer a Business Question (orchestrated): Avery calls the same
-    // agents as her tools, on the same model; she runs on Opus 5.5 high
-    // (agents.md 5.22).
-    const orchestrated = workflow.engineId === ORCHESTRATED_ANSWER_WORKFLOW_ID;
+    // Answer a Business Question (Avery + Michael) (agents.md 1.3, 5.23):
+    // when the saved model is served as a Claude model, the agents Avery
+    // calls run on the team's step model (their model functions read it
+    // from the context, and every call sends its effort), and she runs on
+    // Opus 5.5 high. Otherwise the saved model and effort, as every agent.
+    const orchestrated = workflow.engineId === ORCHESTRATED_MICHAEL_WORKFLOW_ID;
     const claude = servesClaude(await resolveAgentModelConfig());
-    const stepModel =
-      (v2 || orchestrated) && claude
-        ? ANSWER_BUSINESS_QUESTION_MODEL
-        : undefined;
+    const stepModel = orchestrated && claude ? TEAM_STEP_MODEL : undefined;
     if (stepModel) {
       options.requestContext.set(STEP_MODEL_CONTEXT_KEY, stepModel);
       options.providerOptions = await turnProviderOptions(
@@ -526,19 +460,9 @@ export class TurnEngine {
       : (options.providerOptions as Record<string, unknown> | undefined);
     // What Avery's team produced: it outlives a wait for the user.
     const orchState = orchestratorState();
-    // A follow-up that asks one agent (agents.md 5.21): only the Analyst
-    // and Sarah answer as an agent turn; every other asked step's answer is
-    // its model call's or the code's, which no synthesis replaces.
-    const asked =
-      workflow.engineId === ASK_AGENT_WORKFLOW_ID
-        ? (session.ask?.step as AskableStepId | undefined)
-        : undefined;
-    // Answer a Business Question (orchestrated) writes its answer by code
-    // until its orchestrator is built (agents.md 5.22).
-    const codeAnswer =
-      v2 ||
-      workflow.engineId === ORCHESTRATED_ANSWER_WORKFLOW_ID ||
-      (asked !== undefined && !AGENT_TURN_ASK_STEPS.includes(asked));
+    // Avery's answer is hers (Michael's, then her closing words): no
+    // synthesis replaces it.
+    const codeAnswer = orchestrated;
     // A query record of the turn: kept for the answer with its facts,
     // explorable from then on, and shown as its call's result.
     const captureRecord = (record: ToolDataRecord, callId?: string) => {
@@ -569,30 +493,6 @@ export class TurnEngine {
     const flushHeldQueries = () => {
       for (const replay of heldQueries.splice(0)) replay();
     };
-    // A follow-up that asks Write answer or Build visual alone (agents.md
-    // 5.21): the earlier answer's records join this turn's, each with the
-    // facts its evidence kept, so the answer's sources keep their coverage
-    // and view. Once per turn, however many times a step reads them.
-    let carried: ToolDataRecord[] | undefined;
-    const carryEarlierRecords = (): ToolDataRecord[] => {
-      if (carried) return carried;
-      const earlier = session.ask?.earlier;
-      carried = earlier?.records ?? [];
-      carried.forEach((record, index) => {
-        data.push(record);
-        const known = earlier?.evidence.find((entry) => entry.index === index);
-        if (!known) return;
-        recordFacts.set(record, {
-          ...(known.datasourceId ? { datasourceId: known.datasourceId } : {}),
-          ...(known.totalRows !== undefined
-            ? { totalRows: known.totalRows }
-            : {}),
-          ...(known.rowLimit !== undefined ? { rowLimit: known.rowLimit } : {}),
-          ...(known.view ? { view: known.view } : {}),
-        });
-      });
-      return carried;
-    };
     // Consume one agent stream (agents.md 5.1 step 3).
     const consume = async (
       agentStream: Awaited<ReturnType<typeof agent.stream>>,
@@ -613,7 +513,7 @@ export class TurnEngine {
           } else if (chunk.type === 'text-delta') {
             const delta = (chunk.payload as { text?: string }).text ?? '';
             if (delta && notes !== undefined) {
-              // v2's Analyse step: its text is a note, not the answer.
+              // Michael's analysis or Clara's build: a note, not the answer.
               notes += delta;
             } else if (delta) {
               text += delta;
@@ -889,29 +789,12 @@ export class TurnEngine {
           }
         },
       });
-      // Plan has no memory: on a host that continues an earlier run's
-      // threads, `input` is only the latest messages, so Plan reads the
-      // whole conversation as text, as it did before the threads were
-      // copied (agents.md 5.14).
-      const planInput = session.continuesThreads
-        ? this.deps.options.transcriptInput(session)
-        : input;
       // Read images (agents.md 2.15): the run's stored images, loaded from
       // its workspace in order, described by Zoe in one model call recorded
       // in her thread, stopped with `signal` (the turn's, or an early job's
       // own). A model error fails the step with its own message.
       const readImagesOn = async (
-        {
-          question,
-          images,
-          ...interactive
-        }: {
-          question: string;
-          images: string[];
-          canAsk?: boolean;
-          answered?: { question: string; answer: string };
-          revision?: { previous: string; note: string };
-        },
+        { question, images }: { question: string; images: string[] },
         signal: AbortSignal,
       ) => {
         const loaded: StepImage[] = [];
@@ -920,9 +803,8 @@ export class TurnEngine {
           loaded.push({ data, mediaType });
         }
         try {
-          // An interactive run's extras (workflows R44), only when given.
           const read = await this.deps.mastra.readImages(
-            { question, images: loaded, ...interactive },
+            { question, images: loaded },
             { ...stepModelOf(IMAGE_READER_AGENT_KEY), abortSignal: signal },
           );
           return { ...read, stopped: read.stopped || signal.aborted };
@@ -998,66 +880,23 @@ export class TurnEngine {
         // The current request's stream: a resumed turn reports to its own.
         (event) => emit(event),
         {
-          // A run of v2 whose input ticked Approve each step is interactive
-          // (workflows R44): its step agents may ask first, and each outcome
-          // waits for the user's approval. A past chat's turn never is: it
-          // cannot wait.
-          ...(v2 && suspendable && session.approveSteps === true
-            ? { interactive: true }
-            : {}),
-          // v2's steps (agents.md 5.11): Plan and Write answer call the
-          // agent's model without tools; Analyse streams the agent itself.
-          plan: async ({
-            question,
-            catalogBlock,
-            clarification: answered,
-            imageNotes,
-            revision,
-            brief,
-          }) => {
-            try {
-              // After Clarify, Plan plans with its question and the answer;
-              // with reference images, with Zoe's notes (agents.md 2.15).
-              const planned = await this.deps.mastra.planAnalysis(
-                withImageNotes({
-                  messages: planInput,
-                  question,
-                  catalogBlock,
-                  ...(answered ? { answered } : {}),
-                  ...(revision ? { revision } : {}),
-                  // Avery's request, in the orchestrated workflow only.
-                  ...(brief ? { brief } : {}),
-                  imageNotes,
-                }),
-                stepModelOf(ANALYSIS_PLANNER_AGENT_KEY),
-              );
-              return {
-                plan: planned.plan,
-                stopped: planned.stopped || turn.signal.aborted,
-              };
-            } catch (error) {
-              throw await stepError(error);
-            }
-          },
+          // Michael's analysis (agents.md 5.11, 5.23): one attempt of his
+          // agent turn with its tools, for Avery's answer_from_data.
           analyse: async ({
             catalogBlock,
             planBlock,
-            earlierBlock,
-            earlier: earlierAttempt,
             attempt,
             answered,
             imageNotes,
-            visualFollows,
           }) => {
             // A resumed attempt keeps the records it made before it asked,
-            // and is shown their queries after the earlier attempt's, in
-            // one block under one cap (agents.md 5.11).
+            // and is shown their queries in one block under one cap
+            // (agents.md 5.11).
             if (answered) answers.push(answered);
             else attemptStart = data.length;
-            attemptStarts.set(attempt, attemptStart);
             const earlier = answered
-              ? attemptEarlierBlock(earlierAttempt, data.slice(attemptStart))
-              : earlierBlock;
+              ? attemptEarlierBlock(undefined, data.slice(attemptStart))
+              : undefined;
             // A retry, and an attempt after the user answered the agent,
             // run without the memory thread, so the question is not stored
             // twice; the plan block and the answered questions carry what
@@ -1079,6 +918,7 @@ export class TurnEngine {
             const stop = new AbortController();
             const stopAttempt = () => stop.abort();
             turn.signal.addEventListener('abort', stopAttempt, { once: true });
+            if (turn.signal.aborted) stop.abort();
             attemptStop = stop;
             notes = '';
             let attemptNotes = '';
@@ -1095,11 +935,9 @@ export class TurnEngine {
                     {
                       ...attemptOptions,
                       abortSignal: idle.signal,
-                      // The catalog and plan blocks, the earlier-queries
-                      // block on a retry or a resume, then Zoe's notes
-                      // only when the run has images (agents.md 5.11), and
-                      // last the line saying a visual follows, only when
-                      // one does.
+                      // The catalog block and Avery's request, the
+                      // earlier-queries block on a resume, then Zoe's notes
+                      // only when the run has images (agents.md 5.11).
                       context: [
                         ...options.context,
                         ...analyseSystemBlocks({
@@ -1107,7 +945,6 @@ export class TurnEngine {
                           planBlock,
                           earlierBlock: earlier,
                           imageNotes,
-                          visualFollows,
                         }).map((content) => ({
                           role: 'system' as const,
                           content,
@@ -1174,133 +1011,6 @@ export class TurnEngine {
                   }
                 : {}),
             };
-          },
-          // Build visual (agents.md 5.11, workflows R41): Ryan designs an
-          // interactive visual from the written answer and the rows the
-          // turn's queries returned. The answer message is stored later
-          // with the same time, so the visual's later actions find it. A
-          // visual that cannot be built is reported, never a failed run.
-          // Asked alone (agents.md 5.21), Ryan designs from the earlier
-          // question and answer, the follow-up as his instruction.
-          // Zoe's notes, when the run has some, are Ryan's reference.
-          // After a retry Ryan is given only the kept queries' records, in
-          // the kept set's order (keptRecords); the answer's sources stay
-          // every record of both attempts.
-          buildVisual: async ({
-            question,
-            answer,
-            queries,
-            instruction,
-            imageNotes,
-          }: {
-            question: string;
-            answer: string;
-            queries?: readonly AnalyseQuery[];
-            instruction?: string;
-            imageNotes?: string;
-          }) => {
-            const stop = () => ({ visual: {}, stopped: true });
-            if (turn.signal.aborted) return stop();
-            answerAt ??= new Date().toISOString();
-            // A kept query is its attempt's n-th `run_readonly_sql` record,
-            // as `analyseAttemptOf` built it from that attempt's records.
-            // No retry, or a set no merge keeps: every record, as before.
-            const keptRecords = (
-              kept: readonly AnalyseQuery[] | undefined,
-            ): ToolDataRecord[] => {
-              const first = attemptStarts.get(1);
-              const second = attemptStarts.get(2);
-              if (!kept || first === undefined || second === undefined) {
-                return data;
-              }
-              const attempts = [
-                data.slice(first, second),
-                data.slice(second),
-              ].map((records) =>
-                records.filter((record) => record.tool === 'run_readonly_sql'),
-              );
-              const origins = keptQueryOrigins(
-                attempts.map((records) => analyseQueriesOf(records)),
-                kept,
-              );
-              return origins
-                ? origins.map(
-                    ({ attempt, index }) => attempts[attempt - 1][index],
-                  )
-                : data;
-            };
-            try {
-              // The turn's stop reaches the designer: a call in flight is
-              // aborted and no further attempt starts (the catch below).
-              const metadata = await this.deps.buildVisual(
-                id,
-                {
-                  question,
-                  answer,
-                  at: answerAt,
-                  data: keptRecords(queries),
-                  ...(instruction !== undefined ? { instruction } : {}),
-                  ...(imageNotes?.trim() ? { reference: imageNotes } : {}),
-                  // Ryan on v2's own model and effort (agents.md 1.3).
-                  ...(stepModel ? { stepModel } : {}),
-                },
-                turn.signal,
-              );
-              // Stored before the stop: the step still names it, so the run
-              // logs it and it stays one click away.
-              return {
-                visual: { visualId: metadata.id, title: metadata.title },
-                stopped: turn.signal.aborted,
-              };
-            } catch (error) {
-              if (turn.signal.aborted) return stop();
-              return {
-                visual: {
-                  error: error instanceof Error ? error.message : String(error),
-                },
-                stopped: false,
-              };
-            }
-          },
-          // A change asked on Ryan's approval gate (workflows R44): Zoe reads
-          // any new reference images, then Ryan makes a new version of the
-          // visual from the user's words and her notes. Never a failed run.
-          reviseVisual: async ({ visualId, instruction, images }) => {
-            const stop = () => ({ visual: {}, stopped: true });
-            if (turn.signal.aborted) return stop();
-            try {
-              const notes = images?.length
-                ? (
-                    await readImagesOn(
-                      { question: instruction, images },
-                      turn.signal,
-                    )
-                  ).imageNotes
-                : '';
-              if (turn.signal.aborted) return stop();
-              const metadata = await this.deps.reviseVisual(
-                id,
-                visualId,
-                {
-                  instruction,
-                  ...(notes.trim() ? { reference: notes } : {}),
-                  ...(stepModel ? { stepModel } : {}),
-                },
-                turn.signal,
-              );
-              return {
-                visual: { visualId: metadata.id, title: metadata.title },
-                stopped: turn.signal.aborted,
-              };
-            } catch (error) {
-              if (turn.signal.aborted) return stop();
-              return {
-                visual: {
-                  error: error instanceof Error ? error.message : String(error),
-                },
-                stopped: false,
-              };
-            }
           },
           // Clara's build (agents.md 2.22, 5.22): her turn inside this
           // turn's stream, through the same consumer as Michael's, without
@@ -1533,12 +1243,7 @@ export class TurnEngine {
               };
             }
           },
-          deliverAnswer: (answer) => {
-            text = answer;
-            emit({ type: 'text', content: answer });
-            return Promise.resolve();
-          },
-          // Avery's turn (agents.md 5.22): the team as her tools; her answer
+          // Avery's turn (agents.md 5.23): the team as her tools; her answer
           // is delivered once she is done (only she talks to the user).
           orchestrate: async (input, team: OrchestratorTeam) => {
             // The conversation's dashboard (the follow-up carry, 5.22): its
@@ -1558,7 +1263,6 @@ export class TurnEngine {
                 signal: turn.signal,
                 datasets: session.datasets,
                 images: [...(session.inputImages ?? [])],
-                buildsVisual: session.buildVisual === true,
                 // The dashboard gate (2.21): the message asks for one, or
                 // the conversation has one.
                 buildsDashboard:
@@ -1585,8 +1289,8 @@ export class TurnEngine {
                 ...(session.contextQueries?.length
                   ? { earlierQueries: session.contextQueries }
                   : {}),
-                // Her team in this workflow (Avery + Michael: Michael alone).
-                tools: orchestratorTeamOf(workflow.id).tools,
+                // Her tools (agents.md 5.23).
+                tools: AVERY_TEAM.tools,
                 ...(orchestratorModel ? { orchestratorModel } : {}),
                 ...(orchestratorProviderOptions
                   ? { providerOptions: orchestratorProviderOptions }
@@ -1599,74 +1303,6 @@ export class TurnEngine {
               emit({ type: 'text', content: done.answer });
             }
             return done;
-          },
-          // A follow-up that asks Write answer alone (agents.md 5.21): the
-          // earlier answer's records come into this answer with their
-          // evidence, so its sources stay one click from its figures; the
-          // checks are those records' own, plus the earlier quality ones.
-          earlierAnswer: (): EarlierAnswerInput => {
-            const earlier = session.ask?.earlier;
-            const records = carryEarlierRecords();
-            const stored = planSchema.safeParse(earlier?.plan);
-            const plan = stored.success
-              ? stored.data
-              : planOf(undefined, trimmed);
-            const queries = analyseQueriesOf(records);
-            const { findings } = validateAttempt({
-              plan,
-              calls: analyseOutcomeOf(records, false).calls,
-              queries,
-            });
-            return {
-              plan,
-              queries,
-              findings: [...findings, ...(earlier?.qualityFindings ?? [])],
-              imageNotes: earlier?.imageNotes ?? '',
-            };
-          },
-          // A follow-up that asks Build visual alone (agents.md 5.21): the
-          // earlier answer's records come into this answer as for Write
-          // answer, and Ryan charts their rows.
-          earlierVisual: (): EarlierVisualInput => {
-            const earlier = session.ask?.earlier;
-            return {
-              question: earlier?.question || trimmed,
-              answer: earlier?.answer ?? '',
-              queries: analyseQueriesOf(carryEarlierRecords()),
-              imageNotes: earlier?.imageNotes ?? '',
-            };
-          },
-          writeAnswer: async ({ quiet, ...written }) => {
-            try {
-              // Zoe's notes only when the run has images (agents.md 5.11).
-              // An answer that waits on its approval gate is not streamed:
-              // the step delivers it once approved (workflows R44).
-              const result = await this.deps.mastra.writeAnswer(
-                withImageNotes(written),
-                {
-                  ...stepModelOf(ANSWER_WRITER_AGENT_KEY),
-                  ...(quiet
-                    ? {}
-                    : {
-                        onText: (delta: string) => {
-                          text += delta;
-                          emit({ type: 'text', content: delta });
-                        },
-                      }),
-                },
-              );
-              // The stored answer is the step's whole answer.
-              if (result.answer.answer) text = result.answer.answer;
-              return {
-                answer: result.answer,
-                stopped: result.stopped || turn.signal.aborted,
-                ...(result.clarification
-                  ? { clarification: result.clarification }
-                  : {}),
-              };
-            } catch (error) {
-              throw await stepError(error);
-            }
           },
           answer: async () => {
             // The idle deadline (workflows R43): a Stop is never a timeout.
@@ -2359,7 +1995,7 @@ export class TurnEngine {
                 : exported
                   ? `Exported "${exported.title}".`
                   : readinessAnswerFallback(readinessReport!)),
-          at: answerAt ?? new Date().toISOString(),
+          at: new Date().toISOString(),
           ...(data.length ? { data } : {}),
           ...(evidence.length ? { evidence } : {}),
           ...(entities.length ? { entities } : {}),
@@ -2389,8 +2025,8 @@ export class TurnEngine {
 
   /**
    * Run one turn as a run of the session's workflow (agents.md 5.1, 5.11,
-   * 5.12; ADR-0034, ADR-0040): `answer-business-question` hands its Analyse step
-   * `runtime.analyse`, `agent-turn` hands its Answer step `runtime.answer`.
+   * 5.12; ADR-0034, ADR-0040): `orchestrated-answer-michael` hands Avery's
+   * step `runtime.orchestrate`, `agent-turn` hands its Answer step `runtime.answer`.
    * Only a workflow whose steps drive the bar (`bar: 'steps'`) writes the
    * session's workflow state from the run's step events and emits each
    * change as `workflow`; a one-step workflow never does (agent-panel R15).
@@ -2519,13 +2155,7 @@ export class TurnEngine {
     workflow: TurnWorkflow,
     question: string,
     emit: (event: StreamEvent) => void,
-    runtime: AnswerBusinessQuestionRuntime &
-      Required<
-        Pick<
-          AnswerBusinessQuestionRuntime,
-          'buildVisual' | 'reviseVisual' | 'deliverAnswer'
-        >
-      > &
+    runtime: AnalyseRuntime &
       AgentTurnRuntime &
       DataReadinessAssessmentRuntime &
       RecreateDashboardRuntime &
@@ -2534,19 +2164,13 @@ export class TurnEngine {
       ReviewWebsiteRuntime & {
         /** Its names overlap the others' (readDashboard, saveReport): kept apart. */
         consumptionGap: ConsumptionGapRuntime;
-        /** A follow-up that asks Write answer alone (agents.md 5.21). */
-        earlierAnswer: () => EarlierAnswerInput;
-        /** Avery's turn, with her team (agents.md 5.22). */
+        /** Avery's turn, with her team (agents.md 5.23). */
         orchestrate: (
-          input: Parameters<OrchestratedAnswerRuntime['orchestrate']>[0],
+          input: Parameters<OrchestratedMichaelRuntime['orchestrate']>[0],
           team: OrchestratorTeam,
-        ) => ReturnType<OrchestratedAnswerRuntime['orchestrate']>;
+        ) => ReturnType<OrchestratedMichaelRuntime['orchestrate']>;
         /** Clara's build, one of Avery's team calls (agents.md 5.22). */
         buildDashboard: NonNullable<OrchestratorTeam['buildDashboard']>;
-        /** A follow-up that asks Build visual alone (agents.md 5.21). */
-        earlierVisual: () => EarlierVisualInput;
-        /** Its designer call, the follow-up as Ryan's instruction. */
-        buildVisual: AskAgentRuntime['buildVisual'];
       },
     onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<TurnRunOutcome> {
@@ -2567,38 +2191,19 @@ export class TurnEngine {
     const mapping = workflow.engineId === MAP_DASHBOARD_DATA_WORKFLOW_ID;
     const review = workflow.engineId === REVIEW_WEBSITE_WORKFLOW_ID;
     const gap = workflow.engineId === CONSUMPTION_GAP_WORKFLOW_ID;
-    const ask = workflow.engineId === ASK_AGENT_WORKFLOW_ID;
-    const orchestrated = workflow.engineId === ORCHESTRATED_ANSWER_WORKFLOW_ID;
+    const orchestrated = workflow.engineId === ORCHESTRATED_MICHAEL_WORKFLOW_ID;
     if (orchestrated) {
-      // Answer a Business Question (orchestrated): Avery calls the team
-      // through the same calls Answer a Business Question's steps make.
-      requestContext.set(ORCHESTRATED_ANSWER_RUNTIME_KEY, {
+      // Answer a Business Question (Avery + Michael) (agents.md 5.23): Avery
+      // calls Michael's analysis and Clara's build as her team.
+      requestContext.set(ORCHESTRATED_MICHAEL_RUNTIME_KEY, {
         orchestrate: (input) =>
           captured(() =>
             runtime.orchestrate(input, {
-              readImages: (read) => runtime.readImages(read),
-              plan: (planned) => runtime.plan(planned),
               analyse: (attempt) => runtime.analyse(attempt),
-              writeAnswer: (written) => runtime.writeAnswer(written),
-              buildVisual: (built) => runtime.buildVisual(built),
               buildDashboard: (built) => runtime.buildDashboard(built),
             }),
           ),
-      } satisfies OrchestratedAnswerRuntime);
-    } else if (ask) {
-      // A follow-up that asks one agent (agents.md 5.21): the same calls
-      // the workflow's own steps make, on this turn's records.
-      requestContext.set(ASK_AGENT_RUNTIME_KEY, {
-        answer: () => captured(() => runtime.answer()),
-        readImages: (input) => captured(() => runtime.readImages(input)),
-        plan: (input) => captured(() => runtime.plan(input)),
-        earlierAnswer: () => runtime.earlierAnswer(),
-        writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
-        earlierVisual: () => runtime.earlierVisual(),
-        buildVisual: (input: Parameters<AskAgentRuntime['buildVisual']>[0]) =>
-          captured(() => runtime.buildVisual(input)),
-        deliverAnswer: (answer) => runtime.deliverAnswer(answer),
-      } satisfies AskAgentRuntime);
+      } satisfies OrchestratedMichaelRuntime);
     } else if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
@@ -2707,19 +2312,6 @@ export class TurnEngine {
         recommendFixes: (input) => captured(() => parts.recommendFixes(input)),
         saveReport: (input) => captured(() => parts.saveReport(input)),
       } satisfies ConsumptionGapRuntime);
-    } else {
-      requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
-        // A run host's turn (workflows R44): its agents ask and wait.
-        ...(runtime.interactive ? { interactive: true } : {}),
-        plan: (input) => captured(() => runtime.plan(input)),
-        analyse: (input) => captured(() => runtime.analyse(input)),
-        // Only a run host whose input ticked it (agents.md 5.11).
-        buildsVisual: session.buildVisual === true,
-        buildVisual: (input) => captured(() => runtime.buildVisual(input)),
-        reviseVisual: (input) => captured(() => runtime.reviseVisual(input)),
-        writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
-        deliverAnswer: (answer) => runtime.deliverAnswer(answer),
-      } satisfies AnswerBusinessQuestionRuntime);
     }
     // Read images, the optional first step of every workflow but the
     // agent turn, Dashboard Image to Artifact and Consumption Gap Analysis,
@@ -2729,11 +2321,6 @@ export class TurnEngine {
     if (readsImages) {
       requestContext.set(READ_IMAGES_RUNTIME_KEY, {
         readImages: (input) => captured(() => runtime.readImages(input)),
-        // Only a run of Answer a Business Question waits on Zoe (R44).
-        ...(runtime.interactive &&
-        workflow.engineId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID
-          ? { interactive: true }
-          : {}),
       } satisfies ReadImagesRuntime);
     }
     // The run's reference images (their stored paths), only when it has
@@ -2748,8 +2335,7 @@ export class TurnEngine {
     // Consumption Gap Analysis on the run's questions and datasets, its
     // saved dashboard ('' when none) and its reference dashboards (5.20).
     const turnInput:
-      | AnswerBusinessQuestionInput
-      | AskAgentInput
+      | QuestionInput
       | { question: string; dataset: string; images?: string[] }
       | { question: string; image: string }
       | {
@@ -2758,36 +2344,28 @@ export class TurnEngine {
           datasets: string[];
           images?: string[];
         }
-      | ReviewWebsiteInput = ask
-      ? // The asked step, over the run's datasets and images (5.21).
-        {
-          question,
-          datasets: session.datasets,
-          askStep: session.ask?.step as AskableStepId,
-          ...images,
-        }
-      : review
-        ? // Review a Website reads the whole form (agents.md 5.19).
-          reviewWebsiteInputOf(session.inputValues ?? { url: question })
-        : gap
-          ? {
-              question,
-              datasets: session.datasets,
-              artifact: session.inputArtifact ?? '',
-              images: [...(session.inputImages ?? [])],
-            }
-          : recreate
-            ? { question, image: session.inputImage ?? '' }
-            : mapping
-              ? {
-                  question,
-                  artifact: session.inputArtifact ?? '',
-                  datasets: session.datasets,
-                  ...images,
-                }
-              : readiness
-                ? { question, dataset: session.datasets[0] ?? '', ...images }
-                : { question, datasets: session.datasets, ...images };
+      | ReviewWebsiteInput = review
+      ? // Review a Website reads the whole form (agents.md 5.19).
+        reviewWebsiteInputOf(session.inputValues ?? { url: question })
+      : gap
+        ? {
+            question,
+            datasets: session.datasets,
+            artifact: session.inputArtifact ?? '',
+            images: [...(session.inputImages ?? [])],
+          }
+        : recreate
+          ? { question, image: session.inputImage ?? '' }
+          : mapping
+            ? {
+                question,
+                artifact: session.inputArtifact ?? '',
+                datasets: session.datasets,
+                ...images,
+              }
+            : readiness
+              ? { question, dataset: session.datasets[0] ?? '', ...images }
+              : { question, datasets: session.datasets, ...images };
     let state = session.workflowState;
     // A new run starts the bar over at its first step event, whichever step
     // that is: Read images, step 1, is optional, so a run without images
@@ -2891,14 +2469,6 @@ export class TurnEngine {
             : {}),
           discard,
         };
-      }
-      const summary =
-        result.status === 'success' ? turnSummaryOf(result.result) : undefined;
-      if (summary) {
-        const { answer, ...counts } = summary;
-        this.deps.logger.log(
-          `Insights Analyst turn in session ${session.id}: ${JSON.stringify({ ...counts, answerLength: answer.length })}`,
-        );
       }
       return { status: 'done' };
     };

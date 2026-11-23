@@ -1,8 +1,7 @@
 /**
- * Avery's job description (agents.md 2.21, 5.22): the instructions of the
- * Chief of Staff, the orchestrator of Answer a Business Question
- * (orchestrated). Editable in the app like every built-in prompt
- * (ADR-0026).
+ * Avery's job description (agents.md 2.21, 5.23): the instructions of the
+ * Chief of Staff, the orchestrator of Answer a Business Question (Avery +
+ * Michael). Editable in the app like every built-in prompt (ADR-0026).
  *
  * Built from three sources (2026-11-20):
  * - Mastra's supervisor-agent guidance: name the resources, when to use
@@ -17,44 +16,17 @@
  *   bottom line. Adapted to a data team; its C-suite roles are not used.
  */
 
+import type { AnalysisPlan } from './analysis.steps';
+
 /** The first line: who Avery is. */
 export const ORCHESTRATOR_FIRST_LINE =
   'You are Avery, the Chief of Staff of a data team. You are the only person the user talks to: you decide who on the team works on their question, brief them, check what they bring back and hand the user one answer.';
 
-export const ORCHESTRATOR_INSTRUCTIONS = `${ORCHESTRATOR_FIRST_LINE}
-
-## Your team (your tools)
-- read_reference_images: Zoe, Image Analyst. Describes the reference images the user attached (charts, dashboards, tables). Call it first when the request says the run has images, and never otherwise.
-- plan_analysis: Olivia, Analysis Lead. Turns the question into a plan: measures, tables, scope, assumptions. Reads no data. She may report that the question can be read more than one way, with the options she sees.
-- analyse_data: Michael, Insights Analyst. Runs read-only SQL over the user's datasets, following the plan, and reports each query with its rows and the checks on them. Give him a brief: what to find and anything the plan or the user added.
-- write_answer: Jessica, Insights Writer. Writes the answer for the user from Michael's results. Her answer is what the user reads, with every figure linked to the query behind it.
-- build_visual: Ryan, Visualization Designer. Charts the rows behind the written answer. Only available when the run builds a visual.
-- build_dashboard: Clara, Business Intelligence Analyst. Builds an interactive dashboard on the user's real rows, or changes the conversation's dashboard into its next version. Only available when the user asked for a dashboard or the conversation has one.
-- ask_clarification: asks the user one question with 2-4 options. The run waits for their answer, then you continue.
-
-## How to work
-1. Before your first call to the team, load the "avery-playbooks" skill. It tells you which playbook fits the request; read that playbook and follow its steps.
-2. Read every result before the next call. When a result surprises you (a failed check, no rows, a result that contradicts the question), go back to the skill: it names the playbook for that case.
-3. Finish with one or two sentences for the user, as the playbook's Reply says: the bottom line first, then anything they should know. Do not repeat Jessica's answer: the user sees it.
-
-## Rules
-- Plan before data: always call plan_analysis before analyse_data.
-- Call analyse_data at most twice in a run.
-- You are the only one who talks to the user. Your team never asks the user anything; you decide whether a question is worth asking.
-- Ask the user at most once per run, and only when the answer changes the analysis. Never ask what the plan can assume.
-- One call per need: never call the same specialist twice for the same thing, and never call a tool in a loop.
-- Never invent figures. Every number the user reads comes from Michael's queries through Jessica's answer.
-- When results disagree with the question's premise, or with each other, say so plainly in your closing sentences. Do not smooth it over.
-- If the datasets cannot answer any part of the question, say what is missing in your closing sentences, without calling write_answer. When they cover only part of it (fewer years, fewer matches), have Jessica answer that part and say the limit.
-- Your team does not read the conversation as you do. Every brief to Olivia, Michael or Jessica starts with the user's question restated so it stands alone; on a follow-up, resolve words like "it", "each one" or "and by region" from the conversation.
-- Build a dashboard only when the user asks for one, or for a change to the conversation's dashboard: then read the dashboard playbook and call build_dashboard. A chart, a table or a ranking is no dashboard.
-`;
-
 /**
  * Avery's job description in Answer a Business Question (Avery + Michael)
- * (agents.md 5.23): the same Chief of Staff with a team of one. Michael
- * plans, queries and writes the answer; she briefs him, reads it and closes.
- * Shipped only: an in-app edit of her prompt is her whole team's.
+ * (agents.md 5.23): the Chief of Staff with Michael, who plans, queries and
+ * writes the answer; she briefs him, reads it and closes. Her shipped,
+ * editable prompt (ADR-0026).
  */
 export const ORCHESTRATOR_MICHAEL_INSTRUCTIONS = `${ORCHESTRATOR_FIRST_LINE}
 
@@ -81,7 +53,7 @@ export const ORCHESTRATOR_MICHAEL_INSTRUCTIONS = `${ORCHESTRATOR_FIRST_LINE}
 
 /**
  * export_conversation in Avery's team list (agents.md 2.21, 3.18), put
- * before ask_clarification in both of her job descriptions.
+ * before ask_clarification in her job description.
  */
 export const EXPORT_TEAM_LINE =
   '- export_conversation: exports the whole conversation (each earlier question, its answer and its dashboard) to a PDF and a PowerPoint the user downloads and shares. You write its title, summary and headlines from the answers; your team does no new work for it. Only available when the user asked to export or share the conversation.';
@@ -103,4 +75,63 @@ export function withExportInstructions(instructions: string): string {
     return `${[...lines, EXPORT_TEAM_LINE, EXPORT_RULE].join('\n')}\n`;
   lines.splice(at, 0, EXPORT_TEAM_LINE);
   return `${[...lines, EXPORT_RULE].join('\n')}\n`;
+}
+
+/** Michael on his own (Avery + Michael): told he plans and writes the answer. */
+export const MICHAEL_ALONE_LINE =
+  'You work alone with Avery in this run: no one plans before you and no one writes after you. Plan the analysis yourself from her brief, and write your reply as the answer the user reads.';
+
+/** The plan Michael works from on his own: the user's question, nothing planned. */
+export function briefPlan(question: string): AnalysisPlan {
+  return {
+    question,
+    measures: [],
+    entities: [],
+    scope: '',
+    assumptions: [],
+    needsClarification: false,
+    clarification: null,
+  };
+}
+
+/**
+ * Michael's request on his own (agents.md 5.23), the block after the
+ * catalog's: Avery's brief, the line that says he plans and writes the
+ * answer, then the queries behind the last answer when there are some
+ * (`earlier`, '' when none).
+ */
+export function michaelAloneRequest(brief: string, earlier = ''): string {
+  return [
+    `Brief from Avery, the Chief of Staff: ${brief}`,
+    '',
+    MICHAEL_ALONE_LINE,
+    ...(earlier ? ['', earlier] : []),
+  ].join('\n');
+}
+
+/** A list in the plan's Markdown, or `none` when it is empty. */
+function reviewList(items: readonly string[]): string[] {
+  return items.length ? items.map((item) => `- ${item}`) : ['- none'];
+}
+
+/**
+ * The plan Michael worked from, as a resumed Avery reads it in the work so
+ * far (agents.md 5.23): the question as planned, the measures, entities,
+ * scope and assumptions.
+ */
+export function planReview(plan: AnalysisPlan): string {
+  return [
+    `**Question:** ${plan.question}`,
+    '',
+    '**Measures**',
+    ...reviewList(plan.measures),
+    '',
+    '**Entities**',
+    ...reviewList(plan.entities),
+    '',
+    `**Scope:** ${plan.scope || 'none given'}`,
+    '',
+    '**Assumptions**',
+    ...reviewList(plan.assumptions),
+  ].join('\n');
 }

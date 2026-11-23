@@ -19,13 +19,13 @@ import type {
 import {
   contractStepEntry,
   type ContractStepEntry,
+  type WorkflowEdge,
   type WorkflowStepExit,
-} from './answer-business-question.steps';
+} from './workflow-contract';
 import {
   READ_IMAGES_STEP_ID,
   READ_IMAGES_STEP_TITLE,
 } from './read-images.steps';
-import type { WorkflowEdge } from './workflow-contract';
 
 /** The workflow's registry key and id. */
 export const DATA_READINESS_ASSESSMENT_WORKFLOW_ID =

@@ -6,16 +6,12 @@ import type {
   AnsweredClarification,
   CheckedAttempt,
   TurnCallsOutcome,
-} from '../../../mastra/workflows/answer-business-question.steps';
-import { earlierQueriesBlock } from '../../../mastra/workflows/answer-business-question.prompts';
+} from '../../../mastra/workflows/analysis.steps';
+import { earlierQueriesBlock } from '../../../mastra/workflows/analysis.prompts';
 import {
   AGENT_TURN_STEPS,
   AGENT_TURN_WORKFLOW_ID,
 } from '../../../mastra/workflows/agent-turn.steps';
-import {
-  ASK_AGENT_WORKFLOW_ID,
-  isAskableStep,
-} from '../../../mastra/workflows/ask-agent.steps';
 import {
   parseWorkflowId,
   sessionWorkflowId,
@@ -25,9 +21,9 @@ import type { SessionDoc, ToolDataRecord } from '../entities/session.entity';
 
 /** A session's workflow as its turn runs it (agents.md 5.12, ADR-0040). */
 export interface TurnWorkflow {
-  /** The catalogue id: `answer-business-question`, `agent:<key>` or `agent:<user-agent id>`. */
+  /** The catalogue id (`orchestrated-answer-michael`, …), `agent:<key>` or `agent:<user-agent id>`. */
   id: string;
-  /** The registered Mastra workflow the turn runs. */
+  /** The registered Mastra workflow the turn runs: a code workflow's own id, or `agent-turn`. */
   engineId: string;
   /** What drives the bar: the run's step events, or the agent's own phases. */
   bar: WorkflowBar;
@@ -42,22 +38,11 @@ export interface TurnWorkflow {
  */
 export function turnWorkflowOf(session: SessionDoc): TurnWorkflow {
   const id = sessionWorkflowId(session);
-  // A follow-up that asks one agent alone (agents.md 5.21): the asked step
-  // is the engine's one step, whatever agent the host is bound to.
-  if (session.ask && isAskableStep(session.ask.step)) {
-    return {
-      id,
-      engineId: ASK_AGENT_WORKFLOW_ID,
-      bar: 'agent',
-      stepIds: [session.ask.step],
-    };
-  }
   const parsed = parseWorkflowId(id);
   if (parsed?.kind === 'code' && !session.contextBlock) {
     return {
       id,
-      // A workflow may run on another one's engine (Avery + Michael).
-      engineId: parsed.source.engine ?? parsed.source.id,
+      engineId: parsed.source.id,
       bar: parsed.source.bar,
       stepIds: parsed.source.steps.map((step) => step.id),
     };
@@ -91,16 +76,6 @@ export function analyseOutcomeOf(
     })),
     stopped,
   };
-}
-
-/** A Wrap up summary, as the v2 turn workflow returns it. */
-export function isTurnSummary(value: unknown): value is Record<string, number> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'sqlQueries' in value &&
-    'rows' in value
-  );
 }
 
 /**

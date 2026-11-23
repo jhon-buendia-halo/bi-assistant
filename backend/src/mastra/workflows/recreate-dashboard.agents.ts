@@ -19,12 +19,12 @@ import {
   replyText,
   stoppedBy,
   type StepModelOptions,
-} from './answer-business-question.agents';
+} from './step-agents';
 import {
   jsonObjectOf,
   type CatalogEntity,
   type EntityColumns,
-} from './answer-business-question.steps';
+} from './analysis.steps';
 import {
   mapDataRequest,
   readDashboardRequest,

@@ -177,7 +177,7 @@ describe('insights-analyst eval target', () => {
     expect(load).toHaveBeenCalledTimes(1);
   });
 
-  it('runs each case as the whole answer-business-question workflow on the agent (agents.md 8.1)', () => {
+  it("runs each case as Avery's answer_from_data runs Michael (agents.md 8.1, 5.23)", () => {
     const agent = { id: 'insights-analyst' } as unknown as Agent;
     const wholeTurn = jest.fn(() => ({ id: 'whole-turn' }) as unknown as Agent);
     const target = insightsAnalystEvalTarget(() => agent, undefined, wholeTurn);

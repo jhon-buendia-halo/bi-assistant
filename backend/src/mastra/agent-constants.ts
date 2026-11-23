@@ -34,8 +34,8 @@ export const OFFICIAL_AGENT_KEYS: readonly string[] = [
 ];
 
 /**
- * The agents of the two model-only steps of `answer-business-question` (agents.md 5.11):
- * Plan and Write answer. System agents: the workflow calls them.
+ * Olivia and Jessica, the planner and the writer (agents.md 5.11): System
+ * agents of the library, each called in one model call without tools.
  */
 export const ANALYSIS_PLANNER_AGENT_KEY = 'analysis-planner';
 export const ANSWER_WRITER_AGENT_KEY = 'answer-writer';

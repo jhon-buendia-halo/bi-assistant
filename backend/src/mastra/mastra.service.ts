@@ -13,10 +13,6 @@ import type { RequestContext } from '@mastra/core/request-context';
 import { explainQueryWithModel } from './agents/query-explainer.agent';
 import { interpretResultWithModel } from './agents/result-explorer.agent';
 import {
-  planWithModel,
-  writeAnswerWithModel,
-} from './workflows/answer-business-question.agents';
-import {
   mapDataWithModel,
   readDashboardWithModel,
 } from './workflows/recreate-dashboard.agents';
@@ -94,26 +90,6 @@ export class MastraService {
   }
 
   /**
-   * Insights Analyst's Plan step model call (agents.md 5.11): the
-   * agent's model, no tools, the plan read from its reply.
-   */
-  planAnalysis(
-    ...args: Parameters<typeof planWithModel>
-  ): ReturnType<typeof planWithModel> {
-    return planWithModel(...args);
-  }
-
-  /**
-   * Insights Analyst's Write answer step model call (agents.md
-   * 5.11): the agent's model, no tools, the answer streamed to `onText`.
-   */
-  writeAnswer(
-    ...args: Parameters<typeof writeAnswerWithModel>
-  ): ReturnType<typeof writeAnswerWithModel> {
-    return writeAnswerWithModel(...args);
-  }
-
-  /**
    * The query inspector's explanation of one stored query (api.md 140): the
    * `query-explainer` agent's model, no tools, the steps read from her reply.
    */
@@ -146,8 +122,8 @@ export class MastraService {
   }
 
   /**
-   * The Read images step model call of Answer a Business Question, Assess
-   * Data Readiness and Map a Dashboard to Data (agents.md 2.15; workflows
+   * The Read images step model call of Assess Data Readiness and Map a
+   * Dashboard to Data (agents.md 2.15; workflows
    * R35): Zoe, the Image Reader, over every reference image of the run in
    * one call, her notes rendered from the reply. A model error rejects.
    */

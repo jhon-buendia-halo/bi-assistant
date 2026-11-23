@@ -240,6 +240,29 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
         },
       ],
       [
+        'a past chat of a removed workflow: its name on the chip (M18)',
+        { workflowId: 'orchestrated-answer', agentKey: 'insights-analyst' },
+        {
+          id: 'orchestrated-answer',
+          name: 'Answer a Business Question (orchestrated)',
+          kind: 'code',
+          deleted: false,
+        },
+      ],
+      [
+        "an Avery + Michael run host's",
+        {
+          workflowId: 'orchestrated-answer-michael',
+          agentKey: 'insights-analyst',
+        },
+        {
+          id: 'orchestrated-answer-michael',
+          name: 'Answer a Business Question (Avery + Michael)',
+          kind: 'code',
+          deleted: false,
+        },
+      ],
+      [
         'an unresolvable stored workflowId',
         { workflowId: 'removed-workflow', agentKey: 'insights-analyst' },
         {
@@ -260,12 +283,14 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
       }
     });
 
-    it('never stores workflowRef, and leaves `workflow` (the bar) as it was', async () => {
+    it('never stores workflowRef, and shows no bar for a past chat of a removed workflow', async () => {
       const { service } = build();
       const session = doc({ agentKey: 'insights-analyst' });
       const view = await service.toView(session);
       expect(session).not.toHaveProperty('workflowRef');
-      expect(view.workflow?.source).toBe('workflow');
+      // Its steps went with the workflow: no fixed steps, no bar.
+      expect(service.effectiveWorkflowFor(session)).toEqual([]);
+      expect(view.workflow).toBeUndefined();
     });
   });
 });

@@ -13,7 +13,7 @@ import {
 } from '../agents/query-explainer.prompts';
 import { DATASETS_CONTEXT_KEY } from '../tools/dataset.tools';
 import { answerResult } from './query-explainer-eval-answer';
-import { lastUserText } from './insights-analyst-workflow-target';
+import { lastUserText } from './insights-analyst-target';
 
 /**
  * The `query-explainer` eval target's turn (agents.md 8.1, 2.12): a case is

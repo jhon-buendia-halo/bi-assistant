@@ -1,10 +1,10 @@
 /**
- * The turn workflow of Insights Analyst (ADR-0034; agents.md 5.11):
- * its step ids and titles, the edges between them, the contract between its
- * model steps and the session code, and the pure code of its deterministic
- * steps. Plain data and functions (its schemas are ./answer-business-question.schemas.ts),
- * no framework import, so the session code and the tests can read it without
- * loading Mastra; the workflow itself is built in ./answer-business-question.workflow.ts.
+ * Michael's analysis (agents.md 5.11, 5.23): the catalog his request
+ * carries, the checks on his queries, a waiting step's question, and the
+ * types of the plan, the queries and the answer that Olivia's and Jessica's
+ * model calls (./step-agents.ts) share with him. Plain data and functions
+ * (its schemas are ./analysis.schemas.ts), no framework import, so the
+ * session code and the tests can read it without loading Mastra.
  */
 import type { z } from 'zod';
 import { coverageOf } from '../../modules/sessions/query-evidence/query-coverage';
@@ -18,286 +18,18 @@ import {
   sqlReadsTable,
 } from '../data-dates';
 import {
-  ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
   answerSchema,
   planSchema,
-  answerBusinessQuestionResultSchema,
   type analyseCallSchema,
   type analyseOutcomeSchema,
   type analyseQuerySchema,
   type answeredClarificationSchema,
   type catalogEntitySchema,
   type clarifyingQuestionSchema,
-  type builtVisualSchema,
-  type answerBusinessQuestionInputSchema,
+  type questionInputSchema,
   type entityColumnsSchema,
-  type turnSummarySchema,
-  type validateOutcomeSchema,
   type validationFindingSchema,
-} from './answer-business-question.schemas';
-import { readImagesEdges, readImagesStepEntry } from './read-images.steps';
-import type { Revision } from './answer-business-question.review';
-import {
-  contractJsonSchema,
-  schemaFieldNames,
-  type JsonSchema,
-  type WorkflowEdge,
-} from './workflow-contract';
-
-export type { WorkflowEdge } from './workflow-contract';
-
-/** The workflow's registry key and id. */
-export const ANSWER_BUSINESS_QUESTION_WORKFLOW_ID = 'answer-business-question';
-
-/**
- * The name the app shows for the workflow (workflows R1). Michael, the
- * `insights-analyst` agent, runs it; the agent and its prompts keep the name
- * Insights Analyst. A stored run keeps the name it ran under.
- */
-export const ANSWER_BUSINESS_QUESTION_WORKFLOW_NAME =
-  'Answer a Business Question';
-
-/** How a step can end other than by passing its output on. */
-export interface WorkflowStepExit {
-  /**
-   * The rest of the sentence the app writes about the exit, after `Fails
-   * if`, `Ends if` or `Waits`: a condition in lower case with no
-   * full stop (`the model returns an error`, `you stop it`); a `waits`
-   * exit brings its own connector (`if it asks you a question`).
-   */
-  label: string;
-  /**
-   * `fails`: the run stops with an error; `stops`: it ends early; `waits`:
-   * the run is suspended until the user answers (api.md 138).
-   */
-  outcome: 'fails' | 'stops' | 'waits';
-}
-
-/**
- * One step of a code-defined turn workflow, as the step catalogue describes
- * it (agents.md 5.11): the workflow bar reads `id` and `title`, the agent's
- * Graph tab all of it (agents-evals R108). `input` and `output` name the
- * fields of the step's schemas, in schema order: a catalogued workflow's
- * steps derive them from their declared schemas (`inputSchema`,
- * `outputSchema`; agents.md 5.12).
- */
-export interface WorkflowStepEntry {
-  id: string;
-  title: string;
-  kind: 'code' | 'agent';
-  summary: string;
-  input: readonly string[];
-  output: readonly string[];
-  exits: readonly WorkflowStepExit[];
-  /**
-   * An agent step that calls its agent's model without its tools (Plan,
-   * Write answer): its own tools (none) and its one model call.
-   */
-  modelOnly?: true;
-  /** The step's declared input, as JSON Schema (catalogued workflows). */
-  inputSchema?: JsonSchema;
-  /** The step's declared output, as JSON Schema (catalogued workflows). */
-  outputSchema?: JsonSchema;
-}
-
-/** A catalogued step: its field names and JSON Schemas derived from its Zod schemas. */
-export type ContractStepEntry = WorkflowStepEntry & {
-  inputSchema: JsonSchema;
-  outputSchema: JsonSchema;
-};
-
-/** A step's catalogue entry from its description and its declared schemas. */
-export function contractStepEntry(
-  step: Omit<
-    WorkflowStepEntry,
-    'input' | 'output' | 'inputSchema' | 'outputSchema'
-  >,
-  schemas: { input: z.ZodType; output: z.ZodType },
-): ContractStepEntry {
-  const inputSchema = contractJsonSchema(schemas.input, 'input');
-  const outputSchema = contractJsonSchema(schemas.output, 'output');
-  return {
-    ...step,
-    input: schemaFieldNames(inputSchema),
-    output: schemaFieldNames(outputSchema),
-    inputSchema,
-    outputSchema,
-  };
-}
-
-const SCHEMAS = ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS;
-
-const MODEL_EXITS: readonly WorkflowStepExit[] = [
-  { label: 'the model returns an error', outcome: 'fails' },
-  { label: 'you stop it', outcome: 'stops' },
-];
-
-/** A step agent asks the user first (an interactive run, workflows R44). */
-const ASKS_EXIT: WorkflowStepExit = {
-  label: 'if it asks you a question',
-  outcome: 'waits',
-};
-
-/** Its outcome waits on the approval gate (an interactive run, R44). */
-const APPROVAL_EXIT: WorkflowStepExit = {
-  label: 'until you approve its work',
-  outcome: 'waits',
-};
-
-/**
- * The steps, in catalogue order, one line from Read images to Wrap up: the session's
- * workflow bar shows them. Their field names and JSON Schemas come from
- * ./answer-business-question.schemas.ts; how they connect is `ANSWER_BUSINESS_QUESTION_EDGES`.
- */
-export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
-  // Optional (the run's reference images, workflows R35): Zoe describes
-  // them; Plan, Analyse and Write answer get her notes as text.
-  // In an interactive run (R44) Zoe may ask, and her notes wait for approval.
-  readImagesStepEntry([ASKS_EXIT, APPROVAL_EXIT]),
-  contractStepEntry(
-    {
-      id: 'receive-question',
-      title: 'Receive question',
-      kind: 'code',
-      summary:
-        'Trims the question. The input node has checked it before the run.',
-      exits: [],
-    },
-    SCHEMAS['receive-question'],
-  ),
-  contractStepEntry(
-    {
-      id: 'load-catalog',
-      title: 'Load catalog',
-      kind: 'code',
-      summary: "Lists the entities of the session's datasets. No LLM.",
-      exits: [],
-    },
-    SCHEMAS['load-catalog'],
-  ),
-  contractStepEntry(
-    {
-      id: 'plan',
-      title: 'Plan',
-      kind: 'agent',
-      summary:
-        "The agent's model plans the analysis: measures, entities, scope and assumptions. When the question can be read more than one way, it asks you first and plans with your answer. No tools.",
-      // Olivia asks in her own step: the run waits there for the answer
-      // (since 2026-11-19 there is no Clarify step). In an interactive run
-      // (R44) a clear plan waits for approval.
-      exits: [...MODEL_EXITS, ASKS_EXIT, APPROVAL_EXIT],
-      modelOnly: true,
-    },
-    SCHEMAS.plan,
-  ),
-  contractStepEntry(
-    {
-      id: 'analyse',
-      title: 'Analyse',
-      kind: 'agent',
-      summary:
-        'The agent runs the planned analysis with its tools and the catalog as context. Its text is a note, not the answer.',
-      // A clarifying question makes the run wait for the user's answer;
-      // the agent then goes on with it (agents.md 5.11, api.md 138).
-      exits: [
-        ...MODEL_EXITS,
-        ASKS_EXIT,
-        // In an interactive run (R44) each attempt waits for approval.
-        APPROVAL_EXIT,
-      ],
-    },
-    SCHEMAS.analyse,
-  ),
-  contractStepEntry(
-    {
-      id: 'validate',
-      title: 'Validate',
-      kind: 'code',
-      summary:
-        "Checks the attempt's queries: one ran, no unresolved error, no result cut at its row limit, no answer from an arbitrary sample, the plan's measures covered. No LLM.",
-      exits: [],
-    },
-    SCHEMAS.validate,
-  ),
-  contractStepEntry(
-    {
-      id: 'write-answer',
-      title: 'Write answer',
-      kind: 'agent',
-      summary:
-        "The agent's model writes the run's answer from the queries' rows and the findings. No tools.",
-      // In an interactive run (R44) she may ask, and her answer waits for
-      // approval when Build visual follows.
-      exits: [...MODEL_EXITS, ASKS_EXIT, APPROVAL_EXIT],
-      modelOnly: true,
-    },
-    SCHEMAS['write-answer'],
-  ),
-  contractStepEntry(
-    {
-      id: 'build-visual',
-      title: 'Build visual',
-      kind: 'agent',
-      summary:
-        "On unless the run turns it off (Build a visual): Ryan's model designs an interactive visual from the answer and the rows its queries returned, following Read images' notes when the run has reference images. No tools. Skipped when no query returned rows; a design that fails leaves the answer without a visual, never a failed run.",
-      // In an interactive run (R44) his visual waits for approval; a
-      // change, with reference images or not, makes a new version of it.
-      exits: [{ label: 'you stop it', outcome: 'stops' }, APPROVAL_EXIT],
-      modelOnly: true,
-    },
-    SCHEMAS['build-visual'],
-  ),
-  contractStepEntry(
-    {
-      id: 'wrap-up',
-      title: 'Wrap up',
-      kind: 'code',
-      summary:
-        "Counts the answer's SQL queries, failed queries and rows, and logs the summary.",
-      exits: [],
-    },
-    SCHEMAS['wrap-up'],
-  ),
-];
-
-/** The edges of the workflow (api.md 117), from Start to End. */
-export const ANSWER_BUSINESS_QUESTION_EDGES: readonly WorkflowEdge[] = [
-  // Start → Receive question, or through Read images when the run has images.
-  ...readImagesEdges('receive-question'),
-  { from: 'receive-question', to: 'load-catalog', kind: 'next' },
-  // One line since 2026-11-19: no follow-up branch, and Plan asks in its
-  // own step (no Clarify loop).
-  { from: 'load-catalog', to: 'plan', kind: 'next' },
-  { from: 'plan', to: 'analyse', kind: 'next' },
-  { from: 'analyse', to: 'validate', kind: 'next' },
-  {
-    from: 'validate',
-    to: 'analyse',
-    kind: 'loop',
-    label: 'Retry once',
-    note: 'A check failed: the analyst tries once more, told what failed.',
-  },
-  {
-    from: 'validate',
-    to: 'write-answer',
-    kind: 'next',
-    label: 'Valid or retried',
-    note: 'The checks passed, or the retry is spent: the answer is written from the results.',
-  },
-  { from: 'write-answer', to: 'wrap-up', kind: 'next' },
-  {
-    from: 'write-answer',
-    to: 'build-visual',
-    kind: 'branch',
-    label: 'Build a visual',
-    note: 'On unless turned off: Ryan charts the rows behind the answer.',
-  },
-  { from: 'build-visual', to: 'wrap-up', kind: 'next' },
-  { from: 'wrap-up', to: 'end', kind: 'next' },
-];
-
-/** The most attempts of the analysis loop: the first and one retry. */
-export const ANALYSE_MAX_ATTEMPTS = 2;
+} from './analysis.schemas';
 
 /**
  * The agent's step budget on a retry of Analyse (agents.md 2.11, 5.11):
@@ -306,17 +38,12 @@ export const ANALYSE_MAX_ATTEMPTS = 2;
  */
 export const ANALYSE_RETRY_MAX_STEPS = 8;
 
-/** The run's RequestContext key holding the per-run `AnswerBusinessQuestionRuntime`. */
-export const ANSWER_BUSINESS_QUESTION_RUNTIME_KEY =
-  'answer-business-question-runtime';
-
 /**
- * The workflow's input: the question, the session's dataset names and,
- * only when the run has any, its reference images' stored paths.
+ * A question workflow's input (Avery + Michael's): the question, the
+ * session's dataset names and, only when the run has any, its reference
+ * images' stored paths.
  */
-export type AnswerBusinessQuestionInput = z.output<
-  typeof answerBusinessQuestionInputSchema
->;
+export type QuestionInput = z.output<typeof questionInputSchema>;
 
 /** One entity of the session's datasets, as the Load catalog step lists it. */
 export type CatalogEntity = z.output<typeof catalogEntitySchema>;
@@ -342,9 +69,6 @@ export type TurnCallsOutcome = Pick<AnalyseOutcome, 'calls' | 'stopped'>;
 /** One validation check. */
 export type ValidationFinding = z.output<typeof validationFindingSchema>;
 
-/** What the Validate step passes on. */
-export type ValidateOutcome = z.output<typeof validateOutcomeSchema>;
-
 /** The answer (AnswerOutput). */
 export type BusinessAnswer = z.output<typeof answerSchema>;
 
@@ -355,12 +79,6 @@ export type ClarifyingQuestion = z.output<typeof clarifyingQuestionSchema>;
 export type AnsweredClarification = z.output<
   typeof answeredClarificationSchema
 >;
-
-/** The Wrap up step's summary: the run's result. */
-export type AnswerBusinessQuestionSummary = z.output<typeof turnSummarySchema>;
-
-/** What Build visual made: the run's visual, or why there is none. */
-export type BuiltVisual = z.output<typeof builtVisualSchema>;
 
 /**
  * What one analysis attempt of the agent turn gives back; `clarification`
@@ -375,46 +93,12 @@ export type AnalyseAttempt = Pick<
 > & { clarification?: ClarifyingQuestion; retryError?: string };
 
 /**
- * What the session code (or the eval runner) hands the run, on its
- * RequestContext: the model steps call back into it, so the chat sees the
- * turn as today (agents.md 5.11).
+ * One analysis attempt of Michael (agents.md 5.11, 5.23): the agent turn
+ * with its tools, as the session code runs it for Avery's answer_from_data.
+ * When it resumes after the agent's clarifying question, `answered` holds
+ * it with the user's answer: the agent goes on from there.
  */
-export interface AnswerBusinessQuestionRuntime {
-  /**
-   * A run of the workflow (workflows R44; answer-business-question.review.ts):
-   * every step agent may ask the user first, and each outcome that goes on
-   * to another agent waits for the user's approval. Absent in a past chat's
-   * turn and in an eval run: nothing waits but Plan's and Analyse's own
-   * question, as before.
-   */
-  interactive?: boolean;
-  /**
-   * The Plan step's model call; `stopped` when the turn was stopped. After
-   * Plan asked the user, `clarification` holds its question and the answer.
-   */
-  plan(input: {
-    question: string;
-    catalog: CatalogEntity[];
-    catalogBlock: string;
-    clarification?: AnsweredClarification;
-    /** The changes the user asked for on Plan's approval gate. */
-    revision?: Revision;
-    /** Read images' notes (agents.md 2.15); absent or `''` without images. */
-    imageNotes?: string;
-    /**
-     * An orchestrator's request (Avery, agents.md 2.21): it ends the plan
-     * request. Absent in Answer a Business Question.
-     */
-    brief?: string;
-  }): Promise<{ plan: AnalysisPlan; stopped: boolean }>;
-  /**
-   * One attempt of the Analyse step: the agent turn with its tools. When
-   * the step resumes after the agent's clarifying question, `answered`
-   * holds it with the user's answer: the agent goes on from there. On a
-   * retry, `earlierBlock` lists the earlier attempt's queries; a retry runs
-   * with `ANALYSE_RETRY_MAX_STEPS`, and a model error on it comes back as
-   * `retryError` instead of failing the step.
-   */
+export interface AnalyseRuntime {
   analyse(input: {
     question: string;
     catalog: CatalogEntity[];
@@ -422,103 +106,10 @@ export interface AnswerBusinessQuestionRuntime {
     plan: AnalysisPlan;
     attempt: number;
     planBlock: string;
-    /** On a retry: the earlier attempt's queries (`earlierQueriesBlock`). */
-    earlierBlock?: string;
-    /**
-     * On a retry: the earlier attempt's queries and findings the block was
-     * built from, so an attempt resumed after the agent's question rebuilds
-     * one block with its own queries after them.
-     */
-    earlier?: Pick<CheckedAttempt, 'queries' | 'findings'>;
     answered?: AnsweredClarification;
     /** Read images' notes (agents.md 2.15); absent or `''` without images. */
     imageNotes?: string;
-    /**
-     * Build visual runs after this turn and the request cues a visual
-     * (`visualCued`): the agent is told a visual follows. Absent otherwise.
-     */
-    visualFollows?: true;
   }): Promise<AnalyseAttempt>;
-  /**
-   * Whether the run builds a visual (its input's `buildVisual`): the
-   * condition of the branch to Build visual. Absent means no.
-   */
-  buildsVisual?: boolean;
-  /**
-   * Build visual (workflows R41): Ryan designs an interactive visual from
-   * the answer and its queries' rows; it is stored with the run. It never
-   * fails the run: a design that fails comes back as `error`.
-   */
-  buildVisual?(input: {
-    question: string;
-    answer: string;
-    queries: AnalyseQuery[];
-    /**
-     * Read images' notes, the reference the designer follows; present only
-     * when the run has some (not blank).
-     */
-    imageNotes?: string;
-  }): Promise<{ visual: BuiltVisual; stopped: boolean }>;
-  /**
-   * A change the user asked for on Build visual's approval gate (workflows
-   * R44): Ryan makes a new version of the visual from the user's words and,
-   * when they attached some, Zoe's notes on the new reference images (their
-   * paths in the run's workspace). It never fails the run: a change that
-   * fails comes back as `error`.
-   */
-  reviseVisual?(input: {
-    visualId: string;
-    instruction: string;
-    images?: string[];
-  }): Promise<{ visual: BuiltVisual; stopped: boolean }>;
-  /** The Write answer step's model call; its text is the run's answer. */
-  writeAnswer(input: {
-    question: string;
-    plan: AnalysisPlan;
-    queries: AnalyseQuery[];
-    findings: ValidationFinding[];
-    /** Read images' notes (agents.md 2.15); absent or `''` without images. */
-    imageNotes?: string;
-    /**
-     * Build visual runs after it and the request cues a visual
-     * (`visualCued`): the request says a visual follows. Absent otherwise.
-     */
-    visualFollows?: true;
-    /** An interactive run: Jessica may ask the user one question first. */
-    canAsk?: boolean;
-    /** Her question with the user's answer, once answered. */
-    answered?: { question: string; answer: string };
-    /** The changes the user asked for on her approval gate. */
-    revision?: Revision;
-    /**
-     * Her answer waits on an approval gate: it is not streamed as the
-     * run's answer; `deliverAnswer` hands it over once approved.
-     */
-    quiet?: boolean;
-    /**
-     * An orchestrator's request (Avery, agents.md 2.21): it ends the
-     * answer request. Absent in Answer a Business Question.
-     */
-    brief?: string;
-  }): Promise<{
-    answer: BusinessAnswer;
-    stopped: boolean;
-    clarification?: { question: string; options: string[] };
-  }>;
-  /**
-   * The run's answer, written outside the stream: Jessica's, once approved
-   * on her gate (workflows R44).
-   */
-  deliverAnswer?(answer: string): Promise<void>;
-}
-
-/**
- * Step 1: the trimmed question. It never fails: the run's input was checked
- * as a whole before the run (api.md 118, 119), so a blank question never
- * reaches it.
- */
-export function receiveQuestion(question: string): string {
-  return (question ?? '').trim();
 }
 
 /** The most columns of one entity Load catalog hands Plan. */
@@ -1227,93 +818,6 @@ export interface CheckedAttempt {
   findings: readonly ValidationFinding[];
 }
 
-/** What Validate keeps after a retry (agents.md 5.11): the set Write answer reads. */
-export interface MergedAttempts {
-  ok: boolean;
-  findings: ValidationFinding[];
-  calls: AnalyseCall[];
-  queries: AnalyseQuery[];
-  kept: 'merged' | 'first';
-}
-
-/**
- * Validate on a retry (agents.md 5.11; workflows R27): the merged set is
- * attempt 2's queries first, then attempt 1's that ran and that no failed
- * check flagged (`flaggedQueries`), so Write answer's cut drops attempt 1's
- * first; the calls follow (attempt 2's, then the kept queries' SQL calls:
- * a data record's call and its query come in the same order). The merged
- * set is checked in the order it ran (attempt 1's kept queries, then
- * attempt 2's), so a query attempt 1 ran never resolves a sample, a cut or
- * a failed call attempt 2 left. Attempt 1
- * alone is kept (`first`) when attempt 2 ended on a model error (with the
- * warning-only `Retry completed` check), ran nothing successfully, or the
- * merged set fails a check attempt 1 passed: a retry never scores below
- * attempt 1.
- */
-export function mergeAttempts(input: {
-  plan: AnalysisPlan;
-  first: CheckedAttempt;
-  second: Pick<CheckedAttempt, 'calls' | 'queries'> & { retryError?: string };
-  /** The run's catalog and question, for the data-date check (*Data dates*). */
-  catalog?: readonly CatalogEntity[];
-  question?: string;
-}): MergedAttempts {
-  const { plan, first, second } = input;
-  const keepFirst = (extra: ValidationFinding[] = []): MergedAttempts => ({
-    ok: first.findings.every((f) => f.passed || isWarningCheck(f.check)),
-    findings: [...first.findings, ...extra],
-    calls: [...first.calls],
-    queries: [...first.queries],
-    kept: 'first',
-  });
-  if (second.retryError !== undefined) {
-    return keepFirst([
-      {
-        check: VALIDATION_CHECKS.retry,
-        passed: false,
-        detail: `Attempt 2 stopped on an error (${second.retryError}); the answer rests on attempt 1's queries.`,
-      },
-    ]);
-  }
-  if (!second.queries.some((query) => !query.error)) return keepFirst();
-  const flagged = flaggedQueries(first.queries, first.findings);
-  const keeps = first.queries.map(
-    (query, index) => !query.error && flagged[index] === undefined,
-  );
-  let sqlIndex = 0;
-  const firstCalls = first.calls.filter((call) =>
-    call.tool === 'run_readonly_sql' ? keeps[sqlIndex++] === true : false,
-  );
-  const calls = [...second.calls, ...firstCalls];
-  const queries = [
-    ...second.queries,
-    ...first.queries.filter((_query, index) => keeps[index]),
-  ];
-  // Validate's "resolved by a later query" rules read the order the queries
-  // ran: attempt 1's kept ones, then attempt 2's. The display order above
-  // is for Write answer only, so an earlier query never resolves a later one.
-  const checked = validateAttempt({
-    plan,
-    catalog: input.catalog,
-    question: input.question,
-    calls: [...firstCalls, ...second.calls],
-    queries: [
-      ...first.queries.filter((_query, index) => keeps[index]),
-      ...second.queries,
-    ],
-  });
-  const worse = first.findings.some(
-    (before) =>
-      before.passed &&
-      !isWarningCheck(before.check) &&
-      checked.findings.some(
-        (after) => after.check === before.check && !after.passed,
-      ),
-  );
-  if (worse) return keepFirst();
-  return { ...checked, calls, queries, kept: 'merged' };
-}
-
 /** Where one kept query ran: its attempt (1 or 2) and its place among that attempt's queries. */
 export interface KeptQueryOrigin {
   attempt: 1 | 2;
@@ -1377,19 +881,6 @@ function queryKey(query: AnalyseQuery): string {
 }
 
 /**
- * The plan after the user answered its question (agents.md 5.11): Plan never
- * asks twice, so a plan made with an answer needs no clarification, whatever
- * the model replied.
- */
-export function planAfterAnswer(
-  plan: AnalysisPlan,
-  answered: AnsweredClarification | undefined,
-): AnalysisPlan {
-  if (!answered || !plan.needsClarification) return plan;
-  return { ...plan, needsClarification: false, clarification: null };
-}
-
-/**
  * A waiting step's question from its suspend payload (agents.md 5.11): the
  * question and its options, the engine's own fields (`__workflow_meta`)
  * dropped; undefined when the payload holds no question.
@@ -1411,57 +902,4 @@ export function clarifyingQuestionOf(
     ...(review ? { review } : {}),
     ...(visualId ? { visualId } : {}),
   };
-}
-
-/**
- * Whether the analysis loop ends after an attempt (agents.md 5.11): it was
- * stopped, it passed validation, or it was the last allowed attempt.
- */
-export function analysisLoopDone(outcome: {
-  ok?: boolean;
-  attempt?: number;
-  stopped?: boolean;
-}): boolean {
-  return (
-    outcome.stopped === true ||
-    outcome.ok === true ||
-    (outcome.attempt ?? 0) >= ANALYSE_MAX_ATTEMPTS
-  );
-}
-
-/**
- * Wrap up: the kept queries' `run_readonly_sql` calls (the last attempt's,
- * or after a retry the merged set's or attempt 1's), their rows, the answer.
- */
-export function wrapUp(
-  calls: readonly AnalyseCall[],
-  answer: string,
-): AnswerBusinessQuestionSummary {
-  const sql = calls.filter((call) => call.tool === 'run_readonly_sql');
-  const failed = sql.filter((call) => call.failed);
-  return {
-    sqlQueries: sql.length,
-    failedQueries: failed.length,
-    rows: sql
-      .filter((call) => !call.failed)
-      .reduce((sum, call) => sum + (call.rowCount ?? 0), 0),
-    answer,
-  };
-}
-
-/**
- * Whether the answer has something to chart (workflows R41): a query that
- * ran without error and returned rows. Build visual is skipped otherwise.
- */
-export function chartableQueries(queries: readonly AnalyseQuery[]): boolean {
-  return queries.some((query) => !query.error && query.rowCount > 0);
-}
-
-/** The run's summary (Wrap up's), when the run got that far. */
-export function turnSummaryOf(
-  result: unknown,
-): AnswerBusinessQuestionSummary | undefined {
-  const parsed = answerBusinessQuestionResultSchema.safeParse(result);
-  if (!parsed.success) return undefined;
-  return parsed.data['question-path']?.['analysis-path']?.['answer-path'];
 }

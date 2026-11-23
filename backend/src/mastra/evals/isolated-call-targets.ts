@@ -1,5 +1,5 @@
 import type { Agent } from '@mastra/core/agent';
-import type * as StepAgents from '../workflows/answer-business-question.agents';
+import type * as StepAgents from '../workflows/step-agents';
 import type * as ReadImagesAgents from '../workflows/read-images.agents';
 import type * as PlannerAgent from '../agents/analysis-planner.agent';
 import type * as WriterAgent from '../agents/answer-writer.agent';
@@ -8,7 +8,7 @@ import type {
   AnalysisPlan,
   AnsweredClarification,
   BusinessAnswer,
-} from '../workflows/answer-business-question.steps';
+} from '../workflows/analysis.steps';
 import type { ReadImagesOutcome } from '../workflows/read-images.steps';
 import type { AssistantEvalSet, EvalTarget } from './assistant.evals';
 import { loadEvalImages } from './eval-images';
@@ -33,7 +33,7 @@ export const IMAGE_READER_EVAL_TARGET = 'image-reader';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const stepAgents = () =>
-  require('../workflows/answer-business-question.agents') as typeof StepAgents;
+  require('../workflows/step-agents') as typeof StepAgents;
 const readImagesAgents = () =>
   require('../workflows/read-images.agents') as typeof ReadImagesAgents;
 /* eslint-enable @typescript-eslint/no-require-imports */
