@@ -6,7 +6,7 @@
   class="card flex flex-col gap-3 border-l-4 border-l-on-warning-soft p-4 outline-none focus-visible:ring-2 focus-visible:ring-primary"
 >
   <h2 [id]="uid + '-title'" class="m-0 text-[14px] font-semibold text-fg-strong">
-    {{ gate() ? 'Waiting for your approval' : 'Waiting for your answer' }}
+    Waiting for your answer
   </h2>
   @if (expired()) {
     <p class="m-0 text-[13px] text-fg" data-testid="workflow-run-input-expired" role="status">
@@ -19,41 +19,7 @@
   <p class="m-0 text-[14px] text-fg-strong" data-testid="workflow-run-input-question">
     {{ waiting().question }}
   </p>
-  @if (waiting().review; as review) {
-    <div
-      class="prose-dark max-h-[320px] overflow-y-auto rounded-md border border-border p-3 text-[13px]"
-      data-testid="workflow-run-input-review"
-      tabindex="0"
-      role="region"
-      aria-label="What the agent produced"
-      [innerHTML]="review | markdown"
-    ></div>
-    @if (waiting().visualId; as visualId) {
-      <div>
-        <button
-          type="button"
-          class="btn btn-secondary"
-          data-testid="workflow-run-input-open-visual"
-          (click)="openVisual.emit(visualId)"
-        >
-          Open visual
-        </button>
-      </div>
-    }
-    @if (!expired()) {
-      <div>
-        <button
-          type="button"
-          class="btn btn-primary"
-          data-testid="workflow-run-input-approve"
-          [disabled]="busy()"
-          (click)="approve()"
-        >
-          Approve
-        </button>
-      </div>
-    }
-  } @else if (waiting().options.length > 0) {
+  @if (waiting().options.length > 0) {
     <div class="flex flex-col items-stretch gap-2" role="group" aria-label="Suggested answers">
       @for (option of waiting().options; track $index) {
         <button
@@ -69,13 +35,7 @@
     </div>
   }
   <label class="flex flex-col gap-1 text-[12px] text-fg-muted" [attr.for]="uid + '-answer'">
-    {{
-      gate()
-        ? visualId() !== null
-          ? 'Or say what to change (a filter, another chart…)'
-          : 'Or say what to change'
-        : 'Your answer'
-    }}
+    Your answer
     <textarea
       [id]="uid + '-answer'"
       rows="2"
@@ -86,17 +46,6 @@
       (input)="onInput($event)"
     ></textarea>
   </label>
-  @if (visualId() !== null && !expired()) {
-    <div data-testid="workflow-run-input-images">
-      <app-workflow-run-attachments
-        [images]="images()"
-        [max]="4"
-        [error]="imageError()"
-        (picked)="addImages($event)"
-        (removed)="removeImage($event)"
-      />
-    </div>
-  }
   @if (error(); as message) {
     <p
       role="alert"
@@ -125,7 +74,7 @@
         [disabled]="blank() || busy()"
         (click)="submit()"
       >
-        {{ gate() ? 'Ask for changes' : 'Continue' }}
+        Continue
       </button>
     }
   </div>

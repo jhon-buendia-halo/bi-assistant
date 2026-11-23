@@ -66,7 +66,6 @@ const orchestrateStep = createStep({
       });
       if (done.clarification && !done.stopped) {
         return params.suspend({
-          kind: 'clarify',
           question: done.clarification.question,
           options: done.clarification.options,
         });

@@ -86,35 +86,18 @@ export const planClarificationSchema = z.object({
 
 /**
  * What a waiting step suspends with (the run's `waitingFor`, api.md 138):
- * one clarifying question and its options. A run stored while it waited
- * on an approval gate (workflows R44, removed) holds `kind: 'review'`, the
- * outcome in words (`review`), the step's output passed on once approved
- * (`outcome`) and the agent's reply (`reply`).
+ * one clarifying question and its options.
  * Mastra keeps only the fields this schema names.
  */
 export const clarifyingQuestionSchema = z.object({
-  kind: z
-    .enum(['clarify', 'review'])
-    .optional()
-    .describe("'review': an approval gate; else a clarifying question."),
   question: z.string().describe('The clarifying question the run waits on.'),
-  options: z.array(z.string()).describe('Its 2-4 answer options.'),
-  review: z
-    .string()
-    .optional()
-    .describe("An approval gate's outcome, in the user's words (Markdown)."),
-  outcome: z
-    .record(z.string(), z.unknown())
-    .optional()
-    .describe("An approval gate's step output, passed on once approved."),
-  reply: z
-    .string()
-    .optional()
-    .describe("An approval gate's agent reply, shown again on a revision."),
-  visualId: z
-    .string()
-    .optional()
-    .describe("Build visual's approval gate: the visual Ryan built."),
+  options: z
+    .array(z.string())
+    .min(2)
+    .max(4)
+    .describe(
+      '2-4 answer options, each a short title, optionally followed by " — " and one line explaining it.',
+    ),
 });
 
 /** What resumes a waiting step (api.md 138): the user's answer. */
@@ -122,12 +105,6 @@ export const clarificationAnswerSchema = z.object({
   answer: z
     .string()
     .describe("The user's answer: one of the options or their own words."),
-  images: z
-    .array(z.string())
-    .optional()
-    .describe(
-      "On Build visual's approval gate (workflows R44): reference images for the change, as their paths in the run's workspace.",
-    ),
 });
 
 /** A clarifying question with the user's answer to it. */

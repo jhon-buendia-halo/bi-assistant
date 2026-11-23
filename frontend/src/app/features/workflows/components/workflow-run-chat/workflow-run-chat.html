@@ -319,10 +319,6 @@
               [busy]="designer.running()"
               [error]="designer.resumeError()"
               (answered)="designer.resume($event)"
-              (answeredWithImages)="
-                designer.resume($event.answer, $event.images)
-              "
-              (openVisual)="openGateVisual($event)"
               (rerun)="designer.rerunWithAnswer($event)"
             />
           }

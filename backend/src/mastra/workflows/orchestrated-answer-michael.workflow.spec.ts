@@ -124,7 +124,6 @@ describe('orchestrated-answer-michael workflow (agents.md 5.23; workflows R45)',
     expect(started.result.status).toBe('suspended');
     expect(started.result.suspended).toEqual([['orchestrate']]);
     expect(started.result.steps?.orchestrate.suspendPayload).toEqual({
-      kind: 'clarify',
       ...ASKED,
     });
 
