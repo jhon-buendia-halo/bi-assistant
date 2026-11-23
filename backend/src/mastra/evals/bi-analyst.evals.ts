@@ -8,7 +8,11 @@ import {
   submitAccepted,
   sumsColumn,
 } from './bi-analyst-eval-checks';
-import type { DashboardDraft } from '../workflows/bi-dashboard.schemas';
+import {
+  blueprintFromDraft,
+  type DashboardDraft,
+} from '../workflows/bi-dashboard.schemas';
+import { currentDashboardBlock } from '../workflows/bi-analyst.prompts';
 
 /**
  * The eval set of Clara, the Business Intelligence Analyst (agents.md 8.1,
@@ -122,18 +126,22 @@ export function biaSeedDraft(): DashboardDraft {
  * current dashboard").
  */
 export function biaEvolveBrief(change: string): string {
+  const draft = biaSeedDraft();
+  const blueprint = blueprintFromDraft(draft, []);
   return [
     change,
     '',
-    'Current dashboard (its draft):',
-    '```json',
-    JSON.stringify(biaSeedDraft(), null, 2),
-    '```',
-    '',
-    'Its data query:',
-    '```sql',
-    BIA_SEED_SQL,
-    '```',
+    currentDashboardBlock({
+      artifactId: 'eval-dashboard',
+      version: 1,
+      title: draft.title,
+      blueprint,
+      query: { sql: BIA_SEED_SQL, datasourceId: 'world-cup' },
+      columns: draft.columns.map((c) => c.name),
+      rowCount: 0,
+      widgetCount: draft.widgets.length,
+      filterCount: draft.filters.length,
+    }),
   ].join('\n');
 }
 

@@ -1,3 +1,6 @@
+import { draftOf } from './bi-dashboard.schemas';
+import type { CurrentDashboard } from '../../modules/artifacts/entities/artifact.entity';
+
 /**
  * Clara's job description (plan bi-dashboard; agents.md, her section in 2):
  * the instructions of the Business Intelligence Analyst Avery calls with
@@ -29,3 +32,18 @@ When the brief gives you the current dashboard (its draft and its data query), s
 - 1 to 12 widgets: KPIs first (span 3 or 4), then charts (span 6 to 12), a table last when it helps.
 - Theme: light, unless the brief asks for dark; an accent and 4 to 6 distinct palette colours as #rrggbb.
 `;
+
+/**
+ * The dashboard Clara changes (agents.md 2.22): its draft (ids kept), its
+ * stored data query, columns and row count, with the instruction to change
+ * only what the brief asks.
+ */
+export function currentDashboardBlock(current: CurrentDashboard): string {
+  return [
+    `The current dashboard: "${current.title}", version ${current.version}. Change it into version ${current.version + 1}: keep every id, title and binding, and change only what the brief asks. Submit the whole dashboard.`,
+    `Its draft: ${JSON.stringify(draftOf(current.blueprint))}`,
+    `Its data query (datasource ${current.query.datasourceId}): ${current.query.sql}`,
+    `Its columns: ${current.columns.join(', ') || '(none)'}`,
+    `Its rows: ${current.rowCount}`,
+  ].join('\n');
+}

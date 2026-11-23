@@ -86,7 +86,11 @@ describe('the seed dashboard', () => {
   it('is in the evolve brief with its query', () => {
     const brief = biaEvolveBrief('Add a filter by stage');
     expect(brief).toContain('Add a filter by stage');
-    expect(brief).toContain('"id": "goals-by-team"');
+    // The same block the turn gives Clara (currentDashboardBlock).
+    expect(brief).toContain('The current dashboard:');
+    for (const id of ['total-goals', 'goals-by-team', 'goals-by-tournament']) {
+      expect(brief).toContain(`"id":"${id}"`);
+    }
     expect(brief).toContain(BIA_SEED_SQL);
   });
 });

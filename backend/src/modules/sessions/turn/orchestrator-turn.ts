@@ -41,10 +41,8 @@ import {
   type OrchestratorToolsRuntime,
 } from '../../../mastra/workflows/orchestrated-answer.steps';
 import type { ReadImagesOutcome } from '../../../mastra/workflows/read-images.steps';
-import {
-  BUILD_DASHBOARD_MAX_CALLS,
-  draftOf,
-} from '../../../mastra/workflows/bi-dashboard.schemas';
+import { BUILD_DASHBOARD_MAX_CALLS } from '../../../mastra/workflows/bi-dashboard.schemas';
+import { currentDashboardBlock } from '../../../mastra/workflows/bi-analyst.prompts';
 import type {
   CurrentDashboard,
   DashboardRef,
@@ -270,20 +268,7 @@ function dashboardFact(current: CurrentDashboard | undefined): string {
     : 'The user asked for a dashboard: build_dashboard is available.';
 }
 
-/**
- * The dashboard Clara changes (agents.md 2.22): its draft (ids kept), its
- * stored data query, columns and row count, with the instruction to change
- * only what the brief asks.
- */
-export function currentDashboardBlock(current: CurrentDashboard): string {
-  return [
-    `The current dashboard: "${current.title}", version ${current.version}. Change it into version ${current.version + 1}: keep every id, title and binding, and change only what the brief asks. Submit the whole dashboard.`,
-    `Its draft: ${JSON.stringify(draftOf(current.blueprint))}`,
-    `Its data query (datasource ${current.query.datasourceId}): ${current.query.sql}`,
-    `Its columns: ${current.columns.join(', ') || '(none)'}`,
-    `Its rows: ${current.rowCount}`,
-  ].join('\n');
-}
+export { currentDashboardBlock };
 
 /** The work done so far, for a resumed Avery. */
 function workSoFar(state: OrchestratorState): string | undefined {
