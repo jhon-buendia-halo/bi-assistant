@@ -55,6 +55,17 @@ export interface KnowledgeUse {
   datasetId?: string;
 }
 
+/** A dashboard Clara built for the answer (the run's card; bi-dashboard 2.4). */
+export interface DashboardRef {
+  artifactId: string;
+  version: number;
+  title: string;
+  action: 'created' | 'updated';
+  widgetCount: number;
+  filterCount: number;
+  rowCount: number;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -70,6 +81,8 @@ export interface ChatMessage {
   };
   /** Present when this turn created, updated or reverted a visual. */
   visual?: VisualEvent;
+  /** Present when this turn built or updated a live dashboard in Artifacts. */
+  dashboard?: DashboardRef;
   /** User rating of this answer; `up` saves it as a verified query. */
   feedback?: MessageFeedback;
   /**

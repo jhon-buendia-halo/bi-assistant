@@ -115,6 +115,7 @@ const ASKS: Record<string, string> = {
   write_answer: ' to write the answer',
   read_reference_images: ' to read the images',
   build_visual: ' for a chart',
+  build_dashboard: ' for a dashboard',
 };
 
 /** What a teammate hands back once their call is done, by the tool that called them. */
@@ -124,6 +125,7 @@ const HANDED_BACK: Record<string, string> = {
   write_answer: 'Wrote the answer',
   read_reference_images: 'Read the images',
   build_visual: 'Built the chart',
+  build_dashboard: 'Built the dashboard',
 };
 
 /** The relay of a delegating step; empty when its activity holds no signed call. */

@@ -258,4 +258,77 @@ describe('sample fixture catalogue', () => {
       expect(columns.length).toBeGreaterThanOrEqual(60);
     });
   });
+
+  describe('retail-ops', () => {
+    const fixture = findFixture('retail-ops')!;
+    const sql = seedSql(fixture.seedFile as string);
+    const statements = splitSqlStatements(sql);
+
+    it('owns schema retail_ops in its own database, as a plain SQL seed', () => {
+      expect(fixture).toMatchObject({
+        name: 'Retail Ops',
+        schema: 'retail_ops',
+        seedFile: '007_retail_ops.sql',
+        datasourceName: 'Retail Ops PostgreSQL',
+        datasetName: 'Retail Ops',
+      });
+      expect(fixture.defaults.database).toBe('retail_ops');
+      expect(fixture.requiredTables).toHaveLength(19);
+      expect(sql).toMatch(/^DROP SCHEMA IF EXISTS retail_ops CASCADE;$/m);
+    });
+
+    it('sits after World Cup Medallion and before the register-only samples', () => {
+      const ids = SAMPLE_FIXTURES.map((sample) => sample.id);
+      expect(ids.indexOf('retail-ops')).toBe(
+        ids.indexOf('world-cup-medallion') + 1,
+      );
+      expect(ids[ids.length - 1]).toBe('world-cup-rest');
+      expect(ids[ids.length - 2]).toBe('world-cup-excel');
+    });
+
+    it('generates the data in SQL, identically on every load', () => {
+      expect(sql).not.toMatch(
+        /\b(?:random|now|clock_timestamp|statement_timestamp|transaction_timestamp|gen_random_uuid)\s*\(|\b(?:current_date|current_timestamp|localtimestamp)\b/i,
+      );
+      expect(sql).toMatch(/generate_series\(1, 12000\)/);
+    });
+
+    it('splits cleanly: no dollar quoting and no backslash-escaped quotes', () => {
+      expect(sql).not.toMatch(/\$[A-Za-z_]*\$/);
+      expect(sql).not.toMatch(/\\'/);
+      const bare = statements.map((statement) =>
+        statement.replace(/^(?:\s*--[^\n]*\n)+/, '').trim(),
+      );
+      const odd = bare.filter(
+        (statement) =>
+          !/^(?:DROP|CREATE|INSERT|ALTER|COMMENT|REFRESH|ANALYZE|UPDATE)\s/i.test(
+            statement,
+          ),
+      );
+      expect(odd).toEqual([]);
+    });
+
+    it('qualifies every statement, so it does not depend on search_path', () => {
+      const unqualified = statements.filter((statement) => {
+        const match =
+          /^(?:CREATE (?:OR REPLACE )?(?:MATERIALIZED )?(?:TABLE|VIEW|TYPE|INDEX \S+ ON|FUNCTION)|INSERT INTO|ALTER TABLE|REFRESH MATERIALIZED VIEW|COMMENT ON (?:TABLE|COLUMN|VIEW|MATERIALIZED VIEW)|ANALYZE|UPDATE)\s+("?[\w]+"?)(\.)?/i.exec(
+            statement.replace(/^(?:\s*--[^\n]*\n)+/, '').trim(),
+          );
+        return (
+          match !== null &&
+          (match[1].replace(/"/g, '') !== 'retail_ops' || !match[2])
+        );
+      });
+      expect(unqualified).toEqual([]);
+      expect(statements.some((s) => /^SET\s+search_path/im.test(s))).toBe(
+        false,
+      );
+    });
+
+    it('creates one table for each required table', () => {
+      for (const table of fixture.requiredTables) {
+        expect(sql).toContain(`CREATE TABLE retail_ops.${table} (`);
+      }
+    });
+  });
 });
