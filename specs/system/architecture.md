@@ -1376,20 +1376,22 @@ flowchart LR
   - Eval runs call the same agents as users do, and nothing tells their traces apart (no tag, metadata or resource id; they show `session: null`, as previews do).
   - CLI eval runs (`run-assistant-evals.ts`) were never saved, and no run recorded its set or model, so pass^3 could mix models.
 - **Decision:**
-  - **Marker.** Every eval case sets `eval-run-id = <jobId>` in its request context (`EVAL_RUN_CONTEXT_KEY`, `mastra/evals/eval-trace-marker.ts`), and so does its judge. The Observability config lists that key in `requestContextKeys`, so Mastra copies it into the `metadata` of every span created with that request context: agent runs, model calls, tool calls and workflow spans.
+  - **Marker.** Every eval case runs inside its run's scope: `runAssistantEvalCase` wraps the whole case (setup, target, synthesis, judge, clean-up) in `inEvalRun(jobId)`, an `AsyncLocalStorage` scope (`mastra/evals/eval-run-scope.ts`), and a run's `finish` runs in it too. The Observability config's span output processor `EvalRunMarker` writes `eval-run-id = <jobId>` (`EVAL_RUN_CONTEXT_KEY`, `mastra/evals/eval-trace-marker.ts`) into the `metadata` of every span started inside a scope: agent runs, model generations, steps, tool calls and workflow spans, whatever request context the span was created with. Mastra runs output processors synchronously when a span starts, in the caller's async context, so this holds for the wrapper targets (Result Explorer, Query Explainer, Site Reviewer, isolated calls, whole-workflow runs) whose app functions build their own call and start a new trace. The case's request context also carries the key, listed in `requestContextKeys`, as a second path.
   - **Classification.** A model call is an eval call when any span of its trace carries `metadata."eval-run-id"`. Every other call is live, including calls recorded before this change.
   - **Monitoring reads `eval_runs` read-only** through `EvalRunsRepository`. Endpoint #163 joins those runs (by agent registry key) with the trace store's live calls (by Mastra agent id).
   - **Every run records `setId`, `provider`, `model` and `source`.** The CLI saves its runs to `eval_runs` as the UI does; a record is inserted only once its first question has finished, so a preflight refusal leaves nothing. Old runs: the set is derived from `caseIds` when one set holds them all; the model is `Unknown`, and such runs are never pooled into pass^3.
 - **Alternatives considered:**
   - **`tracingOptions.tags`/`metadata`:** rejected; they go on the root span only, and every wrapper target, the judge and the synthesis would need them threaded by hand.
+  - **The request context alone (the first build):** rejected after a real run; the Result Explorer target's app function builds its own call without the case's request context, so its 39 model generations started unmarked traces and counted as live. Forwarding it through every app function would leave each new target to remember it.
   - **Matching the throwaway host id `run-eval-<uuid>`:** rejected; best-effort, and absent from calls made without a session.
   - **A new eval-calls collection:** rejected; it duplicates the trace store (ADR-0038).
 - **Consequences:**
   - Every span of an eval trace carries one more metadata key; other traces are unchanged.
-  - A model call made in a new trace with a fresh request context would count as live, so any new eval target must forward the case's request context.
+  - Any model call a case makes is marked, in a new trace or not, as long as it runs in the case's async call chain; work handed to a queue or worker started outside the scope would not be. A guard test (`eval-run-marker-guard.spec.ts`) runs a case of every target in `EVAL_SETS` and fails when the runner uses the target outside the scope.
+  - Live calls running at the same time as an eval run are not marked: the scope follows each async call chain, not the process.
   - Live figures include old eval calls until they leave the period.
   - The CLI writes to the data dir it boots on, and beside a running app it shares SQLite and Mastra's DuckDB lock, as it already did.
-  - **Stack-neutral:** a rebuild needs a per-request key copied onto every span of a trace, a run store with set and model, and a read path over both.
+  - **Stack-neutral:** a rebuild needs an async-context scope per eval case whose id a span hook writes onto every span started in it, a run store with set and model, and a read path over both.
 
 ## Level 4 — Code
 

@@ -1,10 +1,10 @@
 /**
  * The marker that tells an eval run's traffic apart in the trace store
- * (ADR-0054). Every eval case sets `EVAL_RUN_CONTEXT_KEY` to the run's job id
- * in its request context; the Observability config lists the key in
- * `requestContextKeys`, so Mastra copies it into the `metadata` of every span
- * created with that request context. Monitoring classifies a model call as an
- * eval call when any span of its trace carries it.
+ * (ADR-0054). Every eval case runs in its run's scope (`eval-run-scope.ts`),
+ * whose span processor writes `EVAL_RUN_CONTEXT_KEY` = the run's job id into
+ * the `metadata` of every span started in it; the case's request context
+ * carries the key too, listed in `requestContextKeys`. Monitoring classifies
+ * a model call as an eval call when any span of its trace carries it.
  *
  * Framework-free on purpose: Monitoring imports it without pulling in Mastra.
  */

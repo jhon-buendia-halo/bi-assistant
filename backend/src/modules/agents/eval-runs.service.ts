@@ -28,6 +28,7 @@ import {
   evalTargetIdFor,
 } from '../../mastra/evals/eval-sets';
 import { savedLlmLabel } from '../../mastra/evals/eval-cli-run';
+import { inEvalRun } from '../../mastra/evals/eval-run-scope';
 import type { SampleFixture } from '../testing-data/fixtures/registry';
 
 export type EvalRunStatus = 'running' | 'completed' | 'failed';
@@ -265,8 +266,9 @@ export class EvalRunsService {
       view.finishedAt = new Date().toISOString();
       this.active.delete(view.agentKey);
       await this.repository.save(view);
-      // The agent's own clean-up of what this run created, if any.
-      await target.finish?.(view.datasets);
+      // The agent's own clean-up of what this run created, if any, inside
+      // the run's scope so any model call it makes is marked (ADR-0054).
+      await inEvalRun(view.jobId, async () => target.finish?.(view.datasets));
       await cleanupEvalHost(this.sessions, evalSession);
     }
   }

@@ -165,11 +165,11 @@ Owns `frontend/src/app/features/monitoring/components/monitoring-area/monitoring
 
 ## 5. Risks
 
-1. **An unmarked eval call**: any path that starts a new trace with a fresh request context counts as live (e.g. a tool that calls another agent). Trace-level classification covers nested calls in the same trace; U1's per-target wave check and the E2E's `—` guard the rest.
+1. **An unmarked eval call**: any path that starts a new trace with a fresh request context counted as live (seen on a real run: the Result Explorer target's 39 model generations). Since the fix, every case runs in an `AsyncLocalStorage` scope whose span processor marks every span started in it, whatever its request context (ADR-0054); only work handed to a queue or worker started outside the scope would escape. `eval-run-marker-guard.spec.ts` covers every target in `EVAL_SETS`; U1's per-target wave check and the E2E's `—` guard the rest.
 2. **Model strings**: the settings' `model` may differ from the span's `attributes.model` (Copilot `auto`, LenAI deployments, `responseModel`), so the Model facet can show near-duplicates and live figures can drop out under a model filter. pass^3 pools on the model string only.
 3. **CLI and app together**: the CLI writes the data dir it boots; beside a running app it shares SQLite and the DuckDB lock, with no cross-process one-run-per-agent lock. Evals run on a copy (lessons), so CLI runs show only in that copy.
 4. **pass^3 definition**: strict "last 3 all passed", not the τ-bench estimator; partial coverage shows `(k of N)`.
 5. **Old eval calls count as live** until they leave the period (30 days by default).
 6. **Payload size**: every completed run, answers and tool I/O included, is read per request; fine locally, watch large histories.
-7. **A Mastra upgrade** that changes `requestContextKeys` would silently stop the marking; the E2E pins it.
+7. **A Mastra upgrade** that changes `spanOutputProcessors` (run synchronously at span start) or `requestContextKeys` would silently stop the marking; the E2E pins it.
 8. **Effect ordering in `agent-detail.ts`**: the reset effect must run before the requested sub-tab is applied.

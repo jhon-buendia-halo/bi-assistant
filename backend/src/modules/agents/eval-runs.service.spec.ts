@@ -62,6 +62,7 @@ import {
   selectEvalSets,
 } from '../../mastra/evals/assistant.evals';
 import { evalTargetFor } from '../../mastra/evals/eval-sets';
+import { currentEvalRunId } from '../../mastra/evals/eval-run-scope';
 
 describe('EvalRunsService dataset validation', () => {
   const datasets = { list: jest.fn() };
@@ -238,6 +239,14 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
     jest
       .mocked(runAssistantEvalCase)
       .mockResolvedValueOnce({ id: 'dr-first', passed: true } as never);
+    // The clean-up runs in the run's scope, so its model calls are marked.
+    const finishScopes: (string | undefined)[] = [];
+    (
+      evalTargetFor('data-readiness') as unknown as { finish: jest.Mock }
+    ).finish.mockImplementationOnce(() => {
+      finishScopes.push(currentEvalRunId());
+      return Promise.resolve();
+    });
 
     const started = await service().start('data-readiness', 'wc', ['dr-first']);
 
@@ -277,6 +286,7 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
       (started as { jobId: string }).jobId,
     );
     expect(target.finish).toHaveBeenCalledWith(['Sample']);
+    expect(finishScopes).toEqual([(started as { jobId: string }).jobId]);
   });
 });
 

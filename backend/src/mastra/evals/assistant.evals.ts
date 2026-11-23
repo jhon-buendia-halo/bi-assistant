@@ -13,6 +13,7 @@ import {
 } from '../agents/eval-judge.agent';
 import { ASSISTANT_MAX_STEPS } from '../agent-constants';
 import { EVAL_RUN_CONTEXT_KEY } from './eval-trace-marker';
+import { inEvalRun } from './eval-run-scope';
 import { DATASETS_CONTEXT_KEY } from '../tools/dataset.tools';
 import {
   SESSION_ID_CONTEXT_KEY,
@@ -1605,7 +1606,7 @@ function anyAnswer() {
   return checks.includes('');
 }
 
-export async function runAssistantEvalCase(
+export function runAssistantEvalCase(
   evalCase: AssistantEvalCase,
   datasets: string[],
   sessionId?: string,
@@ -1619,8 +1620,34 @@ export async function runAssistantEvalCase(
   knowledgeBlock?: string,
   /** The agent the case runs on; the assistant when omitted (agents.md 8.1). */
   target: EvalTarget = ASSISTANT_EVAL_TARGET,
-  /** The eval run's job id, set on the request context as the trace marker (ADR-0054). */
+  /**
+   * The eval run's job id: the trace marker (ADR-0054). The whole case runs
+   * in the run's scope (`inEvalRun`), so every span any model call of it
+   * starts is marked, whatever request context the target's own code builds;
+   * it is also set on the case's request context.
+   */
   evalRunId?: string,
+): Promise<AssistantEvalCaseResult> {
+  return inEvalRun(evalRunId, () =>
+    runCaseInScope(
+      evalCase,
+      datasets,
+      sessionId,
+      knowledgeBlock,
+      target,
+      evalRunId,
+    ),
+  );
+}
+
+/** `runAssistantEvalCase`, inside the run's scope. */
+async function runCaseInScope(
+  evalCase: AssistantEvalCase,
+  datasets: string[],
+  sessionId: string | undefined,
+  knowledgeBlock: string | undefined,
+  target: EvalTarget,
+  evalRunId: string | undefined,
 ): Promise<AssistantEvalCaseResult> {
   const startedAt = Date.now();
   // The question sent: the case's own, unless the target's setup fills it.
@@ -1903,7 +1930,7 @@ export async function runAssistantEvals(
     }
     return results;
   } finally {
-    await target.finish?.(datasets);
+    await inEvalRun(evalRunId, async () => target.finish?.(datasets));
     await cleanupEvalHost(sessions, evalSession);
   }
 }

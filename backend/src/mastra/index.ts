@@ -22,6 +22,7 @@ import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
 import { siteReviewerAgent } from './agents/site-reviewer.agent';
 import { EVAL_RUN_CONTEXT_KEY } from './evals/eval-trace-marker';
+import { EvalRunMarker } from './evals/eval-run-scope';
 import { developerTraceExporters } from './developer-exporters';
 import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
@@ -101,7 +102,10 @@ export const mastra = new Mastra({
         // The local store always gets every trace; Phoenix is added only
         // when developer observability is on.
         exporters: [new MastraStorageExporter(), ...developerTraceExporters()],
-        // Copies the eval marker into every span's metadata (ADR-0054).
+        // Writes the eval marker into the metadata of every span started
+        // inside an eval run's scope, whatever its request context; the key
+        // also copies the marker from a case's own request context (ADR-0054).
+        spanOutputProcessors: [new EvalRunMarker()],
         requestContextKeys: [EVAL_RUN_CONTEXT_KEY],
         logging: {
           enabled: true,

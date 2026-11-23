@@ -28,6 +28,8 @@ import { runEvals } from '@mastra/core/evals';
 import { appSkillBody } from '../app-skills';
 import { evalJudgeAgent } from '../agents/eval-judge.agent';
 import { EVAL_RUN_CONTEXT_KEY } from './eval-trace-marker';
+import { currentEvalRunId } from './eval-run-scope';
+import { synthesizeToolOnlyTurn } from '../../modules/sessions/turn-data';
 import {
   ASSISTANT_EVAL_SETS,
   cleanupEvalHost,
@@ -211,6 +213,80 @@ describe('eval trace marker (ADR-0054)', () => {
     };
     expect(options.requestContext).toBe(sentRequestContext());
     expect(options.requestContext.get(EVAL_RUN_CONTEXT_KEY)).toBe('job-2');
+  });
+
+  it("runs the target and the judge inside the run's scope, so a call that builds its own request context is marked too", async () => {
+    const scopes: Record<string, string | undefined> = {};
+    (runEvals as jest.Mock).mockImplementationOnce(() => {
+      scopes.target = currentEvalRunId();
+      return Promise.resolve({ scores: {} });
+    });
+    (evalJudgeAgent as unknown as { generate: jest.Mock }).generate = jest.fn(
+      () => {
+        scopes.judge = currentEvalRunId();
+        return Promise.resolve({ object: { score: 1, reason: 'ok' } });
+      },
+    );
+
+    await runAssistantEvalCase(
+      { ...evalCase, judgeRubric: 'Answers the question.' },
+      ['World Cup Core'],
+      undefined,
+      undefined,
+      undefined,
+      'job-3',
+    );
+
+    expect(scopes).toEqual({ target: 'job-3', judge: 'job-3' });
+    expect(currentEvalRunId()).toBeUndefined();
+  });
+
+  it("runs the tool-only answer's synthesis inside the run's scope", async () => {
+    let scope: string | undefined;
+    (runEvals as jest.Mock).mockImplementationOnce(
+      (config: { onItemComplete(item: { targetResult: unknown }): void }) => {
+        config.onItemComplete({
+          targetResult: {
+            text: '',
+            steps: [
+              {
+                toolCalls: [{ payload: { toolName: 'sample_rows', args: {} } }],
+                toolResults: [],
+              },
+            ],
+          },
+        });
+        return Promise.resolve({ scores: {} });
+      },
+    );
+    jest.mocked(synthesizeToolOnlyTurn).mockImplementationOnce(() => {
+      scope = currentEvalRunId();
+      return Promise.resolve('synthesized');
+    });
+
+    const result = await runAssistantEvalCase(
+      evalCase,
+      ['World Cup Core'],
+      undefined,
+      undefined,
+      undefined,
+      'job-4',
+    );
+
+    expect(result.answer).toBe('synthesized');
+    expect(scope).toBe('job-4');
+  });
+
+  it('opens no scope without a run id', async () => {
+    let scope: string | undefined = 'unset';
+    (runEvals as jest.Mock).mockImplementationOnce(() => {
+      scope = currentEvalRunId();
+      return Promise.resolve({ scores: {} });
+    });
+
+    await runAssistantEvalCase(evalCase, ['World Cup Core']);
+
+    expect(scope).toBeUndefined();
   });
 });
 
