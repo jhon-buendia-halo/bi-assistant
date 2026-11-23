@@ -47,6 +47,16 @@ export interface EvalRunView {
   startedAt: string;
   finishedAt?: string;
   /**
+   * The eval set the questions belong to; null when they span several sets.
+   * Absent on runs recorded before ADR-0054.
+   */
+  setId?: string | null;
+  /** What the run ran on; absent on runs recorded before ADR-0054. */
+  provider?: string;
+  model?: string;
+  /** Absent = 'app'. */
+  source?: 'app' | 'cli';
+  /**
    * Regression comparison against the most recent previous completed run
    * for this agent with the same datasource and datasets, computed once this
    * run finishes. Absent when no

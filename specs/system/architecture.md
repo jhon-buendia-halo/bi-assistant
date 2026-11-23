@@ -1368,6 +1368,29 @@ flowchart LR
   - It is the one askable step whose earlier `skipped` status (Build a visual unticked) or `visual.skipped` does not refuse it: rows are what it needs, and with none the request is refused with `The earlier answer has no query rows to chart`.
   - The Decision and Consequences above stand; the graph and contract hash of `answer-business-question` are still unchanged.
 
+#### ADR-0054 — Eval traffic is marked in the trace, and Monitoring reads eval runs for Agent quality
+- **Status:** Accepted. Amends ADR-0038.
+- **Date:** 2026-11-22
+- **Context:**
+  - The operator approved an Agent quality tab on Monitoring: one row per agent persona with its eval pass rate, pass^3 and tool figures from its eval runs, and its p95 latency and cost per call from live calls.
+  - Eval runs call the same agents as users do, and nothing tells their traces apart (no tag, metadata or resource id; they show `session: null`, as previews do).
+  - CLI eval runs (`run-assistant-evals.ts`) were never saved, and no run recorded its set or model, so pass^3 could mix models.
+- **Decision:**
+  - **Marker.** Every eval case sets `eval-run-id = <jobId>` in its request context (`EVAL_RUN_CONTEXT_KEY`, `mastra/evals/eval-trace-marker.ts`), and so does its judge. The Observability config lists that key in `requestContextKeys`, so Mastra copies it into the `metadata` of every span created with that request context: agent runs, model calls, tool calls and workflow spans.
+  - **Classification.** A model call is an eval call when any span of its trace carries `metadata."eval-run-id"`. Every other call is live, including calls recorded before this change.
+  - **Monitoring reads `eval_runs` read-only** through `EvalRunsRepository`. Endpoint #163 joins those runs (by agent registry key) with the trace store's live calls (by Mastra agent id).
+  - **Every run records `setId`, `provider`, `model` and `source`.** The CLI saves its runs to `eval_runs` as the UI does; a record is inserted only once its first question has finished, so a preflight refusal leaves nothing. Old runs: the set is derived from `caseIds` when one set holds them all; the model is `Unknown`, and such runs are never pooled into pass^3.
+- **Alternatives considered:**
+  - **`tracingOptions.tags`/`metadata`:** rejected; they go on the root span only, and every wrapper target, the judge and the synthesis would need them threaded by hand.
+  - **Matching the throwaway host id `run-eval-<uuid>`:** rejected; best-effort, and absent from calls made without a session.
+  - **A new eval-calls collection:** rejected; it duplicates the trace store (ADR-0038).
+- **Consequences:**
+  - Every span of an eval trace carries one more metadata key; other traces are unchanged.
+  - A model call made in a new trace with a fresh request context would count as live, so any new eval target must forward the case's request context.
+  - Live figures include old eval calls until they leave the period.
+  - The CLI writes to the data dir it boots on, and beside a running app it shares SQLite and Mastra's DuckDB lock, as it already did.
+  - **Stack-neutral:** a rebuild needs a per-request key copied onto every span of a trace, a run store with set and model, and a read path over both.
+
 ## Level 4 — Code
 
 ```mermaid
