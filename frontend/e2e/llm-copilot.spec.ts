@@ -265,10 +265,16 @@ test('a run of Answer a Business Question runs on GitHub Copilot', async ({
   const question = 'Who won the 2018 World Cup final and what was the score?';
   const result = await runQuestionOk(page, question);
 
-  // The answer streams (R62): it arrives in several pieces, not one.
-  expect(result.events.filter((e) => e.type === 'text').length).toBeGreaterThan(
-    1,
-  );
+  // Avery briefed Michael on Copilot, and his streamed reply (R62) came back
+  // to her as what he handed back, then became the run's answer.
+  expect(
+    result.events.some(
+      (e) =>
+        e.type === 'tool-result' &&
+        JSON.stringify(e).includes('answer_from_data') &&
+        JSON.stringify(e).includes('France'),
+    ),
+  ).toBe(true);
   expect(result.text).toContain(FINAL_ANSWER);
   expect(result.run?.status).toBe('success');
 

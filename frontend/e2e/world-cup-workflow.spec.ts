@@ -46,8 +46,9 @@ test('creates a PostgreSQL datasource, dataset, and run using the real World Cup
             },
           };
 
-    // A run of Insights Analyst over the dataset just created queries
-    // the real database and shows the answer with the query behind it.
+    // A run of Answer a Business Question (Avery + Michael) over the dataset
+    // just created queries the real database and shows the answer with the
+    // query behind it.
     await runQuestionInTab(page, QUESTION, WORLD_CUP_DATASET);
     await expect(runAnswer(page)).toContainText(ANSWER);
     await page.getByTestId('query-row-0').click();
@@ -55,35 +56,30 @@ test('creates a PostgreSQL datasource, dataset, and run using the real World Cup
     await expect(page.getByTestId('query-sql')).toHaveText(SQL);
     await page.getByTestId('query-inspector-close').click();
 
-    // Analyse's Story names the query and opens it in the same inspector.
-    await page.getByTestId('workflow-node-analyse').dblclick();
+    // Orchestrate's lead view names Michael's query and opens it in the
+    // same inspector.
+    await page.getByTestId('workflow-node-orchestrate').dblclick();
     const dialog = page.getByTestId('workflow-ndv');
-    await expect(
-      dialog.getByTestId('workflow-step-story-headline'),
-    ).toContainText('Ran 1 query on the data.');
-    await dialog.getByTestId('workflow-step-story-query-0').click();
+    await expect(dialog.getByTestId('workflow-lead-teammate').first()).toContainText(
+      'Counting the matches.',
+    );
+    await dialog.getByTestId('workflow-lead-open-query').first().click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByTestId('query-inspector-sheet')).toBeVisible();
     await page.getByTestId('query-inspector-tab-sql').click();
     await expect(page.getByTestId('query-sql')).toHaveText(SQL);
     await page.getByTestId('query-inspector-close').click();
-    await expect(page.getByTestId('workflow-node-analyse')).toBeFocused();
+    await expect(page.getByTestId('workflow-node-orchestrate')).toBeFocused();
 
-    // The canvas tells each code step in a few words, and How it ran, under
-    // the answer, reads the run step by step.
-    await expect(
-      page
-        .getByTestId('workflow-node-load-catalog')
-        .getByTestId('workflow-node-run-line'),
-    ).toContainText(/\d+ tables? · /);
+    // How it ran, under the answer, reads the run step by step: its one step.
     const howItRan = page.getByTestId('workflow-run-story');
     await expect(
       howItRan.getByTestId('workflow-run-story-summary'),
     ).toContainText('to run');
     await howItRan.getByTestId('workflow-run-story-toggle').click();
     await expect(
-      howItRan.getByTestId('workflow-run-story-step-analyse'),
-    ).toContainText('Ran 1 query on the data.');
+      howItRan.getByTestId('workflow-run-story-step-orchestrate'),
+    ).toContainText('Orchestrate');
 
     const toolResult = stub.requests
       .flatMap((request) => request.messages)

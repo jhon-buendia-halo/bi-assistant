@@ -125,10 +125,10 @@ async function askInRun(page: Page, question: string): Promise<StubRequest> {
   const from = stub.requests.length;
   const result = await runQuestionOk(page, question);
   expect(result.text).toContain(STUB_ANSWER);
-  // The analysis turn's call, not v2's structured Plan or Write answer call.
+  // Michael's analysis turn, not Avery's call that briefs him.
   const request = stub.requests
     .slice(from)
-    .find((r) => r.stream && r.step === undefined);
+    .find((r) => r.stream && r.step === undefined && !r.avery);
   expect(request, `a streamed call for "${question}"`).toBeDefined();
   return request!;
 }
@@ -191,7 +191,7 @@ test("I edit Insights Analyst's prompt, its runs read it, and Reset restores it"
 }) => {
   // Given the World Cup dataset and the stub model.
   await seedChat(page);
-  // When I add a line to v2's prompt on its page and save.
+  // When I add a line to Michael's prompt on his page and save.
   await openAgent(page, V2_KEY, V2);
   await openPromptTab(page);
   await expect(modifiedChip(page)).toHaveCount(0);
@@ -211,7 +211,7 @@ test("I edit Insights Analyst's prompt, its runs read it, and Reset restores it"
   ).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
 
-  // Then a run of Answer a Business Question sends the edited prompt.
+  // Then a run of Answer a Business Question (Avery + Michael) sends Michael the edited prompt.
   const edited = systemTexts(await askInRun(page, QUESTION))[0];
   expect(edited.startsWith('You are Questions to Insights')).toBe(true);
   expect(edited).toContain(DONE_LINE);

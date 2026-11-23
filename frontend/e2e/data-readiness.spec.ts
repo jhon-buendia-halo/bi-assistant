@@ -383,7 +383,7 @@ test('the Data Readiness Agent is an Official library agent used by Assess Data 
     page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByTestId('workflow-answer-business-question'),
+    page.getByTestId('workflow-data-readiness-assessment'),
   ).toBeVisible();
   await expect(page.getByTestId(`workflow-agent:${AGENT_KEY}`)).toHaveCount(0);
   expect(stub.requests, 'nothing reached the model').toHaveLength(0);

@@ -149,13 +149,17 @@ test('the start page asks a question first and links runs, workflows and agents'
     page.getByRole('heading', { name: 'Recent runs' }),
   ).toBeVisible();
   await expect(page.getByTestId('welcome-runs-empty')).toBeVisible();
-  // Answer a Business Question is the question box; the others are listed.
+  // Answer a Business Question (Avery + Michael) is the question box; the
+  // other workflows are listed.
   const workflows = page.getByTestId('welcome-workflows');
+  await expect(
+    workflows.getByRole('heading', { name: 'Other workflows' }),
+  ).toBeVisible();
   await expect(
     workflows.getByTestId('welcome-workflow-review-website'),
   ).toBeVisible();
   await expect(
-    workflows.getByTestId('welcome-workflow-answer-business-question'),
+    workflows.getByTestId('welcome-workflow-orchestrated-answer-michael'),
   ).toHaveCount(0);
 
   // Each link opens the place it names (app-shell R51).

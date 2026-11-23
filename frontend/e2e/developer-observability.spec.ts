@@ -102,15 +102,15 @@ test('workflow runs reach Phoenix when observability is on', async ({
   await seedWorldCupDataset(page);
   await saveAndRestart(app, true);
 
-  // A run of Insights Analyst. No model is configured, so the run
-  // fails before its agent step; the spans of the steps that ran (the first
-  // is `receive-question`) are exported all the same.
+  // A run of Answer a Business Question (Avery + Michael). No model is
+  // configured, so its one step, `orchestrate`, fails at Avery's call; the
+  // spans of the run and its step are exported all the same.
   const run = await runQuestion(page, 'Who won the 2022 World Cup?');
   expect(run.status, run.body).toBe(200);
 
   await expect
     .poll(() => payloadOf(phoenix, '/v1/traces'), { timeout: 30_000 })
-    .toContain('receive-question');
+    .toContain('orchestrate');
   expect(phoenix.received('/v1/traces')[0].contentType).toContain(
     'application/x-protobuf',
   );
