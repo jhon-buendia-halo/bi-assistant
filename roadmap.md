@@ -765,7 +765,7 @@ Each agent of Answer a Business Question and Assess Data Readiness gets its own 
 - **Out of scope:** changing an agent before the baseline shows a failure (1.29.8 owns fixes).
 - **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
 
-#### 1.29.9 — Monitoring: the Agent quality tab  `🚧 In progress`
+#### 1.29.9 — Monitoring: the Agent quality tab  `✅ Done`
 - **Intent:** a third Monitoring tab, **Agent quality**: one row per agent persona with its eval pass rate, pass^3 and tool figures from its eval runs, and its p95 latency and cost per call from live calls; every eval call is marked in the trace so live figures leave it out, and every run (UI and CLI) records its set and model.
 - **Scope:** per plan `monitoring-agent-quality` (`docs/plans/monitoring-agent-quality.md`): the `eval-run-id` marker (ADR-0054), run metadata and CLI-saved runs, endpoint #163, the tab, opening an agent's Executions from a row; monitoring, agents-evals, api, data-model, agents and glossary specs.
 - **Out of scope:** a trend chart over time; per-case drill-down inside Monitoring; pass^k other than 3.

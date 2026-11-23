@@ -344,7 +344,7 @@ roadmap.md:744-748  #### 1.29.5 — image-reader border-case evals  `✅ Done`
 roadmap.md:750-754  #### 1.29.6 — insights-analyst and result-explorer evals on Edge Cases  `✅ Done`
 roadmap.md:756-760  #### 1.29.7 — Explain report evals inside Assess Data Readiness  `✅ Done`
 roadmap.md:762-766  #### 1.29.8 — Baseline, inconsistency report and fixes  `✅ Done`
-roadmap.md:768-772  #### 1.29.9 — Monitoring: the Agent quality tab  `🚧 In progress`
+roadmap.md:768-772  #### 1.29.9 — Monitoring: the Agent quality tab  `✅ Done`
 roadmap.md:774-803  ### Milestone 1.30 — Consumption Gap Analysis: does the medallion's Consumption layer support the business? (M1-30)
 roadmap.md:778-782  #### 1.30.1 — World Cup Medallion sample  `✅ Done`
 roadmap.md:784-787  #### 1.30.2 — Lineage inference and gap tracing  `✅ Done`
