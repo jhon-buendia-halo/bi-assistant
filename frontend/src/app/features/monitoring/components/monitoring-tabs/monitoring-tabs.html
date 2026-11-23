@@ -1,9 +1,5 @@
 <p class="mt-1 text-[13px] text-fg-muted" data-testid="monitoring-note">
-  {{
-    state.tab() === "sessions"
-      ? "Runs with recorded agent persona calls, most recent first."
-      : "LLM calls made by the app's agent personas, newest first."
-  }}
+  {{ notes[state.tab()] }}
 </p>
 <div
   role="tablist"
@@ -20,8 +16,10 @@
       [attr.aria-controls]="'monitoring-panel-' + tab.id"
       [attr.tabindex]="state.tab() === tab.id ? 0 : -1"
       (click)="select(tab.id)"
-      (keydown.arrowRight)="select(other(tab.id), true)"
-      (keydown.arrowLeft)="select(other(tab.id), true)"
+      (keydown.arrowRight)="select(step(tab.id, 1), true)"
+      (keydown.arrowLeft)="select(step(tab.id, -1), true)"
+      (keydown.home)="jump($event, first())"
+      (keydown.end)="jump($event, last())"
       class="-mb-px border-b-2 px-3 py-2 text-[13px]"
       [class.border-border-selected]="state.tab() === tab.id"
       [class.text-fg-strong]="state.tab() === tab.id"
@@ -33,22 +31,36 @@
     </button>
   }
 </div>
-@if (state.tab() === "sessions") {
-  <div
-    class="mt-6"
-    role="tabpanel"
-    id="monitoring-panel-sessions"
-    aria-labelledby="monitoring-tab-sessions"
-  >
-    <app-sessions-page (openSession)="openSession.emit($event)" />
-  </div>
-} @else {
-  <div
-    class="mt-6"
-    role="tabpanel"
-    id="monitoring-panel-calls"
-    aria-labelledby="monitoring-tab-calls"
-  >
-    <app-llm-calls-page (openCall)="openCall.emit($event)" />
-  </div>
+@switch (state.tab()) {
+  @case ("sessions") {
+    <div
+      class="mt-6"
+      role="tabpanel"
+      id="monitoring-panel-sessions"
+      aria-labelledby="monitoring-tab-sessions"
+    >
+      <app-sessions-page (openSession)="openSession.emit($event)" />
+    </div>
+  }
+  @case ("quality") {
+    <div
+      class="mt-6"
+      role="tabpanel"
+      id="monitoring-panel-quality"
+      data-testid="monitoring-panel-quality"
+      aria-labelledby="monitoring-tab-quality"
+    >
+      <app-agent-quality-page (openAgent)="openAgentEvals.emit($event)" />
+    </div>
+  }
+  @default {
+    <div
+      class="mt-6"
+      role="tabpanel"
+      id="monitoring-panel-calls"
+      aria-labelledby="monitoring-tab-calls"
+    >
+      <app-llm-calls-page (openCall)="openCall.emit($event)" />
+    </div>
+  }
 }
