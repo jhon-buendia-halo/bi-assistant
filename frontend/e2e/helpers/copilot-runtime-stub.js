@@ -245,15 +245,13 @@ async function onSend(params) {
   if (v2 !== null) return answer(sessionId, v2);
   const schema = params.responseFormat?.jsonSchema?.schema;
   if (schema) return answer(sessionId, JSON.stringify(sample(schema)));
-  if (isAvery(state.system)) {
-    if (state.tools.includes(AVERY_ANSWER_TOOL)) {
-      state.averyBriefed = true;
-      return requestTool(sessionId, {
-        name: AVERY_ANSWER_TOOL,
-        arguments: { brief: String(params.prompt ?? '').trim() || 'Answer the user.' },
-      });
-    }
-    return answer(sessionId, '');
+  // Avery's orchestrating turn: her instructions, with her team tool.
+  if (isAvery(state.system) && state.tools.includes(AVERY_ANSWER_TOOL)) {
+    state.avery = true;
+    return requestTool(sessionId, {
+      name: AVERY_ANSWER_TOOL,
+      arguments: { brief: String(params.prompt ?? '').trim() || 'Answer the user.' },
+    });
   }
   if (TOOL_CALL && !state.toolRequested && state.tools.includes(TOOL_CALL.name)) {
     if (TOOL_AS_TEXT && !state.wroteToolAsText) {
@@ -324,7 +322,7 @@ function handle(message) {
       if (sessionId) {
         emit(sessionId, 'external_tool.completed', { requestId: params.requestId });
         const state = sessions.get(sessionId);
-        if (state && isAvery(state.system)) {
+        if (state && state.avery) {
           const next = averyAfter(resultText(params.result));
           if (next) requestTool(sessionId, next);
           else void answer(sessionId, '');

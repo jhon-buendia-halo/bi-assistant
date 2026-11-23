@@ -64,7 +64,11 @@ export interface StubRequest {
   model?: string;
   /** A structured call of Insights Analyst (Plan, Write answer); absent for any other. */
   step?: V2Step;
-  /** True for a call of Avery, the Chief of Staff (never sent to `reply`). */
+  /**
+   * True for a call of Avery's orchestrating turn (her instructions, offered
+   * `answer_from_data`): answered by `averyReply`, never sent to `reply`.
+   * Her calls without that tool (a node chat) go to `reply` as any other.
+   */
   avery?: boolean;
 }
 
@@ -454,7 +458,11 @@ export async function startLlmStub(
         reasoningEffort: body.reasoning_effort,
         model: body.model,
         ...(step !== null ? { step } : {}),
-        ...(isAveryCall(systemTexts({ messages } as StubRequest))
+        // Avery's orchestrating turn: her instructions, with her team tool.
+        ...(isAveryCall(systemTexts({ messages } as StubRequest)) &&
+        (body.tools ?? []).some(
+          (tool) => tool.function?.name === AVERY_ANSWER_TOOL,
+        )
           ? { avery: true }
           : {}),
       };

@@ -437,7 +437,14 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
             : step === 'quality'
               ? dataQualityReply(lastUserText(body))
               : null;
-      const avery = step === null && isAveryCall(systemTexts(body));
+      // Avery's orchestrating turn: her instructions, with her team tool.
+      const avery =
+        step === null &&
+        isAveryCall(systemTexts(body)) &&
+        Array.isArray(body?.tools) &&
+        body.tools.some(
+          (tool: { name?: string }) => tool?.name === AVERY_ANSWER_TOOL,
+        );
       const content: ContentBlock[] = avery
         ? averyContent(body)
         : v2 !== null
