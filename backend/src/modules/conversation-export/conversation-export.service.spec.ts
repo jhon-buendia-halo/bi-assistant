@@ -250,6 +250,35 @@ describe('ConversationExportService (agents.md 3.18; api.md 167)', () => {
     });
   });
 
+  it('leaves out an earlier turn that exported the conversation', async () => {
+    const exported = run(
+      'r-export',
+      '2026-11-23T04:00:00.000Z',
+      'Export this conversation to PDF',
+      {
+        answer: {
+          role: 'assistant',
+          content: 'Your PDF is ready.',
+          at: '2026-11-23T04:00:00.000Z',
+          export: {
+            id: 'ex-0',
+            title: 'Earlier export',
+            createdAt: '2026-11-23T04:00:00.000Z',
+            files: [
+              { format: 'pdf', fileName: 'earlier.pdf', bytes: 1, pages: 1 },
+            ],
+          },
+        },
+      },
+    );
+    const { service } = build({ runs: [...RUNS, exported] });
+    const turns = await service.turns('c-1', 'r-now');
+    expect(turns.questions).toEqual([
+      'Create a dashboard of goals by team',
+      'Replace the table with a bar chart',
+    ]);
+  });
+
   it('draws the dashboards, prints the PDF, writes the PowerPoint and stores the export', async () => {
     const { service, session, artifacts, stored } = build();
     const made = await service.export({

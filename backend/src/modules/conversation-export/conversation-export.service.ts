@@ -86,7 +86,8 @@ export class ConversationExportService implements ConversationExporter {
 
   /**
    * The conversation's ended runs with an answer, oldest first, before
-   * `beforeRunId` (all of them when that run is not in it).
+   * `beforeRunId` (all of them when that run is not in it). A turn that
+   * exported the conversation is about the file, not the data: it is left out.
    */
   private async earlierRuns(
     conversationId: string,
@@ -102,7 +103,8 @@ export class ConversationExportService implements ConversationExporter {
           run.status !== 'running' &&
           run.status !== 'suspended' &&
           !!run.question?.trim() &&
-          !!run.answer?.content?.trim(),
+          !!run.answer?.content?.trim() &&
+          !run.answer.export,
       )
       .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
   }
