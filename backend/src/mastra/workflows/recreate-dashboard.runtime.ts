@@ -9,8 +9,12 @@
  * Plain strings, no framework import. The script is browser-native
  * JavaScript with no template literal and no backslash, so it sits in a
  * template literal here unchanged. It exposes `window.dashMock`:
- * `buildRows(blueprint)` and `compute(blueprint, rows, state)` are pure
- * (the unit test runs them without a DOM); `mount(root, document)` draws.
+ * `buildRows(blueprint)` and `compute(blueprint, rows, state, live)` are
+ * pure (the unit test runs them without a DOM); `mount(root, document)`
+ * draws. The document is `{ blueprint, mapping, rows?, live? }`: with
+ * `rows` (a live dashboard: the row snapshot of an artifact version) it
+ * draws those rows of the user's data instead of the mock, and with
+ * `live: true` it never says the values are invented.
  */
 
 /** The id of the element the runtime mounts on. */
@@ -194,9 +198,17 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
     );
   }
 
+  // A row's value as a group key: an empty value reads as (blank).
+  function keyOf(row, name) {
+    var value = row[name];
+    return value === null || value === undefined ? '(blank)' : String(value);
+  }
+
   // One widget's figures from the rows its filters leave: the total of each
   // measure and, with a dimension, each measure by the dimension's values.
-  function computeWidget(blueprint, rows, state, widget) {
+  // Live rows (the user's data) group in the order the rows give, dates and
+  // numbers ascending; mock rows in the order of the column's values.
+  function computeWidget(blueprint, rows, state, widget, live) {
     var applies = {};
     (widget.filteredBy || []).forEach(function (id) {
       applies[id] = state[id];
@@ -213,14 +225,20 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
     var groups = [];
     var column = widget.dimension ? columnOf(blueprint, widget.dimension) : null;
     if (column) {
-      var order = column.type === 'number' ? [] : valuesOf(blueprint, column);
+      var order = live || column.type === 'number' ? [] : valuesOf(blueprint, column);
       var byKey = {};
       kept.forEach(function (row) {
-        var key = String(row[column.name]);
-        if (!byKey[key]) byKey[key] = [];
+        var key = keyOf(row, column.name);
+        if (!byKey[key]) {
+          byKey[key] = [];
+          if (order.indexOf(key) < 0) order.push(key);
+        }
         byKey[key].push(row);
-        if (order.indexOf(key) < 0) order.push(key);
       });
+      if (live && column.type === 'date') order.sort();
+      if (live && column.type === 'number') {
+        order.sort(function (a, b) { return Number(a) - Number(b); });
+      }
       order.forEach(function (key) {
         if (!byKey[key]) return;
         groups.push({
@@ -234,9 +252,9 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
     return { id: widget.id, rowCount: kept.length, totals: totals, groups: groups };
   }
 
-  function compute(blueprint, rows, state) {
+  function compute(blueprint, rows, state, live) {
     return (blueprint.widgets || []).map(function (widget) {
-      return computeWidget(blueprint, rows, state || {}, widget);
+      return computeWidget(blueprint, rows, state || {}, widget, !!live);
     });
   }
 
@@ -331,7 +349,11 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
       filterMapping[entry.filterId] = entry;
     });
     var palette = paletteOf(blueprint);
-    var rows = buildRows(blueprint);
+    // Rows given are the user's data (a live dashboard): drawn as they are,
+    // never scaled. Without them the seeded mock rows stand in.
+    var given = Object.prototype.toString.call(input.rows) === '[object Array]';
+    var live = given && !!input.live;
+    var rows = given ? input.rows : buildRows(blueprint);
     var state = {};
     var sort = {};
     var bodies = {};
@@ -584,7 +606,7 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
 
     function drawNote(body, widget) {
       body.appendChild(
-        el('p', 'dmk-note', widget.description || 'This widget is not drawn in the mock.')
+        el('p', 'dmk-note', widget.description || (live ? 'This widget has no figure to draw.' : 'This widget is not drawn in the mock.'))
       );
     }
 
@@ -623,7 +645,7 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
     }
 
     function render() {
-      var computed = compute(blueprint, rows, state);
+      var computed = compute(blueprint, rows, state, given);
       (blueprint.widgets || []).forEach(function (widget, index) {
         drawWidget(widget, computed[index]);
       });
@@ -631,6 +653,7 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
 
     while (root.firstChild) root.removeChild(root.firstChild);
     root.setAttribute('data-mode', (blueprint.theme || {}).mode === 'dark' ? 'dark' : 'light');
+    root.setAttribute('data-data', live ? 'live' : 'mock');
     root.style.setProperty('--dmk-accent', palette[0]);
 
     var header = el('div', 'dmk-header');
@@ -697,7 +720,7 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
     summary.setAttribute('data-testid', 'dash-mock-summary');
     summary.textContent =
       'Data mapping: ' + counts.mapped + ' mapped, ' + counts.partial + ' partly mapped, ' + counts.unmapped +
-      ' with no data. Every value shown is invented.';
+      ' with no data.' + (live ? '' : ' Every value shown is invented.');
     if (mapped) root.appendChild(summary);
 
     var grid = el('div', 'dmk-grid-layout');

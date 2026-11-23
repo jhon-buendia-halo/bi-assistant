@@ -6,21 +6,24 @@ import {
   HttpCode,
   Param,
   Patch,
+  Query,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { renderDashboardBundle } from '../../mastra/workflows/recreate-dashboard.steps';
+import { renderLiveDashboardBundle } from '../../mastra/workflows/live-dashboard';
 import { sandboxedVisualizationDocument } from '../sessions/visualization-document';
-import { ArtifactsService } from './artifacts.service';
+import { ArtifactsService, versionParam } from './artifacts.service';
 import type {
   ArtifactDetail,
   ArtifactSummary,
 } from './entities/artifact.entity';
 
 /**
- * The Artifacts area (api.md 2.6.4): the stored artifacts, read, renamed
- * and deleted. An artifact has no route that creates it: a run of Dashboard
- * Image to Artifact saves one (agents.md 5.17).
+ * The Artifacts area (api.md 2.6.4): the stored artifacts, read at a
+ * version, downloaded, renamed and deleted. No route creates an artifact or
+ * a version: a run of Dashboard Image to Artifact saves one (agents.md
+ * 5.17), and a turn that builds a dashboard on the user's data saves each
+ * version.
  */
 @Controller('artifacts')
 export class ArtifactsController {
@@ -32,17 +35,48 @@ export class ArtifactsController {
     return this.artifacts.list();
   }
 
-  /** One artifact with its dashboard drawn (api.md 145). */
+  /**
+   * One artifact at a version, the current one when `version` is absent,
+   * with its dashboard drawn (api.md 145): on the version's rows when it
+   * has them, else on invented values.
+   */
   @Get(':id')
-  async get(@Param('id') id: string): Promise<ArtifactDetail> {
-    const artifact = await this.artifacts.get(id);
+  async get(
+    @Param('id') id: string,
+    @Query('version') version?: unknown,
+  ): Promise<ArtifactDetail> {
+    const { artifact, rows } = await this.artifacts.detail(
+      id,
+      versionParam(version),
+    );
     return {
       ...artifact,
-      // No mapping: the dashboard as it was read, with no status badges.
+      // No mapping: the dashboard as it was built, with no status badges.
       document: sandboxedVisualizationDocument(
-        renderDashboardBundle(artifact.blueprint, null),
+        renderLiveDashboardBundle(artifact.blueprint, rows),
       ),
     };
+  }
+
+  /**
+   * A version of an artifact's dashboard as a zip of plain HTML, JS and CSS
+   * that opens from the file system (api.md 163).
+   */
+  @Get(':id/download')
+  async download(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @Query('version') version?: unknown,
+  ): Promise<void> {
+    const { filename, archive } = await this.artifacts.download(
+      id,
+      versionParam(version),
+    );
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', archive.length);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(archive);
   }
 
   /** The image an artifact's dashboard was read from (api.md 146). */
