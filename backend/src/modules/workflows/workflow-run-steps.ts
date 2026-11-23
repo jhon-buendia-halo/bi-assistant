@@ -20,11 +20,13 @@ import type {
 } from '../sessions/entities/session.entity';
 
 /**
- * A run's status: `running` until it ends; `suspended` while it waits for
- * the user's answer (api.md 138, ADR-0043).
+ * A run's status: `queued` from when it is accepted (api.md 119) until a
+ * slot is free for it, or again after a restart cut it off; `running` until
+ * it ends; `suspended` while it waits for the user's answer (api.md 138,
+ * ADR-0043).
  */
 export type WorkflowRunStatus =
-  'running' | 'suspended' | 'success' | 'failed' | 'stopped';
+  'queued' | 'running' | 'suspended' | 'success' | 'failed' | 'stopped';
 
 /** A step's status in a run (api.md 119 `step`); `suspended`: it waits. */
 export type WorkflowRunStepStatus =
@@ -161,6 +163,17 @@ export interface WorkflowRun {
    */
   archivedAt?: string;
   status: WorkflowRunStatus;
+  /**
+   * When 119 accepted the run (it was stored `queued`). Absent on runs
+   * stored before the queue, and on 118 and draft runs.
+   */
+  queuedAt?: string;
+  /**
+   * How many times the run has started (1 on its first start; a restart
+   * that cut it off starts it again, at most `RUN_MAX_ATTEMPTS`). Absent
+   * while it never started, and on runs stored before the queue.
+   */
+  attempts?: number;
   /** Every step of the workflow, in its order. */
   steps: WorkflowRunStep[];
   /** The workflow's final output (success only). */
@@ -196,6 +209,7 @@ export interface WorkflowRun {
   workflow?: WorkflowView;
   /** Legacy and inert (data-model 3.14): `local`. */
   ownerId?: string;
+  /** When it was stored, then each time it starts (history order). */
   startedAt: string;
   finishedAt?: string;
   /** Store-maintained. */
@@ -219,6 +233,8 @@ export interface WorkflowRunSummary {
   title: string;
   startedAt: string;
   finishedAt?: string;
+  queuedAt?: string;
+  attempts?: number;
   /** Its conversation with Avery (workflows R45), when it has one. */
   conversationId?: string;
   /** When its conversation was archived (api.md 159). */
@@ -230,6 +246,12 @@ export const RUN_TITLE_MAX = 120;
 
 /** A run the app stopped in, as start-up recovery fails it (plan 5.1 step 5). */
 export const RUN_INTERRUPTED_ERROR = 'The app stopped before the run finished';
+
+/**
+ * How many times a run starts at most: a run the app stopped in this many
+ * times is failed at start-up instead of queued again.
+ */
+export const RUN_MAX_ATTEMPTS = 3;
 
 /**
  * A run's title (plan 5.3): its question, else the first of `textFields`
@@ -265,6 +287,8 @@ export function runSummaryOf(
     title: runTitle(run, textFields),
     startedAt: run.startedAt,
     ...(run.finishedAt ? { finishedAt: run.finishedAt } : {}),
+    ...(run.queuedAt ? { queuedAt: run.queuedAt } : {}),
+    ...(run.attempts !== undefined ? { attempts: run.attempts } : {}),
     ...(run.conversationId ? { conversationId: run.conversationId } : {}),
     ...(run.archivedAt ? { archivedAt: run.archivedAt } : {}),
   };
@@ -306,8 +330,23 @@ export function runHostDoc(run: WorkflowRunDoc): SessionDoc {
 }
 
 /**
- * What start-up recovery writes on a run the app stopped in (plan 5.1 step
- * 5): `failed` with `RUN_INTERRUPTED_ERROR`, and so is any step still running.
+ * What start-up recovery writes on a run 119 accepted that the app stopped
+ * in and that may start again (`attempts` below `RUN_MAX_ATTEMPTS`):
+ * `queued`, from scratch (no steps, output, error or answer), in line from
+ * when it was first accepted (its `queuedAt` is kept).
+ */
+export const REQUEUED_RUN_PATCH: Readonly<Partial<WorkflowRunDoc>> = {
+  status: 'queued',
+  steps: [],
+  output: undefined,
+  error: undefined,
+  answer: undefined,
+};
+
+/**
+ * What start-up recovery writes on a run the app stopped in
+ * `RUN_MAX_ATTEMPTS` times (plan 5.1 step 5): `failed` with
+ * `RUN_INTERRUPTED_ERROR`, and so is any step still running.
  * A step stored `suspended` fails too: a checkpoint can store the waiting
  * step before the end write stores the run `suspended` (data-model 3.16
  * allows a suspended step only on a suspended run).
@@ -721,7 +760,7 @@ export class RunStepTracker {
    * repeated step's attempts one after the other.
    */
   finish(
-    status: Exclude<WorkflowRunStatus, 'running'>,
+    status: Exclude<WorkflowRunStatus, 'running' | 'queued'>,
     error?: string,
   ): { steps: WorkflowRunStep[]; changed: WorkflowRunStep[] } {
     const changed: WorkflowRunStep[] = [];
