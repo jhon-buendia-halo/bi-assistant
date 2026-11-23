@@ -1221,6 +1221,35 @@ type DashboardRef = {
 - Response `200`: the `Artifact` as 145 at that version, with the version now in `savedVersions` (`status: 'saved'`). Idempotent: saving a saved version changes nothing. `400 "Version must be a positive whole number"`; `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no version <n>"`.
 - Side effects: adds the version to the document's `savedVersions` (data-model 3.18); later versions stay drafts until saved. FE: yes (**Save to Artifacts** on the dashboard panel and the card).
 
+### 2.6.5 Conversation exports
+
+Controller prefix `/conversation-exports`. Capability: workflows (R45). Avery makes an export in a run of hers when the user asks to export or share the conversation (`export_conversation`, [agents.md](agents.md) 3.18; ADR-0056): **no route creates one**. The answer of that run carries it as `answer.export` (a session's `ChatMessage.export`, data-model 3.4.1), and the export is stored in `conversation_exports` (data-model 3.20) with its files under `<data dir>/exports/<id>/`.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 167 | `GET /conversation-exports/:id/download` | One file of an export (PDF or PowerPoint) as an attachment | yes |
+
+```ts
+// ChatMessage.export (data-model 3.4.1; a run's answer.export): the conversation Avery exported in that turn
+type ConversationExportRef = {
+  id: string;                      // uuid
+  title: string;                   // Avery's title for the file
+  createdAt: string;               // ISO
+  files: {
+    format: 'pdf' | 'pptx';
+    fileName: string;              // `<slug of the title>.pdf` / `.pptx`: lower case [a-z0-9-], at most 64 characters (`conversation` when nothing is left)
+    bytes: number;
+    pages?: number;                // the PDF's page count
+    slides?: number;               // the PowerPoint's slide count
+  }[];                             // the formats Avery asked for, `pdf` first
+};
+```
+
+#### 167. `GET /conversation-exports/:id/download`
+- Query: `format`: `pdf` or `pptx` (required).
+- Response `200`: the file, `Content-Type: application/pdf` or `application/vnd.openxmlformats-officedocument.presentationml.presentation`, `Content-Disposition: attachment; filename="<fileName>"`, `Content-Length` and `Cache-Control: no-store`.
+- `400 "format must be \"pdf\" or \"pptx\""` for any other `format` (or none); `404 "Export not found"`; `404 "This export has no <format> file"` when the export was made without that format; `404 "The export file is gone"` when its file was removed from the data directory. FE: yes (the export card's **Download PDF** and **Download PowerPoint**, ui.md 4.4b).
+
 ### 2.7 Deep analysis (removed 2026-11-12)
 
 Controller prefix `/sessions`. Capability: none (the `deep-analysis` capability spec was deleted). Deep analysis was removed with ADR-0042: its start and poll routes went in 1.23.27, its report download and its workflow on 2026-11-12. Every route answers `404`; the numbers are not reused. Report files an old session left in its workspace stay on disk, unused.
@@ -1444,6 +1473,8 @@ interface ChatMessage {
   feedback?: 'up' | 'down'; crossCheck?: { status: 'agree'|'disagree'|'error'; note?: string };
   reasoning?: ReasoningStep[]; knowledge?: KnowledgeUse[]; report?: AnalysisReport;
   evidence?: QueryEvidence[];   // the query inspector's facts, beside `data` (data-model 3.4.2a)
+  dashboard?: DashboardRef;     // the dashboard a turn of Avery's created or changed (2.6.4)
+  export?: ConversationExportRef;   // the conversation Avery exported in that turn (2.6.5, 167)
 }
 interface ToolDataRecord {
   tool: string; input?: string;                       // SQL text or entity name
@@ -1788,6 +1819,7 @@ type WorkflowRun = {
   // Answer a Business Question runs only:
   question?: string;               // the user message the agent received (`question`), trimmed
   answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1): Write answer's text (a run stored before 2026-11-13 may hold a clarifying question with its `clarification`); absent while it waits, and when it stopped or failed before answering
+                                   // an Avery run's `answer.dashboard` (2.6.4) and `answer.export` (2.6.5, 167): the dashboard and the conversation export that turn made
                                    // answer.evidence?: QueryEvidence[] (data-model 3.4.2a): one entry per run_readonly_sql, sample_rows or explore_result record of answer.data (an explore_result entry carries its view: ResultView), failed ones included, in data order; set at persist, built by 139 for an answer stored before it, patched only by 139-141 under the run's answer lock
   datasets: string[];              // the host's datasets 
   agentKey?: string; agentId?: string; agentName?: string;

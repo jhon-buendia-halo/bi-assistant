@@ -1417,6 +1417,31 @@ flowchart LR
   - **C. The model writes the dashboard's code (HTML, CSS and JS):** the most flexible, and the same route Ryan's legacy mode took, but every dashboard would need validation and repair, a follow-up would rewrite the code and drift, and the zip would ship code nobody reviewed; rejected against ADR-0034 (the flow and the code come from the host).
   - **A (chosen): the blueprint drawn by the fixed runtime on real rows,** which reuses the runtime, its filters and its tests, makes a version a small diffable draft, and keeps the model's output to data.
 
+#### ADR-0056 — The conversation export is built by the backend and drawn by the computer's own browser
+- **Status:** Accepted
+- **Date:** 2026-11-23
+- **Context:**
+  - A conversation with Avery (workflows R45) holds answers, their queries and a dashboard that changes version by version. The user wants to take the whole conversation away as a file to share, a PDF and a PowerPoint, **dashboards included**, and asks Avery for it in the conversation itself.
+  - The dashboards are drawn by the fixed runtime (ADR-0055) in a browser: no server-side library draws their charts as the user sees them.
+  - Review a Website (ADR-0049) already drives the computer's own Edge or Chrome headless from the backend through `playwright-core`, which ships no browser.
+  - Avery writes the file's words; a summary is where an invented figure would hide.
+- **Decision:**
+  - **Avery's own tool, behind a gate.** `export_conversation` (agents.md 3.18) is offered only when the message asks to export or share the conversation (`asksForExport`, a pure function of its words, English and Spanish). With the gate closed her tools, run facts, instructions and skills are unchanged. She writes only the title, a summary and one headline (and up to three points) per earlier question, in the conversation's language, following the `conversation-export` skill; the rest of the files is the conversation itself, read by the backend.
+  - **The figures are checked before anything is drawn.** Every number she writes must be one of the conversation's answers (the same string, or the same value under `1,234.5` or `1.234,5` grouping); otherwise the tool names the figures and makes nothing.
+  - **The backend builds the report and the browser draws it** (approach A, chosen by the operator on 2026-11-23). A global `conversation-export` module reads the conversation's runs and their dashboard versions, draws each version in the browser of ADR-0049 at 1280 px and cuts it into **one image per row of widgets** (table widgets read as text), so no page or slide cuts a widget. The PDF is the browser's print of an HTML report; the PowerPoint is written with `pptxgenjs` (MIT) as native text and tables, the dashboard rows as images. The latest version of a dashboard goes in full, each earlier one as its first row. The layout is the operator's accepted prototype.
+  - **The files are kept.** They go to `<data dir>/exports/<id>/`, with a `conversation_exports` document (data-model 3.20), and the answer carries the export (`answer.export`) for its card; api.md 167 serves them.
+- **Consequences:**
+  - Exporting needs Edge or Chrome on the computer, as Review a Website does; without one, Avery says so and no file is made. One export runs at a time.
+  - A table widget shows the rows the dashboard runtime shows (at most 25): its full data stays in the dashboard. An answer's table on a slide is cut at 6 columns and 11 rows, a table widget at 12 rows, each with a note; the full answer is in the slide's notes and the PDF.
+  - The report prints with scripts off and the answers' raw HTML escaped: what a model wrote reaches the files as text only.
+  - A new dependency, `pptxgenjs` 4.0.1, and a new collection and data folder with no way yet to list or delete an export.
+  - The brand comes from `APP_BRAND` (Halo by default): the backend does not otherwise know the build's brand.
+  - **Stack-neutral:** a rebuild needs a headless browser that prints HTML to PDF and screenshots a page region, a PowerPoint writer, and the conversation's runs and dashboard versions.
+- **Alternatives considered:**
+  - **Native PDF (`pdfkit`) and PowerPoint charts (`pptxgenjs` charts):** no browser, but every dashboard widget kind would need a second drawing in two libraries that would never match the runtime's; rejected by the operator.
+  - **The tab exports it (the renderer prints or captures the open conversation):** the browser is already there, but the export would need the conversation and its dashboards open on screen, would not work for Avery from the conversation's words, and would leave nothing on the run; rejected by the operator.
+  - **A (chosen): the backend builds the files and drives the local browser,** which reuses ADR-0049's browser and ADR-0055's runtime, draws the dashboards exactly as the user saw them, and keeps the files with the run.
+
 ## Level 4 — Code
 
 ```mermaid

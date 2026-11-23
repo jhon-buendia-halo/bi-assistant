@@ -159,6 +159,7 @@ Consumption Gap Analysis (2026-11-16, roadmap 1.30; ADR-0051)
   - **The conversation's dashboard** (R46). The first dashboard of a conversation SHALL be created as version 1 (`Created · Version 1`); a follow-up that changes it (a new filter, another breakdown, another measure) SHALL add a version to the **same** artifact (`Updated · Version <n>`): Avery SHALL be told the dashboard the conversation has and Clara SHALL be given it to change, not to start over. A conversation SHALL NOT hold more than one dashboard.
   - **The card.** The run's answer SHALL carry the dashboard, shown as a **dashboard card** (R33, [../../system/ui.md](../../system/ui.md) 4.4b) with its title, `Created`/`Updated` and version, its widgets, filters and rows, a `Live data` mark and a state chip: `Draft` with **Show in panel** and **Save to Artifacts**, or `✓ Saved to Artifacts` with **Open** (the Artifacts page at that version) and **Download**; Avery's closing words SHALL be the answer text. A run that is stopped or fails SHALL save no version. Clara's own words SHALL NOT reach the user.
   - **The dashboard panel** (2026-11-22; [../../system/ui.md](../../system/ui.md) 4.4b, `app-run-dashboard-panel`). When a run's answer carries a dashboard (created or updated by Clara), the dashboard SHALL open **automatically in a side panel on the right edge, beside the chat**: the chat column narrows and SHALL stay fully usable (its composer visible), and the panel SHALL NOT overlap or hide the chat. The panel SHALL draw the live dashboard, offer **Full screen** and **Close**, and SHALL update to the new version each time a follow-up changes the dashboard (re-opening if it was closed). While the version shown is a draft the panel SHALL say so and offer **Save to Artifacts**; once saved it SHALL show `✓ Saved to Artifacts` and offer **Open in Artifacts** and **Download**. **Save to Artifacts** SHALL publish the version shown ([../../system/api.md](../../system/api.md) 166); a later change SHALL show in the panel as a new draft until it is saved again. The card and the panel SHALL share one state, so saving in one updates the other.
+  - **Exporting the conversation** (2026-11-23; [../../system/agents.md](../../system/agents.md) 2.21, 3.18, 5.22; [../../system/api.md](../../system/api.md) 167; ADR-0056). When the user asks Avery to export, download or share the conversation (as a PDF, a PowerPoint, slides, a deck or a presentation; in English or Spanish), she SHALL export the **whole conversation**, every earlier question of it with her answer, in one call of `export_conversation`, and SHALL NOT call the team to analyse again. The tool SHALL be offered **only on such a request**: otherwise Avery SHALL NOT have it, its skill or its instructions, and her run's facts SHALL NOT mention an export, so any other message is answered exactly as before. She SHALL write the file's title, a summary of 2 to 5 findings and one headline per earlier question in the conversation's language, and every figure she writes SHALL be one an answer of the conversation gave: a figure that is not SHALL be refused before anything is made, and she SHALL fix it and call once more (at most twice per run). The **PDF** SHALL hold a cover, the summary with the conversation's questions, each question with her full answer and its dashboard, and an appendix of the queries (their SQL only when the user asks for it); the **PowerPoint** SHALL hold the same as native text and tables, the answer in each slide's notes. A dashboard SHALL be drawn as the app draws it, one image per row of widgets, its table widgets as tables; its latest version in full, each earlier version as its first row with `Version <n>, replaced by version <m>`. Both SHALL be drawn with the computer's own Microsoft Edge or Google Chrome; without one Avery SHALL say `Exporting needs Microsoft Edge or Google Chrome on this computer.` The run's answer SHALL carry the export (`answer.export`), shown as an **export card** with one download per file ([../../system/ui.md](../../system/ui.md) 4.4b); the files SHALL stay downloadable (167) after the run.
   - **Avery + Michael** (2026-11-22; `orchestrated-answer-michael`; [../../system/agents.md](../../system/agents.md) 5.23). A third version SHALL run the same Orchestrate step on this workflow's engine with Avery's team reduced to Michael: it SHALL take only `question` and `datasets`, offer Avery only `answer_from_data` (Michael plans from her brief, queries and writes the answer the user reads), `build_dashboard` (Clara, gated as above) and `ask_clarification`, and be listed third. Everything this rule and R46 say of Answer a Business Question (orchestrated) (its step, exits, wait, conversation, archive) SHALL hold for it too.
 - R46. **Avery's conversation** (2026-11-20; R45). A conversation with Avery SHALL never end unless it is archived:
   - **Runs and conversations.** Each message to Avery SHALL be a run of `orchestrated-answer`. A run with no `context.fromRunId` SHALL start a conversation: its `conversationId` is its own id. A follow-up (`context.fromRunId` naming an earlier run, [../../system/api.md](../../system/api.md) 118, 119) SHALL join the earlier run's conversation (the same `conversationId`) and Avery SHALL read the conversation so far: the questions and answers of its runs in order, the **last 20 turns**, as the host's transcript, then the new message ([../../system/data-model.md](../../system/data-model.md) 3.16).
@@ -503,6 +504,36 @@ Feature: Live dashboards from Avery
     Then Michael answers and Avery closes
     And the relay shows no ask to Clara
     And the answer has no dashboard card and no artifact is saved
+```
+
+### Feature: Avery exports the conversation
+
+Written without an E2E reference until the export card's spec exists under `frontend/e2e/` (the check of `scripts/check-specs.py` refuses an `E2E:` line to a file that is not there). The backend is proven by `conversation-export.service.spec.ts`, `orchestrator-turn.spec.ts` and `run-host-sessions.spec.ts`.
+
+```gherkin
+Feature: Avery exports the conversation
+
+  Background:
+    Given a dataset "World Cup Core" and the recording stub model as the LLM
+    And I am in the run chat of "Answer a Business Question (Avery + Michael)"
+    And Avery answered "Create a dashboard of goals by team and tournament" with version 1 of a dashboard
+    And Avery answered "Replace the table with a bar chart of goals by stage" with version 2 of it
+
+  @story-export
+  Scenario: I ask Avery to export the conversation and download it as a PDF and a PowerPoint
+    When I send "Export this conversation to PDF and PowerPoint"
+    Then the relay shows "Avery → export_conversation" and no ask to Michael or Clara
+    And the answer shows an export card with the file's title, "PDF · <p> pages" and "PowerPoint · <s> slides"
+    When I click "Download PDF"
+    Then I get a PDF named after the title with a cover, the summary, both questions with Avery's answers, the dashboard's version 2 drawn row by row and version 1 as its first row with "Version 1, replaced by version 2", and the appendix of queries
+    When I click "Download PowerPoint"
+    Then I get a PowerPoint with the same questions, the dashboard's rows on slides and each answer in its slide's notes
+
+  @story-export
+  Scenario: A plain question does not offer the export
+    When I send "Which team scored the most goals?"
+    Then Michael answers and Avery closes
+    And the answer has no export card
 ```
 
 ### Feature: Ask one agent in a follow-up
