@@ -1,7 +1,10 @@
 import BetterSqlite3 from 'better-sqlite3';
+import { agentPromptHash } from '../../mastra/shipped-agent-prompts';
+import { ORCHESTRATOR_MICHAEL_INSTRUCTIONS } from '../../mastra/workflows/orchestrated-answer-michael.prompts';
 import {
   consolidateOwners,
   dropRemovedCollections,
+  dropStaleChiefOfStaffPrompt,
   legacySnippetToOntologyItem,
   migrateKnowledgeToOntology,
   renameLegacyAgentIds,
@@ -712,6 +715,54 @@ describe('legacy datastore migrations', () => {
       dropRemovedCollections(db);
       dropRemovedCollections(db);
       expect(tableNames()).toContain('settings');
+    });
+  });
+
+  describe("M18b: Avery's edit of her whole team's prompt is dropped", () => {
+    const shipped = agentPromptHash(ORCHESTRATOR_MICHAEL_INSTRUCTIONS);
+
+    it('deletes her override made from the old prompt, and keeps every other agent', () => {
+      createTable('agent_prompt_overrides');
+      insert('agent_prompt_overrides', {
+        key: 'chief-of-staff',
+        prompt: 'You are Avery. plan_analysis, then analyse_data.',
+        baseHash: agentPromptHash('the whole team prompt'),
+      });
+      insert('agent_prompt_overrides', {
+        key: 'insights-analyst',
+        prompt: 'Be brief.',
+        baseHash: 'h',
+      });
+
+      dropStaleChiefOfStaffPrompt(db);
+
+      expect(docs('agent_prompt_overrides')).toEqual([
+        { key: 'insights-analyst', prompt: 'Be brief.', baseHash: 'h' },
+      ]);
+    });
+
+    it('keeps an edit made from her new shipped prompt: a second start changes nothing', () => {
+      createTable('agent_prompt_overrides');
+      insert('agent_prompt_overrides', {
+        key: 'chief-of-staff',
+        prompt: 'Avery, edited after the removal.',
+        baseHash: shipped,
+      });
+
+      dropStaleChiefOfStaffPrompt(db);
+      dropStaleChiefOfStaffPrompt(db);
+
+      expect(docs('agent_prompt_overrides')).toEqual([
+        {
+          key: 'chief-of-staff',
+          prompt: 'Avery, edited after the removal.',
+          baseHash: shipped,
+        },
+      ]);
+    });
+
+    it('is a no-op on a fresh database', () => {
+      expect(() => dropStaleChiefOfStaffPrompt(db)).not.toThrow();
     });
   });
 });

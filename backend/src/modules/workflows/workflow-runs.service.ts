@@ -21,6 +21,7 @@ import {
   wrappedAgentMaxSteps,
   type AgentRunTurn,
   type WorkflowInputValues,
+  REMOVED_WORKFLOW_IDS,
 } from '../../mastra/workflows/workflow-catalog';
 import {
   inputFieldsWithUsage,
@@ -411,6 +412,7 @@ export class WorkflowRunsService
    * memory threads.
    */
   async onModuleInit(): Promise<void> {
+    await this.deleteRemovedWorkflowRuns();
     const now = new Date().toISOString();
     for (const run of await this.repository.listRunning()) {
       if (!run.queuedAt || (run.attempts ?? 0) >= RUN_MAX_ATTEMPTS) {
@@ -444,6 +446,38 @@ export class WorkflowRunsService
       await this.quietly(`delete the orphan workspace ${hostId}`, () =>
         this.sessions.deleteRunHostResources(hostId),
       );
+    }
+  }
+
+  /**
+   * M18 (data-model 6): the stored runs of the removed workflows (Answer a
+   * Business Question and its orchestrated version, `REMOVED_WORKFLOW_IDS`)
+   * are deleted at startup, whatever their status: each node chat's memory
+   * thread, the node chats, the run's workspace and memory thread, then the
+   * run itself, last, so a start that stops mid-way finds it again next
+   * time. Idempotent: a second start finds none. Its past chats, verified
+   * queries, artifacts and conversation exports stay.
+   */
+  private async deleteRemovedWorkflowRuns(): Promise<void> {
+    for (const run of await this.repository.listByWorkflowIds(
+      REMOVED_WORKFLOW_IDS,
+    )) {
+      for (const chat of await this.nodeChats.listByRun(run.id)) {
+        const hostId = `${RUN_HOST_ID_PREFIX}${nodeChatHostRunId(run.id, chat.stepId)}`;
+        await this.quietly(`delete the memory thread of ${hostId}`, () =>
+          this.mastra.deleteMemoryResource(hostId),
+        );
+      }
+      await this.quietly(
+        `delete the node chats of removed run ${run.id}`,
+        async () => {
+          await this.nodeChats.deleteByRun(run.id);
+        },
+      );
+      await this.quietly(`delete the host of removed run ${run.id}`, () =>
+        this.sessions.deleteRunHostResources(`${RUN_HOST_ID_PREFIX}${run.id}`),
+      );
+      await this.repository.delete(run.id);
     }
   }
 

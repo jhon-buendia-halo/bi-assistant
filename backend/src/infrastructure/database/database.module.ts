@@ -1,8 +1,10 @@
 import { Global, Logger, Module, Provider } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { SUPER_ADMIN } from '../../common/super-admin';
 import { resolveSkillLinkNames } from '../../mastra/agent-links';
+import { ORCHESTRATOR_MICHAEL_INSTRUCTIONS } from '../../mastra/workflows/orchestrated-answer-michael.prompts';
 import {
   AGENTS_STORE,
   CONNECTIONS_STORE,
@@ -75,6 +77,7 @@ const sqliteDbProvider: Provider = {
     migrateKnowledgeToOntology(db);
     renameLegacyAgentIds(db);
     dropRemovedCollections(db);
+    dropStaleChiefOfStaffPrompt(db);
     return db;
   },
 };
@@ -442,7 +445,9 @@ export function migrateKnowledgeToOntology(
  * M16 (data-model 6): the ids renamed on 2026-11-15. The agent of the
  * Analyse step was `assistant-v2` ("Questions to Insights v2") and the
  * workflow Answer a Business Question was `qti-v2-turn`; both names
- * outlived the design they described.
+ * outlived the design they described. Answer a Business Question was
+ * removed since (M18): M16 still renames its old id, and M18 then deletes
+ * the runs that hold it.
  */
 export const LEGACY_AGENT_KEY = {
   from: 'assistant-v2',
@@ -525,6 +530,28 @@ export function dropRemovedCollections(db: Db): void {
       ).run(...REMOVED_SETTINGS_KEYS);
     }
   })();
+}
+
+/**
+ * M18b (data-model 6): Avery's shipped prompt became Answer a Business
+ * Question (Avery + Michael)'s when her whole-team workflow was removed
+ * (2026-11-23). An in-app edit of her prompt was an edit of the whole
+ * team's, which names tools she no longer has, so it is deleted and she
+ * runs on her shipped prompt. Idempotent: a later edit is kept, since it is
+ * made from the new prompt (its `baseHash` is the new prompt's).
+ */
+export function dropStaleChiefOfStaffPrompt(
+  db: Db,
+  shippedHash: string = createHash('sha256')
+    .update(ORCHESTRATOR_MICHAEL_INSTRUCTIONS)
+    .digest('hex'),
+): void {
+  if (!tableExists(db, 'agent_prompt_overrides')) return;
+  db.prepare(
+    `DELETE FROM agent_prompt_overrides
+      WHERE json_extract(doc, '$.key') = 'chief-of-staff'
+        AND COALESCE(json_extract(doc, '$.baseHash'), '') <> ?`,
+  ).run(shippedHash);
 }
 
 const storeProviders: Provider[] = COLLECTIONS.map((c) => ({

@@ -37,6 +37,7 @@ import type { QueryEvidenceService } from '../sessions/query-evidence/query-evid
 import type { WorkflowRun, WorkflowRunDoc } from './workflow-run-steps';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
 import { LiveRuns } from './live-runs';
+import { nodeChatHostRunId } from './node-chat-context';
 import {
   WorkflowRunsService,
   type RunStreamEvent,
@@ -1355,6 +1356,124 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { role: 'user', content: 'Who won in 2002?' },
         { role: 'assistant', content: 'Brazil won in 2002.' },
       ],
+    });
+  });
+
+  describe('M18: the stored runs of the removed workflows are deleted at startup (data-model 6)', () => {
+    const removedRun = (
+      id: string,
+      workflowId: string,
+      patch: Partial<WorkflowRunDoc> = {},
+    ): WorkflowRunDoc => ({
+      id,
+      workflowId,
+      workflowName: 'Answer a Business Question',
+      input: ASK,
+      status: 'success',
+      steps: [{ id: 'analyse', title: 'Analyse', status: 'success' }],
+      question: 'Who won in 2002?',
+      answer: { role: 'assistant', content: 'Brazil won.', at: 't' },
+      datasets: ['World Cup Core'],
+      startedAt: '2026-11-11T10:00:00.000Z',
+      ...patch,
+    });
+    const said = {
+      id: 'm1',
+      role: 'user' as const,
+      content: 'Why?',
+      createdAt: 't',
+    };
+
+    async function seed() {
+      ctx = build();
+      await ctx.repository.insert(
+        removedRun('abq-done', 'answer-business-question'),
+      );
+      await ctx.repository.insert(
+        removedRun('abq-queued', 'answer-business-question', {
+          status: 'queued',
+          queuedAt: '2026-11-11T09:00:00.000Z',
+          steps: [],
+        }),
+      );
+      await ctx.repository.insert(
+        removedRun('orch-waiting', 'orchestrated-answer', {
+          workflowName: 'Answer a Business Question (orchestrated)',
+          status: 'suspended',
+          steps: [
+            { id: 'orchestrate', title: 'Orchestrate', status: 'suspended' },
+          ],
+          waitingFor: {
+            stepId: 'orchestrate',
+            title: 'Orchestrate',
+            question: 'Which tournament?',
+            options: ['2018', '2022'],
+            since: '2026-11-11T10:01:00.000Z',
+            expiresAt: '2026-11-12T10:01:00.000Z',
+          },
+        }),
+      );
+      await ctx.repository.insert(
+        removedRun('avery', 'orchestrated-answer-michael', {
+          workflowName: 'Answer a Business Question (Avery + Michael)',
+          steps: [
+            { id: 'orchestrate', title: 'Orchestrate', status: 'success' },
+          ],
+        }),
+      );
+      await ctx.nodeChats.append('abq-done', 'analyse', said);
+      await ctx.nodeChats.append('avery', 'orchestrate', said);
+    }
+
+    it("deletes each one with its node chats, its host and their memory, whatever its status, and keeps Avery + Michael's", async () => {
+      await seed();
+      await ctx.service.onModuleInit();
+      for (const id of ['abq-done', 'abq-queued', 'orch-waiting']) {
+        await expect(ctx.repository.get(id)).resolves.toBeNull();
+        expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
+          `run-${id}`,
+        );
+      }
+      await expect(
+        ctx.nodeChats.get('abq-done', 'analyse'),
+      ).resolves.toBeNull();
+      expect(ctx.deleteMemoryResource).toHaveBeenCalledWith(
+        `run-${nodeChatHostRunId('abq-done', 'analyse')}`,
+      );
+      // Avery + Michael's run, its chat and its host are untouched.
+      await expect(ctx.repository.get('avery')).resolves.toMatchObject({
+        status: 'success',
+      });
+      expect(await ctx.nodeChats.get('avery', 'orchestrate')).not.toBeNull();
+      expect(ctx.sessions.deleteRunHostResources).not.toHaveBeenCalledWith(
+        'run-avery',
+      );
+      // None is left to queue again, expire or dispatch.
+      expect(
+        (await ctx.repository.list()).map((run) => run.workflowId),
+      ).toEqual(['orchestrated-answer-michael']);
+    });
+
+    it('a second start finds none and changes nothing', async () => {
+      await seed();
+      await ctx.service.onModuleInit();
+      ctx.sessions.deleteRunHostResources.mockClear();
+      ctx.deleteMemoryResource.mockClear();
+      await ctx.restarted().onModuleInit();
+      expect(ctx.sessions.deleteRunHostResources).not.toHaveBeenCalled();
+      expect(ctx.deleteMemoryResource).not.toHaveBeenCalled();
+      expect(await ctx.repository.list()).toHaveLength(1);
+    });
+
+    it('still deletes the run when its host or memory cannot be deleted, so the next start does not find it again', async () => {
+      await seed();
+      ctx.sessions.deleteRunHostResources.mockRejectedValue(new Error('busy'));
+      ctx.deleteMemoryResource.mockRejectedValue(new Error('locked'));
+      await ctx.service.onModuleInit();
+      for (const id of ['abq-done', 'abq-queued', 'orch-waiting']) {
+        await expect(ctx.repository.get(id)).resolves.toBeNull();
+      }
+      await expect(ctx.repository.get('avery')).resolves.not.toBeNull();
     });
   });
 

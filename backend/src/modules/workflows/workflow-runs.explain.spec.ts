@@ -61,8 +61,8 @@ const ANSWER: ChatMessage = {
 function runDoc(patch: Partial<WorkflowRunDoc> = {}): WorkflowRunDoc {
   return {
     id: RUN_ID,
-    workflowId: 'answer-business-question',
-    workflowName: 'Answer a Business Question',
+    workflowId: 'orchestrated-answer-michael',
+    workflowName: 'Answer a Business Question (Avery + Michael)',
     input: {},
     status: 'success',
     steps: [],
