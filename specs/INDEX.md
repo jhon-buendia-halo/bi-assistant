@@ -507,7 +507,7 @@ specs/capabilities/agent-panel/spec.md:103-138  ### Feature: Agent panel
 specs/capabilities/agent-panel/spec.md:140-151  ## Acceptance
 
 specs/capabilities/agents-evals/spec.md:5-16  ## Concepts
-specs/capabilities/agents-evals/spec.md:18-273  ## Rules
+specs/capabilities/agents-evals/spec.md:18-314  ## Rules
 specs/capabilities/agents-evals/spec.md:21-21  R1 The **Agent personas** screen SHALL be the Agent Hub. It SHALL show th
 specs/capabilities/agents-evals/spec.md:22-22  R2 Search SHALL match the trimmed query, case-insensitively, as a substri
 specs/capabilities/agents-evals/spec.md:23-23  R3 Every section SHALL show all its cards; there is no `Show more` or `Sh
@@ -550,95 +550,95 @@ specs/capabilities/agents-evals/spec.md:85-87  R39 Downloading a run that does n
 specs/capabilities/agents-evals/spec.md:88-88  R40 When a run completes, the system SHALL compare its per-question verdic
 specs/capabilities/agents-evals/spec.md:89-91  R41 The report SHALL show the comparison as `## Compared to previous run`
 specs/capabilities/agents-evals/spec.md:92-92  R42 The same suite SHALL also be runnable without the UI from the command
-specs/capabilities/agents-evals/spec.md:94-139  ### Eval suite content
-specs/capabilities/agents-evals/spec.md:129-129  R43 A user agent SHALL be a stored configuration of the assistant with: a
-specs/capabilities/agents-evals/spec.md:130-130  R44 Every user agent SHALL have a **draft**. Publishing SHALL copy the dra
-specs/capabilities/agents-evals/spec.md:131-131  R45 Publishing SHALL require a name and at least one dataset, else `Select
-specs/capabilities/agents-evals/spec.md:132-132  R46 Built-in agents SHALL NOT be created, edited, published or deleted thr
-specs/capabilities/agents-evals/spec.md:133-133  R47 Any agent, built-in or user-built, SHALL be pinnable and unpinnable. A
-specs/capabilities/agents-evals/spec.md:134-134  R48 The agent catalogue SHALL list built-in and user agents together. Each
-specs/capabilities/agents-evals/spec.md:135-135  R49 Requesting one agent SHALL resolve the key as a built-in agent first,
-specs/capabilities/agents-evals/spec.md:136-136  R50 Deleting a user agent SHALL remove only its definition. Sessions that
-specs/capabilities/agents-evals/spec.md:137-137  R51 Saving a draft, publishing, deleting or pinning an agent that does not
-specs/capabilities/agents-evals/spec.md:138-138  R52 User agents SHALL persist across restarts of the backend.
-specs/capabilities/agents-evals/spec.md:139-139  R53 Agents are a library, not workflows (ADR-0042, 2026-11-12): they are c
-specs/capabilities/agents-evals/spec.md:141-166  ### Agent editor
-specs/capabilities/agents-evals/spec.md:143-143  R54 **New agent persona** on the hub and **Edit** in a user agent's detail
-specs/capabilities/agents-evals/spec.md:144-154  R55 The editor SHALL hold these fields, which enforce the R43 limits as th
-specs/capabilities/agents-evals/spec.md:155-155  R56 **Save** SHALL store the form as the draft, creating the agent on its
-specs/capabilities/agents-evals/spec.md:156-156  R57 **Publish** SHALL first save the form when it has changes (R56; a refu
-specs/capabilities/agents-evals/spec.md:157-157  R58 The editor's header SHALL show the agent's `Draft` or `Live` chip and,
-specs/capabilities/agents-evals/spec.md:158-158  R59 **Back** SHALL return to the agent's detail view, or to the hub for an
-specs/capabilities/agents-evals/spec.md:159-164  R60 **Try it** tests a user agent's **draft** by running it once, the way
-specs/capabilities/agents-evals/spec.md:165-165  R61 A draft run SHALL NOT be listed with the runs or the sessions and SHAL
-specs/capabilities/agents-evals/spec.md:166-166  R62 User agents, their pins, pins of built-in agents and eval runs SHALL b
-specs/capabilities/agents-evals/spec.md:168-178  ### Skills tab
-specs/capabilities/agents-evals/spec.md:170-174  R63 The agent detail SHALL have a **Skills (<n>)** tab. For the Official a
-specs/capabilities/agents-evals/spec.md:175-175  R64 Expanding a skill SHALL list every file in its folder, `SKILL.md` firs
-specs/capabilities/agents-evals/spec.md:176-176  R65 Removed in roadmap 1.13.13: skills ship only with the app, so the tab
-specs/capabilities/agents-evals/spec.md:177-177  R66 Removed in roadmap 1.13.13: there are no user or project skills to ski
-specs/capabilities/agents-evals/spec.md:178-178  R67 Nothing on the tab SHALL change a skill, and viewing it needs nothing
-specs/capabilities/agents-evals/spec.md:180-190  ### Skill library
-specs/capabilities/agents-evals/spec.md:184-184  R68 The Agent Hub's header SHALL offer **Skills**, beside **New agent pers
-specs/capabilities/agents-evals/spec.md:185-185  R69 The library's **Your skills** section (R75) SHALL list the user's skil
-specs/capabilities/agents-evals/spec.md:186-186  R70 The **skill editor** SHALL hold: **Name**; **Description**, with the h
-specs/capabilities/agents-evals/spec.md:187-187  R71 **Save** SHALL create or save the skill and show `Skill "<name>" creat
-specs/capabilities/agents-evals/spec.md:188-188  R72 **Delete** SHALL ask `Delete "<name>"?`, followed by `Agent personas u
-specs/capabilities/agents-evals/spec.md:189-189  R73 Changing or deleting a skill SHALL NOT change a Live agent. The agents
-specs/capabilities/agents-evals/spec.md:190-190  R74 Skills SHALL belong to the one user (the built-in super admin; the sto
-specs/capabilities/agents-evals/spec.md:192-201  ### Built-in skills
-specs/capabilities/agents-evals/spec.md:196-196  R75 The skills library SHALL show two sections: **Your skills** (R69) and
-specs/capabilities/agents-evals/spec.md:197-197  R76 A built-in row SHALL open the **built-in skill editor**: Description,
-specs/capabilities/agents-evals/spec.md:198-198  R77 **Save** SHALL store the override and show `Built-in skill "<name>" sa
-specs/capabilities/agents-evals/spec.md:199-199  R78 **Reset to built-in**, shown while the skill is modified, SHALL ask `R
-specs/capabilities/agents-evals/spec.md:200-200  R79 When a modified built-in's shipped version has changed since the overr
-specs/capabilities/agents-evals/spec.md:201-201  R80 Overrides SHALL apply to every session and agent. Viewing the built-in
-specs/capabilities/agents-evals/spec.md:203-212  ### Links
-specs/capabilities/agents-evals/spec.md:207-207  R81 The **Instructions** field SHALL be a rich editor: plain text lines, w
-specs/capabilities/agents-evals/spec.md:208-208  R82 A chip SHALL show the name of the skill or tool: skills and tools in d
-specs/capabilities/agents-evals/spec.md:209-209  R83 Before the model sees them, every link SHALL become a plain mention: `
-specs/capabilities/agents-evals/spec.md:210-210  R84 In the skill editor the menu SHALL list tools only and the only button
-specs/capabilities/agents-evals/spec.md:211-211  R85 An agent saved before links, whose draft has no `tools`, or has `tools
-specs/capabilities/agents-evals/spec.md:212-212  R86 Read-only views of text with links (the Job Description tab for a user
-specs/capabilities/agents-evals/spec.md:214-220  ### Tools and LLM Config tabs
-specs/capabilities/agents-evals/spec.md:218-218  R87 For a user agent the **Tools** tab SHALL list every tool of the librar
-specs/capabilities/agents-evals/spec.md:219-219  R88 *Removed on 2026-11-15:* the agent page has no **Graph** tab any more
-specs/capabilities/agents-evals/spec.md:220-220  R89 The **LLM Config** tab (every agent; it replaces the Model tab) SHALL
-specs/capabilities/agents-evals/spec.md:222-243  ### Agent page tabs
-specs/capabilities/agents-evals/spec.md:226-227  R90 **Try it** SHALL be the first tab of a user agent (its id stays `chat`
-specs/capabilities/agents-evals/spec.md:228-228  R91 The tabs SHALL open on their defaults: **Try it** for user agents, **J
-specs/capabilities/agents-evals/spec.md:229-229  R92 On a user agent, the **Job Description** tab SHALL show the assistant'
-specs/capabilities/agents-evals/spec.md:230-236  R93 **Edit** SHALL turn the section into the link editor of R81 over the d
-specs/capabilities/agents-evals/spec.md:237-237  R94 Leaving the agent page, or switching to another agent or tab, with an
-specs/capabilities/agents-evals/spec.md:238-242  R95 On a user agent, the **Skills** tab SHALL be the user's skill library
-specs/capabilities/agents-evals/spec.md:243-243  R96 The Skills tab's **New skill**, **Edit** and **Delete** SHALL always b
-specs/capabilities/agents-evals/spec.md:245-257  ### Built-in agents' system prompts
-specs/capabilities/agents-evals/spec.md:249-249  R97 The Job Description tab of a built-in agent SHALL show a `Built-in` ch
-specs/capabilities/agents-evals/spec.md:250-250  R98 **Edit** SHALL open an editor over the editable text ([agents.md](../.
-specs/capabilities/agents-evals/spec.md:251-251  R99 The assistant's editor SHALL be the link editor of R81, limited to too
-specs/capabilities/agents-evals/spec.md:252-252  R100 The assistant's editor SHALL show the read-only note `The ## Tools lis
-specs/capabilities/agents-evals/spec.md:253-253  R101 **Save job description** SHALL store the override and show the backend
-specs/capabilities/agents-evals/spec.md:254-254  R102 **Reset to built-in**, shown while the prompt is modified, SHALL ask `
-specs/capabilities/agents-evals/spec.md:255-255  R103 A save or a reset SHALL apply to the next call of every session, user
-specs/capabilities/agents-evals/spec.md:256-256  R104 When a modified prompt's shipped text has changed since the override w
-specs/capabilities/agents-evals/spec.md:257-257  R105 The Job Description tab of an Official agent (the assistant and Insigh
-specs/capabilities/agents-evals/spec.md:259-273  ### Retired agents
-specs/capabilities/agents-evals/spec.md:261-261  R106 Retired (1.23.8): the four showcase agents were removed from the app.
-specs/capabilities/agents-evals/spec.md:262-266  R107 **Insights Analyst** (`insights-analyst`; BA-320, [agents.md](../../sy
-specs/capabilities/agents-evals/spec.md:267-267  R108 *Removed on 2026-11-15* with the Graph tab (R88): the agent page no lo
-specs/capabilities/agents-evals/spec.md:268-271  R109 The agent detail's header SHALL carry the line **Used in** under the i
-specs/capabilities/agents-evals/spec.md:272-272  R110 **Personas.** Every built-in agent SHALL be a persona: a human first n
-specs/capabilities/agents-evals/spec.md:273-273  R111 **Eval runs are background tasks** (ADR-0047, [app-shell](../app-shell
-specs/capabilities/agents-evals/spec.md:275-291  ## Edge cases and errors
-specs/capabilities/agents-evals/spec.md:293-302  ## Contracts
-specs/capabilities/agents-evals/spec.md:304-306  ## UI
-specs/capabilities/agents-evals/spec.md:308-1226  ## Flows
-specs/capabilities/agents-evals/spec.md:633-729  ### Feature: Agent skills
-specs/capabilities/agents-evals/spec.md:731-989  ### Feature: Agent editor
-specs/capabilities/agents-evals/spec.md:991-1077  ### Feature: Skill library
-specs/capabilities/agents-evals/spec.md:1079-1226  ### Feature: Built-in agent prompts
-specs/capabilities/agents-evals/spec.md:1228-1234  ## Acceptance
-specs/capabilities/agents-evals/spec.md:1236-1245  ## Open questions
+specs/capabilities/agents-evals/spec.md:94-180  ### Eval suite content
+specs/capabilities/agents-evals/spec.md:170-170  R43 A user agent SHALL be a stored configuration of the assistant with: a
+specs/capabilities/agents-evals/spec.md:171-171  R44 Every user agent SHALL have a **draft**. Publishing SHALL copy the dra
+specs/capabilities/agents-evals/spec.md:172-172  R45 Publishing SHALL require a name and at least one dataset, else `Select
+specs/capabilities/agents-evals/spec.md:173-173  R46 Built-in agents SHALL NOT be created, edited, published or deleted thr
+specs/capabilities/agents-evals/spec.md:174-174  R47 Any agent, built-in or user-built, SHALL be pinnable and unpinnable. A
+specs/capabilities/agents-evals/spec.md:175-175  R48 The agent catalogue SHALL list built-in and user agents together. Each
+specs/capabilities/agents-evals/spec.md:176-176  R49 Requesting one agent SHALL resolve the key as a built-in agent first,
+specs/capabilities/agents-evals/spec.md:177-177  R50 Deleting a user agent SHALL remove only its definition. Sessions that
+specs/capabilities/agents-evals/spec.md:178-178  R51 Saving a draft, publishing, deleting or pinning an agent that does not
+specs/capabilities/agents-evals/spec.md:179-179  R52 User agents SHALL persist across restarts of the backend.
+specs/capabilities/agents-evals/spec.md:180-180  R53 Agents are a library, not workflows (ADR-0042, 2026-11-12): they are c
+specs/capabilities/agents-evals/spec.md:182-207  ### Agent editor
+specs/capabilities/agents-evals/spec.md:184-184  R54 **New agent persona** on the hub and **Edit** in a user agent's detail
+specs/capabilities/agents-evals/spec.md:185-195  R55 The editor SHALL hold these fields, which enforce the R43 limits as th
+specs/capabilities/agents-evals/spec.md:196-196  R56 **Save** SHALL store the form as the draft, creating the agent on its
+specs/capabilities/agents-evals/spec.md:197-197  R57 **Publish** SHALL first save the form when it has changes (R56; a refu
+specs/capabilities/agents-evals/spec.md:198-198  R58 The editor's header SHALL show the agent's `Draft` or `Live` chip and,
+specs/capabilities/agents-evals/spec.md:199-199  R59 **Back** SHALL return to the agent's detail view, or to the hub for an
+specs/capabilities/agents-evals/spec.md:200-205  R60 **Try it** tests a user agent's **draft** by running it once, the way
+specs/capabilities/agents-evals/spec.md:206-206  R61 A draft run SHALL NOT be listed with the runs or the sessions and SHAL
+specs/capabilities/agents-evals/spec.md:207-207  R62 User agents, their pins, pins of built-in agents and eval runs SHALL b
+specs/capabilities/agents-evals/spec.md:209-219  ### Skills tab
+specs/capabilities/agents-evals/spec.md:211-215  R63 The agent detail SHALL have a **Skills (<n>)** tab. For the Official a
+specs/capabilities/agents-evals/spec.md:216-216  R64 Expanding a skill SHALL list every file in its folder, `SKILL.md` firs
+specs/capabilities/agents-evals/spec.md:217-217  R65 Removed in roadmap 1.13.13: skills ship only with the app, so the tab
+specs/capabilities/agents-evals/spec.md:218-218  R66 Removed in roadmap 1.13.13: there are no user or project skills to ski
+specs/capabilities/agents-evals/spec.md:219-219  R67 Nothing on the tab SHALL change a skill, and viewing it needs nothing
+specs/capabilities/agents-evals/spec.md:221-231  ### Skill library
+specs/capabilities/agents-evals/spec.md:225-225  R68 The Agent Hub's header SHALL offer **Skills**, beside **New agent pers
+specs/capabilities/agents-evals/spec.md:226-226  R69 The library's **Your skills** section (R75) SHALL list the user's skil
+specs/capabilities/agents-evals/spec.md:227-227  R70 The **skill editor** SHALL hold: **Name**; **Description**, with the h
+specs/capabilities/agents-evals/spec.md:228-228  R71 **Save** SHALL create or save the skill and show `Skill "<name>" creat
+specs/capabilities/agents-evals/spec.md:229-229  R72 **Delete** SHALL ask `Delete "<name>"?`, followed by `Agent personas u
+specs/capabilities/agents-evals/spec.md:230-230  R73 Changing or deleting a skill SHALL NOT change a Live agent. The agents
+specs/capabilities/agents-evals/spec.md:231-231  R74 Skills SHALL belong to the one user (the built-in super admin; the sto
+specs/capabilities/agents-evals/spec.md:233-242  ### Built-in skills
+specs/capabilities/agents-evals/spec.md:237-237  R75 The skills library SHALL show two sections: **Your skills** (R69) and
+specs/capabilities/agents-evals/spec.md:238-238  R76 A built-in row SHALL open the **built-in skill editor**: Description,
+specs/capabilities/agents-evals/spec.md:239-239  R77 **Save** SHALL store the override and show `Built-in skill "<name>" sa
+specs/capabilities/agents-evals/spec.md:240-240  R78 **Reset to built-in**, shown while the skill is modified, SHALL ask `R
+specs/capabilities/agents-evals/spec.md:241-241  R79 When a modified built-in's shipped version has changed since the overr
+specs/capabilities/agents-evals/spec.md:242-242  R80 Overrides SHALL apply to every session and agent. Viewing the built-in
+specs/capabilities/agents-evals/spec.md:244-253  ### Links
+specs/capabilities/agents-evals/spec.md:248-248  R81 The **Instructions** field SHALL be a rich editor: plain text lines, w
+specs/capabilities/agents-evals/spec.md:249-249  R82 A chip SHALL show the name of the skill or tool: skills and tools in d
+specs/capabilities/agents-evals/spec.md:250-250  R83 Before the model sees them, every link SHALL become a plain mention: `
+specs/capabilities/agents-evals/spec.md:251-251  R84 In the skill editor the menu SHALL list tools only and the only button
+specs/capabilities/agents-evals/spec.md:252-252  R85 An agent saved before links, whose draft has no `tools`, or has `tools
+specs/capabilities/agents-evals/spec.md:253-253  R86 Read-only views of text with links (the Job Description tab for a user
+specs/capabilities/agents-evals/spec.md:255-261  ### Tools and LLM Config tabs
+specs/capabilities/agents-evals/spec.md:259-259  R87 For a user agent the **Tools** tab SHALL list every tool of the librar
+specs/capabilities/agents-evals/spec.md:260-260  R88 *Removed on 2026-11-15:* the agent page has no **Graph** tab any more
+specs/capabilities/agents-evals/spec.md:261-261  R89 The **LLM Config** tab (every agent; it replaces the Model tab) SHALL
+specs/capabilities/agents-evals/spec.md:263-284  ### Agent page tabs
+specs/capabilities/agents-evals/spec.md:267-268  R90 **Try it** SHALL be the first tab of a user agent (its id stays `chat`
+specs/capabilities/agents-evals/spec.md:269-269  R91 The tabs SHALL open on their defaults: **Try it** for user agents, **J
+specs/capabilities/agents-evals/spec.md:270-270  R92 On a user agent, the **Job Description** tab SHALL show the assistant'
+specs/capabilities/agents-evals/spec.md:271-277  R93 **Edit** SHALL turn the section into the link editor of R81 over the d
+specs/capabilities/agents-evals/spec.md:278-278  R94 Leaving the agent page, or switching to another agent or tab, with an
+specs/capabilities/agents-evals/spec.md:279-283  R95 On a user agent, the **Skills** tab SHALL be the user's skill library
+specs/capabilities/agents-evals/spec.md:284-284  R96 The Skills tab's **New skill**, **Edit** and **Delete** SHALL always b
+specs/capabilities/agents-evals/spec.md:286-298  ### Built-in agents' system prompts
+specs/capabilities/agents-evals/spec.md:290-290  R97 The Job Description tab of a built-in agent SHALL show a `Built-in` ch
+specs/capabilities/agents-evals/spec.md:291-291  R98 **Edit** SHALL open an editor over the editable text ([agents.md](../.
+specs/capabilities/agents-evals/spec.md:292-292  R99 The assistant's editor SHALL be the link editor of R81, limited to too
+specs/capabilities/agents-evals/spec.md:293-293  R100 The assistant's editor SHALL show the read-only note `The ## Tools lis
+specs/capabilities/agents-evals/spec.md:294-294  R101 **Save job description** SHALL store the override and show the backend
+specs/capabilities/agents-evals/spec.md:295-295  R102 **Reset to built-in**, shown while the prompt is modified, SHALL ask `
+specs/capabilities/agents-evals/spec.md:296-296  R103 A save or a reset SHALL apply to the next call of every session, user
+specs/capabilities/agents-evals/spec.md:297-297  R104 When a modified prompt's shipped text has changed since the override w
+specs/capabilities/agents-evals/spec.md:298-298  R105 The Job Description tab of an Official agent (the assistant and Insigh
+specs/capabilities/agents-evals/spec.md:300-314  ### Retired agents
+specs/capabilities/agents-evals/spec.md:302-302  R106 Retired (1.23.8): the four showcase agents were removed from the app.
+specs/capabilities/agents-evals/spec.md:303-307  R107 **Insights Analyst** (`insights-analyst`; BA-320, [agents.md](../../sy
+specs/capabilities/agents-evals/spec.md:308-308  R108 *Removed on 2026-11-15* with the Graph tab (R88): the agent page no lo
+specs/capabilities/agents-evals/spec.md:309-312  R109 The agent detail's header SHALL carry the line **Used in** under the i
+specs/capabilities/agents-evals/spec.md:313-313  R110 **Personas.** Every built-in agent SHALL be a persona: a human first n
+specs/capabilities/agents-evals/spec.md:314-314  R111 **Eval runs are background tasks** (ADR-0047, [app-shell](../app-shell
+specs/capabilities/agents-evals/spec.md:316-332  ## Edge cases and errors
+specs/capabilities/agents-evals/spec.md:334-343  ## Contracts
+specs/capabilities/agents-evals/spec.md:345-347  ## UI
+specs/capabilities/agents-evals/spec.md:349-1267  ## Flows
+specs/capabilities/agents-evals/spec.md:674-770  ### Feature: Agent skills
+specs/capabilities/agents-evals/spec.md:772-1030  ### Feature: Agent editor
+specs/capabilities/agents-evals/spec.md:1032-1118  ### Feature: Skill library
+specs/capabilities/agents-evals/spec.md:1120-1267  ### Feature: Built-in agent prompts
+specs/capabilities/agents-evals/spec.md:1269-1275  ## Acceptance
+specs/capabilities/agents-evals/spec.md:1277-1286  ## Open questions
 
 specs/capabilities/app-shell/spec.md:5-14  ## Concepts
 specs/capabilities/app-shell/spec.md:16-104  ## Rules
@@ -1323,47 +1323,49 @@ specs/capabilities/synthetic-data/spec.md:337-440  ## Flows
 specs/capabilities/synthetic-data/spec.md:442-457  ## Acceptance
 
 specs/capabilities/testing-data/spec.md:5-13  ## Concepts
-specs/capabilities/testing-data/spec.md:15-144  ## Rules
-specs/capabilities/testing-data/spec.md:17-38  ### The catalogue
+specs/capabilities/testing-data/spec.md:15-182  ## Rules
+specs/capabilities/testing-data/spec.md:17-41  ### The catalogue
 specs/capabilities/testing-data/spec.md:19-19  R1 The catalogue SHALL be the single definition of every sample: the pane
-specs/capabilities/testing-data/spec.md:20-33  R2 The system SHALL ship these fixtures, in this panel order:
-specs/capabilities/testing-data/spec.md:34-34  R3 The default connection of the PostgreSQL samples SHALL be host `127.0.
-specs/capabilities/testing-data/spec.md:35-38  R4 The seed files are data assets: `001_world_cup.sql` (a transaction tha
-specs/capabilities/testing-data/spec.md:40-44  ### Status
-specs/capabilities/testing-data/spec.md:42-42  R5 The system SHALL report, for every fixture: its id, name, description,
-specs/capabilities/testing-data/spec.md:43-43  R6 A fixture SHALL be considered **loaded** only when a datasource named
-specs/capabilities/testing-data/spec.md:44-44  R7 Status SHALL never fail the caller: if the stores cannot be read the s
-specs/capabilities/testing-data/spec.md:46-57  ### Loading
-specs/capabilities/testing-data/spec.md:48-48  R8 Loading a fixture SHALL accept a connection (host, port, database, use
-specs/capabilities/testing-data/spec.md:49-49  R9 The World Cup REST sample (`world-cup-rest`) SHALL NOT be loadable fro
-specs/capabilities/testing-data/spec.md:50-50  R10 The loader SHALL connect to the named database. If it does not exist (
-specs/capabilities/testing-data/spec.md:51-51  R11 A connection that cannot be established SHALL answer with an actionabl
-specs/capabilities/testing-data/spec.md:52-52  R12 For a seedable fixture the loader SHALL drop every schema the fixture
-specs/capabilities/testing-data/spec.md:53-53  R13 A seeding failure SHALL answer `Could not seed the <name> fixture into
-specs/capabilities/testing-data/spec.md:54-54  R14 After a successful seed (or immediately, for a register-only fixture)
-specs/capabilities/testing-data/spec.md:55-55  R15 If any required entity is missing from the inventory the loader SHALL
-specs/capabilities/testing-data/spec.md:56-56  R16 Otherwise the loader SHALL save the dataset named as the fixture's dat
-specs/capabilities/testing-data/spec.md:57-57  R17 Seeding SHALL be destructive by design (it drops the sample's schemas
-specs/capabilities/testing-data/spec.md:59-62  ### Removing
-specs/capabilities/testing-data/spec.md:61-61  R18 Removing a fixture SHALL delete its dataset (first) and its datasource
-specs/capabilities/testing-data/spec.md:62-62  R19 Because fixtures are matched to records by **name**, a datasource or d
-specs/capabilities/testing-data/spec.md:64-66  ### Availability
-specs/capabilities/testing-data/spec.md:66-66  R20 Every testing-data action SHALL be available to the user; the app has
-specs/capabilities/testing-data/spec.md:68-70  ### Background task
-specs/capabilities/testing-data/spec.md:70-70  R23 Loading a fixture SHALL run as a background task of kind `testing-data
-specs/capabilities/testing-data/spec.md:72-135  ### The Edge Cases sample
-specs/capabilities/testing-data/spec.md:74-135  R24 The Edge Cases sample SHALL hold every edge case below, at the place a
-specs/capabilities/testing-data/spec.md:137-140  ### The World Cup Excel sample
-specs/capabilities/testing-data/spec.md:139-139  R25 The World Cup Excel sample (`world-cup-excel`, kind `file`, [datasourc
-specs/capabilities/testing-data/spec.md:140-140  R26 Loading the World Cup Excel sample (`POST /testing-data/world-cup-exce
-specs/capabilities/testing-data/spec.md:142-144  ### Retired
-specs/capabilities/testing-data/spec.md:144-144  R21 Retired (2026-11-12). The self-registering `intellify-api` sample and
-specs/capabilities/testing-data/spec.md:146-155  ## Edge cases and errors
-specs/capabilities/testing-data/spec.md:157-163  ## Contracts
-specs/capabilities/testing-data/spec.md:165-178  ## UI
-specs/capabilities/testing-data/spec.md:180-271  ## Flows
-specs/capabilities/testing-data/spec.md:182-271  ### Feature: Testing data
-specs/capabilities/testing-data/spec.md:273-285  ## Acceptance
+specs/capabilities/testing-data/spec.md:20-34  R2 The system SHALL ship these fixtures, in this panel order:
+specs/capabilities/testing-data/spec.md:35-35  R3 The default connection of the PostgreSQL samples SHALL be host `127.0.
+specs/capabilities/testing-data/spec.md:36-41  R4 The seed files are data assets: `001_world_cup.sql` (a transaction tha
+specs/capabilities/testing-data/spec.md:43-47  ### Status
+specs/capabilities/testing-data/spec.md:45-45  R5 The system SHALL report, for every fixture: its id, name, description,
+specs/capabilities/testing-data/spec.md:46-46  R6 A fixture SHALL be considered **loaded** only when a datasource named
+specs/capabilities/testing-data/spec.md:47-47  R7 Status SHALL never fail the caller: if the stores cannot be read the s
+specs/capabilities/testing-data/spec.md:49-60  ### Loading
+specs/capabilities/testing-data/spec.md:51-51  R8 Loading a fixture SHALL accept a connection (host, port, database, use
+specs/capabilities/testing-data/spec.md:52-52  R9 The World Cup REST sample (`world-cup-rest`) SHALL NOT be loadable fro
+specs/capabilities/testing-data/spec.md:53-53  R10 The loader SHALL connect to the named database. If it does not exist (
+specs/capabilities/testing-data/spec.md:54-54  R11 A connection that cannot be established SHALL answer with an actionabl
+specs/capabilities/testing-data/spec.md:55-55  R12 For a seedable fixture the loader SHALL drop every schema the fixture
+specs/capabilities/testing-data/spec.md:56-56  R13 A seeding failure SHALL answer `Could not seed the <name> fixture into
+specs/capabilities/testing-data/spec.md:57-57  R14 After a successful seed (or immediately, for a register-only fixture)
+specs/capabilities/testing-data/spec.md:58-58  R15 If any required entity is missing from the inventory the loader SHALL
+specs/capabilities/testing-data/spec.md:59-59  R16 Otherwise the loader SHALL save the dataset named as the fixture's dat
+specs/capabilities/testing-data/spec.md:60-60  R17 Seeding SHALL be destructive by design (it drops the sample's schemas
+specs/capabilities/testing-data/spec.md:62-65  ### Removing
+specs/capabilities/testing-data/spec.md:64-64  R18 Removing a fixture SHALL delete its dataset (first) and its datasource
+specs/capabilities/testing-data/spec.md:65-65  R19 Because fixtures are matched to records by **name**, a datasource or d
+specs/capabilities/testing-data/spec.md:67-69  ### Availability
+specs/capabilities/testing-data/spec.md:69-69  R20 Every testing-data action SHALL be available to the user; the app has
+specs/capabilities/testing-data/spec.md:71-73  ### Background task
+specs/capabilities/testing-data/spec.md:73-73  R23 Loading a fixture SHALL run as a background task of kind `testing-data
+specs/capabilities/testing-data/spec.md:75-138  ### The Edge Cases sample
+specs/capabilities/testing-data/spec.md:77-138  R24 The Edge Cases sample SHALL hold every edge case below, at the place a
+specs/capabilities/testing-data/spec.md:140-143  ### The World Cup Excel sample
+specs/capabilities/testing-data/spec.md:142-142  R25 The World Cup Excel sample (`world-cup-excel`, kind `file`, [datasourc
+specs/capabilities/testing-data/spec.md:143-143  R26 Loading the World Cup Excel sample (`POST /testing-data/world-cup-exce
+specs/capabilities/testing-data/spec.md:145-178  ### The Retail Ops sample
+specs/capabilities/testing-data/spec.md:147-178  R27 The Retail Ops sample SHALL hold the 19 tables below with these exact
+specs/capabilities/testing-data/spec.md:180-182  ### Retired
+specs/capabilities/testing-data/spec.md:182-182  R21 Retired (2026-11-12). The self-registering `intellify-api` sample and
+specs/capabilities/testing-data/spec.md:184-193  ## Edge cases and errors
+specs/capabilities/testing-data/spec.md:195-201  ## Contracts
+specs/capabilities/testing-data/spec.md:203-216  ## UI
+specs/capabilities/testing-data/spec.md:218-309  ## Flows
+specs/capabilities/testing-data/spec.md:220-309  ### Feature: Testing data
+specs/capabilities/testing-data/spec.md:311-324  ## Acceptance
 
 specs/capabilities/verified-queries/spec.md:5-7  ## Concepts
 specs/capabilities/verified-queries/spec.md:9-39  ## Rules
@@ -1920,24 +1922,24 @@ specs/system/agents.md:2168-2216  ### 7.2 The `interactive-visuals` skill
 specs/system/agents.md:2218-2244  ### 7.3 Skills: source, layout, loading and validation
 specs/system/agents.md:2246-2337  ### 7.4 Skills per agent
 specs/system/agents.md:2339-2343  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:2345-2519  ## 8. Evals
-specs/system/agents.md:2349-2474  ### 8.1 Case and set format
-specs/system/agents.md:2476-2483  ### 8.2 Data preflight
-specs/system/agents.md:2485-2496  ### 8.3 Executing a case
-specs/system/agents.md:2498-2503  ### 8.4 Runs, regression and report
-specs/system/agents.md:2505-2519  ### 8.5 Other entry points
-specs/system/agents.md:2521-2525  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2527-2540  ## Open questions and gaps
-specs/system/agents.md:2542-2681  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2683-2719  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2721-2723  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2725-2808  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2810-2931  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2933-2987  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2939-2960  ### Plan
-specs/system/agents.md:2962-2987  ### Write answer
-specs/system/agents.md:2989-3006  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
-specs/system/agents.md:3008-3027  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
+specs/system/agents.md:2345-2524  ## 8. Evals
+specs/system/agents.md:2349-2479  ### 8.1 Case and set format
+specs/system/agents.md:2481-2488  ### 8.2 Data preflight
+specs/system/agents.md:2490-2501  ### 8.3 Executing a case
+specs/system/agents.md:2503-2508  ### 8.4 Runs, regression and report
+specs/system/agents.md:2510-2524  ### 8.5 Other entry points
+specs/system/agents.md:2526-2530  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2532-2545  ## Open questions and gaps
+specs/system/agents.md:2547-2686  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2688-2724  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2726-2728  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2730-2813  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2815-2936  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2938-2992  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2944-2965  ### Plan
+specs/system/agents.md:2967-2992  ### Write answer
+specs/system/agents.md:2994-3011  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:3013-3032  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL
