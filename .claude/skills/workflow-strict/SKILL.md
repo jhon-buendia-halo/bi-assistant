@@ -5,7 +5,7 @@ description: Use when the session's workflow is Strict (the user picked it, or .
 
 # Strict workflow
 
-One of the two workflows in [CLAUDE.md](../../../CLAUDE.md); the other is [`workflow-free-style`](../workflow-free-style/SKILL.md). The rules in CLAUDE.md under *Non-negotiables*, *Autonomy* and *Writing the reply* apply here too, and its *Choose the playbook* section picks the playbook whose steps fill these steps for the task at hand.
+One of the two workflows in [CLAUDE.md](../../../CLAUDE.md); the other is [`workflow-free-style`](../workflow-free-style/SKILL.md). The rules in CLAUDE.md under *Non-negotiables*, *Autonomy* and *Writing the reply* apply here too, and its *Task skills* section says which task skill's steps fill these steps for the task at hand.
 
 ## Workflow
 
@@ -36,12 +36,11 @@ When in doubt between two sizes, take the larger and say so. The user can always
 ## When the steps run — decide, story lane, wave check, acceptance gate
 
 - **Decide before you build.** For an L epic, or an M feature whose end state is unclear, first show a cheap prototype, then ask one batched confirmation per epic. Skill: `workflow-start`.
-- **Story lane, every story:** steps 1–5 scaled to the size, then step 8. A story built by a `builder` agent starts from its **story pack** (`node scripts/story-pack.mjs <id>`). It writes the code, its unit tests, for a UI story **one** Playwright scenario (tagged `@demo` and `@story-<roadmap-id>`, with `scenarioStep` captions), and only the spec lines its change makes false. It runs only the related unit tests and its own Playwright file. No axe scan, screenshots, evidence, demo or `qa.mjs` unless the brief asks. Skill: `workflow-implement`.
+- **Story lane, every story:** steps 1–5 scaled to the size, then step 8; a `builder` agent follows the lean lane. Skill: `workflow-implement`.
 - **Wave check, once per set of parallel stories:** the lead merges the wave's unit branches and runs `node scripts/qa.mjs --wave <id>,<id> --base <ref> [--demo <id>]`, then hands the user the running web app. A demo is recorded only for the wave's user-visible milestone. Evidence and demos are recorded per wave. Skill: `verify`.
 - **Plain session without a builder agent:** a single-story change, and every S change, may run `node scripts/qa.mjs <roadmap-id> --fast` (with `--no-demo` for S) instead of a wave check, then hand over the same way. Skill: `verify`.
 - **Acceptance gate, once the user accepts the change by hand:** steps 6, 7, 9 and 10 per story; then, when the epic's last story is through, the epic's changelog entry, PR and retrospective (step 11). Steps 6, 7, 9, 10 and 11 wait until then. Several accepted stories may go through the gate together.
 - **No epic PR opens** while one of its stories has not passed the acceptance gate.
-- **Gherkin once.** A flow's steps live in its Playwright test; the capability spec keeps the Feature heading, its `E2E:` line and one `Scenario: <title>` line per scenario. Skill: `workflow-start`.
 
 ## Epic gate — no epic in the repo, no code change
 

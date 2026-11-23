@@ -10,7 +10,7 @@ A user of Answer a Business Question could not tell how the agent built its quer
 - Each query is explained step by step in business words, with a coverage label that says how much of the data its result stands for, and any `LIMIT` or row cap explained in plain words.
 - The full result is one click away.
 
-The pattern is built once in the shared layer, so every agent that answers from data gets it by using the dataset tools (the rule in `CLAUDE.md`, *Non-negotiables*, detailed in the `agent-change` playbook).
+The pattern is built once in the shared layer, so every agent that answers from data gets it by using the dataset tools (the rule in `CLAUDE.md`, *Non-negotiables*, detailed in the `agent-change` skill).
 
 ## Scope
 
