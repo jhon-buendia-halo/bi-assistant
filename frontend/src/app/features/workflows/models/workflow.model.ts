@@ -78,12 +78,6 @@ export interface WorkflowInputError {
 
 /** One value of a run's input (api.md 118). */
 /**
- * The catalogue's Answer a Business Question workflow (api.md 116). Its run
- * is the first host of the query inspector (M1-25).
- */
-export const ANSWER_BUSINESS_QUESTION_WORKFLOW_ID = 'answer-business-question';
-
-/**
  * An answer (or follow-up event answer) that ran queries holds `data` records:
  * it gets the query inspector, whichever workflow ran it (workflows R31). The
  * same rule as past chats.
@@ -103,7 +97,7 @@ export type WorkflowInputValue = string | number | boolean | string[];
  */
 export interface WorkflowSummary {
   /**
-   * The workflow id (`answer-business-question`, `assess-data-readiness`, …). Agents are a
+   * The workflow id (`orchestrated-answer-michael`, `assess-data-readiness`, …). Agents are a
    * library and have no workflow of their own.
    */
   id: string;
@@ -237,42 +231,6 @@ export interface WorkflowEdge {
   label?: string;
   /** What happens on this path, in business words (workflows R42); a labelled edge has one. */
   note?: string;
-}
-
-/**
- * The Plan step's output (`answer-business-question`, `PlanOutput`): what the analysis
- * answers, and the question to ask first when it can't start.
- */
-export interface PlanOutput {
-  question: string;
-  measures: string[];
-  entities: string[];
-  scope: string;
-  assumptions: string[];
-  needsClarification: boolean;
-  clarification: { question: string; options: string[] } | null;
-}
-
-/** One check of the Validate step (`ValidateOutput.findings`). */
-export interface ValidateFinding {
-  check: string;
-  passed: boolean;
-  detail: string;
-}
-
-/** The Validate step's output (`answer-business-question`, `ValidateOutput`). */
-export interface ValidateOutput {
-  ok: boolean;
-  /** 1 or 2. */
-  attempt: number;
-  findings: ValidateFinding[];
-}
-
-/** The Write answer step's output (`answer-business-question`, `AnswerOutput`). */
-export interface AnswerOutput {
-  headline: string;
-  /** Markdown, starting with the headline. */
-  answer: string;
 }
 
 /** A step's status in a streamed run (api.md 3.6 `step`). */
@@ -432,7 +390,7 @@ export interface WorkflowInputRequired {
 /** The body of `POST /workflows/:id/runs/stream` (api.md 118, 119). */
 export interface WorkflowRunRequest {
   input: Record<string, WorkflowInputValue>;
-  context?: { fromRunId: string; askStep?: string };
+  context?: { fromRunId: string };
 }
 
 /** `queued`: accepted, waiting for a free slot (or re-queued after a restart). */
@@ -449,8 +407,8 @@ export interface WorkflowRun {
   workflowId: string;
   workflowName: string;
   input: Record<string, WorkflowInputValue>;
-  context?: { fromRunId: string; askStep?: string };
-  /** Answer a Business Question (orchestrated): the conversation this run belongs to. */
+  context?: { fromRunId: string };
+  /** Answer a Business Question (Avery + Michael): the conversation this run belongs to. */
   conversationId?: string;
   /** Set while the run's conversation is archived (hidden, read-only). */
   archivedAt?: string;

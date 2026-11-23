@@ -264,33 +264,15 @@
           }
         }
         @if (designer.contextRun(); as earlier) {
-          <!-- In the Business view's thread the earlier question is shown above;
-             only the agent asked, if one was, is still said -->
+          <!-- In the Business view's thread the earlier question is shown above -->
           @if (!threaded() || conversation.earlier().length === 0) {
             <p
               data-testid="workflow-run-context"
               class="m-0 text-[12px] text-fg-muted"
             >
-              @if (designer.contextAgent(); as agent) {
-                <span>Asked {{ agent }} · </span>
-              }
               <span>Follows up on “{{ earlier.question }}”</span>
             </p>
-          } @else if (designer.contextAgent(); as agent) {
-            <p
-              data-testid="workflow-run-context"
-              class="m-0 text-[12px] text-fg-muted"
-            >
-              Asked {{ agent }}
-            </p>
           }
-        } @else if (designer.contextAgent(); as agent) {
-          <p
-            data-testid="workflow-run-context"
-            class="m-0 text-[12px] text-fg-muted"
-          >
-            Asked {{ agent }}
-          </p>
         }
         @if (designer.shownQuestion(); as question) {
           <p

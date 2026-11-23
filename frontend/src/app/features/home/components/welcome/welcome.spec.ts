@@ -34,15 +34,15 @@ function workflow(id: string, name: string): WorkflowSummary {
 }
 
 const CATALOGUE = [
-  workflow('answer-business-question', 'Answer a Business Question'),
+  workflow('orchestrated-answer-michael', 'Answer a Business Question (Avery + Michael)'),
   workflow('review-website', 'Review a Website'),
 ];
 
 function run(n: number): WorkflowRunSummary {
   return {
     id: `run-${n}`,
-    workflowId: 'answer-business-question',
-    workflowName: 'Answer a Business Question',
+    workflowId: 'orchestrated-answer-michael',
+    workflowName: 'Answer a Business Question (Avery + Michael)',
     status: n === 2 ? 'failed' : 'success',
     title: `Question ${n}`,
     startedAt: '2026-01-01T00:00:00Z',
@@ -122,7 +122,7 @@ describe('Welcome, the home page (app-shell R51; ui.md 4.1)', () => {
     ).toBeFalse();
   });
 
-  it('Ask opens Answer a Business Question, which runs on the question and the picked datasets', () => {
+  it('Ask opens Answer a Business Question (Avery + Michael), which runs on the question and the picked datasets', () => {
     const welcome = mount();
     const designer = TestBed.inject(WorkflowDesigner);
     const nav = TestBed.inject(WorkflowsNavState);
@@ -138,7 +138,7 @@ describe('Welcome, the home page (app-shell R51; ui.md 4.1)', () => {
       { execute: true },
     );
     expect(nav.openWorkflow).toHaveBeenCalledOnceWith(
-      'answer-business-question',
+      'orchestrated-answer-michael',
     );
   });
 
@@ -205,7 +205,7 @@ describe('Welcome, the home page (app-shell R51; ui.md 4.1)', () => {
     (rows[0] as HTMLButtonElement).click();
     expect(runs.openRun).toHaveBeenCalledOnceWith('run-1');
 
-    expect(byTestId('welcome-workflow-answer-business-question')).toBeNull();
+    expect(byTestId('welcome-workflow-orchestrated-answer-michael')).toBeNull();
     const nav = TestBed.inject(WorkflowsNavState);
     spyOn(nav, 'openWorkflow');
     byTestId<HTMLButtonElement>('welcome-workflow-review-website')!.click();
