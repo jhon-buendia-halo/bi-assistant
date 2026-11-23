@@ -1,14 +1,17 @@
 /**
  * API-level proof of stored runs (ADR-0041; api.md 118-127; data-model
- * 3.16; workflows R18-R20): an Answer a Business Question run with the
- * recording stub model is stored, listed, fetched and deleted with its
+ * 3.16; workflows R18-R20): an Answer a Business Question (Avery + Michael)
+ * run with the recording stub model is stored, listed, fetched and deleted with its
  * workspace; runs an earlier version stored of the workflows removed in
  * 1.23.35 (`seq-text-demo`, `deep-analysis`, `agent:assistant`) and
  * sessions bound to them still list and read as plain runs and sessions,
  * their files served from their workspace, and cannot run again; after the
  * backend restarts, a run it was killed in is queued again and starts from
  * scratch (its second attempt) until it succeeds, an orphan run workspace
- * is gone, and a stored run is still the context of a follow-up run.
+ * is gone, and a stored run is still the context of a follow-up run; the
+ * stored runs of the two removed question-answering workflows (and their
+ * node chats, memory threads and workspaces) are deleted at every start
+ * (data-model 6, M18).
  *
  * Needs no Postgres: the dataset points at a closed port, and the stub model
  * calls no tool. Set `WORKFLOW_RUN_HISTORY_TRANSCRIPT=<file>` to write the
@@ -32,8 +35,11 @@ import {
   type LlmStub,
   type StubRequest,
 } from '../../frontend/e2e/helpers/llm-stub';
+import {
+  ASK_WORKFLOW_ID,
+  ASK_WORKFLOW_NAME,
+} from '../../frontend/e2e/helpers/runs-api';
 import { type Backend, boot, stop } from './backend-process';
-import { useV2Steps } from './v2-stub';
 
 const dataDir = mkdtempSync(join(tmpdir(), 'qti-workflow-run-history-'));
 
@@ -258,8 +264,6 @@ describe('Stored runs: the run history API (API)', () => {
 
   beforeAll(async () => {
     stub = await startLlmStub();
-    // v2's Plan and Write answer get a plan and an answer as JSON.
-    useV2Steps(stub, stub.reply);
     backend = await boot(dataDir);
     await configure();
   });
@@ -272,7 +276,7 @@ describe('Stored runs: the run history API (API)', () => {
     if (file && transcript.length) writeFileSync(file, transcript.join('\n'));
   });
 
-  it('a v2 run is stored: listed while it runs, fetched as it ended, then deleted with its workspace', async () => {
+  it('an Avery + Michael run is stored: listed while it runs, fetched as it ended, then deleted with its workspace', async () => {
     // Hold the turn's first model call while the run is listed.
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));
@@ -280,11 +284,10 @@ describe('Stored runs: the run history API (API)', () => {
       req.stream && lastQuestion(req).includes(HOLD_QUESTION)
         ? held
         : undefined;
-    const pending = runStream('answer-business-question', {
+    const pending = runStream(ASK_WORKFLOW_ID, {
       input: {
         question: HOLD_QUESTION,
         datasets: ['World Cup Core'],
-        approveSteps: false,
       },
     });
     await waitForModelCall(HOLD_QUESTION);
@@ -309,12 +312,12 @@ describe('Stored runs: the run history API (API)', () => {
     const run = done.run!;
     expect(run).toMatchObject({
       id: runId,
-      workflowId: 'answer-business-question',
+      workflowId: ASK_WORKFLOW_ID,
       status: 'success',
       question: HOLD_QUESTION,
       answer: { role: 'assistant', content: STUB_ANSWER },
       panelItems: [],
-      output: { sqlQueries: 0, failedQueries: 0, rows: 0 },
+      output: { answer: STUB_ANSWER },
     });
 
     // Listed, newest first, with its title; filtered by workflow.
@@ -325,8 +328,10 @@ describe('Stored runs: the run history API (API)', () => {
     expect(list.runs).toEqual([
       {
         id: runId,
-        workflowId: 'answer-business-question',
-        workflowName: 'Answer a Business Question',
+        workflowId: ASK_WORKFLOW_ID,
+        workflowName: ASK_WORKFLOW_NAME,
+        // A first message starts a conversation of its own.
+        conversationId: runId,
         status: 'success',
         title: HOLD_QUESTION,
         startedAt: run.startedAt,
@@ -489,12 +494,11 @@ describe('Stored runs: the run history API (API)', () => {
       },
     );
 
-    it('a v2 run may continue from one with an answer; one without is refused clearly', async () => {
-      const followUp = await runStream('answer-business-question', {
+    it('an Avery + Michael run may continue from one with an answer; one without is refused clearly', async () => {
+      const followUp = await runStream(ASK_WORKFLOW_ID, {
         input: {
           question: 'And why now?',
           datasets: ['World Cup Core'],
-          approveSteps: false,
         },
         context: { fromRunId: 'old-deep' },
       });
@@ -504,12 +508,11 @@ describe('Stored runs: the run history API (API)', () => {
         .delete(`/workflow-runs/${followUp.frames[0].runId}`)
         .expect(200);
       const refused = await http()
-        .post('/workflows/answer-business-question/runs/stream')
+        .post(`/workflows/${ASK_WORKFLOW_ID}/runs/stream`)
         .send({
           input: {
             question: 'And?',
             datasets: ['World Cup Core'],
-            approveSteps: false,
           },
           context: { fromRunId: 'old-seq' },
         })
@@ -541,11 +544,10 @@ describe('Stored runs: the run history API (API)', () => {
   });
 
   it('after a restart: a run the app was killed in starts again from scratch and succeeds, an orphan run workspace is gone, and a stored run is still context', async () => {
-    const first = await runStream('answer-business-question', {
+    const first = await runStream(ASK_WORKFLOW_ID, {
       input: {
         question: 'Who hosted in 2002?',
         datasets: ['World Cup Core'],
-        approveSteps: false,
       },
     });
     const firstId = first.frames[0].runId!;
@@ -560,7 +562,7 @@ describe('Stored runs: the run history API (API)', () => {
         : undefined;
     const controller = new AbortController();
     const pending = fetch(
-      `${backend!.url}/workflows/answer-business-question/runs/stream`,
+      `${backend!.url}/workflows/${ASK_WORKFLOW_ID}/runs/stream`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -568,7 +570,6 @@ describe('Stored runs: the run history API (API)', () => {
           input: {
             question: 'Hold this one',
             datasets: ['World Cup Core'],
-            approveSteps: false,
           },
         }),
         signal: controller.signal,
@@ -627,28 +628,243 @@ describe('Stored runs: the run history API (API)', () => {
     expect(existsSync(workspace('run-orphan'))).toBe(false);
 
     const before = stub.requests.length;
-    const followUp = await runStream('answer-business-question', {
+    const followUp = await runStream(ASK_WORKFLOW_ID, {
       input: {
         question: 'And in 2006?',
         datasets: ['World Cup Core'],
-        approveSteps: false,
       },
       context: { fromRunId: firstId },
     });
     expect(followUp.frames.at(-1)!.type).toBe('done');
-    const turn = stub.requests.slice(before).find((req) => req.stream)!;
+    const turn = stub.requests
+      .slice(before)
+      .find((req) => req.stream && !req.avery)!;
     expect(
       turn.messages
         .filter((message) => message.role !== 'system')
         .map((message) => [message.role, messageText(message)]),
     ).toEqual([
-      // The earlier run's threads survived the restart: the follow-up goes
-      // on from a copy of its Analyse thread (agents.md 5.14), then its
-      // answer and this question.
+      // The earlier run's threads survived the restart: Michael goes on
+      // from a copy of his thread (agents.md 5.14), then this question.
       ['user', 'Who hosted in 2002?'],
-      ['assistant', STUB_ANSWER],
       ['assistant', STUB_ANSWER],
       ['user', 'And in 2006?'],
     ]);
+  });
+});
+
+/**
+ * M18 (data-model 6): the stored runs of the two removed question-answering
+ * workflows are deleted at every start, with their node chats, memory
+ * threads and run workspace; Answer a Business Question (Avery + Michael)
+ * keeps its runs. Seeded in the store as an earlier version left them (they
+ * can no longer be made), the backend booted twice.
+ */
+describe('Runs of the removed question-answering workflows (API)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'qti-workflow-removed-runs-'));
+  const REMOVED = [
+    { id: 'm18-abq', workflowId: 'answer-business-question', step: 'analyse' },
+    {
+      id: 'm18-orch',
+      workflowId: 'orchestrated-answer',
+      step: 'orchestrate',
+    },
+    {
+      id: 'm18-orch-waiting',
+      workflowId: 'orchestrated-answer',
+      step: 'orchestrate',
+    },
+  ];
+  const KEPT = {
+    id: 'm18-avery',
+    workflowId: ASK_WORKFLOW_ID,
+    step: 'orchestrate',
+  };
+  const ALL = [...REMOVED, KEPT];
+  const hostOf = (id: string) => join(dir, 'workspaces', `session-run-${id}`);
+  let backend: Backend | undefined;
+
+  const runDoc = (run: (typeof ALL)[number], status: string) => ({
+    id: run.id,
+    workflowId: run.workflowId,
+    workflowName: run.workflowId,
+    input: { question: `Question of ${run.id}`, datasets: ['World Cup Core'] },
+    status,
+    steps: [{ id: run.step, title: run.step, status: 'success' }],
+    question: `Question of ${run.id}`,
+    answer: {
+      role: 'assistant',
+      content: `Answer of ${run.id}`,
+      at: '2026-11-01T10:04:00.000Z',
+    },
+    datasets: ['World Cup Core'],
+    panelItems: [],
+    visualizations: [],
+    startedAt: '2026-11-01T10:00:00.000Z',
+    finishedAt: '2026-11-01T10:04:00.000Z',
+    ownerId: 'local',
+  });
+
+  /** The threads (by resource) of the app's Mastra store, as a sorted list. */
+  const threads = () => {
+    const db = new BetterSqlite3(join(dir, 'mastra.sqlite'), {
+      readonly: true,
+      fileMustExist: true,
+    });
+    try {
+      return (
+        db.prepare('SELECT id FROM "mastra_threads"').all() as { id: string }[]
+      )
+        .map((row) => row.id)
+        .sort();
+    } finally {
+      db.close();
+    }
+  };
+
+  /** The run ids that still have a node chat in the store. */
+  const chatRuns = () => {
+    const db = new BetterSqlite3(join(dir, 'app.sqlite'), { readonly: true });
+    try {
+      return (
+        db.prepare('SELECT doc FROM workflow_run_node_chats').all() as {
+          doc: string;
+        }[]
+      )
+        .map((row) => (JSON.parse(row.doc) as { runId: string }).runId)
+        .sort();
+    } finally {
+      db.close();
+    }
+  };
+
+  /** What the start left behind, for comparing two starts. */
+  const state = async () => ({
+    runs: (
+      (await request.agent(backend!.url).get('/workflow-runs').expect(200))
+        .body as { runs: { id: string }[] }
+    ).runs
+      .map((run) => run.id)
+      .sort(),
+    threads: threads(),
+    chats: chatRuns(),
+    workspaces: ALL.filter((run) => existsSync(hostOf(run.id))).map(
+      (run) => run.id,
+    ),
+  });
+
+  afterAll(async () => {
+    await stop(backend);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('deletes them with their node chats, memory threads and workspaces at the start, keeps an Avery + Michael run, and changes nothing at the next start', async () => {
+    // A first start makes the stores; the seeds go in while it is stopped.
+    backend = await boot(dir);
+    await stop(backend);
+
+    const mastra = new BetterSqlite3(join(dir, 'mastra.sqlite'));
+    const columns = (
+      mastra.prepare('PRAGMA table_info("mastra_threads")').all() as {
+        name: string;
+      }[]
+    ).map((column) => column.name);
+    const now = '2026-11-01T10:00:00.000Z';
+    const insertThread = (id: string, resourceId: string) => {
+      const values: Record<string, string> = {
+        id,
+        resourceId,
+        title: id,
+        metadata: '{}',
+        createdAt: now,
+        updatedAt: now,
+        createdAtZ: now,
+        updatedAtZ: now,
+      };
+      const names = columns.filter((name) => name in values);
+      mastra
+        .prepare(
+          `INSERT INTO "mastra_threads" (${names.map((n) => `"${n}"`).join(', ')}) VALUES (${names.map(() => '?').join(', ')})`,
+        )
+        .run(...names.map((name) => values[name]));
+    };
+
+    const app = new BetterSqlite3(join(dir, 'app.sqlite'));
+    const insertRun = app.prepare('INSERT INTO workflow_runs (doc) VALUES (?)');
+    const insertChat = app.prepare(
+      'INSERT INTO workflow_run_node_chats (doc) VALUES (?)',
+    );
+    for (const run of ALL) {
+      insertRun.run(
+        JSON.stringify(
+          runDoc(run, run.id === 'm18-orch-waiting' ? 'failed' : 'success'),
+        ),
+      );
+      insertChat.run(
+        JSON.stringify({
+          id: `chat-${run.id}`,
+          runId: run.id,
+          stepId: run.step,
+          messages: [
+            {
+              id: `message-${run.id}`,
+              role: 'user',
+              content: 'Why?',
+              createdAt: now,
+            },
+          ],
+          ownerId: 'local',
+        }),
+      );
+      insertThread(`run-${run.id}`, `run-${run.id}`);
+      insertThread(`run-${run.id}:analysis-planner`, `run-${run.id}`);
+      insertThread(
+        `run-${run.id}-node-${run.step}`,
+        `run-${run.id}-node-${run.step}`,
+      );
+      mkdirSync(hostOf(run.id), { recursive: true });
+      writeFileSync(join(hostOf(run.id), 'notes.md'), run.id);
+    }
+    app.close();
+    mastra.close();
+    // Everything is in the store before the start that cleans it.
+    expect(threads()).toHaveLength(ALL.length * 3);
+    expect(chatRuns()).toHaveLength(ALL.length);
+
+    backend = await boot(dir);
+    const http = () => request.agent(backend!.url);
+    const first = await state();
+    // Only the Avery + Michael run is left, with all it had.
+    expect(first).toEqual({
+      runs: [KEPT.id],
+      threads: [
+        `run-${KEPT.id}`,
+        `run-${KEPT.id}-node-${KEPT.step}`,
+        `run-${KEPT.id}:analysis-planner`,
+      ].sort(),
+      chats: [KEPT.id],
+      workspaces: [KEPT.id],
+    });
+    for (const run of REMOVED) {
+      await http().get(`/workflow-runs/${run.id}`).expect(404);
+    }
+    expect(
+      (await http().get(`/workflow-runs/${KEPT.id}`).expect(200)).body,
+    ).toMatchObject({ id: KEPT.id, workflowId: ASK_WORKFLOW_ID });
+    await http()
+      .get(`/workflow-runs/${KEPT.id}/node-chats/${KEPT.step}`)
+      .expect(200)
+      .expect(({ body }) =>
+        expect((body as { messages: unknown[] }).messages).toHaveLength(1),
+      );
+    // The two workflows are no workflows of the catalogue any more.
+    for (const id of ['answer-business-question', 'orchestrated-answer']) {
+      await http().get(`/workflows/${id}`).expect(404);
+    }
+
+    // The next start finds none of them: nothing changes.
+    await stop(backend);
+    backend = await boot(dir);
+    expect(await state()).toEqual(first);
   });
 });
