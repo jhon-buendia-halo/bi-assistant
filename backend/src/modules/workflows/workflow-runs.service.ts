@@ -2,13 +2,12 @@ import {
   BadRequestException,
   ConflictException,
   GoneException,
-  HttpException,
-  HttpStatus,
   Inject,
   Injectable,
   Logger,
   NotFoundException,
   Optional,
+  type OnApplicationBootstrap,
   type OnModuleInit,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
@@ -98,6 +97,7 @@ import { WorkflowRunsRepository } from './repositories/workflow-runs.repository'
 import { SuspendedRuns } from './suspended-runs';
 import {
   RUN_EXPIRED_ERROR,
+  RUN_MAX_ATTEMPTS,
   RunStepTracker,
   expiredRunPatch,
   failOpenSteps,
@@ -105,6 +105,7 @@ import {
   interruptedRunPatch,
   loopStepIds,
   noteToolFrame,
+  REQUEUED_RUN_PATCH,
   runAnswerOf,
   runHostDoc,
   runSummaryOf,
@@ -183,6 +184,7 @@ function builtVisualEvent(
 export type RunStreamEvent =
   | StreamEvent
   | { type: 'run'; runId: string; workflowId: string }
+  | { type: 'queued' }
   | ({ type: 'step' } & WorkflowRun['steps'][number])
   | ({ type: 'input-required'; runId: string } & Pick<
       WorkflowRunWaitingFor,
@@ -344,7 +346,9 @@ export interface RunAttachment {
  * cycle).
  */
 @Injectable()
-export class WorkflowRunsService implements OnModuleInit {
+export class WorkflowRunsService
+  implements OnModuleInit, OnApplicationBootstrap
+{
   private readonly logger = new Logger(WorkflowRunsService.name);
   /** The runs waiting for the user's answer (api.md 138, ADR-0043). */
   private readonly waiting = new SuspendedRuns<HeldRun>((id, held) =>
@@ -402,14 +406,27 @@ export class WorkflowRunsService implements OnModuleInit {
 
   /**
    * Start-up recovery (plan 5.1 step 5): a run still `running` was cut off
-   * when the app stopped, so it becomes `failed` (its workspace and memory
-   * threads kept, as any finished run's); a run workspace no stored run
-   * owns is deleted with its memory threads.
+   * when the app stopped. One 119 accepted (`queuedAt`) is queued again to
+   * start from scratch (its memory threads deleted, its workspace and input
+   * images kept) until it started `RUN_MAX_ATTEMPTS` times; any other (an
+   * inline 118 run, a run stored before the queue, or one out of attempts)
+   * becomes `failed` (its workspace and memory threads kept, as any
+   * finished run's). A queued run stays queued; `onApplicationBootstrap`
+   * starts them. A run workspace no stored run owns is deleted with its
+   * memory threads.
    */
   async onModuleInit(): Promise<void> {
     const now = new Date().toISOString();
     for (const run of await this.repository.listRunning()) {
-      await this.repository.update(run.id, interruptedRunPatch(run, now));
+      if (!run.queuedAt || (run.attempts ?? 0) >= RUN_MAX_ATTEMPTS) {
+        await this.repository.update(run.id, interruptedRunPatch(run, now));
+        continue;
+      }
+      const hostId = `${RUN_HOST_ID_PREFIX}${run.id}`;
+      await this.quietly(`delete the memory threads of ${hostId}`, () =>
+        this.mastra.deleteMemoryResource(hostId),
+      );
+      await this.repository.update(run.id, { ...REQUEUED_RUN_PATCH });
     }
     // A run that waited for an answer when the app stopped can't go on: its
     // turn lived in memory (ADR-0043). It is stopped, `waitingFor` expired,
@@ -436,6 +453,17 @@ export class WorkflowRunsService implements OnModuleInit {
   }
 
   /**
+   * Once the whole app is up: the stored `queued` runs (waiting when the
+   * app stopped, or queued again by `onModuleInit`) take their place in
+   * line, oldest `queuedAt` first, and start as slots free (api.md 119).
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    for (const run of await this.repository.listQueued()) {
+      this.dispatch(run);
+    }
+  }
+
+  /**
    * Check a run request as a whole before anything runs (api.md 118, 119
    * refusals, Style B): 404 for a workflow `GET /workflows` does not list;
    * 400 for a workflow without input fields, and for a request its input
@@ -443,8 +471,14 @@ export class WorkflowRunsService implements OnModuleInit {
    * a whitespace-only text missing), then a `context.fromRunId` naming no
    * stored run with an answer. The 400 carries them all as `errors` and the
    * first one's text as `message`. Nothing is stored before it passes.
+   * `ownRunId`: a queued run prepared again from its stored doc as it
+   * starts; its input's image paths are read back from its own workspace.
    */
-  async prepare(id: string, body: unknown): Promise<PreparedRun> {
+  async prepare(
+    id: string,
+    body: unknown,
+    ownRunId?: string,
+  ): Promise<PreparedRun> {
     const workflow = await this.workflows.definition(id);
     if (!workflow.input.length) {
       throw inputRefusal([
@@ -460,7 +494,13 @@ export class WorkflowRunsService implements OnModuleInit {
     );
     const checked = validateWorkflowInput(
       workflow,
-      await this.withEarlierImages(workflow, request.input, request.context),
+      await this.withEarlierImages(
+        workflow,
+        request.input,
+        ownRunId ??
+          (request.context as { fromRunId?: unknown } | null | undefined)
+            ?.fromRunId,
+      ),
       {
         datasets: needsDatasets ? await this.datasets.list() : [],
         artifacts: workflow.input.some((field) => field.type === 'artifact')
@@ -560,42 +600,126 @@ export class WorkflowRunsService implements OnModuleInit {
     emit: (event: RunStreamEvent) => void,
     abortSignal?: AbortSignal,
   ): Promise<WorkflowRun> {
-    return this.runOpened(await this.open(prepared), emit, abortSignal);
+    const held = await this.open(prepared);
+    liveEmit(
+      emit,
+      abortSignal,
+    )({ type: 'run', runId: held.base.id, workflowId: prepared.workflow.id });
+    return this.runOpened(held, emit, abortSignal);
   }
 
   /**
-   * Start a prepared run detached from the request (api.md 119; ADR-0048):
-   * stored `running`, then run on the live runs' signal, every event logged
-   * there, until it ends or Stop (150) aborts it. Answers its id; the
-   * request follows it like any client (149), and closing the connection
-   * stops only the following. 429 when `live.cap` runs are running already:
-   * the slot is taken before anything awaits, so two starts arriving
-   * together for one free slot give one run, and a refused run stores
-   * nothing. The slot frees when the run ends, fails, stops or suspends.
+   * Accept a prepared run detached from the request (api.md 119; ADR-0048):
+   * stored `queued` with its input images written to its workspace, then
+   * dispatched (`dispatch`). Never refused for the cap: the run waits in
+   * line for a slot. Answers its id; the request follows it like any client
+   * (149), and closing the connection stops only the following.
    */
   async launch(prepared: PreparedRun): Promise<string> {
-    const slot = this.live.reserve();
-    if (!slot) {
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.TOO_MANY_REQUESTS,
-          message: `Too many runs are in progress (${this.live.cap}). Wait for one to finish, or stop one.`,
-          error: 'Too Many Requests',
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-    let held: HeldRun;
+    const id = randomUUID();
+    const hostId = `${RUN_HOST_ID_PREFIX}${id}`;
+    let base: WorkflowRunDoc;
     try {
-      held = await this.open(prepared);
+      for (const { path, data } of prepared.images) {
+        await this.sessions.writeRunHostFile(hostId, path, data);
+      }
+      base = await this.start(prepared, 'queued', id);
     } catch (failure) {
-      slot.release();
+      if (prepared.images.length) {
+        await this.quietly(`delete the workspace of unstored run ${id}`, () =>
+          this.sessions.deleteRunHostResources(hostId),
+        );
+      }
       throw failure;
     }
-    const id = held.base.id;
-    const signal = this.live.begin(id, slot);
-    this.detach(id, signal, (emit) => this.runOpened(held, emit, signal));
+    this.dispatch(base);
     return id;
+  }
+
+  /**
+   * Run a stored `queued` run detached (api.md 119): its log starts with
+   * `run`, then `queued` when it must wait; it joins the line for a slot at
+   * once (so runs dispatched in turn start in that order), then starts
+   * (`runQueued`). Once per run: a run already held live is left as it is.
+   */
+  private dispatch(run: Pick<WorkflowRunDoc, 'id' | 'workflowId'>): void {
+    const { id } = run;
+    if (this.live.isRunning(id)) return;
+    const signal = this.live.begin(id);
+    this.live.publish(id, {
+      type: 'run',
+      runId: id,
+      workflowId: run.workflowId,
+    });
+    if (!this.live.seat(id)) this.live.publish(id, { type: 'queued' });
+    const seated = this.live.waitForSlot(id);
+    this.detach(id, signal, (emit) => this.runQueued(id, seated, emit, signal));
+  }
+
+  /**
+   * A queued run once it holds a slot (`seated`), then run as any run
+   * (`runOpened`). A run stopped before it started is stored `stopped` with
+   * no steps; one that could not start (its preparing refused: its dataset
+   * or workflow gone) ends `failed` with the reason.
+   */
+  private async runQueued(
+    id: string,
+    seated: Promise<void>,
+    emit: (event: RunStreamEvent) => void,
+    signal: AbortSignal,
+  ): Promise<WorkflowRun | undefined> {
+    let held: HeldRun;
+    try {
+      await seated;
+      held = await this.startQueued(id, signal);
+    } catch (failure) {
+      await this.quietly(`store the end of queued run ${id}`, () =>
+        this.endQueued(
+          id,
+          signal.aborted
+            ? { status: 'stopped' }
+            : { status: 'failed', error: runErrorMessage(failure) },
+        ),
+      );
+      if (signal.aborted) return undefined;
+      throw failure;
+    }
+    return this.runOpened(held, emit, signal);
+  }
+
+  /**
+   * Start a seated queued run: prepared again from its stored doc (its
+   * workflow, input and context as they are now, so a follow-up reads a
+   * fresh conversation), then stored `running` (`attempts` + 1, `startedAt`
+   * now). Throws, storing nothing, when the preparing is refused or the run
+   * was stopped meanwhile.
+   */
+  private async startQueued(id: string, signal: AbortSignal): Promise<HeldRun> {
+    const doc = await this.stored(id);
+    const prepared = await this.prepare(
+      doc.workflowId,
+      { input: doc.input, context: doc.context },
+      id,
+    );
+    if (signal.aborted) throw new Error('Run stopped');
+    const { contractHash } = prepared.workflow;
+    const started: Partial<WorkflowRunDoc> = {
+      status: 'running',
+      attempts: (doc.attempts ?? 0) + 1,
+      startedAt: new Date().toISOString(),
+      ...(contractHash ? { contractHash } : {}),
+    };
+    await this.repository.update(id, started);
+    return this.tracked(prepared, { ...doc, ...started });
+  }
+
+  /** Store how a run that never started ended, if it is still `queued`. */
+  private async endQueued(
+    id: string,
+    end: { status: 'stopped' | 'failed'; error?: string },
+  ): Promise<void> {
+    if ((await this.repository.get(id))?.status !== 'queued') return;
+    await this.end(id, { ...end, finishedAt: new Date().toISOString() });
   }
 
   /**
@@ -631,9 +755,13 @@ export class WorkflowRunsService implements OnModuleInit {
     const run = await this.stored(id);
     if (this.live.stop(id)) {
       await this.settled(this.live.whenEnded(id));
-      if ((await this.repository.get(id))?.status === 'running') {
+      const status = (await this.repository.get(id))?.status;
+      if (status === 'running' || status === 'queued') {
         await this.forceStop(id);
       }
+    } else if (run.status === 'queued') {
+      // Not held live (it was never dispatched): it never starts.
+      await this.endQueued(id, { status: 'stopped' });
     } else if (run.status === 'suspended') {
       const held = this.waiting.remove(id);
       await this.expire(id, held);
@@ -768,6 +896,11 @@ export class WorkflowRunsService implements OnModuleInit {
 
   /** Store a prepared run as it starts, with its step tracker. */
   private async open(prepared: PreparedRun): Promise<HeldRun> {
+    return this.tracked(prepared, await this.start(prepared, 'running'));
+  }
+
+  /** A stored run about to start, with its step tracker. */
+  private tracked(prepared: PreparedRun, base: WorkflowRunDoc): HeldRun {
     const { workflow } = prepared;
     // Steps inside a loop keep one entry per attempt (api.md 3.6).
     const repeats = loopStepIds(workflow.edges);
@@ -781,11 +914,13 @@ export class WorkflowRunsService implements OnModuleInit {
       undefined,
       runStepTeller(workflow.id, prepared.values),
     );
-    const base = await this.start(prepared);
     return { prepared, base, tracker };
   }
 
-  /** Run an opened run's turn and report it on `emit` (as `stream`). */
+  /**
+   * Run an opened run's turn and report it on `emit` (as `stream`, after
+   * its `run` event).
+   */
   private runOpened(
     held: HeldRun,
     emit: (event: RunStreamEvent) => void,
@@ -794,7 +929,6 @@ export class WorkflowRunsService implements OnModuleInit {
     const { prepared, base } = held;
     const { workflow } = prepared;
     const live = liveEmit(emit, abortSignal);
-    live({ type: 'run', runId: base.id, workflowId: workflow.id });
     // A follow-up that asks one agent alone (agents.md 5.21).
     const ask = prepared.context?.ask;
     return this.drive(held, live, abortSignal, async (io) => {
@@ -1454,6 +1588,10 @@ export class WorkflowRunsService implements OnModuleInit {
     const stored = await this.repository.get(id);
     const run: WorkflowRun | undefined = stored ?? (await this.heldDraft(id));
     if (!run) throw new NotFoundException(`Run "${id}" not found`);
+    // A queued run has no answer yet: it is waited for, as a running one.
+    if (run.status === 'queued') {
+      throw new BadRequestException('Wait for the run to finish');
+    }
     if (!run.answer) throw new NotFoundException(`Run "${id}" has no answer`);
     if (run.status === 'running' || run.status === 'suspended') {
       throw new BadRequestException('Wait for the run to finish');
@@ -1507,17 +1645,18 @@ export class WorkflowRunsService implements OnModuleInit {
   /**
    * Delete a run (api.md 122): its document, its node chats (data-model
    * 3.17) and, for an agent run, its workspace and memory thread. A running
-   * run is refused.
+   * or queued run is refused.
    */
   async delete(id: string): Promise<void> {
     const run = await this.stored(id);
-    if (run.status === 'running') {
+    if (run.status === 'running' || run.status === 'queued') {
       throw new BadRequestException('Stop the run before deleting it');
     }
     // A run waiting for an answer is dropped with its turn and host.
     const held = this.waiting.remove(id);
     if (held) await this.expire(id, held);
-    if (run.question !== undefined) {
+    // A run stopped while queued has no question, but may have input images.
+    if (run.question !== undefined || run.queuedAt !== undefined) {
       await this.sessions.deleteRunHostResources(`${RUN_HOST_ID_PREFIX}${id}`);
     }
     // Each node chat keeps a memory thread of its own (agents.md 5.16).
@@ -1631,6 +1770,9 @@ export class WorkflowRunsService implements OnModuleInit {
     action: (run: WorkflowRunDoc) => RunVisualAction,
   ): Promise<RunVisualResult> {
     const run = await this.stored(id);
+    if (run.status === 'queued') {
+      throw new BadRequestException('Wait for the run to finish');
+    }
     if (run.question === undefined) {
       throw new BadRequestException(`Run "${id}" has no answer to visualize`);
     }
@@ -1762,23 +1904,22 @@ export class WorkflowRunsService implements OnModuleInit {
   }
 
   /**
-   * A follow-up's input with the earlier run's image put back (agents.md
-   * 5.17): a stored run holds the path of its image, not the image, so a
-   * follow-up on the same input sends that path. Where an `image` field's
-   * value is the path the earlier run of the same workflow stored, it
+   * An input with a stored run's images put back (agents.md 5.17): a stored
+   * run holds the path of its image, not the image, so a follow-up on the
+   * same input sends that path, and a queued run prepared again as it
+   * starts (`fromRunId` its own id) holds its own paths. Where an `image`
+   * field's value is the path that run of the same workflow stored, it
    * becomes that file as a `data:` URL; anything else is left for the
    * input check to refuse.
    */
   private async withEarlierImages(
     workflow: WorkflowDefinition,
     input: unknown,
-    context: unknown,
+    fromRunId: unknown,
   ): Promise<unknown> {
     const fields = workflow.input.filter(
       (field) => field.type === 'image' || field.type === 'images',
     );
-    const fromRunId = (context as { fromRunId?: unknown } | null | undefined)
-      ?.fromRunId;
     if (
       !fields.length ||
       typeof fromRunId !== 'string' ||
@@ -1824,11 +1965,17 @@ export class WorkflowRunsService implements OnModuleInit {
   }
 
   /**
-   * Store a run as it starts: `running`, with its input and the workflow's
-   * contract hash at that moment (data-model 3.16).
+   * Store a run as it is accepted, with its input and the workflow's
+   * contract hash at that moment (data-model 3.16): `queued` (119, with
+   * `queuedAt`; it starts later) or `running` (118 and drafts; its first
+   * start, `attempts` 1 for a stored run).
    */
-  private async start(prepared: PreparedRun): Promise<WorkflowRunDoc> {
-    const id = randomUUID();
+  private async start(
+    prepared: PreparedRun,
+    status: 'queued' | 'running',
+    id: string = randomUUID(),
+  ): Promise<WorkflowRunDoc> {
+    const now = new Date().toISOString();
     const base: WorkflowRunDoc = {
       id,
       workflowId: prepared.workflow.id,
@@ -1852,10 +1999,12 @@ export class WorkflowRunsService implements OnModuleInit {
             },
           }
         : {}),
-      status: 'running',
+      status,
+      ...(status === 'queued' ? { queuedAt: now } : {}),
+      ...(status === 'running' && !prepared.draft ? { attempts: 1 } : {}),
       steps: [],
       datasets: [],
-      startedAt: new Date().toISOString(),
+      startedAt: now,
     };
     if (!prepared.draft) await this.repository.insert(base);
     return base;
@@ -1988,7 +2137,12 @@ export class WorkflowRunsService implements OnModuleInit {
   }> {
     const runs = await this.conversationRuns(id);
     if (
-      runs.some((run) => run.status === 'running' || run.status === 'suspended')
+      runs.some(
+        (run) =>
+          run.status === 'queued' ||
+          run.status === 'running' ||
+          run.status === 'suspended',
+      )
     ) {
       throw new ConflictException('The run is still running');
     }
