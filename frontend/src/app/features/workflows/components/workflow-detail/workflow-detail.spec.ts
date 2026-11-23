@@ -648,7 +648,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
           dashboard: { ...DASHBOARD, version },
         },
       });
-    const loadDashboard = (version: number) => {
+    const loadDashboard = async (version: number) => {
       const req = http.expectOne((r) => r.url.endsWith('/artifacts/a-1'));
       expect(req.request.params.get('version')).toBe(String(version));
       req.flush({
@@ -678,15 +678,18 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
         ],
       });
       fixture.detectChanges();
+      // The panel is deferred (@defer): wait for it to render.
+      await fixture.whenStable();
+      fixture.detectChanges();
     };
 
-    it('Business: a run that ends with a dashboard opens it beside the chat, never over it', () => {
+    it('Business: a run that ends with a dashboard opens it beside the chat, never over it', async () => {
       localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'business');
       open(THREE_STEPS);
       expect(q('run-dashboard-panel')).toBeNull();
       runWith('run-1', 1);
       fixture.detectChanges();
-      loadDashboard(1);
+      await loadDashboard(1);
       const panel = el.querySelector('app-run-dashboard-panel') as HTMLElement;
       const chatColumn = q('workflow-business-view')!;
       // Siblings in one flex row: the chat column narrows, the panel follows it.
@@ -714,12 +717,12 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       ).toBeGreaterThanOrEqual(520);
     });
 
-    it('a later run with a newer version updates the panel and reopens it once closed', () => {
+    it('a later run with a newer version updates the panel and reopens it once closed', async () => {
       localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'business');
       open(THREE_STEPS);
       runWith('run-1', 1);
       fixture.detectChanges();
-      loadDashboard(1);
+      await loadDashboard(1);
       q('run-dashboard-close')!.click();
       fixture.detectChanges();
       expect(q('run-dashboard-panel')).toBeNull();
@@ -729,15 +732,15 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       expect(q('run-dashboard-panel')).toBeNull();
       runWith('run-2', 2);
       fixture.detectChanges();
-      loadDashboard(2);
+      await loadDashboard(2);
       expect(text('run-dashboard-panel-meta')).toContain('Version 2');
     });
 
-    it('Builder: the panel docks on the right edge beside the canvas, after the Run panel', () => {
+    it('Builder: the panel docks on the right edge beside the canvas, after the Run panel', async () => {
       open(THREE_STEPS);
       runWith('run-1', 1);
       fixture.detectChanges();
-      loadDashboard(1);
+      await loadDashboard(1);
       const panel = el.querySelector('app-run-dashboard-panel') as HTMLElement;
       const dock = q('workflow-run-dock')!;
       const canvasColumn = el.querySelector('app-workflow-canvas')!
@@ -749,11 +752,11 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       );
     });
 
-    it('leaving the page closes the panel', () => {
+    it('leaving the page closes the panel', async () => {
       open(THREE_STEPS);
       runWith('run-1', 1);
       fixture.detectChanges();
-      loadDashboard(1);
+      await loadDashboard(1);
       fixture.destroy();
       expect(TestBed.inject(RunDashboardState).shown()).toBeNull();
     });

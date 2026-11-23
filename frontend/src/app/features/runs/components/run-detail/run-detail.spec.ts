@@ -3,7 +3,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { WorkflowRun } from '../../../workflows/models/workflow.model';
 import { RunDashboardState } from '../../services/run-dashboard-state';
 import { RunVisualsState } from '../../services/run-visuals-state';
@@ -14,11 +14,18 @@ const RUN: WorkflowRun = {
   id: 'r1',
   workflowId: 'answer-business-question',
   workflowName: 'Insights Analyst',
-  input: { question: 'Which team scored the most goals?', datasets: ['World Cup Core', 'Other'] },
+  input: {
+    question: 'Which team scored the most goals?',
+    datasets: ['World Cup Core', 'Other'],
+  },
   status: 'success',
   steps: [{ id: 'answer', title: 'Answer', status: 'success' }],
   question: 'Which team scored the most goals?',
-  answer: { role: 'assistant', content: 'Brazil scored the most.', at: '2026-01-01T00:00:01Z' },
+  answer: {
+    role: 'assistant',
+    content: 'Brazil scored the most.',
+    at: '2026-01-01T00:00:01Z',
+  },
   datasets: ['World Cup Core'],
   startedAt: '2026-01-01T00:00:00Z',
 };
@@ -31,31 +38,35 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     });
   });
 
+  let lastFixture: ComponentFixture<RunDetail>;
   function mount(run: WorkflowRun): HTMLElement {
     const state = TestBed.inject(RunsState);
     state.activeRun.set(run);
     const fixture = TestBed.createComponent(RunDetail);
+    lastFixture = fixture;
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
 
   it('shows the workflow, status, input, steps and the answer, read-only', () => {
     const el = mount(RUN);
-    expect(el.querySelector('[data-testid="run-detail-workflow"]')?.textContent).toContain(
-      'Insights Analyst',
-    );
-    expect(el.querySelector('[data-testid="run-detail-status"]')?.textContent).toContain(
-      'Run succeeded',
-    );
-    const input = el.querySelector('[data-testid="run-detail-input"]')!.textContent!;
+    expect(
+      el.querySelector('[data-testid="run-detail-workflow"]')?.textContent,
+    ).toContain('Insights Analyst');
+    expect(
+      el.querySelector('[data-testid="run-detail-status"]')?.textContent,
+    ).toContain('Run succeeded');
+    const input = el.querySelector(
+      '[data-testid="run-detail-input"]',
+    )!.textContent!;
     expect(input).toContain('Which team scored the most goals?');
     expect(input).toContain('World Cup Core, Other');
-    expect(el.querySelector('[data-testid="run-detail-step-answer"]')?.textContent).toContain(
-      'Done',
-    );
-    expect(el.querySelector('[data-testid="run-detail-answer"]')?.textContent).toContain(
-      'Brazil scored the most.',
-    );
+    expect(
+      el.querySelector('[data-testid="run-detail-step-answer"]')?.textContent,
+    ).toContain('Done');
+    expect(
+      el.querySelector('[data-testid="run-detail-answer"]')?.textContent,
+    ).toContain('Brazil scored the most.');
     // Nothing on a stored run sends, rates or stops anything.
     expect(el.querySelector('textarea, input')).toBeNull();
     expect(el.querySelector('[data-testid="workflow-run-stop"]')).toBeNull();
@@ -79,30 +90,30 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       el.querySelector('[data-testid="run-detail-status"]')?.textContent,
     ).toContain('Waiting for you');
     expect(el.querySelector('[data-testid="run-again"]')).toBeNull();
-    expect(el.querySelector('[data-testid="run-answer-in-workflow"]')).toBeNull();
+    expect(
+      el.querySelector('[data-testid="run-answer-in-workflow"]'),
+    ).toBeNull();
   });
 
   it('a run of a removed workflow reads as a plain run: its answer, no Run again, no phases bar', () => {
-    const el = mount(
-      {
-        ...RUN,
-        workflowId: 'agent:assistant',
-        workflowName: 'Assistant',
-        workflow: {
-          phases: [{ number: 1, title: 'Understand' }],
-          current: null,
-          done: [1],
-          skipped: [],
-          source: 'prompt',
-        },
+    const el = mount({
+      ...RUN,
+      workflowId: 'agent:assistant',
+      workflowName: 'Assistant',
+      workflow: {
+        phases: [{ number: 1, title: 'Understand' }],
+        current: null,
+        done: [1],
+        skipped: [],
+        source: 'prompt',
       },
-    );
-    expect(el.querySelector('[data-testid="run-detail-workflow"]')?.textContent).toContain(
-      'Assistant',
-    );
-    expect(el.querySelector('[data-testid="run-detail-answer"]')?.textContent).toContain(
-      'Brazil scored the most.',
-    );
+    });
+    expect(
+      el.querySelector('[data-testid="run-detail-workflow"]')?.textContent,
+    ).toContain('Assistant');
+    expect(
+      el.querySelector('[data-testid="run-detail-answer"]')?.textContent,
+    ).toContain('Brazil scored the most.');
     expect(el.querySelector('[data-testid="run-again"]')).toBeNull();
     expect(el.querySelector('[data-testid="run-detail-phases"]')).toBeNull();
   });
@@ -113,11 +124,13 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       status: 'failed',
       error: 'Boom',
       answer: undefined,
-      steps: [{ id: 'answer', title: 'Answer', status: 'failed', error: 'Boom' }],
+      steps: [
+        { id: 'answer', title: 'Answer', status: 'failed', error: 'Boom' },
+      ],
     });
-    expect(el.querySelector('[data-testid="run-detail-status"]')?.textContent).toContain(
-      'Run failed: Boom',
-    );
+    expect(
+      el.querySelector('[data-testid="run-detail-status"]')?.textContent,
+    ).toContain('Run failed: Boom');
     expect(el.querySelector('[data-testid="run-detail-answer"]')).toBeNull();
   });
 
@@ -151,14 +164,16 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     const view = spyOn(TestBed.inject(RunVisualsState), 'view');
     const card = el.querySelector('[data-testid="run-artifact-card"]')!;
     expect(card.textContent).toContain('Goals');
-    (card.querySelector('[data-testid="run-artifact-open"]') as HTMLElement).click();
+    (
+      card.querySelector('[data-testid="run-artifact-open"]') as HTMLElement
+    ).click();
     expect(view).toHaveBeenCalledWith(
       jasmine.objectContaining({ id: 'r1' }),
       jasmine.objectContaining({ visualId: 'vis-1', version: 1 }),
     );
   });
 
-  it('a run opened with a dashboard shows it beside the run, not over it (dashboard-panel)', () => {
+  it('a run opened with a dashboard shows it beside the run, not over it (dashboard-panel)', async () => {
     const el = mount({
       ...RUN,
       answer: {
@@ -179,6 +194,9 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     const req = http.expectOne((r) => r.url.endsWith('/artifacts/a-1'));
     expect(req.request.params.get('version')).toBe('2');
     expect(TestBed.inject(RunDashboardState).shown()?.version).toBe(2);
+    // The panel is deferred (@defer): wait for it to render.
+    await lastFixture.whenStable();
+    lastFixture.detectChanges();
     const panel = el.querySelector('app-run-dashboard-panel') as HTMLElement;
     const content = el.querySelector('[data-testid="run-detail"]')!;
     expect(panel.parentElement).toBe(content.parentElement);
@@ -213,13 +231,13 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       '/workflow-runs/r1/input-image?path=inputs%2Fimages%2F1.png',
     );
     expect(
-      el
-        .querySelector<HTMLImageElement>('[data-testid="run-detail-input-image-1"]')!
-        .alt,
+      el.querySelector<HTMLImageElement>(
+        '[data-testid="run-detail-input-image-1"]',
+      )!.alt,
     ).toBe('Reference image 2');
-    expect(el.querySelector('[data-testid="run-detail-input"]')!.textContent).not.toContain(
-      'inputs/images',
-    );
+    expect(
+      el.querySelector('[data-testid="run-detail-input"]')!.textContent,
+    ).not.toContain('inputs/images');
   });
 
   it('turns the images of an input into one entry holding their paths', () => {
@@ -245,7 +263,9 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
             rationale: 'Counting the matches.',
           },
         ],
-        evidence: [{ index: 0, coverage: 'whole-table', datasourceKind: 'postgres' }],
+        evidence: [
+          { index: 0, coverage: 'whole-table', datasourceKind: 'postgres' },
+        ],
       },
     };
 
@@ -258,17 +278,22 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       return { fixture, http, el: fixture.nativeElement as HTMLElement };
     }
     const evidence = (r: { url: string; method: string }) =>
-      r.method === 'POST' && r.url.endsWith('/workflow-runs/r1/answer/evidence');
+      r.method === 'POST' &&
+      r.url.endsWith('/workflow-runs/r1/answer/evidence');
 
     it('shows the query rows and a chip, builds the evidence once, and opens the inspector from a row', async () => {
       const { fixture, http, el } = mountWithHttp(WITH_QUERIES);
       http.expectOne(evidence).flush({ ok: true, run: WITH_QUERIES });
       fixture.detectChanges();
       expect(el.textContent).not.toContain('Data used');
-      expect(el.querySelector('[data-testid="query-coverage-line"]')).not.toBeNull();
+      expect(
+        el.querySelector('[data-testid="query-coverage-line"]'),
+      ).not.toBeNull();
       const row = el.querySelector<HTMLElement>('[data-testid="query-row-0"]')!;
       expect(row.textContent).toContain('Counting the matches.');
-      expect(el.querySelector('[data-testid="figure-ref"]')?.textContent).toBe('1');
+      expect(el.querySelector('[data-testid="figure-ref"]')?.textContent).toBe(
+        '1',
+      );
       expect(el.querySelector('[data-testid="query-inspector"]')).toBeNull();
 
       row.click();
@@ -277,14 +302,17 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       await fixture.whenStable();
       fixture.detectChanges();
       const sheet = el.querySelector('[data-testid="query-inspector-sheet"]')!;
-      expect(sheet.querySelector('[data-testid="query-inspector-position"]')?.textContent).toContain(
-        'Source 1 of 1',
-      );
+      expect(
+        sheet.querySelector('[data-testid="query-inspector-position"]')
+          ?.textContent,
+      ).toContain('Source 1 of 1');
       // Showing the run again builds nothing a second time.
       fixture.detectChanges();
       http.expectNone(evidence);
 
-      el.querySelector<HTMLElement>('[data-testid="query-inspector-close"]')!.click();
+      el.querySelector<HTMLElement>(
+        '[data-testid="query-inspector-close"]',
+      )!.click();
       fixture.detectChanges();
       expect(el.querySelector('[data-testid="query-inspector"]')).toBeNull();
       // Opening the query asked for its steps; that is the only call left.

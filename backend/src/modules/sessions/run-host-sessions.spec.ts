@@ -607,8 +607,11 @@ function build(options: BuildOptions = {}) {
       ),
     ),
     {} as never,
-    // No stored artifact: no workflow here takes one.
-    { list: () => Promise.resolve([]) } as never,
+    // No stored artifact: no workflow here takes one; nothing is saved.
+    {
+      list: () => Promise.resolve([]),
+      isVersionSaved: () => Promise.resolve(null),
+    } as never,
   );
   /** A chat session over the same input as `workflow`'s run. */
   const chat = (workflow: Workflow): SessionDoc => {
