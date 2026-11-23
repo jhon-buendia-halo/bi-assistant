@@ -15,7 +15,7 @@ specs/      the complete specification of the app
 ## Non-negotiables
 
 - **Never on `main`.** Work on a branch; nothing goes directly on `main`.
-- **Every session starts up to date with `main` and in its own worktree (mandatory).** Before the first change of a session: `git fetch origin`, then work in a git worktree of its own (never in the main checkout), on a branch that holds the latest `origin/main` (a new branch starts from it; an existing one merges it in first, and the session stops to ask when the merge conflicts). Skill: `session-handoff`, *Start*.
+- **Every session starts up to date with `main` and in its own worktree (mandatory).** Before the first change of a session: `git fetch origin`, then work in a git worktree of its own (never in the main checkout), on a branch that holds the latest `origin/main` (a new branch starts from it; an existing one merges it in first, and the session stops to ask when the merge conflicts). Say in one line the worktree, the branch and the `origin/main` commit it holds.
 - **Specs change with the code, on the same branch.** `python3 scripts/check-specs.py` must pass. Skill: `workflow-start` (where a fact belongs).
 - **Every local instance is ready to test.** Never leave an instance without an LLM. Skill: `local-instance`.
 - **New or changed workflows start from Mastra's docs.** Read them, check what can be reused, offer the user three approaches with a recommendation, and build only after the user picks one. Skill: `mastra-workflows`.
@@ -23,7 +23,6 @@ specs/      the complete specification of the app
 - **All planning lives in this repository** ([roadmap.md](roadmap.md), [specs/epics/](specs/README.md)); don't ask for or create Jira issues.
 - **Read and output.** Never read a file over 500 lines whole: `grep -n` or use [specs/INDEX.md](specs/INDEX.md), then read the range. Run builds and tests quietly, to a log file, and read back only the summary or the failure block.
 - **Versioning is automatic:** Conventional Commit subjects drive the bump. Never edit `version` by hand; installers and the npm package are built manually. See [delivery.md](specs/system/delivery.md).
-- **Session hygiene.** Before starting a new session, write `.context/handoff.md`. Skill: `session-handoff`.
 - **Starting any subagent** → the first line of its brief is `Read .claude/worker.md before anything else.`; the rest is the goal, the task and the brand. [worker.md](.claude/worker.md) holds the rules every subagent follows.
 
 New checkout or worktree: run `node scripts/bootstrap.mjs` once (installs, builds the backend and web UI, reports whether the shared Postgres on 55432 is up; never starts the app).
@@ -108,7 +107,7 @@ Subagents that work from a brief (`builder`, `reviewer`) skip this.
 
 ### Task skills
 
-The workflow decides which steps run; a task skill says how to do one kind of task inside them (`bug-fix`, `agent-change`, `mastra-workflows`, `local-instance`, `session-handoff`, `visual-options`, `show-the-change`, `ship`). Its `description` says when it applies: load every one that matches the task and copy its steps into the todo list. A step that names a workflow step in brackets fills that step. A task no skill fits (a feature, a UI change) follows the workflow's steps alone.
+The workflow decides which steps run; a task skill says how to do one kind of task inside them (`bug-fix`, `agent-change`, `mastra-workflows`, `local-instance`, `visual-options`, `show-the-change`, `ship`). Its `description` says when it applies: load every one that matches the task and copy its steps into the todo list. A step that names a workflow step in brackets fills that step. A task no skill fits (a feature, a UI change) follows the workflow's steps alone.
 
 ## Process documents
 
