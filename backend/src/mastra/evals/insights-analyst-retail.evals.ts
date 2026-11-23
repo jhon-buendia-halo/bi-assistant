@@ -122,7 +122,20 @@ function clarifyCase(
   };
 }
 
-/** An out-of-coverage case: the answer says so, with one pass condition for the judge. */
+/**
+ * Added to every coverage rubric. The workflow hands Plan the dataset catalog,
+ * so "no such table or column" needs no tool call; and a refusal may end by
+ * offering other measures as a question (baseline 2026-11-22: Opus 5.5 did so
+ * 3 of 3 on the ROAS case, giving no figure).
+ */
+const COVERAGE_RUBRIC_NOTE =
+  'The workflow is given the data catalog, so a claim that the data lacks a table or column needs no tool call. Ending with a question that offers other measures is fine.';
+
+/**
+ * An out-of-coverage case: the answer says so, with one pass condition for the
+ * judge. No `answersWithoutClarifying`: a refusal that offers alternatives as
+ * a question is a correct outcome here.
+ */
 function coverageCase(
   id: string,
   question: string,
@@ -135,8 +148,8 @@ function coverageCase(
     question,
     intent,
     scorers: [checks.noToolErrors()],
-    customChecks: [answersWithoutClarifying(), ...codeChecks],
-    judgeRubric: rubric,
+    customChecks: codeChecks,
+    judgeRubric: `${rubric} ${COVERAGE_RUBRIC_NOTE}`,
   };
 }
 

@@ -84,18 +84,29 @@ describe('insights-analyst-retail set', () => {
     }
   });
 
-  it('makes every answer and not-covered case check that it answered', () => {
+  it('makes every answer case, and no other, check that it answered', () => {
     for (const c of cases) {
       const expected = IAR_CASES[c.id].expected;
-      if (expected === 'answer' || expected === 'not-covered') {
-        expect({
-          id: c.id,
-          has: checkIds(c).includes('answers-without-clarifying'),
-        }).toEqual({
-          id: c.id,
-          has: true,
-        });
-      }
+      expect({
+        id: c.id,
+        has: checkIds(c).includes('answers-without-clarifying'),
+      }).toEqual({
+        id: c.id,
+        has: expected === 'answer',
+      });
+    }
+  });
+
+  it('lets a coverage refusal rest on the catalog and end on a question', () => {
+    const coverage = cases.filter(
+      (c) => IAR_CASES[c.id].expected === 'not-covered',
+    );
+    expect(coverage).toHaveLength(3);
+    for (const c of coverage) {
+      expect(c.judgeRubric).toContain('needs no tool call');
+      expect(c.judgeRubric).toContain(
+        'Ending with a question that offers other measures is fine.',
+      );
     }
   });
 
