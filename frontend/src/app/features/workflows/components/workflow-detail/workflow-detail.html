@@ -157,7 +157,9 @@
         @if (dashboards.shown() !== null) {
           <!-- The dashboard beside the chat (dashboard-panel): the chat
                column narrows, it is never covered -->
-          <app-run-dashboard-panel />
+          @defer (on immediate) {
+            <app-run-dashboard-panel />
+          }
         }
         @if (openQuery(); as open) {
           <div
@@ -222,7 +224,9 @@
         @if (dashboards.shown() !== null) {
           <!-- The dashboard on the right edge, beside the canvas, never over
                the Run panel (dashboard-panel) -->
-          <app-run-dashboard-panel />
+          @defer (on immediate) {
+            <app-run-dashboard-panel />
+          }
         }
       </div>
     }

@@ -222,7 +222,9 @@
     </div>
   </div>
   @if (dashboards.shown() !== null) {
-    <app-run-dashboard-panel />
+    @defer (on immediate) {
+      <app-run-dashboard-panel />
+    }
   }
   @if (openQuery(); as open) {
     <!-- The query inspector sheet: at the right of the page, never wider than 720 px. -->

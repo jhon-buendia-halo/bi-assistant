@@ -1189,7 +1189,7 @@ type DashboardRef = {
   widgetCount: number;
   filterCount: number;
   rowCount: number;
-  saved: boolean;                  // whether this version is saved to Artifacts (false when Clara creates or updates it; 164 saves it)
+  saved: boolean;                  // whether this version is saved to Artifacts (false when Clara creates or updates it; 164 saves it); a stored run's ref is read again from the artifact each time the run is read (121, 119's done.run), so a card shows a later save
 };
 ```
 

@@ -458,6 +458,16 @@ export class ArtifactsService {
     }
   }
 
+  /**
+   * Whether a version of an artifact is saved to Artifacts now (a run's
+   * dashboard card reads it: its stored ref is a snapshot from the run);
+   * null when the artifact is gone.
+   */
+  async isVersionSaved(id: string, version: number): Promise<boolean | null> {
+    const doc = await this.repository.get(id);
+    return doc ? isSavedVersion(doc, version) : null;
+  }
+
   private async stored(id: string): Promise<ArtifactDoc> {
     const doc = await this.repository.get(id);
     if (!doc) throw notFound(id);

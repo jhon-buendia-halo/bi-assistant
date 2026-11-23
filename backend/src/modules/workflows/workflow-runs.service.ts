@@ -1761,6 +1761,16 @@ export class WorkflowRunsService implements OnModuleInit {
       ),
     };
     delete run.rfpId;
+    // A dashboard card's `saved` is a snapshot from its run: read it now.
+    const dashboard = run.answer?.dashboard;
+    if (dashboard) {
+      const saved = await this.artifacts
+        .isVersionSaved(dashboard.artifactId, dashboard.version)
+        .catch(() => null);
+      if (saved !== null && saved !== dashboard.saved) {
+        run.answer = { ...run.answer!, dashboard: { ...dashboard, saved } };
+      }
+    }
     if (run.question === undefined) return run;
     const view = await this.sessions.toView(runHostDoc(run));
     return {

@@ -416,6 +416,11 @@ function build(
     rerun: jest.fn(),
     exportRows: jest.fn(),
   };
+  const artifacts = {
+    list: () => Promise.resolve([]),
+    // A dashboard card's saved state is read when a run is (api.md 121).
+    isVersionSaved: jest.fn().mockResolvedValue(null),
+  };
   const service = new WorkflowRunsService(
     workflows,
     sessions as unknown as SessionsService,
@@ -425,11 +430,12 @@ function build(
     nodeChats,
     queryEvidence as unknown as QueryEvidenceService,
     // No stored artifact: no workflow here takes one.
-    { list: () => Promise.resolve([]) } as never,
+    artifacts as never,
   );
   return {
     db,
     service,
+    artifacts,
     repository,
     nodeChats,
     queryEvidence,
@@ -2208,6 +2214,35 @@ describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 1
         }
       ).contextDashboard,
     ).toBe('a-2');
+  });
+
+  it("reads a dashboard card's saved state when the run is read, not the run's snapshot", async () => {
+    const { second } = await conversation();
+    const answered = await ctx.repository.get(second.id);
+    await ctx.repository.update(second.id, {
+      answer: {
+        ...answered!.answer!,
+        dashboard: {
+          artifactId: 'a-1',
+          version: 2,
+          title: 'Goals',
+          action: 'updated',
+          widgetCount: 1,
+          filterCount: 0,
+          rowCount: 1,
+          saved: false,
+        },
+      },
+    });
+    ctx.artifacts.isVersionSaved.mockResolvedValue(true);
+    const run = await ctx.service.get(second.id);
+    expect(run.answer?.dashboard?.saved).toBe(true);
+    expect(ctx.artifacts.isVersionSaved).toHaveBeenCalledWith('a-1', 2);
+    // A deleted artifact leaves the snapshot as it was.
+    ctx.artifacts.isVersionSaved.mockResolvedValue(null);
+    expect((await ctx.service.get(second.id)).answer?.dashboard?.saved).toBe(
+      false,
+    );
   });
 
   it('carries no dashboard into a conversation that has none, and an archived one still takes no message', async () => {
