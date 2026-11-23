@@ -4,30 +4,29 @@ import {
   computed,
   inject,
   input,
-  signal,
 } from '@angular/core';
 import {
   BarChart3,
   Download,
   ExternalLink,
   LucideAngularModule,
+  PanelRight,
+  Save,
 } from 'lucide-angular';
-import { ToastService } from '../../../../core/toast/toast.service';
-import { saveBlob } from '../../../../shared/query-evidence/rows-csv';
-import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.service';
-import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
 import { DashboardRef } from '../../../sessions/models/session.model';
-import { dashboardZipName } from '../../../artifacts/models/artifact.model';
+import { RunDashboardState } from '../../services/run-dashboard-state';
 
 function plural(n: number, one: string): string {
   return `${n.toLocaleString('en-US')} ${one}${n === 1 ? '' : 's'}`;
 }
 
 /**
- * The live dashboard an answer built (bi-dashboard 2.10): its title, whether
- * this turn created or updated it and at which version, the widget, filter
- * and row counts, and Open (the Artifacts page at that version) and Download
- * (that version's zip).
+ * The live dashboard an answer built (bi-dashboard 2.10, dashboard-panel):
+ * its title, whether this turn created or updated it and at which version,
+ * Draft or Saved, the widget, filter and row counts. A draft offers Show in
+ * panel and Save to Artifacts; a saved version Open (the Artifacts page at
+ * that version) and Download (its zip). It shares `RunDashboardState` with
+ * the side panel, so a save in either shows in both.
  */
 @Component({
   selector: 'app-run-dashboard-card',
@@ -48,6 +47,13 @@ function plural(n: number, one: string): string {
           >Live data</span
         >
         <span
+          class="chip"
+          [class.chip-success]="saved()"
+          [class.chip-warning]="!saved()"
+          data-testid="run-dashboard-status"
+          >{{ saved() ? '✓ Saved to Artifacts' : 'Draft' }}</span
+        >
+        <span
           class="text-[12px] text-fg-muted"
           data-testid="run-dashboard-version"
           >{{ actionLabel() }} · Version {{ dashboard().version }}</span
@@ -64,26 +70,49 @@ function plural(n: number, one: string): string {
         {{ meta() }}
       </p>
       <div class="mt-1 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          class="btn btn-primary"
-          data-testid="run-dashboard-open"
-          [attr.aria-label]="'Open ' + dashboard().title"
-          (click)="open()"
-        >
-          <lucide-angular [img]="ExternalLink" [size]="14" />
-          <span>Open</span>
-        </button>
-        <button
-          type="button"
-          class="btn btn-outline"
-          data-testid="run-dashboard-download"
-          [disabled]="downloading()"
-          (click)="download()"
-        >
-          <lucide-angular [img]="Download" [size]="14" />
-          <span>Download</span>
-        </button>
+        @if (saved()) {
+          <button
+            type="button"
+            class="btn btn-primary"
+            data-testid="run-dashboard-open"
+            [attr.aria-label]="'Open ' + dashboard().title"
+            (click)="state.openInArtifacts(dashboard())"
+          >
+            <lucide-angular [img]="ExternalLink" [size]="14" />
+            <span>Open</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-outline"
+            data-testid="run-dashboard-download"
+            [disabled]="state.downloading() !== null"
+            (click)="state.download(dashboard())"
+          >
+            <lucide-angular [img]="Download" [size]="14" />
+            <span>Download</span>
+          </button>
+        } @else {
+          <button
+            type="button"
+            class="btn btn-outline"
+            data-testid="run-dashboard-show"
+            [attr.aria-pressed]="state.isShown(dashboard())"
+            (click)="state.open(dashboard())"
+          >
+            <lucide-angular [img]="PanelRight" [size]="14" />
+            <span>Show in panel</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            data-testid="run-dashboard-save"
+            [disabled]="state.saving() !== null"
+            (click)="state.save(dashboard())"
+          >
+            <lucide-angular [img]="Save" [size]="14" />
+            <span>Save to Artifacts</span>
+          </button>
+        }
       </div>
     </article>
   `,
@@ -92,14 +121,17 @@ export class RunDashboardCard {
   protected readonly BarChart3 = BarChart3;
   protected readonly Download = Download;
   protected readonly ExternalLink = ExternalLink;
+  protected readonly PanelRight = PanelRight;
+  protected readonly Save = Save;
 
-  private readonly api = inject(ArtifactsApiService);
-  private readonly nav = inject(ArtifactsNavState);
-  private readonly toast = inject(ToastService);
+  protected readonly state = inject(RunDashboardState);
 
   readonly dashboard = input.required<DashboardRef>();
-  protected readonly downloading = signal(false);
 
+  /** Saved to Artifacts, as the ref or a save since says (dashboard-panel). */
+  protected readonly saved = computed(() =>
+    this.state.isSaved(this.dashboard()),
+  );
   protected readonly actionLabel = computed(() =>
     this.dashboard().action === 'created' ? 'Created' : 'Updated',
   );
@@ -111,25 +143,4 @@ export class RunDashboardCard {
       plural(d.rowCount, 'row'),
     ].join(' · ');
   });
-
-  protected open(): void {
-    const d = this.dashboard();
-    this.nav.openArtifact(d.artifactId, d.version);
-  }
-
-  protected download(): void {
-    const d = this.dashboard();
-    if (this.downloading()) return;
-    this.downloading.set(true);
-    this.api.download(d.artifactId, d.version).subscribe({
-      next: (blob) => {
-        this.downloading.set(false);
-        saveBlob(blob, dashboardZipName(d.title, d.artifactId, d.version));
-      },
-      error: (err) => {
-        this.downloading.set(false);
-        this.toast.error(err?.error?.message ?? 'Could not download');
-      },
-    });
-  }
 }

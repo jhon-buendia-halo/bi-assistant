@@ -39,6 +39,17 @@ export class ArtifactsApiService {
     );
   }
 
+  /**
+   * Save a dashboard version to Artifacts (api.md 164): `version` defaults to
+   * the latest. Answers the artifact at that version.
+   */
+  save(id: string, version?: number): Observable<Artifact> {
+    return this.http.post<Artifact>(
+      `${API_BASE_URL}/artifacts/${encodeURIComponent(id)}/save`,
+      version === undefined ? {} : { version },
+    );
+  }
+
   rename(id: string, name: string): Observable<ArtifactSummary> {
     return this.http.patch<ArtifactSummary>(
       `${API_BASE_URL}/artifacts/${encodeURIComponent(id)}`,

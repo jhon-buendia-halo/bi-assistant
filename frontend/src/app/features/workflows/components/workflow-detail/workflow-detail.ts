@@ -30,6 +30,8 @@ import { StoryQueryOpen } from '../workflow-step-story/workflow-step-story';
 import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
 import { WorkflowRunChat } from '../workflow-run-chat/workflow-run-chat';
 import { relayQueryOf } from '../../services/team-relay';
+import { RunDashboardPanel } from '../../../runs/components/run-dashboard-panel/run-dashboard-panel';
+import { RunDashboardState } from '../../../runs/services/run-dashboard-state';
 import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import {
   WorkflowView,
@@ -54,6 +56,7 @@ import {
     LucideAngularModule,
     NgTemplateOutlet,
     QueryInspector,
+    RunDashboardPanel,
     WorkflowCanvas,
     WorkflowNodeDialog,
     WorkflowRunChat,
@@ -70,6 +73,8 @@ export class WorkflowDetailPage {
   readonly FileText = FileText;
 
   protected readonly designer = inject(WorkflowDesigner);
+  /** The dashboard open beside the chat (dashboard-panel). */
+  protected readonly dashboards = inject(RunDashboardState);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly workflowId = input.required<string>();
@@ -118,8 +123,30 @@ export class WorkflowDetailPage {
       const id = this.workflowId();
       untracked(() => this.designer.load(id));
     });
+    // A run shown in the chat that ended (or was opened) with a dashboard
+    // opens it beside the chat; a later run's newer version replaces it
+    // (dashboard-panel).
+    effect(() => {
+      const dashboard = this.designer.running()
+        ? null
+        : (this.designer.runResult()?.answer?.dashboard ?? null);
+      untracked(() => this.dashboards.follow(dashboard));
+    });
+    // Another workflow: its own conversation, so no dashboard yet.
+    let shownWorkflow: string | null = null;
+    effect(() => {
+      const id = this.designer.workflow()?.id ?? null;
+      untracked(() => {
+        if (shownWorkflow !== null && id !== shownWorkflow)
+          this.dashboards.reset();
+        if (id !== null) shownWorkflow = id;
+      });
+    });
     // Leaving the page discards the workflow and its run (R13).
-    inject(DestroyRef).onDestroy(() => this.designer.clear());
+    inject(DestroyRef).onDestroy(() => {
+      this.designer.clear();
+      this.dashboards.reset();
+    });
   }
 
   /**

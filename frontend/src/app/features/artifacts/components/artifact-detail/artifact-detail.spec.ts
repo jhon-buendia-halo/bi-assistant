@@ -113,6 +113,41 @@ describe('ArtifactDetail, versions', () => {
     expect(q(fixture.nativeElement, 'artifact-data-missing')).not.toBeNull();
   });
 
+  it('offers only the saved versions in the picker (dashboard-panel)', () => {
+    const fixture = render(1);
+    detailReq().flush(
+      artifact(1, {
+        status: 'saved',
+        savedVersions: [1],
+        versions: artifact(1).versions!.map((v) => ({
+          ...v,
+          saved: v.version === 1,
+        })),
+      }),
+    );
+    fixture.detectChanges();
+    const options = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll(
+        '[data-testid="artifact-version-select"] option',
+      ),
+    ).map((o) => o.textContent?.trim());
+    expect(options).toEqual(['Version 1 · 20 Nov 2026']);
+  });
+
+  it('opens at the latest saved version when the latest is a draft', () => {
+    const fixture = render();
+    const first = detailReq();
+    expect(first.request.params.has('version')).toBeFalse();
+    first.flush(artifact(2, { status: 'saved', savedVersions: [1] }));
+    const second = detailReq();
+    expect(second.request.params.get('version')).toBe('1');
+    second.flush(artifact(1, { status: 'saved', savedVersions: [1] }));
+    fixture.detectChanges();
+    expect(
+      q(fixture.nativeElement, 'artifact-version-instruction')?.textContent,
+    ).toContain('First cut');
+  });
+
   it('downloads the shown version', () => {
     const fixture = render();
     detailReq().flush(artifact(2));

@@ -8,6 +8,7 @@ import { API_BASE_URL } from '../../../../core/config/api.config';
 import { ShellState } from '../../../../core/shell/shell-state';
 import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
 import { DashboardRef } from '../../../sessions/models/session.model';
+import { RunDashboardState } from '../../services/run-dashboard-state';
 import { RunDashboardCard } from './run-dashboard-card';
 
 const REF: DashboardRef = {
@@ -18,7 +19,9 @@ const REF: DashboardRef = {
   widgetCount: 6,
   filterCount: 2,
   rowCount: 1234,
+  saved: true,
 };
+const DRAFT: DashboardRef = { ...REF, saved: false };
 
 describe('RunDashboardCard', () => {
   let http: HttpTestingController;
@@ -32,8 +35,10 @@ describe('RunDashboardCard', () => {
     const fixture = TestBed.createComponent(RunDashboardCard);
     fixture.componentRef.setInput('dashboard', ref);
     fixture.detectChanges();
+    current = fixture;
     return fixture.nativeElement as HTMLElement;
   }
+  let current: { detectChanges(): void };
   const q = (el: HTMLElement, id: string) =>
     el.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
 
@@ -88,5 +93,60 @@ describe('RunDashboardCard', () => {
     expect(req.request.params.get('version')).toBe('2');
     expect(req.request.responseType).toBe('blob');
     req.flush(new Blob(['zip']));
+  });
+
+  it('a saved version shows the Saved chip, Open and Download, no Save', () => {
+    const el = render();
+    expect(q(el, 'run-dashboard-status')?.textContent?.trim()).toBe(
+      '✓ Saved to Artifacts',
+    );
+    expect(q(el, 'run-dashboard-save')).toBeNull();
+    expect(q(el, 'run-dashboard-show')).toBeNull();
+  });
+
+  it('a draft shows the Draft chip, Show in panel and Save, no Open or Download', () => {
+    const el = render(DRAFT);
+    expect(q(el, 'run-dashboard-status')?.textContent?.trim()).toBe('Draft');
+    expect(q(el, 'run-dashboard-show')?.textContent?.trim()).toBe(
+      'Show in panel',
+    );
+    expect(q(el, 'run-dashboard-save')?.textContent?.trim()).toBe(
+      'Save to Artifacts',
+    );
+    expect(q(el, 'run-dashboard-open')).toBeNull();
+    expect(q(el, 'run-dashboard-download')).toBeNull();
+  });
+
+  it('a ref stored before drafts existed (no saved flag) is a draft', () => {
+    const legacy: Partial<DashboardRef> = { ...REF };
+    delete legacy.saved;
+    const el = render(legacy as DashboardRef);
+    expect(q(el, 'run-dashboard-status')?.textContent?.trim()).toBe('Draft');
+  });
+
+  it('Show in panel opens that version in the shared panel state', () => {
+    const el = render(DRAFT);
+    q(el, 'run-dashboard-show')!.click();
+    const state = TestBed.inject(RunDashboardState);
+    expect(state.shown()?.artifactId).toBe('a-1234567890');
+    expect(state.shown()?.version).toBe(2);
+    http
+      .expectOne((r) => r.url === `${API_BASE_URL}/artifacts/a-1234567890`)
+      .flush({});
+  });
+
+  it('Save to Artifacts saves that version (api.md 164) and turns the card Saved', () => {
+    const el = render(DRAFT);
+    q(el, 'run-dashboard-save')!.click();
+    const req = http.expectOne(`${API_BASE_URL}/artifacts/a-1234567890/save`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ version: 2 });
+    req.flush({ id: 'a-1234567890', version: 2, savedVersions: [2] });
+    current.detectChanges();
+    expect(q(el, 'run-dashboard-status')?.textContent?.trim()).toBe(
+      '✓ Saved to Artifacts',
+    );
+    expect(q(el, 'run-dashboard-download')).not.toBeNull();
+    expect(q(el, 'run-dashboard-save')).toBeNull();
   });
 });

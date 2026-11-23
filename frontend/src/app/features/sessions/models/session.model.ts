@@ -64,6 +64,11 @@ export interface DashboardRef {
   widgetCount: number;
   filterCount: number;
   rowCount: number;
+  /**
+   * Whether this version is saved to Artifacts (dashboard-panel): false while
+   * it is a draft. Absent on refs stored before drafts existed: a draft.
+   */
+  saved: boolean;
 }
 
 export interface ChatMessage {
