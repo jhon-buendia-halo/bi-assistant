@@ -71,15 +71,6 @@ export interface ReadImagesInput {
   question: string;
   /** The images' paths in the run's workspace (`inputs/images/<n>.<ext>`), in order. */
   images: string[];
-  /**
-   * An interactive run (answer-business-question.review.ts): Zoe may ask
-   * the user one question first. Absent otherwise.
-   */
-  canAsk?: boolean;
-  /** Her question with the user's answer, once answered. */
-  answered?: { question: string; answer: string };
-  /** The changes the user asked for on her approval gate. */
-  revision?: { previous: string; note: string };
 }
 
 /** What Read images gets back from the runtime. */
@@ -94,8 +85,6 @@ export interface ReadImagesOutcome {
    * model step sees the aborted signal and ends the run.
    */
   stopped: boolean;
-  /** Zoe asked the user first (only when `canAsk`): the step waits. */
-  clarification?: { question: string; options: string[] };
 }
 
 /**
@@ -106,12 +95,6 @@ export interface ReadImagesOutcome {
  */
 export interface ReadImagesRuntime {
   readImages(input: ReadImagesInput): Promise<ReadImagesOutcome>;
-  /**
-   * An interactive run of Answer a Business Question (workflows R44): Zoe
-   * may ask first, and her notes wait for the user's approval before they
-   * go on. Absent in every other workflow and in chats.
-   */
-  interactive?: boolean;
 }
 
 /** One image as Read images keeps it from the reply. */

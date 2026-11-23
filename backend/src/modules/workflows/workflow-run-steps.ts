@@ -152,8 +152,8 @@ export interface WorkflowRun {
   input: WorkflowInputValues;
   context?: { fromRunId: string };
   /**
-   * A conversation with Avery (Answer a Business Question (orchestrated),
-   * workflows R45): the id of its first run, shared by every run that
+   * A conversation with Avery (Answer a Business Question (Avery +
+   * Michael), workflows R45): the id of its first run, shared by every run that
    * follows up on it. Absent on other workflows' runs.
    */
   conversationId?: string;

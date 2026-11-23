@@ -14,18 +14,15 @@ import {
 // data contract's check: workflow-contract.spec.ts (`missing`).
 
 describe('usedBy: the steps that read a field from the input (api.md 116)', () => {
-  it("answer-business-question's question and datasets are read by Receive question only, and buildVisual and approveSteps by no step (they pick a branch, or make the run interactive)", () => {
+  it("Avery + Michael's question and datasets are read by Orchestrate, its one step", () => {
     expect(
       inputFieldsWithUsage(CODE_WORKFLOWS[0]).map(({ name, usedBy }) => ({
         name,
         usedBy,
       })),
     ).toEqual([
-      { name: 'question', usedBy: ['read-images', 'receive-question'] },
-      { name: 'images', usedBy: ['read-images'] },
-      { name: 'datasets', usedBy: ['receive-question'] },
-      { name: 'buildVisual', usedBy: [] },
-      { name: 'approveSteps', usedBy: [] },
+      { name: 'question', usedBy: ['orchestrate'] },
+      { name: 'datasets', usedBy: ['orchestrate'] },
     ]);
   });
 

@@ -7,13 +7,11 @@ import { askClarificationTool } from '../tools/clarification.tool';
 import { orchestratorTools } from '../tools/orchestrator.tools';
 import { catalogFrameworkSkills } from '../skill-sources';
 import {
-  ORCHESTRATOR_INSTRUCTIONS,
   ORCHESTRATOR_MICHAEL_INSTRUCTIONS,
   withExportInstructions,
 } from '../workflows/orchestrated-answer-michael.prompts';
 import { CONVERSATION_EXPORT_SKILL } from '../workflows/export-request';
 import {
-  MICHAEL_ANSWER_TOOL,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   type OrchestratorToolsRuntime,
 } from '../workflows/orchestrated-answer-michael.steps';
@@ -27,9 +25,8 @@ function runtimeOf(requestContext?: {
 }
 
 /**
- * Her job description for the run: with Michael alone (Avery + Michael,
- * agents.md 5.23) the shipped one for her team of one; else her whole
- * team's, or its in-app override (ADR-0026). With the export gate open
+ * Her job description for the run (Avery + Michael, agents.md 5.23): the
+ * shipped one, or its in-app override (ADR-0026). With the export gate open
  * (agents.md 2.21) its team line and rule are added; closed, the text is
  * what it was before the export.
  */
@@ -37,9 +34,10 @@ export function chiefOfStaffInstructions(requestContext?: {
   get(key: string): unknown;
 }): string {
   const runtime = runtimeOf(requestContext);
-  const base = runtime?.tools.includes(MICHAEL_ANSWER_TOOL)
-    ? ORCHESTRATOR_MICHAEL_INSTRUCTIONS
-    : agentInstructions(CHIEF_OF_STAFF_AGENT_KEY, ORCHESTRATOR_INSTRUCTIONS);
+  const base = agentInstructions(
+    CHIEF_OF_STAFF_AGENT_KEY,
+    ORCHESTRATOR_MICHAEL_INSTRUCTIONS,
+  );
   return runtime?.exportsConversation ? withExportInstructions(base) : base;
 }
 
@@ -62,11 +60,11 @@ export function chiefOfStaffSkills(requestContext?: {
 }
 
 /**
- * Avery, Chief of Staff (agents.md 2.21, 5.22): the orchestrator of Answer a
- * Business Question (orchestrated) and the only agent the user talks to in
- * it. She calls the team as her tools (Zoe, Olivia, Michael, Jessica, Ryan;
- * mastra/tools/orchestrator.tools.ts) and may ask the user one question
- * (`ask_clarification`). A System agent: the workflow's Orchestrate step
+ * Avery, Chief of Staff (agents.md 2.21, 5.23): the orchestrator of Answer a
+ * Business Question (Avery + Michael) and the only agent the user talks to
+ * in it. She calls the team as her tools (Michael, and Clara for a
+ * dashboard; mastra/tools/orchestrator.tools.ts) and may ask the user one
+ * question (`ask_clarification`). A System agent: the workflow's Orchestrate step
  * streams her; her job description is the shipped instructions or their
  * in-app override (ADR-0026). Her model is the workflow's orchestrator model
  * on the call's requestContext (Opus 5.5 at high effort when the saved
@@ -77,7 +75,7 @@ export const chiefOfStaffAgent = new Agent({
   // The technical name traces and Monitoring show; the hub shows the persona.
   name: 'Chief of Staff',
   description:
-    "Orchestrates Answer a Business Question (orchestrated): decides which agents work on the user's question, briefs them and hands back one answer.",
+    "Orchestrates Answer a Business Question (Avery + Michael): briefs Michael on the user's question, checks his answer and hands back one answer.",
   instructions: ({ requestContext }) =>
     chiefOfStaffInstructions(requestContext),
   // Her router and playbooks, loaded on demand through Mastra's skill tools

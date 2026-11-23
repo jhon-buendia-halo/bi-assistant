@@ -5,8 +5,10 @@ jest.mock('../data-readiness/data-readiness.service', () => ({
 }));
 
 // Sessions bound to Insights Analyst (BA-320; api.md 2.1 #3,
-// agents.md 2.11, agent-answers R61): creation over picked datasets, the
-// derived agent, the turn's agent, its context and the plain turn.
+// agents.md 2.11, agent-answers R61): a past chat of his (agentKey, no
+// workflowId) keeps the removed Answer a Business Question's chip and goes
+// on as his own turn on the `agent-turn` engine: the derived agent, the
+// turn's agent, its context and the plain turn.
 jest.mock('@mastra/core/request-context', () => ({
   RequestContext: class {
     private readonly values = new Map<string, unknown>();
@@ -25,28 +27,8 @@ jest.mock('../../mastra/model-resolver', () => ({
 }));
 jest.mock('../../mastra/tool-services', () => ({
   setDatasetToolServices: jest.fn(),
-  // The Load catalog step reads the datasets as the dataset tools do.
-  getDatasetToolServices: () => ({
-    getDatasets: (names: string[]) =>
-      Promise.resolve(
-        [
-          {
-            name: 'World Cup',
-            datasourceId: 'ds-pg',
-            datasourceKind: 'postgres',
-            tables: ['wc.public.matches', 'wc.public.teams'],
-          },
-          {
-            name: 'Sales',
-            datasourceId: 'ds-dbx',
-            datasourceKind: 'databricks',
-            tables: ['main.sales.orders'],
-          },
-        ].filter((d) => names.includes(d.name)),
-      ),
-  }),
 }));
-// v2's turn runs its workflow (agents.md 5.11) on the engine stand-in.
+// Every streamed turn runs its workflow (agents.md 5.1): the engine stand-in.
 jest.mock('@mastra/core/workflows', () =>
   jest.requireActual<typeof import('../../mastra/testing/workflows.stub')>(
     '../../mastra/testing/workflows.stub',
@@ -101,16 +83,8 @@ jest.mock('./visualization-document', () => ({
 
 import { SessionsService, type StreamEvent } from './sessions.service';
 import { streamStored } from './testing/stream-stored';
-import type { SessionDoc, SessionView } from './entities/session.entity';
-import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
-import { planOf } from '../../mastra/workflows/analysis.steps';
-
-type StubRun = {
-  stream(args: { inputData: unknown; requestContext: unknown }): unknown;
-};
-const turnWorkflow = answerBusinessQuestionWorkflow as unknown as {
-  createRun(): Promise<StubRun>;
-};
+import type { SessionDoc } from './entities/session.entity';
+import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
 
 const NAME = 'Insights Analyst';
 const DESCRIPTION =
@@ -135,10 +109,7 @@ const DATASETS = [
   },
 ];
 
-/** The answer the stubbed Write answer step writes, in two pieces. */
-const WRITTEN = 'The written answer.';
-
-/** An Analyse turn that ran one successful query, then wrote a note. */
+/** A turn that ran one successful query, then answered. */
 const SQL_CHUNKS = [
   {
     type: 'tool-call',
@@ -185,9 +156,7 @@ function build(chunks?: unknown[], partial: Partial<SessionDoc> = {}) {
     context: { role: string; content: string }[];
     requestContext: { get(key: string): unknown };
   } = { context: [], requestContext: { get: () => undefined } };
-  // Every Analyse attempt's options, in order (a retry streams again).
-  const allStreamOptions: Record<string, unknown>[] = [];
-  const v2 = {
+  const michael = {
     id: 'insights-analyst',
     name: NAME,
     getDescription: () => DESCRIPTION,
@@ -198,7 +167,6 @@ function build(chunks?: unknown[], partial: Partial<SessionDoc> = {}) {
       .fn()
       .mockImplementation((_input: unknown, opts: typeof streamOptions) => {
         streamOptions = opts;
-        allStreamOptions.push(opts);
         return Promise.resolve({
           fullStream: streamOf(chunks ?? SQL_CHUNKS),
           text: Promise.resolve(''),
@@ -215,29 +183,12 @@ function build(chunks?: unknown[], partial: Partial<SessionDoc> = {}) {
   };
   const registry: Record<string, unknown> = {
     assistant,
-    'insights-analyst': v2,
+    'insights-analyst': michael,
   };
   const mastra = {
     getAgent: jest.fn((key: string) => registry[key]),
-    streamWorkflow: jest.fn(
-      async (_key: string, inputData: unknown, requestContext: unknown) =>
-        (await turnWorkflow.createRun()).stream({ inputData, requestContext }),
-    ),
+    streamWorkflow: jest.fn(streamTurnWorkflow),
     listAgents: () => registry,
-    // v2's Plan and Write answer model calls (agents.md 5.11).
-    planAnalysis: jest.fn(({ question }: { question: string }) =>
-      Promise.resolve({ plan: planOf({}, question), stopped: false }),
-    ),
-    writeAnswer: jest.fn(
-      (_input: unknown, opts: { onText?: (delta: string) => void }) => {
-        opts.onText?.('The written ');
-        opts.onText?.('answer.');
-        return Promise.resolve({
-          answer: { headline: WRITTEN, answer: WRITTEN },
-          stopped: false,
-        });
-      },
-    ),
     ensureSessionWorkspace: jest
       .fn()
       .mockImplementation((id: string) =>
@@ -284,13 +235,12 @@ function build(chunks?: unknown[], partial: Partial<SessionDoc> = {}) {
     session,
     repository,
     mastra,
-    v2,
+    michael,
     assistant,
     knowledge,
     metrics,
     verifiedQueries,
     streamOptions: () => streamOptions,
-    allStreamOptions,
   };
 }
 
@@ -313,41 +263,6 @@ async function turn(
   return events;
 }
 
-/** The `workflow` events of a turn, as `current`, `done` and `failed`. */
-function workflowMoves(events: StreamEvent[]) {
-  return events
-    .filter((event) => event.type === 'workflow')
-    .map((event) => {
-      const view = JSON.parse(event.content ?? '{}') as {
-        current: number | null;
-        done: number[];
-        failed?: number;
-      };
-      return {
-        current: view.current,
-        done: view.done,
-        ...(view.failed ? { failed: view.failed } : {}),
-      };
-    });
-}
-
-const STEPS = [
-  // Optional: a chat turn has no reference images, so it never runs.
-  { number: 1, title: 'Read images' },
-  { number: 2, title: 'Receive question' },
-  { number: 3, title: 'Load catalog' },
-  { number: 4, title: 'Plan' },
-  { number: 5, title: 'Analyse' },
-  { number: 6, title: 'Validate' },
-  { number: 7, title: 'Write answer' },
-  { number: 8, title: 'Build visual' },
-  { number: 9, title: 'Wrap up' },
-];
-
-/** The plan block the default plan gives Analyse. */
-const planBlockFor = (question: string) =>
-  `Analysis plan for this turn:\n${JSON.stringify(planOf({}, question))}`;
-
 describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
   it('derives the agent from the registry, with no starters (api.md 2.1)', async () => {
     const ctx = build();
@@ -360,19 +275,20 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
     });
   });
 
-  it("shows its workflow's nine steps before any turn (agent-panel R8a)", async () => {
+  it("keeps the removed workflow's chip and shows no bar (agents.md 5.12)", async () => {
     const ctx = build();
-    expect(ctx.service.effectiveWorkflowFor(ctx.session)).toEqual(STEPS);
-    expect((await ctx.service.toView(ctx.session)).workflow).toEqual({
-      phases: STEPS,
-      source: 'workflow',
-      current: null,
-      done: [],
-      skipped: [],
+    expect(ctx.service.effectiveWorkflowFor(ctx.session)).toEqual([]);
+    const view = await ctx.service.toView(ctx.session);
+    expect(view.workflowRef).toEqual({
+      id: 'answer-business-question',
+      name: 'Answer a Business Question',
+      kind: 'code',
+      deleted: false,
     });
+    expect(view).not.toHaveProperty('workflow');
   });
 
-  it('runs v2 with Block 1, the metrics, knowledge and verified-query blocks, in that order, then the catalog and the plan (agents.md 2.11, 4.1, 4.2, 5.11)', async () => {
+  it('runs Michael with Block 1, the metrics, knowledge and verified-query blocks, in that order (agents.md 2.11, 4.1, 4.2)', async () => {
     const ctx = build(undefined, { datasets: ['World Cup', 'Sales'] });
     const used = [
       {
@@ -409,16 +325,6 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       { role: 'system', content: 'METRICS BLOCK' },
       { role: 'system', content: 'KNOWLEDGE BLOCK' },
       { role: 'system', content: 'VERIFIED BLOCK' },
-      {
-        role: 'system',
-        content: [
-          'Catalog loaded for this turn: 3 entities.',
-          '- wc.public.matches (dataset: World Cup; ? columns)',
-          '- wc.public.teams (dataset: World Cup; ? columns)',
-          '- main.sales.orders (dataset: Sales; ? columns)',
-        ].join('\n'),
-      },
-      { role: 'system', content: planBlockFor('How many goals per year?') },
     ]);
     // The same services as the assistant's turn, for the session's datasets.
     expect(ctx.metrics.definitionBlock).toHaveBeenCalledWith([
@@ -451,151 +357,13 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
 
   it('leaves out the metrics, knowledge and verified-query blocks when none applies', async () => {
     const ctx = build();
-    ctx.metrics.definitionBlock.mockResolvedValue('');
-    ctx.knowledge.contextFor.mockResolvedValue({ block: '', used: [] });
-    ctx.verifiedQueries.referenceBlock.mockResolvedValue(undefined);
     await turn(ctx, 'How many matches?');
     const contents = ctx.streamOptions().context.map((block) => block.content);
-    expect(contents).toHaveLength(3);
+    expect(contents).toHaveLength(1);
     expect(contents[0]).toMatch(/^Datasets for this session: World Cup\./);
-    expect(contents[1]).toMatch(/^Catalog loaded for this turn:/);
-    expect(contents[2]).toMatch(/^Analysis plan for this turn:/);
   });
 
-  describe('Plan and Write answer (agents.md 5.11)', () => {
-    it("plans with the turn's input and the catalog, and answers with Write answer's text only", async () => {
-      const ctx = build();
-      const events = await turn(ctx, 'How many?');
-      expect(ctx.mastra.planAnalysis).toHaveBeenCalledWith(
-        {
-          messages: 'How many?',
-          question: 'How many?',
-          catalogBlock: expect.stringMatching(
-            /^Catalog loaded for this turn: 2 entities\./,
-          ) as string,
-        },
-        expect.objectContaining({
-          abortSignal: expect.any(AbortSignal) as AbortSignal,
-          providerOptions: expect.anything() as unknown,
-        }),
-      );
-      // Write answer reads the attempt's query and its rows.
-      expect(ctx.mastra.writeAnswer).toHaveBeenCalledWith(
-        {
-          question: 'How many?',
-          plan: planOf({}, 'How many?'),
-          queries: [
-            {
-              sql: 'SELECT 1 AS n',
-              rationale: 'Count.',
-              rows: [{ n: 1 }],
-              rowCount: 1,
-              truncated: false,
-            },
-          ],
-          findings: expect.arrayContaining([
-            {
-              check: 'Ran a query',
-              passed: true,
-              detail: expect.any(String) as string,
-            },
-          ]) as unknown,
-        },
-        expect.objectContaining({ onText: expect.any(Function) as unknown }),
-      );
-      // Analyse's own text ("Hello.") is a note: never streamed, never stored.
-      const texts = events.filter((event) => event.type === 'text');
-      expect(texts.map((event) => event.content)).toEqual([
-        'The written ',
-        'answer.',
-      ]);
-      expect(ctx.session.messages.at(-1)).toMatchObject({
-        role: 'assistant',
-        content: WRITTEN,
-        // The turn's SQL stays on the answer.
-        data: [expect.objectContaining({ input: 'SELECT 1 AS n' })],
-      });
-    });
-
-    it('stops at Plan when the plan needs clarification: the card, done, no analysis', async () => {
-      const ctx = build();
-      ctx.mastra.planAnalysis.mockImplementation(
-        ({ question }: { question: string }) =>
-          Promise.resolve({
-            plan: planOf(
-              {
-                needsClarification: true,
-                clarification: {
-                  question: 'Dominant by which measure?',
-                  options: ['Matches won', 'Goals scored — over all matches'],
-                },
-              },
-              question,
-            ),
-            stopped: false,
-          }),
-      );
-      const events = await turn(ctx, 'Which team was the most dominant?');
-      expect(ctx.v2.stream).not.toHaveBeenCalled();
-      expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
-      expect(ctx.session.messages.at(-1)).not.toHaveProperty('data');
-      expect(ctx.session.messages.at(-1)).toMatchObject({
-        role: 'assistant',
-        content: 'Dominant by which measure?',
-        clarification: {
-          question: 'Dominant by which measure?',
-          options: [
-            { label: 'Matches won' },
-            { label: 'Goals scored', description: 'over all matches' },
-          ],
-        },
-      });
-      // The bar stops at Plan, the run's last step: it asks in its own step,
-      // in a chat turn too.
-      expect(workflowMoves(events).at(-1)).toEqual({
-        current: 4,
-        done: [2, 3],
-      });
-      expect(events.at(-1)?.type).toBe('done');
-    });
-
-    it('retries Analyse once, without the memory thread and with the failed checks, when Validate fails', async () => {
-      const ctx = build();
-      ctx.v2.stream.mockImplementationOnce(
-        (_input: unknown, opts: Record<string, unknown>) => {
-          ctx.allStreamOptions.push(opts);
-          return Promise.resolve({
-            fullStream: streamOf([
-              { type: 'text-delta', payload: { text: 'No query.' } },
-            ]),
-            text: Promise.resolve(''),
-          });
-        },
-      );
-      const events = await turn(ctx, 'How many?');
-      expect(ctx.v2.stream).toHaveBeenCalledTimes(2);
-      const [first, second] = ctx.allStreamOptions;
-      expect(first).toHaveProperty('memory');
-      expect(second).not.toHaveProperty('memory');
-      const retry = (second['context'] as { content: string }[]).at(-1);
-      expect(retry?.content).toContain(
-        'Attempt 1 of this analysis failed validation.',
-      );
-      expect(retry?.content).toContain('- Ran a query: No SQL query ran.');
-      // Analyse and Validate ran twice; the bar went through them again.
-      const moves = workflowMoves(events);
-      // The retry makes Analyse current again, after the first attempt's
-      // Analyse and Validate were done.
-      expect(moves).toContainEqual({ current: 5, done: [2, 3, 4, 5, 6] });
-      expect(moves.at(-1)).toEqual({
-        current: 9,
-        done: [2, 3, 4, 5, 6, 7, 9],
-      });
-      expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
-    });
-  });
-
-  describe('a clarifying question from Analyse (agents.md 2.11, 5.11)', () => {
+  describe('a clarifying question (agents.md 2.11, 3.6)', () => {
     const ASK = {
       type: 'tool-call',
       payload: {
@@ -608,7 +376,7 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       },
     };
 
-    it('stops the turn at Analyse with the question and its options, and sends done', async () => {
+    it('stops the turn with the question and its options, and sends done', async () => {
       const ctx = build([
         ASK,
         { type: 'text-delta', payload: { text: 'never streamed' } },
@@ -627,45 +395,30 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
         },
       });
       expect(answer?.content).not.toContain('never streamed');
-      // The run ends at Analyse: no answer is written.
-      expect(workflowMoves(events).at(-1)).toEqual({
-        current: 5,
-        done: [2, 3, 4],
-      });
-      expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
       expect(events.some((event) => event.type === 'done')).toBe(true);
     });
 
-    it("replays the question before the user's pick on the next turn, Plan included", async () => {
+    it("replays the question before the user's pick on the next turn", async () => {
       const ctx = build([ASK]);
       await turn(ctx, 'Which team is the best?');
-      ctx.v2.stream.mockImplementation(() =>
+      ctx.michael.stream.mockImplementation(() =>
         Promise.resolve({
           fullStream: streamOf(SQL_CHUNKS),
           text: Promise.resolve(''),
         }),
       );
-      const events = await turn(ctx, 'Most wins');
-      const replayed = [
+      await turn(ctx, 'Most wins');
+      const calls = ctx.michael.stream.mock.calls as unknown[][];
+      expect(calls.at(-1)?.[0]).toEqual([
         {
           role: 'assistant',
           content: 'Which measure makes a team the best?',
         },
         { role: 'user', content: 'Most wins' },
-      ];
-      const calls = ctx.v2.stream.mock.calls as unknown[][];
-      expect(calls.at(-1)?.[0]).toEqual(replayed);
-      expect(ctx.mastra.planAnalysis).toHaveBeenLastCalledWith(
-        expect.objectContaining({ messages: replayed, question: 'Most wins' }),
-        expect.anything(),
-      );
+      ]);
       expect(ctx.session.messages.at(-1)).toMatchObject({
         role: 'assistant',
-        content: WRITTEN,
-      });
-      expect(workflowMoves(events).at(-1)).toEqual({
-        current: 9,
-        done: [2, 3, 4, 5, 6, 7, 9],
+        content: 'Hello.',
       });
     });
   });
@@ -676,10 +429,13 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
     ]);
     await turn(ctx, 'Who won in 2002?', true);
     // The grounding guard and the cross-check would call generate again.
-    expect(ctx.v2.generate).not.toHaveBeenCalled();
+    expect(ctx.michael.generate).not.toHaveBeenCalled();
     expect(ctx.assistant.generate).not.toHaveBeenCalled();
     const answer = ctx.session.messages.at(-1);
-    expect(answer).toMatchObject({ role: 'assistant', content: WRITTEN });
+    expect(answer).toMatchObject({
+      role: 'assistant',
+      content: 'Brazil won in 2002.',
+    });
     expect(answer).not.toHaveProperty('crossCheck');
   });
 
@@ -693,116 +449,33 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       rowCount: 1,
     });
     const answer = ctx.session.messages.at(-1);
-    expect(answer?.content).toBe(WRITTEN);
+    expect(answer?.content).toBe('Hello.');
     expect(answer?.data?.[0]).toMatchObject({
       tool: 'run_readonly_sql',
       input: 'SELECT 1 AS n',
     });
   });
 
-  describe('the turn workflow (agents.md 5.11, ADR-0034)', () => {
-    it('runs every streamed turn as the workflow and moves the bar step by step', async () => {
+  describe('the turn workflow (agents.md 5.12, ADR-0040)', () => {
+    it('runs a past chat on the agent-turn engine, with no workflow bar events', async () => {
       const ctx = build();
       const events = await turn(ctx, '  How many?  ');
-      expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
-        'answer-business-question',
-        { question: 'How many?', datasets: ['World Cup'] },
-        expect.anything(),
+      const engines = ctx.mastra.streamWorkflow.mock.calls.map(
+        (call) => call[0],
       );
-      // Read images (1) is not taken: a chat turn has no images.
-      expect(workflowMoves(events)).toEqual([
-        { current: 2, done: [] },
-        { current: 2, done: [2] },
-        { current: 3, done: [2] },
-        { current: 3, done: [2, 3] },
-        { current: 4, done: [2, 3] },
-        { current: 4, done: [2, 3, 4] },
-        { current: 5, done: [2, 3, 4] },
-        { current: 5, done: [2, 3, 4, 5] },
-        { current: 6, done: [2, 3, 4, 5] },
-        { current: 6, done: [2, 3, 4, 5, 6] },
-        { current: 7, done: [2, 3, 4, 5, 6] },
-        { current: 7, done: [2, 3, 4, 5, 6, 7] },
-        // Build visual (8) is not asked for in a chat.
-        { current: 9, done: [2, 3, 4, 5, 6, 7] },
-        { current: 9, done: [2, 3, 4, 5, 6, 7, 9] },
-      ]);
-      // The answer streams inside Write answer, between its start and end.
-      const types = events.map((event) => event.type);
-      const text = types.indexOf('text');
-      const moves = events
-        .map((event, i) => (event.type === 'workflow' ? i : -1))
-        .filter((i) => i >= 0);
-      expect(text).toBeGreaterThan(moves[10]);
-      expect(text).toBeLessThan(moves[11]);
-      expect(types.at(-1)).toBe('done');
-      const done = events.at(-1)?.session as SessionView | undefined;
-      expect(done?.workflow).toMatchObject({
-        source: 'workflow',
-        current: 9,
-        done: [2, 3, 4, 5, 6, 7, 9],
-      });
-      expect(ctx.session.workflowState).toMatchObject({
-        current: 9,
-        done: [2, 3, 4, 5, 6, 7, 9],
-      });
-      expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
+      expect(engines).toEqual(['agent-turn']);
+      expect(events.some((event) => event.type === 'workflow')).toBe(false);
+      // Michael's text is the answer, streamed as he writes it.
+      const texts = events.filter((event) => event.type === 'text');
+      expect(texts.map((event) => event.content)).toEqual(['Hello.']);
+      expect(events.at(-1)?.type).toBe('done');
+      expect(ctx.session.messages.at(-1)?.content).toBe('Hello.');
     });
 
-    it('starts over on the next turn', async () => {
-      const ctx = build(undefined, {
-        workflowState: {
-          current: 3,
-          done: [1, 2],
-          failed: 3,
-          updatedAt: '2026-11-09T00:00:00.000Z',
-        },
-      });
-      const events = await turn(ctx, 'Again');
-      expect(workflowMoves(events)[0]).toEqual({ current: 2, done: [] });
-      expect(ctx.session.workflowState).not.toHaveProperty('failed');
-    });
-
-    it('marks Analyse failed and fails the turn with the model error', async () => {
-      const ctx = build([
-        { type: 'error', payload: { error: new Error('model down') } },
-      ]);
-      const events: StreamEvent[] = [];
-      await expect(
-        turn(ctx, 'How many?', false, undefined, events),
-      ).rejects.toThrow('model down');
-      expect(workflowMoves(events).at(-1)).toEqual({
-        current: 5,
-        done: [2, 3, 4],
-        failed: 5,
-      });
-      expect(ctx.session.workflowState).toMatchObject({
-        current: 5,
-        done: [2, 3, 4],
-        failed: 5,
-      });
-      expect(events.some((event) => event.type === 'done')).toBe(false);
-      // The question was kept; no answer was added.
-      expect(ctx.session.messages.map((m) => m.role)).toEqual(['user']);
-    });
-
-    it('marks Write answer failed with its model error', async () => {
-      const ctx = build();
-      ctx.mastra.writeAnswer.mockRejectedValue(new Error('answer down'));
-      const events: StreamEvent[] = [];
-      await expect(
-        turn(ctx, 'How many?', false, undefined, events),
-      ).rejects.toThrow('answer down');
-      expect(workflowMoves(events).at(-1)).toMatchObject({
-        current: 7,
-        failed: 7,
-      });
-    });
-
-    it('ends at Analyse when the user stops the turn', async () => {
+    it('sends no done when the user stops the turn', async () => {
       const controller = new AbortController();
       const ctx = build();
-      ctx.v2.stream.mockImplementation(() =>
+      ctx.michael.stream.mockImplementation(() =>
         Promise.resolve({
           fullStream: (async function* () {
             yield await Promise.resolve({
@@ -815,29 +488,10 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
         }),
       );
       const events = await turn(ctx, 'How many?', false, controller.signal);
-      expect(workflowMoves(events).at(-1)).toEqual({
-        current: 5,
-        done: [2, 3, 4],
-      });
-      expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
       expect(events.some((event) => event.type === 'done')).toBe(false);
     });
 
-    it('logs the wrap-up summary of the SQL calls', async () => {
-      const ctx = build(SQL_CHUNKS);
-      const log = jest
-        .spyOn(
-          (ctx.service as unknown as { logger: { log: () => void } }).logger,
-          'log',
-        )
-        .mockImplementation(() => undefined);
-      await turn(ctx, 'How many?');
-      expect(log).toHaveBeenCalledWith(
-        `Insights Analyst turn in session s-1: {"sqlQueries":1,"failedQueries":0,"rows":1,"answerLength":${WRITTEN.length}}`,
-      );
-    });
-
-    it("leaves the assistant turn as it was: its one-step workflow, never v2's", async () => {
+    it("leaves the assistant turn as it was: its own agent, never Michael's", async () => {
       const ctx = build(undefined, { agentKey: undefined });
       ctx.assistant.stream.mockResolvedValue({
         fullStream: streamOf([]),
@@ -849,8 +503,8 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       const engines = ctx.mastra.streamWorkflow.mock.calls.map(
         (call) => call[0],
       );
-      expect(engines).not.toContain('answer-business-question');
-      expect(ctx.mastra.planAnalysis).not.toHaveBeenCalled();
+      expect(engines).toEqual(['agent-turn']);
+      expect(ctx.michael.stream).not.toHaveBeenCalled();
     });
   });
 });

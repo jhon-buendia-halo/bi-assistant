@@ -6,8 +6,8 @@ import { stepModelFrom } from '../step-model';
 import { PLAN_INSTRUCTIONS } from '../workflows/analysis.prompts';
 
 /**
- * Olivia, Analysis Lead (agents.md 1.1, 5.11): the agent of the Plan step of
- * `answer-business-question`. She plans the analysis of one question (measures,
+ * Olivia, Analysis Lead (agents.md 1.1, 5.11): a planner of the library. She
+ * plans the analysis of one question (measures,
  * entities, scope, assumptions, whether to clarify first) in one model
  * call, with no tools and no memory. A System agent: the workflow calls
  * her through `planWithModel`; her job description is the shipped Plan

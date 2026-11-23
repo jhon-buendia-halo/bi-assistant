@@ -33,11 +33,11 @@ import {
   TEAM_STEP_MODEL,
   type StepModel,
 } from '../../mastra/step-model';
-import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/analysis.steps';
+import { ORCHESTRATED_MICHAEL_WORKFLOW_ID } from '../../mastra/workflows/orchestrated-answer-michael.steps';
 
 /** One workflow of the catalogue, as `GET /workflows` lists it (api.md 116). */
 export interface WorkflowSummary {
-  /** `answer-business-question`, the one catalogue workflow since 1.23.35. */
+  /** The catalogue id (`orchestrated-answer-michael`, `review-website`, …). */
   id: string;
   name: string;
   description: string;
@@ -136,10 +136,10 @@ interface CatalogueEntry {
 /**
  * The read-only workflow catalogue (ADR-0040; workflows R1-R3): the
  * code-defined workflows whose agent is registered, built at read time from
- * the pure catalogue (workflow-catalog.ts) and the agent catalogue. Only
- * Insights Analyst (`answer-business-question`) since 1.23.35: agents are a
- * library and get no workflow of their own, so an `agent:` id, like the
- * removed `seq-text-demo` and `deep-analysis`, is not found. Nothing is
+ * the pure catalogue (workflow-catalog.ts) and the agent catalogue. Agents
+ * are a library and get no workflow of their own, so an `agent:` id, like a
+ * removed workflow's (`seq-text-demo`, `answer-business-question`), is not
+ * found. Nothing is
  * stored or registered per workflow. Runs are `WorkflowRunsService`'s
  * (R11, R14).
  */
@@ -165,8 +165,8 @@ export class WorkflowsService {
       steps
         .filter((step) => step.agent?.key === key)
         .every((step) => step.agent?.tools.length === 0);
-    // Answer a Business Question's agents run on its own model when the
-    // saved one is a Claude model (agents.md 1.3): the canvas shows that one.
+    // Avery + Michael's agents run on the team's model when the saved one
+    // is a Claude model (agents.md 1.3): the canvas shows that one.
     const stepModel = await this.stepModelOf(entry.summary.id);
     const agents = await Promise.all(
       entry.summary.agents.map((agent) =>
@@ -197,12 +197,13 @@ export class WorkflowsService {
   }
 
   /**
-   * The model a workflow runs its step agents on (agents.md 1.3): Answer a
-   * Business Question's when the saved model is served as a Claude model;
-   * otherwise none (every agent on the saved model). Never throws.
+   * The model a workflow runs its step agents on (agents.md 1.3): the
+   * team's (`TEAM_STEP_MODEL`) for Answer a Business Question (Avery +
+   * Michael) when the saved model is served as a Claude model; otherwise
+   * none (every agent on the saved model). Never throws.
    */
   private async stepModelOf(id: string): Promise<StepModel | undefined> {
-    if (id !== ANSWER_BUSINESS_QUESTION_WORKFLOW_ID) return undefined;
+    if (id !== ORCHESTRATED_MICHAEL_WORKFLOW_ID) return undefined;
     try {
       return servesClaude(await resolveAgentModelConfig())
         ? TEAM_STEP_MODEL

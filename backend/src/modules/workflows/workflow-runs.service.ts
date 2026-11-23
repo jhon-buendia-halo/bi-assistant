@@ -78,13 +78,6 @@ import {
 } from '../sessions/sessions.service';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { nodeChatHostRunId } from './node-chat-context';
-import {
-  askHostOf,
-  askRefusal,
-  chartedRunOf,
-  type AskHost,
-} from './ask-agent-context';
-import type { AskableStepId } from '../../mastra/workflows/ask-agent.steps';
 import { HeldDraftRuns } from './held-draft-runs';
 import {
   IdleWatchdog,
@@ -291,11 +284,6 @@ export interface PreparedRun {
      */
     queries?: ExplorableQuery[];
     /**
-     * A follow-up that asks one agent alone (workflows R40; agents.md
-     * 5.21): the asked step and how its host is set up.
-     */
-    ask?: AskHost;
-    /**
      * A conversation with Avery (workflows R45): the conversation the new
      * run joins, and its earlier turns in order (at most
      * `CONVERSATION_TURNS`), which Avery reads as the conversation so far.
@@ -340,8 +328,8 @@ export interface RunAttachment {
 
 /**
  * Runs a workflow once on its typed input and keeps the run (ADR-0041;
- * api.md 118-127; agents.md 5.14; data-model 3.16). A run (of
- * `answer-business-question`, the one catalogue workflow, or a user agent's draft) runs
+ * api.md 118-127; agents.md 5.14; data-model 3.16). A run (of a
+ * catalogue workflow, or a user agent's draft) runs
  * one agent turn on a run host, an in-memory session `SessionsService`
  * holds, through today's turn path unchanged, and the host is projected
  * into the run. Every run but a draft's is stored in `workflow_runs` when it
@@ -938,21 +926,13 @@ export class WorkflowRunsService
     const { prepared, base } = held;
     const { workflow } = prepared;
     const live = liveEmit(emit, abortSignal);
-    // A follow-up that asks one agent alone (agents.md 5.21).
-    const ask = prepared.context?.ask;
     return this.drive(held, live, abortSignal, async (io) => {
       const host = await this.sessions.createRunHost({
         runId: base.id,
-        ...(ask?.agentKey
-          ? { agentKey: ask.agentKey }
-          : { workflowId: workflow.id }),
+        workflowId: workflow.id,
         name: workflow.name,
-        ...(ask ? { ask: ask.ask } : {}),
-        ...(ask?.contextBlock ? { contextBlock: ask.contextBlock } : {}),
         ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
         ...(prepared.turn.datasets ? { datasets: prepared.turn.datasets } : {}),
-        ...(prepared.turn.buildVisual ? { buildVisual: true } : {}),
-        ...(prepared.turn.approveSteps ? { approveSteps: true } : {}),
         ...(prepared.image ? { image: prepared.image } : {}),
         ...(prepared.images.length
           ? {
@@ -982,14 +962,12 @@ export class WorkflowRunsService
                       answer: prepared.context.answer,
                     },
                   }),
-              // Its agents go on from copies of the earlier run's threads
-              // (not Sarah asked alone: the host's thread is the Analyst's).
+              // Its agents go on from copies of the earlier run's threads.
               // Avery's team gets no copy: she holds the conversation, and
               // Michael reads the last answer's queries as a block instead
               // (workflows R45), so every teammate starts from what she
               // hands it.
-              ...(ask?.continuesThreads === false ||
-              isOrchestratedWorkflow(workflow.id)
+              ...(isOrchestratedWorkflow(workflow.id)
                 ? {}
                 : {
                     continuesThreadsOf: `${RUN_HOST_ID_PREFIX}${prepared.context.fromRunId}`,
@@ -2016,12 +1994,7 @@ export class WorkflowRunsService
         : {}),
       ...(prepared.context
         ? {
-            context: {
-              fromRunId: prepared.context.fromRunId,
-              ...(prepared.context.ask
-                ? { askStep: prepared.context.ask.ask.step }
-                : {}),
-            },
+            context: { fromRunId: prepared.context.fromRunId },
           }
         : {}),
       status,
@@ -2052,16 +2025,18 @@ export class WorkflowRunsService
       raw && typeof raw === 'object'
         ? (raw as { fromRunId?: unknown }).fromRunId
         : undefined;
+    // Asking one agent alone went with Answer a Business Question (api.md
+    // 118): no workflow takes it now.
     const askStep =
       raw && typeof raw === 'object'
         ? (raw as { askStep?: unknown }).askStep
         : undefined;
-    const asks = askStep !== undefined && askStep !== null && askStep !== '';
+    if (askStep !== undefined && askStep !== null && askStep !== '') {
+      throw new BadRequestException(
+        `Workflow "${workflowId}" can't ask one agent`,
+      );
+    }
     if (fromRunId === undefined || fromRunId === null || fromRunId === '') {
-      // Asking one agent is a follow-up: it needs the run it follows.
-      if (asks) {
-        throw new BadRequestException('Asking one agent needs an earlier run');
-      }
       return undefined;
     }
     const earlier =
@@ -2077,7 +2052,7 @@ export class WorkflowRunsService
     // with my answer", api.md 138 410): its question and the clarifying
     // question it asked are the context, so the new run's question (the
     // user's answer) is planned with the original question.
-    if (earlier.question && !earlier.answer && earlier.waitingFor && !asks) {
+    if (earlier.question && !earlier.answer && earlier.waitingFor) {
       return {
         fromRunId: earlier.id,
         question: earlier.question,
@@ -2089,21 +2064,6 @@ export class WorkflowRunsService
         `Run "${earlier.id}" has no answer to continue from`,
       );
     }
-    // Asking one agent (workflows R40): a step that ran in the earlier run
-    // of Answer a Business Question.
-    let ask: AskHost | undefined;
-    if (asks) {
-      const refused = askRefusal(workflowId, askStep, earlier);
-      if (refused) throw new BadRequestException(refused);
-      // Ryan charts the answer of the run that was not itself an ask of him.
-      ask = askHostOf(
-        earlier,
-        askStep as AskableStepId,
-        askStep === 'build-visual'
-          ? await chartedRunOf(earlier, (id) => this.repository.get(id))
-          : earlier,
-      );
-    }
     const queries = explorableQueriesOf(
       earlier.answer.data ?? [],
       earlier.answer.evidence,
@@ -2113,7 +2073,6 @@ export class WorkflowRunsService
       question: earlier.question,
       answer: earlier.answer.content,
       ...(queries.length ? { queries } : {}),
-      ...(ask ? { ask } : {}),
       ...(isOrchestratedWorkflow(workflowId)
         ? await this.conversationOf(earlier)
         : {}),

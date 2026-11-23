@@ -6,8 +6,8 @@ import { stepModelFrom } from '../step-model';
 import { WRITE_ANSWER_INSTRUCTIONS } from '../workflows/analysis.prompts';
 
 /**
- * Jessica, Insights Writer (agents.md 1.1, 5.11): the agent of the Write
- * answer step of `answer-business-question`. She writes a run's answer from its
+ * Jessica, Insights Writer (agents.md 1.1, 5.11): a writer of the library.
+ * She writes a run's answer from its
  * queries' rows and the validation findings in one model call, with no
  * tools and no memory. A System agent: the workflow calls her through
  * `writeAnswerWithModel`; her job description is the shipped Write answer

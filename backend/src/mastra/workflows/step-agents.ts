@@ -1,12 +1,12 @@
 /**
- * The model calls of the two tool-less steps of Insights Analyst
- * (agents.md 5.11): Plan and Write answer. Each runs a registered System
- * agent (Olivia, `analysis-planner`; Jessica, `answer-writer`; agents.md
- * 1.1, 2.11) on v2's model (`resolveAgentModel`), with its own editable
- * instructions, no tools, no memory and structured output by JSON prompt
- * injection, so any provider answers it (a native response format is not
- * required). The session's turn and the eval runner call them through
- * `AnswerBusinessQuestionRuntime`.
+ * The model calls of the two tool-less agents of the analysis (agents.md
+ * 5.11): Olivia's plan and Jessica's answer. Each runs a registered System
+ * agent (`analysis-planner`, `answer-writer`; agents.md 1.1, 2.11) on the
+ * saved model (`resolveAgentModel`), with its own editable instructions, no
+ * tools, no memory and structured output by JSON prompt injection, so any
+ * provider answers it (a native response format is not required). Their
+ * eval targets call them (isolated-call-targets.ts), as do the other
+ * workflows' model steps through `StepModelOptions` and `callOptions`.
  */
 import type { MessageListInput } from '@mastra/core/agent/message-list';
 import type { RequestContext } from '@mastra/core/request-context';
@@ -17,10 +17,6 @@ import { answerSchema, planSchema } from './analysis.schemas';
 import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from './workflow-run';
 import { cutReply, guardedCall, ReplyCutError } from './model-call';
-import {
-  clarificationIn,
-  type Revision,
-} from './answer-business-question.review';
 import {
   answerDeltas,
   answerOf,
@@ -121,10 +117,6 @@ export async function planWithModel(
      * not empty; absent or `''`, the request is what it was before.
      */
     imageNotes?: string;
-    /** The changes the user asked for on Plan's approval gate (R44). */
-    revision?: Revision;
-    /** An orchestrator's request (Avery, agents.md 2.21): it ends the request. */
-    brief?: string;
   },
   options: StepModelOptions,
 ): Promise<{ plan: AnalysisPlan; stopped: boolean }> {
@@ -230,24 +222,9 @@ export async function writeAnswerWithModel(
      * not empty; absent or `''`, the request is what it was before.
      */
     imageNotes?: string;
-    /**
-     * Build visual runs after it and the request cues a visual: the
-     * request ends with the line saying so; absent, it is as before.
-     */
-    visualFollows?: boolean;
-    /** An interactive run (workflows R44): she may ask the user first. */
-    canAsk?: boolean;
-    answered?: { question: string; answer: string };
-    revision?: Revision;
-    /** An orchestrator's request (Avery, agents.md 2.21): it ends the request. */
-    brief?: string;
   },
   options: StepModelOptions & { onText?: (delta: string) => void },
-): Promise<{
-  answer: BusinessAnswer;
-  stopped: boolean;
-  clarification?: { question: string; options: string[] };
-}> {
+): Promise<{ answer: BusinessAnswer; stopped: boolean }> {
   const deltas = answerDeltas(input.queries, options.onText);
   const request = writeAnswerRequest(input);
   try {
@@ -298,20 +275,6 @@ export async function writeAnswerWithModel(
         deltas.finish(answer.answer);
         await noteExchange(call, request, replyText(object, text));
         return { answer, stopped: false };
-      }
-      // She asked the user first (only offered when she may): nothing of
-      // the reply is the answer, and nothing more is shown.
-      const asked =
-        input.canAsk && !input.answered && !stoppedBy(call)
-          ? clarificationIn(text || object)
-          : undefined;
-      if (asked) {
-        await noteExchange(call, request, replyText(object, text));
-        return {
-          answer: { headline: '', answer: '' },
-          stopped: false,
-          clarification: asked,
-        };
       }
       const answer = answerWithRowTables(
         answerOf(object ?? text),

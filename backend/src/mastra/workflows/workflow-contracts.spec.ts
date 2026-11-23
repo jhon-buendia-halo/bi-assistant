@@ -23,14 +23,6 @@ jest.mock('../tool-services', () => ({
 
 import { RequestContext } from '@mastra/core/request-context';
 import type { z } from 'zod';
-import { ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS } from './analysis.schemas';
-import {
-  ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
-  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
-  planOf,
-  type AnswerBusinessQuestionRuntime,
-} from './analysis.steps';
-import { answerBusinessQuestionWorkflow } from './answer-business-question.workflow';
 import { DATA_READINESS_ASSESSMENT_STEP_SCHEMAS } from './data-readiness-assessment.schemas';
 import {
   DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
@@ -74,14 +66,13 @@ import {
   type ReviewWebsiteRuntime,
 } from './review-website.steps';
 import { reviewWebsiteWorkflow } from './review-website.workflow';
-import { ORCHESTRATED_ANSWER_STEP_SCHEMAS } from './orchestrated-answer-michael.steps';
+import { ORCHESTRATED_MICHAEL_STEP_SCHEMAS } from './orchestrated-answer-michael.steps';
 import {
-  ORCHESTRATED_ANSWER_RUNTIME_KEY,
-  ORCHESTRATED_ANSWER_WORKFLOW_ID,
+  ORCHESTRATED_MICHAEL_RUNTIME_KEY,
   ORCHESTRATED_MICHAEL_WORKFLOW_ID,
-  type OrchestratedAnswerRuntime,
+  type OrchestratedMichaelRuntime,
 } from './orchestrated-answer-michael.steps';
-import { orchestratedAnswerWorkflow } from './orchestrated-answer-michael.workflow';
+import { orchestratedMichaelWorkflow } from './orchestrated-answer-michael.workflow';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 
 interface StubStream {
@@ -147,66 +138,21 @@ const GAP_DATASET = {
 
 const ORCHESTRATED_FIXTURE: ContractFixture = {
   workflow:
-    orchestratedAnswerWorkflow as unknown as ContractFixture['workflow'],
-  schemas: ORCHESTRATED_ANSWER_STEP_SCHEMAS,
+    orchestratedMichaelWorkflow as unknown as ContractFixture['workflow'],
+  schemas: ORCHESTRATED_MICHAEL_STEP_SCHEMAS,
   input: { question: 'How many matches?', datasets: ['World Cup'] },
   requestContext: () => {
     const context = new RequestContext();
-    context.set(ORCHESTRATED_ANSWER_RUNTIME_KEY, {
+    context.set(ORCHESTRATED_MICHAEL_RUNTIME_KEY, {
       orchestrate: () =>
         Promise.resolve({ answer: 'There were 64 matches.', stopped: false }),
-    } satisfies OrchestratedAnswerRuntime);
+    } satisfies OrchestratedMichaelRuntime);
     return context;
   },
 };
 
 const FIXTURES: Record<string, ContractFixture> = {
-  [ORCHESTRATED_ANSWER_WORKFLOW_ID]: ORCHESTRATED_FIXTURE,
-  // Avery + Michael runs on the orchestrated engine (agents.md 5.23).
   [ORCHESTRATED_MICHAEL_WORKFLOW_ID]: ORCHESTRATED_FIXTURE,
-  [ANSWER_BUSINESS_QUESTION_WORKFLOW_ID]: {
-    workflow:
-      answerBusinessQuestionWorkflow as unknown as ContractFixture['workflow'],
-    schemas: ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
-    input: { question: 'How many matches?', datasets: ['World Cup'] },
-    requestContext: () => {
-      const context = new RequestContext();
-      // The stubbed model: a plan, one SQL call that returned 4 rows, an
-      // answer.
-      context.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
-        plan: ({ question }) =>
-          Promise.resolve({ plan: planOf({}, question), stopped: false }),
-        analyse: () =>
-          Promise.resolve({
-            calls: [{ tool: 'run_readonly_sql', rowCount: 4, failed: false }],
-            queries: [
-              {
-                sql: 'SELECT * FROM wc.public.matches LIMIT 4',
-                rows: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }],
-                rowCount: 4,
-                truncated: false,
-              },
-            ],
-            text: '',
-            stopped: false,
-          }),
-        // The run builds a visual, so every step but Clarify runs: Ryan
-        // designs one from the rows the query returned.
-        buildsVisual: true,
-        buildVisual: () =>
-          Promise.resolve({
-            visual: { visualId: 'v-1', title: 'Matches' },
-            stopped: false,
-          }),
-        writeAnswer: () =>
-          Promise.resolve({
-            answer: { headline: '4 matches.', answer: '4 matches.' },
-            stopped: false,
-          }),
-      } satisfies AnswerBusinessQuestionRuntime);
-      return context;
-    },
-  },
   [DATA_READINESS_ASSESSMENT_WORKFLOW_ID]: {
     workflow:
       dataReadinessAssessmentWorkflow as unknown as ContractFixture['workflow'],

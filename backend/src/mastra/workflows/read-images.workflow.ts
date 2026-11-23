@@ -31,14 +31,6 @@ import {
   type ReadImagesRuntime,
 } from './read-images.steps';
 import { engineInputSchema, withContract } from './workflow-contract';
-import {
-  clarificationAnswerSchema,
-  clarifyingQuestionSchema,
-} from './analysis.schemas';
-import {
-  interactiveStep,
-  reviewQuestion,
-} from './answer-business-question.review';
 
 export {
   READ_IMAGES_OUTCOME_ID,
@@ -98,53 +90,18 @@ export const readImagesStep = createStep({
   description: READ_IMAGES_STEP_TITLE,
   inputSchema: engineInput,
   outputSchema: SCHEMAS.output,
-  // In an interactive run of Answer a Business Question (workflows R44)
-  // Zoe may ask first, and her notes wait for the user's approval.
-  suspendSchema: clarifyingQuestionSchema,
-  resumeSchema: clarificationAnswerSchema,
   execute: withContract(
     READ_IMAGES_STEP_TITLE,
     SCHEMAS,
-    async (params: ReadImagesParams) => {
-      const { inputData, requestContext } = params;
-      const runtime = runtimeOf(requestContext);
-      const ended = await interactiveStep(
-        params as never,
-        runtime.interactive === true,
-        {
-          run: async ({ canAsk, answered, revision }) => {
-            const read = await runtime.readImages({
-              question: inputData.question,
-              images: inputData.images,
-              ...(canAsk ? { canAsk } : {}),
-              ...(answered ? { answered } : {}),
-              ...(revision ? { revision } : {}),
-            });
-            const output = {
-              imageNotes: read.stopped ? '' : read.imageNotes,
-              imageCount: read.stopped ? 0 : read.imageCount,
-            };
-            return {
-              output,
-              reply: output.imageNotes,
-              stopped: read.stopped,
-              ...(read.clarification
-                ? { clarification: read.clarification }
-                : {}),
-            };
-          },
-          // Her notes go on to Nathan or Olivia.
-          gate: (output) => ({
-            question: reviewQuestion(
-              'Zoe',
-              'notes on your images',
-              'the next agent',
-            ),
-            review: output.imageNotes || 'Zoe wrote no notes.',
-          }),
-        },
-      );
-      return ended.type === 'suspended' ? (ended.value as never) : ended.output;
+    async ({ inputData, requestContext }: ReadImagesParams) => {
+      const read = await runtimeOf(requestContext).readImages({
+        question: inputData.question,
+        images: inputData.images,
+      });
+      return {
+        imageNotes: read.stopped ? '' : read.imageNotes,
+        imageCount: read.stopped ? 0 : read.imageCount,
+      };
     },
   ),
 });

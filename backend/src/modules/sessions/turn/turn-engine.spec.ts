@@ -5,7 +5,8 @@ jest.mock('../../data-readiness/data-readiness.service', () => ({
 }));
 
 // The idle deadline of a streamed agent turn (workflows R43; agents.md 1.6):
-// Analyse, the one-step Answer and Explain report fail with ModelTimeoutError
+// Michael's analysis for Avery (Avery + Michael), the one-step Answer and
+// Explain report fail with ModelTimeoutError
 // when the model sends nothing for five minutes while no tool executes; a
 // Stop and a
 // clarifying question are never a timeout. A retry of a step's call is a
@@ -108,8 +109,7 @@ jest.mock('../visualization-document', () => ({
 import { SessionsService, type StreamEvent } from '../sessions.service';
 import { streamStored } from '../testing/stream-stored';
 import type { SessionDoc } from '../entities/session.entity';
-import { answerBusinessQuestionWorkflow } from '../../../mastra/workflows/answer-business-question.workflow';
-import { planOf } from '../../../mastra/workflows/analysis.steps';
+import { orchestratedMichaelWorkflow } from '../../../mastra/workflows/orchestrated-answer-michael.workflow';
 import { dataReadinessAssessmentWorkflow } from '../../../mastra/workflows/data-readiness-assessment.workflow';
 import { reviewWebsiteWorkflow } from '../../../mastra/workflows/review-website.workflow';
 import type { GroupedSite } from '../../../mastra/workflows/review-website.schemas';
@@ -121,7 +121,7 @@ const MINUTE = 60_000;
 type StubRun = {
   stream(args: { inputData: unknown; requestContext: unknown }): unknown;
 };
-const v2Workflow = answerBusinessQuestionWorkflow as unknown as {
+const averyWorkflow = orchestratedMichaelWorkflow as unknown as {
   createRun(): Promise<StubRun>;
 };
 const readinessWorkflow = dataReadinessAssessmentWorkflow as unknown as {
@@ -129,7 +129,7 @@ const readinessWorkflow = dataReadinessAssessmentWorkflow as unknown as {
 };
 /** The code workflow a turn streams, by its key. */
 const codeWorkflowOf = (key: string) =>
-  key === 'data-readiness-assessment' ? readinessWorkflow : v2Workflow;
+  key === 'data-readiness-assessment' ? readinessWorkflow : averyWorkflow;
 
 /** One chunk of a stream, sent after `after` ms (fake time). */
 interface Timed {
@@ -165,7 +165,8 @@ const SQL_RESULT = {
     result: { columns: ['n'], rows: [{ n: 1 }], rowCount: 1 },
   },
 };
-const WRITTEN = 'The written answer.';
+/** Avery's closing words, after every brief of hers. */
+const CLOSING = 'That is the count.';
 
 /** The report the fake readiness engine scores: no finding, so no SQL. */
 const READINESS_REPORT = {
@@ -204,22 +205,23 @@ function readinessService() {
 
 /** The registry key of the agent each kind of turn streams. */
 const AGENT_KEYS = {
-  v2: 'insights-analyst',
+  avery: 'insights-analyst',
   assistant: 'assistant',
   readiness: 'data-readiness',
 } as const;
 
 /**
- * A turn of an Insights Analyst session (v2: Analyse streams), of an
- * assistant session (the one-step Answer streams) or of an Assess Data
- * Readiness session (Explain report streams); each agent stream sends
- * `steps` (a function of the call, to give a retry its own). With
- * `visuals`, the run builds a visual (Build visual, workflows R41).
+ * A turn of an Answer a Business Question (Avery + Michael) host (Avery
+ * calls answer_from_data once per brief of `briefs`, then closes; Michael's
+ * analysis streams), of an assistant session (the one-step Answer streams)
+ * or of an Assess Data Readiness session (Explain report streams); each
+ * agent stream sends `steps` (a function of the call, to give a second call
+ * its own). What Michael's calls told Avery is in `told`.
  */
 function build(
-  kind: 'v2' | 'assistant' | 'readiness',
+  kind: 'avery' | 'assistant' | 'readiness',
   steps: (call: number) => Timed[],
-  visuals?: { createFromAnswer: jest.Mock },
+  briefs: string[] = ['Count every match.'],
 ) {
   const session: SessionDoc = {
     id: 's-1',
@@ -227,9 +229,12 @@ function build(
     datasets: ['World Cup'],
     messages: [],
     visualizations: [],
-    ...(visuals ? { buildVisual: true as const } : {}),
-    ...(kind === 'v2'
-      ? { agentKey: 'insights-analyst', agentName: 'Insights Analyst' }
+    ...(kind === 'avery'
+      ? {
+          workflowId: 'orchestrated-answer-michael',
+          agentKey: 'insights-analyst',
+          agentName: 'Insights Analyst',
+        }
       : kind === 'readiness'
         ? {
             workflowId: 'data-readiness-assessment',
@@ -267,6 +272,30 @@ function build(
   });
   const agent = agentFor(AGENT_KEYS[kind]);
   const registry: Record<string, unknown> = { [AGENT_KEYS[kind]]: agent };
+  // Avery: each brief through her answer_from_data, then her closing words.
+  const told: string[] = [];
+  registry['chief-of-staff'] = {
+    id: 'chief-of-staff',
+    name: 'Chief of Staff',
+    stream: jest.fn(
+      (
+        _messages: unknown,
+        opts: { requestContext: { get(key: string): unknown } },
+      ) => {
+        const tools = opts.requestContext.get('orchestrator-tools-runtime') as {
+          answerFromData(brief: string): Promise<string>;
+        };
+        return Promise.resolve({
+          fullStream: (async function* () {
+            for (const brief of briefs) {
+              told.push(await tools.answerFromData(brief));
+            }
+            yield text(CLOSING);
+          })(),
+        });
+      },
+    ),
+  };
   const mastra = {
     getAgent: jest.fn((key: string) => registry[key]),
     listAgents: () => registry,
@@ -283,18 +312,7 @@ function build(
     readImages: jest
       .fn()
       .mockResolvedValue({ imageNotes: '', imageCount: 0, stopped: false }),
-    planAnalysis: jest.fn(({ question }: { question: string }) =>
-      Promise.resolve({ plan: planOf({}, question), stopped: false }),
-    ),
-    writeAnswer: jest.fn(
-      (_input: unknown, opts: { onText?: (delta: string) => void }) => {
-        opts.onText?.(WRITTEN);
-        return Promise.resolve({
-          answer: { headline: WRITTEN, answer: WRITTEN },
-          stopped: false,
-        });
-      },
-    ),
+    recordAgentExchange: jest.fn().mockResolvedValue(undefined),
     ensureSessionWorkspace: jest
       .fn()
       .mockImplementation((id: string) =>
@@ -318,7 +336,7 @@ function build(
     {
       getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
     } as never,
-    (visuals ?? {}) as never,
+    {} as never,
     {
       referenceBlock: jest.fn().mockResolvedValue(undefined),
       isVerifiedSql: jest.fn().mockResolvedValue(false),
@@ -335,7 +353,7 @@ function build(
     } as never,
     (kind === 'readiness' ? readinessService() : undefined) as never,
   );
-  return { service, session, mastra, agent, signals };
+  return { service, session, mastra, agent, signals, told };
 }
 
 /** Start a turn; its outcome is the error it failed with, or 'done'. */
@@ -356,23 +374,14 @@ function startTurn(
   );
 }
 
-/** The last `workflow` event of a turn, as `current`, `done` and `failed`. */
-function lastMove(events: StreamEvent[]) {
-  const moves = events.filter((event) => event.type === 'workflow');
-  const view = JSON.parse(moves.at(-1)?.content ?? '{}') as {
-    current: number | null;
-    done: number[];
-    failed?: number;
-  };
-  return view;
-}
-
 describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
-  it('fails Analyse with ModelTimeoutError when no chunk comes for five minutes', async () => {
-    const ctx = build('v2', () => [{ after: 6 * MINUTE, chunk: text('late') }]);
+  it("fails Michael's analysis with ModelTimeoutError when no chunk comes for five minutes", async () => {
+    const ctx = build('avery', () => [
+      { after: 6 * MINUTE, chunk: text('late') },
+    ]);
     const events: StreamEvent[] = [];
     const outcome = startTurn(ctx, events);
     await jest.advanceTimersByTimeAsync(5 * MINUTE);
@@ -381,14 +390,12 @@ describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
     expect((error as Error).message).toBe(
       'Analyse failed: the model sent nothing for 5 minutes. The model may be busy or rate limited: run again later.',
     );
-    expect(lastMove(events)).toMatchObject({ current: 5, failed: 5 });
     expect(ctx.signals[0].aborted).toBe(true);
     expect(ctx.agent.stream).toHaveBeenCalledTimes(1);
-    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
   });
 
   it('does not time out while chunks come every four minutes for twenty minutes', async () => {
-    const ctx = build('v2', () => [
+    const ctx = build('avery', () => [
       now(SQL_CALL),
       now(SQL_RESULT),
       ...Array.from({ length: 5 }, () => ({
@@ -400,12 +407,14 @@ describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
     const outcome = startTurn(ctx, events);
     await jest.advanceTimersByTimeAsync(21 * MINUTE);
     expect(await outcome).toBe('done');
-    expect(ctx.mastra.writeAnswer).toHaveBeenCalledTimes(1);
-    expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
+    // Michael's reply is the answer, then Avery's closing words.
+    expect(ctx.session.messages.at(-1)?.content).toBe(
+      `${'Still working. '.repeat(5).trim()}\n\n${CLOSING}`,
+    );
   });
 
   it('does not count a tool call that executes for six minutes', async () => {
-    const ctx = build('v2', () => [
+    const ctx = build('avery', () => [
       { after: MINUTE, chunk: SQL_CALL },
       { after: 6 * MINUTE, chunk: SQL_RESULT },
       { after: 4 * MINUTE, chunk: text('Done.') },
@@ -414,11 +423,13 @@ describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
     const outcome = startTurn(ctx, events);
     await jest.advanceTimersByTimeAsync(12 * MINUTE);
     expect(await outcome).toBe('done');
-    expect(ctx.mastra.writeAnswer).toHaveBeenCalledTimes(1);
+    expect(ctx.session.messages.at(-1)?.content).toBe(`Done.\n\n${CLOSING}`);
   });
 
   it('a Stop during the wait is a Stop, never a timeout', async () => {
-    const ctx = build('v2', () => [{ after: 6 * MINUTE, chunk: text('late') }]);
+    const ctx = build('avery', () => [
+      { after: 6 * MINUTE, chunk: text('late') },
+    ]);
     const controller = new AbortController();
     const events: StreamEvent[] = [];
     const outcome = startTurn(ctx, events, controller.signal);
@@ -426,14 +437,11 @@ describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
     controller.abort();
     await jest.advanceTimersByTimeAsync(10 * MINUTE);
     expect(await outcome).toBe('done');
-    const move = lastMove(events);
-    expect(move).toMatchObject({ current: 5, done: [2, 3, 4] });
-    expect(move.failed).toBeUndefined();
-    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
+    expect(ctx.agent.stream).toHaveBeenCalledTimes(1);
   });
 
-  it('a clarifying question still stops only the attempt, and is no timeout', async () => {
-    const ctx = build('v2', () => [
+  it("a clarifying question still stops only Michael's attempt, and is no timeout: Avery is told it", async () => {
+    const ctx = build('avery', () => [
       {
         after: MINUTE,
         chunk: {
@@ -454,11 +462,10 @@ describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
     const outcome = startTurn(ctx, events);
     await jest.advanceTimersByTimeAsync(10 * MINUTE);
     expect(await outcome).toBe('done');
-    expect(ctx.session.messages.at(-1)).toMatchObject({
-      role: 'assistant',
-      content: 'Which measure?',
-      clarification: { question: 'Which measure?' },
-    });
+    expect(ctx.told).toEqual([
+      'Michael needs an answer before he can go on: Which measure?\n- Most wins\n- Most goals',
+    ]);
+    expect(ctx.session.messages.at(-1)?.content).toBe(CLOSING);
     expect(events.some((event) => event.type === 'done')).toBe(true);
   });
 
@@ -539,288 +546,79 @@ describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
   });
 });
 
-describe('the retry of Analyse carries attempt 1 forward (agents.md 5.11; workflows R27)', () => {
-  /** Attempt 1's query: a LIMIT with no sort, so the sample check fails. */
-  const SAMPLE_SQL = 'SELECT id FROM wc.public.matches LIMIT 1';
-  const sampleCall = {
-    type: 'tool-call',
-    payload: {
-      toolCallId: 's1',
-      toolName: 'run_readonly_sql',
-      args: { sql: SAMPLE_SQL, rationale: 'I look at one match.' },
-    },
-  };
-  const sampleResult = {
-    type: 'tool-result',
-    payload: {
-      toolCallId: 's1',
-      toolName: 'run_readonly_sql',
-      result: { columns: ['id'], rows: [{ id: 7 }], rowCount: 1 },
-    },
-  };
-  const ATTEMPT_1 = [now(sampleCall), now(sampleResult), now(text('Notes.'))];
-  type WrittenInput = {
-    queries: { sql: string }[];
-    findings: { check: string; passed: boolean }[];
-  };
-  const written = (ctx: ReturnType<typeof build>) =>
-    (ctx.mastra.writeAnswer.mock.calls[0] as unknown[])[0] as WrittenInput;
+describe("Avery's second answer_from_data call (agents.md 5.11, 5.23; workflows R27)", () => {
+  /** Michael's first answer: one query and his reply. */
+  const FIRST = [now(SQL_CALL), now(SQL_RESULT), now(text('One match.'))];
   const streamOptions = (ctx: ReturnType<typeof build>, call: number) =>
     (ctx.agent.stream.mock.calls[call] as unknown[])[1] as {
       maxSteps?: number;
+      memory?: unknown;
       context: { role: string; content: string }[];
     };
 
-  it('answers from attempt 1 when the retry ends on a model error: the stream error is cleared, the records kept, the retry check a warning', async () => {
-    const ctx = build('v2', (call) =>
-      call === 1
-        ? ATTEMPT_1
-        : [now({ type: 'error', payload: { error: new Error('Overloaded') } })],
-    );
-    const events: StreamEvent[] = [];
-    expect(await startTurn(ctx, events)).toBe('done');
-    expect(ctx.agent.stream).toHaveBeenCalledTimes(2);
-    // The retry runs with its own step budget; attempt 1 keeps the agent's.
-    expect(streamOptions(ctx, 0).maxSteps).toBe(15);
-    expect(streamOptions(ctx, 1).maxSteps).toBe(8);
-    // It is shown attempt 1's query after the plan block.
-    const system = streamOptions(ctx, 1).context.map((c) => c.content);
-    const plan = system.findIndex((c) =>
-      c.startsWith('Analysis plan for this turn:'),
-    );
-    expect(system[plan + 1]).toContain(
-      `1. [flagged: No answer from a sample] I look at one match. | SQL: ${SAMPLE_SQL}`,
-    );
-    expect(
-      streamOptions(ctx, 0).context.some((c) =>
-        c.content.startsWith('Queries an earlier attempt'),
-      ),
-    ).toBe(false);
-    const input = written(ctx);
-    expect(input.queries.map((q) => q.sql)).toEqual([SAMPLE_SQL]);
-    expect(input.findings.at(-1)).toMatchObject({
-      check: 'Retry completed (warning only)',
-      passed: false,
-    });
-    const answer = ctx.session.messages.at(-1)!;
-    expect(answer.content).toBe(WRITTEN);
-    // The answer's sources: attempt 1's one record, indexed once.
-    expect(answer.data?.map((record) => record.input)).toEqual([SAMPLE_SQL]);
-    expect(answer.evidence?.map((entry) => entry.index)).toEqual([0]);
-    expect(lastMove(events).failed).toBeUndefined();
-  });
-
-  it("keeps every record of both attempts once, in run order, while Write answer reads the merged set, attempt 2's first", async () => {
-    const ctx = build('v2', (call) =>
-      call === 1
-        ? ATTEMPT_1
-        : [now(SQL_CALL), now(SQL_RESULT), now(text('Ok.'))],
+  it("runs with the retry's step budget, and keeps his first answer when it ends on a model error", async () => {
+    const ctx = build(
+      'avery',
+      (call) =>
+        call === 1
+          ? FIRST
+          : [
+              now({
+                type: 'error',
+                payload: { error: new Error('Overloaded') },
+              }),
+            ],
+      ['Count every match.', 'Count them by stage.'],
     );
     expect(await startTurn(ctx, [])).toBe('done');
-    // The flagged sample is left out of the merged set.
-    expect(written(ctx).queries.map((q) => q.sql)).toEqual(['SELECT 1 AS n']);
+    expect(ctx.agent.stream).toHaveBeenCalledTimes(2);
+    // The second call runs with its own step budget and no memory thread.
+    expect(streamOptions(ctx, 0).maxSteps).toBe(15);
+    expect(streamOptions(ctx, 1).maxSteps).toBe(8);
+    expect(streamOptions(ctx, 1).memory).toBeUndefined();
+    // Each call carries her brief and the alone line.
+    for (const [call, brief] of [
+      [0, 'Count every match.'],
+      [1, 'Count them by stage.'],
+    ] as const) {
+      const system = streamOptions(ctx, call).context.map((c) => c.content);
+      expect(system).toContainEqual(
+        expect.stringContaining(
+          `Brief from Avery, the Chief of Staff: ${brief}\n\nYou work alone with Avery in this run`,
+        ),
+      );
+    }
     const answer = ctx.session.messages.at(-1)!;
+    expect(answer.content).toBe(`One match.\n\n${CLOSING}`);
+    // The answer's sources: the first call's one record.
     expect(answer.data?.map((record) => record.input)).toEqual([
-      SAMPLE_SQL,
       'SELECT 1 AS n',
     ]);
-    expect(answer.evidence?.map((entry) => entry.index)).toEqual([0, 1]);
   });
 
-  it('still fails the run on a model error in attempt 1', async () => {
-    const ctx = build('v2', () => [
+  it('still fails the run on a model error in his first call', async () => {
+    const ctx = build('avery', () => [
       now({ type: 'error', payload: { error: new Error('Overloaded') } }),
     ]);
     const outcome = await startTurn(ctx, []);
     expect(outcome).toBeInstanceOf(Error);
+    expect((outcome as Error).message).toContain('Overloaded');
     expect(ctx.agent.stream).toHaveBeenCalledTimes(1);
-    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
   });
 
-  it('still ends the run on a Stop during the retry, writing no answer', async () => {
+  it('still ends the run on a Stop during the second call', async () => {
     const controller = new AbortController();
-    const ctx = build('v2', (call) => {
-      if (call === 1) return ATTEMPT_1;
-      controller.abort();
-      return [now(text('stopped'))];
-    });
+    const ctx = build(
+      'avery',
+      (call) => {
+        if (call === 1) return FIRST;
+        controller.abort();
+        return [now(text('stopped'))];
+      },
+      ['one', 'two'],
+    );
     expect(await startTurn(ctx, [], controller.signal)).toBe('done');
     expect(ctx.agent.stream).toHaveBeenCalledTimes(2);
-    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
-  });
-
-  describe('Build visual draws from the queries the answer rests on (workflows R41)', () => {
-    type Designed = { input?: string; rowCount?: number; truncated?: boolean };
-    const designer = () => ({
-      createFromAnswer: jest.fn().mockResolvedValue({
-        metadata: {
-          id: 'v-1',
-          title: 'Matches',
-          description: 'Matches',
-          path: 'visuals/v-1',
-          sourceMessageAt: '2026-01-01T00:00:00.000Z',
-          createdAt: '2026-01-01T00:00:00.000Z',
-          currentVersion: 1,
-          versions: [],
-        },
-        bundle: {},
-      }),
-    });
-    /** The records the designer was given. */
-    const designed = (visuals: ReturnType<typeof designer>) => {
-      expect(visuals.createFromAnswer).toHaveBeenCalledTimes(1);
-      return (
-        (visuals.createFromAnswer.mock.calls[0] as unknown[])[1] as {
-          data: Designed[];
-        }
-      ).data;
-    };
-    /** One `run_readonly_sql` call and its result, under its own call id. */
-    const sqlRun = (callId: string, sql: string, result: object) => [
-      now({
-        type: 'tool-call',
-        payload: {
-          toolCallId: callId,
-          toolName: 'run_readonly_sql',
-          args: { sql, rationale: 'Count.' },
-        },
-      }),
-      now({
-        type: 'tool-result',
-        payload: { toolCallId: callId, toolName: 'run_readonly_sql', result },
-      }),
-    ];
-    const COUNT_SQL = 'SELECT count(*) AS n FROM wc.public.matches';
-    const cut = {
-      columns: ['n'],
-      rows: [{ n: 1 }],
-      rowCount: 1,
-      truncated: true,
-    };
-    const whole = { columns: ['n'], rows: [{ n: 64 }], rowCount: 1 };
-    const failed = { error: 'column "x" does not exist' };
-
-    it('gives the designer exactly the records of a run with no retry, in run order', async () => {
-      const visuals = designer();
-      const ctx = build(
-        'v2',
-        () => [
-          ...sqlRun('a', COUNT_SQL, whole),
-          ...sqlRun('b', 'SELECT 1 AS n', SQL_RESULT.payload.result),
-          now(text('Ok.')),
-        ],
-        visuals,
-      );
-      expect(await startTurn(ctx, [])).toBe('done');
-      expect(ctx.agent.stream).toHaveBeenCalledTimes(1);
-      const data = designed(visuals);
-      expect(data.map((record) => record.input)).toEqual([
-        COUNT_SQL,
-        'SELECT 1 AS n',
-      ]);
-      expect(data).toEqual(ctx.session.messages.at(-1)?.data);
-    });
-
-    it("leaves out attempt 1's flagged query the merge dropped, while the answer's sources keep it", async () => {
-      const visuals = designer();
-      const ctx = build(
-        'v2',
-        (call) =>
-          call === 1
-            ? ATTEMPT_1
-            : [now(SQL_CALL), now(SQL_RESULT), now(text('Ok.'))],
-        visuals,
-      );
-      expect(await startTurn(ctx, [])).toBe('done');
-      expect(designed(visuals).map((record) => record.input)).toEqual([
-        'SELECT 1 AS n',
-      ]);
-      const answer = ctx.session.messages.at(-1)!;
-      expect(answer.data?.map((record) => record.input)).toEqual([
-        SAMPLE_SQL,
-        'SELECT 1 AS n',
-      ]);
-      expect(answer.evidence?.map((entry) => entry.index)).toEqual([0, 1]);
-    });
-
-    it("gives the retry's run of the same SQL, not attempt 1's cut one, in the kept set's order", async () => {
-      const visuals = designer();
-      const ctx = build(
-        'v2',
-        (call) =>
-          call === 1
-            ? [
-                ...sqlRun('a', 'SELECT 1 AS n', SQL_RESULT.payload.result),
-                ...sqlRun('b', COUNT_SQL, cut),
-                now(text('Cut.')),
-              ]
-            : [...sqlRun('c', COUNT_SQL, whole), now(text('Ok.'))],
-        visuals,
-      );
-      expect(await startTurn(ctx, [])).toBe('done');
-      // Attempt 2's query first, then attempt 1's unflagged one.
-      expect(written(ctx).queries.map((q) => q.sql)).toEqual([
-        COUNT_SQL,
-        'SELECT 1 AS n',
-      ]);
-      const data = designed(visuals);
-      expect(data.map((record) => [record.input, record.truncated])).toEqual([
-        [COUNT_SQL, undefined],
-        ['SELECT 1 AS n', undefined],
-      ]);
-      expect(ctx.session.messages.at(-1)?.data).toHaveLength(3);
-    });
-
-    it("gives attempt 1's records alone when the merged set scored worse", async () => {
-      const visuals = designer();
-      const ctx = build(
-        'v2',
-        (call) =>
-          call === 1
-            ? [...sqlRun('a', COUNT_SQL, cut), now(text('Cut.'))]
-            : [
-                ...sqlRun('b', COUNT_SQL, whole),
-                ...sqlRun('c', 'SELECT x FROM wc.public.matches', failed),
-                now(text('Ok.')),
-              ],
-        visuals,
-      );
-      expect(await startTurn(ctx, [])).toBe('done');
-      expect(written(ctx).queries).toEqual([
-        expect.objectContaining({ sql: COUNT_SQL, truncated: true }),
-      ]);
-      const data = designed(visuals);
-      expect(data.map((record) => [record.input, record.truncated])).toEqual([
-        [COUNT_SQL, true],
-      ]);
-      expect(ctx.session.messages.at(-1)?.data).toHaveLength(3);
-    });
-
-    it("gives attempt 1's records alone when the retry ended on a model error", async () => {
-      const visuals = designer();
-      const ctx = build(
-        'v2',
-        (call) =>
-          call === 1
-            ? ATTEMPT_1
-            : [
-                now(SQL_CALL),
-                now(SQL_RESULT),
-                now({
-                  type: 'error',
-                  payload: { error: new Error('Overloaded') },
-                }),
-              ],
-        visuals,
-      );
-      expect(await startTurn(ctx, [])).toBe('done');
-      expect(designed(visuals).map((record) => record.input)).toEqual([
-        SAMPLE_SQL,
-      ]);
-      expect(
-        ctx.session.messages.at(-1)?.data?.map((record) => record.input),
-      ).toEqual([SAMPLE_SQL, 'SELECT 1 AS n']);
-    });
   });
 });
 
@@ -996,30 +794,5 @@ describe('Review templates fails the turn with its first error (workflows R43; a
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain('Save report');
     expect((error as Error).message).not.toContain('Iris failed 1');
-  });
-});
-
-describe("a retry of a step's model call (workflows R43)", () => {
-  it('is shown as a reasoning line of the running step', async () => {
-    const ctx = build('v2', () => [
-      now(SQL_CALL),
-      now(SQL_RESULT),
-      now(text('Done.')),
-    ]);
-    ctx.mastra.planAnalysis.mockImplementation(
-      ({ question }: { question: string }, opts?: unknown) => {
-        (opts as { onRetry: (line: string) => void }).onRetry(
-          'Plan: the model call failed (fetch failed). Trying once more in 2 seconds.',
-        );
-        return Promise.resolve({ plan: planOf({}, question), stopped: false });
-      },
-    );
-    const events: StreamEvent[] = [];
-    expect(await startTurn(ctx, events)).toBe('done');
-    expect(events).toContainEqual({
-      type: 'reasoning',
-      content:
-        'Plan: the model call failed (fetch failed). Trying once more in 2 seconds.\n',
-    });
   });
 });

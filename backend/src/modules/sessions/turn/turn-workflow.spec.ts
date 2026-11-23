@@ -28,48 +28,33 @@ const session = (partial: Partial<SessionDoc> = {}): SessionDoc => ({
 });
 
 describe('turnWorkflowOf (agents.md 5.11, 5.16)', () => {
-  it("runs a v2 session's turn as answer-business-question, its steps driving the bar", () => {
-    expect(turnWorkflowOf(session())).toMatchObject({
-      id: 'answer-business-question',
-      engineId: 'answer-business-question',
+  it("runs an Avery + Michael host's turn on its own engine, its one step driving the bar", () => {
+    expect(
+      turnWorkflowOf(session({ workflowId: 'orchestrated-answer-michael' })),
+    ).toEqual({
+      id: 'orchestrated-answer-michael',
+      engineId: 'orchestrated-answer-michael',
       bar: 'steps',
-      stepIds: [
-        // Optional: taken only when the run has reference images (R35).
-        'read-images',
-        'receive-question',
-        'load-catalog',
-        'plan',
-        'analyse',
-        'validate',
-        'write-answer',
-        'build-visual',
-        'wrap-up',
-      ],
+      stepIds: ['orchestrate'],
     });
   });
+
+  it.each(['answer-business-question', 'orchestrated-answer'])(
+    'runs a past chat of %s (removed, M18) as its agent alone, on agent-turn',
+    (workflowId) => {
+      expect(turnWorkflowOf(session({ workflowId }))).toEqual({
+        id: workflowId,
+        engineId: 'agent-turn',
+        bar: 'agent',
+        stepIds: ['answer'],
+      });
+    },
+  );
 
   it("runs a node chat's turn as its step's agent alone, on agent-turn", () => {
     expect(
       turnWorkflowOf(session({ run: true, contextBlock: 'NODE CHAT' })),
     ).toMatchObject({ engineId: 'agent-turn', bar: 'agent' });
-  });
-
-  it('runs a follow-up that asks one agent on ask-agent, its one step the asked one (agents.md 5.21)', () => {
-    expect(
-      turnWorkflowOf(
-        session({
-          run: true,
-          ask: { step: 'write-answer' },
-          contextBlock: 'STEP',
-        }),
-      ),
-    ).toEqual(
-      expect.objectContaining({
-        engineId: 'ask-agent',
-        bar: 'agent',
-        stepIds: ['write-answer'],
-      }),
-    );
   });
 });
 

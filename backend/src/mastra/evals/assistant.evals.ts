@@ -992,9 +992,9 @@ export interface EvalTarget {
   agentKey: string;
   agent: Agent;
   /**
-   * What a case runs, when not the agent alone: Insights Analyst's
-   * cases run its whole `answer-business-question` workflow (agents.md 8.1). A run of it
-   * never gets the tool-only synthesis: its answer is its Write answer's.
+   * What a case runs, when not the agent alone: Insights Analyst's cases
+   * run him as Avery's answer_from_data does (agents.md 8.1, 5.23). A run of
+   * it never gets the tool-only synthesis: its answer is his reply.
    */
   runTarget?: Agent;
   /** The sets that run on this agent. */

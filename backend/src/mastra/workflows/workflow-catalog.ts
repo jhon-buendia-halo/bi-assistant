@@ -1,7 +1,7 @@
 /**
  * The workflow catalogue (ADR-0040; agents.md 5.12): the workflows defined in
- * code (only Insights Analyst, `answer-business-question`, since 1.23.35), and the
- * turn routing of the agent-turn engine: the `agent:<key>` ids a run host, a
+ * code, the ids of the removed ones a past chat or stored run may still
+ * name, and the turn routing of the agent-turn engine: the `agent:<key>` ids a run host, a
  * draft run or a stored session is bound to, and the rule that derives a
  * session's workflow from its stored agent binding. An `agent:` id names the
  * engine an agent turn runs on, never a catalogue workflow: `GET /workflows`
@@ -11,8 +11,6 @@
  */
 import {
   CHIEF_OF_STAFF_AGENT_KEY,
-  ANALYSIS_PLANNER_AGENT_KEY,
-  ANSWER_WRITER_AGENT_KEY,
   ASSISTANT_MAX_STEPS,
   DASHBOARD_READER_AGENT_KEY,
   DATA_MAPPER_AGENT_KEY,
@@ -23,19 +21,12 @@ import {
   LAYER_MAPPER_AGENT_KEY,
   REQUIREMENTS_ANALYST_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
-  VISUALIZATION_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
-import {
-  INSIGHTS_ANALYST_AGENT_KEY,
-  INSIGHTS_ANALYST_DESCRIPTION,
-} from '../agents/insights-analyst-catalog';
+import { INSIGHTS_ANALYST_AGENT_KEY } from '../agents/insights-analyst-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
 import {
-  ORCHESTRATED_ANSWER_EDGES,
-  ORCHESTRATED_ANSWER_STEPS,
-  ORCHESTRATED_ANSWER_WORKFLOW_ID,
-  ORCHESTRATED_ANSWER_WORKFLOW_NAME,
+  ORCHESTRATED_MICHAEL_EDGES,
   ORCHESTRATED_MICHAEL_STEPS,
   ORCHESTRATED_MICHAEL_WORKFLOW_ID,
   ORCHESTRATED_MICHAEL_WORKFLOW_NAME,
@@ -83,12 +74,6 @@ import {
   REVIEW_WEBSITE_WORKFLOW_ID,
   REVIEW_WEBSITE_WORKFLOW_NAME,
 } from './review-website.steps';
-import {
-  ANSWER_BUSINESS_QUESTION_EDGES,
-  ANSWER_BUSINESS_QUESTION_STEPS,
-  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
-  ANSWER_BUSINESS_QUESTION_WORKFLOW_NAME,
-} from './analysis.steps';
 import {
   assertWorkflowContracts,
   contractHash,
@@ -190,32 +175,6 @@ const CAREFUL_FIELD: WorkflowInputField = {
 };
 
 /**
- * Answer a Business Question's visual (agents.md 5.11, workflows R41): the
- * branch to Build visual, where Ryan designs an interactive visual from the
- * answer's query results. On unless unticked.
- */
-const BUILD_VISUAL_FIELD: WorkflowInputField = {
-  name: 'buildVisual',
-  label: 'Build a visual: Ryan charts the results of the answer',
-  type: 'boolean',
-  required: false,
-  default: true,
-};
-
-/**
- * Answer a Business Question's approvals (workflows R44): each agent may
- * ask you first, and its work waits for your approval before the next
- * agent gets it. On unless unticked.
- */
-const APPROVE_STEPS_FIELD: WorkflowInputField = {
-  name: 'approveSteps',
-  label: "Approve each step: every agent's work waits for your OK",
-  type: 'boolean',
-  required: false,
-  default: true,
-};
-
-/**
  * The input of a draft run (Try it, api.md R12): the question, and careful
  * mode; its datasets are the draft's.
  */
@@ -237,12 +196,6 @@ export interface CodeWorkflowSource {
    * keys (agents.md 5.11). Every other agent step runs `primaryFor`.
    */
   stepAgents?: Readonly<Record<string, string>>;
-  /**
-   * The registered Mastra workflow its runs run on, when it is another
-   * workflow's (Avery + Michael runs on `orchestrated-answer`); its own id
-   * otherwise.
-   */
-  engine?: string;
   trigger: WorkflowTrigger;
   /** The typed input of a run, in form order. */
   input: readonly WorkflowInputField[];
@@ -269,65 +222,16 @@ export const QUESTION_MAX_LENGTH = 4000;
 export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
   assertWorkflowContracts<Omit<CodeWorkflowSource, 'contractHash'>>([
     {
-      id: ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
-      name: ANSWER_BUSINESS_QUESTION_WORKFLOW_NAME,
-      category: 'data-analytics',
-      description: INSIGHTS_ANALYST_DESCRIPTION,
-      primaryFor: INSIGHTS_ANALYST_AGENT_KEY,
-      trigger: 'run',
-      input: [
-        { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
-        IMAGES_FIELD,
-        DATASETS_FIELD,
-        BUILD_VISUAL_FIELD,
-        APPROVE_STEPS_FIELD,
-      ],
-      steps: ANSWER_BUSINESS_QUESTION_STEPS,
-      // Zoe reads the reference images when there are some; Olivia plans
-      // and Jessica writes the answer; Michael analyses; Ryan builds the
-      // visual unless the run turns it off.
-      stepAgents: {
-        [READ_IMAGES_STEP_ID]: IMAGE_READER_AGENT_KEY,
-        plan: ANALYSIS_PLANNER_AGENT_KEY,
-        'write-answer': ANSWER_WRITER_AGENT_KEY,
-        'build-visual': VISUALIZATION_AGENT_KEY,
-      },
-      edges: ANSWER_BUSINESS_QUESTION_EDGES,
-      bar: 'steps',
-    },
-    {
-      // Avery, the Chief of Staff, chooses which agents answer the question
-      // and is the only one who talks to the user (workflows R45; agents.md
-      // 5.22). The run host stays Michael's: Avery's analyse_data runs his
-      // turn there, as Analyse does.
-      id: ORCHESTRATED_ANSWER_WORKFLOW_ID,
-      name: ORCHESTRATED_ANSWER_WORKFLOW_NAME,
-      category: 'data-analytics',
-      description:
-        'The same question as Answer a Business Question, answered by Avery, a Chief of Staff who decides which agents to call and is the only one you talk to.',
-      primaryFor: INSIGHTS_ANALYST_AGENT_KEY,
-      trigger: 'run',
-      input: [
-        { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
-        IMAGES_FIELD,
-        DATASETS_FIELD,
-        BUILD_VISUAL_FIELD,
-      ],
-      steps: ORCHESTRATED_ANSWER_STEPS,
-      stepAgents: { orchestrate: CHIEF_OF_STAFF_AGENT_KEY },
-      edges: ORCHESTRATED_ANSWER_EDGES,
-      bar: 'steps',
-    },
-    {
-      // Avery with Michael alone (agents.md 5.23): the same Orchestrate step
-      // on the same engine; Michael plans, queries and writes the answer.
+      // Avery, the Chief of Staff, with Michael (workflows R45; agents.md
+      // 5.23): Michael plans, queries and writes the answer, and Avery is
+      // the only one who talks to the user. The run host stays Michael's:
+      // her answer_from_data runs his turn there.
       id: ORCHESTRATED_MICHAEL_WORKFLOW_ID,
       name: ORCHESTRATED_MICHAEL_WORKFLOW_NAME,
       category: 'data-analytics',
       description:
         'The same question answered by Avery, the Chief of Staff, with Michael alone: he plans, queries the data and writes the answer; she briefs him, checks it and is the only one you talk to.',
       primaryFor: INSIGHTS_ANALYST_AGENT_KEY,
-      engine: ORCHESTRATED_ANSWER_WORKFLOW_ID,
       trigger: 'run',
       input: [
         { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
@@ -335,7 +239,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       ],
       steps: ORCHESTRATED_MICHAEL_STEPS,
       stepAgents: { orchestrate: CHIEF_OF_STAFF_AGENT_KEY },
-      edges: ORCHESTRATED_ANSWER_EDGES,
+      edges: ORCHESTRATED_MICHAEL_EDGES,
       bar: 'steps',
     },
     {
@@ -592,6 +496,28 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
     },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
 
+/**
+ * The code workflows removed from the catalogue (data-model 3.16 M18): their
+ * stored runs are deleted at startup, and a past chat that ran one keeps its
+ * id, so its chip still names it (`REMOVED_WORKFLOW_NAMES`). Never listed,
+ * never run: a past chat of one goes on as its agent's own turn.
+ */
+export const REMOVED_WORKFLOW_IDS: readonly string[] = [
+  'answer-business-question',
+  'orchestrated-answer',
+];
+
+/** The name a removed workflow had, by id, for a past chat's chip. */
+export const REMOVED_WORKFLOW_NAMES: Readonly<Record<string, string>> = {
+  'answer-business-question': 'Answer a Business Question',
+  'orchestrated-answer': 'Answer a Business Question (orchestrated)',
+};
+
+/** Whether an id names a removed code workflow (`REMOVED_WORKFLOW_IDS`). */
+export function isRemovedWorkflowId(id: string | undefined): boolean {
+  return !!id && REMOVED_WORKFLOW_IDS.includes(id);
+}
+
 /** What one agent turn of a run takes from the run's input (plan 4.2, 5.1). */
 export interface AgentRunTurn {
   /** The user message: `question`, else the entry `url`, trimmed. */
@@ -600,10 +526,6 @@ export interface AgentRunTurn {
   datasets?: string[];
   /** Careful mode (the Assistant and user agents). */
   careful: boolean;
-  /** Answer a Business Question's `buildVisual`: Build visual runs. */
-  buildVisual?: true;
-  /** Answer a Business Question's `approveSteps` (workflows R44). */
-  approveSteps?: true;
   /** Map a Dashboard to Data's `artifact`: the saved dashboard it maps. */
   artifact?: string;
 }
@@ -622,8 +544,6 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     question: text(values['question']) || text(values['url']),
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
-    ...(values['buildVisual'] === true ? { buildVisual: true as const } : {}),
-    ...(values['approveSteps'] === true ? { approveSteps: true as const } : {}),
     ...(text(values['artifact']) ? { artifact: text(values['artifact']) } : {}),
   };
 }
@@ -648,9 +568,8 @@ export const ASSISTANT_WORKFLOW_NAME = 'Assistant';
 
 /**
  * The catalogue workflows whose agent steps run an agent, as an agent's
- * detail lists them (api.md 34 `usedInWorkflows`): `answer-business-question` for
- * `insights-analyst`, `analysis-planner` and `answer-writer`, none for any
- * other agent.
+ * detail lists them (api.md 34 `usedInWorkflows`): Answer a Business
+ * Question (Avery + Michael) for `insights-analyst` and `chief-of-staff`.
  */
 export function workflowsUsingAgent(
   agentKey: string,
@@ -733,13 +652,19 @@ export interface SessionWorkflowFields {
 
 /**
  * The workflow a session runs (plan 4.3): its stored `workflowId` while that
- * still resolves, else the one its agent fields derive: the code workflow
- * whose `primaryFor` is its `agentKey`, `agent:<agentKey>` for a wrapped
- * built-in agent, `agent:<agentId>` for a user agent (deleted or not), and
- * `agent:assistant` otherwise.
+ * still resolves or names a removed workflow (a past chat keeps it), else
+ * the one its agent fields derive: `answer-business-question`, removed, for
+ * Michael's past chats (they ran it before a session stored its workflow),
+ * the code workflow whose `primaryFor` is its `agentKey`, `agent:<agentKey>`
+ * for a wrapped built-in agent, `agent:<agentId>` for a user agent (deleted
+ * or not), and `agent:assistant` otherwise.
  */
 export function sessionWorkflowId(session: SessionWorkflowFields): string {
-  if (session.workflowId && parseWorkflowId(session.workflowId)) {
+  if (
+    session.workflowId &&
+    (parseWorkflowId(session.workflowId) ||
+      isRemovedWorkflowId(session.workflowId))
+  ) {
     return session.workflowId;
   }
   if (session.agentKey) {
@@ -748,6 +673,10 @@ export function sessionWorkflowId(session: SessionWorkflowFields): string {
     // stay on its agent turn (a run host names its workflow itself).
     if (WRAPPED_AGENT_KEYS.includes(session.agentKey)) {
       return agentWorkflowId(session.agentKey);
+    }
+    // Michael's past chats ran Answer a Business Question: they keep it.
+    if (session.agentKey === INSIGHTS_ANALYST_AGENT_KEY) {
+      return REMOVED_WORKFLOW_IDS[0];
     }
     const code = CODE_WORKFLOWS.find(
       (workflow) => workflow.primaryFor === session.agentKey,

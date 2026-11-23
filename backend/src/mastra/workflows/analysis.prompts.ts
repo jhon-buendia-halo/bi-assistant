@@ -1,10 +1,10 @@
 /**
- * The instructions and request text of the two model steps of Questions to
- * Insights v2 that run without tools (agents.md 5.11, Appendix F): Plan and
- * Write answer. Their first lines are fixed: the E2E stub model routes a
- * request by its system prompt's first line. Plain strings and pure
- * functions, no framework import, so Jest and the catalogue read them
- * without Mastra.
+ * The instructions and request text of Olivia's plan and Jessica's answer,
+ * the two model calls without tools (agents.md 5.11, Appendix F), and the
+ * system blocks Michael's analysis streams with (5.23). The first lines are
+ * fixed: the E2E stub model routes a request by its system prompt's first
+ * line. Plain strings and pure functions, no framework import, so Jest and
+ * the catalogue read them without Mastra.
  */
 import type { z } from 'zod';
 import type {
@@ -15,11 +15,6 @@ import type {
 import { flaggedQueries } from './analysis.steps';
 import { coverageOf } from '../../modules/sessions/query-evidence/query-coverage';
 import { imageNotesBlock } from './read-images.steps';
-import {
-  interactiveBlocks,
-  revisionBlock,
-  type Revision,
-} from './answer-business-question.review';
 
 /** The Plan step's instructions' first line (the stub model routes by it). */
 export const PLAN_FIRST_LINE =
@@ -73,32 +68,6 @@ Rules:
 
 Counts stay exact even when you describe a spread: never round a count into a range ("about 37,000 to 38,000"); give the exact smallest and largest counts the rows hold.`;
 
-/**
- * The words in a question that ask for a visual, as whole words: the cue,
- * with reference image notes, for telling Analyse and Write answer that
- * Build visual draws one after them.
- */
-const VISUAL_CUE =
-  /\b(dashboards?|charts?|graphs?|plots?|maps?|heatmaps?|pivots?|visual\w*)\b/i;
-
-/**
- * Whether the request cues a visual: the run has reference image notes
- * (not blank), or the question names a visual. Only a run that also builds
- * a visual tells its steps so; any other request keeps its prompts as they
- * are, so the agents' eval results stay valid for it.
- */
-export function visualCued(question: string, imageNotes?: string): boolean {
-  return Boolean(imageNotes?.trim()) || VISUAL_CUE.test(question);
-}
-
-/** Analyse's last system block when a visual follows its queries. */
-export const ANALYSE_VISUAL_LINE =
-  'A later step draws the visual from your query results, so never say you cannot render a chart, a dashboard or a map. Run one query per view the request asks for, each returning the rows that view shows: the headline totals as one single-row query, and one query for each table, chart or map. For a view that crosses two dimensions, return one row per combination with the measure in one column, never one column per value, so the visual labels its columns with the values in the data.';
-
-/** The last line of Write answer's request when a visual follows it. */
-export const WRITE_ANSWER_VISUAL_LINE =
-  'An interactive visual of these results is built right after your answer and shown under it. Never say you cannot render a chart, a dashboard or a map, and do not lay the data out as tables to stand in for one: state the findings and point the reader to the visual.';
-
 /** The most result rows of one query Write answer reads. */
 export const ANSWER_ROWS_CAP = 50;
 
@@ -128,19 +97,6 @@ export function planRequest(
   ].join('\n');
 }
 
-/**
- * An orchestrator's request to a teammate (Avery, agents.md 2.21): the
- * question restated to stand alone, then what she needs. It ends Plan's
- * and Write answer's request; '' when there is none (Answer a Business
- * Question sends none, so its requests are unchanged).
- */
-export function orchestratorBriefBlock(brief: string | undefined): string {
-  const text = brief?.trim();
-  return text
-    ? `Request from Avery, the Chief of Staff who coordinates the team (the user's own words are above): ${text}`
-    : '';
-}
-
 /** A message of the Plan step's request. */
 export interface PlanMessage {
   role: 'user' | 'assistant';
@@ -164,25 +120,11 @@ export function planMessages(input: {
   answered?: { question: string; options: readonly string[]; answer: string };
   /** Read images' notes (agents.md 2.15); absent or `''` without images. */
   imageNotes?: string;
-  /**
-   * The changes the user asked for on Plan's approval gate (workflows R44):
-   * the request ends with the earlier plan and their words.
-   */
-  revision?: Revision;
-  /** An orchestrator's request (Avery): it ends the request. */
-  brief?: string;
 }): { messages: string | PlanMessage[]; fallback: string } {
   const before = Array.isArray(input.messages)
     ? (input.messages as PlanMessage[]).slice(0, -1)
     : [];
   const { answered } = input;
-  const briefBlock = orchestratorBriefBlock(input.brief);
-  const revised = (request: string) =>
-    [
-      request,
-      ...(input.revision ? [revisionBlock(input.revision)] : []),
-      ...(briefBlock ? [briefBlock] : []),
-    ].join('\n\n');
   if (answered) {
     return {
       messages: [
@@ -197,16 +139,20 @@ export function planMessages(input: {
         },
         {
           role: 'user',
-          content: revised(
-            planRequest(answered.answer, input.catalogBlock, input.imageNotes),
+          content: planRequest(
+            answered.answer,
+            input.catalogBlock,
+            input.imageNotes,
           ),
         },
       ],
       fallback: `${input.question} (${answered.answer})`,
     };
   }
-  const request = revised(
-    planRequest(input.question, input.catalogBlock, input.imageNotes),
+  const request = planRequest(
+    input.question,
+    input.catalogBlock,
+    input.imageNotes,
   );
   return {
     messages: Array.isArray(input.messages)
@@ -262,33 +208,6 @@ export function writeAnswerRequest(input: {
   findings: readonly Finding[];
   /** Read images' notes (agents.md 2.15); absent or `''` without images. */
   imageNotes?: string;
-  /** Build visual runs after it and the request cues a visual (`visualCued`). */
-  visualFollows?: boolean;
-  /**
-   * An interactive run (workflows R44): the clarify rule, her answered
-   * question or the user's revision end the request. Absent: unchanged.
-   */
-  canAsk?: boolean;
-  answered?: { question: string; answer: string };
-  revision?: Revision;
-  /** An orchestrator's request (Avery): it ends the request. */
-  brief?: string;
-}): string {
-  const interactive = interactiveBlocks(input);
-  const request = writeAnswerBody(input);
-  const briefBlock = orchestratorBriefBlock(input.brief);
-  const blocks = [...interactive, ...(briefBlock ? [briefBlock] : [])];
-  return blocks.length ? [request, ...blocks].join('\n\n') : request;
-}
-
-/** The Write answer request before any interactive block. */
-function writeAnswerBody(input: {
-  question: string;
-  plan: Plan;
-  queries: readonly AnalyseQuery[];
-  findings: readonly Finding[];
-  imageNotes?: string;
-  visualFollows?: boolean;
 }): string {
   const notes = imageNotesBlock(input.imageNotes);
   const head = [
@@ -311,38 +230,12 @@ function writeAnswerBody(input: {
   const queries = input.queries.length
     ? input.queries.map(queryLines).join('\n\n')
     : '(no query ran)';
-  // When a visual follows, its line ends the request, after everything else.
-  const tail = input.visualFollows ? `\n\n${WRITE_ANSWER_VISUAL_LINE}` : '';
-  const room = Math.max(
-    0,
-    ANSWER_REQUEST_CAP - head.length - findings.length - tail.length,
-  );
+  const room = Math.max(0, ANSWER_REQUEST_CAP - head.length - findings.length);
   const body =
     queries.length > room
       ? `${queries.slice(0, room)}\n[rows shortened to fit]`
       : queries;
-  return `${head}Queries and their result rows:\n${body}\n${findings}${tail}`;
-}
-
-/**
- * The Analyse step's plan block (agents.md 5.11): the plan as the last
- * system message, and on a retry what the previous attempt's validation
- * found.
- */
-export function analysePlanBlock(
-  plan: Plan,
-  retry?: { attempt: number; findings: readonly Finding[] },
-): string {
-  const lines = ['Analysis plan for this turn:', JSON.stringify(plan)];
-  if (retry) {
-    const failed = retry.findings.filter((f) => !f.passed);
-    lines.push(
-      '',
-      `Attempt ${retry.attempt} of this analysis failed validation. Run the analysis again and fix:`,
-      ...failed.map((f) => `- ${f.check}: ${f.detail}`),
-    );
-  }
-  return lines.join('\n');
+  return `${head}Queries and their result rows:\n${body}\n${findings}`;
 }
 
 /** The earlier-queries block's first line (agents.md 5.11). */
@@ -440,8 +333,6 @@ export function analyseSystemBlocks(input: {
   planBlock: string;
   earlierBlock?: string;
   imageNotes?: string;
-  /** Build visual runs after it and the request cues a visual (`visualCued`). */
-  visualFollows?: boolean;
 }): string[] {
   const notes = imageNotesBlock(input.imageNotes);
   return [
@@ -449,42 +340,15 @@ export function analyseSystemBlocks(input: {
     input.planBlock,
     ...(input.earlierBlock ? [input.earlierBlock] : []),
     ...(notes ? [notes] : []),
-    ...(input.visualFollows ? [ANALYSE_VISUAL_LINE] : []),
   ];
-}
-
-/** A list in the review's Markdown, or `none` when it is empty. */
-function reviewList(items: readonly string[]): string[] {
-  return items.length ? items.map((item) => `- ${item}`) : ['- none'];
-}
-
-/**
- * Olivia's plan on her approval gate (workflows R44), in the user's words:
- * the question as planned, the measures, entities, scope and assumptions.
- */
-export function planReview(plan: Plan): string {
-  return [
-    `**Question:** ${plan.question}`,
-    '',
-    '**Measures**',
-    ...reviewList(plan.measures),
-    '',
-    '**Entities**',
-    ...reviewList(plan.entities),
-    '',
-    `**Scope:** ${plan.scope || 'none given'}`,
-    '',
-    '**Assumptions**',
-    ...reviewList(plan.assumptions),
-  ].join('\n');
 }
 
 /** The most queries Michael's review lists. */
 const REVIEW_QUERIES_SHOWN = 12;
 
 /**
- * Michael's analysis on its approval gate (workflows R44): each query he
- * ran, why and what came back, then his own note.
+ * Michael's analysis as Avery reads it (agents.md 5.23): each query he ran,
+ * why and what came back, then his own note.
  */
 export function analysisReview(outcome: {
   queries: readonly AnalyseQuery[];

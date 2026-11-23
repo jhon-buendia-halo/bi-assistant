@@ -7,12 +7,12 @@ jest.mock('@mastra/core/workflows', () =>
 );
 
 import { RequestContext } from '@mastra/core/request-context';
-import { orchestratedAnswerWorkflow } from './orchestrated-answer-michael.workflow';
+import { orchestratedMichaelWorkflow } from './orchestrated-answer-michael.workflow';
 import {
-  ORCHESTRATED_ANSWER_RUNTIME_KEY,
-  ORCHESTRATED_ANSWER_STEPS,
-  ORCHESTRATED_ANSWER_WORKFLOW_ID,
-  type OrchestratedAnswerRuntime,
+  ORCHESTRATED_MICHAEL_RUNTIME_KEY,
+  ORCHESTRATED_MICHAEL_STEPS,
+  ORCHESTRATED_MICHAEL_WORKFLOW_ID,
+  type OrchestratedMichaelRuntime,
 } from './orchestrated-answer-michael.steps';
 
 interface StubEvent {
@@ -46,7 +46,7 @@ interface StubWorkflow {
   }>;
 }
 
-const workflow = orchestratedAnswerWorkflow as unknown as StubWorkflow;
+const workflow = orchestratedMichaelWorkflow as unknown as StubWorkflow;
 
 async function drain(output: StubStream) {
   const events: string[] = [];
@@ -58,13 +58,13 @@ async function drain(output: StubStream) {
   return { events, result: await output.result };
 }
 
-function context(runtime?: OrchestratedAnswerRuntime) {
+function context(runtime?: OrchestratedMichaelRuntime) {
   const requestContext = new RequestContext();
-  if (runtime) requestContext.set(ORCHESTRATED_ANSWER_RUNTIME_KEY, runtime);
+  if (runtime) requestContext.set(ORCHESTRATED_MICHAEL_RUNTIME_KEY, runtime);
   return requestContext;
 }
 
-async function run(runtime?: OrchestratedAnswerRuntime) {
+async function run(runtime?: OrchestratedMichaelRuntime) {
   const requestContext = context(runtime);
   const engineRun = await workflow.createRun();
   const started = await drain(
@@ -81,13 +81,14 @@ const ASKED = {
   options: ['Men', 'Women'],
 };
 
-describe('orchestrated-answer workflow (agents.md 5.22; workflows R45)', () => {
+describe('orchestrated-answer-michael workflow (agents.md 5.23; workflows R45)', () => {
   it("is one Orchestrate agent step (Avery's), and keeps a snapshot only while suspended", () => {
-    expect(workflow.id).toBe(ORCHESTRATED_ANSWER_WORKFLOW_ID);
+    expect(workflow.id).toBe(ORCHESTRATED_MICHAEL_WORKFLOW_ID);
+    expect(workflow.id).toBe('orchestrated-answer-michael');
     expect(workflow.steps.map((s) => [s.id, s.description])).toEqual([
       ['orchestrate', 'Orchestrate'],
     ]);
-    expect(ORCHESTRATED_ANSWER_STEPS.map((s) => [s.id, s.kind])).toEqual([
+    expect(ORCHESTRATED_MICHAEL_STEPS.map((s) => [s.id, s.kind])).toEqual([
       ['orchestrate', 'agent'],
     ]);
     const persist = workflow.options?.shouldPersistSnapshot;

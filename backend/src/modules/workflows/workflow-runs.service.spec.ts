@@ -83,34 +83,8 @@ const stepResult = (id: string, output: unknown): StepEvent => ({
   payload: { id, status: 'success', output },
 });
 
-/** What the Analyse step of `answer-business-question` (and agent-turn's Answer) ends with. */
+/** What agent-turn's Answer (a draft run's one step) ends with. */
 const ANALYSE_OUTPUT = { calls: [], stopped: false };
-/** What Wrap up ends with: the run's output. */
-const WRAP_UP_OUTPUT = {
-  sqlQueries: 0,
-  failedQueries: 0,
-  rows: 0,
-  answer: 'Brazil won.',
-};
-/** What Plan, Validate and Write answer end with. */
-const PLAN_OUTPUT = { plan: { needsClarification: false } };
-const VALIDATE_OUTPUT = { ok: true, attempt: 1, findings: [] };
-const ANSWER_OUTPUT = { headline: 'Brazil won.', answer: 'Brazil won.' };
-
-/** The steps `answer-business-question` reports before its agent step's turn streams. */
-const V2_STEPS_BEFORE: StepEvent[] = [
-  stepStart('receive-question', {
-    question: 'Who won in 2002?',
-    datasets: ['World Cup Core'],
-  }),
-  stepResult('receive-question', { question: 'Who won in 2002?' }),
-  stepStart('load-catalog', { question: 'Who won in 2002?' }),
-  stepResult('load-catalog', { entities: 1 }),
-  stepStart('plan', { question: 'Who won in 2002?' }),
-  stepResult('plan', PLAN_OUTPUT),
-  stepStart('analyse', { question: 'Who won in 2002?' }),
-];
-
 const DATASETS = [
   { name: 'World Cup Core', datasourceKind: 'postgres' },
   { name: 'Claims', datasourceKind: 'databricks' },
@@ -174,7 +148,6 @@ function build(
     data?: unknown[];
   }[] = [];
   let draftHost = false;
-  let orchestratedHost = false;
   const workspaceFiles = new Map<string, Buffer>();
   const sessions = {
     createRunHost: jest.fn(
@@ -189,7 +162,6 @@ function build(
         inputImages?: string[];
       }) => {
         draftHost = !!spec.draftAgentId;
-        orchestratedHost = spec.workflowId === 'orchestrated-answer';
         hostMessages = spec.transcript
           ? spec.transcript.map((m) => ({ ...m, at: 't' }))
           : spec.context
@@ -211,19 +183,13 @@ function build(
         onStep: (event: unknown) => void,
       ) => {
         hostMessages.push({ role: 'user', content: question, at: 't' });
-        if (orchestratedHost) {
-          // Avery's one step: Orchestrate.
-          onStep(stepStart('orchestrate', { question }));
-          for (const event of script.events ?? []) emit(event);
-          const answer = script.answer ?? 'Brazil won.';
-          onStep(stepResult('orchestrate', { answer }));
-          hostMessages.push({ role: 'assistant', content: answer, at: 't' });
-          emit({ type: 'done', session: { id: 'host' } });
-          return;
-        }
-        const agentStep = draftHost ? 'answer' : 'analyse';
+        // Avery's one step (Orchestrate) around the turn's events; a draft
+        // host's, agent-turn's Answer.
+        const agentStep = draftHost ? 'answer' : 'orchestrate';
         for (const step of script.steps ??
-          (draftHost ? [stepStart('answer')] : V2_STEPS_BEFORE)) {
+          (draftHost
+            ? [stepStart('answer')]
+            : [stepStart('orchestrate', { question })])) {
           onStep(step);
         }
         for (const event of script.events ?? []) emit(event);
@@ -232,24 +198,14 @@ function build(
           return;
         }
         if (script.throws) throw script.throws;
-        onStep(stepResult(agentStep, ANALYSE_OUTPUT));
-        if (!draftHost) {
-          onStep(stepStart('validate', ANALYSE_OUTPUT));
-          onStep(stepResult('validate', VALIDATE_OUTPUT));
-          onStep(stepStart('write-answer', VALIDATE_OUTPUT));
-          onStep(stepResult('write-answer', ANSWER_OUTPUT));
-          if (script.visual) {
-            onStep(stepStart('build-visual', ANSWER_OUTPUT));
-            onStep(
-              stepResult('build-visual', {
-                ...ANSWER_OUTPUT,
-                visual: script.visual,
-              }),
-            );
-          }
-          onStep(stepStart('wrap-up', ANSWER_OUTPUT));
-          onStep(stepResult('wrap-up', WRAP_UP_OUTPUT));
-        }
+        onStep(
+          stepResult(
+            agentStep,
+            draftHost
+              ? ANALYSE_OUTPUT
+              : { answer: script.answer ?? 'Brazil won.' },
+          ),
+        );
         hostMessages.push({
           role: 'assistant',
           content: script.answer ?? 'Brazil won.',
@@ -269,8 +225,8 @@ function build(
         visualizations: [],
         panelItems: [],
         workflowRef: {
-          id: 'answer-business-question',
-          name: 'Answer a Business Question',
+          id: 'orchestrated-answer-michael',
+          name: 'Answer a Business Question (Avery + Michael)',
           kind: 'code',
           deleted: false,
         },
@@ -532,13 +488,13 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
     ],
   ])('Insights Analyst refuses %p with %p', async (body, message) => {
     ctx = build();
-    await refuse('answer-business-question', body, message);
+    await refuse('orchestrated-answer-michael', body, message);
   });
 
   it('refuses the whole input at once: every error in field order, then the context, nothing stored', async () => {
     ctx = build();
     const refusal = await ctx.service
-      .prepare('answer-business-question', {
+      .prepare('orchestrated-answer-michael', {
         input: { question: ' \n ', datasets: [] },
         context: { fromRunId: 'nope' },
       })
@@ -561,7 +517,7 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
   it('refuses a question over 4000 characters', async () => {
     ctx = build();
     await refuse(
-      'answer-business-question',
+      'orchestrated-answer-michael',
       { input: { question: 'x'.repeat(4001), datasets: ['Claims'] } },
       'Question must be at most 4000 characters',
     );
@@ -583,6 +539,9 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
       `agent:${live.id}`,
       'seq-text-demo',
       'deep-analysis',
+      // Removed with M18: a past chat keeps the id, nothing runs it.
+      'answer-business-question',
+      'orchestrated-answer',
       'agent:rfp',
       'nope',
       'agent:sql-fixer',
@@ -610,10 +569,34 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
     await refuse('x', { input: {} }, 'Workflow "x" can\'t run on an input');
   });
 
+  it.each([
+    ['orchestrated-answer-michael', { askStep: 'write-answer' }],
+    ['orchestrated-answer-michael', { fromRunId: 'gone', askStep: 'analyse' }],
+    ['data-readiness-assessment', { askStep: 'explain-report' }],
+  ])(
+    "refuses to ask one agent alone on %s (%p): no workflow takes it since Answer a Business Question's removal",
+    async (id, context) => {
+      ctx = build();
+      await refuse(
+        id,
+        {
+          input: {
+            question: 'Why?',
+            datasets: ['Claims'],
+            dataset: 'Claims',
+          },
+          context,
+        },
+        `Workflow "${id}" can't ask one agent`,
+      );
+      expect(await ctx.repository.list()).toEqual([]);
+    },
+  );
+
   it('refuses a context naming a run it does not hold', async () => {
     ctx = build();
     await refuse(
-      'answer-business-question',
+      'orchestrated-answer-michael',
       {
         input: { question: 'And 2018?', datasets: ['Claims'] },
         context: { fromRunId: 'gone' },
@@ -623,7 +606,7 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
   });
 });
 
-describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14)', () => {
+describe('WorkflowRunsService: an Answer a Business Question (Avery + Michael) run (agents.md 5.14, 5.23)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
 
@@ -639,21 +622,19 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { type: 'text', content: 'Brazil won.' },
       ],
     });
-    const { events, run } = await streamed(ctx, 'answer-business-question', {
+    const { events, run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: { ...ASK, careful: true, extra: 'ignored' },
     });
 
     expect(ctx.sessions.createRunHost).toHaveBeenCalledWith({
       runId: run.id,
-      workflowId: 'answer-business-question',
-      name: 'Answer a Business Question',
+      workflowId: 'orchestrated-answer-michael',
+      name: 'Answer a Business Question (Avery + Michael)',
       datasets: ['World Cup Core'],
-      // Build visual is on unless the run turns it off (workflows R41),
-      // and so is Approve each step (workflows R44).
-      buildVisual: true,
-      approveSteps: true,
+      // A first message starts Avery's conversation (workflows R45).
+      conversationId: run.id,
     });
-    // Careful is no field of v2's input: the turn runs without it.
+    // Careful is no field of the input: the turn runs without it.
     // The turn runs on its own signal: the no-progress watchdog's.
     expect(ctx.sessions.streamRunTurn).toHaveBeenCalledWith(
       `run-${run.id}`,
@@ -672,90 +653,56 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       ),
     ).toEqual([
       'run',
-      'receive-question:running',
-      'receive-question:success',
-      'load-catalog:running',
-      'load-catalog:success',
-      'plan:running',
-      'plan:success',
-      'analyse:running',
+      'orchestrate:running',
       'tool',
       'text',
-      'analyse:success',
-      'validate:running',
-      'validate:success',
-      'write-answer:running',
-      'write-answer:success',
-      'wrap-up:running',
-      'wrap-up:success',
-      // The steps the run never took end skipped: Read images (no image
-      // attached).
-      'read-images:skipped',
-      'build-visual:skipped',
+      'orchestrate:success',
       'done',
     ]);
     expect(events[0]).toEqual({
       type: 'run',
       runId: run.id,
-      workflowId: 'answer-business-question',
+      workflowId: 'orchestrated-answer-michael',
     });
     // Each step carries what it received and when it started.
     expect(events[1]).toEqual({
       type: 'step',
-      id: 'receive-question',
-      title: 'Receive question',
+      id: 'orchestrate',
+      title: 'Orchestrate',
       status: 'running',
-      input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
+      input: { question: 'Who won in 2002?' },
       startedAt: expect.any(String) as string,
     });
-    expect(events[10]).toEqual({
+    expect(events[4]).toMatchObject({
       type: 'step',
-      id: 'analyse',
-      title: 'Analyse',
+      id: 'orchestrate',
+      title: 'Orchestrate',
       status: 'success',
-      // A step inside the analysis loop carries its attempt (api.md 3.6).
-      attempt: 1,
-      input: { question: 'Who won in 2002?' },
-      output: ANALYSE_OUTPUT,
+      output: { answer: 'Brazil won.' },
       startedAt: expect.any(String) as string,
       endedAt: expect.any(String) as string,
       // The turn's `tool` event is the step's call; no result came for it.
       toolCalls: [{ tool: 'run_readonly_sql' }],
-      // Its story is told as it ends (ui.md 4.4b, Logs Story).
-      story: {
-        headline: 'Ran 1 query on the data.',
-        brief: '1 query',
-        stats: [{ value: '1', label: 'query' }],
-        source: 'step',
-      },
     });
     expect(events.at(-1)).toEqual({ type: 'done', run });
     expect(run).toMatchObject({
-      workflowId: 'answer-business-question',
-      workflowName: 'Answer a Business Question',
+      workflowId: 'orchestrated-answer-michael',
+      workflowName: 'Answer a Business Question (Avery + Michael)',
+      conversationId: run.id,
       input: {
         question: '  Who won in 2002?  ',
         datasets: ['World Cup Core'],
       },
       status: 'success',
       steps: [
-        { id: 'read-images', status: 'skipped' },
-        { id: 'receive-question', status: 'success' },
-        { id: 'load-catalog', status: 'success', output: { entities: 1 } },
-        { id: 'plan', status: 'success', output: PLAN_OUTPUT },
         {
-          id: 'analyse',
-          title: 'Analyse',
+          id: 'orchestrate',
+          title: 'Orchestrate',
           status: 'success',
-          attempt: 1,
-          output: ANALYSE_OUTPUT,
+          output: { answer: 'Brazil won.' },
         },
-        { id: 'validate', status: 'success', attempt: 1 },
-        { id: 'write-answer', status: 'success', output: ANSWER_OUTPUT },
-        { id: 'build-visual', status: 'skipped' },
-        { id: 'wrap-up', status: 'success', output: WRAP_UP_OUTPUT },
       ],
-      output: WRAP_UP_OUTPUT,
+      output: { answer: 'Brazil won.' },
       question: 'Who won in 2002?',
       answer: { role: 'assistant', content: 'Brazil won.' },
       datasets: ['World Cup Core'],
@@ -765,7 +712,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     expect(run.input).not.toHaveProperty('careful');
     expect(run.finishedAt).toBeDefined();
     // Every step that ran has its start and end times, the end never before
-    // the start; the skipped steps have none.
+    // the start.
     for (const step of run.steps.filter((s) => s.status !== 'skipped')) {
       expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
         Date.parse(step.startedAt!),
@@ -777,7 +724,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
   it("attaches the turn's tool calls to its running agent step, in the step events and the stored run", async () => {
     ctx = build(DATASETS, {
       steps: [
-        stepStart('analyse', {
+        stepStart('orchestrate', {
           question: 'Who won?',
           datasets: ['World Cup Core'],
         }),
@@ -809,7 +756,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         },
       ],
     });
-    const { events, run } = await streamed(ctx, 'answer-business-question', {
+    const { events, run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     const calls = [
@@ -827,7 +774,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       },
     ];
     const steps = events.filter(
-      (event) => event.type === 'step' && event.id === 'analyse',
+      (event) => event.type === 'step' && event.id === 'orchestrate',
     );
     expect(steps[0]).toMatchObject({
       status: 'running',
@@ -839,15 +786,11 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       input: { question: 'Who won?', datasets: ['World Cup Core'] },
       toolCalls: calls,
     });
-    const analyse = (doc: { steps: WorkflowRun['steps'] } | null) =>
-      doc?.steps.find((step) => step.id === 'analyse');
-    expect(analyse(run)?.toolCalls).toEqual(calls);
-    // A code step makes no calls.
-    expect(run.steps.find((s) => s.id === 'wrap-up')).not.toHaveProperty(
-      'toolCalls',
-    );
+    const orchestrate = (doc: { steps: WorkflowRun['steps'] } | null) =>
+      doc?.steps.find((step) => step.id === 'orchestrate');
+    expect(orchestrate(run)?.toolCalls).toEqual(calls);
     const stored = await ctx.repository.get(run.id);
-    expect(analyse(stored)).toMatchObject({
+    expect(orchestrate(stored)).toMatchObject({
       input: { question: 'Who won?', datasets: ['World Cup Core'] },
       startedAt: expect.any(String) as string,
       endedAt: expect.any(String) as string,
@@ -859,7 +802,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     ctx = build(DATASETS, {
       throws: new Error('The endpoint rejected the API key (401)'),
     });
-    const { events, run } = await streamed(ctx, 'answer-business-question', {
+    const { events, run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     expect(events.at(-1)).toEqual({
@@ -871,29 +814,14 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       status: 'failed',
       error: 'The endpoint rejected the API key (401)',
       steps: [
-        { id: 'read-images', status: 'skipped' },
-        { id: 'receive-question', status: 'success' },
-        { id: 'load-catalog', status: 'success' },
-        { id: 'plan', status: 'success' },
         {
-          id: 'analyse',
+          id: 'orchestrate',
           status: 'failed',
-          attempt: 1,
           error: 'The endpoint rejected the API key (401)',
         },
-        { id: 'validate', status: 'skipped' },
-        { id: 'write-answer', status: 'skipped' },
-        { id: 'build-visual', status: 'skipped' },
-        { id: 'wrap-up', status: 'skipped' },
       ],
     });
-    expect(stepTrail(events).slice(-5)).toEqual([
-      'analyse:failed',
-      'validate:skipped',
-      'write-answer:skipped',
-      'build-visual:skipped',
-      'wrap-up:skipped',
-    ]);
+    expect(stepTrail(events).slice(-1)).toEqual(['orchestrate:failed']);
     expect(run.answer).toBeUndefined();
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
   });
@@ -906,7 +834,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     });
     const { events, run } = await streamed(
       ctx,
-      'answer-business-question',
+      'orchestrated-answer-michael',
       { input: ASK },
       abort.signal,
     );
@@ -915,88 +843,43 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       events.map((event) =>
         event.type === 'step' ? `${event.id}:${event.status}` : event.type,
       ),
-    ).toEqual([
-      'run',
-      'receive-question:running',
-      'receive-question:success',
-      'load-catalog:running',
-      'load-catalog:success',
-      'plan:running',
-      'plan:success',
-      'analyse:running',
-      'text',
-    ]);
+    ).toEqual(['run', 'orchestrate:running', 'text']);
     expect(run.status).toBe('stopped');
-    // A step the stop kept from running says so (ui.md 4.4b, the node Story).
-    const notReached = {
-      headline: 'Did not run: the run was stopped before it got here.',
-      brief: 'Not reached',
-      source: 'generic',
-    };
-    expect(run.steps.slice(4)).toEqual([
-      {
-        id: 'analyse',
-        title: 'Analyse',
+    expect(run.steps).toEqual([
+      expect.objectContaining({
+        id: 'orchestrate',
+        title: 'Orchestrate',
         status: 'stopped',
-        attempt: 1,
         input: { question: 'Who won in 2002?' },
         startedAt: expect.any(String) as string,
         endedAt: expect.any(String) as string,
-        story: {
-          headline: 'You stopped the analysis before it ran a query.',
-          brief: 'No queries',
-          stats: [{ value: '0', label: 'queries' }],
-          source: 'step',
-        },
-      },
-      {
-        id: 'validate',
-        title: 'Validate',
-        status: 'skipped',
-        story: notReached,
-      },
-      {
-        id: 'write-answer',
-        title: 'Write answer',
-        status: 'skipped',
-        story: notReached,
-      },
-      {
-        id: 'build-visual',
-        title: 'Build visual',
-        status: 'skipped',
-        // On by default: a stopped run did not get there.
-        story: notReached,
-      },
-      { id: 'wrap-up', title: 'Wrap up', status: 'skipped', story: notReached },
+      }),
     ]);
     // The turn's own signal aborts with the request's.
     expect(ctx.sessions.streamRunTurn.mock.calls[0][3]?.aborted).toBe(true);
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
   });
 
-  it("gives a later run the earlier run's question and answer as context (plan 5.4)", async () => {
+  it("gives a later run the conversation so far as Avery's context, without copies of the earlier run's threads (workflows R45)", async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
-    const first = await streamed(ctx, 'answer-business-question', {
+    const first = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
-    const second = await streamed(ctx, 'answer-business-question', {
+    const second = await streamed(ctx, 'orchestrated-answer-michael', {
       input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
       context: { fromRunId: first.run.id },
     });
-    expect(ctx.sessions.createRunHost).toHaveBeenLastCalledWith({
+    const spec = ctx.sessions.createRunHost.mock.lastCall?.[0];
+    expect(spec).toEqual({
       runId: second.run.id,
-      workflowId: 'answer-business-question',
-      name: 'Answer a Business Question',
+      workflowId: 'orchestrated-answer-michael',
+      name: 'Answer a Business Question (Avery + Michael)',
       datasets: ['World Cup Core'],
-      buildVisual: true,
-      approveSteps: true,
-      context: {
-        question: 'Who won in 2002?',
-        answer: 'Brazil won in 2002.',
-      },
-      // Its agents go on from copies of the earlier run's threads.
-      continuesThreadsOf: `run-${first.run.id}`,
+      conversationId: first.run.id,
+      transcript: [
+        { role: 'user', content: 'Who won in 2002?' },
+        { role: 'assistant', content: 'Brazil won in 2002.' },
+      ],
     });
     expect(second.run.context).toEqual({ fromRunId: first.run.id });
     // The answer is this run's, never the context's.
@@ -1028,10 +911,10 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         },
       ],
     });
-    const first = await streamed(ctx, 'answer-business-question', {
+    const first = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
-    await streamed(ctx, 'answer-business-question', {
+    await streamed(ctx, 'orchestrated-answer-michael', {
       input: { question: 'Only Italy', datasets: ['World Cup Core'] },
       context: { fromRunId: first.run.id },
     });
@@ -1054,7 +937,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
 
   it('rates the stored answer of a run (api.md 128)', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
-    const first = await streamed(ctx, 'answer-business-question', {
+    const first = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
 
@@ -1075,7 +958,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     ctx = build(DATASETS, { abort });
     const stopped = await streamed(
       ctx,
-      'answer-business-question',
+      'orchestrated-answer-michael',
       { input: ASK },
       abort.signal,
     );
@@ -1084,7 +967,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     );
   });
 
-  it('a context run carries the earlier question and answer only, never its stages or a legacy RFP id', async () => {
+  it('a context run carries the conversation only, never its stages or a legacy RFP id', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
     const finishView = ctx.sessions.finishRunHost.getMockImplementation()!;
     ctx.sessions.finishRunHost.mockImplementationOnce(async () => ({
@@ -1092,10 +975,10 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       rfpId: 'rfp-1',
       workflowState: { current: 2, done: [1], updatedAt: 't' },
     }));
-    const first = await streamed(ctx, 'answer-business-question', {
+    const first = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
-    await streamed(ctx, 'answer-business-question', {
+    await streamed(ctx, 'orchestrated-answer-michael', {
       input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
       context: { fromRunId: first.run.id },
     });
@@ -1103,7 +986,10 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     expect(spec).not.toHaveProperty('workflowState');
     expect(spec).not.toHaveProperty('rfpId');
     expect(spec).toMatchObject({
-      context: { question: 'Who won in 2002?', answer: 'Brazil won in 2002.' },
+      transcript: [
+        { role: 'user', content: 'Who won in 2002?' },
+        { role: 'assistant', content: 'Brazil won in 2002.' },
+      ],
     });
   });
 
@@ -1112,12 +998,12 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     ctx = build(DATASETS, { abort });
     const stopped = await streamed(
       ctx,
-      'answer-business-question',
+      'orchestrated-answer-michael',
       { input: ASK },
       abort.signal,
     );
     await expect(
-      ctx.service.prepare('answer-business-question', {
+      ctx.service.prepare('orchestrated-answer-michael', {
         input: ASK,
         context: { fromRunId: stopped.run.id },
       }),
@@ -1126,19 +1012,19 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
 
   it('POST /runs (118) answers the run as the stream ends it, and stores it', async () => {
     ctx = build();
-    const run = await ctx.service.run('answer-business-question', {
+    const run = await ctx.service.run('orchestrated-answer-michael', {
       input: ASK,
     });
     expect(run).toMatchObject({
-      workflowId: 'answer-business-question',
+      workflowId: 'orchestrated-answer-michael',
       status: 'success',
       answer: { content: 'Brazil won.' },
-      output: WRAP_UP_OUTPUT,
+      output: { answer: 'Brazil won.' },
     });
     await expect(ctx.service.get(run.id)).resolves.toEqual(run);
     // A refusal stores nothing.
     await expect(
-      ctx.service.run('answer-business-question', {}),
+      ctx.service.run('orchestrated-answer-michael', {}),
     ).rejects.toThrow('Question is required');
     expect(await ctx.repository.list()).toHaveLength(1);
   });
@@ -1146,7 +1032,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
   it('stores a run when it starts, as running, and step by step as it ends', async () => {
     ctx = build();
     const atStart: unknown[] = [];
-    const prepared = await ctx.service.prepare('answer-business-question', {
+    const prepared = await ctx.service.prepare('orchestrated-answer-michael', {
       input: ASK,
     });
     const run = await ctx.service.stream(prepared, (event) => {
@@ -1157,7 +1043,10 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     await new Promise((resolve) => setImmediate(resolve));
     expect(atStart[0]).toMatchObject({ id: run.id, status: 'running' });
     const stored = await ctx.repository.get(run.id);
-    expect(stored).toMatchObject({ status: 'success', output: WRAP_UP_OUTPUT });
+    expect(stored).toMatchObject({
+      status: 'success',
+      output: { answer: 'Brazil won.' },
+    });
     // Each stored step that ran keeps what it received and its times.
     for (const step of stored!.steps.filter((s) => s.status !== 'skipped')) {
       expect(step.input).toBeDefined();
@@ -1175,7 +1064,7 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
     const live = new LiveRuns();
     const runs = {
       prepare: jest.fn((id: string, body: { input?: { question?: string } }) =>
-        id !== 'answer-business-question'
+        id !== 'orchestrated-answer-michael'
           ? Promise.reject(new NotFoundException(`Workflow "${id}" not found`))
           : body.input?.question
             ? Promise.resolve({ id })
@@ -1188,7 +1077,7 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
         live.publish('r1', {
           type: 'run',
           runId: 'r1',
-          workflowId: 'answer-business-question',
+          workflowId: 'orchestrated-answer-michael',
         });
         live.publish('r1', { type: 'text', content: 'Hi' });
         live.publish('r1', { type: 'done', run });
@@ -1208,7 +1097,7 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
     try {
       const server = app.getHttpServer() as Parameters<typeof request>[0];
       await request(server)
-        .post('/workflows/answer-business-question/runs/stream')
+        .post('/workflows/orchestrated-answer-michael/runs/stream')
         .send({ input: {} })
         .expect(400)
         .expect(({ body }) =>
@@ -1225,7 +1114,7 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
         );
       expect(runs.launch).not.toHaveBeenCalled();
       const res = await request(server)
-        .post('/workflows/answer-business-question/runs/stream')
+        .post('/workflows/orchestrated-answer-michael/runs/stream')
         .send({ input: { question: 'Hi' } })
         .expect(200);
       expect(res.headers['content-type']).toBe(
@@ -1233,7 +1122,7 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
       );
       expect(res.text).toBe(
         [
-          'data: {"seq":1,"type":"run","runId":"r1","workflowId":"answer-business-question"}',
+          'data: {"seq":1,"type":"run","runId":"r1","workflowId":"orchestrated-answer-michael"}',
           'data: {"seq":2,"type":"text","content":"Hi"}',
           'data: {"seq":3,"type":"done","run":{"id":"r1","status":"success"}}',
         ]
@@ -1241,7 +1130,7 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
           .join(''),
       );
       expect(runs.prepare).toHaveBeenLastCalledWith(
-        'answer-business-question',
+        'orchestrated-answer-michael',
         {
           input: { question: 'Hi' },
         },
@@ -1249,70 +1138,6 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
     } finally {
       await app.close();
     }
-  });
-});
-
-describe('WorkflowRunsService: Build visual (agents.md 5.11, workflows R41)', () => {
-  let ctx: ReturnType<typeof build>;
-  afterEach(() => ctx.db.close());
-  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
-  const METADATA = {
-    id: 'v-1',
-    title: 'Wins per team',
-    description: '',
-    path: 'visuals/v-1',
-    sourceMessageAt: 't',
-    createdAt: 't',
-    currentVersion: 1,
-    versions: [],
-  };
-
-  it('logs the creation of the visual the step stored beside the answer', async () => {
-    ctx = build(DATASETS, {
-      visual: { visualId: 'v-1', title: 'Wins per team' },
-    });
-    ctx.sessions.finishRunHost.mockImplementationOnce(() =>
-      Promise.resolve({
-        id: 'host',
-        name: 'Insights Analyst',
-        datasets: ['World Cup Core'],
-        messages: [],
-        visualizations: [METADATA],
-        panelItems: [],
-      } as never),
-    );
-    const { run } = await streamed(ctx, 'answer-business-question', {
-      input: ASK,
-    });
-    expect(run.visualizations?.map((v) => v.id)).toEqual(['v-1']);
-    expect(run.events).toEqual([
-      expect.objectContaining({
-        role: 'assistant',
-        content: 'Created interactive visual "Wins per team" (v1).',
-        visual: {
-          visualId: 'v-1',
-          version: 1,
-          title: 'Wins per team',
-          action: 'created',
-        },
-      }),
-    ]);
-  });
-
-  it('logs nothing when the step names a visual the host does not hold', async () => {
-    ctx = build(DATASETS, { visual: { visualId: 'gone', title: 'Gone' } });
-    const { run } = await streamed(ctx, 'answer-business-question', {
-      input: ASK,
-    });
-    expect(run.events ?? []).toEqual([]);
-  });
-
-  it('logs nothing when the run built no visual', async () => {
-    ctx = build();
-    const { run } = await streamed(ctx, 'answer-business-question', {
-      input: ASK,
-    });
-    expect(run.events ?? []).toEqual([]);
   });
 });
 
@@ -1330,13 +1155,13 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         atTurn = await ctx.repository.get(hostId.slice('run-'.length));
       },
     );
-    const { run } = await streamed(ctx, 'answer-business-question', {
+    const { run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     expect(atTurn).toMatchObject({
       id: run.id,
-      workflowId: 'answer-business-question',
-      workflowName: 'Answer a Business Question',
+      workflowId: 'orchestrated-answer-michael',
+      workflowName: 'Answer a Business Question (Avery + Michael)',
       input: ASK,
       status: 'running',
       steps: [],
@@ -1356,7 +1181,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         atTurn = await ctx.repository.get(hostId.slice('run-'.length));
       },
     );
-    const { run, events } = await streamed(ctx, 'answer-business-question', {
+    const { run, events } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     expect(atTurn).toMatchObject({ contractHash });
@@ -1378,7 +1203,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       'Invalid input: expected number, received string',
     );
     ctx = build(DATASETS, { throws: violation });
-    const failed = await streamed(ctx, 'answer-business-question', {
+    const failed = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     const message =
@@ -1386,17 +1211,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     await expect(ctx.repository.get(failed.run.id)).resolves.toMatchObject({
       status: 'failed',
       error: message,
-      steps: [
-        { id: 'read-images', status: 'skipped' },
-        { id: 'receive-question', status: 'success' },
-        { id: 'load-catalog', status: 'success' },
-        { id: 'plan', status: 'success' },
-        { id: 'analyse', status: 'failed', error: message },
-        { id: 'validate', status: 'skipped' },
-        { id: 'write-answer', status: 'skipped' },
-        { id: 'build-visual', status: 'skipped' },
-        { id: 'wrap-up', status: 'skipped' },
-      ],
+      steps: [{ id: 'orchestrate', status: 'failed', error: message }],
     });
   });
 
@@ -1440,24 +1255,14 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         },
       } as never),
     );
-    const { run, events } = await streamed(ctx, 'answer-business-question', {
+    const { run, events } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     const stored = await ctx.repository.get(run.id);
     expect(stored).toMatchObject({
       status: 'success',
-      steps: [
-        { id: 'read-images', status: 'skipped' },
-        { id: 'receive-question', status: 'success' },
-        { id: 'load-catalog', status: 'success' },
-        { id: 'plan', status: 'success' },
-        { id: 'analyse', status: 'success' },
-        { id: 'validate', status: 'success' },
-        { id: 'write-answer', status: 'success' },
-        { id: 'build-visual', status: 'skipped' },
-        { id: 'wrap-up', status: 'success' },
-      ],
-      output: WRAP_UP_OUTPUT,
+      steps: [{ id: 'orchestrate', status: 'success' }],
+      output: { answer: 'Brazil won.' },
       question: 'Who won in 2002?',
       answer: { role: 'assistant', content: 'Which client?', at: 't2' },
       datasets: ['Claims'],
@@ -1487,46 +1292,26 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
 
   it('stores a failed run with its error, and a stopped one as stopped', async () => {
     ctx = build(DATASETS, { throws: new Error('Model error') });
-    const failed = await streamed(ctx, 'answer-business-question', {
+    const failed = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     await expect(ctx.repository.get(failed.run.id)).resolves.toMatchObject({
       status: 'failed',
       error: 'Model error',
-      steps: [
-        { id: 'read-images', status: 'skipped' },
-        { id: 'receive-question', status: 'success' },
-        { id: 'load-catalog', status: 'success' },
-        { id: 'plan', status: 'success' },
-        { id: 'analyse', status: 'failed', error: 'Model error' },
-        { id: 'validate', status: 'skipped' },
-        { id: 'write-answer', status: 'skipped' },
-        { id: 'build-visual', status: 'skipped' },
-        { id: 'wrap-up', status: 'skipped' },
-      ],
+      steps: [{ id: 'orchestrate', status: 'failed', error: 'Model error' }],
     });
     ctx.db.close();
     const abort = new AbortController();
     ctx = build(DATASETS, { abort });
     const stopped = await streamed(
       ctx,
-      'answer-business-question',
+      'orchestrated-answer-michael',
       { input: ASK },
       abort.signal,
     );
     await expect(ctx.repository.get(stopped.run.id)).resolves.toMatchObject({
       status: 'stopped',
-      steps: [
-        { id: 'read-images', status: 'skipped' },
-        { id: 'receive-question', status: 'success' },
-        { id: 'load-catalog', status: 'success' },
-        { id: 'plan', status: 'success' },
-        { id: 'analyse', status: 'stopped' },
-        { id: 'validate', status: 'skipped' },
-        { id: 'write-answer', status: 'skipped' },
-        { id: 'build-visual', status: 'skipped' },
-        { id: 'wrap-up', status: 'skipped' },
-      ],
+      steps: [{ id: 'orchestrate', status: 'stopped' }],
     });
   });
 
@@ -1535,7 +1320,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     ctx.sessions.finishRunHost.mockImplementationOnce(() =>
       Promise.reject(new Error('disk full')),
     );
-    const prepared = await ctx.service.prepare('answer-business-question', {
+    const prepared = await ctx.service.prepare('orchestrated-answer-michael', {
       input: ASK,
     });
     let runId = '';
@@ -1552,11 +1337,11 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
 
   it('takes a stored run as context after a restart (plan 5.4)', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
-    const first = await streamed(ctx, 'answer-business-question', {
+    const first = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     const after = ctx.restarted();
-    const prepared = await after.prepare('answer-business-question', {
+    const prepared = await after.prepare('orchestrated-answer-michael', {
       input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
       context: { fromRunId: first.run.id },
     });
@@ -1564,6 +1349,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       fromRunId: first.run.id,
       question: 'Who won in 2002?',
       answer: 'Brazil won in 2002.',
+      // Avery's conversation, read back from the stored runs (R45).
+      conversationId: first.run.id,
+      transcript: [
+        { role: 'user', content: 'Who won in 2002?' },
+        { role: 'assistant', content: 'Brazil won in 2002.' },
+      ],
     });
   });
 
@@ -1776,7 +1567,9 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
 
   it('lists summaries newest first, filtered by workflow, titled from the question or the first text input', async () => {
     ctx = build();
-    const v2 = await streamed(ctx, 'answer-business-question', { input: ASK });
+    const v2 = await streamed(ctx, 'orchestrated-answer-michael', {
+      input: ASK,
+    });
     // Same-millisecond starts would tie: order by the stored startedAt.
     await ctx.repository.update(v2.run.id, {
       startedAt: '2026-11-11T12:00:00.000Z',
@@ -1787,13 +1580,15 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
     expect(await ctx.service.list()).toEqual([
       {
         id: v2.run.id,
-        workflowId: 'answer-business-question',
-        workflowName: 'Answer a Business Question',
+        workflowId: 'orchestrated-answer-michael',
+        workflowName: 'Answer a Business Question (Avery + Michael)',
         status: 'success',
         title: 'Who won in 2002?',
         startedAt: '2026-11-11T12:00:00.000Z',
         finishedAt: v2.run.finishedAt,
         attempts: 1,
+        // Avery's run starts its own conversation (workflows R45).
+        conversationId: v2.run.id,
       },
       {
         id: 'old-seq',
@@ -1815,7 +1610,9 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
       },
     ]);
     expect(
-      (await ctx.service.list('answer-business-question')).map((run) => run.id),
+      (await ctx.service.list('orchestrated-answer-michael')).map(
+        (run) => run.id,
+      ),
     ).toEqual([v2.run.id]);
     expect(
       (await ctx.service.list('seq-text-demo')).map((run) => run.id),
@@ -1824,7 +1621,7 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
 
   it('gets one run with its derived views, or 404 Run "<id>" not found', async () => {
     ctx = build();
-    const { run } = await streamed(ctx, 'answer-business-question', {
+    const { run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     await expect(ctx.service.get(run.id)).resolves.toEqual(run);
@@ -1894,16 +1691,25 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
       ctx = build();
       await ctx.repository.insert(DEEP_RUN);
       await ctx.repository.insert(SEQ_RUN);
-      const prepared = await ctx.service.prepare('answer-business-question', {
-        input: { question: 'Why?', datasets: ['World Cup Core'] },
-        context: { fromRunId: DEEP_RUN.id },
-      });
+      const prepared = await ctx.service.prepare(
+        'orchestrated-answer-michael',
+        {
+          input: { question: 'Why?', datasets: ['World Cup Core'] },
+          context: { fromRunId: DEEP_RUN.id },
+        },
+      );
       expect(prepared.context).toEqual({
         fromRunId: DEEP_RUN.id,
         question: DEEP_RUN.question,
         answer: DEEP_RUN.answer!.content,
+        // Avery reads it as the conversation so far (workflows R45).
+        conversationId: DEEP_RUN.id,
+        transcript: [
+          { role: 'user', content: DEEP_RUN.question },
+          { role: 'assistant', content: DEEP_RUN.answer!.content },
+        ],
       });
-      const refusal = ctx.service.prepare('answer-business-question', {
+      const refusal = ctx.service.prepare('orchestrated-answer-michael', {
         input: { question: 'Why?', datasets: ['World Cup Core'] },
         context: { fromRunId: 'old-seq' },
       });
@@ -1962,7 +1768,7 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
 
   it('deletes a run with its workspace and memory thread; refuses a running one and an unknown one', async () => {
     ctx = build();
-    const { run } = await streamed(ctx, 'answer-business-question', {
+    const { run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     const said = {
@@ -2009,7 +1815,7 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
 
   it("serves a run's files through the session file services, given its run-backed host", async () => {
     ctx = build();
-    const { run } = await streamed(ctx, 'answer-business-question', {
+    const { run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     const host = expect.objectContaining({
@@ -2047,7 +1853,7 @@ describe('WorkflowRunsService: visual actions on a run (api.md 130-134; visuals 
 
   it('generates a visual from the answer: stores its metadata, panel item and a created card on the run', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won.' });
-    const { run } = await streamed(ctx, 'answer-business-question', {
+    const { run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
 
@@ -2092,7 +1898,7 @@ describe('WorkflowRunsService: visual actions on a run (api.md 130-134; visuals 
 
   it('tailors and reverts: each adds a card; refresh and repair add none and keep one visual entry', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won.' });
-    const { run } = await streamed(ctx, 'answer-business-question', {
+    const { run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     await ctx.service.generateVisualization(run.id);
@@ -2124,7 +1930,7 @@ describe('WorkflowRunsService: visual actions on a run (api.md 130-134; visuals 
 
   it('refuses a run that is still running, a code-only run, and an unknown run', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won.' });
-    const { run } = await streamed(ctx, 'answer-business-question', {
+    const { run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     await ctx.repository.update(run.id, { status: 'running' });
@@ -2155,7 +1961,7 @@ describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 1
   afterEach(() => ctx.db.close());
 
   const FIRST = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
-  const ORCHESTRATED = 'orchestrated-answer';
+  const ORCHESTRATED = 'orchestrated-answer-michael';
 
   /** A first message and a follow-up to it, both finished. */
   async function conversation() {
@@ -2173,8 +1979,8 @@ describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 1
     const { run } = await streamed(ctx, ORCHESTRATED, { input: FIRST });
     expect(run.conversationId).toBe(run.id);
     // Another workflow's run belongs to no conversation.
-    const other = await streamed(ctx, 'answer-business-question', {
-      input: FIRST,
+    const other = await streamed(ctx, 'data-readiness-assessment', {
+      input: { dataset: 'Claims' },
     });
     expect(other.run.conversationId).toBeUndefined();
   });
@@ -2783,7 +2589,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
 
   const launch = async () =>
     ctx.service.launch(
-      await ctx.service.prepare('answer-business-question', { input: ASK }),
+      await ctx.service.prepare('orchestrated-answer-michael', { input: ASK }),
     );
 
   it('keeps running when its follower leaves: the run ends success and a later follower replays it from seq 0', async () => {
@@ -2850,7 +2656,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
     await expect(ctx.service.checkLive('nope')).rejects.toThrow(
       'Run "nope" not found',
     );
-    const { run } = await streamed(ctx, 'answer-business-question', {
+    const { run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: ASK,
     });
     await expect(ctx.service.checkLive(run.id)).rejects.toThrow(
@@ -3056,7 +2862,7 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
     ctx = build();
     withImagesField();
     const second = png('second');
-    const { run } = await streamed(ctx, 'answer-business-question', {
+    const { run } = await streamed(ctx, 'orchestrated-answer-michael', {
       input: { ...ASK, images: [url(PNG), url(second)] },
     });
     expect(run.input.images).toEqual([
@@ -3081,7 +2887,7 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
   it('a run without images sends no files', async () => {
     ctx = build();
     withImagesField();
-    await streamed(ctx, 'answer-business-question', { input: ASK });
+    await streamed(ctx, 'orchestrated-answer-michael', { input: ASK });
     const spec = ctx.sessions.createRunHost.mock.lastCall?.[0];
     expect(spec).not.toHaveProperty('inputFiles');
     expect(spec).not.toHaveProperty('inputImages');
@@ -3090,7 +2896,7 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
   it('a follow-up turns earlier paths into their files and leaves new images alone', async () => {
     ctx = build();
     withImagesField();
-    const first = await streamed(ctx, 'answer-business-question', {
+    const first = await streamed(ctx, 'orchestrated-answer-michael', {
       input: { ...ASK, images: [url(PNG)] },
     });
     ctx.sessions.runHostImage.mockImplementation((_host, path) =>
@@ -3099,7 +2905,7 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
         : Promise.reject(new Error('gone')),
     );
     const fresh = png('fresh');
-    await streamed(ctx, 'answer-business-question', {
+    await streamed(ctx, 'orchestrated-answer-michael', {
       input: { ...ASK, images: ['inputs/images/1.png', url(fresh)] },
       context: { fromRunId: first.run.id },
     });
@@ -3117,11 +2923,11 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
   it('a follow-up naming a path the earlier run does not hold, or a missing file, is refused by the input check', async () => {
     ctx = build();
     withImagesField();
-    const first = await streamed(ctx, 'answer-business-question', {
+    const first = await streamed(ctx, 'orchestrated-answer-michael', {
       input: { ...ASK, images: [url(PNG)] },
     });
     await expect(
-      ctx.service.prepare('answer-business-question', {
+      ctx.service.prepare('orchestrated-answer-michael', {
         input: { ...ASK, images: ['inputs/images/1.png'] }, // file is gone
         context: { fromRunId: first.run.id },
       }),
@@ -3136,7 +2942,7 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
       () => new Promise<undefined>(() => undefined),
     );
     const id = await ctx.service.launch(
-      await ctx.service.prepare('answer-business-question', {
+      await ctx.service.prepare('orchestrated-answer-michael', {
         input: { ...ASK, images: [url(PNG)] },
       }),
     );
@@ -3172,7 +2978,7 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
     it('serves a path of the stored input, and answers 404 for any other', async () => {
       ctx = build();
       withImagesField();
-      const { run } = await streamed(ctx, 'answer-business-question', {
+      const { run } = await streamed(ctx, 'orchestrated-answer-michael', {
         input: { ...ASK, images: [url(PNG)] },
       });
       ctx.sessions.runHostImage.mockResolvedValue({
@@ -3207,206 +3013,13 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
     it('answers 404 when the file is gone', async () => {
       ctx = build();
       withImagesField();
-      const { run } = await streamed(ctx, 'answer-business-question', {
+      const { run } = await streamed(ctx, 'orchestrated-answer-michael', {
         input: { ...ASK, images: [url(PNG)] },
       });
       await expect(
         ctx.service.inputImage(run.id, 'inputs/images/1.png'),
       ).rejects.toThrow(`Run "${run.id}" has no image "inputs/images/1.png"`);
     });
-  });
-});
-
-describe('WorkflowRunsService: a follow-up that asks one agent (workflows R40; api.md 118; agents.md 5.21)', () => {
-  let ctx: ReturnType<typeof build>;
-  afterEach(() => ctx.db.close());
-
-  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
-  const DATA = [
-    {
-      tool: 'run_readonly_sql',
-      input: 'SELECT year, winner FROM wc.public.cups',
-      columns: ['year', 'winner'],
-      rows: [{ year: 2002, winner: 'Brazil' }],
-      rowCount: 1,
-      rationale: 'Every winner.',
-    },
-  ];
-
-  async function earlier() {
-    ctx = build(DATASETS, { answer: 'Brazil won in 2002.', data: DATA });
-    return (await streamed(ctx, 'answer-business-question', { input: ASK }))
-      .run;
-  }
-
-  it('runs Write answer alone on a host given the earlier answer, and stores the asked step', async () => {
-    const first = await earlier();
-    const second = await streamed(ctx, 'answer-business-question', {
-      input: { question: 'Shorter, please', datasets: ['World Cup Core'] },
-      context: { fromRunId: first.id, askStep: 'write-answer' },
-    });
-    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
-      ask?: {
-        step: string;
-        earlier?: { plan: unknown; records: { input?: string }[] };
-      };
-    };
-    expect(spec).toMatchObject({
-      runId: second.run.id,
-      workflowId: 'answer-business-question',
-      context: {
-        question: 'Who won in 2002?',
-        answer: 'Brazil won in 2002.',
-      },
-      continuesThreadsOf: `run-${first.id}`,
-    });
-    expect(spec.ask?.step).toBe('write-answer');
-    expect(spec.ask?.earlier?.plan).toEqual(PLAN_OUTPUT.plan);
-    expect(spec.ask?.earlier?.records.map((record) => record.input)).toEqual([
-      DATA[0].input,
-    ]);
-    expect(second.run.context).toEqual({
-      fromRunId: first.id,
-      askStep: 'write-answer',
-    });
-  });
-
-  it('asks the Analyst from copies of the run threads, with its step context block', async () => {
-    const first = await earlier();
-    const second = await streamed(ctx, 'answer-business-question', {
-      input: { question: 'Why Brazil?', datasets: ['World Cup Core'] },
-      context: { fromRunId: first.id, askStep: 'analyse' },
-    });
-    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as Record<
-      string,
-      unknown
-    >;
-    expect(spec).toMatchObject({
-      workflowId: 'answer-business-question',
-      ask: { step: 'analyse' },
-      continuesThreadsOf: `run-${first.id}`,
-    });
-    expect(spec['contextBlock']).toContain('step "Analyse" (analyse)');
-    expect(spec['agentKey']).toBeUndefined();
-    expect(
-      (second.run.context as { askStep?: string } | undefined)?.askStep,
-    ).toBe('analyse');
-  });
-
-  it.each([
-    [{ askStep: 'validate' }, 'Step "validate" has no agent to ask'],
-    [{ askStep: 'read-images' }, 'did not run in run'],
-    // Check data quality left the workflow.
-    [{ askStep: 'check-data-quality' }, 'has no agent to ask'],
-  ])('refuses %j before anything runs', async (extra, message) => {
-    const first = await earlier();
-    ctx.sessions.createRunHost.mockClear();
-    const refusal = ctx.service.prepare('answer-business-question', {
-      input: ASK,
-      context: { fromRunId: first.id, ...extra },
-    });
-    await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
-    await expect(refusal).rejects.toThrow(message);
-    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
-  });
-
-  it("asks Ryan alone for a new visual of the earlier answer's rows, and logs the visual it stored", async () => {
-    const script: TurnScript = { answer: 'Brazil won in 2002.', data: DATA };
-    ctx = build(DATASETS, script);
-    const first = (
-      await streamed(ctx, 'answer-business-question', { input: ASK })
-    ).run;
-    // The follow-up's turn: Build visual stores Ryan's new visual.
-    script.visual = { visualId: 'v-2', title: 'Winners by year' };
-    script.answer = `Here's a new visual of the earlier answer: "Winners by year".`;
-    const metadata = {
-      id: 'v-2',
-      title: 'Winners by year',
-      description: '',
-      path: 'visuals/v-2',
-      sourceMessageAt: 't',
-      createdAt: 't',
-      currentVersion: 1,
-      versions: [],
-    };
-    ctx.sessions.finishRunHost.mockImplementationOnce(() =>
-      Promise.resolve({
-        id: 'host',
-        name: 'Insights Analyst',
-        datasets: ['World Cup Core'],
-        messages: [],
-        visualizations: [metadata],
-        panelItems: [],
-      } as never),
-    );
-    const second = await streamed(ctx, 'answer-business-question', {
-      input: { question: 'As a line chart', datasets: ['World Cup Core'] },
-      context: { fromRunId: first.id, askStep: 'build-visual' },
-    });
-    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
-      ask?: {
-        step: string;
-        earlier?: {
-          question?: string;
-          answer?: string;
-          records: { input?: string }[];
-        };
-      };
-    };
-    expect(spec.ask?.step).toBe('build-visual');
-    expect(spec.ask?.earlier).toMatchObject({
-      question: 'Who won in 2002?',
-      answer: 'Brazil won in 2002.',
-    });
-    expect(spec.ask?.earlier?.records.map((record) => record.input)).toEqual([
-      DATA[0].input,
-    ]);
-    expect(second.run.context).toEqual({
-      fromRunId: first.id,
-      askStep: 'build-visual',
-    });
-    expect(second.run.events).toEqual([
-      expect.objectContaining({
-        role: 'assistant',
-        content: 'Created interactive visual "Winners by year" (v1).',
-        visual: {
-          visualId: 'v-2',
-          version: 1,
-          title: 'Winners by year',
-          action: 'created',
-        },
-      }),
-    ]);
-  });
-
-  it('refuses to ask Ryan when the earlier answer has no query rows to chart', async () => {
-    ctx = build(DATASETS, {
-      answer: 'No match was found.',
-      data: [{ ...DATA[0], rows: [], rowCount: 0 }],
-    });
-    const first = (
-      await streamed(ctx, 'answer-business-question', { input: ASK })
-    ).run;
-    ctx.sessions.createRunHost.mockClear();
-    const refusal = ctx.service.prepare('answer-business-question', {
-      input: ASK,
-      context: { fromRunId: first.id, askStep: 'build-visual' },
-    });
-    await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
-    await expect(refusal).rejects.toThrow(
-      'The earlier answer has no query rows to chart',
-    );
-    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
-  });
-
-  it('refuses an asked step with no earlier run', async () => {
-    ctx = build();
-    await expect(
-      ctx.service.prepare('answer-business-question', {
-        input: ASK,
-        context: { askStep: 'plan' },
-      }),
-    ).rejects.toThrow('Asking one agent needs an earlier run');
   });
 });
 
@@ -3429,8 +3042,26 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
 
   const launch = async () =>
     ctx.service.launch(
-      await ctx.service.prepare('answer-business-question', { input: ASK }),
+      await ctx.service.prepare('orchestrated-answer-michael', { input: ASK }),
     );
+
+  /** An Assess Data Readiness run: several steps before its agent step. */
+  const launchReadiness = async () =>
+    ctx.service.launch(
+      await ctx.service.prepare('data-readiness-assessment', {
+        input: { dataset: 'Claims' },
+      }),
+    );
+  /** The steps it reports before Explain report, which it starts. */
+  const READINESS_BEFORE: StepEvent[] = [
+    stepStart('resolve-dataset', { dataset: 'Claims' }),
+    stepResult('resolve-dataset', { dataset: 'Claims' }),
+    stepStart('profile-source', { dataset: 'Claims' }),
+    stepResult('profile-source', { entityCount: 1 }),
+    stepStart('score-readiness', { entityCount: 1 }),
+    stepResult('score-readiness', { overallScore: 84 }),
+    stepStart('explain-report', { overallScore: 84 }),
+  ];
 
   /** The stored run's steps as `<id>:<status>`. */
   const storedTrail = async (id: string) =>
@@ -3454,8 +3085,9 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     );
 
   /**
-   * The next turn reports the steps before Analyse and a tool call, waits
-   * for `next`, ends Analyse and starts Validate, then waits for `end`.
+   * The next turn (an Assess Data Readiness run's) reports the steps before
+   * Explain report and a tool call, waits for `next`, ends Explain report
+   * and starts Rows behind findings, then waits for `end`.
    */
   function stagedTurn() {
     let next!: () => void;
@@ -3464,11 +3096,11 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     const endGate = new Promise<void>((resolve) => (end = resolve));
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, emit, _signal, _careful, onStep) => {
-        for (const step of V2_STEPS_BEFORE) onStep(step);
+        for (const step of READINESS_BEFORE) onStep(step);
         emit(TOOL_FRAME);
         await nextGate;
-        onStep(stepResult('analyse', ANALYSE_OUTPUT));
-        onStep(stepStart('validate', ANALYSE_OUTPUT));
+        onStep(stepResult('explain-report', ANALYSE_OUTPUT));
+        onStep(stepStart('finding-rows', ANALYSE_OUTPUT));
         await endGate;
       },
     );
@@ -3479,19 +3111,19 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     ctx = build();
     const update = jest.spyOn(ctx.repository, 'update');
     const turn = stagedTurn();
-    const id = await launch();
+    const id = await launchReadiness();
     await settled();
     expect(await storedTrail(id)).toEqual([
-      'receive-question:success',
-      'load-catalog:success',
-      'plan:success',
-      'analyse:running',
+      'resolve-dataset:success',
+      'profile-source:success',
+      'score-readiness:success',
+      'explain-report:running',
     ]);
-    // Nine step changes, coalesced: one write in flight, one queued.
+    // Seven step changes, coalesced: one write in flight, one queued.
     expect(checkpoints(update)).toHaveLength(2);
     // The tool call alone wrote nothing.
-    const analyse = (await ctx.repository.get(id))?.steps.at(-1);
-    expect(analyse).not.toHaveProperty('toolCalls');
+    const explain = (await ctx.repository.get(id))?.steps.at(-1);
+    expect(explain).not.toHaveProperty('toolCalls');
     turn.next();
     await settled();
     // Two more step changes: one write, then the newer state.
@@ -3499,11 +3131,11 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     const steps = (await ctx.repository.get(id))?.steps ?? [];
     expect(steps.slice(-2)).toEqual([
       expect.objectContaining({
-        id: 'analyse',
+        id: 'explain-report',
         status: 'success',
         toolCalls: [{ tool: 'run_readonly_sql', input: 'select 1' }],
       }),
-      expect.objectContaining({ id: 'validate', status: 'running' }),
+      expect.objectContaining({ id: 'finding-rows', status: 'running' }),
     ]);
     turn.end();
     await ctx.service.live.whenEnded(id);
@@ -3554,15 +3186,15 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     expect(order).toEqual(['running', 'checkpoint', 'success']);
     const stored = await ctx.repository.get(id);
     expect(stored?.status).toBe('success');
-    expect(stored?.steps.find((step) => step.id === 'wrap-up')?.status).toBe(
-      'success',
-    );
+    expect(
+      stored?.steps.find((step) => step.id === 'orchestrate')?.status,
+    ).toBe('success');
   });
 
   it('after a restart a run cut off mid-way is queued again from scratch: its stored steps are dropped', async () => {
     ctx = build();
     stagedTurn();
-    const id = await launch();
+    const id = await launchReadiness();
     await until(async () => (await storedTrail(id)).length === 4);
     const fresh = ctx.restarted();
     await fresh.onModuleInit();
@@ -3577,12 +3209,11 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, _emit, _signal, _careful, onStep) => {
-        for (const step of V2_STEPS_BEFORE.slice(0, -3)) onStep(step);
-        onStep(stepStart('plan', { question: 'Who won in 2002?' }));
+        onStep(stepStart('orchestrate', { question: 'Who won in 2002?' }));
         onStep({
           type: 'workflow-step-suspended',
           payload: {
-            id: 'plan',
+            id: 'orchestrate',
             status: 'suspended',
             suspendPayload: { question: 'Which measure?' },
           },
@@ -3593,7 +3224,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     );
     const id = await launch();
     await until(
-      async () => (await storedTrail(id)).at(-1) === 'plan:suspended',
+      async () => (await storedTrail(id)).at(-1) === 'orchestrate:suspended',
     );
     expect((await ctx.repository.get(id))?.status).toBe('running');
     const fresh = ctx.restarted();
@@ -3608,19 +3239,18 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, _emit, _signal, _careful, onStep) => {
-        for (const step of V2_STEPS_BEFORE.slice(0, -3)) onStep(step);
-        onStep(stepStart('plan', { question: 'Who won in 2002?' }));
+        onStep(stepStart('orchestrate', { question: 'Who won in 2002?' }));
         onStep({
           type: 'workflow-step-suspended',
           payload: {
-            id: 'plan',
+            id: 'orchestrate',
             status: 'suspended',
             suspendPayload: { question: 'Which measure?' },
           },
         });
         await settled();
         return {
-          stepId: 'plan',
+          stepId: 'orchestrate',
           question: 'Which measure?',
           options: ['Goals', 'Wins'],
           resume: jest.fn(() => Promise.resolve(undefined)),
@@ -3636,7 +3266,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     const stored = await ctx.repository.get(id);
     expect(stored).toMatchObject({ status: 'failed', error: 'host lost' });
     expect(stored?.steps.at(-1)).toMatchObject({
-      id: 'plan',
+      id: 'orchestrate',
       status: 'failed',
       error: 'host lost',
     });
@@ -3651,7 +3281,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, _emit, _signal, _careful, onStep) => {
-        for (const step of V2_STEPS_BEFORE) onStep(step);
+        onStep(stepStart('orchestrate', { question: 'Who won in 2002?' }));
         await settled();
       },
     );
@@ -3663,12 +3293,9 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     const stored = await ctx.repository.get(id);
     expect(stored).toMatchObject({ status: 'failed', error: 'host lost' });
     expect(stored?.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
-      'receive-question:success',
-      'load-catalog:success',
-      'plan:success',
-      // The turn ended with Analyse unfinished, so the tracker closed it;
-      // the checkpoint had stored it running.
-      'analyse:stopped',
+      // The turn ended with Orchestrate unfinished, so the tracker closed
+      // it; the checkpoint had stored it running.
+      'orchestrate:stopped',
     ]);
   });
 });
@@ -3694,7 +3321,7 @@ describe('WorkflowRunsService: the line for a slot (api.md 119 queued, 138, 150)
   }
 
   const prepared = () =>
-    ctx.service.prepare('answer-business-question', { input: ASK });
+    ctx.service.prepare('orchestrated-answer-michael', { input: ASK });
   const launch = async () => ctx.service.launch(await prepared());
 
   /**
@@ -3889,12 +3516,12 @@ describe('WorkflowRunsService: the line for a slot (api.md 119 queued, 138, 150)
     buildCapped(8);
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, _emit, _signal, _careful, onStep) => {
-        for (const step of V2_STEPS_BEFORE) onStep(step);
+        onStep(stepStart('orchestrate', { question: 'Who won in 2002?' }));
         await new Promise<void>(() => undefined);
       },
     );
     const id = await launch();
-    await until(async () => (await ctx.repository.get(id))?.steps.length === 4);
+    await until(async () => (await ctx.repository.get(id))?.steps.length === 1);
     const before = (await ctx.repository.get(id))!;
     expect(before).toMatchObject({ status: 'running', attempts: 1 });
     const fresh = ctx.restarted();
@@ -3920,7 +3547,7 @@ describe('WorkflowRunsService: the line for a slot (api.md 119 queued, 138, 150)
       after.steps.every((step) => ['success', 'skipped'].includes(step.status)),
     ).toBe(true);
     expect(after.steps.at(-1)).toMatchObject({
-      id: 'wrap-up',
+      id: 'orchestrate',
       status: 'success',
     });
     expect(await ctx.repository.list()).toHaveLength(1);
@@ -4049,7 +3676,7 @@ function hangingRuns() {
       async (_hostId, question, emit, signal, _careful, onStep) => {
         handle.emit = emit;
         handle.signal = signal;
-        for (const step of V2_STEPS_BEFORE) onStep(step);
+        onStep(stepStart('orchestrate', { question: 'Who won in 2002?' }));
         emit({ type: 'text', content: 'Bra' });
         await Promise.race([
           released,
@@ -4061,7 +3688,9 @@ function hangingRuns() {
               ]
             : []),
         ]);
-        if (!signal?.aborted) onStep(stepResult('analyse', ANALYSE_OUTPUT));
+        if (!signal?.aborted) {
+          onStep(stepResult('orchestrate', { answer: 'Brazil won.' }));
+        }
         void question;
       },
     );
@@ -4094,7 +3723,9 @@ function hangingRuns() {
 
   const launch = async () =>
     ctx().service.launch(
-      await ctx().service.prepare('answer-business-question', { input: ASK }),
+      await ctx().service.prepare('orchestrated-answer-michael', {
+        input: ASK,
+      }),
     );
 
   /** Let pending promise work (sqlite writes, the drive's awaits) land. */
@@ -4135,7 +3766,9 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
     const stored = await t.ctx().repository.get(id);
     expect(stored).toMatchObject({ status: 'failed', error: STALLED });
     expect(stored?.finishedAt).toBeDefined();
-    expect(stored?.steps.find((step) => step.id === 'analyse')).toMatchObject({
+    expect(
+      stored?.steps.find((step) => step.id === 'orchestrate'),
+    ).toMatchObject({
       status: 'failed',
       error: STALLED,
     });
@@ -4266,7 +3899,7 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
     expect(events.at(-1)).toEqual({ type: 'error', content: STALLED });
 
     t.hangingTurn();
-    const answered = t.ctx().service.run('answer-business-question', {
+    const answered = t.ctx().service.run('orchestrated-answer-michael', {
       input: t.ASK,
     });
     await t.flush();
@@ -4349,10 +3982,7 @@ describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 am
     expect(run.status).toBe('stopped');
     expect(run.finishedAt).toBeDefined();
     expect(run.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
-      'receive-question:success',
-      'load-catalog:success',
-      'plan:success',
-      'analyse:stopped',
+      'orchestrate:stopped',
     ]);
     expect(watcher.got.at(-1)).toBe('done');
     expect(watcher.ended.value).toBe(true);

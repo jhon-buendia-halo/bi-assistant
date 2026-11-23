@@ -203,18 +203,10 @@ describe('AgentsService (built-in and user agents)', () => {
         'run_readonly_sql',
         'sample_rows',
       ]);
-      // Its turn workflow, for the Graph tab (api.md 34, R108).
-      expect(detail?.workflow?.id).toBe('answer-business-question');
+      // Its workflow, for the Graph tab (api.md 34, R108): Avery + Michael.
+      expect(detail?.workflow?.id).toBe('orchestrated-answer-michael');
       expect(detail?.workflow?.steps.map((step) => step.title)).toEqual([
-        'Read images',
-        'Receive question',
-        'Load catalog',
-        'Plan',
-        'Analyse',
-        'Validate',
-        'Write answer',
-        'Build visual',
-        'Wrap up',
+        'Orchestrate',
       ]);
       expect((await v2.service.get('assistant'))?.workflow).toBeUndefined();
       // Its built-in skills, on demand (agents.md 7.4).

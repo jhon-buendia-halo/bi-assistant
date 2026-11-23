@@ -31,10 +31,8 @@ import {
 import { builtinAgentPersona } from '../agent-personas';
 import { CHIEF_OF_STAFF_AGENT_KEY } from '../agent-constants';
 import {
+  AVERY_TEAM,
   ORCHESTRATOR_MAX_STEPS,
-  ORCHESTRATOR_TEAM,
-  ORCHESTRATOR_TOOL_NAMES,
-  orchestratorTeamOf,
 } from './orchestrated-answer-michael.steps';
 import type { WorkflowStepExit } from './workflow-contract';
 import { CODE_WORKFLOWS, stepAgentKey } from './workflow-catalog';
@@ -89,13 +87,13 @@ const STEP_AGENTS: Record<
     team?: readonly { tool: string; agent: string }[];
   }
 > = {
-  // Avery's Orchestrate step (agents.md 2.21, 5.22): her own tools, each but
-  // ask_clarification calling an agent of her team.
+  // Avery's Orchestrate step (agents.md 2.21, 5.23): her own tools, the
+  // team's each calling an agent of her team.
   [CHIEF_OF_STAFF_AGENT_KEY]: {
     name: 'Avery',
-    tools: ORCHESTRATOR_TOOL_NAMES,
+    tools: AVERY_TEAM.tools,
     maxSteps: ORCHESTRATOR_MAX_STEPS,
-    team: ORCHESTRATOR_TEAM,
+    team: AVERY_TEAM.team,
   },
   [INSIGHTS_ANALYST_AGENT_KEY]: {
     name: INSIGHTS_ANALYST_NAME,
@@ -169,9 +167,7 @@ export function agentWorkflow(agentKey: string): AgentWorkflow | undefined {
 
 /**
  * One code workflow's steps as api.md 34 and 117 show them, whichever
- * agent it is primary for (two workflows may share one: Answer a Business
- * Question and its orchestrated version, agents.md 5.22); undefined when
- * its agent has no step catalogue.
+ * agent it is primary for; undefined when its agent has no step catalogue.
  */
 export function codeWorkflowView(
   workflow: (typeof CODE_WORKFLOWS)[number],
@@ -198,7 +194,6 @@ export function codeWorkflowView(
               stepAgentKey(workflow, step.id),
               step,
               source.agent,
-              workflow.id,
             ),
           }
         : {}),
@@ -216,16 +211,11 @@ function stepAgent(
   key: string,
   step: { modelOnly?: true },
   primary: { name: string; tools: readonly string[]; maxSteps: number },
-  workflowId?: string,
 ): NonNullable<AgentWorkflowStep['agent']> {
   const persona = builtinAgentPersona(key);
-  const entry: (typeof STEP_AGENTS)[string] = Object.hasOwn(STEP_AGENTS, key)
+  const own: (typeof STEP_AGENTS)[string] = Object.hasOwn(STEP_AGENTS, key)
     ? STEP_AGENTS[key]
     : primary;
-  // An orchestrator's team and tools are her workflow's (agents.md 5.23).
-  const own = entry.team
-    ? { ...entry, ...orchestratorTeamOf(workflowId) }
-    : entry;
   return {
     key,
     name: persona?.name ?? own.name,

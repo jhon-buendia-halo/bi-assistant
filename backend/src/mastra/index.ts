@@ -29,9 +29,7 @@ import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
-import { askAgentWorkflow } from './workflows/ask-agent.workflow';
-import { answerBusinessQuestionWorkflow } from './workflows/answer-business-question.workflow';
-import { orchestratedAnswerWorkflow } from './workflows/orchestrated-answer-michael.workflow';
+import { orchestratedMichaelWorkflow } from './workflows/orchestrated-answer-michael.workflow';
 import { consumptionGapAnalysisWorkflow } from './workflows/consumption-gap-analysis.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 import { mapDashboardDataWorkflow } from './workflows/map-dashboard-data.workflow';
@@ -55,10 +53,11 @@ export const mastra = new Mastra({
     'assistant-eval-judge': evalJudgeAgent,
     'knowledge-bootstrap': knowledgeBootstrapAgent,
     'data-readiness': dataReadinessAgent,
-    // The agents of v2's Plan and Write answer steps (agents.md 2.11).
+    // Olivia and Jessica, the planner and the writer (agents.md 2.11): in the
+    // library, their model calls run by their evals.
     'analysis-planner': analysisPlannerAgent,
     'answer-writer': answerWriterAgent,
-    // Avery, the orchestrator of Answer a Business Question (orchestrated).
+    // Avery, the orchestrator of Answer a Business Question (Avery + Michael).
     'chief-of-staff': chiefOfStaffAgent,
     // Clara, Avery's teammate behind build_dashboard (plan bi-dashboard).
     'bi-analyst': biAnalystAgent,
@@ -79,17 +78,14 @@ export const mastra = new Mastra({
     // Review a Website's agent (agents.md 2.16, 5.19).
     'site-reviewer': siteReviewerAgent,
   },
-  // The turn workflows (agents.md 1.2, 5.1): `answer-business-question`, the one
-  // catalogue workflow (5.11, ADR-0034; api.md 118, 119), and `agent-turn`,
-  // the engine of a turn bound to an agent (draft runs, evals and stored
-  // sessions; 5.12, ADR-0040).
+  // The turn workflows (agents.md 1.2, 5.1): each catalogue workflow under
+  // its own id (5.12; api.md 118, 119), and `agent-turn`, the engine of a
+  // turn bound to an agent (draft runs, evals and stored sessions; 5.12,
+  // ADR-0040).
   workflows: {
     'agent-turn': agentTurnWorkflow,
-    // A follow-up that asks one agent of Answer a Business Question (5.21).
-    'ask-agent': askAgentWorkflow,
-    'answer-business-question': answerBusinessQuestionWorkflow,
-    // Answer a Business Question (orchestrated): a placeholder for now (5.22).
-    'orchestrated-answer': orchestratedAnswerWorkflow,
+    // Answer a Business Question (Avery + Michael) (5.23).
+    'orchestrated-answer-michael': orchestratedMichaelWorkflow,
     'data-readiness-assessment': dataReadinessAssessmentWorkflow,
     'recreate-dashboard': recreateDashboardWorkflow,
     'map-dashboard-data': mapDashboardDataWorkflow,
