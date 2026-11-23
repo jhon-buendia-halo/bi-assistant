@@ -679,7 +679,20 @@ export function exportSlides(doc: ExportDocument): SlideSpec[] {
       p.accent,
       { bold: true },
     ),
-    text(headline, 0.6, 0.7, 12, 0.8, 26, p.fgStrong, { bold: true }),
+    // A headline over one line at 26 pt (about 58 characters across 12 in)
+    // drops to 20 pt, so it never runs into what sits under it.
+    text(
+      headline,
+      0.6,
+      0.7,
+      12,
+      0.8,
+      headline.length > 58 ? 20 : 26,
+      p.fgStrong,
+      {
+        bold: true,
+      },
+    ),
   ];
 
   slides.push({

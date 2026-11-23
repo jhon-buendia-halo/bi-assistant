@@ -308,6 +308,34 @@ describe('the export document (agents.md 3.18)', () => {
     ).toBe(true);
   });
 
+  it('drops a headline too long for one line at 26 pt to 20 pt', () => {
+    const headlineSize = (headline: string): number | undefined => {
+      const slides = exportSlides(
+        exportDocument({
+          runs: RUNS,
+          content: {
+            ...CONTENT,
+            turns: CONTENT.turns.map((turn, k) =>
+              k === 0 ? { ...turn, headline } : turn,
+            ),
+          },
+          brand: 'halo',
+          dashboards: drawn(),
+        }),
+      );
+      const item = slides[2].items.find(
+        (i) => i.kind === 'text' && i.text === headline,
+      );
+      return item?.kind === 'text' ? item.size : undefined;
+    };
+    expect(headlineSize('Unas 12 métricas comparan los 11 productos')).toBe(26);
+    expect(
+      headlineSize(
+        'Los 38 clientes tienen de media 6,3 de 11 productos (58% de penetración)',
+      ),
+    ).toBe(20);
+  });
+
   it('reads an answer’s first markdown table and a statement’s tables', () => {
     expect(firstMarkdownTable(RUNS[0].answer.content)?.rows[0][0]).toBe(
       'Medical',
