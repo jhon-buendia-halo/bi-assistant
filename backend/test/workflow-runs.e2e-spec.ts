@@ -962,6 +962,40 @@ describe('Streamed runs of Answer a Business Question (Avery + Michael) (API)', 
     expect(run.error).toContain('The model refused the orchestrate call.');
   });
 
+  it("Michael's model failure fails Orchestrate too, naming him: the run is failed with no answer, not a success with an empty one", async () => {
+    // Avery briefs Michael as usual (averyAuto); his own model call fails.
+    stub.intercept = (req) =>
+      req.stream && !req.avery && req.step === undefined
+        ? { status: 400, message: 'The model refused the analysis call.' }
+        : undefined;
+    const res = await answer('Fail at Michael: how many matches?');
+    expect(res.status).toBe(200);
+    expect(stub.requests.some((req) => req.avery)).toBe(true);
+    const message =
+      'Michael (Insights Analyst) could not answer: The model refused the analysis call.';
+    expect(res.frames.at(-1)).toMatchObject({
+      type: 'error',
+      content: message,
+    });
+    const run = await http()
+      .get(`/workflow-runs/${res.frames[0].runId}`)
+      .expect(200)
+      .then(
+        ({ body }) =>
+          body as {
+            status: string;
+            error?: string;
+            answer?: unknown;
+            steps: { id: string; status: string; error?: string }[];
+          },
+      );
+    expect(run.status).toBe('failed');
+    expect(run.answer).toBeUndefined();
+    expect(run.steps.map(trail)).toEqual(['orchestrate:failed']);
+    expect(run.steps[0].error).toContain(message);
+    expect(run.error).toContain(message);
+  });
+
   it('closing the connection leaves the run running (ADR-0048); Stop (150) stops it with no answer to continue from', async () => {
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));

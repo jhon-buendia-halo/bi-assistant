@@ -14,6 +14,8 @@ import { RequestContext } from '@mastra/core/request-context';
 import { parseClarification } from '../../../mastra/tools/clarification.tool';
 import { CHIEF_OF_STAFF_AGENT_KEY } from '../../../mastra/agent-constants';
 import { runErrorMessage } from '../../../mastra/workflows/workflow-run';
+import { BUILTIN_AGENT_PERSONAS } from '../../../mastra/agent-personas';
+import { ModelTimeoutError } from '../../../mastra/workflows/model-call';
 import { analysisReview } from '../../../mastra/workflows/analysis.prompts';
 import {
   loadCatalog,
@@ -324,6 +326,19 @@ function findingsForAvery(findings: readonly ValidationFinding[]): string {
     : 'Every check passed.';
 }
 
+/**
+ * A model error of Michael's (agents.md 5.23): it fails Orchestrate, named
+ * as his, e.g. `Michael (Insights Analyst) could not answer: <message>`. A
+ * model timeout is thrown as it is (workflows R43).
+ */
+export function michaelFailure(error: unknown): Error {
+  if (error instanceof ModelTimeoutError) return error;
+  const { name, role } = BUILTIN_AGENT_PERSONAS['insights-analyst'];
+  return new Error(
+    `${name} (${role}) could not answer: ${runErrorMessage(error)}`,
+  );
+}
+
 /** The tools' runtime: each tool calls one member of the team. */
 export function orchestratorTools(
   deps: OrchestratorTurnDeps,
@@ -331,6 +346,11 @@ export function orchestratorTools(
   answered: AnsweredClarification | undefined,
   /** Michael's own words for Avery, which his team call hands back (ui.md 4.4b). */
   said?: (reply: string) => void,
+  /**
+   * Michael's model failed (not a Stop): the turn fails with it. His tool
+   * throws it as well, so no caller reads it as an answer.
+   */
+  failed?: (error: Error) => void,
 ): OrchestratorToolsRuntime {
   const { state, team } = deps;
   const earlier = conversationQueriesBlock(deps.earlierQueries);
@@ -353,17 +373,32 @@ export function orchestratorTools(
     const { catalog, columns } = await catalogOf();
     const current = (state.plan ??= briefPlan(question));
     state.attempts += 1;
-    const attempt: AnalyseAttempt = await team.analyse({
-      question,
-      catalog,
-      catalogBlock: planCatalogBlock(catalog, columns, { question }),
-      plan: current,
-      attempt: state.attempts,
-      planBlock: michaelAloneRequest(brief, earlier),
-      ...(answered ? { answered } : {}),
-      // No reference images reach Michael here: the run's input has none.
-      imageNotes: '',
-    });
+    // His model's error fails the turn: inside her tool it would only be a
+    // tool error she reads, and the run would end with no answer. A Stop is
+    // no failure (it answers stopped); a retry's error is no throw, its
+    // `retryError` keeps his first answer (5.11).
+    const fail = (error: unknown): Error => {
+      const named = michaelFailure(error);
+      failed?.(named);
+      return named;
+    };
+    let attempt: AnalyseAttempt;
+    try {
+      attempt = await team.analyse({
+        question,
+        catalog,
+        catalogBlock: planCatalogBlock(catalog, columns, { question }),
+        plan: current,
+        attempt: state.attempts,
+        planBlock: michaelAloneRequest(brief, earlier),
+        ...(answered ? { answered } : {}),
+        // No reference images reach Michael here: the run's input has none.
+        imageNotes: '',
+      });
+    } catch (error) {
+      if (deps.signal.aborted) throw error;
+      throw fail(error);
+    }
     if (attempt.clarification) {
       said?.(
         `Needs an answer before going on: ${attempt.clarification.question}`,
@@ -487,9 +522,19 @@ export async function runOrchestratorTurn(
   const requestContext = new RequestContext();
   requestContext.set(
     ORCHESTRATOR_TOOLS_RUNTIME_KEY,
-    orchestratorTools(deps, question, answered, (reply) => {
-      said = reply;
-    }),
+    orchestratorTools(
+      deps,
+      question,
+      answered,
+      (reply) => {
+        said = reply;
+      },
+      // Michael's model failed: her stream ends there, and the turn fails.
+      (error) => {
+        failure ??= error;
+        stop.abort();
+      },
+    ),
   );
   if (deps.orchestratorModel) {
     requestContext.set(STEP_MODEL_CONTEXT_KEY, deps.orchestratorModel);
