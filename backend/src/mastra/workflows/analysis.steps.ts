@@ -891,15 +891,5 @@ export function clarifyingQuestionOf(
   const raw = (payload ?? {}) as Record<string, unknown>;
   const question = text(raw['question']);
   if (!question) return undefined;
-  // An approval gate's outcome in words (workflows R44) is shown with it,
-  // and Build visual's names the visual it waits on.
-  const gate = raw['kind'] === 'review';
-  const review = gate ? text(raw['review']) : '';
-  const visualId = gate ? text(raw['visualId']) : '';
-  return {
-    question,
-    options: strings(raw['options']),
-    ...(review ? { review } : {}),
-    ...(visualId ? { visualId } : {}),
-  };
+  return { question, options: strings(raw['options']) };
 }

@@ -318,9 +318,7 @@ type TurnRunOutcome =
       stepId: string;
       question: string;
       options: string[];
-      review?: string;
-      visualId?: string;
-      resume?: (answer: string, images?: string[]) => Promise<TurnRunOutcome>;
+      resume?: (answer: string) => Promise<TurnRunOutcome>;
       discard: () => Promise<void>;
     };
 
@@ -1838,8 +1836,6 @@ export class TurnEngine {
             stepId: outcome.stepId,
             question: outcome.question,
             options: outcome.options,
-            ...(outcome.review ? { review: outcome.review } : {}),
-            ...(outcome.visualId ? { visualId: outcome.visualId } : {}),
             resume: async (answer: string, io: TurnResumeIo) => {
               emit = io.emit;
               abortSignal = io.abortSignal;
@@ -1852,7 +1848,7 @@ export class TurnEngine {
                 });
               let next: TurnRunOutcome;
               try {
-                next = await resumeRun(answer, io.images);
+                next = await resumeRun(answer);
               } finally {
                 await early.settle();
                 abortSignal?.removeEventListener('abort', forwardAbort);
@@ -2448,19 +2444,13 @@ export class TurnEngine {
           stepId,
           question: asked.question,
           options: asked.options,
-          ...(asked.review ? { review: asked.review } : {}),
-          ...(asked.visualId ? { visualId: asked.visualId } : {}),
           ...(resumeRun
             ? {
-                resume: (answer: string, images?: string[]) =>
+                resume: (answer: string) =>
                   drive(
                     resumeRun({
                       step: path,
-                      // Reference images only with a change to Ryan's visual.
-                      resumeData: {
-                        answer,
-                        ...(images?.length ? { images } : {}),
-                      },
+                      resumeData: { answer },
                       requestContext,
                     }),
                     true,

@@ -25,7 +25,6 @@ import {
 } from '../../mastra/workflows/workflow-catalog';
 import {
   inputFieldsWithUsage,
-  revisionImagesOf,
   validateWorkflowInput,
   withStoredImages,
   type InputImageFile,
@@ -251,11 +250,6 @@ interface HeldRun {
 export interface PreparedResume {
   held: HeldRun;
   answer: string;
-  /**
-   * Reference images sent with a change on Build visual's approval gate
-   * (workflows R44): written to the run's workspace before it resumes.
-   */
-  images: { path: string; data: Buffer }[];
 }
 
 /** A run whose request passed every check, ready to start (api.md 119). */
@@ -1054,24 +1048,11 @@ export class WorkflowRunsService
     }
     const request =
       body && typeof body === 'object'
-        ? (body as { stepId?: unknown; answer?: unknown; images?: unknown })
+        ? (body as { stepId?: unknown; answer?: unknown })
         : {};
     const answer =
       typeof request.answer === 'string' ? request.answer.trim() : '';
-    // Reference images go only with a change to Ryan's visual (workflows
-    // R44); they may stand for the words.
-    const takesImages = Boolean(run.waitingFor.visualId);
-    const sent = Array.isArray(request.images) && request.images.length > 0;
-    if (sent && !takesImages) {
-      throw new BadRequestException(
-        `Step "${run.waitingFor.stepId}" takes no images`,
-      );
-    }
-    const images = revisionImagesOf(request.images, Date.now());
-    if (!images.ok) throw new BadRequestException(images.error);
-    if (!answer && !images.images.length) {
-      throw new BadRequestException('Answer is required');
-    }
+    if (!answer) throw new BadRequestException('Answer is required');
     const stepId = typeof request.stepId === 'string' ? request.stepId : '';
     if (stepId !== run.waitingFor.stepId) {
       throw new BadRequestException(
@@ -1084,11 +1065,7 @@ export class WorkflowRunsService
       await this.expire(id, taken?.value);
       throw new GoneException(RUN_EXPIRED_ERROR);
     }
-    return {
-      held: taken.value,
-      answer,
-      images: images.images.map(({ path, data }) => ({ path, data })),
-    };
+    return { held: taken.value, answer };
   }
 
   /**
@@ -1121,21 +1098,12 @@ export class WorkflowRunsService
     emit: (event: RunStreamEvent) => void,
     abortSignal?: AbortSignal,
   ): Promise<WorkflowRun> {
-    const { held, answer, images } = prepared;
+    const { held, answer } = prepared;
     const { base, prepared: run } = held;
     await this.repository.update(base.id, {
       status: 'running',
       waitingFor: undefined,
     });
-    // The change's reference images go into the run's workspace, where Zoe
-    // reads them (workflows R44).
-    for (const image of images) {
-      await this.sessions.writeRunHostFile(
-        `${RUN_HOST_ID_PREFIX}${base.id}`,
-        image.path,
-        image.data,
-      );
-    }
     const live = liveEmit(emit, abortSignal);
     live({ type: 'run', runId: base.id, workflowId: run.workflow.id });
     const suspension = held.suspension;
@@ -1149,9 +1117,6 @@ export class WorkflowRunsService
             emit: io.emit,
             abortSignal: io.abortSignal,
             onStepEvent: io.onStepEvent,
-            ...(images.length
-              ? { images: images.map((image) => image.path) }
-              : {}),
           }),
     );
   }
@@ -1332,8 +1297,7 @@ export class WorkflowRunsService
       return run;
     }
     if (run.status === 'suspended' && run.waitingFor) {
-      const { stepId, title, question, options, review, visualId, expiresAt } =
-        run.waitingFor;
+      const { stepId, title, question, options, expiresAt } = run.waitingFor;
       live({
         type: 'input-required',
         runId: run.id,
@@ -1341,8 +1305,6 @@ export class WorkflowRunsService
         title,
         question,
         options,
-        ...(review ? { review } : {}),
-        ...(visualId ? { visualId } : {}),
         expiresAt,
       });
     }
@@ -2324,8 +2286,6 @@ export class WorkflowRunsService
         title: step?.title ?? suspension.stepId,
         question: suspension.question,
         options: suspension.options,
-        ...(suspension.review ? { review: suspension.review } : {}),
-        ...(suspension.visualId ? { visualId: suspension.visualId } : {}),
         since: since.toISOString(),
         expiresAt: new Date(expiresAt).toISOString(),
       },
@@ -2334,11 +2294,6 @@ export class WorkflowRunsService
       ...(view.agentKey ? { agentKey: view.agentKey } : {}),
       ...(view.agentId ? { agentId: view.agentId } : {}),
       ...(view.agentName ? { agentName: view.agentName } : {}),
-      // Ryan's visual is shown while the run waits on its approval gate
-      // (workflows R44): the run carries the host's visuals.
-      ...(suspension.visualId
-        ? { visualizations: view.visualizations ?? [] }
-        : {}),
       ...(view.workflowState ? { workflowState: view.workflowState } : {}),
     };
   }
