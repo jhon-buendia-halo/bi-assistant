@@ -63,7 +63,7 @@ import {
 } from './panel-items';
 import { applyWorkflowUpdate, workflowViewOf } from './workflow-update';
 import { workflowStepPhases } from './workflow-run-state';
-import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/answer-business-question.steps';
+import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/analysis.steps';
 import {
   ASSISTANT_WORKFLOW_NAME,
   parseWorkflowId,

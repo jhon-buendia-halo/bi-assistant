@@ -11,8 +11,8 @@ import type {
   analyseQuerySchema,
   planSchema,
   validationFindingSchema,
-} from './answer-business-question.schemas';
-import { flaggedQueries } from './answer-business-question.steps';
+} from './analysis.schemas';
+import { flaggedQueries } from './analysis.steps';
 import { coverageOf } from '../../modules/sessions/query-evidence/query-coverage';
 import { imageNotesBlock } from './read-images.steps';
 import {

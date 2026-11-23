@@ -35,7 +35,7 @@ jest.mock('../model-resolver', () => ({ resolveAgentModel: jest.fn() }));
 import type { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
 import { answerBusinessQuestionWorkflow } from '../workflows/answer-business-question.workflow';
-import type { AnalysisPlan } from '../workflows/answer-business-question.steps';
+import type { AnalysisPlan } from '../workflows/analysis.steps';
 import { EVAL_CASE_CONTEXT_KEY, evalDetailsOf } from './eval-details';
 import { endsOnClarifyingQuestion } from './insights-analyst-eval-checks';
 import {

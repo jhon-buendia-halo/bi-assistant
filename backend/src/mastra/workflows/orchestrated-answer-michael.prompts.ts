@@ -17,6 +17,8 @@
  *   bottom line. Adapted to a data team; its C-suite roles are not used.
  */
 
+import type { AnalysisPlan } from './analysis.steps';
+
 /** The first line: who Avery is. */
 export const ORCHESTRATOR_FIRST_LINE =
   'You are Avery, the Chief of Staff of a data team. You are the only person the user talks to: you decide who on the team works on their question, brief them, check what they bring back and hand the user one answer.';
@@ -103,4 +105,36 @@ export function withExportInstructions(instructions: string): string {
     return `${[...lines, EXPORT_TEAM_LINE, EXPORT_RULE].join('\n')}\n`;
   lines.splice(at, 0, EXPORT_TEAM_LINE);
   return `${[...lines, EXPORT_RULE].join('\n')}\n`;
+}
+
+/** Michael on his own (Avery + Michael): told he plans and writes the answer. */
+export const MICHAEL_ALONE_LINE =
+  'You work alone with Avery in this run: no one plans before you and no one writes after you. Plan the analysis yourself from her brief, and write your reply as the answer the user reads.';
+
+/** The plan Michael works from on his own: the user's question, nothing planned. */
+export function briefPlan(question: string): AnalysisPlan {
+  return {
+    question,
+    measures: [],
+    entities: [],
+    scope: '',
+    assumptions: [],
+    needsClarification: false,
+    clarification: null,
+  };
+}
+
+/**
+ * Michael's request on his own (agents.md 5.23), the block after the
+ * catalog's: Avery's brief, the line that says he plans and writes the
+ * answer, then the queries behind the last answer when there are some
+ * (`earlier`, '' when none).
+ */
+export function michaelAloneRequest(brief: string, earlier = ''): string {
+  return [
+    `Brief from Avery, the Chief of Staff: ${brief}`,
+    '',
+    MICHAEL_ALONE_LINE,
+    ...(earlier ? ['', earlier] : []),
+  ].join('\n');
 }

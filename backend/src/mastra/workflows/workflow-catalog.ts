@@ -39,7 +39,7 @@ import {
   ORCHESTRATED_MICHAEL_STEPS,
   ORCHESTRATED_MICHAEL_WORKFLOW_ID,
   ORCHESTRATED_MICHAEL_WORKFLOW_NAME,
-} from './orchestrated-answer.steps';
+} from './orchestrated-answer-michael.steps';
 import {
   CONSUMPTION_GAP_DESCRIPTION,
   CONSUMPTION_GAP_EDGES,
@@ -88,11 +88,11 @@ import {
   ANSWER_BUSINESS_QUESTION_STEPS,
   ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   ANSWER_BUSINESS_QUESTION_WORKFLOW_NAME,
-  type ContractStepEntry,
-} from './answer-business-question.steps';
+} from './analysis.steps';
 import {
   assertWorkflowContracts,
   contractHash,
+  type ContractStepEntry,
   type WorkflowEdge,
 } from './workflow-contract';
 import {

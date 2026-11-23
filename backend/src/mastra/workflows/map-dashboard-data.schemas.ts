@@ -16,10 +16,7 @@
  * only its previous step's output.
  */
 import { z } from 'zod';
-import {
-  catalogEntitySchema,
-  entityColumnsSchema,
-} from './answer-business-question.schemas';
+import { catalogEntitySchema, entityColumnsSchema } from './analysis.schemas';
 import {
   dashboardBlueprintSchema,
   dataMappingSchema,

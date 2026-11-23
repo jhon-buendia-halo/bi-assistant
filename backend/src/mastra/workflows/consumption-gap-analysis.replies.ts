@@ -7,7 +7,7 @@
  * (./consumption-gap.gaps.ts). No framework import beyond zod.
  */
 import { z } from 'zod';
-import { jsonObjectOf } from './answer-business-question.steps';
+import { jsonObjectOf } from './analysis.steps';
 import type {
   Requirement,
   RequirementField,

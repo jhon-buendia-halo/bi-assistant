@@ -30,13 +30,15 @@ import {
   DASHBOARD_MOCK_RUNTIME,
 } from './recreate-dashboard.runtime';
 import {
-  contractStepEntry,
   jsonObjectOf,
   type CatalogEntity,
-  type ContractStepEntry,
   type EntityColumns,
-} from './answer-business-question.steps';
-import type { WorkflowEdge } from './workflow-contract';
+} from './analysis.steps';
+import {
+  contractStepEntry,
+  type ContractStepEntry,
+  type WorkflowEdge,
+} from './workflow-contract';
 
 /** The workflow's registry key and id. */
 export const RECREATE_DASHBOARD_WORKFLOW_ID = 'recreate-dashboard';

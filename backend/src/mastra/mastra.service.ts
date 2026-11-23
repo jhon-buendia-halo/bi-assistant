@@ -12,10 +12,7 @@ import type { Workspace } from '@mastra/core/workspace';
 import type { RequestContext } from '@mastra/core/request-context';
 import { explainQueryWithModel } from './agents/query-explainer.agent';
 import { interpretResultWithModel } from './agents/result-explorer.agent';
-import {
-  planWithModel,
-  writeAnswerWithModel,
-} from './workflows/answer-business-question.agents';
+import { planWithModel, writeAnswerWithModel } from './workflows/step-agents';
 import {
   mapDataWithModel,
   readDashboardWithModel,

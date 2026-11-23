@@ -9,17 +9,6 @@
  * a past chat's turn and an eval run are not, so their steps, requests and
  * replies are exactly what they were.
  */
-import type { StepModel } from '../step-model';
-
-/**
- * The model and reasoning effort Answer a Business Question's step agents
- * run on (agents.md 1.3), when the saved model is served as a Claude model
- * (`servesClaude`); otherwise the saved model and effort, as every agent.
- */
-export const ANSWER_BUSINESS_QUESTION_MODEL: StepModel = {
-  model: 'claude-opus-5-5',
-  reasoningEffort: 'medium',
-};
 
 /** The option that approves an outcome on the approval gate. */
 export const APPROVE_OPTION = 'Approve';

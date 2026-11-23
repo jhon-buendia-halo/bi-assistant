@@ -1,5 +1,5 @@
 import type { Agent } from '@mastra/core/agent';
-import type * as StepAgents from '../workflows/answer-business-question.agents';
+import type * as StepAgents from '../workflows/step-agents';
 import type * as TurnWorkflow from '../workflows/answer-business-question.workflow';
 import {
   ANALYSE_RETRY_MAX_STEPS,
@@ -7,8 +7,8 @@ import {
   clarifyingQuestionOf,
   type ClarifyingQuestion,
   type AnswerBusinessQuestionRuntime,
-} from '../workflows/answer-business-question.steps';
-import { analyseSystemBlocks } from '../workflows/answer-business-question.prompts';
+} from '../workflows/analysis.steps';
+import { analyseSystemBlocks } from '../workflows/analysis.prompts';
 import { DATASETS_CONTEXT_KEY } from '../tools/dataset.tools';
 import { parseClarification } from '../tools/clarification.tool';
 import { analyseAttemptOf } from '../../modules/sessions/turn/turn-workflow';
@@ -72,7 +72,7 @@ function defaultParts(): WorkflowTargetParts {
   const { answerBusinessQuestionWorkflow } =
     require('../workflows/answer-business-question.workflow') as typeof TurnWorkflow;
   const { planWithModel, writeAnswerWithModel } =
-    require('../workflows/answer-business-question.agents') as typeof StepAgents;
+    require('../workflows/step-agents') as typeof StepAgents;
   /* eslint-enable @typescript-eslint/no-require-imports */
   return {
     workflow:

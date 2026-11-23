@@ -19,7 +19,7 @@ import {
   analysisReview,
   analysePlanBlock,
   planReview,
-} from '../../../mastra/workflows/answer-business-question.prompts';
+} from '../../../mastra/workflows/analysis.prompts';
 import {
   loadCatalog,
   planCatalogBlock,
@@ -32,15 +32,19 @@ import {
   type CatalogEntity,
   type EntityColumns,
   type ValidationFinding,
-} from '../../../mastra/workflows/answer-business-question.steps';
+} from '../../../mastra/workflows/analysis.steps';
 import {
   ORCHESTRATOR_MAX_STEPS,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   orchestratorTeamOf,
   teammateOfTool,
   type OrchestratorToolsRuntime,
-} from '../../../mastra/workflows/orchestrated-answer.steps';
+} from '../../../mastra/workflows/orchestrated-answer-michael.steps';
 import type { ReadImagesOutcome } from '../../../mastra/workflows/read-images.steps';
+import {
+  briefPlan,
+  michaelAloneRequest,
+} from '../../../mastra/workflows/orchestrated-answer-michael.prompts';
 import { BUILD_DASHBOARD_MAX_CALLS } from '../../../mastra/workflows/bi-dashboard.schemas';
 import {
   EXPORT_CONVERSATION_MAX_CALLS,
@@ -242,23 +246,6 @@ function toolResultText(result: unknown): string | undefined {
   return typeof text === 'string' ? text : undefined;
 }
 
-/** Michael on his own (Avery + Michael): told he plans and writes the answer. */
-export const MICHAEL_ALONE_LINE =
-  'You work alone with Avery in this run: no one plans before you and no one writes after you. Plan the analysis yourself from her brief, and write your reply as the answer the user reads.';
-
-/** The plan Michael works from on his own: the user's question, nothing planned. */
-function briefPlan(question: string): AnalysisPlan {
-  return {
-    question,
-    measures: [],
-    entities: [],
-    scope: '',
-    assumptions: [],
-    needsClarification: false,
-    clarification: null,
-  };
-}
-
 /** At most this many earlier queries, each SQL cut at this length, reach Michael. */
 const EARLIER_QUERIES_MAX = 8;
 const EARLIER_SQL_MAX = 1500;
@@ -423,12 +410,14 @@ export function orchestratorTools(
       catalogBlock: planCatalogBlock(catalog, columns, { question }),
       plan: current,
       attempt: state.attempts,
-      planBlock: [
-        ...(alone ? [] : [analysePlanBlock(current), '']),
-        `Brief from Avery, the Chief of Staff: ${brief}`,
-        ...(alone ? ['', MICHAEL_ALONE_LINE] : []),
-        ...(earlier ? ['', earlier] : []),
-      ].join('\n'),
+      planBlock: alone
+        ? michaelAloneRequest(brief, earlier)
+        : [
+            analysePlanBlock(current),
+            '',
+            `Brief from Avery, the Chief of Staff: ${brief}`,
+            ...(earlier ? ['', earlier] : []),
+          ].join('\n'),
       ...(answered ? { answered } : {}),
       imageNotes: state.imageNotes,
     });

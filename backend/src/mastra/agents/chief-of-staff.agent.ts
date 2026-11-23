@@ -10,13 +10,13 @@ import {
   ORCHESTRATOR_INSTRUCTIONS,
   ORCHESTRATOR_MICHAEL_INSTRUCTIONS,
   withExportInstructions,
-} from '../workflows/orchestrated-answer.prompts';
+} from '../workflows/orchestrated-answer-michael.prompts';
 import { CONVERSATION_EXPORT_SKILL } from '../workflows/export-request';
 import {
   MICHAEL_ANSWER_TOOL,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   type OrchestratorToolsRuntime,
-} from '../workflows/orchestrated-answer.steps';
+} from '../workflows/orchestrated-answer-michael.steps';
 
 /** The run's tools runtime on a call's context, when it is a run's. */
 function runtimeOf(requestContext?: {

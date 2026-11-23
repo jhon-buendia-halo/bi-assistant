@@ -1,5 +1,4 @@
 import {
-  ANSWER_BUSINESS_QUESTION_MODEL,
   APPROVE_OPTION,
   CLARIFY_BLOCK,
   clarificationIn,
@@ -9,52 +8,9 @@ import {
   reviewOf,
   reviewQuestion,
 } from './answer-business-question.review';
-import { servesClaude, stepModelFrom } from '../step-model';
-import { analysisReview, planReview } from './answer-business-question.prompts';
+import { analysisReview, planReview } from './analysis.prompts';
 
 describe("Answer a Business Question's interactive runs (workflows R44)", () => {
-  it('runs its step agents on Opus 5.5 at medium effort', () => {
-    expect(ANSWER_BUSINESS_QUESTION_MODEL).toEqual({
-      model: 'claude-opus-5-5',
-      reasoningEffort: 'medium',
-    });
-  });
-
-  it('swaps the model only when the saved one is served as a Claude model', () => {
-    expect(servesClaude('anthropic/claude-sonnet-4-6')).toBe(true);
-    expect(
-      servesClaude({
-        kind: 'custom-anthropic',
-        id: 'anthropic/claude-sonnet-5-5',
-        baseUrl: 'http://127.0.0.1:8317/v1',
-      }),
-    ).toBe(true);
-    expect(
-      servesClaude({
-        id: 'custom/claude-sonnet-5-5',
-        apiKey: 'k',
-        url: 'http://127.0.0.1:8317/v1',
-      }),
-    ).toBe(true);
-    expect(servesClaude('openai/gpt-5.2')).toBe(false);
-    expect(
-      servesClaude({ id: 'lenai/mmc-gpt-52', apiKey: 'k', url: 'https://x' }),
-    ).toBe(false);
-    expect(servesClaude({ kind: 'copilot', id: 'copilot/claude-opus' })).toBe(
-      false,
-    );
-  });
-
-  it('reads the step model from a context, and nothing from one without it', () => {
-    const context = new Map<string, unknown>([
-      ['step-model', ANSWER_BUSINESS_QUESTION_MODEL],
-    ]);
-    expect(stepModelFrom(context)).toEqual(ANSWER_BUSINESS_QUESTION_MODEL);
-    expect(stepModelFrom(new Map())).toBeUndefined();
-    expect(stepModelFrom(undefined)).toBeUndefined();
-    expect(stepModelFrom({} as never)).toBeUndefined();
-  });
-
   it('approves on Approve and its usual words, and reads anything else as changes', () => {
     for (const answer of [
       'Approve',

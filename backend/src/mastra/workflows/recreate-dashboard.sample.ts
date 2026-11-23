@@ -3,10 +3,7 @@
  * dashboard and Map data reply for it, and the catalog it is mapped to.
  * Test data only; nothing at run time reads it.
  */
-import type {
-  CatalogEntity,
-  EntityColumns,
-} from './answer-business-question.steps';
+import type { CatalogEntity, EntityColumns } from './analysis.steps';
 
 /** Read dashboard's reply: two KPI tiles, a bar chart and a table. */
 export const SAMPLE_BLUEPRINT_REPLY = {

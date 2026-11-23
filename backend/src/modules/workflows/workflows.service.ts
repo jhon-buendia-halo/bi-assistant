@@ -28,9 +28,12 @@ import {
 } from '../agents/agents.service';
 import { runsOnPickedDatasets } from '../agents/builtin-sessions';
 import { resolveAgentModelConfig } from '../../mastra/model-resolver';
-import { servesClaude, type StepModel } from '../../mastra/step-model';
-import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/answer-business-question.steps';
-import { ANSWER_BUSINESS_QUESTION_MODEL } from '../../mastra/workflows/answer-business-question.review';
+import {
+  servesClaude,
+  TEAM_STEP_MODEL,
+  type StepModel,
+} from '../../mastra/step-model';
+import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/analysis.steps';
 
 /** One workflow of the catalogue, as `GET /workflows` lists it (api.md 116). */
 export interface WorkflowSummary {
@@ -202,7 +205,7 @@ export class WorkflowsService {
     if (id !== ANSWER_BUSINESS_QUESTION_WORKFLOW_ID) return undefined;
     try {
       return servesClaude(await resolveAgentModelConfig())
-        ? ANSWER_BUSINESS_QUESTION_MODEL
+        ? TEAM_STEP_MODEL
         : undefined;
     } catch {
       return undefined;

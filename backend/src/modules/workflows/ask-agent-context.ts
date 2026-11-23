@@ -6,7 +6,7 @@
 import {
   ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   chartableQueries,
-} from '../../mastra/workflows/answer-business-question.steps';
+} from '../../mastra/workflows/analysis.steps';
 import {
   isAskableStep,
   type AskableStepId,

@@ -15,7 +15,7 @@ import type {
   CatalogEntity,
   TurnCallsOutcome,
   ValidationFinding,
-} from './answer-business-question.steps';
+} from './analysis.steps';
 import type { ReadImagesOutcome } from './read-images.steps';
 
 /** The engine every single-agent follow-up runs on. */

@@ -33,7 +33,7 @@ import {
   wrapUp,
   type AnalyseQuery,
   type AnalysisPlan,
-} from './answer-business-question.steps';
+} from './analysis.steps';
 import { INSIGHTS_ANALYST_PROMPT } from '../agents/system-prompts';
 import {
   ANALYSE_VISUAL_LINE,
@@ -55,13 +55,13 @@ import {
   planMessages,
   visualCued,
   writeAnswerRequest,
-} from './answer-business-question.prompts';
+} from './analysis.prompts';
 import {
   analyseInputSchema,
   analyseOutcomeSchema,
   plannedQuestionSchema,
   validateOutcomeSchema,
-} from './answer-business-question.schemas';
+} from './analysis.schemas';
 
 const PLAN: AnalysisPlan = {
   question: 'Who scored the most goals in 2018?',

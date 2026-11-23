@@ -1,12 +1,12 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
-import { builtVisualSchema } from './answer-business-question.schemas';
+import { builtVisualSchema } from './analysis.schemas';
 import {
   chartableQueries,
   loadCatalog,
   planCatalogBlock,
   type BuiltVisual,
-} from './answer-business-question.steps';
+} from './analysis.steps';
 import {
   ASK_AGENT_RUNTIME_KEY,
   ASK_AGENT_WORKFLOW_ID,

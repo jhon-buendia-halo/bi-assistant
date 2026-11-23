@@ -23,13 +23,13 @@ jest.mock('../tool-services', () => ({
 
 import { RequestContext } from '@mastra/core/request-context';
 import type { z } from 'zod';
-import { ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS } from './answer-business-question.schemas';
+import { ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS } from './analysis.schemas';
 import {
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
   ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   planOf,
   type AnswerBusinessQuestionRuntime,
-} from './answer-business-question.steps';
+} from './analysis.steps';
 import { answerBusinessQuestionWorkflow } from './answer-business-question.workflow';
 import { DATA_READINESS_ASSESSMENT_STEP_SCHEMAS } from './data-readiness-assessment.schemas';
 import {
@@ -74,14 +74,14 @@ import {
   type ReviewWebsiteRuntime,
 } from './review-website.steps';
 import { reviewWebsiteWorkflow } from './review-website.workflow';
-import { ORCHESTRATED_ANSWER_STEP_SCHEMAS } from './orchestrated-answer.steps';
+import { ORCHESTRATED_ANSWER_STEP_SCHEMAS } from './orchestrated-answer-michael.steps';
 import {
   ORCHESTRATED_ANSWER_RUNTIME_KEY,
   ORCHESTRATED_ANSWER_WORKFLOW_ID,
   ORCHESTRATED_MICHAEL_WORKFLOW_ID,
   type OrchestratedAnswerRuntime,
-} from './orchestrated-answer.steps';
-import { orchestratedAnswerWorkflow } from './orchestrated-answer.workflow';
+} from './orchestrated-answer-michael.steps';
+import { orchestratedAnswerWorkflow } from './orchestrated-answer-michael.workflow';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 
 interface StubStream {
@@ -639,4 +639,14 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
       }).toMatchSnapshot();
     },
   );
+
+  // Answer a Business Question (Avery + Michael) keeps the contract it had
+  // before the two other Answer a Business Question workflows were removed.
+  it("orchestrated-answer-michael's contract hash is the base one", () => {
+    expect(
+      CODE_WORKFLOWS.find(
+        (source) => source.id === 'orchestrated-answer-michael',
+      )?.contractHash,
+    ).toBe('2217391f68ac');
+  });
 });

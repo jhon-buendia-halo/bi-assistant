@@ -9,15 +9,15 @@
  */
 import { z } from 'zod';
 import {
-  answerBusinessQuestionInputSchema,
+  questionInputSchema,
   clarificationAnswerSchema,
   clarifyingQuestionSchema,
-} from './answer-business-question.schemas';
+} from './analysis.schemas';
 import {
   contractStepEntry,
   type ContractStepEntry,
   type WorkflowEdge,
-} from './answer-business-question.steps';
+} from './workflow-contract';
 
 import {
   ANALYSIS_PLANNER_AGENT_KEY,
@@ -145,7 +145,7 @@ export const ORCHESTRATED_ANSWER_RUNTIME_KEY = 'orchestrated-answer-runtime';
 /** The step's input and output (agents.md 5.12 data contract). */
 export const ORCHESTRATED_ANSWER_STEP_SCHEMAS = {
   orchestrate: {
-    input: answerBusinessQuestionInputSchema,
+    input: questionInputSchema,
     output: z.object({
       answer: z.string().describe("The run's answer."),
     }),

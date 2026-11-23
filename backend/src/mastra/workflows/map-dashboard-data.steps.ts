@@ -9,12 +9,7 @@
  * from it.
  */
 import type { z } from 'zod';
-import {
-  contractStepEntry,
-  type CatalogEntity,
-  type ContractStepEntry,
-  type EntityColumns,
-} from './answer-business-question.steps';
+import type { CatalogEntity, EntityColumns } from './analysis.steps';
 import { readImagesEdges, readImagesStepEntry } from './read-images.steps';
 import { MAP_DASHBOARD_DATA_STEP_SCHEMAS } from './map-dashboard-data.schemas';
 import type { renderedDashboardSchema } from './map-dashboard-data.schemas';
@@ -24,7 +19,11 @@ import {
   type DataMapping,
   type MockBundle,
 } from './recreate-dashboard.steps';
-import type { WorkflowEdge } from './workflow-contract';
+import {
+  contractStepEntry,
+  type ContractStepEntry,
+  type WorkflowEdge,
+} from './workflow-contract';
 
 /** The workflow's registry key and id. */
 export const MAP_DASHBOARD_DATA_WORKFLOW_ID = 'map-dashboard-data';

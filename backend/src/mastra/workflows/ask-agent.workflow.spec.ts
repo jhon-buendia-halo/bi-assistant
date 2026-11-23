@@ -37,7 +37,7 @@ import {
   type AskAgentRuntime,
   type AskableStepId,
 } from './ask-agent.steps';
-import type { AnalysisPlan } from './answer-business-question.steps';
+import type { AnalysisPlan } from './analysis.steps';
 
 interface StubWorkflow {
   id: string;

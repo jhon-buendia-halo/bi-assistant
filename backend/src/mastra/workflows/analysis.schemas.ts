@@ -48,7 +48,7 @@ const resumableImageNotesSchema = imageNotesSchema.default('');
  * which only Read images reads (kept out of Receive question's input, so
  * `usedBy(images)` names Read images alone).
  */
-export const answerBusinessQuestionInputSchema = turnInputSchema.extend({
+export const questionInputSchema = turnInputSchema.extend({
   images: z
     .array(z.string())
     .optional()

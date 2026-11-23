@@ -13,7 +13,7 @@ import {
 import {
   EARLIER_BLOCK_CAP,
   EARLIER_BLOCK_HEADER,
-} from '../../../mastra/workflows/answer-business-question.prompts';
+} from '../../../mastra/workflows/analysis.prompts';
 
 const session = (partial: Partial<SessionDoc> = {}): SessionDoc => ({
   id: 's-1',

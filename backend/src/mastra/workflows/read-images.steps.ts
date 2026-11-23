@@ -30,15 +30,10 @@
  * - prompts: a model step adds `imageNotesBlock(imageNotes)` only when it
  *   is not `''`, so a run without images sends what it sent before.
  *
- * Nothing here imports `./answer-business-question.steps` at run time
- * (types only): that module imports this one, and a cycle would leave one
- * of the two half loaded.
+ * Nothing here imports `./analysis.steps` at run time: that module
+ * imports this one, and a cycle would leave one of the two half loaded.
  */
 import type { z } from 'zod';
-import type {
-  ContractStepEntry,
-  WorkflowStepExit,
-} from './answer-business-question.steps';
 import {
   IMAGE_KINDS,
   READ_IMAGES_STEP_SCHEMAS,
@@ -47,7 +42,9 @@ import {
 import {
   contractJsonSchema,
   schemaFieldNames,
+  type ContractStepEntry,
   type WorkflowEdge,
+  type WorkflowStepExit,
 } from './workflow-contract';
 
 /** The step's id, in every workflow that has it. */

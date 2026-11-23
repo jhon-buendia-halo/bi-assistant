@@ -80,15 +80,15 @@ import {
   type AnsweredClarification,
   type AnswerBusinessQuestionInput,
   type AnswerBusinessQuestionRuntime,
-} from '../../../mastra/workflows/answer-business-question.steps';
-import { analyseSystemBlocks } from '../../../mastra/workflows/answer-business-question.prompts';
+} from '../../../mastra/workflows/analysis.steps';
+import { analyseSystemBlocks } from '../../../mastra/workflows/analysis.prompts';
 import {
   ORCHESTRATED_ANSWER_RUNTIME_KEY,
   ORCHESTRATED_ANSWER_WORKFLOW_ID,
   ORCHESTRATOR_MODEL,
   orchestratorTeamOf,
   type OrchestratedAnswerRuntime,
-} from '../../../mastra/workflows/orchestrated-answer.steps';
+} from '../../../mastra/workflows/orchestrated-answer-michael.steps';
 import {
   currentDashboardBlock,
   orchestratorState,
@@ -128,10 +128,10 @@ import type {
   DashboardVersionData,
 } from '../../artifacts/entities/artifact.entity';
 import type { NewDashboardVersion } from '../../artifacts/artifacts.service';
-import { ANSWER_BUSINESS_QUESTION_MODEL } from '../../../mastra/workflows/answer-business-question.review';
 import { resolveAgentModelConfig } from '../../../mastra/model-resolver';
 import {
   STEP_MODEL_CONTEXT_KEY,
+  TEAM_STEP_MODEL,
   servesClaude,
   type StepModel,
 } from '../../../mastra/step-model';
@@ -158,7 +158,7 @@ import {
   type EarlierAnswerInput,
   type EarlierVisualInput,
 } from '../../../mastra/workflows/ask-agent.steps';
-import { planSchema } from '../../../mastra/workflows/answer-business-question.schemas';
+import { planSchema } from '../../../mastra/workflows/analysis.schemas';
 import type { LlmService } from '../../llm/llm.service';
 import { chatTurnError } from '../llm-error-message';
 import { sourceEntities } from '../visualization-document';
@@ -506,9 +506,7 @@ export class TurnEngine {
     const orchestrated = workflow.engineId === ORCHESTRATED_ANSWER_WORKFLOW_ID;
     const claude = servesClaude(await resolveAgentModelConfig());
     const stepModel =
-      (v2 || orchestrated) && claude
-        ? ANSWER_BUSINESS_QUESTION_MODEL
-        : undefined;
+      (v2 || orchestrated) && claude ? TEAM_STEP_MODEL : undefined;
     if (stepModel) {
       options.requestContext.set(STEP_MODEL_CONTEXT_KEY, stepModel);
       options.providerOptions = await turnProviderOptions(

@@ -6,7 +6,7 @@
  */
 import { answerBusinessQuestionStoryteller } from './answer-business-question.story';
 import { readImagesStory } from './read-images.story';
-import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from './answer-business-question.steps';
+import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from './analysis.steps';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 import type { JsonSchema } from './workflow-contract';
 import {

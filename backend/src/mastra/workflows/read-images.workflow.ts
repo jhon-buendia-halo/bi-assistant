@@ -34,7 +34,7 @@ import { engineInputSchema, withContract } from './workflow-contract';
 import {
   clarificationAnswerSchema,
   clarifyingQuestionSchema,
-} from './answer-business-question.schemas';
+} from './analysis.schemas';
 import {
   interactiveStep,
   reviewQuestion,

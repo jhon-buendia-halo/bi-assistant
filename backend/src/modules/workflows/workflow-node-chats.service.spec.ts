@@ -7,7 +7,7 @@ jest.mock('./workflows.service', () => ({ WorkflowsService: class {} }));
 import { NotFoundException } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
-import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/answer-business-question.steps';
+import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/analysis.steps';
 import type { SessionsService } from '../sessions/sessions.service';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';

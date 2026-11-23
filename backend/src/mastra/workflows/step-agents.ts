@@ -12,11 +12,8 @@ import type { MessageListInput } from '@mastra/core/agent/message-list';
 import type { RequestContext } from '@mastra/core/request-context';
 import { analysisPlannerAgent } from '../agents/analysis-planner.agent';
 import { answerWriterAgent } from '../agents/answer-writer.agent';
-import {
-  planMessages,
-  writeAnswerRequest,
-} from './answer-business-question.prompts';
-import { answerSchema, planSchema } from './answer-business-question.schemas';
+import { planMessages, writeAnswerRequest } from './analysis.prompts';
+import { answerSchema, planSchema } from './analysis.schemas';
 import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from './workflow-run';
 import { cutReply, guardedCall, ReplyCutError } from './model-call';
@@ -34,7 +31,7 @@ import {
   type BusinessAnswer,
   type AnalysisPlan,
   type ValidationFinding,
-} from './answer-business-question.steps';
+} from './analysis.steps';
 
 /** The agents of the two calls (agents.md 1.1): Olivia plans, Jessica writes. */
 const planAgent = analysisPlannerAgent;

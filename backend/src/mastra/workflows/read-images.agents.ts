@@ -12,7 +12,7 @@ import {
   replyText,
   stoppedBy,
   type StepModelOptions,
-} from './answer-business-question.agents';
+} from './step-agents';
 import { readImagesRequest } from './read-images.prompts';
 import { imageDescriptionsSchema } from './read-images.schemas';
 import {

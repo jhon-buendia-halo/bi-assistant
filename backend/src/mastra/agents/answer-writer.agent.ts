@@ -3,7 +3,7 @@ import { agentInstructions } from '../agent-prompt-overrides';
 import { ANSWER_WRITER_AGENT_KEY } from '../agent-constants';
 import { resolveAgentModel } from '../model-resolver';
 import { stepModelFrom } from '../step-model';
-import { WRITE_ANSWER_INSTRUCTIONS } from '../workflows/answer-business-question.prompts';
+import { WRITE_ANSWER_INSTRUCTIONS } from '../workflows/analysis.prompts';
 
 /**
  * Jessica, Insights Writer (agents.md 1.1, 5.11): the agent of the Write

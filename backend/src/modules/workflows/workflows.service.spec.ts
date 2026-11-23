@@ -22,7 +22,7 @@ import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
 import { setAgentModelResolver } from '../../mastra/model-resolver';
 import { agentWorkflow } from '../../mastra/workflows/agent-workflows';
-import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/answer-business-question.steps';
+import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/analysis.steps';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type { SkillDoc } from '../skills/entities/skill.entity';

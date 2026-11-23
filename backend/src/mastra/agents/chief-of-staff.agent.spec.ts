@@ -3,19 +3,23 @@
 jest.mock('@mastra/core/agent', () => ({ Agent: class {} }));
 jest.mock('../model-resolver', () => ({ resolveAgentModel: jest.fn() }));
 
+import { createHash } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
+import { askClarificationTool } from '../tools/clarification.tool';
+import { orchestratorTools } from '../tools/orchestrator.tools';
+import { contractJsonSchema } from '../workflows/workflow-contract';
 import {
   ORCHESTRATOR_TEAMS,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   type OrchestratorToolsRuntime,
-} from '../workflows/orchestrated-answer.steps';
+} from '../workflows/orchestrated-answer-michael.steps';
 import {
   EXPORT_RULE,
   EXPORT_TEAM_LINE,
   ORCHESTRATOR_INSTRUCTIONS,
   ORCHESTRATOR_MICHAEL_INSTRUCTIONS,
   withExportInstructions,
-} from '../workflows/orchestrated-answer.prompts';
+} from '../workflows/orchestrated-answer-michael.prompts';
 import {
   chiefOfStaffInstructions,
   chiefOfStaffSkills,
@@ -80,6 +84,75 @@ describe("Avery's export gate on her instructions and skills (agents.md 2.21, 7.
   it('adds both lines at the end of an edited prompt with no ask_clarification line', () => {
     expect(withExportInstructions('You are Avery.\n')).toBe(
       `You are Avery.\n${EXPORT_TEAM_LINE}\n${EXPORT_RULE}\n`,
+    );
+  });
+});
+
+/**
+ * What Avery receives in Answer a Business Question (Avery + Michael)
+ * (agents.md 5.23), pinned to its value before the two other Answer a
+ * Business Question workflows were removed: her job description, her
+ * skills and her tools (id, description, input schema), with every gate
+ * closed and each one open. A change here is a change of her prompt.
+ */
+describe('Avery + Michael: what Avery receives is pinned', () => {
+  const AVERY_MICHAEL_TOOLS = [
+    'answer_from_data',
+    'build_dashboard',
+    'export_conversation',
+    'ask_clarification',
+  ];
+
+  function received(overrides: Record<string, unknown>) {
+    const requestContext = new RequestContext();
+    requestContext.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, {
+      tools: AVERY_MICHAEL_TOOLS,
+      buildsDashboard: false,
+      exportsConversation: false,
+      ...overrides,
+    });
+    const tools = {
+      ...orchestratorTools(requestContext),
+      ask_clarification: askClarificationTool,
+    } as Record<
+      string,
+      { id: string; description: string; inputSchema?: unknown }
+    >;
+    return {
+      instructions: chiefOfStaffInstructions(requestContext),
+      skills: chiefOfStaffSkills(requestContext).map((skill) => skill.name),
+      tools: Object.entries(tools).map(([key, tool]) => ({
+        key,
+        id: tool.id,
+        description: tool.description,
+        input: tool.inputSchema
+          ? contractJsonSchema(tool.inputSchema as never, 'input')
+          : null,
+      })),
+    };
+  }
+
+  it('her instructions, skills and tools hash to the base value', () => {
+    const cases = [
+      received({}),
+      received({ buildsDashboard: true }),
+      received({ exportsConversation: true }),
+      received({ buildsDashboard: true, exportsConversation: true }),
+    ];
+    expect(cases[0].tools.map((tool) => tool.key)).toEqual([
+      'answer_from_data',
+      'ask_clarification',
+    ]);
+    expect(cases[3].tools.map((tool) => tool.key)).toEqual(AVERY_MICHAEL_TOOLS);
+    expect(cases[0].tools[0].input).toMatchObject({
+      properties: { brief: { type: 'string' } },
+    });
+    expect(cases[0].instructions).toContain('- answer_from_data: Michael');
+    const digest = createHash('sha256')
+      .update(JSON.stringify(cases))
+      .digest('hex');
+    expect(digest).toBe(
+      '1697a333be98798a376b5f88076f15f30f12525b4e0d31fb9df8950456f00f6e',
     );
   });
 });

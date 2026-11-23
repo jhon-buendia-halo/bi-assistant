@@ -103,7 +103,7 @@ import { SessionsService, type StreamEvent } from './sessions.service';
 import { streamStored } from './testing/stream-stored';
 import type { SessionDoc, SessionView } from './entities/session.entity';
 import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
-import { planOf } from '../../mastra/workflows/answer-business-question.steps';
+import { planOf } from '../../mastra/workflows/analysis.steps';
 
 type StubRun = {
   stream(args: { inputData: unknown; requestContext: unknown }): unknown;

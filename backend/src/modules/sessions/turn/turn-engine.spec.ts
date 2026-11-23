@@ -109,7 +109,7 @@ import { SessionsService, type StreamEvent } from '../sessions.service';
 import { streamStored } from '../testing/stream-stored';
 import type { SessionDoc } from '../entities/session.entity';
 import { answerBusinessQuestionWorkflow } from '../../../mastra/workflows/answer-business-question.workflow';
-import { planOf } from '../../../mastra/workflows/answer-business-question.steps';
+import { planOf } from '../../../mastra/workflows/analysis.steps';
 import { dataReadinessAssessmentWorkflow } from '../../../mastra/workflows/data-readiness-assessment.workflow';
 import { reviewWebsiteWorkflow } from '../../../mastra/workflows/review-website.workflow';
 import type { GroupedSite } from '../../../mastra/workflows/review-website.schemas';

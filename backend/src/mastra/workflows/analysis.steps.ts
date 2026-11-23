@@ -29,19 +29,19 @@ import {
   type catalogEntitySchema,
   type clarifyingQuestionSchema,
   type builtVisualSchema,
-  type answerBusinessQuestionInputSchema,
+  type questionInputSchema,
   type entityColumnsSchema,
   type turnSummarySchema,
   type validateOutcomeSchema,
   type validationFindingSchema,
-} from './answer-business-question.schemas';
+} from './analysis.schemas';
 import { readImagesEdges, readImagesStepEntry } from './read-images.steps';
 import type { Revision } from './answer-business-question.review';
 import {
-  contractJsonSchema,
-  schemaFieldNames,
-  type JsonSchema,
+  contractStepEntry,
+  type ContractStepEntry,
   type WorkflowEdge,
+  type WorkflowStepExit,
 } from './workflow-contract';
 
 export type { WorkflowEdge } from './workflow-contract';
@@ -56,74 +56,6 @@ export const ANSWER_BUSINESS_QUESTION_WORKFLOW_ID = 'answer-business-question';
  */
 export const ANSWER_BUSINESS_QUESTION_WORKFLOW_NAME =
   'Answer a Business Question';
-
-/** How a step can end other than by passing its output on. */
-export interface WorkflowStepExit {
-  /**
-   * The rest of the sentence the app writes about the exit, after `Fails
-   * if`, `Ends if` or `Waits`: a condition in lower case with no
-   * full stop (`the model returns an error`, `you stop it`); a `waits`
-   * exit brings its own connector (`if it asks you a question`).
-   */
-  label: string;
-  /**
-   * `fails`: the run stops with an error; `stops`: it ends early; `waits`:
-   * the run is suspended until the user answers (api.md 138).
-   */
-  outcome: 'fails' | 'stops' | 'waits';
-}
-
-/**
- * One step of a code-defined turn workflow, as the step catalogue describes
- * it (agents.md 5.11): the workflow bar reads `id` and `title`, the agent's
- * Graph tab all of it (agents-evals R108). `input` and `output` name the
- * fields of the step's schemas, in schema order: a catalogued workflow's
- * steps derive them from their declared schemas (`inputSchema`,
- * `outputSchema`; agents.md 5.12).
- */
-export interface WorkflowStepEntry {
-  id: string;
-  title: string;
-  kind: 'code' | 'agent';
-  summary: string;
-  input: readonly string[];
-  output: readonly string[];
-  exits: readonly WorkflowStepExit[];
-  /**
-   * An agent step that calls its agent's model without its tools (Plan,
-   * Write answer): its own tools (none) and its one model call.
-   */
-  modelOnly?: true;
-  /** The step's declared input, as JSON Schema (catalogued workflows). */
-  inputSchema?: JsonSchema;
-  /** The step's declared output, as JSON Schema (catalogued workflows). */
-  outputSchema?: JsonSchema;
-}
-
-/** A catalogued step: its field names and JSON Schemas derived from its Zod schemas. */
-export type ContractStepEntry = WorkflowStepEntry & {
-  inputSchema: JsonSchema;
-  outputSchema: JsonSchema;
-};
-
-/** A step's catalogue entry from its description and its declared schemas. */
-export function contractStepEntry(
-  step: Omit<
-    WorkflowStepEntry,
-    'input' | 'output' | 'inputSchema' | 'outputSchema'
-  >,
-  schemas: { input: z.ZodType; output: z.ZodType },
-): ContractStepEntry {
-  const inputSchema = contractJsonSchema(schemas.input, 'input');
-  const outputSchema = contractJsonSchema(schemas.output, 'output');
-  return {
-    ...step,
-    input: schemaFieldNames(inputSchema),
-    output: schemaFieldNames(outputSchema),
-    inputSchema,
-    outputSchema,
-  };
-}
 
 const SCHEMAS = ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS;
 
@@ -314,9 +246,7 @@ export const ANSWER_BUSINESS_QUESTION_RUNTIME_KEY =
  * The workflow's input: the question, the session's dataset names and,
  * only when the run has any, its reference images' stored paths.
  */
-export type AnswerBusinessQuestionInput = z.output<
-  typeof answerBusinessQuestionInputSchema
->;
+export type AnswerBusinessQuestionInput = z.output<typeof questionInputSchema>;
 
 /** One entity of the session's datasets, as the Load catalog step lists it. */
 export type CatalogEntity = z.output<typeof catalogEntitySchema>;

@@ -14,7 +14,7 @@ import {
   planCatalogBlock,
   type CatalogEntity,
   type EntityColumns,
-} from './answer-business-question.steps';
+} from './analysis.steps';
 import { imageNotesBlock } from './read-images.steps';
 import {
   widgetFields,

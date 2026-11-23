@@ -112,10 +112,10 @@ import {
 import {
   ANSWER_BUSINESS_QUESTION_STEPS,
   planOf,
-} from '../../mastra/workflows/answer-business-question.steps';
-import { ANALYSE_VISUAL_LINE } from '../../mastra/workflows/answer-business-question.prompts';
+} from '../../mastra/workflows/analysis.steps';
+import { ANALYSE_VISUAL_LINE } from '../../mastra/workflows/analysis.prompts';
 import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
-import { orchestratedAnswerWorkflow } from '../../mastra/workflows/orchestrated-answer.workflow';
+import { orchestratedAnswerWorkflow } from '../../mastra/workflows/orchestrated-answer-michael.workflow';
 import { askAgentWorkflow } from '../../mastra/workflows/ask-agent.workflow';
 import {
   DATA_READINESS_ASSESSMENT_STEPS,
@@ -146,7 +146,7 @@ import { streamStored } from './testing/stream-stored';
 import {
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   type OrchestratorToolsRuntime,
-} from '../../mastra/workflows/orchestrated-answer.steps';
+} from '../../mastra/workflows/orchestrated-answer-michael.steps';
 import {
   DASHBOARD_TOOLS_RUNTIME_KEY,
   type DashboardToolsRuntime,

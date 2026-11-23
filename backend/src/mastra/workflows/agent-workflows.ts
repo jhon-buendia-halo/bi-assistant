@@ -35,8 +35,8 @@ import {
   ORCHESTRATOR_TEAM,
   ORCHESTRATOR_TOOL_NAMES,
   orchestratorTeamOf,
-} from './orchestrated-answer.steps';
-import type { WorkflowStepExit } from './answer-business-question.steps';
+} from './orchestrated-answer-michael.steps';
+import type { WorkflowStepExit } from './workflow-contract';
 import { CODE_WORKFLOWS, stepAgentKey } from './workflow-catalog';
 
 export interface AgentWorkflowStep {

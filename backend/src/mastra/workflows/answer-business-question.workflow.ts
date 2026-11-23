@@ -9,16 +9,16 @@ import {
   analysePlanBlock,
   visualCued,
   earlierQueriesBlock,
-} from './answer-business-question.prompts';
+} from './analysis.prompts';
 import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
   analyseInputSchema,
-  answerBusinessQuestionInputSchema,
+  questionInputSchema,
   catalogedQuestionSchema,
   answerBusinessQuestionResultSchema,
   turnSummarySchema,
   answerPathInputSchema,
-} from './answer-business-question.schemas';
+} from './analysis.schemas';
 import {
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
   ANSWER_BUSINESS_QUESTION_STEPS,
@@ -34,7 +34,7 @@ import {
   validateAttempt,
   wrapUp,
   type AnswerBusinessQuestionRuntime,
-} from './answer-business-question.steps';
+} from './analysis.steps';
 import {
   READ_IMAGES_OUTCOME_ID,
   hasReferenceImages,
@@ -53,7 +53,7 @@ import {
   VISUAL_REVIEW_QUESTION,
   visualReview,
 } from './answer-business-question.review';
-import { analysisReview, planReview } from './answer-business-question.prompts';
+import { analysisReview, planReview } from './analysis.prompts';
 
 // The turn of Insights Analyst as a workflow defined in code
 // (ADR-0034; agents.md 5.11), on Mastra's control flow
@@ -731,11 +731,11 @@ export const answerBusinessQuestionWorkflow = createWorkflow({
   id: ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   description:
     'One turn of Insights Analyst: read the reference images when there are some, receive the question, load the catalog, plan (asking the user first when the question is ambiguous), analyse and validate (retried once), write the answer and build its visual.',
-  inputSchema: answerBusinessQuestionInputSchema,
+  inputSchema: questionInputSchema,
   outputSchema: answerBusinessQuestionResultSchema,
   options: {
     // The run's input is validated against
-    // `answerBusinessQuestionInputSchema` before the first step (the input
+    // `questionInputSchema` before the first step (the input
     // node has already checked it, api.md 118, 119).
     validateInputs: true,
     // The session document holds the turn's state. Only a suspended run is

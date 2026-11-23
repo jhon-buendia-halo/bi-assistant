@@ -6,8 +6,8 @@ import type {
   AnsweredClarification,
   CheckedAttempt,
   TurnCallsOutcome,
-} from '../../../mastra/workflows/answer-business-question.steps';
-import { earlierQueriesBlock } from '../../../mastra/workflows/answer-business-question.prompts';
+} from '../../../mastra/workflows/analysis.steps';
+import { earlierQueriesBlock } from '../../../mastra/workflows/analysis.prompts';
 import {
   AGENT_TURN_STEPS,
   AGENT_TURN_WORKFLOW_ID,

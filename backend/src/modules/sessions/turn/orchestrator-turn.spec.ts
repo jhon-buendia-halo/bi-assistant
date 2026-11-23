@@ -16,16 +16,19 @@ jest.mock('../../../mastra/tool-services', () => ({
   }),
 }));
 
+import { createHash } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { CHIEF_OF_STAFF_AGENT_KEY } from '../../../mastra/agent-constants';
+import { analyseSystemBlocks } from '../../../mastra/workflows/analysis.prompts';
+import { MICHAEL_ALONE_LINE } from '../../../mastra/workflows/orchestrated-answer-michael.prompts';
 import {
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   type OrchestratorToolsRuntime,
-} from '../../../mastra/workflows/orchestrated-answer.steps';
+} from '../../../mastra/workflows/orchestrated-answer-michael.steps';
 import type {
   AnalyseAttempt,
   AnalysisPlan,
-} from '../../../mastra/workflows/answer-business-question.steps';
+} from '../../../mastra/workflows/analysis.steps';
 import { orchestratorTools as avertTools } from '../../../mastra/tools/orchestrator.tools';
 import {
   blueprintFromDraft,
@@ -37,7 +40,6 @@ import type {
 } from '../../artifacts/entities/artifact.entity';
 import {
   currentDashboardBlock,
-  MICHAEL_ALONE_LINE,
   ORCHESTRATOR_HISTORY_MESSAGES,
   orchestratorState,
   orchestratorTools,
@@ -1039,6 +1041,130 @@ describe("Avery's export_conversation (agents.md 2.21, 3.18)", () => {
       await orchestratorTools(deps, 'q', undefined).exportConversation(CONTENT),
     ).toBe(
       'The conversation was not exported: Exporting needs Microsoft Edge or Google Chrome on this computer.',
+    );
+  });
+});
+
+/**
+ * What Michael and Avery receive in Answer a Business Question (Avery +
+ * Michael) (agents.md 5.23), pinned to its value before the two other
+ * Answer a Business Question workflows were removed: Michael's analyse
+ * request (its input and the system blocks it streams with) on a first
+ * call, a second one and a call resumed after a clarification; Avery's
+ * messages, her run facts with each gate, and what her tool tells her.
+ */
+describe('Avery + Michael: what Michael and Avery receive is pinned', () => {
+  const MICHAEL_TOOLS = [
+    'answer_from_data',
+    'build_dashboard',
+    'export_conversation',
+    'ask_clarification',
+  ];
+
+  async function received(
+    deps: Partial<OrchestratorTurnDeps> & {
+      members?: jest.Mocked<OrchestratorTeam>;
+    },
+    input: Parameters<typeof runOrchestratorTurn>[1],
+  ) {
+    const replies: string[] = [];
+    const { members: given, ...rest } = deps;
+    const {
+      deps: full,
+      members,
+      streams,
+    } = fixture(
+      async (tools) => {
+        replies.push(
+          await tools.answerFromData(
+            'How many matches were played in the 2022 World Cup? Count every match.',
+          ),
+        );
+        replies.push(
+          await tools.answerFromData('Count the group matches separately.'),
+        );
+        replies.push(await tools.answerFromData('A third call.'));
+        return [text('Want it by stage?')];
+      },
+      {
+        ...(given ? { team: given } : {}),
+        deps: {
+          tools: MICHAEL_TOOLS,
+          history: [
+            { role: 'user', content: 'Which teams played?' },
+            { role: 'assistant', content: '32 teams played.' },
+          ],
+          earlierQueries: [
+            {
+              ref: 'Q1',
+              sql: 'SELECT DISTINCT team FROM wc.public.matches',
+              rationale: 'The teams.',
+            },
+          ],
+          ...rest,
+        },
+      },
+    );
+    const done = await runOrchestratorTurn(full, input);
+    return {
+      requests: members.analyse.mock.calls.map(([call]) => ({
+        call,
+        system: analyseSystemBlocks({
+          catalogBlock: call.catalogBlock,
+          planBlock: call.planBlock,
+          imageNotes: call.imageNotes,
+        }),
+      })),
+      replies,
+      avery: streams.map((stream) => ({
+        messages: stream.messages,
+        context: stream.options['context'],
+        maxSteps: stream.options['maxSteps'],
+      })),
+      done,
+    };
+  }
+
+  it("Michael's analyse requests and Avery's messages hash to the base value", async () => {
+    const cases = [
+      await received({}, { question: 'How many matches?' }),
+      await received(
+        {},
+        {
+          question: 'How many matches?',
+          answered: {
+            question: 'Which tournament?',
+            options: ['2018', '2022'],
+            answer: '2022',
+          },
+        },
+      ),
+      await received(
+        {
+          buildsDashboard: true,
+          members: team({ buildDashboard: jest.fn() }),
+        },
+        { question: 'Build a dashboard of the matches' },
+      ),
+      await received(
+        {
+          exportsConversation: true,
+          earlierTurns: TURNS,
+          members: team({ exportConversation: jest.fn() }),
+        },
+        { question: 'Export the conversation' },
+      ),
+    ];
+    expect(cases[0].requests).toHaveLength(2);
+    expect(cases[0].requests[0].system[1]).toContain(MICHAEL_ALONE_LINE);
+    expect(JSON.stringify(cases[2].avery[0].context)).toContain(
+      'build_dashboard is available',
+    );
+    const digest = createHash('sha256')
+      .update(JSON.stringify(cases))
+      .digest('hex');
+    expect(digest).toBe(
+      'a8641df1f40ea6bc9b309d0184afa3ebfa930298aa416863e41899b7b8a0d8ea',
     );
   });
 });

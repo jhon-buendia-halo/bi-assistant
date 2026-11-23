@@ -37,7 +37,7 @@ import {
   type AnalyseAttempt,
   type AnalysisPlan,
   type AnswerBusinessQuestionRuntime,
-} from './answer-business-question.steps';
+} from './analysis.steps';
 import {
   READ_IMAGES_OUTCOME_ID,
   READ_IMAGES_RUNTIME_KEY,
