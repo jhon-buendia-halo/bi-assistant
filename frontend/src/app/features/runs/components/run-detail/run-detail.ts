@@ -1,5 +1,6 @@
 import {
   Component,
+  DestroyRef,
   computed,
   effect,
   inject,
@@ -35,6 +36,8 @@ import { RunsState } from '../../services/runs-state';
 import { RunVisual } from '../run-visual/run-visual';
 import { RunArtifactCard } from '../run-artifact-card/run-artifact-card';
 import { RunDashboardCard } from '../run-dashboard-card/run-dashboard-card';
+import { RunDashboardPanel } from '../run-dashboard-panel/run-dashboard-panel';
+import { RunDashboardState } from '../../services/run-dashboard-state';
 import { WorkflowRun } from '../../../workflows/models/workflow.model';
 
 /** One field of a run's input as `run-detail` shows it. */
@@ -76,6 +79,7 @@ export function runInputEntries(
     RunVisual,
     RunArtifactCard,
     RunDashboardCard,
+    RunDashboardPanel,
   ],
   templateUrl: './run-detail.html',
   providers: [
@@ -85,6 +89,8 @@ export function runInputEntries(
 export class RunDetail {
   protected readonly state = inject(RunsState);
   protected readonly visuals = inject(RunVisualsState);
+  /** The dashboard open beside the run (dashboard-panel). */
+  protected readonly dashboards = inject(RunDashboardState);
   private readonly runsApi = inject(WorkflowRunsApiService);
 
   /** A visual action stored the run: show it as it is now. */
@@ -114,6 +120,16 @@ export class RunDetail {
   });
 
   constructor() {
+    // A run opened with a dashboard shows it beside the run (dashboard-panel).
+    effect(() => {
+      const run = this.state.activeRun();
+      const dashboard =
+        run === null || run.status === 'running'
+          ? null
+          : (run.answer?.dashboard ?? null);
+      untracked(() => this.dashboards.follow(dashboard));
+    });
+    inject(DestroyRef).onDestroy(() => this.dashboards.reset());
     // Another run shown: the sheet closes; its evidence is built once, in the background.
     effect(() => {
       const run = this.state.activeRun();

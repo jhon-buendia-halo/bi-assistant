@@ -13,6 +13,7 @@ import { WorkflowDetail } from '../../models/workflow.model';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { FIXTURE_WORKFLOW } from '../workflow-node-dialog/workflow-node.testing';
 import { WORKFLOW_VIEW_STORAGE_KEY } from '../../services/workflow-view';
+import { RunDashboardState } from '../../../runs/services/run-dashboard-state';
 import { WorkflowDetailPage } from './workflow-detail';
 
 const STEP = (id: string, title: string) => ({
@@ -616,6 +617,145 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       open(THREE_STEPS);
       expect(pressed('workflow-view-business')).toBe('true');
       expect(q('workflow-canvas')).toBeNull();
+    });
+  });
+
+  describe('the dashboard beside the chat (dashboard-panel)', () => {
+    const DASHBOARD = {
+      artifactId: 'a-1',
+      version: 1,
+      title: 'Penetration by client',
+      action: 'created' as const,
+      widgetCount: 11,
+      filterCount: 5,
+      rowCount: 418,
+      saved: false,
+    };
+    const runWith = (id: string, version: number) =>
+      designer.run.set({
+        id,
+        workflowId: 'three-steps',
+        workflowName: 'Three steps',
+        input: { text: 'a' },
+        status: 'success',
+        steps: [],
+        datasets: [],
+        startedAt: '2026-11-22T10:00:00.000Z',
+        answer: {
+          role: 'assistant',
+          content: 'I built the dashboard.',
+          at: '2026-11-22T10:00:01.000Z',
+          dashboard: { ...DASHBOARD, version },
+        },
+      });
+    const loadDashboard = (version: number) => {
+      const req = http.expectOne((r) => r.url.endsWith('/artifacts/a-1'));
+      expect(req.request.params.get('version')).toBe(String(version));
+      req.flush({
+        id: 'a-1',
+        kind: 'dashboard',
+        name: 'Penetration by client',
+        description: '',
+        widgetCount: 11,
+        filterCount: 5,
+        hasImage: false,
+        createdAt: '2026-11-22T10:00:00.000Z',
+        updatedAt: '2026-11-22T10:00:00.000Z',
+        blueprint: {},
+        document: `<html>v${version}</html>`,
+        version,
+        status: 'draft',
+        savedVersions: [],
+        versions: [
+          {
+            version,
+            createdAt: '2026-11-22T10:00:00.000Z',
+            widgetCount: 11,
+            filterCount: 5,
+            rowCount: 418,
+            saved: false,
+          },
+        ],
+      });
+      fixture.detectChanges();
+    };
+
+    it('Business: a run that ends with a dashboard opens it beside the chat, never over it', () => {
+      localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'business');
+      open(THREE_STEPS);
+      expect(q('run-dashboard-panel')).toBeNull();
+      runWith('run-1', 1);
+      fixture.detectChanges();
+      loadDashboard(1);
+      const panel = el.querySelector('app-run-dashboard-panel') as HTMLElement;
+      const chatColumn = q('workflow-business-view')!;
+      // Siblings in one flex row: the chat column narrows, the panel follows it.
+      expect(panel.parentElement).toBe(chatColumn.parentElement);
+      expect(chatColumn.compareDocumentPosition(panel)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      expect(getComputedStyle(panel.parentElement!).display).toBe('flex');
+      expect(getComputedStyle(panel).position).toBe('static');
+      expect(chatColumn.classList).toContain('min-w-0');
+      expect(text('run-dashboard-panel-status')).toBe('Draft');
+      // At a 1200 px content width the panel takes 640 px and the chat the
+      // rest, side by side with no overlap.
+      Object.assign(el.style, { width: '1200px', height: '700px' });
+      const chat = chatColumn.getBoundingClientRect();
+      const side = panel.getBoundingClientRect();
+      expect(Math.round(side.width)).toBe(640);
+      expect(chat.width).toBeGreaterThanOrEqual(520);
+      expect(side.left).toBeGreaterThanOrEqual(chat.right - 0.5);
+      // Narrower: the chat keeps 520 px, the panel gives way.
+      el.style.width = '1000px';
+      expect(Math.round(panel.getBoundingClientRect().width)).toBe(480);
+      expect(
+        Math.round(chatColumn.getBoundingClientRect().width),
+      ).toBeGreaterThanOrEqual(520);
+    });
+
+    it('a later run with a newer version updates the panel and reopens it once closed', () => {
+      localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'business');
+      open(THREE_STEPS);
+      runWith('run-1', 1);
+      fixture.detectChanges();
+      loadDashboard(1);
+      q('run-dashboard-close')!.click();
+      fixture.detectChanges();
+      expect(q('run-dashboard-panel')).toBeNull();
+      // The same run shown again: the closed panel stays closed.
+      runWith('run-1', 1);
+      fixture.detectChanges();
+      expect(q('run-dashboard-panel')).toBeNull();
+      runWith('run-2', 2);
+      fixture.detectChanges();
+      loadDashboard(2);
+      expect(text('run-dashboard-panel-meta')).toContain('Version 2');
+    });
+
+    it('Builder: the panel docks on the right edge beside the canvas, after the Run panel', () => {
+      open(THREE_STEPS);
+      runWith('run-1', 1);
+      fixture.detectChanges();
+      loadDashboard(1);
+      const panel = el.querySelector('app-run-dashboard-panel') as HTMLElement;
+      const dock = q('workflow-run-dock')!;
+      const canvasColumn = el.querySelector('app-workflow-canvas')!
+        .parentElement as HTMLElement;
+      expect(panel.parentElement).toBe(dock.parentElement);
+      expect(panel.parentElement).toBe(canvasColumn.parentElement);
+      expect(canvasColumn.compareDocumentPosition(panel)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    });
+
+    it('leaving the page closes the panel', () => {
+      open(THREE_STEPS);
+      runWith('run-1', 1);
+      fixture.detectChanges();
+      loadDashboard(1);
+      fixture.destroy();
+      expect(TestBed.inject(RunDashboardState).shown()).toBeNull();
     });
   });
 });

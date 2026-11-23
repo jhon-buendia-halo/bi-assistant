@@ -20,7 +20,11 @@ import {
 import { saveBlob } from '../../../../shared/query-evidence/rows-csv';
 import { WorkflowDesigner } from '../../../workflows/services/workflow-designer.service';
 import { WorkflowsNavState } from '../../../workflows/services/workflows-nav-state';
-import { Artifact, dashboardZipName } from '../../models/artifact.model';
+import {
+  Artifact,
+  dashboardZipName,
+  isVersionSaved,
+} from '../../models/artifact.model';
 import { ArtifactsApiService } from '../../services/artifacts-api.service';
 import {
   artifactCountsLabel,
@@ -100,14 +104,18 @@ export class ArtifactDetail implements OnInit {
   );
 
   protected readonly downloading = signal(false);
-  protected readonly versionOptions = computed(() =>
-    [...(this.artifact()?.versions ?? [])]
+  /** Only the saved versions are offered: drafts stay in the chat (dashboard-panel). */
+  protected readonly versionOptions = computed(() => {
+    const artifact = this.artifact();
+    if (artifact === null) return [];
+    return [...(artifact.versions ?? [])]
+      .filter((v) => isVersionSaved(artifact, v.version))
       .sort((a, b) => b.version - a.version)
       .map((v) => ({
         version: v.version,
         label: `Version ${v.version} · ${formatVersionDate(v.createdAt)}`,
-      })),
-  );
+      }));
+  });
   /** The shown version's own record (its instruction, rows). */
   protected readonly versionInfo = computed(() => {
     const a = this.artifact();
@@ -121,6 +129,18 @@ export class ArtifactDetail implements OnInit {
   private load(version: number | undefined): void {
     this.api.get(this.artifactId(), version).subscribe({
       next: (artifact) => {
+        // Without a version the server answers the latest, which may be a
+        // draft: the page shows the latest saved one instead.
+        const saved = artifact.savedVersions ?? [];
+        if (
+          version === undefined &&
+          artifact.version !== undefined &&
+          saved.length > 0 &&
+          !isVersionSaved(artifact, artifact.version)
+        ) {
+          this.load(Math.max(...saved));
+          return;
+        }
         this.artifact.set(artifact);
         this.loading.set(false);
       },

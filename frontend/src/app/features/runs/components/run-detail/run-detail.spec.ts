@@ -5,6 +5,7 @@ import {
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { WorkflowRun } from '../../../workflows/models/workflow.model';
+import { RunDashboardState } from '../../services/run-dashboard-state';
 import { RunVisualsState } from '../../services/run-visuals-state';
 import { RunsState } from '../../services/runs-state';
 import { RunDetail, runInputEntries } from './run-detail';
@@ -155,6 +156,37 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       jasmine.objectContaining({ id: 'r1' }),
       jasmine.objectContaining({ visualId: 'vis-1', version: 1 }),
     );
+  });
+
+  it('a run opened with a dashboard shows it beside the run, not over it (dashboard-panel)', () => {
+    const el = mount({
+      ...RUN,
+      answer: {
+        ...RUN.answer!,
+        dashboard: {
+          artifactId: 'a-1',
+          version: 2,
+          title: 'Goals by team',
+          action: 'updated',
+          widgetCount: 3,
+          filterCount: 1,
+          rowCount: 32,
+          saved: false,
+        },
+      },
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const req = http.expectOne((r) => r.url.endsWith('/artifacts/a-1'));
+    expect(req.request.params.get('version')).toBe('2');
+    expect(TestBed.inject(RunDashboardState).shown()?.version).toBe(2);
+    const panel = el.querySelector('app-run-dashboard-panel') as HTMLElement;
+    const content = el.querySelector('[data-testid="run-detail"]')!;
+    expect(panel.parentElement).toBe(content.parentElement);
+    expect(content.compareDocumentPosition(panel)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(getComputedStyle(panel.parentElement!).flexDirection).toBe('row');
+    req.flush({});
   });
 
   it('turns an input into one entry per field', () => {

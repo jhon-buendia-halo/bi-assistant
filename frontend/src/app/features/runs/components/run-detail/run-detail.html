@@ -1,6 +1,7 @@
-<div class="relative flex min-h-0 flex-1 flex-col">
+<!-- The run, and the dashboard it built beside it (dashboard-panel) -->
+<div class="relative flex min-h-0 flex-1 flex-row">
   <div
-    class="min-h-0 flex-1 overflow-y-auto px-8 py-6"
+    class="min-h-0 min-w-0 flex-1 overflow-y-auto px-8 py-6"
     data-testid="run-detail"
   >
     <div class="mx-auto flex w-full max-w-[960px] flex-col gap-4">
@@ -220,6 +221,9 @@
       }
     </div>
   </div>
+  @if (dashboards.shown() !== null) {
+    <app-run-dashboard-panel />
+  }
   @if (openQuery(); as open) {
     <!-- The query inspector sheet: at the right of the page, never wider than 720 px. -->
     <div
