@@ -314,6 +314,7 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | `crossCheck` | object | no | Careful mode only: `{status: "agree" \| "disagree" \| "error", note?: string}`; `note` is a one-line tooltip text (clipped). `agree` = an independent re-derived query returned the same result set, `disagree` = it differed, `error` = the check could not complete. |
 | `reasoning` | `ReasoningStep[]` | no | The assistant's plain-language route to the answer (3.4.2); omitted when no call carried a rationale. Older transcripts lack it; readers derive it from `data[].rationale`. |
 | `knowledge` | `KnowledgeUse[]` | no | The enabled ontology items that fit the turn's context budget (3.9). Records what the model was *given*. |
+| `dashboard` | `DashboardRef` | no | `{artifactId: uuid, version: number, title: string, action: "created" \| "updated", widgetCount: number, filterCount: number, rowCount: number}`: this turn of an Avery run (workflows R45) created version 1 of a dashboard artifact (3.18) or added version `version` to the conversation's. Rendered as the dashboard card (ui.md 4.4b); on a run it is `answer.dashboard`, and the next turn of the conversation reads the conversation's dashboard from it (agents.md 5.22). By value: the artifact may be deleted later. |
 | `report` | `AnalysisReport` | no | Legacy (Deep analysis removed 2026-11-12): `{jobId: string, title: string, path: string, angles: number}`, set on the message a finished deep-analysis job appended and on a `deep-analysis` run's `answer`. Stored data stays and is read as before; nothing writes it any more, and the report file (`reports/…`) is no longer reachable from the app. |
 | `rfpPackage` | object | no | Legacy (the RFP Builder was removed 2026-11-12): older assistant messages may still carry an RFP package reference; nothing writes it and it is ignored, so such a message reads as a plain answer. |
 | `readinessReport` | `ReadinessReportRef` | no | `{reportId: string, datasourceName: string, overallScore: number, maturity: Maturity, generatedAt: ISO}`, the last report a turn's `assess_data_readiness` or `get_readiness_report` returned ([data-readiness](../capabilities/data-readiness/spec.md) R5, R25). Drives the readiness card. Data Readiness Agent sessions only. Additive, no migration. |
@@ -721,7 +722,7 @@ No `ownerId`: the collection is newer than ownership (3.14).
 
 ### 3.18 `artifacts` — saved artifacts
 
-One document per artifact ([workflows](../capabilities/workflows/spec.md) R33; [api.md](api.md) 144-148; since 2026-11-15). Inserted by the Save dashboard step of a Dashboard Image to Artifact run ([agents.md](agents.md) 5.17); only `name` changes afterwards (147).
+One document per artifact ([workflows](../capabilities/workflows/spec.md) R33; [api.md](api.md) 144-148; since 2026-11-15). Inserted by the Save dashboard step of a Dashboard Image to Artifact run ([agents.md](agents.md) 5.17); only `name` changes afterwards (147), and a dashboard built by Clara gains a version for each turn of its conversation that changes it (`versions`, below).
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
@@ -731,8 +732,16 @@ One document per artifact ([workflows](../capabilities/workflows/spec.md) R33; [
 | `description` | string | yes | The blueprint's summary (may be empty). |
 | `blueprint` | `DashboardBlueprint` ([agents.md](agents.md) 5.17) | yes | The dashboard as data, checked against the blueprint's schema when stored. It holds no mapping. |
 | `image` | `{ file: string; mediaType: string }` | no | The image the dashboard was read from: the file `<app data dir>/artifacts/<file>` (`<id>.png`, `.jpg` or `.webp`), written before the document and deleted with it. Absent when the run read no image or the file could not be written. |
-| `source` | `{ runId: string; workflowId: string }` | no | The run it was saved from. By value: it may dangle once the run is deleted. |
+| `source` | `{ runId: string; workflowId: string }` | no | The run it was saved from (a dashboard built by Clara: the run that created version 1). By value: it may dangle once the run is deleted. |
+| `currentVersion` | number | no | The version the artifact is at (since 2026-11-22). Absent on a document saved before versions: it reads as 1. |
+| `versions` | `ArtifactVersion[]` | no | Oldest first (since 2026-11-22; below). Absent on a document saved before versions and on one a Dashboard Image to Artifact run saved: it reads as one synthetic version 1 made from the top-level `blueprint`, with no query and no rows. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+`ArtifactVersion` (workflows R33; agents.md 5.22, ADR-0054): `{ version: number (1, 2, …); blueprint: DashboardBlueprint; query?: { sql: string; datasourceId: string; rationale?: string }; columns?: string[]; rowCount?: number; dataFile?: string; instruction?: string; source?: { runId: string; workflowId: string }; createdAt: ISO }`. A version built by Clara has `query`, `columns`, `rowCount` and `dataFile`; a legacy or imaged one has none of them. `instruction` is Avery's brief that made the version. A version is never changed after it is written; the top-level `blueprint` is always the **current** version's, so Map a Dashboard to Data and the artifact summaries keep reading it.
+
+**Rows file.** The rows of a live version are not in the document store: they are the file `<app data dir>/artifacts/<id>/v<N>/rows.json` (`dataFile`: `artifacts/<id>/v<N>/rows.json`), `{ "columns": string[], "rows": object[] }`, at most 5,000 rows and 2,000,000 characters (agents.md 3.17), numbers as numbers, dates as ISO strings, written before the document that names it. A version whose file cannot be read is `dataMissing` (api.md 145). Deleting the artifact removes the folder `artifacts/<id>/` with every version's file.
+
+**No migration.** `currentVersion` and `versions` are optional: a document stored before them needs no change and reads as above. Clara's dashboards are always created with `versions` (version 1 first), so a legacy document never gains one.
 
 No `ownerId`: the collection is newer than ownership (3.14). Nothing refers to an artifact by a stored key: a run that used one keeps the blueprint in its own `output`, and its `input.artifact` id may dangle.
 

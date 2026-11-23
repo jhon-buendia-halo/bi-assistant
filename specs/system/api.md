@@ -1148,7 +1148,7 @@ The query inspector's endpoints over a run's stored answer and its `evidence` (3
 
 ### 2.6.4 Artifacts
 
-Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R33; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own (144-148 read, rename and delete them), and taken by Map a Dashboard to Data (5.18).
+Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R33; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own (144-148 and 163 read, rename, delete and download them), and taken by Map a Dashboard to Data (5.18). A dashboard built on real rows is saved, as a version of its artifact, by a turn of Avery's run (workflows R45; [agents.md](agents.md) 5.22): **no route creates a version**, the turn does.
 
 ```ts
 type ArtifactSummary = {
@@ -1159,13 +1159,31 @@ type ArtifactSummary = {
   widgetCount: number;
   filterCount: number;
   hasImage: boolean;                // whether 146 answers the image the dashboard was read from
+  currentVersion: number;           // 1 for an artifact with no versions of its own
+  versionCount: number;
+  hasData: boolean;                 // whether the current version keeps the rows of its query (a live dashboard)
   source?: { runId: string; workflowId: string };   // the run it was saved from
   createdAt: string;                // ISO
   updatedAt: string;                // ISO
 };
 type Artifact = ArtifactSummary & {
   blueprint: DashboardBlueprint;    // the dashboard as data (agents.md 5.17)
-  document: string;                 // the dashboard drawn by the fixed runtime with no mapping: a self-contained HTML document for a sandboxed frame
+  document: string;                 // the dashboard drawn by the fixed runtime with no mapping: a self-contained HTML document for a sandboxed frame; on the real rows of the version when it has them (live), else with the mock values
+  version: number;                  // the version shown: the requested one, else the current
+  versions: { version: number; createdAt: string; instruction?: string; rowCount?: number; widgetCount: number; filterCount: number }[];   // oldest first
+  query?: DashboardQuery;           // the version's data query (live versions only)
+  dataMissing?: true;               // the version is live but its rows file is gone: drawn with the mock values
+};
+type DashboardQuery = { sql: string; datasourceId: string; rationale?: string };
+// ChatMessage.dashboard (data-model 3.4.1; a run's answer.dashboard): the dashboard a turn of Avery's run created or changed
+type DashboardRef = {
+  artifactId: string;
+  version: number;
+  title: string;
+  action: 'created' | 'updated';   // 'created' = version 1 of a new artifact
+  widgetCount: number;
+  filterCount: number;
+  rowCount: number;
 };
 ```
 
@@ -1173,7 +1191,8 @@ type Artifact = ArtifactSummary & {
 - Response `200`: `ArtifactSummary[]`, newest first (`createdAt` descending).
 
 #### 145. `GET /artifacts/:id`
-- Response `200`: `Artifact`. `404 "Artifact \"<id>\" not found"`.
+- Query: `version` (optional, a positive whole number): the version to read; the current one when absent.
+- Response `200`: `Artifact` at that version (its `blueprint` and `document` are the version's; `version`, `versions`, `query` and `dataMissing` as above). `400 "Version must be a positive whole number"`; `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no version <n>"`.
 
 #### 146. `GET /artifacts/:id/image`
 - Response `200`: the bytes of the image the dashboard was read from, with its `Content-Type` (`image/png`, `image/jpeg` or `image/webp`) and `Cache-Control: private, max-age=3600`. `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no image"` when it was saved without one or the file is gone.
@@ -1184,7 +1203,11 @@ type Artifact = ArtifactSummary & {
 
 #### 148. `DELETE /artifacts/:id`
 - Response `204`. `404 "Artifact \"<id>\" not found"`.
-- Side effects: the document and its image file are deleted. Runs that used the artifact are unchanged (they keep the blueprint in their own output).
+- Side effects: the document, its image file and the folder of its versions' rows (data-model 3.18) are deleted. Runs that used the artifact are unchanged (they keep the blueprint in their own output), and a dashboard card of an earlier answer then opens `Artifact "<id>" not found`.
+
+#### 163. `GET /artifacts/:id/download`
+- Query: `version` (optional, a positive whole number; the current one when absent).
+- Response `200`: the version as a zip of plain files, `Content-Type: application/zip`, `Content-Disposition: attachment; filename="<slug>-v<N>.zip"`, where the slug is the artifact's name lower-cased to `[a-z0-9-]` and at most 64 characters (`dashboard-<first 8 characters of the id>-v<N>.zip` when nothing is left). Entries, stored uncompressed and dated with the version's `createdAt`: `index.html` (links `styles.css`, loads `data.js` then `app.js`; no `<script>` with code inline, no CSP meta), `styles.css`, `app.js` (the fixed runtime and its mount call), `data.js` (`window.DASHBOARD_DATA = { blueprint, rows, live }`, `</script>` and U+2028/U+2029 escaped), `query.sql` (live versions only) and `README.txt` (how to open it, the version, the date, the row count; a mock version says its values are invented). It opens from `file://` with no server, loads no external resource and draws the dashboard on the rows it holds, so it is a snapshot: it never reads the datasource. `400 "Version must be a positive whole number"`; `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no version <n>"`. FE: yes (the dashboard card's and the artifact page's **Download**).
 
 ### 2.7 Deep analysis (removed 2026-11-12)
 
