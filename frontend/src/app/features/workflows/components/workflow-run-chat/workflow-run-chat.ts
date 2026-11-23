@@ -425,16 +425,23 @@ export class WorkflowRunChat {
       if (request === 0) return;
       untracked(() => {
         this.designer.runFormRequest.set(0);
-        if (this.pending() === null) this.syncDraft();
+        // The request can land after the user already typed (the effect runs
+        // on the next change detection): what they typed wins.
+        if (this.pending() === null && this.draft().trim() === '')
+          this.syncDraft();
         setTimeout(() => this.focusComposer());
       });
     });
     // Another workflow (or the same one opened again): a fresh conversation.
+    // The same workflow loaded again keeps what the user already typed: the
+    // text box shows it, so dropping it here would leave Send disabled.
     effect(() => {
-      this.designer.workflow();
+      const id = this.designer.workflow()?.id ?? null;
       untracked(() => {
+        const reloaded = id !== null && id === this.shownWorkflowId;
+        this.shownWorkflowId = id;
         this.resetIntake();
-        this.syncDraft();
+        if (!(reloaded && this.draft().trim() !== '')) this.syncDraft();
       });
     });
     // A run the intake started: its turns stay above it once it has an id.
@@ -1069,6 +1076,9 @@ export class WorkflowRunChat {
 
   /** What the composer holds now. */
   protected readonly draft = signal('');
+
+  /** The workflow the conversation belongs to, to tell a reload from another workflow. */
+  private shownWorkflowId: string | null = null;
   /** The turns so far, before the run (and above it once it started). */
   protected readonly transcript = signal<ChatEntry[]>([]);
   /** The field the agent waits on; null when it waits on nothing. */
