@@ -17,6 +17,7 @@ import {
   ChevronDown,
   CircleCheck,
   Database,
+  Download,
   Image as ImageIcon,
   ImagePlus,
   LayoutDashboard,
@@ -235,6 +236,7 @@ interface PendingAsk {
 export class WorkflowRunChat {
   protected readonly hasQueries = answerHasQueries;
   protected readonly Archive = Archive;
+  protected readonly Download = Download;
   protected readonly Brain = Brain;
   protected readonly CircleCheck = CircleCheck;
   protected readonly Loader2 = Loader2;
@@ -322,9 +324,47 @@ export class WorkflowRunChat {
   protected sendAvery(): void {
     const text = this.averyText().trim();
     if (!text) return;
+    this.averyText.set('');
+    this.toAvery(text);
+  }
+
+  /** The Export menu (workflows R45): always in the bar of Avery's conversation. */
+  protected readonly exportOpen = signal(false);
+  protected readonly exportOptions = [
+    {
+      id: 'both',
+      label: 'PDF and PowerPoint',
+      message: 'Export this conversation to PDF and PowerPoint',
+    },
+    {
+      id: 'pdf',
+      label: 'PDF only',
+      message: 'Export this conversation to PDF',
+    },
+    {
+      id: 'pptx',
+      label: 'PowerPoint only',
+      message: 'Export this conversation to PowerPoint',
+    },
+  ] as const;
+
+  /** An Export option asks Avery for the export, as a message of the conversation (queued while she works). */
+  protected exportConversation(message: string): void {
+    this.exportOpen.set(false);
+    this.toAvery(message);
+  }
+
+  /** The menu closes when focus leaves it (a click elsewhere, Tab past it). */
+  protected onExportFocusOut(event: FocusEvent): void {
+    const next = event.relatedTarget;
+    const menu = event.currentTarget as HTMLElement;
+    if (!(next instanceof Node) || !menu.contains(next))
+      this.exportOpen.set(false);
+  }
+
+  private toAvery(text: string): void {
     this.averyError.set(null);
     this.averyNotice.set(null);
-    this.averyText.set('');
     if (this.designer.running()) {
       this.queued.update((list) => [...list, text]);
       return;
@@ -1460,6 +1500,7 @@ export class WorkflowRunChat {
   }
 
   protected closeMenu(): void {
+    this.exportOpen.set(false);
     if (!this.menuOpen()) return;
     this.menuOpen.set(false);
     this.focusComposer();

@@ -1414,6 +1414,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
 
     it('does not show for another workflow', () => {
       openStored(assistantRun(), ASSISTANT);
+      expect(q('workflow-run-export')).toBeNull();
       expect(q('workflow-avery-input')).toBeNull();
       expect(q('workflow-run-archive')).toBeNull();
     });
@@ -1439,6 +1440,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
     it('does not show for an archived run, which reads with Unarchive', () => {
       openStored(ended({ archivedAt: '2026-11-20T10:00:00.000Z' }));
       expect(q('workflow-avery-input')).toBeNull();
+      expect(q('workflow-run-export')).toBeNull();
       expect(q('workflow-run-archive')).toBeNull();
       expect(q('workflow-run-again')).toBeNull();
       expect(text('workflow-run-archived')).toContain('This conversation is archived.');
@@ -1459,6 +1461,46 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(box.placeholder).toBe('Queue a message for Avery');
       expect(q('workflow-avery-composer')!.contains(q('workflow-run-stop'))).toBeTrue();
       expect(q('workflow-run-stop')!.getAttribute('aria-label')).toBe('Stop');
+    });
+
+    it('Export sits in the bar and asks Avery for the export as a message', () => {
+      openStored(ended());
+      runs.getRun.and.returnValue(of(ended()));
+      const button = q('workflow-run-export')!;
+      expect(button.getAttribute('aria-haspopup')).toBe('menu');
+      expect(button.getAttribute('aria-expanded')).toBe('false');
+      expect(q('workflow-run-export-menu')).toBeNull();
+      click('workflow-run-export');
+      expect(button.getAttribute('aria-expanded')).toBe('true');
+      const items = Array.from(
+        q('workflow-run-export-menu')!.querySelectorAll('[role="menuitem"]'),
+      ).map((item) => item.textContent!.trim());
+      expect(items).toEqual(['PDF and PowerPoint', 'PDF only', 'PowerPoint only']);
+      click('workflow-run-export-pdf');
+      expect(q('workflow-run-export-menu')).toBeNull();
+      expect(runs.calls.length).toBe(1);
+      expect(runs.last.body.context?.fromRunId).toBe('run-1');
+      expect(runs.last.body.input['question']).toBe('Export this conversation to PDF');
+    });
+
+    it('Export stays while she works, and what it asks is queued', () => {
+      openStored(ended());
+      runs.getRun.and.returnValue(of(ended()));
+      typeToAvery('And in 2022?');
+      click('workflow-avery-send');
+      click('workflow-run-export');
+      click('workflow-run-export-both');
+      expect(runs.calls.length).toBe(1);
+      const queued = el.querySelector('[data-testid="workflow-avery-queued"] [title]');
+      expect(queued!.textContent!.trim()).toBe('Export this conversation to PDF and PowerPoint');
+    });
+
+    it('Escape closes the Export menu', () => {
+      openStored(ended());
+      click('workflow-run-export');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      fixture.detectChanges();
+      expect(q('workflow-run-export-menu')).toBeNull();
     });
 
     it('Stop in the box stops the run', () => {

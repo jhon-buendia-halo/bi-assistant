@@ -57,6 +57,7 @@
         </span>
       }
       @if (averyOpen()) {
+        <ng-container [ngTemplateOutlet]="exportMenu" />
         <button
           type="button"
           data-testid="workflow-run-archive"
@@ -83,6 +84,49 @@
         <span>New question</span>
       </button>
     }
+    @if (averyLive()) {
+      <!-- While Avery works, Export stays: what it asks waits in the queue -->
+      <ng-container [ngTemplateOutlet]="exportMenu" />
+    }
+    <ng-template #exportMenu>
+      <!-- Export (workflows R45): always in the bar of Avery's conversation;
+           an option asks her for the export as a message -->
+      <div class="relative" (focusout)="onExportFocusOut($event)">
+        <button
+          type="button"
+          data-testid="workflow-run-export"
+          title="Export this conversation to PDF or PowerPoint"
+          aria-haspopup="menu"
+          [attr.aria-expanded]="exportOpen()"
+          (click)="exportOpen.set(!exportOpen())"
+          class="btn btn-ghost px-2.5 py-1"
+        >
+          <lucide-angular [img]="Download" [size]="13" />
+          <span>Export</span>
+          <lucide-angular [img]="ChevronDown" [size]="12" />
+        </button>
+        @if (exportOpen()) {
+          <div
+            role="menu"
+            aria-label="Export this conversation"
+            data-testid="workflow-run-export-menu"
+            class="absolute top-full right-0 z-30 mt-1 flex w-52 flex-col gap-0.5 rounded-xl border border-border bg-surface p-1.5 shadow-lg"
+          >
+            @for (option of exportOptions; track option.id) {
+              <button
+                type="button"
+                role="menuitem"
+                [attr.data-testid]="'workflow-run-export-' + option.id"
+                (click)="exportConversation(option.message)"
+                class="cursor-pointer rounded-lg px-3 py-2 text-left text-[13px] text-fg hover:bg-surface-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+              >
+                {{ option.label }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </ng-template>
     @if (designer.running() && !averyLive()) {
       <!-- Stop sits in the bar when no message box shows during the run;
            Avery's conversation has it in its message box -->
@@ -203,7 +247,10 @@
                   }
                   @if (answer.export; as exported) {
                     @defer (on immediate) {
-                      <app-run-export-card class="mt-2 block" [export]="exported" />
+                      <app-run-export-card
+                        class="mt-2 block"
+                        [export]="exported"
+                      />
                     }
                   }
                 } @else {
