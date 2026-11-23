@@ -45,3 +45,18 @@ export interface ArtifactVersionInfo {
   widgetCount: number;
   filterCount: number;
 }
+
+/** The zip name a dashboard version downloads as: `<slug of the name>-v<N>.zip` (api.md 163). */
+export function dashboardZipName(
+  name: string,
+  id: string,
+  version: number,
+): string {
+  const slug = name
+    .normalize('NFKD')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+    .slice(0, 64);
+  return `${slug || `dashboard-${id.slice(0, 8)}`}-v${version}.zip`;
+}

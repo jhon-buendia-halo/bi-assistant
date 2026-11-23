@@ -20,7 +20,7 @@ import {
 import { saveBlob } from '../../../../shared/query-evidence/rows-csv';
 import { WorkflowDesigner } from '../../../workflows/services/workflow-designer.service';
 import { WorkflowsNavState } from '../../../workflows/services/workflows-nav-state';
-import { Artifact } from '../../models/artifact.model';
+import { Artifact, dashboardZipName } from '../../models/artifact.model';
 import { ArtifactsApiService } from '../../services/artifacts-api.service';
 import {
   artifactCountsLabel,
@@ -36,16 +36,6 @@ function formatVersionDate(iso: string): string {
     month: 'short',
     year: 'numeric',
   });
-}
-
-function downloadSlug(name: string, id: string): string {
-  const slug = name
-    .normalize('NFKD')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase()
-    .slice(0, 64);
-  return slug || `dashboard-${id.slice(0, 8)}`;
 }
 
 /** The workflow an artifact is handed to, and the field that takes its id. */
@@ -154,7 +144,7 @@ export class ArtifactDetail implements OnInit {
     this.api.download(a.id, a.version).subscribe({
       next: (blob) => {
         this.downloading.set(false);
-        saveBlob(blob, `${downloadSlug(a.name, a.id)}-v${a.version ?? 1}.zip`);
+        saveBlob(blob, dashboardZipName(a.name, a.id, a.version ?? 1));
       },
       error: (err) => {
         this.downloading.set(false);

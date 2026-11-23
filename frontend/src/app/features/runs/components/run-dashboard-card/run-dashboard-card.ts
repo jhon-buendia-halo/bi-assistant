@@ -17,6 +17,7 @@ import { saveBlob } from '../../../../shared/query-evidence/rows-csv';
 import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.service';
 import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
 import { DashboardRef } from '../../../sessions/models/session.model';
+import { dashboardZipName } from '../../../artifacts/models/artifact.model';
 
 function plural(n: number, one: string): string {
   return `${n.toLocaleString('en-US')} ${one}${n === 1 ? '' : 's'}`;
@@ -123,10 +124,7 @@ export class RunDashboardCard {
     this.api.download(d.artifactId, d.version).subscribe({
       next: (blob) => {
         this.downloading.set(false);
-        saveBlob(
-          blob,
-          `dashboard-${d.artifactId.slice(0, 8)}-v${d.version}.zip`,
-        );
+        saveBlob(blob, dashboardZipName(d.title, d.artifactId, d.version));
       },
       error: (err) => {
         this.downloading.set(false);
