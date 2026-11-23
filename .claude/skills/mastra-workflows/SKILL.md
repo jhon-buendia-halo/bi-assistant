@@ -33,7 +33,7 @@ ls backend/src/mastra/workflows backend/src/mastra/agents backend/src/mastra/too
 
 Read, in this order, only what the change can touch:
 
-- **Workflows.** [agent-turn.workflow.ts](../../../backend/src/mastra/workflows/agent-turn.workflow.ts) with [agent-turn.steps.ts](../../../backend/src/mastra/workflows/agent-turn.steps.ts) (the smallest complete example), then `answer-business-question.*` (branches, loops, nested workflows, suspend and resume; its header comment in [answer-business-question.workflow.ts](../../../backend/src/mastra/workflows/answer-business-question.workflow.ts) is the flow), the catalogue [workflow-catalog.ts](../../../backend/src/mastra/workflows/workflow-catalog.ts) and [agent-workflows.ts](../../../backend/src/mastra/workflows/agent-workflows.ts), and the contract helpers in `workflow-contract.ts`.
+- **Workflows.** [agent-turn.workflow.ts](../../../backend/src/mastra/workflows/agent-turn.workflow.ts) with [agent-turn.steps.ts](../../../backend/src/mastra/workflows/agent-turn.steps.ts) (the smallest complete example), then `data-readiness-assessment.*` (a branch), `consumption-gap-analysis.*` (a step that suspends for the user, then resumes) and `orchestrated-answer-michael.*` (the supervisor pattern: one agent step whose agent calls its teammates as tools and suspends on its own question; agents.md 5.23; `answer-business-question`, the fixed line with nested workflows, loops and two suspending steps, was removed on 2026-11-23, so read it in git history if you need that shape), the catalogue [workflow-catalog.ts](../../../backend/src/mastra/workflows/workflow-catalog.ts) and [agent-workflows.ts](../../../backend/src/mastra/workflows/agent-workflows.ts), and the contract helpers in `workflow-contract.ts`.
 - **Agents** in `backend/src/mastra/agents/`, **tools** in `backend/src/mastra/tools/`, and what is registered in [index.ts](../../../backend/src/mastra/index.ts).
 - **The test stand-in** [workflows.stub.ts](../../../backend/src/mastra/testing/workflows.stub.ts): its header lists the control flow it can run.
 - **The specs** (both large: `grep -n`, then read the range): [workflows/spec.md](../../../specs/capabilities/workflows/spec.md) (rules R1 to R28) and [agents.md](../../../specs/system/agents.md) (2 for the agents, 3 for the tools, 5.11 and 5.12 for the workflows).
@@ -88,7 +88,7 @@ Each rule is visible in the code named beside it; when the code has moved on, fo
 
 - `<name>.steps.ts`: the workflow id constant, the `RequestContext` key, the step catalogue entries (`WorkflowStepEntry`: id, title, kind `code` or `agent`, summary, input, output, exits), the edges, the runtime interface and the pure code of the deterministic steps. **No framework import.**
 - `<name>.workflow.ts`: the only file that imports `@mastra/core/workflows`. It builds `createStep` and `createWorkflow` from the ids and titles of `.steps.ts` (`id: STEP.id`, `description: STEP.title`), so nothing is written twice.
-- When the workflow grows, as `answer-business-question` did: `<name>.schemas.ts` (the Zod schema of every step, used by both the Mastra steps and the catalogue), `<name>.prompts.ts`, `<name>.agents.ts` (model calls).
+- When the workflow grows, as `data-readiness-assessment` did: `<name>.schemas.ts` (the Zod schema of every step, used by both the Mastra steps and the catalogue), `<name>.prompts.ts`, `<name>.agents.ts` (model calls). Code shared by several workflows lives in a neutral file (`analysis.*.ts`, `step-agents.ts`, `workflow-contract.ts`), never in a workflow's own files.
 - Step ids are kebab-case and unique in the whole workflow, nested ones included: the engine reports a nested step as `<workflow id>.<step id>` and the session code reads the last segment. Nested workflows and `.map()` steps are not catalogue steps.
 
 This split exists because Jest cannot load Mastra's ESM: catalogue data lives in a module with no framework import, and the Mastra objects are built in a second file ([lessons.md](../../../lessons.md), *Evals and agents*).
@@ -117,7 +117,7 @@ This split exists because Jest cannot load Mastra's ESM: catalogue data lives in
 
 - A workflow spec starts with `jest.mock('@mastra/core/workflows', () => jest.requireActual('../testing/workflows.stub'))` and drives `createRun().stream({ inputData, requestContext })`, as [agent-turn.workflow.spec.ts](../../../backend/src/mastra/workflows/agent-turn.workflow.spec.ts) does. A spec that mocks `MastraService.streamWorkflow` uses `turn-workflow.stub.ts`.
 - The stub runs `.then`, `.branch`, `.dountil`, `.map`, nested workflows, `bail`, `suspend` and resume. A design that needs anything else (`.parallel`, `.foreach`, `.dowhile`, state, retries) must extend the stub in the same change and check the new behaviour against the real engine once; count that in the approach's size.
-- Pure step code is tested without the stub (`answer-business-question.steps.spec.ts`). Changing a step schema changes the workflow's `contractHash` and the snapshot of `workflow-contracts.spec.ts`: update it on purpose, never blindly.
+- Pure step code is tested without the stub (`analysis.steps.spec.ts`). Changing a step schema changes the workflow's `contractHash` and the snapshot of `workflow-contracts.spec.ts`: update it on purpose, never blindly.
 - The stub validates no schema: a contract is only proven by `withContract` and by the catalogue check.
 
 **Specs, on the same branch**
@@ -127,7 +127,7 @@ This split exists because Jest cannot load Mastra's ESM: catalogue data lives in
 
 **Evals**
 
-- A workflow change that alters what an agent receives (its prompt, tools, context blocks, the messages a step builds) needs that agent's evals: decide and run them with [`agent-change`](../agent-change/SKILL.md), steps 1 and 5. The `insights-analyst` eval target runs the whole `answer-business-question` (`backend/src/mastra/evals/insights-analyst-workflow-target.ts`), so a change to its steps reaches those evals even when no prompt changed.
+- A workflow change that alters what an agent receives (its prompt, tools, context blocks, the messages a step builds) needs that agent's evals: decide and run them with [`agent-change`](../agent-change/SKILL.md), steps 1 and 5. The `insights-analyst` eval target runs Michael as Avery's `answer_from_data` (`backend/src/mastra/evals/insights-analyst-target.ts`), so a change to the analysis steps or his request reaches those evals even when no prompt changed.
 
 ## 5. Checks
 

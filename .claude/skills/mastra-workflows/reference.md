@@ -123,7 +123,7 @@ grep -nE "^\s+'?[a-z0-9-]+'?: " backend/src/mastra/index.ts
 
 | Registered key | Files | What it is |
 |---|---|---|
-| `answer-business-question` | `answer-business-question.workflow.ts` (Mastra objects), `.steps.ts` (catalogue entries, edges, runtime interface, pure step code), `.schemas.ts` (Zod contracts), `.prompts.ts`, `.agents.ts` (the two model-only calls) | *Answer a Business Question*, the one catalogue workflow. Eight steps: `.then` ×2, `.dountil` over a nested plan round (`.branch` to Clarify, `.map`), `.branch` into a nested analysis path (`.dountil` over Analyse then Validate), `.branch` into Write answer then Wrap up. Two steps suspend. agents.md 5.11. |
+| `orchestrated-answer-michael` | `orchestrated-answer-michael.workflow.ts` (Mastra objects), `.steps.ts` (catalogue entry, `AVERY_TEAM`, runtime interfaces, pure code), `.prompts.ts` (Avery's instructions); shared code in `analysis.steps.ts`, `analysis.schemas.ts`, `analysis.prompts.ts` and `step-agents.ts` | *Answer a Business Question (Avery + Michael)*, the one supervisor workflow: a single agent step, Orchestrate, that suspends when Avery asks the user a question. The removed `answer-business-question` (nested workflows, loops, two suspending steps) is in git history. agents.md 5.23. |
 | `agent-turn` | `agent-turn.workflow.ts`, `agent-turn.steps.ts` | The engine of a turn bound to one agent: one `answer` step that calls the runtime handed in on the `RequestContext`. Never snapshotted. agents.md 5.12. |
 
 Shared modules, all without a framework import:
@@ -136,14 +136,14 @@ Shared modules, all without a framework import:
 | `workflow-input.ts` | the typed input fields and `validateWorkflowInput` |
 | `workflow-run.ts` | `runErrorMessage` |
 
-Who runs them: `MastraService.streamWorkflow` (`backend/src/mastra/mastra.service.ts`: `createRun`, `stream`, `resume`, `discard`), called by `backend/src/modules/sessions/turn/turn-engine.ts`, which puts the runtime on the `RequestContext`; `backend/src/modules/workflows/workflows.service.ts` builds the API's catalogue; `backend/src/mastra/evals/insights-analyst-workflow-target.ts` runs the whole `answer-business-question` for each `insights-analyst` eval case.
+Who runs them: `MastraService.streamWorkflow` (`backend/src/mastra/mastra.service.ts`: `createRun`, `stream`, `resume`, `discard`), called by `backend/src/modules/sessions/turn/turn-engine.ts`, which puts the runtime on the `RequestContext`; `backend/src/modules/workflows/workflows.service.ts` builds the API's catalogue; `backend/src/mastra/evals/insights-analyst-target.ts` runs Michael as Avery's `answer_from_data` for each `insights-analyst` eval case.
 
 ### Agents (`backend/src/mastra/agents/`, keys from `index.ts`)
 
 | Key | File | Role | agents.md |
 |---|---|---|---|
 | `assistant` | `assistant.agent.ts` | Questions to Insights Assistant; its turns run on `agent-turn` | 2.1 |
-| `insights-analyst` | `insights-analyst.agent.ts` (data: `insights-analyst-catalog.ts`) | the Analyse step of `answer-business-question`, with tools | 2.11 |
+| `insights-analyst` | `insights-analyst.agent.ts` (data: `insights-analyst-catalog.ts`) | Michael's analysis in Avery's `answer_from_data`, with tools | 2.11 |
 | `analysis-planner` | `analysis-planner.agent.ts` | the Plan step: one model call, no tools | 2.11, 5.11 |
 | `answer-writer` | `answer-writer.agent.ts` | the Write answer step: one model call, no tools | 2.11, 5.11 |
 | `data-readiness` | `data-readiness.agent.ts` | Data Readiness Agent; runs on `agent-turn` | 2.10 |
