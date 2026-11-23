@@ -190,6 +190,11 @@ export interface RunHostSpec {
   inputImages?: string[];
   /** Dashboard Image to Artifact's saved dashboard: the artifact's id. */
   artifact?: string;
+  /**
+   * A message to Avery in a conversation that holds a dashboard (agents.md
+   * 5.22): the artifact's id, whose current version Clara changes.
+   */
+  contextDashboard?: string;
   /** The run's whole checked input (Review a Website, agents.md 5.19). */
   inputValues?: Record<string, string | number | boolean | string[]>;
   /**
@@ -311,6 +316,31 @@ export class SessionsService implements OnModuleInit {
             : {}),
         });
         return { id: saved.id, name: saved.name };
+      },
+      dashboardVersion: (artifactId) => {
+        if (!this.artifacts) throw new Error('Artifacts are not available');
+        return this.artifacts.dashboardVersion(artifactId);
+      },
+      // Clara's dashboard (agents.md 5.22): the conversation's first one is
+      // a new artifact, a later one the next version of the same artifact.
+      saveDashboard: async (sessionId, { artifactId, ...version }) => {
+        if (!this.artifacts) throw new Error('Artifacts are not available');
+        const session = await this.get(sessionId);
+        // A run host is `run-<run id>`: the version names its run.
+        const input = {
+          ...version,
+          ...(sessionId.startsWith(RUN_HOST_ID_PREFIX)
+            ? {
+                source: {
+                  runId: sessionId.slice(RUN_HOST_ID_PREFIX.length),
+                  workflowId: session.workflowId ?? '',
+                },
+              }
+            : {}),
+        };
+        return artifactId
+          ? this.artifacts.addDashboardVersion(artifactId, input)
+          : this.artifacts.createDashboard(input);
       },
       siteReview: (io) => {
         if (!this.siteReview) {
@@ -639,6 +669,9 @@ export class SessionsService implements OnModuleInit {
       ...(spec.image ? { inputImage: spec.image.path } : {}),
       ...(spec.inputImages?.length ? { inputImages: spec.inputImages } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
+      ...(spec.contextDashboard
+        ? { contextDashboard: spec.contextDashboard }
+        : {}),
       ...(spec.inputValues ? { inputValues: { ...spec.inputValues } } : {}),
       ...(spec.ask ? { ask: spec.ask } : {}),
       visualizations: [],

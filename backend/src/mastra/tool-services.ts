@@ -83,6 +83,12 @@ export interface SqlRunResult {
  */
 export interface SqlCallOptions {
   signal?: AbortSignal;
+  /**
+   * The clamp on the call's row limit, when it is not the connectors'
+   * default 500: the host's run of a dashboard's data query passes 5,000
+   * (plan bi-dashboard 2.2).
+   */
+  maxRows?: number;
 }
 
 export interface VisualToolResult {
