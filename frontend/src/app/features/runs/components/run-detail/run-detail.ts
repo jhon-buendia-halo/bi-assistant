@@ -25,6 +25,8 @@ import { AnswerView } from '../../../sessions/components/answer-view/answer-view
 import { WorkflowRunsApiService } from '../../../workflows/services/workflow-runs-api.service';
 import {
   IMAGES_FIELD,
+  isActiveRun,
+  isLiveRun,
   runOutputEntries,
   runStatusLine,
   runStepStatusLabel,
@@ -144,8 +146,7 @@ export class RunDetail {
         if (
           run === null ||
           !answerHasQueries(run.answer) ||
-          run.status === 'running' ||
-          run.status === 'suspended' ||
+          isActiveRun(run.status) ||
           this.prepared.has(run.id)
         ) {
           return;
@@ -178,6 +179,7 @@ export class RunDetail {
   protected readonly Workflow = Workflow;
 
   protected readonly stepStatus = runStepStatusLabel;
+  protected readonly isLive = isLiveRun;
 
   protected readonly status = computed(() => {
     const run = this.state.activeRun();

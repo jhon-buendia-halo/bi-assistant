@@ -107,7 +107,7 @@ export class WorkflowNodeChatsService {
         : undefined;
     const content = typeof raw === 'string' ? raw.trim() : '';
     if (!content) throw new BadRequestException('Message is required');
-    if (run.status === 'running') {
+    if (run.status === 'running' || run.status === 'queued') {
       throw new ConflictException('The run is still running');
     }
     if (run.status === 'suspended') {

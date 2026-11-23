@@ -136,6 +136,7 @@ export function activityLine(
   toolCalls: LiveToolCall[],
 ): string | null {
   if (status === 'suspended') return 'Waiting for your answer';
+  if (status === 'queued') return 'Queued…';
   if (status !== 'running') return null;
   const current = steps.find((s) => s.state === 'current');
   if (current === undefined) return 'Starting…';

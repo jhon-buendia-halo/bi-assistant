@@ -190,6 +190,28 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     expect(steps[0]).toEqual(full as WorkflowRunStep);
   });
 
+  it('reports a queued frame between the run and its first step', async () => {
+    fetchSpy.and.resolveTo(
+      sseResponse(
+        { type: 'run', runId: 'r1', workflowId: 'answer-business-question' },
+        { type: 'queued' },
+        { type: 'step', id: 'plan', title: 'Plan', status: 'running' },
+        { type: 'done', run: RUN },
+      ),
+    );
+    const seen: string[] = [];
+    await service.streamRun(
+      'answer-business-question',
+      { input: { question: 'Q' } },
+      {
+        onRun: () => seen.push('run'),
+        onQueued: () => seen.push('queued'),
+        onStep: (step) => seen.push(`step:${step.id}`),
+      },
+    );
+    expect(seen).toEqual(['run', 'queued', 'step:plan']);
+  });
+
   it("reports a refusal with the server's message, before anything streams", async () => {
     fetchSpy.and.resolveTo(
       new Response(

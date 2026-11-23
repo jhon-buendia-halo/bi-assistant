@@ -122,6 +122,7 @@ import {
 import {
   IMAGES_FIELD,
   canRunFromPage,
+  isActiveRun,
   runOutputEntries,
   runStatusLine,
 } from '../../services/workflows.util';
@@ -636,7 +637,7 @@ export class WorkflowRunChat {
   private follow(status: string | null, runId: string | null): void {
     const el = this.log()?.nativeElement;
     if (el === undefined) return;
-    if (status === 'running') {
+    if (status === 'running' || status === 'queued') {
       if (this.shownRunId !== null) {
         this.shownRunId = null;
         this.stickToEnd = true;
@@ -925,11 +926,11 @@ export class WorkflowRunChat {
     const result = this.designer.runResult();
     return (
       !!result?.answer &&
-      result.status !== 'running' &&
-      result.status !== 'suspended' &&
+      !isActiveRun(result.status) &&
       !this.designer.running()
     );
   });
+  protected readonly isActive = isActiveRun;
   protected readonly runStatus = computed(() => {
     const result = this.designer.runResult();
     return result === null ? '' : runStatusLine(result);

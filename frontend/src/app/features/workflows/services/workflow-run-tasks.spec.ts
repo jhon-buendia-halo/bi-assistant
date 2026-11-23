@@ -89,6 +89,12 @@ describe('WorkflowRunTasks (ADR-0048; plan 1.26.5)', () => {
     expect(runTaskDetail(run())).toBeNull();
   });
 
+  it('says "Waiting for a free slot" for a queued run', () => {
+    expect(runTaskDetail(run({ status: 'queued' }))).toBe(
+      'Waiting for a free slot',
+    );
+  });
+
   it('reads the run every 3 s until it ends, waiting runs included, then toasts done with Open', fakeAsync(() => {
     api.getRun.and.returnValues(
       of(run()),
@@ -214,6 +220,43 @@ describe('WorkflowRunTasks (ADR-0048; plan 1.26.5)', () => {
       ['b', 'W: B'],
       ['a', 'W: A'],
     ]);
+    tick(RUN_TASK_POLL_MS);
+    expect(background.runningCount()).toBe(0);
+  }));
+
+  it('says "Waiting for a free slot" for a queued run the page streams', fakeAsync(() => {
+    api.getRun.and.returnValues(of(run({ status: 'queued' })), of(run({ status: 'success' })));
+    const task = tasks.track({ id: 'run-1', workflowName: 'W', title: 'Q' });
+    // The page follows the run's stream, which has no steps while it waits.
+    tasks.showLive('run-1', { id: 'w', steps: [] } as unknown as WorkflowDetail, [], []);
+    tick(RUN_TASK_POLL_MS);
+    expect(background.get(task.id)?.detail).toBe('Waiting for a free slot');
+    tick(RUN_TASK_POLL_MS);
+  }));
+
+  it('tracks a queued run at start-up and polls it until it ends', fakeAsync(() => {
+    api.list.and.returnValue(
+      of({
+        runs: [
+          {
+            id: 'q',
+            workflowId: 'w',
+            workflowName: 'W',
+            status: 'queued',
+            title: 'Q',
+            startedAt: 't',
+          },
+        ],
+      }),
+    );
+    api.getRun.and.returnValues(
+      of(run({ id: 'q', status: 'queued' })),
+      of(run({ id: 'q', status: 'success' })),
+    );
+    tasks.trackActive();
+    expect(background.running().map((t) => t.key)).toEqual(['q']);
+    tick(RUN_TASK_POLL_MS);
+    expect(background.runningCount()).toBe(1);
     tick(RUN_TASK_POLL_MS);
     expect(background.runningCount()).toBe(0);
   }));

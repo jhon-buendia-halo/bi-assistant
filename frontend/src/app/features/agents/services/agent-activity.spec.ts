@@ -52,6 +52,14 @@ describe('agentActivity (ui.md 4.4)', () => {
     });
   });
 
+  it('is busy, not waiting on the user, while a run is queued', () => {
+    expect(agentActivity(michael, [run('r1', 'queued')])).toEqual({
+      state: 'working',
+      label: 'Queued: “Question r1”',
+      runId: 'r1',
+    });
+  });
+
   it("ignores another workflow's runs and agents no workflow calls", () => {
     const runs = [run('r1', 'running', 'data-readiness-assessment')];
     expect(agentActivity(michael, runs).state).toBe('available');

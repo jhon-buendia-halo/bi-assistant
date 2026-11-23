@@ -433,6 +433,19 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.nodeStatuses()).toEqual({});
   });
 
+  it('shows Queued from the queued event until the first step event, and Stop stays on', () => {
+    executeQuestion();
+    const h = runs.last.handlers;
+    h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
+    expect(designer.runResult()?.status).toBe('running');
+    h.onQueued!();
+    expect(designer.runResult()?.status).toBe('queued');
+    expect(designer.runResult()?.steps.every((s) => s.status === null)).toBeTrue();
+    expect(designer.running()).toBeTrue();
+    h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
+    expect(designer.runResult()?.status).toBe('running');
+  });
+
   it("fills each step's input, times and tool calls live, with the run's id, input and start", () => {
     executeQuestion();
     const h = runs.last.handlers;
@@ -1190,6 +1203,26 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
         .expectOne((r) => r.url.endsWith('/datasets'))
         .flush({ datasets: [] });
       expect(runs.attaches.map((a) => a.runId)).toEqual(['run-1']);
+      expect(designer.runResult()?.status).toBe('running');
+    });
+
+    it('a queued run opened from Runs is followed and reads Queued until it starts', () => {
+      designer.showRunOnLoad(storedRun({ status: 'queued', steps: [] }));
+      designer.load(ASSISTANT.id);
+      http
+        .expectOne((r) => r.url.endsWith('/workflows/answer-business-question'))
+        .flush(ASSISTANT);
+      http
+        .expectOne((r) => r.url.endsWith('/datasets'))
+        .flush({ datasets: [] });
+      expect(runs.attaches.map((a) => a.runId)).toEqual(['run-1']);
+      expect(designer.running()).toBeTrue();
+      expect(designer.runResult()?.status).toBe('queued');
+      runs.attaches[0].handlers.onStep!({
+        id: 'answer',
+        title: 'Answer',
+        status: 'running',
+      });
       expect(designer.runResult()?.status).toBe('running');
     });
 

@@ -873,9 +873,10 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Write a file into a run host's workspace: the reference images sent
-   * with a change on Build visual's approval gate (workflows R44, api.md
-   * 138), which Zoe then reads from there.
+   * Write a file into a run host's workspace: a queued run's input images,
+   * as 119 accepts it (read back when it starts, `runHostImage`), and the
+   * reference images sent with a change on Build visual's approval gate
+   * (workflows R44, api.md 138), which Zoe then reads from there.
    */
   async writeRunHostFile(
     hostId: string,

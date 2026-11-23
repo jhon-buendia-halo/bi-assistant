@@ -175,6 +175,7 @@ function build(
   }[] = [];
   let draftHost = false;
   let orchestratedHost = false;
+  const workspaceFiles = new Map<string, Buffer>();
   const sessions = {
     createRunHost: jest.fn(
       (spec: {
@@ -310,11 +311,23 @@ function build(
         }),
     ),
     runHostWorkspaceIds: jest.fn((): string[] => []),
-    // A run's input image from its host's workspace: gone unless a test sets it.
+    // The run workspaces' files, as `<hostId>/<path>`: a queued run's input
+    // images are written as it is accepted and read back as it starts.
+    writeRunHostFile: jest.fn((hostId: string, path: string, data: Buffer) => {
+      workspaceFiles.set(`${hostId}/${path}`, data);
+      return Promise.resolve();
+    }),
+    // A run's input image from its host's workspace: gone unless written.
     runHostImage: jest.fn<
       Promise<{ data: Buffer; mediaType: string }>,
       [hostId: string, path: string]
-    >(() => Promise.reject(new Error('gone'))),
+    >((hostId, path) => {
+      const data = workspaceFiles.get(`${hostId}/${path}`);
+      if (!data) return Promise.reject(new Error('gone'));
+      const ext = path.slice(path.lastIndexOf('.') + 1);
+      const mediaType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+      return Promise.resolve({ data, mediaType });
+    }),
     // A run-backed host as the API shows it (api.md 2.1): derived fields.
     toView: jest.fn((host: { id: string; panelItems?: unknown[] }) =>
       Promise.resolve({
@@ -457,6 +470,18 @@ function build(
     userAgents,
     workflows,
   };
+}
+
+/**
+ * Let pending work (sqlite writes, a queued run's start) land until `done`
+ * holds; setImmediate is never faked, so this works under fake timers too.
+ */
+async function until(done: () => boolean | Promise<boolean>): Promise<void> {
+  for (let i = 0; i < 500; i += 1) {
+    if (await done()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error('Gave up waiting');
 }
 
 /** The step ids and statuses of a run's `step` events, in order. */
@@ -1542,7 +1567,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     });
   });
 
-  it('at start-up fails a run left running, deletes its memory thread and keeps its workspace; deletes orphan run workspaces', async () => {
+  it('at start-up queues a run 119 accepted and left running again from scratch (its memory threads deleted, its workspace kept), fails one that started 3 times and one never queued, and deletes orphan run workspaces', async () => {
     ctx = build();
     await ctx.repository.insert({
       id: 'left',
@@ -1550,9 +1575,36 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       workflowName: 'Assistant',
       input: ASK,
       status: 'running',
+      queuedAt: '2026-11-11T09:59:00.000Z',
+      attempts: 2,
       steps: [{ id: 'answer', title: 'Answer', status: 'running' }],
+      answer: { role: 'assistant', content: 'Bra', at: 't' },
       datasets: [],
       startedAt: '2026-11-11T10:00:00.000Z',
+    });
+    // An inline 118 run, or one stored before the queue: no `queuedAt`.
+    await ctx.repository.insert({
+      id: 'inline',
+      workflowId: 'agent:assistant',
+      workflowName: 'Assistant',
+      input: ASK,
+      status: 'running',
+      attempts: 1,
+      steps: [],
+      datasets: [],
+      startedAt: '2026-11-11T10:10:00.000Z',
+    });
+    await ctx.repository.insert({
+      id: 'worn',
+      workflowId: 'agent:assistant',
+      workflowName: 'Assistant',
+      input: ASK,
+      status: 'running',
+      queuedAt: '2026-11-11T08:00:00.000Z',
+      attempts: 3,
+      steps: [{ id: 'answer', title: 'Answer', status: 'running' }],
+      datasets: [],
+      startedAt: '2026-11-11T10:30:00.000Z',
     });
     await ctx.repository.insert({
       id: 'done',
@@ -1566,13 +1618,26 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     });
     ctx.sessions.runHostWorkspaceIds.mockReturnValue([
       'run-left',
+      'run-inline',
+      'run-worn',
       'run-done',
       'run-orphan',
     ]);
     await ctx.service.onModuleInit();
-    await expect(ctx.repository.get('left')).resolves.toMatchObject({
+    const left = await ctx.repository.get('left');
+    // In line again from when it was first accepted.
+    expect(left).toMatchObject({
+      status: 'queued',
+      steps: [],
+      attempts: 2,
+      queuedAt: '2026-11-11T09:59:00.000Z',
+    });
+    expect(left).not.toHaveProperty('answer');
+    expect(left).not.toHaveProperty('error');
+    await expect(ctx.repository.get('worn')).resolves.toMatchObject({
       status: 'failed',
       error: 'The app stopped before the run finished',
+      attempts: 3,
       steps: [
         {
           id: 'answer',
@@ -1581,10 +1646,17 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         },
       ],
     });
+    await expect(ctx.repository.get('inline')).resolves.toMatchObject({
+      status: 'failed',
+      error: 'The app stopped before the run finished',
+    });
     await expect(ctx.repository.get('done')).resolves.toMatchObject({
       status: 'success',
     });
-    // A failed run keeps its memory threads, as any finished run does.
+    // The queued run starts from scratch; a failed run keeps its memory
+    // threads, as any finished run does.
+    expect(ctx.deleteMemoryResource).toHaveBeenCalledTimes(1);
+    expect(ctx.deleteMemoryResource).toHaveBeenCalledWith('run-left');
     expect(ctx.deleteMemoryThread).not.toHaveBeenCalled();
     expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledTimes(1);
     expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
@@ -1592,7 +1664,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     );
   });
 
-  it('a start-up recovery that cannot list workspaces still fails the runs left running', async () => {
+  it('a start-up recovery that cannot list workspaces still queues the runs left running again', async () => {
     ctx = build();
     await ctx.repository.insert({
       id: 'left',
@@ -1600,6 +1672,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       workflowName: 'Sequential test workflow',
       input: { text: 'a' },
       status: 'running',
+      queuedAt: 't',
       steps: [],
       datasets: [],
       startedAt: 't',
@@ -1609,7 +1682,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     });
     await ctx.service.onModuleInit();
     await expect(ctx.repository.get('left')).resolves.toMatchObject({
-      status: 'failed',
+      status: 'queued',
     });
   });
 });
@@ -1720,6 +1793,7 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
         title: 'Who won in 2002?',
         startedAt: '2026-11-11T12:00:00.000Z',
         finishedAt: v2.run.finishedAt,
+        attempts: 1,
       },
       {
         id: 'old-seq',
@@ -2719,6 +2793,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
     const first = follow(id);
     expect(first.got[0]).toBe('1:run');
     first.leave!();
+    await until(() => ctx.sessions.streamRunTurn.mock.calls.length === 1);
     expect((await ctx.service.get(id)).status).toBe('running');
     // The turn runs on the registry's signal, never the request's.
     const signal = ctx.sessions.streamRunTurn.mock.calls[0]?.[3];
@@ -3051,6 +3126,46 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
         context: { fromRunId: first.run.id },
       }),
     ).rejects.toThrow('Reference images must be PNG, JPEG or WebP images');
+  });
+
+  it('a run 119 accepts writes its images to its workspace at once; they reach its host when it starts, and again after a restart', async () => {
+    ctx = build();
+    withImagesField();
+    // The first start is cut off by the restart.
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      () => new Promise<undefined>(() => undefined),
+    );
+    const id = await ctx.service.launch(
+      await ctx.service.prepare('answer-business-question', {
+        input: { ...ASK, images: [url(PNG)] },
+      }),
+    );
+    expect(ctx.sessions.writeRunHostFile).toHaveBeenCalledWith(
+      `run-${id}`,
+      'inputs/images/1.png',
+      PNG,
+    );
+    expect((await ctx.repository.get(id))?.input.images).toEqual([
+      'inputs/images/1.png',
+    ]);
+    await until(() => ctx.sessions.streamRunTurn.mock.calls.length === 1);
+    const fresh = ctx.restarted();
+    await fresh.onModuleInit();
+    await fresh.onApplicationBootstrap();
+    await fresh.live.whenEnded(id);
+    expect(await ctx.repository.get(id)).toMatchObject({
+      status: 'success',
+      attempts: 2,
+      input: { images: ['inputs/images/1.png'] },
+    });
+    expect(ctx.sessions.createRunHost).toHaveBeenCalledTimes(2);
+    for (const [spec] of ctx.sessions.createRunHost.mock.calls) {
+      expect(spec).toMatchObject({
+        runId: id,
+        inputFiles: [{ path: 'inputs/images/1.png', data: PNG }],
+        inputImages: ['inputs/images/1.png'],
+      });
+    }
   });
 
   describe('inputImage (151)', () => {
@@ -3429,13 +3544,14 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
         return real.update(id, patch);
       });
     const id = await launch();
+    await until(() => slowed);
     await settled();
     // The turn is over, but its end waits for the checkpoint in flight.
-    expect(order).toEqual([]);
+    expect(order).toEqual(['running']);
     expect((await ctx.repository.get(id))?.status).toBe('running');
     open();
     await ctx.service.live.whenEnded(id);
-    expect(order).toEqual(['checkpoint', 'success']);
+    expect(order).toEqual(['running', 'checkpoint', 'success']);
     const stored = await ctx.repository.get(id);
     expect(stored?.status).toBe('success');
     expect(stored?.steps.find((step) => step.id === 'wrap-up')?.status).toBe(
@@ -3443,30 +3559,21 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     );
   });
 
-  it('after a restart a run cut off mid-way is failed, keeps its finished steps, and its running step is failed', async () => {
+  it('after a restart a run cut off mid-way is queued again from scratch: its stored steps are dropped', async () => {
     ctx = build();
     stagedTurn();
     const id = await launch();
-    await settled();
+    await until(async () => (await storedTrail(id)).length === 4);
     const fresh = ctx.restarted();
     await fresh.onModuleInit();
-    const stored = await ctx.repository.get(id);
-    expect(stored).toMatchObject({
-      status: 'failed',
-      error: 'The app stopped before the run finished',
+    expect(await ctx.repository.get(id)).toMatchObject({
+      status: 'queued',
+      attempts: 1,
+      steps: [],
     });
-    expect(stored?.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
-      'receive-question:success',
-      'load-catalog:success',
-      'plan:success',
-      'analyse:failed',
-    ]);
-    expect(stored?.steps.at(-1)?.error).toBe(
-      'The app stopped before the run finished',
-    );
   });
 
-  it('after a restart a run whose checkpoint stored its step suspended, before the run was stored suspended, is failed with that step failed', async () => {
+  it('after a restart a run whose checkpoint stored its step suspended, before the run was stored suspended, is queued again with no step left', async () => {
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, _emit, _signal, _careful, onStep) => {
@@ -3485,24 +3592,16 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
       },
     );
     const id = await launch();
-    await settled();
-    expect((await storedTrail(id)).at(-1)).toBe('plan:suspended');
+    await until(
+      async () => (await storedTrail(id)).at(-1) === 'plan:suspended',
+    );
     expect((await ctx.repository.get(id))?.status).toBe('running');
     const fresh = ctx.restarted();
     await fresh.onModuleInit();
-    const stored = await ctx.repository.get(id);
-    expect(stored).toMatchObject({
-      status: 'failed',
-      error: 'The app stopped before the run finished',
+    expect(await ctx.repository.get(id)).toMatchObject({
+      status: 'queued',
+      steps: [],
     });
-    expect(stored?.steps.at(-1)).toMatchObject({
-      id: 'plan',
-      status: 'failed',
-      error: 'The app stopped before the run finished',
-    });
-    expect(stored?.steps.some((step) => step.status === 'suspended')).toBe(
-      false,
-    );
   });
 
   it('a run that throws while suspending is stored failed with its suspended step failed, not left suspended', async () => {
@@ -3574,85 +3673,307 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
   });
 });
 
-describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () => {
+describe('WorkflowRunsService: the line for a slot (api.md 119 queued, 138, 150)', () => {
   let ctx: ReturnType<typeof build>;
-  afterEach(() => ctx.db.close());
+  beforeEach(() => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    ctx.db.close();
+  });
 
   const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
-  const FULL =
-    'Too many runs are in progress (1). Wait for one to finish, or stop one.';
 
-  /** A service whose live runs hold one slot. */
-  function buildCapped() {
+  /** A service whose live runs hold `cap` slots. */
+  function buildCapped(cap = 1) {
     ctx = build();
-    Object.assign(ctx.service, { live: new LiveRuns(undefined, undefined, 1) });
+    Object.assign(ctx.service, {
+      live: new LiveRuns(undefined, undefined, cap),
+    });
   }
 
   const prepared = () =>
     ctx.service.prepare('answer-business-question', { input: ASK });
+  const launch = async () => ctx.service.launch(await prepared());
 
-  /** The next turn waits until released or stopped. */
-  function holdTurn(): () => void {
-    let release!: () => void;
-    const released = new Promise<void>((resolve) => (release = resolve));
-    ctx.sessions.streamRunTurn.mockImplementationOnce(
-      async (_hostId, _question, _emit, signal) => {
+  /**
+   * Every turn waits until released (or stopped), then runs as the fake
+   * host's does; `started` holds the run ids in the order their turns began.
+   */
+  function heldTurns() {
+    const started: string[] = [];
+    const releases = new Map<string, () => void>();
+    const original = ctx.sessions.streamRunTurn.getMockImplementation()!;
+    ctx.sessions.streamRunTurn.mockImplementation(
+      async (hostId, question, emit, signal, careful, onStep) => {
+        const id = hostId.slice('run-'.length);
+        started.push(id);
         await Promise.race([
-          released,
+          new Promise<void>((resolve) => releases.set(id, resolve)),
           new Promise<void>((resolve) =>
             signal?.addEventListener('abort', () => resolve()),
           ),
         ]);
+        if (signal?.aborted) return;
+        await original(hostId, question, emit, signal, careful, onStep);
       },
     );
-    return release;
+    return { started, release: (id: string) => releases.get(id)!() };
   }
 
-  const refusal = (failure: unknown) => ({
-    status: (failure as { getStatus?: () => number }).getStatus?.(),
-    message: (failure as Error).message,
+  const statuses = (ids: string[]) =>
+    Promise.all(ids.map(async (id) => (await ctx.repository.get(id))?.status));
+
+  /** What a follower from seq 0 gets: the event types, and its end. */
+  function follow(id: string) {
+    const got: string[] = [];
+    const state = { ended: false };
+    ctx.service.live.subscribe(id, 0, {
+      event: ({ event }) => got.push(event.type),
+      end: () => (state.ended = true),
+    });
+    return { got, state };
+  }
+
+  it('20 runs with 8 slots: 8 run and 12 wait queued, never refused; all 20 succeed, the waiting ones started oldest first', async () => {
+    buildCapped(8);
+    const turns = heldTurns();
+    const ids: string[] = [];
+    for (let i = 0; i < 20; i += 1) ids.push(await launch());
+    await until(() => turns.started.length === 8);
+    expect([...turns.started].sort()).toEqual(ids.slice(0, 8).sort());
+    expect(await statuses(ids)).toEqual([
+      ...Array<string>(8).fill('running'),
+      ...Array<string>(12).fill('queued'),
+    ]);
+    const waiting = await ctx.repository.get(ids[8]);
+    expect(waiting?.steps).toEqual([]);
+    expect(typeof waiting?.queuedAt).toBe('string');
+    expect(waiting).not.toHaveProperty('attempts');
+    expect(follow(ids[8]).got).toEqual(['run', 'queued']);
+    expect(follow(ids[0]).got).not.toContain('queued');
+    // Each run that ends lets the oldest waiting one start.
+    for (let k = 0; k < 12; k += 1) {
+      turns.release(turns.started[k]);
+      await until(() => turns.started.length === 9 + k);
+    }
+    expect(turns.started.slice(8)).toEqual(ids.slice(8));
+    for (const id of turns.started.slice(12)) turns.release(id);
+    for (const id of ids) await ctx.service.live.whenEnded(id);
+    expect(await statuses(ids)).toEqual(Array<string>(20).fill('success'));
+    const last = await ctx.repository.get(ids[19]);
+    expect(last).toMatchObject({ attempts: 1, queuedAt: waiting?.queuedAt });
+    expect(follow(ids[19]).got.slice(0, 3)).toEqual(['run', 'queued', 'step']);
   });
 
-  it('two launches together with one slot free: one run, one 429, and nothing stored for the refused one', async () => {
-    buildCapped();
-    holdTurn();
-    const [a, b] = [await prepared(), await prepared()];
-    const results = await Promise.allSettled([
-      ctx.service.launch(a),
-      ctx.service.launch(b),
+  it('Stop (150) on a waiting run stores it stopped with no steps and ends its log; it never starts, and the line goes on', async () => {
+    buildCapped(1);
+    const turns = heldTurns();
+    const busy = await launch();
+    const waiting = await launch();
+    const next = await launch();
+    await until(() => turns.started.length === 1);
+    const watcher = follow(waiting);
+    const run = await ctx.service.stop(waiting);
+    expect(run).toMatchObject({ id: waiting, status: 'stopped', steps: [] });
+    expect(run.finishedAt).toBeDefined();
+    expect(watcher.got).toEqual(['run', 'queued', 'done']);
+    expect(watcher.state.ended).toBe(true);
+    expect(await statuses([busy, next])).toEqual(['running', 'queued']);
+    turns.release(busy);
+    await until(() => turns.started.length === 2);
+    expect(turns.started).toEqual([busy, next]);
+    turns.release(next);
+    await ctx.service.live.whenEnded(next);
+    expect(await statuses([busy, waiting, next])).toEqual([
+      'success',
+      'stopped',
+      'success',
     ]);
-    const started = results.filter((result) => result.status === 'fulfilled');
-    const refused = results.filter((result) => result.status === 'rejected');
-    expect(started).toHaveLength(1);
-    expect(refused).toHaveLength(1);
-    expect(refusal(refused[0]?.reason)).toEqual({
-      status: 429,
-      message: FULL,
+    expect(ctx.sessions.createRunHost).toHaveBeenCalledTimes(2);
+  });
+
+  it('a waiting run counts as active: delete, archive, evidence and visuals wait for it', async () => {
+    buildCapped(1);
+    const turns = heldTurns();
+    const busy = await launch();
+    const waiting = await launch();
+    await until(() => turns.started.length === 1);
+    await expect(ctx.service.delete(waiting)).rejects.toThrow(
+      'Stop the run before deleting it',
+    );
+    await expect(ctx.service.archive(waiting)).rejects.toThrow(
+      'The run is still running',
+    );
+    await expect(ctx.service.prepareEvidence(waiting)).rejects.toThrow(
+      'Wait for the run to finish',
+    );
+    await expect(ctx.service.generateVisualization(waiting)).rejects.toThrow(
+      'Wait for the run to finish',
+    );
+    turns.release(busy);
+    await until(() => turns.started.length === 2);
+    turns.release(waiting);
+    await ctx.service.live.whenEnded(waiting);
+  });
+
+  it('a waiting run whose dataset is gone when its turn comes ends failed with the refusal', async () => {
+    buildCapped(1);
+    const turns = heldTurns();
+    const busy = await launch();
+    const waiting = await launch();
+    await until(() => turns.started.length === 1);
+    const datasets = (
+      ctx.service as unknown as { datasets: { list: jest.Mock } }
+    ).datasets;
+    datasets.list.mockResolvedValue([]);
+    const refusal = await prepared().then(
+      () => '',
+      (failure: Error) => failure.message,
+    );
+    expect(refusal).not.toBe('');
+    turns.release(busy);
+    await until(() => !ctx.service.live.isRunning(waiting));
+    expect(await ctx.repository.get(waiting)).toMatchObject({
+      status: 'failed',
+      error: refusal,
+      steps: [],
+    });
+    expect(follow(waiting).got).toEqual(['run', 'queued', 'error']);
+    expect(turns.started).toEqual([busy]);
+  });
+
+  it('Stop (150) while a seated run is being prepared again keeps it stopped: it never starts, even when the prepare outlasts the unwind wait', async () => {
+    buildCapped(1);
+    type Definition = Awaited<ReturnType<WorkflowsService['definition']>>;
+    const definition = ctx.workflows.definition.bind(ctx.workflows) as (
+      id: string,
+    ) => Promise<Definition>;
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    let reads = 0;
+    // The request's prepare goes through; the re-prepare as the run starts
+    // waits at the gate.
+    const spy = jest
+      .spyOn(ctx.workflows, 'definition')
+      .mockImplementation(async (name) => {
+        reads += 1;
+        if (reads > 1) await gate;
+        return definition(name);
+      });
+    const id = await launch();
+    await until(() => reads === 2);
+    const stopping = ctx.service.stop(id);
+    await jest.advanceTimersByTimeAsync(10_000);
+    await expect(stopping).resolves.toMatchObject({ status: 'stopped' });
+    open();
+    await until(async () => {
+      for (let i = 0; i < 10; i += 1) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+      return true;
+    });
+    const stored = await ctx.repository.get(id);
+    expect(stored).toMatchObject({ status: 'stopped', steps: [] });
+    expect(stored?.attempts).toBeUndefined();
+    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+    // Its slot is free again.
+    spy.mockRestore();
+    const next = await launch();
+    await ctx.service.live.whenEnded(next);
+    expect((await ctx.repository.get(next))?.status).toBe('success');
+  });
+
+  it('after a restart a run cut off mid-way is queued again and, once the app is up, starts from scratch under the same id and succeeds with attempts 2', async () => {
+    buildCapped(8);
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+        for (const step of V2_STEPS_BEFORE) onStep(step);
+        await new Promise<void>(() => undefined);
+      },
+    );
+    const id = await launch();
+    await until(async () => (await ctx.repository.get(id))?.steps.length === 4);
+    const before = (await ctx.repository.get(id))!;
+    expect(before).toMatchObject({ status: 'running', attempts: 1 });
+    const fresh = ctx.restarted();
+    await fresh.onModuleInit();
+    expect(await ctx.repository.get(id)).toMatchObject({
+      status: 'queued',
+      steps: [],
+      attempts: 1,
+      queuedAt: before.queuedAt,
+    });
+    expect(ctx.deleteMemoryResource).toHaveBeenCalledWith(`run-${id}`);
+    await fresh.onApplicationBootstrap();
+    await fresh.live.whenEnded(id);
+    const after = (await ctx.repository.get(id))!;
+    expect(after).toMatchObject({
+      id,
+      status: 'success',
+      attempts: 2,
+      queuedAt: before.queuedAt,
+    });
+    expect(after.startedAt >= before.startedAt).toBe(true);
+    expect(
+      after.steps.every((step) => ['success', 'skipped'].includes(step.status)),
+    ).toBe(true);
+    expect(after.steps.at(-1)).toMatchObject({
+      id: 'wrap-up',
+      status: 'success',
     });
     expect(await ctx.repository.list()).toHaveLength(1);
-    expect(ctx.sessions.createRunHost).toHaveBeenCalledTimes(1);
   });
 
-  it('the slot frees when the run ends, fails or is stopped', async () => {
-    buildCapped();
-    const ended = await ctx.service.launch(await prepared());
-    await ctx.service.live.whenEnded(ended);
-    holdTurn();
-    const stopped = await ctx.service.launch(await prepared());
-    await expect(ctx.service.launch(await prepared())).rejects.toThrow(FULL);
-    await ctx.service.stop(stopped);
-    ctx.sessions.streamRunTurn.mockImplementationOnce(() =>
-      Promise.reject(new Error('The provider failed')),
-    );
-    const failed = await ctx.service.launch(await prepared());
-    await ctx.service.live.whenEnded(failed);
-    expect((await ctx.service.get(failed)).status).toBe('failed');
-    const next = await ctx.service.launch(await prepared());
-    await ctx.service.live.whenEnded(next);
+  it('a run the app stopped in three times is failed at the next start-up and never starts again', async () => {
+    buildCapped(8);
+    const hang = () =>
+      ctx.sessions.streamRunTurn.mockImplementationOnce(
+        () => new Promise<undefined>(() => undefined),
+      );
+    hang();
+    const id = await launch();
+    for (const attempts of [1, 2]) {
+      await until(
+        () => ctx.sessions.streamRunTurn.mock.calls.length === attempts,
+      );
+      const fresh = ctx.restarted();
+      await fresh.onModuleInit();
+      expect((await ctx.repository.get(id))?.status).toBe('queued');
+      hang();
+      await fresh.onApplicationBootstrap();
+    }
+    await until(() => ctx.sessions.streamRunTurn.mock.calls.length === 3);
+    expect((await ctx.repository.get(id))?.attempts).toBe(3);
+    const last = ctx.restarted();
+    await last.onModuleInit();
+    expect(await ctx.repository.get(id)).toMatchObject({
+      status: 'failed',
+      error: 'The app stopped before the run finished',
+      attempts: 3,
+    });
+    await last.onApplicationBootstrap();
+    expect(last.live.has(id)).toBe(false);
+  });
+
+  it('a dispatched run is dispatched once: a second start-up pass leaves it as it is', async () => {
+    buildCapped(1);
+    const turns = heldTurns();
+    const busy = await launch();
+    const waiting = await launch();
+    await ctx.service.onApplicationBootstrap();
+    await until(() => turns.started.length === 1);
+    turns.release(busy);
+    await until(() => turns.started.length === 2);
+    turns.release(waiting);
+    await ctx.service.live.whenEnded(waiting);
+    expect(turns.started).toEqual([busy, waiting]);
+    expect(ctx.sessions.createRunHost).toHaveBeenCalledTimes(2);
   });
 
   it('a run waiting for the user holds no slot, and its resume is never refused', async () => {
-    buildCapped();
+    buildCapped(1);
     const suspension = {
       stepId: 'plan',
       question: 'Which measure?',
@@ -3668,31 +3989,39 @@ describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () =
         Promise.resolve({ datasets: ['World Cup Core'] }),
       ),
     });
-    const waiting = await ctx.service.launch(await prepared());
+    const waiting = await launch();
     await ctx.service.live.whenEnded(waiting);
     expect((await ctx.service.get(waiting)).status).toBe('suspended');
-    const release = holdTurn();
-    const other = await ctx.service.launch(await prepared());
+    const turns = heldTurns();
+    const other = await launch();
+    await until(() => turns.started.length === 1);
     const resume = await ctx.service.prepareResume(waiting, {
       stepId: 'plan',
       answer: 'Goals',
     });
     expect(ctx.service.resumeDetached(resume)).toBe(waiting);
     await ctx.service.live.whenEnded(waiting);
-    release();
+    turns.release(other);
     await ctx.service.live.whenEnded(other);
+    expect((await ctx.service.get(other)).status).toBe('success');
   });
 
-  it('a draft run (Try it) holds no slot', async () => {
-    buildCapped();
-    holdTurn();
-    await ctx.service.launch(await prepared());
+  it('a draft run (Try it) holds no slot and never waits', async () => {
+    buildCapped(1);
+    const turns = heldTurns();
+    const busy = await launch();
+    await until(() => turns.started.length === 1);
     const draft = await ctx.service.prepareDraft('sales-helper', {
       input: { question: 'Who won?' },
     });
-    await expect(ctx.service.stream(draft, () => undefined)).resolves.toEqual(
+    const tried = ctx.service.stream(draft, () => undefined);
+    await until(() => turns.started.length === 2);
+    turns.release(turns.started[1]);
+    await expect(tried).resolves.toEqual(
       expect.objectContaining({ status: 'success' }),
     );
+    turns.release(busy);
+    await ctx.service.live.whenEnded(busy);
   });
 });
 
@@ -3913,8 +4242,9 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
     const kinds = update.mock.calls.map(([, patch]) =>
       Object.keys(patch).join() === 'steps' ? 'checkpoint' : patch.status,
     );
+    expect(kinds[0]).toBe('running');
     expect(kinds.at(-1)).toBe('failed');
-    expect(kinds.slice(0, -1).every((kind) => kind === 'checkpoint')).toBe(
+    expect(kinds.slice(1, -1).every((kind) => kind === 'checkpoint')).toBe(
       true,
     );
   });

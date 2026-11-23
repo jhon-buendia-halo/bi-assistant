@@ -165,7 +165,7 @@
               [queryInspector]="inspectsQueries()"
               [question]="run.question ?? null"
               (inspectQuery)="inspectQuery($event)"
-              [showGenerateVisual]="run.status !== 'running'"
+              [showGenerateVisual]="!isLive(run.status)"
               [visualGenerating]="visuals.generating() === run.id"
               (generateVisual)="visuals.generate(run, applyRun)"
               (viewVisual)="visuals.view(run, $event)"

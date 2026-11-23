@@ -1197,7 +1197,7 @@ flowchart LR
   - **New `appId`:** rejected; the new app would install beside the old one and start with an empty profile.
 
 #### ADR-0047 — Long work the user starts runs as a background task owned by the shell, not by the screen that started it
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0057 (a queued run is a running task)
 - **Date:** 2026-11-15
 - **Context:**
   - The renderer has no router: changing area, view, tab or opening Settings destroys the screen. Twenty slow operations kept their in-progress state in the component, so leaving made the work invisible (a dataset save, a Testing Data load, ontology suggestions), cancelled it (an inventory load, a synthetic profile) or left it untracked (an eval run, whose poll timer even outlived the page). The user saw a dataset appear only when its save ended and asked for the process to stay visible.
@@ -1218,7 +1218,7 @@ flowchart LR
   - **Backend job queue for every operation:** rejected for now; the requests already complete if the client keeps the connection, so a queue would add endpoints and storage for no visible gain.
 
 #### ADR-0048 — A workflow run runs detached from its connection: a live-run registry with a numbered event log, re-attach and a Stop endpoint
-- **Status:** Accepted; amended 2026-11-17 (a no-progress watchdog and a forced stop, last Consequences bullet)
+- **Status:** Accepted; amended 2026-11-17 (a no-progress watchdog and a forced stop, last Consequences bullet); amended by ADR-0057 (the run cap queues instead of refusing, and a restart queues a running run again instead of failing it)
 - **Date:** 2026-11-15
 - **Context:**
   - A run's stream (api.md 119, 138) was its lifetime: the backend aborted the run when the connection closed, and the workflow page closed it when it was left (the renderer has no router, ADR-0047). Leaving the page, reloading or closing the window stopped the run; the user asked for runs to keep going and show in Background tasks (roadmap 1.26.5).
@@ -1232,7 +1232,7 @@ flowchart LR
   - **Unchanged:** Try it (129) and a step's chat (137) stay tied to their connection; 118 runs inline.
   - **Amends ADR-0043:** a run's runtime stays in server memory, now while it runs too, not only while it waits.
 - **Consequences:**
-  - A backend restart still ends a running run: it is stored `failed` at start-up (workflows R20), and a waiting one `stopped`, as before; nothing of the registry is persisted.
+  - A backend restart still ends a running run: it is stored `failed` at start-up (workflows R20; since ADR-0057 it is queued again instead), and a waiting one `stopped`, as before; nothing of the registry is persisted.
   - The stream's frames gain `seq` (api.md 3.6); a stopped run's stream ends with `done` rather than nothing; a client must call 150 to stop.
   - Memory: one log per live run and per run ended in the last 10 minutes, bounded by the cap.
   - **Stack-neutral:** a rebuild needs a server-side run that outlives its request, a replayable event log per run, a follow endpoint and a stop endpoint.
@@ -1441,6 +1441,32 @@ flowchart LR
   - **Native PDF (`pdfkit`) and PowerPoint charts (`pptxgenjs` charts):** no browser, but every dashboard widget kind would need a second drawing in two libraries that would never match the runtime's; rejected by the operator.
   - **The tab exports it (the renderer prints or captures the open conversation):** the browser is already there, but the export would need the conversation and its dashboards open on screen, would not work for Avery from the conversation's words, and would leave nothing on the run; rejected by the operator.
   - **A (chosen): the backend builds the files and drives the local browser,** which reuses ADR-0049's browser and ADR-0055's runtime, draws the dashboards exactly as the user saw them, and keeps the files with the run.
+
+#### ADR-0057 — Persistent run queue and restart recovery
+- **Status:** Accepted. Amends ADR-0048 (and ADR-0047 for its task rows).
+- **Date:** 2026-11-23
+- **Context:**
+  - A workflow run (api.md 119) holds one of `WORKFLOW_MAX_LIVE_RUNS` slots (8). The ninth start was refused with `429`, so the user had to retry by hand.
+  - A backend restart marked every `running` run `failed` (`The app stopped before the run finished`), although the user's question was still good and nothing was lost but the run's own work.
+  - The runs already live in `workflow_runs` (data-model 3.16), and `LiveRuns` (ADR-0048) already holds each run's abort signal and event log in memory.
+- **Decision:**
+  - **The queue is `workflow_runs` plus a FIFO wait in `LiveRuns`.** 119 inserts the run `queued` (with `queuedAt`), writes its input images to its workspace, holds it in `LiveRuns` and sends `run`, then `queued` when no slot is free. When a slot frees, the oldest queued run (by `queuedAt`) starts. A dispatched run is prepared again from its stored doc, so a follow-up gets a fresh transcript; a refusal there ends the run `failed` with that message.
+  - **The cap bounds running runs, not accepted ones.** 118 stays inline with no slot; resumes (138) and suspended runs behave as before. A queued run counts as active for delete, archive, visuals, evidence and node chats, and Stop stores it `stopped` at once.
+  - **At-least-once, from scratch, 3 attempts.** At start-up a `running` run with fewer than 3 starts (`attempts`, `RUN_MAX_ATTEMPTS`) becomes `queued`: steps, output, error and answer cleared, its memory threads deleted, workspace inputs kept. A run cut off after its third start becomes `failed` as before. Queued runs are dispatched once the whole app is up (`onApplicationBootstrap`). Suspended runs are unchanged.
+  - **No step resume.** The restarted run repeats its steps; resuming mid-run is ADR-0043's approach C, still deferred.
+- **Consequences:**
+  - A crash repeats the run's LLM calls and cost, up to 3 times per run.
+  - Input images are written when the run is accepted, not when it starts, so a queued run uses disk before it uses a slot.
+  - A re-prepare can refuse (a dataset or workflow removed while the run waited); the run then ends `failed` with the refusal.
+  - `queued` joins the status union and the wire shape gains `queuedAt` and `attempts`; both are optional, so no migration.
+  - The idle watchdog times only running time: a queued run is never timed.
+  - **Stack-neutral:** a rebuild needs a durable run record with a queued state, an in-memory wait ordered by acceptance time, a start-up pass that re-queues interrupted runs under an attempt limit, and a dispatch step after start-up.
+- **Alternatives considered:**
+  - **A library queue on PGlite (pg-boss):** rejected; a second store and worker model for a queue the run table already is.
+  - **BullMQ:** rejected; it needs Redis, which a desktop app does not run.
+  - **DBOS:** rejected; it needs Postgres, and its SQLite support is an open PR (#1288).
+  - **Inngest or Temporal sidecars:** rejected; a separate server process for one local app.
+  - **Mastra `restart()`:** rejected for now; it needs workflow snapshots the app disables, and the agent turns' state is not in them (ADR-0043 approach C, deferred).
 
 ## Level 4 — Code
 

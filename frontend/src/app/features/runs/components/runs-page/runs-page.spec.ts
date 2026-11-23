@@ -84,6 +84,13 @@ describe('RunsPage (app-shell R46; plan 1.24.11)', () => {
     expect(chips[1].textContent?.trim()).toBe('Done');
   });
 
+  it('shows a queued run with a neutral Queued chip', () => {
+    const el = mount([{ ...summary(1), status: 'queued' }]);
+    const chip = el.querySelector('[data-testid="row-run-status"]')!;
+    expect(chip.textContent?.trim()).toBe('Queued');
+    expect(chip.classList).toContain('chip-neutral');
+  });
+
   it('shows the title, workflow, status and id of a run, and opens it on click', () => {
     const el = mount([summary(3)]);
     const row = el.querySelector('[data-testid="run-run-03-aaaa"]')!;

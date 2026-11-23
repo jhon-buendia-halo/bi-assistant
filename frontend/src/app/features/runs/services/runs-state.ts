@@ -10,6 +10,7 @@ import { WorkflowDesigner } from '../../workflows/services/workflow-designer.ser
 import { WorkflowRunsApiService } from '../../workflows/services/workflow-runs-api.service';
 import { WorkflowsApiService } from '../../workflows/services/workflows-api.service';
 import { WorkflowsNavState } from '../../workflows/services/workflows-nav-state';
+import { isLiveRun } from '../../workflows/services/workflows.util';
 
 /** The two tabs of the Runs page (app-shell R3, R46). */
 export type RunsTab = 'runs' | 'past-chats';
@@ -142,7 +143,7 @@ export class RunsState {
   }
 
   deleteRun(run: WorkflowRunSummary): void {
-    if (run.status === 'running') {
+    if (isLiveRun(run.status)) {
       this.toast.error('Stop the run before deleting it');
       return;
     }

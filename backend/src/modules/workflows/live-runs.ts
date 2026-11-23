@@ -5,9 +5,11 @@
  * and replay them), the clients following it, and when it ended. A closed
  * connection only stops following; Stop (150) aborts. An ended run stays
  * here `LIVE_RUN_RETENTION_MS`, then it is dropped (121 still reads it).
- * A started run holds one of `MAX_LIVE_RUNS` slots until it ends (119 429).
- * Nothing here survives a restart (workflows R20). Plain code, no framework
- * import, so Jest can drive it with fake timers.
+ * A started run holds one of `MAX_LIVE_RUNS` slots until it ends; a run
+ * accepted while every slot is taken waits for one in line, oldest first
+ * (119 `queued`). Nothing here survives a restart (workflows R20; the
+ * stored `queued` runs do). Plain code, no framework import, so Jest can
+ * drive it with fake timers.
  */
 
 /** How long an ended run's events can still be replayed: 10 minutes. */
@@ -16,7 +18,7 @@ export const LIVE_RUN_RETENTION_MS = 10 * 60 * 1000;
 /** The most entries one run's log keeps; older ones drop off (not `run`). */
 export const LIVE_RUN_MAX_EVENTS = 5_000;
 
-/** How many runs may run at once when nothing overrides it (api.md 119 429). */
+/** How many runs may run at once when nothing overrides it (api.md 119). */
 export const MAX_LIVE_RUNS_DEFAULT = 8;
 
 /**
@@ -30,7 +32,7 @@ export function liveRunCap(raw: string | undefined): number {
   return Number.isSafeInteger(cap) && cap >= 1 ? cap : MAX_LIVE_RUNS_DEFAULT;
 }
 
-/** The cap on live runs, read once from the environment (api.md 119 429). */
+/** The cap on live runs, read once from the environment (api.md 119). */
 export const MAX_LIVE_RUNS = liveRunCap(process.env.WORKFLOW_MAX_LIVE_RUNS);
 
 /**
@@ -116,8 +118,8 @@ export class IdleWatchdog {
 }
 
 /**
- * One run's place under the cap: taken as its start is checked (119), or
- * claimed by a resume (138); freed once, when the run ends or never starts.
+ * One run's place under the cap: given to a waiting run in turn (119), or
+ * claimed by a resume (138); freed once, when the run ends.
  */
 export interface LiveRunSlot {
   release(): void;
@@ -158,8 +160,15 @@ interface Entry {
   whenEnded: Promise<void>;
   resolveEnded: () => void;
   timer: ReturnType<typeof setTimeout> | null;
-  /** Its place under the cap; none for a run that holds no slot. */
+  /** Its place under the cap; none for a run that holds no slot (yet). */
   slot?: LiveRunSlot;
+}
+
+/** A run waiting in line for a slot (`waitForSlot`). */
+interface Waiter {
+  entry: Entry;
+  seated: () => void;
+  refused: (failure: Error) => void;
 }
 
 /** A delta that merges into the one before it: `text` or `reasoning` with only a `content`. */
@@ -177,22 +186,15 @@ export class LiveRuns {
   private readonly lastSeq = new Map<string, number>();
   /** The slots taken and not yet freed. */
   private held = 0;
+  /** The runs waiting for a slot, oldest first. */
+  private readonly line: Waiter[] = [];
 
-  /** `cap`: how many slots `reserve` gives out at most (api.md 119 429). */
+  /** `cap`: how many slots the waiting runs are given at most (api.md 119). */
   constructor(
     private readonly retentionMs = LIVE_RUN_RETENTION_MS,
     private readonly maxEvents = LIVE_RUN_MAX_EVENTS,
     readonly cap = MAX_LIVE_RUNS,
   ) {}
-
-  /**
-   * Take a slot for a run about to start (119), or undefined when `cap`
-   * runs hold one. Synchronous, so the check and the taking are one step:
-   * two starts arriving together with one slot free get one slot.
-   */
-  reserve(): LiveRunSlot | undefined {
-    return this.held < this.cap ? this.claim() : undefined;
-  }
 
   /** Take a slot whatever the cap: a resume (138) is never refused. */
   claim(): LiveRunSlot {
@@ -203,8 +205,70 @@ export class LiveRuns {
         if (freed) return;
         freed = true;
         this.held -= 1;
+        this.seatNext();
       },
     };
+  }
+
+  /**
+   * Seat a held run now, when a slot is free and no run waits before it
+   * (api.md 119): answers whether it holds a slot. Synchronous, so two runs
+   * arriving together for one free slot get one slot.
+   */
+  seat(runId: string): boolean {
+    const entry = this.runs.get(runId);
+    if (!entry || entry.ended) return false;
+    if (entry.slot) return true;
+    if (this.held >= this.cap || this.line.length) return false;
+    entry.slot = this.claim();
+    return true;
+  }
+
+  /**
+   * Settles once the held run holds a slot (`end` frees it): at once when
+   * it is seated, else when its turn in line comes, oldest first. The line
+   * is joined as this is called. Rejects when the run is stopped (150) or
+   * ended before then.
+   */
+  waitForSlot(runId: string): Promise<void> {
+    const entry = this.runs.get(runId);
+    if (!entry || entry.ended) {
+      return Promise.reject(new Error(`Run "${runId}" is not running`));
+    }
+    if (this.seat(runId)) return Promise.resolve();
+    const signal = entry.controller.signal;
+    if (signal.aborted) return Promise.reject(new Error('Run stopped'));
+    return new Promise<void>((resolve, reject) => {
+      const onAbort = () => waiter.refused(new Error('Run stopped'));
+      const waiter: Waiter = {
+        entry,
+        seated: () => {
+          signal.removeEventListener('abort', onAbort);
+          resolve();
+        },
+        refused: (failure) => {
+          signal.removeEventListener('abort', onAbort);
+          this.leaveLine(entry);
+          reject(failure);
+        },
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      this.line.push(waiter);
+    });
+  }
+
+  /** Give the free slots to the runs waiting longest. */
+  private seatNext(): void {
+    while (this.held < this.cap && this.line.length) {
+      const waiter = this.line.shift()!;
+      waiter.entry.slot = this.claim();
+      waiter.seated();
+    }
+  }
+
+  private leaveLine(entry: Entry): void {
+    const at = this.line.findIndex((waiter) => waiter.entry === entry);
+    if (at >= 0) this.line.splice(at, 1);
   }
 
   /**
@@ -274,6 +338,9 @@ export class LiveRuns {
     const entry = this.runs.get(runId);
     if (!entry || entry.ended) return;
     entry.ended = true;
+    this.line
+      .find((waiter) => waiter.entry === entry)
+      ?.refused(new Error(`Run "${runId}" ended`));
     entry.slot?.release();
     const listeners = [...entry.listeners];
     entry.listeners.clear();
