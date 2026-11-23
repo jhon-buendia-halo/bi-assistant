@@ -8,11 +8,12 @@ import {
 } from '../models/workflow.model';
 import { WorkflowNodeStatus } from '../models/workflow-node.model';
 
-export type WorkflowSectionId = 'official';
-
+/** One User journeys section: a category and its workflows. */
 export interface WorkflowSection {
-  id: WorkflowSectionId;
-  label: 'Official';
+  /** The category id (`data-analytics`). */
+  id: string;
+  /** The category name (`Data Analytics`). */
+  label: string;
   workflows: WorkflowSummary[];
 }
 
@@ -25,22 +26,59 @@ function matches(workflow: WorkflowSummary, query: string): boolean {
   );
 }
 
+/** The filter pills' value: every category (`all`) or one category id. */
+export type WorkflowFilter = 'all' | string;
+
 /**
- * The Workflows page's sections (workflows R5, ui.md 4.4a): Official, in the
- * catalogue's own order (workflows R1). Agents have no workflow of their own,
- * so there is no Mine section. A section with nothing to show, after the
- * search, is left out.
+ * The workflows grouped by category: one section per category, in the order
+ * its first workflow comes in the catalogue, each with its workflows in the
+ * catalogue's own order (workflows R1).
+ */
+function groupByCategory(
+  workflows: readonly WorkflowSummary[],
+): WorkflowSection[] {
+  const sections = new Map<string, WorkflowSection>();
+  for (const workflow of workflows) {
+    const { id, name } = workflow.category;
+    const section = sections.get(id) ?? { id, label: name, workflows: [] };
+    section.workflows.push(workflow);
+    sections.set(id, section);
+  }
+  return [...sections.values()];
+}
+
+/**
+ * The filter pills (workflows R5, ui.md 4.4a): All, then one per category,
+ * in section order. Built from every workflow, so the pills do not move as
+ * the user types a search.
+ */
+export function workflowFilters(
+  workflows: readonly WorkflowSummary[],
+): { id: WorkflowFilter; label: string }[] {
+  return [
+    { id: 'all', label: 'All' },
+    ...groupByCategory(workflows).map(({ id, label }) => ({ id, label })),
+  ];
+}
+
+/**
+ * The Workflows page's sections (workflows R5, ui.md 4.4a): one per category,
+ * or only the picked one, holding the workflows that match the search. A
+ * category with nothing to show gets no section.
  */
 export function buildWorkflowSections(
   workflows: readonly WorkflowSummary[],
+  filter: WorkflowFilter,
   query: string,
 ): WorkflowSection[] {
   const needle = query.trim().toLowerCase();
-  const shown = workflows.filter((workflow) => matches(workflow, needle));
-  const sections: WorkflowSection[] = [
-    { id: 'official', label: 'Official', workflows: shown },
-  ];
-  return sections.filter((section) => section.workflows.length > 0);
+  return groupByCategory(
+    workflows.filter(
+      (workflow) =>
+        (filter === 'all' || workflow.category.id === filter) &&
+        matches(workflow, needle),
+    ),
+  );
 }
 
 /** The text shown instead of the sections, or null while one shows. */

@@ -101,6 +101,7 @@ const ASSISTANT: WorkflowDetail = {
   description: 'Answers questions over the datasets you pick.',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
   stepCount: 1,
   trigger: 'run',

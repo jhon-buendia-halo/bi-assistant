@@ -176,6 +176,19 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     ]);
   });
 
+  it('files every workflow under one category, the User journeys sections (workflows R5)', () => {
+    expect(CODE_WORKFLOWS.map(({ id, category }) => [id, category])).toEqual([
+      ['answer-business-question', 'data-analytics'],
+      ['orchestrated-answer', 'data-analytics'],
+      ['orchestrated-answer-michael', 'data-analytics'],
+      ['data-readiness-assessment', 'data-engineering'],
+      ['recreate-dashboard', 'dashboards'],
+      ['map-dashboard-data', 'dashboards'],
+      ['review-website', 'software-development'],
+      ['consumption-gap-analysis', 'data-engineering'],
+    ]);
+  });
+
   // Reference images (workflows R35; agents.md 2.15; api.md 116; plan D5).
   it('explains every labelled connector of every workflow in a note (workflows R42)', () => {
     const labelled = CODE_WORKFLOWS.flatMap((workflow) =>

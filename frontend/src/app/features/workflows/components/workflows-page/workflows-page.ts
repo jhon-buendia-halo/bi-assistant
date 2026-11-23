@@ -11,15 +11,17 @@ import { WorkflowSummary } from '../../models/workflow.model';
 import { WorkflowsApiService } from '../../services/workflows-api.service';
 import {
   buildWorkflowSections,
+  workflowFilters,
   workflowsEmptyMessage,
+  type WorkflowFilter,
 } from '../../services/workflows.util';
 import { WorkflowCard } from '../workflow-card/workflow-card';
 
 /**
  * The Workflows page (workflows R5, R6; ui.md 4.4a): the workflows defined in
- * code, under Official, with search. Agents are a library, not workflows.
- * Read-only (R3).
- * The search resets each time the page opens.
+ * code, one section per category, with search and the category pills.
+ * Agents are a library, not workflows. Read-only (R3).
+ * The search and the pill reset each time the page opens.
  */
 @Component({
   selector: 'app-workflows-page',
@@ -39,9 +41,11 @@ export class WorkflowsPage implements OnInit {
   readonly error = signal<string | null>(null);
   readonly workflows = signal<WorkflowSummary[]>([]);
   readonly query = signal('');
+  readonly filter = signal<WorkflowFilter>('all');
 
+  readonly filters = computed(() => workflowFilters(this.workflows()));
   readonly sections = computed(() =>
-    buildWorkflowSections(this.workflows(), this.query()),
+    buildWorkflowSections(this.workflows(), this.filter(), this.query()),
   );
   readonly emptyMessage = computed(() =>
     workflowsEmptyMessage(this.query(), this.sections()),

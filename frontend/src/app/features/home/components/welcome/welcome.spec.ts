@@ -22,6 +22,7 @@ function workflow(id: string, name: string): WorkflowSummary {
     description: `${name} does its job.`,
     kind: 'code',
     owner: 'Official',
+    category: { id: 'data-analytics', name: 'Data Analytics' },
     agents: [],
     stepCount: 1,
     trigger: 'run',

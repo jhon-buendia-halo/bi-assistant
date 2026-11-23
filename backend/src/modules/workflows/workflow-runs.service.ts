@@ -17,6 +17,7 @@ import {
   agentWorkflowId,
   draftRunInput,
   oneStepWorkflowSteps,
+  workflowCategory,
   wrappedAgentMaxSteps,
   type AgentRunTurn,
   type WorkflowInputValues,
@@ -574,6 +575,8 @@ export class WorkflowRunsService
         description: '',
         kind: 'agent',
         owner: 'You',
+        // A draft agent answers a question on data; it is never listed.
+        category: workflowCategory('data-analytics'),
         agents: [{ key: agentId, name: target.name, role: target.role }],
         stepCount: 1,
         bar: 'agent',

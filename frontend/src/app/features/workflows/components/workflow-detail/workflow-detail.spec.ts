@@ -32,6 +32,7 @@ const THREE_STEPS: WorkflowDetail = {
   description: 'A three-step example.',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   agents: [],
   stepCount: 3,
   trigger: 'run',

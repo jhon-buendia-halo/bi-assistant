@@ -12,6 +12,7 @@ export const FIXTURE_WORKFLOW: WorkflowDetail = {
   description: 'Answers a question over the datasets.',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   agents: [{ key: 'qti', name: 'Insights Analyst' }],
   stepCount: 2,
   trigger: 'run',

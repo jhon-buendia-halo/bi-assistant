@@ -123,6 +123,30 @@ export type WorkflowBar = 'steps' | 'agent';
  */
 export type WorkflowTrigger = 'run';
 
+/**
+ * The categories the User journeys page groups the catalogue by, each with
+ * its section heading (workflows R5; api.md 116). Add one here when a
+ * workflow needs a new kind of work (Financial, …).
+ */
+export const WORKFLOW_CATEGORIES = {
+  'data-analytics': 'Data Analytics',
+  'data-engineering': 'Data Engineering',
+  dashboards: 'Dashboards',
+  'software-development': 'Software Development',
+} as const;
+
+export type WorkflowCategoryId = keyof typeof WORKFLOW_CATEGORIES;
+
+/** A workflow's category as `GET /workflows` lists it (api.md 116). */
+export interface WorkflowCategory {
+  id: WorkflowCategoryId;
+  name: (typeof WORKFLOW_CATEGORIES)[WorkflowCategoryId];
+}
+
+export function workflowCategory(id: WorkflowCategoryId): WorkflowCategory {
+  return { id, name: WORKFLOW_CATEGORIES[id] };
+}
+
 /** The placeholder of a run's question. */
 const QUESTION_PLACEHOLDER = 'Ask a question about your data';
 
@@ -204,6 +228,8 @@ export interface CodeWorkflowSource {
   id: string;
   name: string;
   description: string;
+  /** The section it is listed under on the User journeys page (workflows R5). */
+  category: WorkflowCategoryId;
   /** Registry key of the agent its agent steps run, unless `stepAgents` names another. */
   primaryFor: string;
   /**
@@ -245,6 +271,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
     {
       id: ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
       name: ANSWER_BUSINESS_QUESTION_WORKFLOW_NAME,
+      category: 'data-analytics',
       description: INSIGHTS_ANALYST_DESCRIPTION,
       primaryFor: INSIGHTS_ANALYST_AGENT_KEY,
       trigger: 'run',
@@ -275,6 +302,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       // turn there, as Analyse does.
       id: ORCHESTRATED_ANSWER_WORKFLOW_ID,
       name: ORCHESTRATED_ANSWER_WORKFLOW_NAME,
+      category: 'data-analytics',
       description:
         'The same question as Answer a Business Question, answered by Avery, a Chief of Staff who decides which agents to call and is the only one you talk to.',
       primaryFor: INSIGHTS_ANALYST_AGENT_KEY,
@@ -295,6 +323,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       // on the same engine; Michael plans, queries and writes the answer.
       id: ORCHESTRATED_MICHAEL_WORKFLOW_ID,
       name: ORCHESTRATED_MICHAEL_WORKFLOW_NAME,
+      category: 'data-analytics',
       description:
         'The same question answered by Avery, the Chief of Staff, with Michael alone: he plans, queries the data and writes the answer; she briefs him, checks it and is the only one you talk to.',
       primaryFor: INSIGHTS_ANALYST_AGENT_KEY,
@@ -312,6 +341,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
     {
       id: DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
       name: DATA_READINESS_ASSESSMENT_WORKFLOW_NAME,
+      category: 'data-engineering',
       description: DATA_READINESS_ASSESSMENT_DESCRIPTION,
       // Its Explain report step runs the Data Readiness Agent.
       primaryFor: DATA_READINESS_AGENT_KEY,
@@ -344,6 +374,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
     {
       id: RECREATE_DASHBOARD_WORKFLOW_ID,
       name: RECREATE_DASHBOARD_WORKFLOW_NAME,
+      category: 'dashboards',
       description: RECREATE_DASHBOARD_DESCRIPTION,
       // Grace reads the dashboard.
       primaryFor: DASHBOARD_READER_AGENT_KEY,
@@ -373,6 +404,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
     {
       id: MAP_DASHBOARD_DATA_WORKFLOW_ID,
       name: MAP_DASHBOARD_DATA_WORKFLOW_NAME,
+      category: 'dashboards',
       description: MAP_DASHBOARD_DATA_DESCRIPTION,
       // Daniel maps the saved dashboard to the datasets.
       primaryFor: DATA_MAPPER_AGENT_KEY,
@@ -407,6 +439,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
     {
       id: REVIEW_WEBSITE_WORKFLOW_ID,
       name: REVIEW_WEBSITE_WORKFLOW_NAME,
+      category: 'software-development',
       description: REVIEW_WEBSITE_DESCRIPTION,
       // Iris answers what you ask about the report; no step calls her yet.
       primaryFor: SITE_REVIEWER_AGENT_KEY,
@@ -513,6 +546,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
     {
       id: CONSUMPTION_GAP_WORKFLOW_ID,
       name: CONSUMPTION_GAP_WORKFLOW_NAME,
+      category: 'data-engineering',
       description: CONSUMPTION_GAP_DESCRIPTION,
       // The Gap Advisor recommends the fixes (agents.md 2.20, 5.20).
       primaryFor: GAP_ADVISOR_AGENT_KEY,

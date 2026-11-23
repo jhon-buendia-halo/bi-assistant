@@ -14,6 +14,7 @@ const V2: WorkflowDetail = {
   description: 'Four steps.',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   agents: [
     {
       key: 'insights-analyst',

@@ -7,8 +7,10 @@ import {
 import {
   CODE_WORKFLOWS,
   workflowAgentKeys,
+  workflowCategory,
   type CodeWorkflowSource,
   type WorkflowBar,
+  type WorkflowCategory,
   type WorkflowTrigger,
 } from '../../mastra/workflows/workflow-catalog';
 import type {
@@ -43,6 +45,8 @@ export interface WorkflowSummary {
   kind: 'code' | 'agent';
   /** `You` only for a draft run's definition. */
   owner: 'Official' | 'You';
+  /** The User journeys section it is listed under (workflows R5). */
+  category: WorkflowCategory;
   /** The agents its steps call, in step order, each once, with their role (job title; `''` without one). */
   agents: { key: string; name: string; role: string }[];
   stepCount: number;
@@ -278,6 +282,7 @@ function codeEntry(
       description: source.description,
       kind: 'code',
       owner: 'Official',
+      category: workflowCategory(source.category),
       // Every agent its steps run, by persona name: Michael, Olivia, Jessica.
       agents: workflowAgentKeys(source).flatMap((key) => {
         const used = builtins.get(key);

@@ -65,17 +65,40 @@ const AVERY_MICHAEL_ID = 'orchestrated-answer-michael';
 const AVERY_MICHAEL = 'Answer a Business Question (Avery + Michael)';
 const READINESS_ID = 'data-readiness-assessment';
 const READINESS = 'Assess Data Readiness';
-/** The Official workflows in catalogue order (workflows R1). */
-const OFFICIAL = [
-  [V2_ID, V2],
-  [ORCHESTRATED_ID, ORCHESTRATED],
-  [AVERY_MICHAEL_ID, AVERY_MICHAEL],
-  [READINESS_ID, READINESS],
-  ['recreate-dashboard', 'Dashboard Image to Artifact'],
-  ['map-dashboard-data', 'Map a Dashboard to Data'],
-  ['review-website', 'Review a Website'],
-  ['consumption-gap-analysis', 'Consumption Gap Analysis'],
+/** The User journeys sections, each with its workflows in catalogue order (workflows R1, R5). */
+const SECTIONS = [
+  {
+    id: 'data-analytics',
+    heading: 'Data Analytics',
+    workflows: [
+      [V2_ID, V2],
+      [ORCHESTRATED_ID, ORCHESTRATED],
+      [AVERY_MICHAEL_ID, AVERY_MICHAEL],
+    ],
+  },
+  {
+    id: 'data-engineering',
+    heading: 'Data Engineering',
+    workflows: [
+      [READINESS_ID, READINESS],
+      ['consumption-gap-analysis', 'Consumption Gap Analysis'],
+    ],
+  },
+  {
+    id: 'dashboards',
+    heading: 'Dashboards',
+    workflows: [
+      ['recreate-dashboard', 'Dashboard Image to Artifact'],
+      ['map-dashboard-data', 'Map a Dashboard to Data'],
+    ],
+  },
+  {
+    id: 'software-development',
+    heading: 'Software Development',
+    workflows: [['review-website', 'Review a Website']],
+  },
 ] as const;
+const WORKFLOW_COUNT = SECTIONS.reduce((n, s) => n + s.workflows.length, 0);
 
 const QUESTION = 'How many matches were played in each stage?';
 const ANSWER = 'The stages hold the matches counted by the query.';
@@ -166,7 +189,7 @@ async function openWorkflows(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
-function section(page: Page, id: 'official' | 'mine'): Locator {
+function section(page: Page, id: string): Locator {
   return page.getByTestId(`workflow-section-${id}`);
 }
 
@@ -307,7 +330,7 @@ async function newQuestion(page: Page, question: string): Promise<void> {
 /** Back to the list from a workflow's page. */
 async function backToWorkflows(page: Page): Promise<void> {
   await page.getByTestId('workflow-breadcrumb').click();
-  await expect(section(page, 'official')).toBeVisible();
+  await expect(section(page, 'data-analytics')).toBeVisible();
 }
 
 /** Adds the World Cup dataset through +, types `question` and clicks Send in the panel. */
@@ -334,35 +357,39 @@ test.describe('Feature: Workflows', () => {
       );
       await scenarioStep(
         page,
-        'Then I see "Answer a Business Question", its orchestrated and Avery + Michael versions, "Assess Data Readiness", "Dashboard Image to Artifact", "Map a Dashboard to Data" and "Review a Website" under Official, and no Mine section',
+        'Then I see the user journeys grouped by category: "Answer a Business Question" and its orchestrated and Avery + Michael versions under Data Analytics, "Assess Data Readiness" and "Consumption Gap Analysis" under Data Engineering, "Dashboard Image to Artifact" and "Map a Dashboard to Data" under Dashboards, and "Review a Website" under Software Development',
         async () => {
           await expect(railItem(page, 'User journeys')).toHaveAttribute(
             'aria-current',
             'page',
           );
-          const official = section(page, 'official');
           await expect(
-            official.getByTestId(`workflow-card-${V2_ID}`),
-          ).toBeVisible();
-          expect(await cardIds(official)).toEqual(OFFICIAL.map(([id]) => id));
-          for (const [id, name] of OFFICIAL) {
-            await expect(official.getByTestId(`workflow-${id}`)).toContainText(
-              name,
-            );
+            page.locator('[data-testid^="workflow-section-"]'),
+          ).toHaveCount(SECTIONS.length);
+          for (const { id, heading, workflows } of SECTIONS) {
+            const scope = section(page, id);
+            await expect(
+              scope.getByRole('heading', { name: heading, exact: true }),
+            ).toBeVisible();
+            expect(await cardIds(scope)).toEqual(workflows.map(([wid]) => wid));
+            for (const [wid, name] of workflows) {
+              await expect(scope.getByTestId(`workflow-${wid}`)).toContainText(
+                name,
+              );
+            }
           }
+          await expect(page.getByTestId(`workflow-kind-${V2_ID}`)).toHaveText(
+            V2_STEP_COUNT,
+          );
           await expect(
-            official.getByTestId(`workflow-kind-${V2_ID}`),
-          ).toHaveText(V2_STEP_COUNT);
-          await expect(
-            official.getByTestId(`workflow-kind-${ORCHESTRATED_ID}`),
+            page.getByTestId(`workflow-kind-${ORCHESTRATED_ID}`),
           ).toHaveText('1 step');
           await expect(
-            official.getByTestId(`workflow-kind-${READINESS_ID}`),
+            page.getByTestId(`workflow-kind-${READINESS_ID}`),
           ).toHaveText('8 steps');
           await expect(
             page.locator('[data-testid^="workflow-card-"]'),
-          ).toHaveCount(OFFICIAL.length);
-          await expect(section(page, 'mine')).toHaveCount(0);
+          ).toHaveCount(WORKFLOW_COUNT);
         },
       );
       await scenarioStep(
@@ -488,7 +515,9 @@ test.describe('Feature: Workflows', () => {
       await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(
         3,
       );
-      await expect(section(page, 'mine')).toHaveCount(0);
+      await expect(
+        page.locator('[data-testid^="workflow-section-"]'),
+      ).toHaveCount(1);
     });
     await test.step('When I search for "zzz"', async () => {
       await search.fill('zzz');
@@ -500,6 +529,56 @@ test.describe('Feature: Workflows', () => {
       await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(
         0,
       );
+    });
+  });
+
+  test('A category pill shows only its user journeys', async ({ page }) => {
+    const pills = page.getByRole('group', {
+      name: 'Filter user journeys by category',
+    });
+    await scenarioStep(page, 'Given I am on User journeys', async () => {
+      await openWorkflows(page);
+    });
+    await scenarioStep(
+      page,
+      'Then I see the pills All, Data Analytics, Data Engineering, Dashboards and Software Development, with All pressed',
+      async () => {
+        await expect(pills.getByRole('button')).toHaveText([
+          'All',
+          ...SECTIONS.map((s) => s.heading),
+        ]);
+        await expect(page.getByTestId('workflow-filter-all')).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+      },
+    );
+    await scenarioStep(page, 'When I click "Dashboards"', async () => {
+      await pills.getByRole('button', { name: 'Dashboards' }).click();
+    });
+    await scenarioStep(
+      page,
+      'Then only the Dashboards section shows, with "Dashboard Image to Artifact" and "Map a Dashboard to Data"',
+      async () => {
+        await expect(
+          page.getByTestId('workflow-filter-dashboards'),
+        ).toHaveAttribute('aria-pressed', 'true');
+        await expect(
+          page.locator('[data-testid^="workflow-section-"]'),
+        ).toHaveCount(1);
+        expect(await cardIds(section(page, 'dashboards'))).toEqual([
+          'recreate-dashboard',
+          'map-dashboard-data',
+        ]);
+      },
+    );
+    await scenarioStep(page, 'When I click "All"', async () => {
+      await pills.getByRole('button', { name: 'All', exact: true }).click();
+    });
+    await scenarioStep(page, 'Then every section shows again', async () => {
+      await expect(
+        page.locator('[data-testid^="workflow-section-"]'),
+      ).toHaveCount(SECTIONS.length);
     });
   });
 });
@@ -1921,7 +2000,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
   }
 
   await openWorkflows(page);
-  await expect(section(page, 'official')).toBeVisible();
+  await expect(section(page, 'data-analytics')).toBeVisible();
   await scan('Workflows page');
 
   // A workflow's page: the canvas and the Run panel (Chat) on the right.

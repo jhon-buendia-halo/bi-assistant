@@ -170,6 +170,7 @@ const READINESS_SUMMARY = expect.objectContaining({
   name: 'Assess Data Readiness',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-engineering', name: 'Data Engineering' },
   // Read images first (workflows R35), then its seven steps (Rows behind
   // findings since roadmap 1.28.11).
   stepCount: 8,
@@ -189,6 +190,7 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
   description: V2_DESCRIPTION,
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   // Every agent its steps run: Michael, then Zoe (Read images), Olivia
   // (Plan), Jessica (Write answer) and Ryan (Build visual).
   agents: [
@@ -258,6 +260,7 @@ const ORCHESTRATED_SUMMARY = expect.objectContaining({
   name: 'Answer a Business Question (orchestrated)',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   stepCount: 1,
   bar: 'steps',
   trigger: 'run',
@@ -269,6 +272,7 @@ const AVERY_MICHAEL_SUMMARY = expect.objectContaining({
   name: 'Answer a Business Question (Avery + Michael)',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   stepCount: 1,
   bar: 'steps',
   trigger: 'run',

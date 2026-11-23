@@ -27,6 +27,26 @@
     />
   </div>
 
+  <!-- Filters: All, then one pill per category -->
+  <div
+    role="group"
+    aria-label="Filter user journeys by category"
+    class="mt-3 flex flex-wrap items-center gap-2"
+  >
+    @for (item of filters(); track item.id) {
+      <button
+        type="button"
+        [attr.data-testid]="'workflow-filter-' + item.id"
+        (click)="filter.set(item.id)"
+        [attr.aria-pressed]="filter() === item.id"
+        class="filter-pill"
+        [class.filter-pill-active]="filter() === item.id"
+      >
+        {{ item.label }}
+      </button>
+    }
+  </div>
+
   @if (loading()) {
     <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />

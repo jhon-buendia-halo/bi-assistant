@@ -23,6 +23,7 @@ const WORKFLOW: WorkflowDetail = {
   description: 'Answers questions over the datasets you pick.',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   agents: [],
   stepCount: 1,
   trigger: 'run',

@@ -61,6 +61,7 @@ export const GRAPH_WORKFLOW: WorkflowDetail = {
   description: 'Answers a question over the datasets.',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   agents: [
     { key: 'qti', name: 'Insights Analyst', model: 'openai/gpt-5' },
   ],

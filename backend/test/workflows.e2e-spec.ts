@@ -159,6 +159,7 @@ describe('The workflow catalogue (API)', () => {
         description: expect.any(String) as string,
         kind: 'code',
         owner: 'Official',
+        category: { id: 'data-analytics', name: 'Data Analytics' },
         // Michael analyses; Zoe reads the reference images, Olivia plans,
         // Jessica writes and Ryan builds the visual unless the run turns it
         // off (agents.md 5.11).
@@ -235,6 +236,7 @@ describe('The workflow catalogue (API)', () => {
         description: expect.any(String) as string,
         kind: 'code',
         owner: 'Official',
+        category: { id: 'data-engineering', name: 'Data Engineering' },
         agents: [
           {
             key: 'data-readiness',

@@ -112,6 +112,8 @@ export interface WorkflowSummary {
   /** Defined in code. */
   kind: 'code';
   owner: 'Official';
+  /** The User journeys section it is listed under (`data-analytics`, Data Analytics; workflows R5). */
+  category: { id: string; name: string };
   /** The agents its steps call, in step order, each once, with their role (api.md 116). */
   agents: { key: string; name: string; role?: string }[];
   stepCount: number;

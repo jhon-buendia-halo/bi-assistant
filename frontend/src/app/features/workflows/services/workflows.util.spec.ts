@@ -16,6 +16,7 @@ import {
   runStepStatusLabel,
   personaInList,
   personaLabel,
+  workflowFilters,
   workflowKindLabel,
   workflowUsesLabel,
   workflowsEmptyMessage,
@@ -32,6 +33,7 @@ function workflow(
     description: `${name} description`,
     kind: 'code',
     owner: 'Official',
+    category: { id: 'data-analytics', name: 'Data Analytics' },
     agents: [],
     stepCount: 4,
     trigger: 'run',
@@ -65,36 +67,73 @@ const CATALOGUE: WorkflowSummary[] = [
   }),
   workflow('report-steps', 'Report steps', {
     description: 'Answers about the health plan',
+    category: { id: 'data-engineering', name: 'Data Engineering' },
   }),
+  workflow('review-website', 'Review a Website', {
+    category: { id: 'software-development', name: 'Software Development' },
+  }),
+  workflow('second-analytics', 'Second analytics', {}),
 ];
+
+/** Each section as `[id, label, workflow ids]`. */
+function shape(query: string, filter = 'all'): [string, string, string[]][] {
+  return buildWorkflowSections(CATALOGUE, filter, query).map((section) => [
+    section.id,
+    section.label,
+    section.workflows.map((w) => w.id),
+  ]);
+}
 
 describe('workflows.util', () => {
   describe('buildWorkflowSections', () => {
-    it('lists every workflow under Official in the catalogue order, with no Mine section (R5)', () => {
-      const sections = buildWorkflowSections(CATALOGUE, '');
-      expect(sections.map((section) => section.id)).toEqual(['official']);
-      expect(sections.map((section) => section.label)).toEqual(['Official']);
-      expect(sections[0].workflows.map((w) => w.id)).toEqual([
-        'answer-business-question',
-        'report-steps',
+    it('groups the workflows by category, in the order each category first comes in the catalogue (R5)', () => {
+      expect(shape('')).toEqual([
+        [
+          'data-analytics',
+          'Data Analytics',
+          ['answer-business-question', 'second-analytics'],
+        ],
+        ['data-engineering', 'Data Engineering', ['report-steps']],
+        ['software-development', 'Software Development', ['review-website']],
       ]);
     });
 
-    it('filters by name or description, ignoring case and spaces around', () => {
-      expect(
-        buildWorkflowSections(CATALOGUE, '  insights ').flatMap((section) =>
-          section.workflows.map((w) => w.id),
-        ),
-      ).toEqual(['answer-business-question']);
-      const byDescription = buildWorkflowSections(CATALOGUE, 'HEALTH PLAN');
-      expect(byDescription.map((section) => section.id)).toEqual(['official']);
-      expect(byDescription[0].workflows.map((w) => w.id)).toEqual([
-        'report-steps',
+    it('filters by name or description, ignoring case and spaces around, and drops the emptied categories', () => {
+      expect(shape('  insights ')).toEqual([
+        ['data-analytics', 'Data Analytics', ['answer-business-question']],
       ]);
+      expect(shape('HEALTH PLAN')).toEqual([
+        ['data-engineering', 'Data Engineering', ['report-steps']],
+      ]);
+    });
+
+    it('shows only the picked category, still narrowed by the search', () => {
+      expect(shape('', 'data-analytics')).toEqual([
+        [
+          'data-analytics',
+          'Data Analytics',
+          ['answer-business-question', 'second-analytics'],
+        ],
+      ]);
+      expect(shape('second', 'data-analytics')).toEqual([
+        ['data-analytics', 'Data Analytics', ['second-analytics']],
+      ]);
+      expect(shape('health plan', 'data-analytics')).toEqual([]);
     });
 
     it('returns no section when nothing matches', () => {
-      expect(buildWorkflowSections(CATALOGUE, 'zzz')).toEqual([]);
+      expect(buildWorkflowSections(CATALOGUE, 'all', 'zzz')).toEqual([]);
+    });
+  });
+
+  describe('workflowFilters', () => {
+    it('offers All, then one pill per category in section order, whatever the search (R5)', () => {
+      expect(workflowFilters(CATALOGUE)).toEqual([
+        { id: 'all', label: 'All' },
+        { id: 'data-analytics', label: 'Data Analytics' },
+        { id: 'data-engineering', label: 'Data Engineering' },
+        { id: 'software-development', label: 'Software Development' },
+      ]);
     });
   });
 
@@ -109,7 +148,7 @@ describe('workflows.util', () => {
       expect(
         workflowsEmptyMessage(
           'report',
-          buildWorkflowSections(CATALOGUE, 'report'),
+          buildWorkflowSections(CATALOGUE, 'all', 'report'),
         ),
       ).toBeNull();
     });
@@ -248,6 +287,8 @@ describe('workflows.util', () => {
         'three-steps',
         'answer-business-question',
         'report-steps',
+        'review-website',
+        'second-analytics',
       ]);
       expect(canRunFromPage(workflow('no-input', 'No input'))).toBe(false);
     });
