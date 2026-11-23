@@ -22,10 +22,12 @@ import {
 import {
   ANALYSIS_PLANNER_AGENT_KEY,
   ANSWER_WRITER_AGENT_KEY,
+  BI_ANALYST_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
   VISUALIZATION_AGENT_KEY,
 } from '../agent-constants';
 import { INSIGHTS_ANALYST_AGENT_KEY } from '../agents/insights-analyst-catalog';
+import { BUILD_DASHBOARD_TOOL } from './bi-dashboard.schemas';
 
 /** The workflow's registry key and id. */
 export const ORCHESTRATED_ANSWER_WORKFLOW_ID = 'orchestrated-answer';
@@ -43,6 +45,7 @@ export const ORCHESTRATOR_TEAM: readonly { tool: string; agent: string }[] = [
   { tool: 'analyse_data', agent: INSIGHTS_ANALYST_AGENT_KEY },
   { tool: 'write_answer', agent: ANSWER_WRITER_AGENT_KEY },
   { tool: 'build_visual', agent: VISUALIZATION_AGENT_KEY },
+  { tool: BUILD_DASHBOARD_TOOL, agent: BI_ANALYST_AGENT_KEY },
 ];
 
 /** Avery's tools, in order: her team's, then `ask_clarification`. */
@@ -78,8 +81,11 @@ export const ORCHESTRATOR_TEAMS: Readonly<
     tools: ORCHESTRATOR_TOOL_NAMES,
   },
   [ORCHESTRATED_MICHAEL_WORKFLOW_ID]: {
-    team: [{ tool: MICHAEL_ANSWER_TOOL, agent: INSIGHTS_ANALYST_AGENT_KEY }],
-    tools: [MICHAEL_ANSWER_TOOL, 'ask_clarification'],
+    team: [
+      { tool: MICHAEL_ANSWER_TOOL, agent: INSIGHTS_ANALYST_AGENT_KEY },
+      { tool: BUILD_DASHBOARD_TOOL, agent: BI_ANALYST_AGENT_KEY },
+    ],
+    tools: [MICHAEL_ANSWER_TOOL, BUILD_DASHBOARD_TOOL, 'ask_clarification'],
   },
 };
 
@@ -147,7 +153,7 @@ export const ORCHESTRATED_ANSWER_STEPS: readonly ContractStepEntry[] = [
       title: 'Orchestrate',
       kind: 'agent',
       summary:
-        'Avery, the Chief of Staff, decides who on the team works on the question and calls them as her tools: Zoe reads the images, Olivia plans, Michael queries the data, Jessica writes the answer and Ryan charts it. She is the only one who talks to you.',
+        'Avery, the Chief of Staff, decides who on the team works on the question and calls them as her tools: Zoe reads the images, Olivia plans, Michael queries the data, Jessica writes the answer and Ryan charts it; Clara builds a dashboard when you ask for one. She is the only one who talks to you.',
       exits: [
         { label: 'the model returns an error', outcome: 'fails' },
         { label: 'you stop it', outcome: 'stops' },
@@ -169,7 +175,7 @@ export const ORCHESTRATED_MICHAEL_STEPS: readonly ContractStepEntry[] = [
       title: 'Orchestrate',
       kind: 'agent',
       summary:
-        'Avery, the Chief of Staff, briefs Michael, who plans the analysis, queries the data and writes the answer; she reads it and closes. She is the only one who talks to you.',
+        'Avery, the Chief of Staff, briefs Michael, who plans the analysis, queries the data and writes the answer; she reads it and closes. Clara builds a dashboard when you ask for one. She is the only one who talks to you.',
       exits: [
         { label: 'the model returns an error', outcome: 'fails' },
         { label: 'you stop it', outcome: 'stops' },
@@ -244,4 +250,14 @@ export interface OrchestratorToolsRuntime {
   writeAnswer(brief?: string): Promise<string>;
   /** Ryan charts the answer's rows; what he built, or why not. */
   buildVisual(instruction: string): Promise<string>;
+  /**
+   * The run may build a dashboard (build_dashboard is offered): the user
+   * asked for one (`asksForDashboard`) or the conversation has one.
+   */
+  buildsDashboard: boolean;
+  /**
+   * Clara builds the dashboard of `brief`, or changes the conversation's
+   * into its next version; what she built, or why not, for Avery.
+   */
+  buildDashboard(brief: string): Promise<string>;
 }

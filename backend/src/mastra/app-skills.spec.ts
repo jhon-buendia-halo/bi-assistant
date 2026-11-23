@@ -468,6 +468,7 @@ describe('skill folders', () => {
         expect(playbooks.name).toBe('avery-playbooks');
         expect(Object.keys(fresh.skillReferences(playbooks)).sort()).toEqual([
           'reference/ambiguous.md',
+          'reference/dashboard.md',
           'reference/failed-check.md',
           'reference/no-answer.md',
           'reference/period-change.md',

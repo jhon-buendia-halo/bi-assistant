@@ -407,6 +407,11 @@ export function orchestratorTools(
         : `Ryan built no visual: ${built.visual.error ?? built.visual.skipped ?? 'no reason given'}`;
       return state.visual;
     },
+    // Clara's build is wired in plan bi-dashboard U3; until then no run
+    // offers build_dashboard.
+    buildsDashboard: false,
+    buildDashboard: () =>
+      Promise.resolve('This run cannot build a dashboard yet.'),
   };
 }
 

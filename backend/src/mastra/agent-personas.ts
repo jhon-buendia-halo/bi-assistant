@@ -127,6 +127,13 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       'I turn the rows and findings of an analysis into a clear answer you can act on.',
   },
+  'bi-analyst': {
+    name: 'Clara',
+    role: 'Business Intelligence Analyst',
+    domain: 'storytelling',
+    intro:
+      'Ask for a dashboard and I build it on your real data: filters, KPIs and charts that recompute as you click, ready to download.',
+  },
   'dashboard-reader': {
     name: 'Grace',
     role: 'Dashboard Analyst',

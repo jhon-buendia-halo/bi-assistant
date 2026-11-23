@@ -339,7 +339,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(lean.steps[0].agent).toMatchObject({
         key: 'chief-of-staff',
         name: 'Avery',
-        tools: ['answer_from_data', 'ask_clarification'],
+        tools: ['answer_from_data', 'build_dashboard', 'ask_clarification'],
         maxSteps: 16,
         team: [
           {
@@ -347,6 +347,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
             key: 'insights-analyst',
             name: 'Michael',
           },
+          { tool: 'build_dashboard', key: 'bi-analyst', name: 'Clara' },
         ],
       });
       expect(lean.input.map((field) => field.name)).toEqual([
@@ -376,6 +377,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
           'analyse_data',
           'write_answer',
           'build_visual',
+          'build_dashboard',
           'ask_clarification',
         ],
         maxSteps: 16,
@@ -385,6 +387,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
           { tool: 'analyse_data', key: 'insights-analyst', name: 'Michael' },
           { tool: 'write_answer', key: 'answer-writer', name: 'Jessica' },
           { tool: 'build_visual', key: 'visualization', name: 'Ryan' },
+          { tool: 'build_dashboard', key: 'bi-analyst', name: 'Clara' },
         ],
       });
       const answer = await ctx.service.get('answer-business-question');
