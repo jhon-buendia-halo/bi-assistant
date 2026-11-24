@@ -73,12 +73,13 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 - R26. The system SHALL NOT attempt repair when:
   - the statement was refused before reaching the engine (not read-only or malformed);
   - the failure is a transport or authentication error (HTTP status, connection refused or reset, timeout, socket hang-up, DNS);
+  - the failure is a REST fetch error (a message starting `REST API — `, [datasources](../datasources/spec.md) R42), since the statement never ran;
   - the fixer returns nothing usable or the same statement;
   - the fixer returns a statement that is not `SELECT`/`WITH`.
 
   In those cases the original error is reported.
 - R27. When a repair succeeded, the system SHALL record and show the *corrected* statement as the query that ran. The model is told the original failed and was auto-corrected.
-- R28. An empty result SHALL NOT trigger repair. The model is told to verify filters before concluding. A result that fills the requested row limit SHALL be flagged truncated, and the model is told results may be incomplete.
+- R28. An empty result SHALL NOT trigger repair. The model is told to verify filters before concluding. A result that fills the requested row limit SHALL be flagged truncated, and the model is told results may be incomplete. A result that read a REST endpoint only in part ([datasources](../datasources/spec.md) R36) SHALL keep the connector's `incomplete` list. The model is told which endpoints were cut, how many rows were read and what stopped the read, and that counts, totals and rankings over them cover those rows only.
 
 ### Result-quality warnings
 

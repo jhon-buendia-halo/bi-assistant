@@ -509,6 +509,63 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
   - The `API_BASE_URL` sentence in CLAUDE.md ("Known gap") is updated.
 - **Notes:** moved from 0.1.1 on 2026-10-04 so the bug sits under a Jira epic (BA-11). Found while drawing the C4 container diagram ([specs/system/architecture.md](specs/system/architecture.md), Level 2). Related to ADR-0001.
 
+Bugs found by the golden-dataset evals (BA-9, roadmap 1.1.9 and the 1.1.20 improvement loop). Their repros are in `evidence/1.1.9/references-vs-postgres-and-ba11-repros.txt` on the BA-9 branch (PR #81). All five are fixed on the branch `fix/BA-11-bug-fixes` and ship as one PR.
+
+#### 1.7.21 — REST SQL says when it answered from capped rows ([BA-246](https://halo-powered.atlassian.net/browse/BA-246))  `🚧 In progress`
+- **Intent:** an answer drawn from a REST endpoint that was read only in part says so, instead of reporting a partial total as complete.
+- **Scope:**
+  - The REST connector reports each endpoint whose read stopped at a cap before the API's last page: the row cap, the 50-page limit or the 120 s budget. It reports the rows read and which cap stopped it.
+  - The session's SQL path turns that report into a note on the `run_readonly_sql` result.
+  - The caps themselves stay as they are.
+- **Out of scope:** raising the caps; showing the cut in the UI.
+- **Acceptance:**
+  - Repros 1 to 3 return their capped counts with a note naming the endpoint, the rows read and the cap.
+  - An endpoint read to its last page gets no note.
+  - Unit tests cover each cap in the connector and the note in the sessions service.
+- **Notes:** the note changes what the assistant reads in a REST session, so the acceptance gate runs the evals (`verify` skill).
+
+#### 1.7.22 — REST connector follows a next-page URL ([BA-247](https://halo-powered.atlassian.net/browse/BA-247))  `🚧 In progress`
+- **Intent:** an API that pages with a full next-page URL (OData `@odata.nextLink`, Django REST Framework `next`) can be read past its first page.
+- **Scope:**
+  - In cursor paging, a next value that is an absolute `http(s)` URL on the endpoint's own origin is requested as given.
+  - A next URL on another origin is an error, so the datasource's credentials never go to another host.
+  - Discovery and the form are unchanged: they already propose cursor paging with the pointer `/next`.
+- **Out of scope:** relative next links; `Link` headers.
+- **Acceptance:** repro 4 returns the PostgreSQL count; a next URL on another origin fails with the new error; unit tests.
+
+#### 1.7.23 — REST requests skip the LLM retry ([BA-248](https://halo-powered.atlassian.net/browse/BA-248))  `🚧 In progress`
+- **Intent:** a REST endpoint that is down or rate-limited fails at once with a clear message, instead of freezing the turn for 7 s to 2 minutes.
+- **Scope:**
+  - Every request of the REST connector bypasses the LLM retry wrapper: queries, sampling, inventory, the connection test and discovery.
+  - An HTTP error names the `Retry-After` the API sent.
+  - A REST fetch failure is not sent to the SQL fixer, since no rewrite of the statement can fix it.
+  - LLM provider calls keep their retry (llm-settings R31).
+- **Out of scope:**
+  - Databricks, the RFP tools and testing data, whose requests keep the wrapper.
+  - A retry policy of the connector's own.
+- **Acceptance:**
+  - Repros 5 and 6 fail at once, and repro 6 names `Retry-After: 120`.
+  - LLM requests still retry (`retry-fetch.spec.ts`).
+  - Unit tests.
+
+#### 1.7.24 — A REST query that names no endpoint loads none ([BA-249](https://halo-powered.atlassian.net/browse/BA-249))  `🚧 In progress`
+- **Intent:** an endpoint a statement does not use can't fail or slow it down.
+- **Scope:** `runReadOnlySql` loads only the endpoints the statement references; datasources R36 changes.
+- **Out of scope:** —
+- **Acceptance:** repro 7 (`SELECT 1` with `squad_members` down) returns 1; unit test.
+
+#### 1.7.25 — Datasource id in the assistant's context and tool errors ([BA-250](https://halo-powered.atlassian.net/browse/BA-250))  `🚧 In progress`
+- **Intent:** the model can copy the datasource id in the form the tools take, and an unknown id tells it the right one.
+- **Scope:**
+  - The orientation line becomes `(dataset: <dataset>; datasourceId: <id>; kind: <kind>)`.
+  - When an unknown datasource id is given, the errors of `describe_entity`, `sample_rows` and `run_readonly_sql` list the valid ids with their kinds.
+  - An entity that is in none of the session's datasets says so, even when an id was given.
+- **Out of scope:** accepting `<kind> <id>` as an id.
+- **Acceptance:** context-block and dataset-tool unit tests; agents.md Block 1 and the resolution rules; datasets R31 and R32.
+- **Notes:**
+  - It changes what the assistant reads, so the acceptance gate runs the evals.
+  - The same orientation line also changed on the BA-9 branch (PR #81, column lists). Whichever PR merges second resolves a one-line conflict.
+
 ### Milestone 1.8 — Agentic Hub Look and Feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141))
 
 The app gets the Agentic Hub visual design: a gradient frame, an "Agentic Hub" banner, white rounded cards, an icon rail, pill buttons and status chips. There is a light theme and a navy dark theme derived from it, and the app follows the OS by default. Only the look changes. All stories are built on the branch `feat/BA-141-agentic-hub-look-and-feel` and ship as one PR. Epic spec: [specs/epics/BA-141/spec.md](specs/epics/BA-141/spec.md). Decision: ADR-0007 in [specs/system/architecture.md](specs/system/architecture.md).

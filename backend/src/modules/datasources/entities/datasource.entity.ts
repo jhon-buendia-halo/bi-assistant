@@ -130,7 +130,19 @@ export interface CatalogInfo {
   selectable?: boolean;
 }
 
+/**
+ * An entity a query read only in part: paging stopped at a cap before the
+ * API's last page (REST only, datasources R36).
+ */
+export interface IncompleteRead {
+  entity: string;
+  rowsRead: number;
+  reason: 'row cap' | 'page limit' | 'time budget';
+}
+
 export interface QueryResult {
   columns: string[];
   rows: Record<string, unknown>[];
+  /** Entities the statement read only in part; absent when every read was whole. */
+  incomplete?: IncompleteRead[];
 }

@@ -40,8 +40,17 @@ export interface SqlRunResult {
   /** The run filled its row limit — the result set is probably incomplete. */
   truncated?: boolean;
   /**
-   * Guidance for the agent (repair happened, zero rows came back, or the row
-   * limit was reached).
+   * REST endpoints a cap stopped before their last page — mirrors the
+   * connector's `IncompleteRead` (datasources R36).
+   */
+  incomplete?: {
+    entity: string;
+    rowsRead: number;
+    reason: 'row cap' | 'page limit' | 'time budget';
+  }[];
+  /**
+   * Guidance for the agent (repair happened, zero rows came back, the row
+   * limit was reached, or an endpoint was read only in part).
    */
   note?: string;
 }

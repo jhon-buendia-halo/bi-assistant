@@ -74,13 +74,28 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
   5. Contains any of the whole words `insert`, `update`, `delete`, `merge`, `drop`, `alter`, `truncate`, `create`, `grant`, `revoke`, `upsert`, `replace` (case-insensitive) → `Query contains a forbidden (write/DDL) keyword.`
 - R34. The guard is syntactic and deliberately conservative; it SHALL be treated as a first line of defence, not as the only one. Known consequence: a legitimate query that uses one of the forbidden words as a function or in a string literal (for example `replace(name, …)`, or a `;` inside a literal) is rejected. Open question: decide whether to tokenise instead.
 - R35. PostgreSQL SQL SHALL additionally run inside a `READ ONLY` transaction that is always rolled back, so the server rejects any write the guard missed. Databricks has no equivalent server-side guard; its protection is the syntactic guard and the access rights of the token.
-- R36. REST SQL SHALL run on a throwaway in-memory SQL database (SQLite dialect): the endpoints referenced as `api.<schema>.<table>` in the statement are fetched (all endpoints if none is referenced) and loaded as tables, the statement runs there, and nothing persists after the call. Each endpoint contributes at most its configured maximum row count (default 10 000).
+- R36. REST SQL SHALL run on a throwaway in-memory SQL database (SQLite dialect).
+  - Only the endpoints referenced as `api.<schema>.<table>` in the statement are fetched and loaded as tables. A statement that references none loads none, so an endpoint the statement does not use can neither fail it nor slow it down.
+  - The statement runs there, and nothing persists after the call.
+  - Each endpoint contributes at most its configured maximum row count (default 10 000).
+  - When the read of a referenced endpoint stops before the API's last page, the result SHALL say so. The read can stop at its row count, the page cap or the time budget (R38, R39).
+  - The result then carries `incomplete`, one `{ entity, rowsRead, reason }` per such endpoint, with `reason` `row cap`, `page limit` or `time budget`.
+  - When a stop counts as a cut, by paging style:
+    - Page and offset styles see the last page only as an empty page, so a stop at a cap always counts.
+    - Cursor style counts it only when a next cursor was given.
+    - Style None counts it only when its one response held more rows than the cap.
+  - Consumer: the assistant's SQL tool ([sessions-chat](../sessions-chat/spec.md) R28).
 - R37. The number of rows returned from read-only SQL SHALL be limited to the requested limit, default 100, clamped to 1–500. The limit is applied after the statement has run (rows beyond it are discarded, not pushed into the query).
 
 ### Timeouts and paging
 
-- R38. Every datasource call SHALL be bounded. PostgreSQL: connect 5 s; statement timeout 5 s for test, 10 s for inventory and foreign keys, 15 s for sampling, 30 s for queries. Databricks: connection and test 30 s, catalog listing 15 s, inventory 120 s, queries and sampling 120 s (a cold warehouse can take minutes to start), Unity Catalog API calls 20 s; timeouts read `Databricks connection timed out after <n>s` / `Databricks query timed out after <n>s`. REST: 20 s per request, 120 s total per endpoint, at most 50 pages, default page size 100, specification fetch 10 s and at most 20 MB.
-- R39. REST paging SHALL stop at the requested row count, an empty page, the page cap, the time budget, or (cursor style) a missing/empty next cursor. Style **None** issues one request. Default parameter names: page → `page` + `per_page`; offset → `offset` + `limit`; cursor → `cursor`, next cursor read from the response at the configured cursor pointer. A response that is not valid JSON, or whose rows pointer does not resolve to an array or object, is an error.
+- R38. Every datasource call SHALL be bounded. PostgreSQL: connect 5 s; statement timeout 5 s for test, 10 s for inventory and foreign keys, 15 s for sampling, 30 s for queries. Databricks: connection and test 30 s, catalog listing 15 s, inventory 120 s, queries and sampling 120 s (a cold warehouse can take minutes to start), Unity Catalog API calls 20 s; timeouts read `Databricks connection timed out after <n>s` / `Databricks query timed out after <n>s`. REST: 20 s per request, 120 s total per endpoint, at most 50 pages, default page size 100, specification fetch 10 s and at most 20 MB. REST requests SHALL NOT be retried: the LLM provider retry ([llm-settings](../llm-settings/spec.md) R31) does not apply to them, so a 429 or a 5xx is reported at once and no wait outlasts these bounds.
+- R39. REST paging SHALL stop at the requested row count, an empty page, the page cap, the time budget, or (cursor style) a missing/empty next cursor.
+  - Style **None** issues one request.
+  - Default parameter names: page → `page` + `per_page`; offset → `offset` + `limit`; cursor → `cursor`.
+  - In cursor style, the next cursor is read from the response at the configured cursor pointer.
+  - A next value that is an absolute `http(s)` URL on the endpoint's origin is requested as given, with no paging parameter added. On another origin it is an error (R42), so the datasource's credentials never go to another host.
+  - A response that is not valid JSON, or whose rows pointer does not resolve to an array or object, is an error.
 
 ### Foreign keys
 
@@ -89,7 +104,14 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
 ### Errors and diagnostics
 
 - R41. PostgreSQL failures SHALL surface as `Postgres — <message>`, where the message includes the server's `DETAIL` and `HINT` when present (the SQL repair loop relies on the hint) and unwraps multi-address connection failures (for example `localhost` resolving to both `::1` and `127.0.0.1`) into their real causes instead of an empty message.
-- R42. REST failures SHALL surface as `REST API — endpoint "<name>": <cause>` with causes `HTTP <status>` followed by up to 200 characters of the response body, `request timed out after <n>s`, `response is not valid JSON`, or `time budget exhausted`; and `REST API — expected an array or object at "<pointer>", got <type>` for a bad rows pointer.
+- R42. REST failures SHALL surface as `REST API — endpoint "<name>": <cause>`. The causes:
+  - `HTTP <status>`, followed by up to 200 characters of the response body and by `(Retry-After: <value>)` when the response carries that header;
+  - `request timed out after <n>s`;
+  - `response is not valid JSON`;
+  - `time budget exhausted`;
+  - `next-page URL is on another origin (<origin>); only <endpoint origin> is followed`.
+
+  A bad rows pointer surfaces as `REST API — expected an array or object at "<pointer>", got <type>`.
 - R43. Each failed connector call SHALL also be written to the application log (PostgreSQL: `Postgres call failed: <message>`), from where the system logs panel shows it. See [diagnostics](../diagnostics/spec.md); secrets matching the redaction patterns never appear there.
 - R44. Databricks driver errors are surfaced as the driver reports them, without a prefix. Open question: consider a `Databricks — …` prefix for symmetry with R41 and R42.
 
@@ -228,4 +250,4 @@ The fourth scenario exercises the dataset catalog browser and is also referenced
 6. For REST, "Discover" against a spec produces the review panel, only list-returning endpoints are pre-ticked, and queries over two endpoints can be joined in SQL.
 7. Not covered by any E2E today and to be added when touched: Databricks (needs a live warehouse; unit-tested with a stubbed driver), REST kind, SSL, and OpenAPI discovery.
 
-<!-- sources: backend/src/modules/datasources/**, backend/src/modules/datasources/connectors/{connector,postgres.connector,databricks.connector,rest.connector,openapi-discovery}.ts, backend/src/modules/datasources/repositories/*.ts, backend/src/infrastructure/database/database.module.ts, frontend/src/app/features/datasources/**, frontend/electron/main.cjs (log redaction), frontend/e2e/world-cup-workflow.spec.ts -->
+<!-- sources: backend/src/modules/datasources/**, backend/src/modules/datasources/connectors/{connector,postgres.connector,databricks.connector,rest.connector,openapi-discovery}.ts, backend/src/modules/llm/retry-fetch.ts (fetchWithoutRetry), backend/src/modules/datasources/repositories/*.ts, backend/src/infrastructure/database/database.module.ts, frontend/src/app/features/datasources/**, frontend/electron/main.cjs (log redaction), frontend/e2e/world-cup-workflow.spec.ts -->

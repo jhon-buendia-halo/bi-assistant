@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { fetchWithoutRetry } from '../../llm/retry-fetch';
 import type {
   CatalogInfo,
   ColumnInfo,
+  IncompleteRead,
   QueryResult,
   RestApiConfig,
   RestDiscovery,
@@ -54,6 +56,12 @@ interface FetchOptions {
   pageSize?: number;
 }
 
+interface FetchedRows {
+  rows: RawRow[];
+  /** The cap that stopped paging before the API's last page, if one did. */
+  cut?: IncompleteRead['reason'];
+}
+
 /**
  * REST API connector. Endpoints declared on the datasource are exposed as
  * tables under a single `api` catalog; SQL runs by materialising the
@@ -99,7 +107,7 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
     const tables = new Map<string, TableInfo>();
     await mapWithConcurrency(endpoints, INVENTORY_CONCURRENCY, async (ep) => {
       try {
-        const rows = await this.fetchRows(
+        const { rows } = await this.fetchRows(
           config,
           ep.def,
           INVENTORY_SAMPLE_ROWS,
@@ -141,14 +149,16 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
   ): Promise<QueryResult> {
     const ep = this.resolve(config, entity);
     const lim = clampRows(limit, 10, 100);
-    const rows = await this.fetchRows(config, ep.def, lim);
+    const { rows } = await this.fetchRows(config, ep.def, lim);
     return toQueryResult(rows);
   }
 
   /**
-   * Materialise-then-query: the endpoints the SQL references are fetched into
-   * an in-memory SQLite database (one table per endpoint, named by its dotted
-   * key) and the statement runs there. Nothing outlives the call.
+   * Materialise-then-query: the endpoints the SQL references, and only those,
+   * are fetched into an in-memory SQLite database (one table per endpoint,
+   * named by its dotted key) and the statement runs there. Nothing outlives
+   * the call. An endpoint a cap stopped before its last page is named in
+   * `incomplete`, so an answer from it can say it is partial.
    */
   async runReadOnlySql(
     config: RestApiConfig,
@@ -159,10 +169,9 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
     const lim = clampRows(rowLimit, 100, 500);
     const endpoints = this.endpoints(config);
     const { sql: rewritten, refs } = rewriteReferences(safeSql);
-    const referenced = endpoints.filter((e) => refs.has(e.key));
-    const toLoad = referenced.length ? referenced : endpoints;
+    const toLoad = endpoints.filter((e) => refs.has(e.key));
 
-    const loaded = new Map<string, RawRow[]>();
+    const loaded = new Map<string, FetchedRows>();
     await mapWithConcurrency(toLoad, INVENTORY_CONCURRENCY, async (ep) => {
       loaded.set(
         ep.key,
@@ -175,6 +184,12 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
         ),
       );
     });
+    const incomplete = toLoad.flatMap((ep): IncompleteRead[] => {
+      const read = loaded.get(ep.key);
+      return read?.cut
+        ? [{ entity: ep.key, rowsRead: read.rows.length, reason: read.cut }]
+        : [];
+    });
 
     const BetterSqlite3 =
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -182,13 +197,14 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
     const db = new BetterSqlite3(':memory:');
     try {
       for (const ep of toLoad) {
-        materialise(db, ep.key, loaded.get(ep.key) ?? []);
+        materialise(db, ep.key, loaded.get(ep.key)?.rows ?? []);
       }
       const statement = db.prepare(rewritten);
       const rows = statement.all() as Record<string, unknown>[];
       return {
         columns: statement.columns().map((c) => c.name),
         rows: rows.slice(0, lim),
+        ...(incomplete.length ? { incomplete } : {}),
       };
     } finally {
       db.close();
@@ -256,7 +272,7 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), SPEC_TIMEOUT_MS);
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithoutRetry(url, {
         method: 'GET',
         headers: buildHeaders(config),
         signal: controller.signal,
@@ -321,13 +337,16 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
     return found;
   }
 
-  /** Pages through one endpoint until `limit` rows, an empty page, or a cap. */
+  /**
+   * Pages through one endpoint until `limit` rows, the API's last page, or a
+   * cap; `cut` names the cap when one stopped it before the last page.
+   */
   private async fetchRows(
     config: RestApiConfig,
     endpoint: RestEndpointDef,
     limit: number,
     options: FetchOptions = {},
-  ): Promise<RawRow[]> {
+  ): Promise<FetchedRows> {
     const pagination = endpoint.pagination;
     const style = pagination?.style ?? 'none';
     const pageSize = Math.max(
@@ -336,9 +355,15 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
     );
     const deadline = Date.now() + FETCH_BUDGET_MS;
     const collected: RawRow[] = [];
+    const done = (cut?: IncompleteRead['reason']): FetchedRows => ({
+      rows: collected.slice(0, limit).map(flattenRow),
+      ...(cut ? { cut } : {}),
+    });
     let page = 1;
     let offset = 0;
     let cursor: string | undefined;
+    /** A next page given as a full URL (OData, Django REST Framework). */
+    let nextUrl: string | undefined;
 
     for (let i = 0; i < MAX_PAGES; i++) {
       const params: Record<string, string> = {};
@@ -355,18 +380,19 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
       const body = await this.requestJson(
         config,
         endpoint,
-        params,
+        nextUrl
+          ? sameOriginUrl(nextUrl, config, endpoint)
+          : buildUrl(config.baseUrl, endpoint.path, params),
         Math.min(REQUEST_TIMEOUT_MS, deadline - Date.now()),
       );
       const rows = extractRows(body, endpoint.rowsPointer);
       if (style === 'none') {
         collected.push(...rows);
-        break;
+        return done(collected.length > limit ? 'row cap' : undefined);
       }
-      if (!rows.length) break;
+      // Page and offset styles see the API's last page only as an empty one.
+      if (!rows.length) return done();
       collected.push(...rows);
-      if (collected.length >= limit) break;
-      if (Date.now() >= deadline) break;
 
       if (style === 'page') page += 1;
       else if (style === 'offset') offset += rows.length;
@@ -374,29 +400,38 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
         const next = pagination?.cursorPointer
           ? resolvePointer(body, pagination.cursorPointer)
           : undefined;
-        if (typeof next !== 'string' && typeof next !== 'number') break;
-        if (next === '') break;
-        cursor = String(next);
+        if (
+          (typeof next !== 'string' && typeof next !== 'number') ||
+          next === ''
+        ) {
+          return done(collected.length > limit ? 'row cap' : undefined);
+        }
+        if (typeof next === 'string' && /^https?:\/\//i.test(next)) {
+          nextUrl = next;
+        } else {
+          cursor = String(next);
+        }
       }
+      if (collected.length >= limit) return done('row cap');
+      if (Date.now() >= deadline) return done('time budget');
     }
-    return collected.slice(0, limit).map(flattenRow);
+    return done('page limit');
   }
 
   private async requestJson(
     config: RestApiConfig,
     endpoint: RestEndpointDef,
-    params: Record<string, string>,
+    url: string,
     timeoutMs: number,
   ): Promise<unknown> {
     const label = `endpoint "${endpoint.name}"`;
     if (timeoutMs <= 0) {
       throw new Error(`REST API — ${label}: time budget exhausted`);
     }
-    const url = buildUrl(config.baseUrl, endpoint.path, params);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithoutRetry(url, {
         method: 'GET',
         headers: buildHeaders(config),
         signal: controller.signal,
@@ -406,8 +441,11 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
           .replace(/\s+/g, ' ')
           .trim()
           .slice(0, ERROR_EXCERPT_CHARS);
+        // Not waited for (no retry here, datasources R38), but named, so the
+        // assistant can tell the user when the API expects to be back.
+        const retryAfter = response.headers.get('retry-after')?.trim();
         throw new Error(
-          `REST API — ${label}: HTTP ${response.status}${excerpt ? ` — ${excerpt}` : ''}`,
+          `REST API — ${label}: HTTP ${response.status}${excerpt ? ` — ${excerpt}` : ''}${retryAfter ? ` (Retry-After: ${retryAfter})` : ''}`,
         );
       }
       const text = await response.text();
@@ -486,6 +524,31 @@ function buildUrl(
     url.searchParams.set(name, value);
   }
   return url.toString();
+}
+
+/**
+ * A next-page URL, requested as given only on the endpoint's own origin: the
+ * request carries the datasource's credentials, which must not reach another
+ * host.
+ */
+function sameOriginUrl(
+  next: string,
+  config: RestApiConfig,
+  endpoint: RestEndpointDef,
+): string {
+  const expected = new URL(buildUrl(config.baseUrl, endpoint.path, {})).origin;
+  let origin: string;
+  try {
+    origin = new URL(next).origin;
+  } catch {
+    origin = next;
+  }
+  if (origin !== expected) {
+    throw new Error(
+      `REST API — endpoint "${endpoint.name}": next-page URL is on another origin (${origin}); only ${expected} is followed`,
+    );
+  }
+  return next;
 }
 
 export function buildHeaders(config: RestApiConfig): Record<string, string> {

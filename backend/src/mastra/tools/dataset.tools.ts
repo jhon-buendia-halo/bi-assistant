@@ -47,22 +47,44 @@ function allowedEntities(datasets: DatasetSnapshot[]): EntityAccess[] {
   return entities;
 }
 
+/** `<id> (<kind>), …` — the ids a datasourceId argument may take. */
+function datasourceOptions(
+  sources: Iterable<[string, string | undefined]>,
+): string {
+  return Array.from(sources)
+    .map(([id, kind]) => `${id} (${kind ?? 'unknown'})`)
+    .join(', ');
+}
+
 /** Resolve an entity without silently choosing between identical keys on different sources. */
 function resolveEntity(
   entities: EntityAccess[],
   entity: string,
   requestedDatasourceId?: string,
 ): EntityAccess | { error: string } {
-  const matches = entities.filter(
+  const inSession = entities.filter((access) => access.entity === entity);
+  if (inSession.length === 0) {
+    return {
+      error: `Entity "${entity}" is not part of this session's datasets`,
+    };
+  }
+  const matches = inSession.filter(
     (access) =>
-      access.entity === entity &&
-      (!requestedDatasourceId || access.datasourceId === requestedDatasourceId),
+      !requestedDatasourceId || access.datasourceId === requestedDatasourceId,
   );
   if (matches.length === 0) {
+    // Name the ids that do have it, so a wrong id is fixed in one retry.
+    const sources = new Map<string, string | undefined>();
+    for (const access of inSession) {
+      if (access.datasourceId) {
+        sources.set(access.datasourceId, access.datasourceKind);
+      }
+    }
+    const notHere = `Entity "${entity}" is not available from datasource "${requestedDatasourceId}" in this session`;
     return {
-      error: requestedDatasourceId
-        ? `Entity "${entity}" is not available from datasource "${requestedDatasourceId}" in this session`
-        : `Entity "${entity}" is not part of this session's datasets`,
+      error: sources.size
+        ? `${notHere}. Options: ${datasourceOptions(sources)}`
+        : notHere,
     };
   }
   const byDatasource = new Map(
@@ -90,7 +112,9 @@ function resolveDatasource(
   if (requested) {
     if (available.has(requested)) return { id: requested };
     return {
-      error: `Datasource "${requested}" is not used by this session's datasets`,
+      error: available.size
+        ? `Datasource "${requested}" is not used by this session's datasets. Options: ${datasourceOptions(available)}`
+        : `Datasource "${requested}" is not used by this session's datasets`,
     };
   }
   if (available.size === 1) return { id: Array.from(available.keys())[0] };
@@ -98,11 +122,7 @@ function resolveDatasource(
     return { error: "No datasource is bound to this session's datasets" };
   }
   return {
-    error: `Several datasources are in scope — pass datasourceId. Options: ${Array.from(
-      available.entries(),
-    )
-      .map(([id, kind]) => `${id} (${kind ?? 'unknown'})`)
-      .join(', ')}`,
+    error: `Several datasources are in scope — pass datasourceId. Options: ${datasourceOptions(available)}`,
   };
 }
 

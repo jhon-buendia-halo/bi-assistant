@@ -1,4 +1,8 @@
-import { createRetryFetch, installRetryFetch } from './retry-fetch';
+import {
+  createRetryFetch,
+  fetchWithoutRetry,
+  installRetryFetch,
+} from './retry-fetch';
 
 function response(status: number, headers?: Record<string, string>): Response {
   return new Response(null, { status, headers });
@@ -112,5 +116,36 @@ describe('installRetryFetch', () => {
 
     installRetryFetch();
     expect(globalThis.fetch).toBe(wrapped);
+  });
+});
+
+describe('fetchWithoutRetry (datasources R38)', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('reaches the fetch under the wrapper, so a 503 comes back at once', async () => {
+    const base = jest.fn().mockResolvedValue(response(503));
+    globalThis.fetch = base;
+    installRetryFetch();
+
+    const res = await fetchWithoutRetry('https://api.example.test/rows');
+
+    expect(res.status).toBe(503);
+    expect(base).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls the global fetch as it is when no wrapper is installed', async () => {
+    const base = jest.fn().mockResolvedValue(response(200));
+    globalThis.fetch = base;
+
+    await fetchWithoutRetry('https://api.example.test/rows');
+
+    expect(base).toHaveBeenCalledWith(
+      'https://api.example.test/rows',
+      undefined,
+    );
   });
 });

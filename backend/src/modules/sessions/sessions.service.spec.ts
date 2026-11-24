@@ -1522,6 +1522,46 @@ describe('SessionsService SQL self-correction', () => {
     expect(result.truncated).toBe(true);
     expect(result.note).toContain('row limit 100 reached');
   });
+
+  it('keeps and notes the REST endpoints read only in part (BA-246)', async () => {
+    const incomplete = [
+      {
+        entity: 'api.marketing.policy_sales',
+        rowsRead: 10000,
+        reason: 'row cap',
+      },
+    ];
+    const runs = jest
+      .fn()
+      .mockResolvedValue({ columns: ['n'], rows: [{ n: 10000 }], incomplete });
+    const { run } = await bridge({ runs });
+
+    const result = await run(
+      'SELECT COUNT(*) AS n FROM api.marketing.policy_sales',
+    );
+
+    expect(result.incomplete).toEqual(incomplete);
+    expect(result.note).toBe(
+      'read only in part: api.marketing.policy_sales (first 10000 rows, stopped by the row cap) — counts, totals and rankings over it cover those rows only; say so in the answer',
+    );
+  });
+
+  it('does not call the fixer when a REST endpoint fails to load (BA-248)', async () => {
+    const runs = jest
+      .fn()
+      .mockRejectedValueOnce(
+        new Error(
+          'REST API — endpoint "squad_members": HTTP 503 — down (Retry-After: 120)',
+        ),
+      );
+    const { run, fixer } = await bridge({ runs });
+
+    await expect(
+      run('SELECT COUNT(*) AS n FROM api.world_cup.squad_members'),
+    ).rejects.toThrow('Retry-After: 120');
+    expect(runs).toHaveBeenCalledTimes(1);
+    expect(fixer.generate).not.toHaveBeenCalled();
+  });
 });
 
 describe('SessionsService visual tool bridge (turn records)', () => {

@@ -3,6 +3,7 @@ import type {
   RestApiConfig,
   RestEndpointDef,
 } from '../entities/datasource.entity';
+import { installRetryFetch } from '../../llm/retry-fetch';
 import { MASKED } from './connector';
 import { RestConnector } from './rest.connector';
 
@@ -239,6 +240,28 @@ describe('RestConnector requests', () => {
     expect((error as Error).message.length).toBeLessThan(300);
   });
 
+  it('skips the LLM retry and names Retry-After (BA-248)', async () => {
+    const spied = globalThis.fetch;
+    installRetryFetch();
+    respond = () =>
+      new Response('busy', { status: 503, headers: { 'Retry-After': '120' } });
+
+    try {
+      await expect(
+        new RestConnector().sampleRows(
+          build([customers]),
+          'api.default.customers',
+          10,
+        ),
+      ).rejects.toThrow(
+        'REST API — endpoint "customers": HTTP 503 — busy (Retry-After: 120)',
+      );
+      expect(calls()).toHaveLength(1);
+    } finally {
+      globalThis.fetch = spied;
+    }
+  });
+
   it('testConnection needs a base URL and an endpoint', async () => {
     const connector = new RestConnector();
     await expect(
@@ -334,6 +357,51 @@ describe('RestConnector pagination', () => {
     expect(calls()).toHaveLength(3);
   });
 
+  const nextLinked: RestEndpointDef = {
+    ...customers,
+    rowsPointer: '/results',
+    pagination: { style: 'cursor', cursorPointer: '/next' },
+  };
+
+  it('requests a next-page URL on the same origin as given (BA-247)', async () => {
+    respond = (url) =>
+      url.searchParams.get('page_token') === 'p2'
+        ? { results: [{ id: 2 }], next: null }
+        : {
+            results: [{ id: 1 }],
+            next: 'https://api.example.com/v1/customers?page_token=p2&limit=1',
+          };
+
+    const result = await new RestConnector().sampleRows(
+      build([nextLinked]),
+      'api.default.customers',
+      100,
+    );
+
+    expect(result.rows.map((r) => r.id)).toEqual([1, 2]);
+    expect(calls()[1].url.toString()).toBe(
+      'https://api.example.com/v1/customers?page_token=p2&limit=1',
+    );
+  });
+
+  it('refuses a next-page URL on another origin (BA-247)', async () => {
+    respond = () => ({
+      results: [{ id: 1 }],
+      next: 'https://elsewhere.example.net/customers?page=2',
+    });
+
+    await expect(
+      new RestConnector().sampleRows(
+        build([nextLinked]),
+        'api.default.customers',
+        100,
+      ),
+    ).rejects.toThrow(
+      'REST API — endpoint "customers": next-page URL is on another origin (https://elsewhere.example.net); only https://api.example.com is followed',
+    );
+    expect(calls()).toHaveLength(1);
+  });
+
   it('stops once the limit is reached and trims to it', async () => {
     respond = () => [{ id: 1 }, { id: 2 }, { id: 3 }];
 
@@ -350,7 +418,7 @@ describe('RestConnector pagination', () => {
   it('caps runaway pagination at 50 pages', async () => {
     respond = () => [{ id: 1 }];
 
-    await new RestConnector().runReadOnlySql(
+    const result = await new RestConnector().runReadOnlySql(
       build([
         {
           ...customers,
@@ -363,6 +431,108 @@ describe('RestConnector pagination', () => {
     );
 
     expect(calls()).toHaveLength(50);
+    expect(result.incomplete).toEqual([
+      { entity: 'api.default.customers', rowsRead: 50, reason: 'page limit' },
+    ]);
+  });
+});
+
+describe('RestConnector incomplete reads (BA-246)', () => {
+  const countSql = 'SELECT COUNT(*) AS n FROM api.default.customers';
+  const endless = () => [{ id: 1 }, { id: 2 }];
+
+  it('names an endpoint its row cap stopped', async () => {
+    respond = endless;
+
+    const result = await new RestConnector().runReadOnlySql(
+      build([
+        {
+          ...customers,
+          maxRows: 4,
+          pagination: { style: 'page', pageSize: 2 },
+        },
+      ]),
+      countSql,
+      10,
+    );
+
+    expect(result.rows).toEqual([{ n: 4 }]);
+    expect(result.incomplete).toEqual([
+      { entity: 'api.default.customers', rowsRead: 4, reason: 'row cap' },
+    ]);
+  });
+
+  it('names an endpoint the time budget stopped', async () => {
+    respond = endless;
+    const start = Date.now();
+    jest
+      .spyOn(Date, 'now')
+      .mockReturnValueOnce(start)
+      .mockReturnValueOnce(start)
+      .mockReturnValue(start + 121_000);
+
+    const result = await new RestConnector().runReadOnlySql(
+      build([{ ...customers, pagination: { style: 'page', pageSize: 2 } }]),
+      countSql,
+      10,
+    );
+
+    expect(result.incomplete).toEqual([
+      { entity: 'api.default.customers', rowsRead: 2, reason: 'time budget' },
+    ]);
+  });
+
+  it('names nothing when paging reached the last page', async () => {
+    const pages = [[{ id: 1 }, { id: 2 }], [{ id: 3 }], []];
+    respond = (url) => pages[Number(url.searchParams.get('page')) - 1];
+
+    const result = await new RestConnector().runReadOnlySql(
+      build([{ ...customers, pagination: { style: 'page', pageSize: 2 } }]),
+      countSql,
+      10,
+    );
+
+    expect(result.rows).toEqual([{ n: 3 }]);
+    expect(result.incomplete).toBeUndefined();
+  });
+
+  it('names nothing when a cursor ends exactly at the cap', async () => {
+    respond = () => ({ items: [{ id: 1 }, { id: 2 }], next: '' });
+
+    const result = await new RestConnector().runReadOnlySql(
+      build([
+        {
+          ...customers,
+          maxRows: 2,
+          rowsPointer: '/items',
+          pagination: { style: 'cursor', cursorPointer: '/next' },
+        },
+      ]),
+      countSql,
+      10,
+    );
+
+    expect(result.incomplete).toBeUndefined();
+  });
+
+  it('names a single response that held more rows than the cap', async () => {
+    respond = () => Array.from({ length: 20 }, (_, i) => ({ id: i }));
+
+    const capped = await new RestConnector().runReadOnlySql(
+      build([{ ...customers, maxRows: 8 }]),
+      countSql,
+      10,
+    );
+    const whole = await new RestConnector().runReadOnlySql(
+      build([{ ...customers, maxRows: 20 }]),
+      countSql,
+      10,
+    );
+
+    expect(capped.incomplete).toEqual([
+      { entity: 'api.default.customers', rowsRead: 8, reason: 'row cap' },
+    ]);
+    expect(whole.incomplete).toBeUndefined();
   });
 });
 
@@ -424,18 +594,31 @@ describe('RestConnector runReadOnlySql', () => {
     expect(calls().map((c) => c.url.pathname)).toEqual(['/v1/orders']);
   });
 
-  it('loads every endpoint when nothing references one', async () => {
+  it('loads no endpoint when nothing references one (BA-249)', async () => {
     const result = await new RestConnector().runReadOnlySql(
       config,
-      "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+      'SELECT 1 AS one',
       100,
     );
 
-    expect(calls()).toHaveLength(2);
-    expect(result.rows).toEqual([
-      { name: 'api.default.customers' },
-      { name: 'api.default.orders' },
-    ]);
+    expect(calls()).toHaveLength(0);
+    expect(result.rows).toEqual([{ one: 1 }]);
+  });
+
+  it('is not failed by an endpoint it does not reference (BA-249)', async () => {
+    respond = (url) =>
+      url.pathname.endsWith('/customers')
+        ? new Response('down', { status: 503 })
+        : [{ id: 10, total: 5 }];
+
+    const result = await new RestConnector().runReadOnlySql(
+      config,
+      'SELECT SUM(total) AS spend FROM api.default.orders',
+      100,
+    );
+
+    expect(result.rows).toEqual([{ spend: 5 }]);
+    expect(result.incomplete).toBeUndefined();
   });
 
   it('stores nested arrays as JSON text', async () => {

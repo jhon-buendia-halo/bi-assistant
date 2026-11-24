@@ -27,6 +27,8 @@ const MAX_RETRIES = 3;
 const BACKOFF_MS = [1000, 2000, 4000];
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503]);
 const WRAPPED = Symbol('llm.retryFetch.wrapped');
+/** The fetch a wrapper calls, kept on it for `fetchWithoutRetry`. */
+const UNWRAPPED = Symbol('llm.retryFetch.unwrapped');
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -78,8 +80,24 @@ export function createRetryFetch(
   }) as Fetch;
 
   Object.defineProperty(retryFetch, WRAPPED, { value: true });
+  Object.defineProperty(retryFetch, UNWRAPPED, { value: baseFetch });
   return retryFetch;
 }
+
+/**
+ * `fetch` without the retry, for requests that are not to an LLM provider
+ * and keep their own time bounds: the REST datasource connector, whose
+ * 20-second request timeout a Retry-After wait would outlast (datasources
+ * R38). Resolved on every call, so a `fetch` replaced after the install (a
+ * test's mock) is called as it is.
+ */
+export const fetchWithoutRetry = ((
+  input: Parameters<Fetch>[0],
+  init?: Parameters<Fetch>[1],
+) => {
+  const current = globalThis.fetch as Fetch & { [UNWRAPPED]?: Fetch };
+  return (current[UNWRAPPED] ?? current)(input, init);
+}) as Fetch;
 
 /**
  * Installs the retry wrapper over `globalThis.fetch`. Idempotent — safe to

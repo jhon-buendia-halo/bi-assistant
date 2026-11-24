@@ -31,7 +31,7 @@ describe('entityOrientationLines (agents.md 4.1 Block 1)', () => {
     expect(entityOrientationLines(['Core'], datasets)).toEqual([
       'Datasets for this session: Core.',
       'Entities available (fully-qualified catalog.schema.table):',
-      '- db.world_cup.matches (dataset: Core; datasource: postgres ds-1)',
+      '- db.world_cup.matches (dataset: Core; datasourceId: ds-1; kind: postgres)',
       'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
     ]);
     expect(
@@ -39,6 +39,17 @@ describe('entityOrientationLines (agents.md 4.1 Block 1)', () => {
     ).toBe(
       'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
     );
+  });
+
+  it('gives the datasource id alone, as the tools take it (BA-250)', () => {
+    const [line] = entityOrientationLines(['Core'], datasets).slice(2);
+    expect(line).not.toContain('postgres ds-1');
+    expect(
+      entityOrientationLines(
+        ['Old'],
+        [{ name: 'Old', tables: ['db.world_cup.matches'] }],
+      )[2],
+    ).toBe('- db.world_cup.matches (dataset: Old; no datasource bound)');
   });
 
   it('leaves sample_rows out of the hint when it is not selected (ADR-0022)', () => {

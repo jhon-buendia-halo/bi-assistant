@@ -91,10 +91,16 @@ export function entityOrientationLines(
   /** The call's tool selection (agents.md 2.1); undefined = every tool. */
   selection?: readonly OptionalAgentTool[],
 ): string[] {
+  // The id on its own, under the tools' own argument name: "datasource:
+  // postgres <id>" was copied whole into datasourceId and refused (BA-250).
   const entityLines = datasets.flatMap((s) =>
     s.tables.map(
       (t) =>
-        `- ${t} (dataset: ${s.name}; datasource: ${s.datasourceKind ?? 'unknown'} ${s.datasourceId ?? ''})`,
+        `- ${t} (dataset: ${s.name}; ${
+          s.datasourceId
+            ? `datasourceId: ${s.datasourceId}; kind: ${s.datasourceKind ?? 'unknown'}`
+            : 'no datasource bound'
+        })`,
     ),
   );
   const joinHints = joinHintBlock(datasets);

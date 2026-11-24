@@ -145,12 +145,12 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 ### 1.6 Retries and timeouts
 
-- **Provider retries:** every outbound HTTP request of the backend process (which includes all LLM calls) is retried on status 429, 500, 502 or 503, up to 3 retries (4 requests total), waiting `Retry-After` (seconds or HTTP date) when present, else 1 s, 2 s, 4 s. Any other status, a 2xx, or a thrown network error passes through at once. Retries only inspect status and headers, never the body, so a streamed response is never duplicated. Installed once, idempotently.
+- **Provider retries:** every outbound HTTP request of the backend process (which includes all LLM calls), except the REST datasource connector's ([datasources](../capabilities/datasources/spec.md) R38), is retried on status 429, 500, 502 or 503, up to 3 retries (4 requests total), waiting `Retry-After` (seconds or HTTP date) when present, else 1 s, 2 s, 4 s. Any other status, a 2xx, or a thrown network error passes through at once. Retries only inspect status and headers, never the body, so a streamed response is never duplicated. Installed once, idempotently.
 - **Designer timeout:** 120 s per designer call (6.7).
 - **Connection test timeout:** 30 s.
 - No other agent call has its own timeout; chat turns are bounded by the client's abort.
 
-> Implementation note: `modules/llm/retry-fetch.ts` patches `globalThis.fetch`, because Mastra rebuilds its OpenAI-compatible client without forwarding a caller-supplied `fetch`.
+> Implementation note: `modules/llm/retry-fetch.ts` patches `globalThis.fetch`, because Mastra rebuilds its OpenAI-compatible client without forwarding a caller-supplied `fetch`. The REST connector calls `fetchWithoutRetry` from the same file, which reaches the fetch underneath the wrapper.
 
 ### 1.7 Storage and observability
 
@@ -859,8 +859,8 @@ All tools belong to the `assistant` (3.1-3.9) or to the RFP Builder (3.10); `ask
 **Entity/datasource resolution rules** (shared):
 
 - The allowed entities are every table key of every session dataset, each tagged with its dataset name, datasource id and kind (`databricks`, `postgres`, `rest`). Datasets saved before datasources existed are bound on the fly to the default datasource.
-- *Entity resolution* (`describe_entity`, `sample_rows`): match by exact key, optionally narrowed to `datasourceId`. No match → `Entity "<e>" is not part of this session's datasets` (or `Entity "<e>" is not available from datasource "<id>" in this session` when an id was given). Same key on several datasources → `Entity "<e>" exists in several datasources — pass datasourceId. Options: <id>, <id>`.
-- *Datasource resolution* (`run_readonly_sql`): explicit id must be one of the session's → else `Datasource "<id>" is not used by this session's datasets`; no id and exactly one datasource → that one; none → `No datasource is bound to this session's datasets`; several → `Several datasources are in scope — pass datasourceId. Options: <id> (<kind>), …`.
+- *Entity resolution* (`describe_entity`, `sample_rows`): match by exact key, optionally narrowed to `datasourceId`. Key in no session dataset → `Entity "<e>" is not part of this session's datasets`, with or without an id. Key in the session but not on the given id → `Entity "<e>" is not available from datasource "<id>" in this session. Options: <id> (<kind>), …`, listing the datasources that have it. Same key on several datasources → `Entity "<e>" exists in several datasources — pass datasourceId. Options: <id>, <id>`.
+- *Datasource resolution* (`run_readonly_sql`): explicit id must be one of the session's → else `Datasource "<id>" is not used by this session's datasets. Options: <id> (<kind>), …`; no id and exactly one datasource → that one; none → `No datasource is bound to this session's datasets`; several → `Several datasources are in scope — pass datasourceId. Options: <id> (<kind>), …`.
 
 **Rationale field** (on `sample_rows` and `run_readonly_sql`), description given to the model: `One or two sentences of plain business English saying what this step checks and why it moves toward answering the user's question. No SQL jargon, no restating the statement.` It is stored (whitespace-flattened, trimmed, capped at 400 chars with `…`) and shown to the user as the reasoning trail.
 
@@ -890,7 +890,7 @@ All tools belong to the `assistant` (3.1-3.9) or to the RFP Builder (3.10); `ask
 
 - **Description:** `Run a single read-only SELECT/WITH statement (live) against one datasource. Use the SQL dialect of that datasource: Databricks SQL for databricks, PostgreSQL for postgres, SQLite for rest. Reference entities with fully-qualified catalog.schema.table names (on Postgres, the catalog is the database name; you may write schema.table). Only query entities from this session's datasets. Write/DDL statements are rejected. datasourceId is optional when the session uses a single datasource.`
 - **Input:** `{ sql: string ("A single SELECT or WITH statement"), datasourceId?: string ("Datasource to run on"), limit?: int 1..500 ("Max rows returned (default 100)"), rationale: string }`.
-- **Output:** `{ columns, rows, correctedSql?, truncated?, note?, warnings? }` — see 5.3 for `correctedSql`/`truncated`/`note` and 5.4 for `warnings` (an array of sentences, present only when non-empty). Guards inspect the statement that actually ran (the corrected one when repaired).
+- **Output:** `{ columns, rows, correctedSql?, truncated?, incomplete?, note?, warnings? }` — see 5.3 for `correctedSql`/`truncated`/`incomplete`/`note` and 5.4 for `warnings` (an array of sentences, present only when non-empty). Guards inspect the statement that actually ran (the corrected one when repaired).
 - **Errors:** resolution errors; the final engine/guard error message as `{ error }` after repair attempts are exhausted.
 - **Side effects:** live read on the datasource; may invoke `sql-fixer` (5.3).
 - **Note:** the tool does **not** itself restrict SQL to the session's entities; it only resolves the datasource and relies on the read-only guard. Entity scoping is a prompt rule (A24).
@@ -1040,7 +1040,7 @@ For every assistant call made on behalf of a session (chat turns, the grounding 
 ```
 Datasets for this session: <dataset names, comma-separated>.
 Entities available (fully-qualified catalog.schema.table):
-- <entity key> (dataset: <dataset>; datasource: <kind or "unknown"> <datasource id>)
+- <entity key> (dataset: <dataset>; datasourceId: <datasource id>; kind: <kind or "unknown">)   ← "(dataset: <dataset>; no datasource bound)" when the dataset has no datasource id
 …                                   ← or "(none — the datasets are empty)"
 Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.   ← "describe_entity / run_readonly_sql" without sample_rows (2.1)
 
@@ -1196,10 +1196,11 @@ The fixer's and verifier's outputs are additionally cleaned (fence and trailing 
 1. Execute. On success, return rows plus:
    - `correctedSql` when the executed statement differs from the original;
    - `truncated: true` when `rows.length >= limit`;
-   - `note` — the applicable notes joined with `; `, from: `original query failed and was auto-corrected — cite the corrected SQL`; `query returned 0 rows — verify filters/values before concluding`; `row limit <limit> reached — results may be incomplete; aggregate or narrow the query for exact totals`.
+   - `incomplete` — the connector's list of REST endpoints read only in part ([datasources](../capabilities/datasources/spec.md) R36), passed through;
+   - `note` — the applicable notes joined with `; `, from: `original query failed and was auto-corrected — cite the corrected SQL`; `query returned 0 rows — verify filters/values before concluding`; `row limit <limit> reached — results may be incomplete; aggregate or narrow the query for exact totals`; `read only in part: <entity> (first <n> rows, stopped by the <row cap | page limit | time budget>), … — counts, totals and rankings over it cover those rows only; say so in the answer`.
    Empty results are not errors and never call the fixer.
 2. On failure, if **2** repair attempts (`SQL_REPAIR_ATTEMPTS`; at most 3 executions) are used up, or the error is **not repairable**, rethrow.
-   - Not repairable: a guard rejection (the statement never reached the engine), or a transport/auth failure matching `\bstatus code\b|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|\bsocket hang up\b|\btimed? ?out\b|\bconnection (?:refused|reset|closed)\b` (case-insensitive). Anything else is repairable.
+   - Not repairable: a guard rejection (the statement never reached the engine), or a transport/auth failure matching `\bstatus code\b|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|\bsocket hang up\b|\btimed? ?out\b|\bconnection (?:refused|reset|closed)\b` (case-insensitive), or a REST fetch failure (a message starting `REST API — `; the statement never ran). Anything else is repairable.
 3. Build the fixer context once per call: dialect (`sqlite` for REST datasources, else the kind, default `databricks`) and an `entity(column type, …)` block for the datasets on that datasource (all session datasets if none match), 4,000-char budget.
 4. Call `sql-fixer` (2.3) with the **current** statement (attempt 2 repairs the fixer's own rewrite) and the error. No usable output, or output identical to the input → rethrow the original error. Otherwise log one warn line `Repairing failed SQL (attempt <n>): <error> — SQL: <statement flattened, capped at 500 chars>` and retry with the corrected statement.
 

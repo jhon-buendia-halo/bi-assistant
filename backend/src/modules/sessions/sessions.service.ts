@@ -86,6 +86,7 @@ import {
 } from '../../mastra/context-blocks';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
+import type { IncompleteRead } from '../datasources/entities/datasource.entity';
 import { LlmService } from '../llm/llm.service';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { MetricsService } from '../metrics/metrics.service';
@@ -173,6 +174,16 @@ const EMPTY_ROWS_NOTE =
   'query returned 0 rows — verify filters/values before concluding';
 const limitReachedNote = (limit: number) =>
   `row limit ${limit} reached — results may be incomplete; aggregate or narrow the query for exact totals`;
+/** REST endpoints a cap stopped before their last page (datasources R36). */
+const incompleteReadNote = (reads: IncompleteRead[]) =>
+  `read only in part: ${reads
+    .map(
+      (read) =>
+        `${read.entity} (first ${read.rowsRead} rows, stopped by the ${read.reason})`,
+    )
+    .join(
+      ', ',
+    )} — counts, totals and rankings over it cover those rows only; say so in the answer`;
 /** Character budget for the schema block handed to the fixer. */
 const FIXER_SCHEMA_CHARS = 4_000;
 /** Character budget for a failed statement written into the warn log (ships in diagnostics reports). */
@@ -694,6 +705,9 @@ export class SessionsService implements OnModuleInit {
           ...(repaired ? [SQL_REPAIRED_NOTE] : []),
           ...(result.rows.length ? [] : [EMPTY_ROWS_NOTE]),
           ...(truncated ? [limitReachedNote(limit)] : []),
+          ...(result.incomplete?.length
+            ? [incompleteReadNote(result.incomplete)]
+            : []),
         ];
         return {
           ...result,
@@ -2534,12 +2548,20 @@ const TRANSPORT_OR_AUTH_ERROR =
   /\bstatus code\b|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|\bsocket hang up\b|\btimed? ?out\b|\bconnection (?:refused|reset|closed)\b/i;
 
 /**
+ * A REST datasource failed while fetching an endpoint (datasources R42): the
+ * statement never ran, so a rewrite cannot fix it. SQLite's own errors on the
+ * materialised tables carry no such prefix.
+ */
+const REST_FETCH_ERROR = /^REST API — /;
+
+/**
  * Whether a failed statement is worth another `sql-fixer` round trip.
  * Repairable = the engine parsed and rejected the statement, so a rewrite
  * can plausibly fix it. Not repairable: `assertReadOnlySql`'s
  * `BadRequestException` (the statement never reached the engine — a rewrite
- * doesn't change whether it's forbidden/malformed) or a transport/auth
- * failure (HTTP status, connection, timeout). Anything unrecognised defaults
+ * doesn't change whether it's forbidden/malformed), a transport/auth
+ * failure (HTTP status, connection, timeout) or a REST fetch failure.
+ * Anything unrecognised defaults
  * to repairable: that matches today's behaviour (every error goes to the
  * fixer), so an under-matched transport message costs one attempt at worst,
  * while an over-matched one would silently skip a genuinely fixable error.
@@ -2547,7 +2569,9 @@ const TRANSPORT_OR_AUTH_ERROR =
 function isRepairableSqlError(error: unknown): boolean {
   if (error instanceof BadRequestException) return false;
   const message = error instanceof Error ? error.message : String(error);
-  return !TRANSPORT_OR_AUTH_ERROR.test(message);
+  return (
+    !TRANSPORT_OR_AUTH_ERROR.test(message) && !REST_FETCH_ERROR.test(message)
+  );
 }
 
 /** One-line, length-capped rendering of a SQL statement for warn-level logs. */
