@@ -175,25 +175,34 @@ export function sentencesOf(text: string): string[] {
     .filter((sentence) => /[A-Za-z0-9]/.test(sentence));
 }
 
+/** A sentence as compared: no markdown emphasis, one space, any case. */
+function plain(text: string): string {
+  return text.replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 /**
- * Her closing (after Michael's answer) is `min` to `max` sentences. A run
- * that waits for the user has no closing yet and passes.
+ * Her closing does not repeat Michael's answer (agents.md 5.23: "Do not
+ * repeat Michael's answer: the user sees it"): none of his sentences of 40
+ * characters or more appears in it. Its length is free since 2026-11-24:
+ * a sentence count failed on every build while what she said was right.
+ * A run that waits for the user has no closing yet and passes.
  */
-export function closesIn(min: number, max: number): EvalCustomCheck {
-  const size =
-    min === max
-      ? `${min} sentence${min === 1 ? '' : 's'}`
-      : `${min} or ${max} sentences`;
+export function closingRepeatsNoAnswer(): EvalCustomCheck {
   return {
-    id: 'closing-sentences',
-    description: `Avery's closing, after Michael's answer, is ${size}`,
+    id: 'closing-no-repeat',
+    description:
+      "Avery's closing does not repeat a sentence of Michael's answer",
     run: (input) => {
       const view = runViewOf(input);
       if (view.waitingFor) return undefined;
-      const count = sentencesOf(view.closing).length;
-      return count >= min && count <= max
-        ? undefined
-        : `her closing is ${count} sentences: "${view.closing.slice(0, 200)}"`;
+      const closing = plain(view.closing);
+      const repeated = sentencesOf(view.michaelAnswer)
+        .map(plain)
+        .filter((sentence) => sentence.length >= 40)
+        .find((sentence) => closing.includes(sentence));
+      return repeated
+        ? `her closing repeats his answer: "${repeated.slice(0, 160)}"`
+        : undefined;
     },
   };
 }

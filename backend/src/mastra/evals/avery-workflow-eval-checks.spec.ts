@@ -7,7 +7,7 @@ import {
   asksAtMostOnce,
   callsOnlyHerTools,
   clarificationOffersOptions,
-  closesIn,
+  closingRepeatsNoAnswer,
   closingFiguresFromMichael,
   figuresIn,
   playbooksRead,
@@ -113,7 +113,7 @@ describe('Avery + Michael checks on a real-shaped run', () => {
       asksAtMostOnce(),
       callsOnlyHerTools(),
       runEndsIn(['success']),
-      closesIn(1, 2),
+      closingRepeatsNoAnswer(),
       closingFiguresFromMichael(QUESTION),
       readsPlaybook('period-change'),
       clarificationOffersOptions(),
@@ -225,18 +225,38 @@ describe('Avery + Michael checks on a real-shaped run', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('count the sentences of her closing, not a decimal point', async () => {
+  it('count the sentences of a text, not a decimal point', () => {
     expect(
       sentencesOf('It averaged 2.875 goals. It rose to 3.0 in 2022!'),
     ).toHaveLength(2);
-    await expect(verdict(closesIn(1, 1), storedRun())).resolves.toMatch(
-      /^her closing is 2 sentences/,
-    );
-    const silent = storedRun({
-      steps: [{ ...storedRun().steps[0], output: { answer: MICHAEL } }],
+  });
+
+  it("fail a closing that repeats a sentence of Michael's answer, whatever its length", async () => {
+    const long = storedRun({
+      steps: [
+        {
+          ...storedRun().steps[0],
+          output: {
+            answer: `${MICHAEL}\n\n${CLOSING} ${CLOSING} Ask again for the group stage.`,
+          },
+        },
+      ],
     });
-    await expect(verdict(closesIn(1, 2), silent)).resolves.toMatch(
-      /^her closing is 0 sentences/,
+    await expect(
+      verdict(closingRepeatsNoAnswer(), long),
+    ).resolves.toBeUndefined();
+    const echo = storedRun({
+      steps: [
+        {
+          ...storedRun().steps[0],
+          output: {
+            answer: `${MICHAEL}\n\nAs Michael says, the data holds the quarter-finals to the final of each tournament.`,
+          },
+        },
+      ],
+    });
+    await expect(verdict(closingRepeatsNoAnswer(), echo)).resolves.toMatch(
+      /^her closing repeats his answer/,
     );
   });
 

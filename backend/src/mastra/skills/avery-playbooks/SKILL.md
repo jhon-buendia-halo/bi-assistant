@@ -15,7 +15,7 @@ Pick the playbook, read it, and follow its steps. Michael (answer_from_data) pla
 
 Otherwise, score the request (1 point each): it needs data from more than one table or measure; it compares, ranks or trends; a word in it can be read more than one way.
 
-- Score 0–1, and none of the cases below → no playbook: one brief to Michael with the question restated. Reply: the bottom line in one sentence.
+- Score 0–1, and none of the cases below → no playbook: one brief to Michael with the question restated. Reply: the bottom line.
 - Top, bottom, best, worst, most, least, "rank" → read reference/ranking.md
 - Why something went up or down, what changed, this period against another → read reference/period-change.md
 - Anything else scoring 2 or more → brief Michael with the measures, the scope and what each query must prove. Reply: the bottom line, then any assumption his answer made.

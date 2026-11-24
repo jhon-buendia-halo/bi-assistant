@@ -9,7 +9,7 @@ import {
   asksAtMostOnce,
   callsOnlyHerTools,
   clarificationOffersOptions,
-  closesIn,
+  closingRepeatsNoAnswer,
   closingFiguresFromMichael,
   readsNoPlaybook,
   readsPlaybook,
@@ -52,23 +52,20 @@ export const AVERY_EVAL_FIXTURE_ID = 'world-cup';
 /** Where the judge finds her words in the scored answer. */
 const CLOSING =
   "The final answer shows Michael's answer (the analyst's, which Avery " +
-  'does not write) and, under "Avery\'s closing:", the one to three sentences ' +
+  'does not write) and, under "Avery\'s closing:", the words ' +
   'Avery wrote after it. Grade only her closing. ';
 
 /** Her rules in every run that answers (agents.md 5.23). */
 function answered(
   question: string,
-  {
-    calls = [1, 2],
-    sentences = [1, 3],
-  }: { calls?: [number, number]; sentences?: [number, number] } = {},
+  { calls = [1, 2] }: { calls?: [number, number] } = {},
 ) {
   return [
     answerFromDataCalls(...calls),
     asksAtMostOnce(),
     callsOnlyHerTools(),
     runEndsIn(['success']),
-    closesIn(...sentences),
+    closingRepeatsNoAnswer(),
     closingFiguresFromMichael(question),
   ];
 }
@@ -143,7 +140,7 @@ const AVERY_EVAL_CASES: AssistantEvalCase[] = [
       callsOnlyHerTools(),
       runEndsIn(['success', 'suspended']),
       clarificationOffersOptions(),
-      closesIn(1, 2),
+      closingRepeatsNoAnswer(),
       closingFiguresFromMichael(question),
     ],
     judgeRubric:
@@ -207,9 +204,9 @@ const AVERY_EVAL_CASES: AssistantEvalCase[] = [
     id: 'avery-simple-attendance-2022-final',
     question: 'How many people attended the 2022 World Cup final?',
     intent:
-      'A simple single-figure question (score 0-1) the data covers whole (the final is in the sample): no playbook file, one brief to Michael, a one-sentence close. 88,966 spectators. (Until 2026-11-24 this case asked for the goals of the whole 2022 tournament, which the sample covers only in part, so reading no-answer.md was right and the check was wrong.)',
+      'A simple single-figure question (score 0-1) the data covers whole (the final is in the sample): no playbook file, one brief to Michael. 88,966 spectators. (Until 2026-11-24 this case asked for the goals of the whole 2022 tournament, which the sample covers only in part, so reading no-answer.md was right and the check was wrong.)',
     customChecks: (question) => [
-      ...answered(question, { calls: [1, 1], sentences: [1, 1] }),
+      ...answered(question, { calls: [1, 1] }),
       readsNoPlaybook(),
       answerStatesNumbers([[{ value: 88966 }]]),
     ],
