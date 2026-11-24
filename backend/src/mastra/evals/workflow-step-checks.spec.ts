@@ -62,6 +62,19 @@ describe('check layers (agents-evals R258)', () => {
     expect(layerOf('step-validate')).toBe('step');
   });
 
+  it('reads the edge set’s two cross-step checks as step checks', () => {
+    // Emily has no Plan or Write answer: on 2026-11-23 she failed every
+    // insights-analyst-edge question on these two alone.
+    expect(layerOf('plan-entities-in-sql')).toBe('step');
+    expect(layerOf('headline-figures-in-rows')).toBe('step');
+    expect(
+      questionStatus([
+        { id: 'iae-status-counts-match-sql', status: 'passed' },
+        { id: 'plan-entities-in-sql', status: 'failed' },
+      ]),
+    ).toBe('passed');
+  });
+
   it('leaves a failed step check out of the verdict', () => {
     expect(gatesVerdict('step-plan')).toBe(false);
     expect(

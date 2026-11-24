@@ -349,6 +349,7 @@ describe('eval set files', () => {
       'health-insurance',
       'genomics',
       'supply-chain',
+      'ecommerce',
       'marketing-analytics',
       'marketing-analytics-rest',
       'marketing-analytics-databricks',

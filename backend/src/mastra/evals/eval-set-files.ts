@@ -63,6 +63,7 @@ import financeSetFile from './sets/finance.json';
 import healthInsuranceSetFile from './sets/health-insurance.json';
 import genomicsSetFile from './sets/genomics.json';
 import supplyChainSetFile from './sets/supply-chain.json';
+import ecommerceSetFile from './sets/ecommerce.json';
 import marketingAnalyticsSetFile from './sets/marketing-analytics.json';
 import memorySetFile from './sets/memory.json';
 
@@ -281,6 +282,7 @@ export const EVAL_SET_FILES: readonly EvalSetFileSource[] = [
   { file: 'health-insurance.json', content: healthInsuranceSetFile },
   { file: 'genomics.json', content: genomicsSetFile },
   { file: 'supply-chain.json', content: supplyChainSetFile },
+  { file: 'ecommerce.json', content: ecommerceSetFile },
   { file: 'marketing-analytics.json', content: marketingAnalyticsSetFile },
   { file: MEMORY_SET_FILE, content: memorySetFile },
 ];

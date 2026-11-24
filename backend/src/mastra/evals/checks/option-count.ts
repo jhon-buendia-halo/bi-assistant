@@ -12,7 +12,7 @@ import {
  * split into `{ label }` objects is read as it is. Undefined when there is
  * nothing to read.
  */
-function optionsOf(value: unknown): unknown[] | undefined {
+export function optionsOf(value: unknown): unknown[] | undefined {
   const list: unknown[] | undefined = Array.isArray(value) ? value : undefined;
   if (list?.some((option) => option !== null && typeof option === 'object')) {
     return list;

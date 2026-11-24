@@ -30,9 +30,20 @@ export const PATH_CHECK_IDS: ReadonlySet<string> = new Set([
 /** Every workflow step check's id starts with it. */
 export const STEP_CHECK_PREFIX = 'step-';
 
+/**
+ * Checks that compare two workflow steps with each other (the
+ * `insights-analyst-edge` set): they are step checks under older ids, so an
+ * agent with no steps is not failed for lacking them (fixed 2026-11-23).
+ */
+export const CROSS_STEP_CHECK_IDS: ReadonlySet<string> = new Set([
+  'plan-entities-in-sql',
+  'headline-figures-in-rows',
+]);
+
 /** The layer of a check, by its id. */
 export function layerOf(checkId: string): CheckLayer {
   if (checkId.startsWith(STEP_CHECK_PREFIX)) return 'step';
+  if (CROSS_STEP_CHECK_IDS.has(checkId)) return 'step';
   return PATH_CHECK_IDS.has(checkId) ? 'path' : 'outcome';
 }
 

@@ -528,7 +528,7 @@ specs/capabilities/agent-panel/spec.md:103-138  ### Feature: Agent panel
 specs/capabilities/agent-panel/spec.md:140-151  ## Acceptance
 
 specs/capabilities/agents-evals/spec.md:5-39  ## Concepts
-specs/capabilities/agents-evals/spec.md:41-668  ## Rules
+specs/capabilities/agents-evals/spec.md:41-681  ## Rules
 specs/capabilities/agents-evals/spec.md:44-44  R1 The **Agent personas** screen SHALL be the Agent Hub. It SHALL show th
 specs/capabilities/agents-evals/spec.md:45-45  R2 Search SHALL match the trimmed query, case-insensitively, as a substri
 specs/capabilities/agents-evals/spec.md:46-46  R3 Every section SHALL show all its cards; there is no `Show more` or `Sh
@@ -693,88 +693,88 @@ specs/capabilities/agents-evals/spec.md:467-467  R205 A SQLite reference SHALL n
 specs/capabilities/agents-evals/spec.md:468-468  R206 A Databricks reference SHALL name each table `` `evals`.<schema>.<tabl
 specs/capabilities/agents-evals/spec.md:469-469  R207 A bank SHALL have one variant per datasource kind whose sample is in t
 specs/capabilities/agents-evals/spec.md:470-470  R208 Each SQLite reference SHALL be checked before it is committed by runni
-specs/capabilities/agents-evals/spec.md:472-520  ### Deterministic checks
+specs/capabilities/agents-evals/spec.md:472-533  ### Deterministic checks
 specs/capabilities/agents-evals/spec.md:474-478  R112 Besides the checks of R30, the system SHALL offer fourteen **determini
 specs/capabilities/agents-evals/spec.md:479-479  R113 `noRepairs` (id `check-no-repairs`, criterion D3) SHALL pass when no `
 specs/capabilities/agents-evals/spec.md:480-480  R114 `namesNotIds` (id `check-names-not-ids`, criterion I1) SHALL fail when
-specs/capabilities/agents-evals/spec.md:481-486  R115 `numbersGrounded` (id `check-numbers-grounded`, criterion G1) SHALL pa
-specs/capabilities/agents-evals/spec.md:487-493  R116 `rationaleOk` (id `check-rationale-ok`, criterion I3) SHALL pass when
-specs/capabilities/agents-evals/spec.md:494-494  R117 `noHtml` (id `check-no-html`, criterion I4) SHALL fail when the answer
-specs/capabilities/agents-evals/spec.md:495-500  R118 `dialect` (id `check-dialect`, criterion I6) SHALL read the written SQ
-specs/capabilities/agents-evals/spec.md:501-501  R119 `qualifiedNames` (id `check-qualified-names`, criterion I6) SHALL read
-specs/capabilities/agents-evals/spec.md:502-502  R120 `optionCount` (id `check-option-count`, criterion I5) SHALL pass when
-specs/capabilities/agents-evals/spec.md:503-503  R121 `visualKeywords` (id `check-visual-keywords`, criterion G4) takes `key
-specs/capabilities/agents-evals/spec.md:504-504  R122 `sqlMatches` (id `check-sql-matches`, no default criterion) takes a pa
-specs/capabilities/agents-evals/spec.md:505-505  R123 `notMatches` (id `check-not-matches`, no default criterion) takes a pa
-specs/capabilities/agents-evals/spec.md:506-509  R124 `usesEntities` (id `check-uses-entities`, criterion D2) SHALL pass whe
-specs/capabilities/agents-evals/spec.md:510-510  R125 Every check in a question bank file MAY name the criterion it measures
-specs/capabilities/agents-evals/spec.md:511-520  R126 The questions of the `world-cup`, `world-cup-rest` and `formula-1` set
-specs/capabilities/agents-evals/spec.md:522-540  ### Judge option, statuses and the run summary
-specs/capabilities/agents-evals/spec.md:526-526  R144 A run SHALL take a **judge option**: `off`, the default when none is g
-specs/capabilities/agents-evals/spec.md:527-527  R145 The LLM judge SHALL run on a question that has a rubric only when the
-specs/capabilities/agents-evals/spec.md:528-528  R146 Every check result SHALL carry a **status**: `passed` when it scored 1
-specs/capabilities/agents-evals/spec.md:529-529  R147 Every question result SHALL carry its case's **category** when the cas
-specs/capabilities/agents-evals/spec.md:530-534  R148 Every run SHALL carry a **summary** of its finished results, updated a
-specs/capabilities/agents-evals/spec.md:535-535  R149 An open set's run controls SHALL include a select labelled **Judge** w
-specs/capabilities/agents-evals/spec.md:536-536  R150 The eval sets of R12 SHALL serve every case with a category and a spli
-specs/capabilities/agents-evals/spec.md:537-537  R151 A not-scored question (R147) SHALL show **Not scored** as its verdict
-specs/capabilities/agents-evals/spec.md:538-538  R152 An execution with at least one finished question SHALL show, when expa
-specs/capabilities/agents-evals/spec.md:539-539  R153 The Markdown report (R38) SHALL show, after its "**<passed>/<total> qu
-specs/capabilities/agents-evals/spec.md:540-540  R154 The command-line run (R42) SHALL read the judge option from the settin
-specs/capabilities/agents-evals/spec.md:542-599  ### Repeats, dev and held-out, tokens and cost
-specs/capabilities/agents-evals/spec.md:546-546  R209 A run SHALL take a **repeats** option, the number of attempts per ques
-specs/capabilities/agents-evals/spec.md:547-547  R210 With Repeats k, a run SHALL ask each question k times, as k **attempts
-specs/capabilities/agents-evals/spec.md:548-548  R211 A question's verdict over its attempts SHALL be **pass^k**: `passed` o
-specs/capabilities/agents-evals/spec.md:549-549  R212 A pass rate SHALL be reported with its 95% interval: Wilson's score in
-specs/capabilities/agents-evals/spec.md:550-555  R213 The run summary (R148) SHALL also carry:
-specs/capabilities/agents-evals/spec.md:556-556  R214 An open set's run controls SHALL include a select labelled **Repeats**
-specs/capabilities/agents-evals/spec.md:557-557  R215 Every question result SHALL carry its case's **split**, `dev` or `held
-specs/capabilities/agents-evals/spec.md:558-563  R216 Each execution in the Executions list (R35) SHALL show, after "<passed
-specs/capabilities/agents-evals/spec.md:564-570  R217 The Details panel (R37) SHALL show, for a question that has a result:
-specs/capabilities/agents-evals/spec.md:571-580  R218 The Markdown report (R38) SHALL show, after the judge and not-scored l
-specs/capabilities/agents-evals/spec.md:581-587  R219 Each attempt SHALL record the **usage** of every model call made for i
-specs/capabilities/agents-evals/spec.md:588-588  R220 Prices SHALL come from the **price table** bundled with the app ([data
-specs/capabilities/agents-evals/spec.md:589-591  R221 The **cost** of an agent's usage on a model SHALL be (input − cached i
-specs/capabilities/agents-evals/spec.md:592-597  R222 The command-line run (R42) SHALL also read:
-specs/capabilities/agents-evals/spec.md:598-598  R223 A command-line run SHALL be saved as a run started in the app is ([dat
-specs/capabilities/agents-evals/spec.md:599-599  R224 An **exported run file**, the input of the loop tools (R225 to R228),
-specs/capabilities/agents-evals/spec.md:601-636  ### Improvement loop tools
-specs/capabilities/agents-evals/spec.md:605-605  R225 `eval:diff` SHALL compare a **before** and an **after** side, given by
-specs/capabilities/agents-evals/spec.md:606-613  R226 `eval:diff` SHALL then print:
-specs/capabilities/agents-evals/spec.md:614-621  R227 With `--target <categories, comma-separated>`, `eval:diff` SHALL check
-specs/capabilities/agents-evals/spec.md:622-626  R228 `eval:export-failures --run <run> --out <folder>` (the run as in R225,
-specs/capabilities/agents-evals/spec.md:627-627  R229 `eval:leak-check` SHALL read the lines a change adds to the **lever fi
-specs/capabilities/agents-evals/spec.md:628-636  R230 The leak check SHALL reject an added line that holds:
-specs/capabilities/agents-evals/spec.md:638-668  ### Memory arms and memory sets
-specs/capabilities/agents-evals/spec.md:642-642  R231 A run SHALL take an **arm**, the configuration it measures, and SHALL
-specs/capabilities/agents-evals/spec.md:643-643  R232 The system SHALL refuse a start (R19 step 10, after the repeats), chec
-specs/capabilities/agents-evals/spec.md:644-644  R233 The memory questions SHALL live in one question bank file, `memory.jso
-specs/capabilities/agents-evals/spec.md:645-650  R234 A **memory case** SHALL carry:
-specs/capabilities/agents-evals/spec.md:651-651  R235 The loader SHALL refuse to start, naming the file and the case as R248
-specs/capabilities/agents-evals/spec.md:652-658  R236 A memory case's category SHALL be one of six, with 6 questions each, 4
-specs/capabilities/agents-evals/spec.md:659-659  R237 The validator (R250) SHALL take a memory set like any set, with no mod
-specs/capabilities/agents-evals/spec.md:660-660  R238 Under a memory arm, each attempt SHALL use a **memory scope** of its o
-specs/capabilities/agents-evals/spec.md:661-661  R239 An attempt of a memory case SHALL first **teach**: it renders each tea
-specs/capabilities/agents-evals/spec.md:662-662  R240 The attempt SHALL then **probe**: it asks the probe question as every
-specs/capabilities/agents-evals/spec.md:663-663  R241 `noRowValuesRetained` (id `check-no-row-values-retained`, criterion M1
-specs/capabilities/agents-evals/spec.md:664-664  R242 `notRejectedSql` (id `check-not-rejected-sql`, criterion M2) SHALL pas
-specs/capabilities/agents-evals/spec.md:665-665  R243 `teachNotRecalled` (id `check-teach-not-recalled`, criterion M3) SHALL
-specs/capabilities/agents-evals/spec.md:666-666  R244 The criteria SHALL include a memory bucket after cost and latency: **M
-specs/capabilities/agents-evals/spec.md:667-667  R245 Under a memory arm, each attempt SHALL record the usage of the memory'
-specs/capabilities/agents-evals/spec.md:668-668  R246 The report and the command line SHALL write the arm's memory after the
-specs/capabilities/agents-evals/spec.md:671-718  ## Edge cases and errors
-specs/capabilities/agents-evals/spec.md:720-732  ## Contracts
-specs/capabilities/agents-evals/spec.md:734-736  ## UI
-specs/capabilities/agents-evals/spec.md:738-2103  ## Flows
-specs/capabilities/agents-evals/spec.md:1220-1316  ### Feature: Agent skills
-specs/capabilities/agents-evals/spec.md:1318-1576  ### Feature: Agent editor
-specs/capabilities/agents-evals/spec.md:1578-1664  ### Feature: Skill library
-specs/capabilities/agents-evals/spec.md:1666-1898  ### Feature: Built-in agent prompts
-specs/capabilities/agents-evals/spec.md:1900-1984  ### Feature: Improvement loop tools
-specs/capabilities/agents-evals/spec.md:1986-2066  ### Feature: Memory arms and memory sets
-specs/capabilities/agents-evals/spec.md:2068-2103  ### Feature: Databricks samples
-specs/capabilities/agents-evals/spec.md:2105-2118  ## Acceptance
-specs/capabilities/agents-evals/spec.md:2120-2142  ## Open questions
+specs/capabilities/agents-evals/spec.md:481-499  R115 `numbersGrounded` (id `check-numbers-grounded`, criterion G1) SHALL pa
+specs/capabilities/agents-evals/spec.md:500-506  R116 `rationaleOk` (id `check-rationale-ok`, criterion I3) SHALL pass when
+specs/capabilities/agents-evals/spec.md:507-507  R117 `noHtml` (id `check-no-html`, criterion I4) SHALL fail when the answer
+specs/capabilities/agents-evals/spec.md:508-513  R118 `dialect` (id `check-dialect`, criterion I6) SHALL read the written SQ
+specs/capabilities/agents-evals/spec.md:514-514  R119 `qualifiedNames` (id `check-qualified-names`, criterion I6) SHALL read
+specs/capabilities/agents-evals/spec.md:515-515  R120 `optionCount` (id `check-option-count`, criterion I5) SHALL pass when
+specs/capabilities/agents-evals/spec.md:516-516  R121 `visualKeywords` (id `check-visual-keywords`, criterion G4) takes `key
+specs/capabilities/agents-evals/spec.md:517-517  R122 `sqlMatches` (id `check-sql-matches`, no default criterion) takes a pa
+specs/capabilities/agents-evals/spec.md:518-518  R123 `notMatches` (id `check-not-matches`, no default criterion) takes a pa
+specs/capabilities/agents-evals/spec.md:519-522  R124 `usesEntities` (id `check-uses-entities`, criterion D2) SHALL pass whe
+specs/capabilities/agents-evals/spec.md:523-523  R125 Every check in a question bank file MAY name the criterion it measures
+specs/capabilities/agents-evals/spec.md:524-533  R126 The questions of the `world-cup`, `world-cup-rest` and `formula-1` set
+specs/capabilities/agents-evals/spec.md:535-553  ### Judge option, statuses and the run summary
+specs/capabilities/agents-evals/spec.md:539-539  R144 A run SHALL take a **judge option**: `off`, the default when none is g
+specs/capabilities/agents-evals/spec.md:540-540  R145 The LLM judge SHALL run on a question that has a rubric only when the
+specs/capabilities/agents-evals/spec.md:541-541  R146 Every check result SHALL carry a **status**: `passed` when it scored 1
+specs/capabilities/agents-evals/spec.md:542-542  R147 Every question result SHALL carry its case's **category** when the cas
+specs/capabilities/agents-evals/spec.md:543-547  R148 Every run SHALL carry a **summary** of its finished results, updated a
+specs/capabilities/agents-evals/spec.md:548-548  R149 An open set's run controls SHALL include a select labelled **Judge** w
+specs/capabilities/agents-evals/spec.md:549-549  R150 The eval sets of R12 SHALL serve every case with a category and a spli
+specs/capabilities/agents-evals/spec.md:550-550  R151 A not-scored question (R147) SHALL show **Not scored** as its verdict
+specs/capabilities/agents-evals/spec.md:551-551  R152 An execution with at least one finished question SHALL show, when expa
+specs/capabilities/agents-evals/spec.md:552-552  R153 The Markdown report (R38) SHALL show, after its "**<passed>/<total> qu
+specs/capabilities/agents-evals/spec.md:553-553  R154 The command-line run (R42) SHALL read the judge option from the settin
+specs/capabilities/agents-evals/spec.md:555-612  ### Repeats, dev and held-out, tokens and cost
+specs/capabilities/agents-evals/spec.md:559-559  R209 A run SHALL take a **repeats** option, the number of attempts per ques
+specs/capabilities/agents-evals/spec.md:560-560  R210 With Repeats k, a run SHALL ask each question k times, as k **attempts
+specs/capabilities/agents-evals/spec.md:561-561  R211 A question's verdict over its attempts SHALL be **pass^k**: `passed` o
+specs/capabilities/agents-evals/spec.md:562-562  R212 A pass rate SHALL be reported with its 95% interval: Wilson's score in
+specs/capabilities/agents-evals/spec.md:563-568  R213 The run summary (R148) SHALL also carry:
+specs/capabilities/agents-evals/spec.md:569-569  R214 An open set's run controls SHALL include a select labelled **Repeats**
+specs/capabilities/agents-evals/spec.md:570-570  R215 Every question result SHALL carry its case's **split**, `dev` or `held
+specs/capabilities/agents-evals/spec.md:571-576  R216 Each execution in the Executions list (R35) SHALL show, after "<passed
+specs/capabilities/agents-evals/spec.md:577-583  R217 The Details panel (R37) SHALL show, for a question that has a result:
+specs/capabilities/agents-evals/spec.md:584-593  R218 The Markdown report (R38) SHALL show, after the judge and not-scored l
+specs/capabilities/agents-evals/spec.md:594-600  R219 Each attempt SHALL record the **usage** of every model call made for i
+specs/capabilities/agents-evals/spec.md:601-601  R220 Prices SHALL come from the **price table** bundled with the app ([data
+specs/capabilities/agents-evals/spec.md:602-604  R221 The **cost** of an agent's usage on a model SHALL be (input − cached i
+specs/capabilities/agents-evals/spec.md:605-610  R222 The command-line run (R42) SHALL also read:
+specs/capabilities/agents-evals/spec.md:611-611  R223 A command-line run SHALL be saved as a run started in the app is ([dat
+specs/capabilities/agents-evals/spec.md:612-612  R224 An **exported run file**, the input of the loop tools (R225 to R228),
+specs/capabilities/agents-evals/spec.md:614-649  ### Improvement loop tools
+specs/capabilities/agents-evals/spec.md:618-618  R225 `eval:diff` SHALL compare a **before** and an **after** side, given by
+specs/capabilities/agents-evals/spec.md:619-626  R226 `eval:diff` SHALL then print:
+specs/capabilities/agents-evals/spec.md:627-634  R227 With `--target <categories, comma-separated>`, `eval:diff` SHALL check
+specs/capabilities/agents-evals/spec.md:635-639  R228 `eval:export-failures --run <run> --out <folder>` (the run as in R225,
+specs/capabilities/agents-evals/spec.md:640-640  R229 `eval:leak-check` SHALL read the lines a change adds to the **lever fi
+specs/capabilities/agents-evals/spec.md:641-649  R230 The leak check SHALL reject an added line that holds:
+specs/capabilities/agents-evals/spec.md:651-681  ### Memory arms and memory sets
+specs/capabilities/agents-evals/spec.md:655-655  R231 A run SHALL take an **arm**, the configuration it measures, and SHALL
+specs/capabilities/agents-evals/spec.md:656-656  R232 The system SHALL refuse a start (R19 step 10, after the repeats), chec
+specs/capabilities/agents-evals/spec.md:657-657  R233 The memory questions SHALL live in one question bank file, `memory.jso
+specs/capabilities/agents-evals/spec.md:658-663  R234 A **memory case** SHALL carry:
+specs/capabilities/agents-evals/spec.md:664-664  R235 The loader SHALL refuse to start, naming the file and the case as R248
+specs/capabilities/agents-evals/spec.md:665-671  R236 A memory case's category SHALL be one of six, with 6 questions each, 4
+specs/capabilities/agents-evals/spec.md:672-672  R237 The validator (R250) SHALL take a memory set like any set, with no mod
+specs/capabilities/agents-evals/spec.md:673-673  R238 Under a memory arm, each attempt SHALL use a **memory scope** of its o
+specs/capabilities/agents-evals/spec.md:674-674  R239 An attempt of a memory case SHALL first **teach**: it renders each tea
+specs/capabilities/agents-evals/spec.md:675-675  R240 The attempt SHALL then **probe**: it asks the probe question as every
+specs/capabilities/agents-evals/spec.md:676-676  R241 `noRowValuesRetained` (id `check-no-row-values-retained`, criterion M1
+specs/capabilities/agents-evals/spec.md:677-677  R242 `notRejectedSql` (id `check-not-rejected-sql`, criterion M2) SHALL pas
+specs/capabilities/agents-evals/spec.md:678-678  R243 `teachNotRecalled` (id `check-teach-not-recalled`, criterion M3) SHALL
+specs/capabilities/agents-evals/spec.md:679-679  R244 The criteria SHALL include a memory bucket after cost and latency: **M
+specs/capabilities/agents-evals/spec.md:680-680  R245 Under a memory arm, each attempt SHALL record the usage of the memory'
+specs/capabilities/agents-evals/spec.md:681-681  R246 The report and the command line SHALL write the arm's memory after the
+specs/capabilities/agents-evals/spec.md:684-731  ## Edge cases and errors
+specs/capabilities/agents-evals/spec.md:733-745  ## Contracts
+specs/capabilities/agents-evals/spec.md:747-749  ## UI
+specs/capabilities/agents-evals/spec.md:751-2116  ## Flows
+specs/capabilities/agents-evals/spec.md:1233-1329  ### Feature: Agent skills
+specs/capabilities/agents-evals/spec.md:1331-1589  ### Feature: Agent editor
+specs/capabilities/agents-evals/spec.md:1591-1677  ### Feature: Skill library
+specs/capabilities/agents-evals/spec.md:1679-1911  ### Feature: Built-in agent prompts
+specs/capabilities/agents-evals/spec.md:1913-1997  ### Feature: Improvement loop tools
+specs/capabilities/agents-evals/spec.md:1999-2079  ### Feature: Memory arms and memory sets
+specs/capabilities/agents-evals/spec.md:2081-2116  ### Feature: Databricks samples
+specs/capabilities/agents-evals/spec.md:2118-2131  ## Acceptance
+specs/capabilities/agents-evals/spec.md:2133-2155  ## Open questions
 
 specs/capabilities/app-shell/spec.md:5-14  ## Concepts
 specs/capabilities/app-shell/spec.md:16-104  ## Rules

@@ -295,3 +295,121 @@ describe('numbersGrounded (R115, G1)', () => {
     );
   });
 });
+
+describe('numbersGrounded: worked-out and rounded figures (R115, fixed 2026-11-19)', () => {
+  const teams = rows([
+    { team: 'France', goals: 14, matches: 6 },
+    { team: 'Croatia', goals: 9, matches: 6 },
+    { team: 'Argentina', goals: 8, matches: 3 },
+    { team: 'Belgium', goals: 4, matches: 3 },
+  ]);
+  const ok = (answer: string, calls = [teams], question?: string) =>
+    verdict(turn(answer, calls, question)).passed;
+
+  it('grounds a lead, a sum and a column total', () => {
+    expect(ok('France leads Croatia by 5 goals.')).toBe(true);
+    expect(ok('France and Croatia scored 23 between them.')).toBe(true);
+    expect(ok('The four teams scored 35 goals in total.')).toBe(true);
+    expect(ok('France scored 19 goals.')).toBe(false);
+    // A sum or difference grounds only a number its line says was worked out.
+    expect(ok('France beat Croatia 4-5.')).toBe(false);
+  });
+
+  it('grounds a complement of two one-row results', () => {
+    const total = rows([{ goals: 47 }]);
+    const assisted = rows([{ assisted: 2 }]);
+    expect(ok('The other 45 goals have no assist.', [total, assisted])).toBe(
+      true,
+    );
+  });
+
+  it('grounds a count of distinct values in a column', () => {
+    const cards = rows([
+      { match_id: 'a', card: 'yellow' },
+      { match_id: 'a', card: 'yellow' },
+      { match_id: 'b', card: 'yellow' },
+    ]);
+    expect(ok('The 3 cards came from 2 matches.', [cards])).toBe(true);
+  });
+
+  it('reads a hedged number as rounded to its last non-zero digit', () => {
+    const passes = rows([{ team: 'Croatia', attempted: 3971 }]);
+    expect(ok('It covers almost 4,000 attempted passes.', [passes])).toBe(true);
+    expect(ok('It covers 4,000 attempted passes.', [passes])).toBe(false);
+    const months = rows([
+      { month: 'Feb', cancelled: 319 },
+      { month: 'Nov', cancelled: 419 },
+    ]);
+    expect(ok('Roughly 300 to 420 a month were cancelled.', [months])).toBe(
+      true,
+    );
+  });
+
+  it('reads a magnitude suffix', () => {
+    const paid = rows([{ total: 262384938.16 }]);
+    expect(ok('Card is 43.0% of the 262.4M total.', [paid])).toBe(false);
+    expect(ok('The total is 262.4M.', [paid])).toBe(true);
+    expect(ok('The total is 263.4M.', [paid])).toBe(false);
+  });
+
+  it('skips dates, years, unit sizes and a rank column', () => {
+    const last = new Date().getFullYear() - 1;
+    expect(
+      ok(`In ${last}, from 1 Jan to 31 Dec ${last} or ${last}-12-31.`, []),
+    ).toBe(true);
+    const cups = rows([{ year: 2018 }, { year: 2022 }]);
+    expect(ok('The 2018 and 2022 cups, and 2020 between them.', [cups])).toBe(
+      true,
+    );
+    expect(ok('Brazil also won in 1994.', [cups])).toBe(false);
+    expect(ok('Played on 16 July.', [])).toBe(false);
+    expect(
+      ok('No goal came after 120 minutes, or 90 minutes in normal time.', []),
+    ).toBe(true);
+    expect(ok('Hours divided by 24; the shares add up to 100%.', [])).toBe(
+      true,
+    );
+    const table = [
+      '| Rank | Team | Goals |',
+      '|---|---|---|',
+      '| 1 | France | 14 |',
+      '| 2 | Croatia | 9 |',
+      '| 3 | Argentina | 8 |',
+      '| 4= | Belgium | 4 |',
+    ].join('\n');
+    expect(ok(table)).toBe(true);
+    expect(ok(table.replace('| 14 |', '| 15 |'))).toBe(false);
+  });
+});
+
+describe('numbersGrounded: coverage notes (R115, fixed 2026-11-23)', () => {
+  // From a real Opus workflow answer (top-scoring-team, 2026-11-23): the
+  // per-stage counts the query returned add up to the 16 matches it states.
+  const stages = rows([
+    { tournament_year: 2018, stage: 'final', matches: '1' },
+    { tournament_year: 2018, stage: 'quarter_final', matches: '4' },
+    { tournament_year: 2018, stage: 'semi_final', matches: '2' },
+    { tournament_year: 2018, stage: 'third_place', matches: '1' },
+    { tournament_year: 2022, stage: 'final', matches: '1' },
+    { tournament_year: 2022, stage: 'quarter_final', matches: '4' },
+    { tournament_year: 2022, stage: 'semi_final', matches: '2' },
+    { tournament_year: 2022, stage: 'third_place', matches: '1' },
+  ]);
+  const ok = (answer: string, calls = [stages]) =>
+    verdict(turn(answer, calls)).passed;
+
+  it('grounds a whole column total without a "total" word', () => {
+    expect(
+      ok('It holds only 16 matches: the quarter-finals to the final.'),
+    ).toBe(true);
+    expect(ok('It holds only 17 matches.')).toBe(false);
+  });
+
+  it('does not read a match clock mark as a figure', () => {
+    expect(ok('An extra-time goal is one recorded after minute 90.', [])).toBe(
+      true,
+    );
+    expect(ok('Nothing came after the 120th minute.', [])).toBe(true);
+    expect(ok('He scored in minute 37.', [])).toBe(false);
+  });
+});
