@@ -213,6 +213,39 @@ describe('Avery runs her turn (agents.md 5.23)', () => {
     ).toBe('Hi, I am Avery.');
   });
 
+  it('keeps only the words she writes after her last tool call as her closing, never her notes before a call', async () => {
+    // Seen in the avery-michael-workflow evals (2026-11-24, both builds):
+    // "Score 0–1, no playbook. Brief Michael." reached the user's answer.
+    const { deps } = fixture(async (tools) => {
+      await tools.answerFromData('Count the matches.');
+      return [
+        text('Score 0–1, no playbook. Brief Michael.'),
+        {
+          type: 'tool-call',
+          payload: {
+            toolName: 'answer_from_data',
+            toolCallId: 'c1',
+            args: { brief: 'Count.' },
+          },
+        },
+        {
+          type: 'tool-result',
+          payload: {
+            toolName: 'answer_from_data',
+            toolCallId: 'c1',
+            result: 'done',
+          },
+        },
+        text('That covers every match in the data.'),
+      ];
+    });
+    const { answer } = await runOrchestratorTurn(deps, { question: 'q' });
+    expect(answer).toBe(
+      'There are 64 matches.\n\nThat covers every match in the data.',
+    );
+    expect(answer).not.toContain('Score');
+  });
+
   it('tells Avery when Michael wrote no answer', async () => {
     let told = '';
     const { deps } = fixture(

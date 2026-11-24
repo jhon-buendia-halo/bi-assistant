@@ -597,6 +597,10 @@ export async function runOrchestratorTurn(
       } else if (chunk.type === 'text-delta') {
         closing += payload.text ?? '';
       } else if (chunk.type === 'tool-call') {
+        // Words before a call are her notes on what to do next ("Score 0–1,
+        // brief Michael"), not her closing: only what follows her last call
+        // reaches the user (agents.md 5.23).
+        closing = '';
         const name = payload.toolName ?? 'tool';
         if (name === 'ask_clarification') {
           const parsed = parseClarification(payload.args);
