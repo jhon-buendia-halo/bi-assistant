@@ -3,9 +3,16 @@ import type { ResultView } from '../../modules/datasources/connectors/paged-sql.
 import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from '../workflows/workflow-run';
 import { guardedCall } from '../workflows/model-call';
+import {
+  clarificationIn,
+  interactiveBlocks,
+  type Revision,
+} from '../workflows/answer-business-question.review';
+import type { RequestContext } from '@mastra/core/request-context';
 import { agentInstructions } from '../agent-prompt-overrides';
 import { RESULT_EXPLORER_AGENT_KEY } from '../agent-constants';
 import { resolveAgentModel } from '../model-resolver';
+import { stepModelFrom } from '../step-model';
 import {
   explorerRequest,
   RESULT_EXPLORER_INSTRUCTIONS,
@@ -31,7 +38,9 @@ export const resultExplorerAgent = new Agent({
     "Turns a user's words into filters, a sort and a page over a query's result columns. No tools, no SQL.",
   instructions: () =>
     agentInstructions(RESULT_EXPLORER_AGENT_KEY, RESULT_EXPLORER_INSTRUCTIONS),
-  model: async () => resolveAgentModel(),
+  // A workflow may run its step agents on its own model (agents.md 1.3).
+  model: async ({ requestContext }) =>
+    resolveAgentModel(stepModelFrom(requestContext)?.model),
 });
 
 /** What the explorer reads: the words, the candidates and the current view. */
@@ -54,18 +63,30 @@ export interface InterpretResultInput {
  * fails with `ModelTimeoutError`; it is not retried.
  */
 export async function interpretResultWithModel(
-  input: InterpretResultInput,
+  input: InterpretResultInput & {
+    /**
+     * Answer a Business Question's interactive run (workflows R44): he may
+     * ask the user one question first; his answered question or the
+     * user's revision end the request. Absent everywhere else: unchanged.
+     */
+    canAsk?: boolean;
+    answered?: { question: string; answer: string };
+    revision?: Revision;
+  },
   options: {
     abortSignal?: AbortSignal;
     onExchange?: (exchange: AgentExchange) => void | Promise<void>;
+    /** A workflow run's turn options: its model's effort and context. */
+    providerOptions?: Record<string, unknown>;
+    requestContext?: RequestContext;
   } = {},
-): Promise<ExplorerSpec> {
-  const request = explorerRequest(
-    input.text,
-    input.candidates,
-    input.view,
-    input.pageCount,
-  );
+): Promise<
+  ExplorerSpec & { clarification?: { question: string; options: string[] } }
+> {
+  const request = [
+    explorerRequest(input.text, input.candidates, input.view, input.pageCount),
+    ...interactiveBlocks(input),
+  ].join('\n\n');
   // A deadline only (workflows R43): no retry of a failure or a cut reply.
   const guard = { label: 'Result Explorer', canRetry: () => false };
   const result = await guardedCall(
@@ -76,6 +97,12 @@ export async function interpretResultWithModel(
         maxSteps: 1,
         toolChoice: 'none',
         ...(call.abortSignal ? { abortSignal: call.abortSignal } : {}),
+        ...(options.providerOptions
+          ? { providerOptions: options.providerOptions as never }
+          : {}),
+        ...(options.requestContext
+          ? { requestContext: options.requestContext }
+          : {}),
         structuredOutput: {
           schema: RESULT_EXPLORER_REPLY_SCHEMA,
           jsonPromptInjection: 'inline',
@@ -102,5 +129,10 @@ export async function interpretResultWithModel(
         : JSON.stringify(result.object ?? null),
     });
   }
-  return spec;
+  // He asked the user first (only offered when he may).
+  const asked =
+    input.canAsk && !input.answered
+      ? clarificationIn(result.text || result.object)
+      : undefined;
+  return asked ? { ...spec, clarification: asked } : spec;
 }

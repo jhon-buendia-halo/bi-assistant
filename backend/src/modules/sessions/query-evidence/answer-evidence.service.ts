@@ -150,7 +150,7 @@ export class AnswerEvidenceService {
    * code, any other by one call to `query-explainer`. A second request for
    * the same host and index while one runs waits for the same result.
    */
-  explain<V>(host: AnswerHost<V>, index: number): Promise<V> {
+  explain<V>(host: AnswerHost<V>, index: number, refresh = false): Promise<V> {
     return this.once(`explain:${host.key}:${index}`, async () => {
       // The table sizes the explainer's request holds (idempotent; takes the
       // lock itself, so it runs before ours, never inside one).
@@ -158,7 +158,8 @@ export class AnswerEvidenceService {
       const loaded = await host.load();
       const { answer } = loaded;
       const entry = this.evidenceAt(host, evidenceIn(answer), index);
-      if (entry.explanation) return loaded.view();
+      // `refresh` (api.md 140): explained again, its step counts and previews dropped.
+      if (entry.explanation && !refresh) return loaded.view();
       const record = (answer.data ?? [])[index];
       if (!record || record.error || !record.input?.trim()) {
         throw new BadRequestException(`Query ${index} has no SQL to explain`);
@@ -267,6 +268,84 @@ export class AnswerEvidenceService {
             s.verb === 'show' ? s : { ...s, rows: counts[next++] },
           ),
           stageCounts: { status: 'verified', at: new Date().toISOString() },
+        },
+      });
+    });
+  }
+
+  /**
+   * The first rows one step of an explained query leaves (api.md 161, 162):
+   * its `previewSql`, checked as a count statement is (only the tables the
+   * query reads), run through `QueryEvidenceService.previewRows` and stored
+   * on the step with its check against the step's counted rows. Once
+   * stored, the stored preview is returned. `step` is 0-based; the show
+   * step has none (its rows are the query's own).
+   */
+  previewStep<V>(host: AnswerHost<V>, index: number, step: number): Promise<V> {
+    return this.once(`preview:${host.key}:${index}:${step}`, async () => {
+      const loaded = await host.load();
+      const { answer, datasets } = loaded;
+      const entry = this.evidenceAt(host, evidenceIn(answer), index);
+      const explanation = entry.explanation;
+      if (!explanation) {
+        throw new BadRequestException(`Explain query ${index} first`);
+      }
+      const target = explanation.steps[step];
+      if (!target || target.verb === 'show') {
+        throw new BadRequestException(`Query ${index} has no step ${step}`);
+      }
+      if (target.preview) return loaded.view();
+      if (!target.previewSql) {
+        throw new BadRequestException(
+          `Step ${step + 1} has no preview: explain the query again`,
+        );
+      }
+      const foreign = foreignTable(
+        target.previewSql,
+        (entry.tables ?? []).map((t) => t.entity),
+      );
+      if (foreign) {
+        throw new BadRequestException(
+          `Step ${step + 1} reads ${foreign}, which the query does not read`,
+        );
+      }
+      const source = await this.queryEvidence.datasourceFor(entry, datasets);
+      let rows: Awaited<ReturnType<QueryEvidenceService['previewRows']>>;
+      try {
+        rows = await this.queryEvidence.previewRows(
+          source.id,
+          target.previewSql,
+        );
+      } catch (error) {
+        throw new BadRequestException(
+          `Step ${step + 1} could not be previewed: ${runErrorMessage(error)}`,
+        );
+      }
+      const counted =
+        explanation.stageCounts?.status === 'verified'
+          ? target.rows
+          : undefined;
+      const check =
+        counted !== undefined && rows.total !== undefined
+          ? rows.total === counted
+            ? ('matches' as const)
+            : ('differs' as const)
+          : undefined;
+      return this.patchEvidence(host, index, {
+        explanation: {
+          ...explanation,
+          steps: explanation.steps.map((s, i) =>
+            i === step
+              ? {
+                  ...s,
+                  preview: {
+                    ...rows,
+                    at: new Date().toISOString(),
+                    ...(check ? { check } : {}),
+                  },
+                }
+              : s,
+          ),
         },
       });
     });

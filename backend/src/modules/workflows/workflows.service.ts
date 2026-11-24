@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
-  agentWorkflow,
+  codeWorkflowView,
   type AgentWorkflow,
   type AgentWorkflowStep,
 } from '../../mastra/workflows/agent-workflows';
@@ -25,6 +25,10 @@ import {
   type AgentToolDetail,
 } from '../agents/agents.service';
 import { runsOnPickedDatasets } from '../agents/builtin-sessions';
+import { resolveAgentModelConfig } from '../../mastra/model-resolver';
+import { servesClaude, type StepModel } from '../../mastra/step-model';
+import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/answer-business-question.steps';
+import { ANSWER_BUSINESS_QUESTION_MODEL } from '../../mastra/workflows/answer-business-question.review';
 
 /** One workflow of the catalogue, as `GET /workflows` lists it (api.md 116). */
 export interface WorkflowSummary {
@@ -154,9 +158,12 @@ export class WorkflowsService {
       steps
         .filter((step) => step.agent?.key === key)
         .every((step) => step.agent?.tools.length === 0);
+    // Answer a Business Question's agents run on its own model when the
+    // saved one is a Claude model (agents.md 1.3): the canvas shows that one.
+    const stepModel = await this.stepModelOf(entry.summary.id);
     const agents = await Promise.all(
       entry.summary.agents.map((agent) =>
-        this.agentDetail(agent, toolless(agent.key)),
+        this.agentDetail(agent, toolless(agent.key), stepModel),
       ),
     );
     return {
@@ -183,6 +190,22 @@ export class WorkflowsService {
   }
 
   /**
+   * The model a workflow runs its step agents on (agents.md 1.3): Answer a
+   * Business Question's when the saved model is served as a Claude model;
+   * otherwise none (every agent on the saved model). Never throws.
+   */
+  private async stepModelOf(id: string): Promise<StepModel | undefined> {
+    if (id !== ANSWER_BUSINESS_QUESTION_WORKFLOW_ID) return undefined;
+    try {
+      return servesClaude(await resolveAgentModelConfig())
+        ? ANSWER_BUSINESS_QUESTION_MODEL
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * An agent of a workflow in detail (api.md 34 `AgentDetail`): its LLM as
    * `<provider>/<model>` (null when none is set, never the environment's
    * fallback), its prompt, shortened to `SYSTEM_PROMPT_CAP`, and its tools.
@@ -194,15 +217,18 @@ export class WorkflowsService {
       role: string;
     },
     toolless = false,
+    stepModel?: StepModel,
   ): Promise<WorkflowAgentDetail> {
     const detail = await this.agents.get(agent.key);
     const llm = detail?.llm;
     const prompt = detail?.instructions ?? '';
+    // The workflow's own model replaces the saved name on the same provider.
+    const model = stepModel?.model ?? llm?.model;
     return {
       key: agent.key,
       name: agent.name,
       role: agent.role,
-      model: llm?.provider && llm.model ? `${llm.provider}/${llm.model}` : null,
+      model: llm?.provider && model ? `${llm.provider}/${model}` : null,
       systemPrompt: prompt.slice(0, SYSTEM_PROMPT_CAP),
       ...(prompt.length > SYSTEM_PROMPT_CAP
         ? { systemPromptTruncated: true as const }
@@ -268,7 +294,7 @@ function codeEntry(
     contractHash: source.contractHash,
     edges: () => source.edges.map((edge) => ({ ...edge })),
     steps: () =>
-      (agentWorkflow(source.primaryFor)?.steps ?? []).map((step) => {
+      (codeWorkflowView(source)?.steps ?? []).map((step) => {
         const declared = source.steps.find((entry) => entry.id === step.id);
         return declared
           ? {

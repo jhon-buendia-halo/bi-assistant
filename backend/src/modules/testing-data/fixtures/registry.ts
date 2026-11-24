@@ -721,6 +721,55 @@ const EDGE_CASES: SampleFixture = {
 };
 
 /**
+ * An omnichannel retailer built to evaluate the Insights Analyst on a complex
+ * dataset: a fiscal calendar, currencies, a price history, a category tree,
+ * refunds, targets and a web funnel, with planted traps (ties, duplicates,
+ * closed stores, a time zone boundary, an empty table). Every trap is listed in
+ * the testing-data spec. Hand-maintained plain SQL, deterministic.
+ */
+const RETAIL_OPS: SampleFixture = {
+  id: 'retail-ops',
+  name: 'Retail Ops',
+  description:
+    'An omnichannel retailer in 8 countries and 6 currencies, synthetic data, ' +
+    '2022 to 2024 — orders and lines, returns and refunds, promotions, price ' +
+    'history, revenue targets, a fiscal calendar and a web funnel.',
+  seedFile: '007_retail_ops.sql',
+  schema: 'retail_ops',
+  defaults: {
+    host: SAMPLE_HOST,
+    port: SAMPLE_PORT,
+    database: 'retail_ops',
+    user: SAMPLE_USER,
+    password: SAMPLE_PASSWORD,
+    ssl: false,
+  },
+  datasourceName: 'Retail Ops PostgreSQL',
+  datasetName: 'Retail Ops',
+  requiredTables: [
+    'calendar',
+    'currencies',
+    'fx_rates',
+    'regions',
+    'countries',
+    'stores',
+    'product_categories',
+    'products',
+    'product_price_history',
+    'customers',
+    'promotions',
+    'orders',
+    'order_lines',
+    'order_promotions',
+    'returns',
+    'store_targets',
+    'web_sessions',
+    'funnel_events',
+    'loyalty_redemptions',
+  ],
+};
+
+/**
  * A medallion sample on the World Cup data: three schemas, one per layer, with
  * deliberate gaps (2018 missing from Consumption, columns only in Normalized,
  * raw text only in Landing, cards in no layer). Hand-maintained.
@@ -812,6 +861,7 @@ export const SAMPLE_FIXTURES: SampleFixture[] = [
   US_HEALTH,
   EDGE_CASES,
   WORLD_CUP_MEDALLION,
+  RETAIL_OPS,
   WORLD_CUP_EXCEL,
   WORLD_CUP_REST,
   FINANCE,

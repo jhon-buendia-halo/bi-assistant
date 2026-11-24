@@ -149,10 +149,18 @@ describe('toQuery', () => {
   const now = Date.parse('2026-11-10T12:00:00.000Z');
 
   it('sends only the filters that are set', () => {
-    expect(toQuery(EMPTY_FILTERS, 2, 50, now)).toEqual({ page: 2, pageSize: 50 });
+    expect(toQuery(EMPTY_FILTERS, 2, 50, now)).toEqual({
+      page: 2,
+      pageSize: 50,
+    });
     expect(
       toQuery(
-        { ...EMPTY_FILTERS, agent: 'assistant', status: 'failed', session: 's1' },
+        {
+          ...EMPTY_FILTERS,
+          agent: 'assistant',
+          status: 'failed',
+          session: 's1',
+        },
         1,
         25,
         now,
@@ -184,5 +192,43 @@ describe('toQuery', () => {
     );
     expect(query.from).toBe(new Date('2026-11-01T10:00').toISOString());
     expect(query.to).toBeUndefined();
+  });
+});
+
+describe('MonitoringStateService: Agent quality filters', () => {
+  let state: MonitoringStateService;
+
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.configureTestingModule({});
+    state = TestBed.inject(MonitoringStateService);
+  });
+
+  it('starts at Last 30 days with no other filter', () => {
+    expect(state.qualityFilters()).toEqual({
+      agent: '',
+      set: '',
+      model: '',
+      range: 'month',
+    });
+    expect(state.hasQualityFilters()).toBeFalse();
+  });
+
+  it('sets a filter, clears the set when the agent changes, and resets', () => {
+    state.setQualityFilter('set', 'set-a');
+    state.setQualityFilter('model', 'gpt-4o-mini');
+    state.setQualityFilter('range', 'any');
+    expect(state.hasQualityFilters()).toBeTrue();
+    state.setQualityFilter('agent', 'assistant');
+    expect(state.qualityFilters().set).toBe('');
+    expect(state.qualityFilters().model).toBe('gpt-4o-mini');
+    state.clearQualityFilters();
+    expect(state.hasQualityFilters()).toBeFalse();
+    expect(state.qualityFilters().range).toBe('month');
+  });
+
+  it('accepts the quality tab', () => {
+    state.setTab('quality');
+    expect(state.tab()).toBe('quality');
   });
 });

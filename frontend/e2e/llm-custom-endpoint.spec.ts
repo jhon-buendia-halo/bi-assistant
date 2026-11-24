@@ -404,7 +404,9 @@ test.describe('Anthropic-compatible', () => {
       '••••••••4c4c',
     );
 
-    // A run goes to <root>/v1/messages with the saved model and key.
+    // A run goes to <root>/v1/messages with the saved key. The saved model
+    // is a Claude model, so Answer a Business Question's agents run on its
+    // own model on that endpoint (agents.md 1.3): the name, not the endpoint.
     stub.reply(ANSWER);
     const question = 'How many matches were played in 2022?';
     const result = await runQuestionOk(page, question);
@@ -412,7 +414,9 @@ test.describe('Anthropic-compatible', () => {
 
     const turns = requestsTo('messages').filter((request) => !request.isProbe);
     expect(turns.length).toBeGreaterThan(0);
-    expect(turns[0].body['model']).toBe(MODEL);
+    expect(turns[0].body['model']).toBe('claude-opus-5-5');
+    // The connection test before the save still probes the saved model.
+    expect(probes().at(-1)?.body['model']).toBe(MODEL);
     expectAnthropicHeaders(turns, KEY);
   });
 

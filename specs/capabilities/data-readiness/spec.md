@@ -39,7 +39,7 @@ Capability-local vocabulary:
   - Its code steps profile the dataset's tables, score them with the deterministic engine and store the report with the run's id (R6-R33, R24); its **Explain report** step runs the Data Readiness Agent on the stored report, whose summary its prompt carries (R4), and which SHALL NOT run a second assessment (while the step runs, `assess_data_readiness` answers an error naming the stored report), while the rows behind the report's top findings are looked up; its **Rows behind findings** step then takes them (R34).
   - The run host covers that one dataset only, so the agent never asks which dataset.
   - A dataset that is not PostgreSQL or Databricks SHALL be refused before the run with `Dataset "<name>" is not a PostgreSQL or Databricks dataset`.
-  - The run's answer, its readiness card and its files show in the Run panel (R5; [synthetic-data](../synthetic-data/spec.md) R43). **Follow up** asks a further question as a new run with this run as its context, which assesses again; **Stop** cancels a running assessment (R33) and stores no report.
+  - The run's answer, its readiness card and its files show in the Run panel (R5; [synthetic-data](../synthetic-data/spec.md) R43). The Run panel no longer offers a **Follow up** (removed 2026-11-20; a further question is a new run from **New question**, and the API still takes a run with an earlier run as its context); **Stop**, in the Chat's top bar while the run is going, cancels a running assessment (R33) and stores no report.
   - The assistant-only passes SHALL NOT apply ([agent-answers](../agent-answers/spec.md) R61).
 - R2a. Until chats are retired (1.23.22), **Start chat** on the workflow (R1) SHALL also still create a session at once, with no form.
   - The session is named "Data Readiness" and bound to the agent. It covers every dataset bound to a PostgreSQL or Databricks datasource, ordered by dataset name.
@@ -275,7 +275,7 @@ These rules refine R6 to R11 without changing any statistic, check or score form
 See [ui.md](../../system/ui.md).
 
 - **Agent Hub** (section 4.4): the Data Readiness Agent card in the Data Foundations section (owner Official), with no Start chat.
-- **Workflows** (sections 4.4a and 4.4b): the `Data Readiness Agent` workflow card and page, whose Start chat and Execute are disabled, titled with the requirement, while no PostgreSQL or Databricks dataset exists. The page's Run tab: the `dataset` list, the question with its example chips, the running tool row's progress, the answer with its readiness card, the scorecard under it, and the run's files.
+- **Workflows** (sections 4.4a and 4.4b): the `Data Readiness Agent` workflow card and page, whose Start chat and Execute are disabled, titled with the requirement, while no PostgreSQL or Databricks dataset exists. The page's Run tab: the agent's option cards for the `dataset` (R47 of workflows), the empty state with its example chips, the running tool row's progress, the answer with its readiness card, the scorecard under it, and the run's files.
 - **Agent detail** (section 4.5): the Official agent's tabs (no Chat Box) and **Used in** `Data Readiness Agent`; the System Prompt tab is editable.
 - **Session chat** (section 4.12): the agent chip; each tool call shown as a step; the readiness card on the answer.
 - **Right panel**: the readiness scorecard, its filters and Past assessments (section 4.13).

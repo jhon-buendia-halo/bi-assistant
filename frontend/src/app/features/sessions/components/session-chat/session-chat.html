@@ -9,7 +9,11 @@
   />
 
   <!-- Messages: a past chat is read-only (past-chats R66) -->
-  <div #scroller class="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-4">
+  <div
+    #scroller
+    class="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-4"
+    [style.padding-right.px]="historyItems().length >= 2 ? 56 : null"
+  >
     <div class="flex w-full flex-col gap-6">
       @for (
         message of messages();

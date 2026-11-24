@@ -26,7 +26,7 @@ import {
   systemTexts,
 } from './helpers/llm-stub';
 import { scenarioStep } from './support/demo-captions';
-import { pickedDataset } from './helpers/run-ui';
+import { composer, pickedDataset } from './helpers/run-ui';
 
 /**
  * Mirrors the Feature "Session management" in
@@ -352,7 +352,13 @@ test.describe('Runs and Past chats', () => {
       page,
       'POST',
       `/workflows/${V2_WORKFLOW_ID}/runs`,
-      { input: { question: QUESTION, datasets: [WORLD_CUP_DATASET] } },
+      {
+        input: {
+          question: QUESTION,
+          datasets: [WORLD_CUP_DATASET],
+          approveSteps: false,
+        },
+      },
     );
     return run.id;
   }
@@ -436,8 +442,9 @@ test.describe('Runs and Past chats', () => {
       });
       await scenarioStep(page, 'Then the composer holds the run\'s input, to change and execute', async () => {
         await expect(page.getByTestId('workflow-run-question')).toHaveCount(0);
-        await expect(page.getByTestId('workflow-run')).toBeVisible();
-        await expect(page.getByTestId('workflow-input-question')).toHaveValue(QUESTION);
+        await expect(composer(page)).toBeVisible();
+        await expect(composer(page)).toHaveValue(QUESTION);
+        await expect(page.getByTestId('run-composer-send')).toBeEnabled();
         await expect(pickedDataset(page, WORLD_CUP_DATASET)).toBeVisible();
       });
       await scenarioStep(page, 'When I open Past chats and open the old chat', async () => {

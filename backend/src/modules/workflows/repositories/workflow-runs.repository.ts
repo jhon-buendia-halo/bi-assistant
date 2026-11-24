@@ -8,7 +8,7 @@ import type { WorkflowRunDoc } from '../workflow-run-steps';
 
 /**
  * Stored workflow runs, collection `workflow_runs` (data-model 3.16): one
- * document per run, written when it starts, its `steps` updated at each step
+ * document per run, written when it is accepted, its `steps` updated at each step
  * change while it runs, and the whole run updated when it ends.
  */
 @Injectable()
@@ -34,9 +34,19 @@ export class WorkflowRunsRepository {
     });
   }
 
+  /** The runs of one conversation with Avery, oldest first (workflows R45). */
+  listConversation(conversationId: string): Promise<WorkflowRunDoc[]> {
+    return this.store.find({ conversationId }, { sort: { startedAt: 1 } });
+  }
+
   /** The runs still `running`: at start-up, the ones the app stopped in. */
   listRunning(): Promise<WorkflowRunDoc[]> {
     return this.store.find({ status: 'running' });
+  }
+
+  /** The runs waiting for a slot, in line: oldest `queuedAt` first. */
+  listQueued(): Promise<WorkflowRunDoc[]> {
+    return this.store.find({ status: 'queued' }, { sort: { queuedAt: 1 } });
   }
 
   /**

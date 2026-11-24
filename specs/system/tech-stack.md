@@ -72,6 +72,7 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1.1
 | `@databricks/sql` | 2.1.0 | Databricks datasource connector. |
 | marked | 18.0.13 | Markdown to HTML for the analysis section of visual documents. Its lexer also feeds the panel-item PDF renderer (`common/markdown-pdf.ts`). |
 | `pdfkit` | 0.17.x, pinned (`@types/pdfkit` as a dev dependency) | Renders panel items to PDF (`common/markdown-pdf.ts`) with the built-in Helvetica, no font files. Pure JavaScript, so packaging is unaffected. |
+| pptxgenjs | 4.0.1 | Writes the PowerPoint of Avery's conversation export (`modules/conversation-export/export-render.ts`, ADR-0056): native text and tables, the dashboard rows as images. Pure JavaScript (MIT). The PDF of the same export is printed by the browser of ADR-0049 through `playwright-core`. |
 | sanitize-html | 2.17.7 | Sanitises that HTML (and other generated markup) on the server. |
 | Node built-ins | | `node:util` `parseArgs` (CLI), `node:net`, `node:fs`, `node:crypto` (API-key encryption in `infrastructure/crypto`, keyed by `APP_SECRET`), `node:http` (World Cup test REST API). |
 | Jest | ^30.0.0 (`ts-jest` ^29.2.5, `@types/jest` ^30.0.0) | Backend unit tests and the API-level e2e specs. |

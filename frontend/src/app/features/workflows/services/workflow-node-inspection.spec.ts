@@ -388,6 +388,41 @@ describe('buildToolInspection (a tool sub-node opens that tool)', () => {
     expect(t.tool?.totalDurationMs).toBe(42);
   });
 
+  it("names the teammate a team tool calls (an orchestrator's portrait sub-node), and no teammate for any other tool", () => {
+    const team = {
+      ...TOOLS_WORKFLOW,
+      steps: [
+        TOOLS_WORKFLOW.steps[0],
+        {
+          ...TOOLS_WORKFLOW.steps[1],
+          agent: {
+            ...TOOLS_WORKFLOW.steps[1].agent!,
+            tools: ['answer_from_data', 'run_readonly_sql'],
+            team: [
+              {
+                tool: 'answer_from_data',
+                key: 'insights-analyst',
+                name: 'Michael',
+                role: 'Insights Analyst',
+              },
+            ],
+          },
+        },
+      ],
+    } as unknown as WorkflowDetail;
+    const n = buildNodeInspections({ ...src(null), workflow: team });
+    expect(
+      buildToolInspection(n, 'answer-tool-answer_from_data')?.tool?.teammate,
+    ).toEqual({
+      key: 'insights-analyst',
+      name: 'Michael',
+      role: 'Insights Analyst',
+    });
+    expect(
+      buildToolInspection(n, 'answer-tool-run_readonly_sql')?.tool,
+    ).not.toEqual(jasmine.objectContaining({ teammate: jasmine.anything() }));
+  });
+
   it('includes the live calls while its step runs', () => {
     const live: RunView = {
       status: 'running',

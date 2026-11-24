@@ -1,5 +1,8 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { AgentQualityService } from './agent-quality.service';
 import { MonitoringService } from './monitoring.service';
+import type { AgentQualityQuery } from './dto/agent-quality-query';
+import type { AgentQualityPage } from './entities/agent-quality.entity';
 import type { LlmCallsQuery } from './dto/llm-calls-query';
 import type { SessionsQuery } from './dto/sessions-query';
 import type { UsageQuery } from './dto/usage-query';
@@ -13,7 +16,10 @@ import type {
 
 @Controller('monitoring')
 export class MonitoringController {
-  constructor(private readonly monitoring: MonitoringService) {}
+  constructor(
+    private readonly monitoring: MonitoringService,
+    private readonly quality: AgentQualityService,
+  ) {}
 
   @Get('llm-calls')
   async listCalls(@Query() query: LlmCallsQuery): Promise<LlmCallsPage> {
@@ -23,6 +29,13 @@ export class MonitoringController {
   @Get('usage')
   async getUsage(@Query() query: UsageQuery): Promise<UsageSummary> {
     return this.monitoring.getUsage(query);
+  }
+
+  @Get('agent-quality')
+  async getAgentQuality(
+    @Query() query: AgentQualityQuery,
+  ): Promise<AgentQualityPage> {
+    return this.quality.getAgentQuality(query);
   }
 
   @Get('llm-calls/:id')

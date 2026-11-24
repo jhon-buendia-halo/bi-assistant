@@ -63,6 +63,8 @@ import {
   initialInputValues,
   questionFieldName,
   runAgainValues,
+  isActiveRun,
+  isLiveRun,
   runInput,
 } from './workflows.util';
 
@@ -81,8 +83,6 @@ const ASK_AGENT_WORKFLOW = 'answer-business-question';
 export const ASK_HINTS: Readonly<Record<string, string>> = {
   '': 'Runs every step again: plans, queries the data, checks and writes a new answer.',
   'read-images': 'Read images step: reads your reference images again with this question.',
-  'interpret-follow-up':
-    'Interpret follow-up step: pages, filters or sorts the earlier result. Runs no new analysis.',
   plan: 'Plan step: plans how to answer your question. Reads no data.',
   analyse:
     'Analyse step: answers with new queries over the data, with no plan or checks around it.',
@@ -295,6 +295,8 @@ export class WorkflowDesigner {
   private readonly stopped = signal(false);
   /** What the streaming run waits on (`input-required`), until it resumes. */
   private readonly liveWaiting = signal<WorkflowWaitingFor | null>(null);
+  /** The run waits for a free slot (`queued` event); cleared by its first step event. */
+  private readonly liveQueued = signal(false);
   /** The server refused to resume (not a failed run): shown on the waiting card. */
   readonly resumeError = signal<string | null>(null);
 
@@ -381,7 +383,9 @@ export class WorkflowDesigner {
         ? 'failed'
         : waiting !== null
           ? 'suspended'
-          : 'running';
+          : this.liveQueued()
+            ? 'queued'
+            : 'running';
     const startedAt = this.liveStartedAt();
     const finishedAt = this.liveFinishedAt();
     return {
@@ -398,8 +402,7 @@ export class WorkflowDesigner {
           let stepStatus = event === null ? null : event.status;
           if (
             stepStatus === 'running' &&
-            status !== 'running' &&
-            status !== 'suspended'
+            !isActiveRun(status)
           ) {
             stepStatus = status === 'stopped' ? 'stopped' : 'failed';
           }
@@ -498,7 +501,7 @@ export class WorkflowDesigner {
     return agentStepStories({
       steps: workflow.steps,
       runSteps: this.runPanelSteps(),
-      running: this.running() || status === 'running' || status === 'suspended',
+      running: this.running() || (status !== undefined && isActiveRun(status)),
       liveToolCalls: this.toolCalls(),
     });
   });
@@ -559,7 +562,7 @@ export class WorkflowDesigner {
     const stored = this.run();
     if (stored !== null) {
       if (stored.workflowId !== workflow.id) return { state: 'hidden' };
-      return stored.status === 'running'
+      return isLiveRun(stored.status)
         ? { state: 'running' }
         : { state: 'ready', runId: stored.id };
     }
@@ -800,8 +803,7 @@ export class WorkflowDesigner {
   private prepareEvidence(run: WorkflowRun): void {
     if (
       !answerHasQueries(run.answer) ||
-      run.status === 'running' ||
-      run.status === 'suspended' ||
+      isActiveRun(run.status) ||
       this.preparedRuns.has(run.id)
     ) {
       return;
@@ -1028,7 +1030,7 @@ export class WorkflowDesigner {
     this.stoppedSubscription = this.runTasks.stop(id).subscribe({
       next: (result) => {
         if (generation !== this.generation) return;
-        if (result.run.status === 'running') {
+        if (isLiveRun(result.run.status)) {
           this.readBackStopped(id, generation, 0);
         } else {
           this.showStored(result.run);
@@ -1044,7 +1046,7 @@ export class WorkflowDesigner {
 
   /** Show a run opened on this page: a running one is followed live. */
   private showOrFollow(workflow: WorkflowDetail, run: WorkflowRun): void {
-    if (run.status === 'running') this.follow(workflow, run);
+    if (isLiveRun(run.status)) this.follow(workflow, run);
     else this.showStored(run);
   }
 
@@ -1078,6 +1080,7 @@ export class WorkflowDesigner {
       (grouped[step.id] ??= []).push(step);
     }
     this.liveSteps.set(grouped);
+    this.liveQueued.set(run.status === 'queued');
     this.runId.set(run.id);
     this.liveInput.set(run.input ?? null);
     this.liveStartedAt.set(run.startedAt);
@@ -1139,14 +1142,14 @@ export class WorkflowDesigner {
     this.stoppedSubscription = this.runsApi.getRun(id).subscribe({
       next: (run) => {
         if (generation !== this.generation) return;
-        if (run.status === 'running' && tries + 1 < STOPPED_POLL_TRIES) {
+        if (isLiveRun(run.status) && tries + 1 < STOPPED_POLL_TRIES) {
           this.stoppedTimer = setTimeout(
             () => this.readBackStopped(id, generation, tries + 1),
             STOPPED_POLL_MS,
           );
           return;
         }
-        if (run.status !== 'running') this.showStored(run);
+        if (!isLiveRun(run.status)) this.showStored(run);
       },
       error: () => undefined,
     });
@@ -1168,7 +1171,7 @@ export class WorkflowDesigner {
     this.run.set(run);
     this.prepareEvidence(run);
     // Its end shows here: its background task does not toast it.
-    if (run.status !== 'running' && run.status !== 'suspended') {
+    if (!isActiveRun(run.status)) {
       this.runTasks.markSeen(run.id);
     }
   }
@@ -1191,6 +1194,7 @@ export class WorkflowDesigner {
     this.stopped.set(false);
     this.stopRequested = false;
     this.liveWaiting.set(null);
+    this.liveQueued.set(false);
     this.resumeError.set(null);
   }
 
@@ -1200,13 +1204,13 @@ export class WorkflowDesigner {
    * appended to what it had. A refusal before the stream leaves the run as
    * it was: an expired one reads as stopped, any other shows on the card.
    */
-  resume(answer: string): void {
+  resume(answer: string, images: readonly string[] = []): void {
     const workflow = this.workflow();
     const stored = this.run();
     const waiting = this.waitingFor();
     const text = answer.trim();
     if (workflow === null || stored === null || waiting === null) return;
-    if (this.running() || !text) return;
+    if (this.running() || (!text && images.length === 0)) return;
     if (stored.status !== 'suspended' || waiting.expired) return;
     this.cancelStream();
     const generation = this.generation;
@@ -1267,6 +1271,7 @@ export class WorkflowDesigner {
           },
         },
         controller.signal,
+        images,
       )
       .finally(() => {
         if (!live()) return;
@@ -1341,18 +1346,25 @@ export class WorkflowDesigner {
           this.stopRun(runId);
         }
       },
+      onQueued: () => {
+        if (live()) this.liveQueued.set(true);
+      },
       onStep: (step) => {
         if (!live()) return;
+        this.liveQueued.set(false);
         this.applyStep(workflow, step);
       },
       onInputRequired: (event) => {
         if (!live()) return;
+        this.liveQueued.set(false);
         this.liveWaiting.set({
           stepId: event.stepId,
           title: event.title,
           question: event.question,
           options: event.options,
           expiresAt: event.expiresAt,
+          ...(event.review !== undefined ? { review: event.review } : {}),
+          ...(event.visualId !== undefined ? { visualId: event.visualId } : {}),
         });
       },
       onReasoning: (delta) => {

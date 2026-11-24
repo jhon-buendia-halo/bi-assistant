@@ -20,11 +20,13 @@ import type {
 } from '../sessions/entities/session.entity';
 
 /**
- * A run's status: `running` until it ends; `suspended` while it waits for
- * the user's answer (api.md 138, ADR-0043).
+ * A run's status: `queued` from when it is accepted (api.md 119) until a
+ * slot is free for it, or again after a restart cut it off; `running` until
+ * it ends; `suspended` while it waits for the user's answer (api.md 138,
+ * ADR-0043).
  */
 export type WorkflowRunStatus =
-  'running' | 'suspended' | 'success' | 'failed' | 'stopped';
+  'queued' | 'running' | 'suspended' | 'success' | 'failed' | 'stopped';
 
 /** A step's status in a run (api.md 119 `step`); `suspended`: it waits. */
 export type WorkflowRunStepStatus =
@@ -41,6 +43,18 @@ export interface WorkflowRunWaitingFor {
   title: string;
   question: string;
   options: string[];
+  /**
+   * An approval gate (workflows R44): the step agent's outcome in words
+   * (Markdown), which the user approves or asks to change. Absent on a
+   * clarifying question.
+   */
+  review?: string;
+  /**
+   * Build visual's approval gate (workflows R44): the visual Ryan built,
+   * which the user opens before approving it; a change to it may come with
+   * reference images (api.md 138).
+   */
+  visualId?: string;
   since: string;
   expiresAt: string;
   expired?: true;
@@ -63,6 +77,19 @@ export interface WorkflowRunToolCall {
   durationMs?: number;
   /** Why the agent made the call, in its words (the `tool` event's `rationale`). */
   rationale?: string;
+  /**
+   * Who made the call, when the step's agent delegates (Avery, agents.md
+   * 2.21): her registry key on her own calls; absent on a teammate's, which
+   * follow the team call that hands them the work.
+   */
+  agent?: string;
+  /** A team call (Avery's): the registry key of the agent it calls. */
+  teammate?: string;
+  /**
+   * A team call's result: what the teammate handed back, in their words (the
+   * `tool-result` event's `reply`); at most `TOOL_CALL_INPUT_CAP` characters.
+   */
+  reply?: string;
 }
 
 /**
@@ -124,7 +151,29 @@ export interface WorkflowRun {
   contractHash?: string;
   input: WorkflowInputValues;
   context?: { fromRunId: string };
+  /**
+   * A conversation with Avery (Answer a Business Question (orchestrated),
+   * workflows R45): the id of its first run, shared by every run that
+   * follows up on it. Absent on other workflows' runs.
+   */
+  conversationId?: string;
+  /**
+   * When the run's conversation was archived (api.md 159): it is hidden
+   * from the run history (120) unless asked for, and read-only.
+   */
+  archivedAt?: string;
   status: WorkflowRunStatus;
+  /**
+   * When 119 accepted the run (it was stored `queued`). Absent on runs
+   * stored before the queue, and on 118 and draft runs.
+   */
+  queuedAt?: string;
+  /**
+   * How many times the run has started (1 on its first start; a restart
+   * that cut it off starts it again, at most `RUN_MAX_ATTEMPTS`). Absent
+   * while it never started, and on runs stored before the queue.
+   */
+  attempts?: number;
   /** Every step of the workflow, in its order. */
   steps: WorkflowRunStep[];
   /** The workflow's final output (success only). */
@@ -160,6 +209,7 @@ export interface WorkflowRun {
   workflow?: WorkflowView;
   /** Legacy and inert (data-model 3.14): `local`. */
   ownerId?: string;
+  /** When it was stored, then each time it starts (history order). */
   startedAt: string;
   finishedAt?: string;
   /** Store-maintained. */
@@ -183,6 +233,12 @@ export interface WorkflowRunSummary {
   title: string;
   startedAt: string;
   finishedAt?: string;
+  queuedAt?: string;
+  attempts?: number;
+  /** Its conversation with Avery (workflows R45), when it has one. */
+  conversationId?: string;
+  /** When its conversation was archived (api.md 159). */
+  archivedAt?: string;
 }
 
 /** The longest run title, in characters (plan 5.3). */
@@ -190,6 +246,12 @@ export const RUN_TITLE_MAX = 120;
 
 /** A run the app stopped in, as start-up recovery fails it (plan 5.1 step 5). */
 export const RUN_INTERRUPTED_ERROR = 'The app stopped before the run finished';
+
+/**
+ * How many times a run starts at most: a run the app stopped in this many
+ * times is failed at start-up instead of queued again.
+ */
+export const RUN_MAX_ATTEMPTS = 3;
 
 /**
  * A run's title (plan 5.3): its question, else the first of `textFields`
@@ -225,6 +287,10 @@ export function runSummaryOf(
     title: runTitle(run, textFields),
     startedAt: run.startedAt,
     ...(run.finishedAt ? { finishedAt: run.finishedAt } : {}),
+    ...(run.queuedAt ? { queuedAt: run.queuedAt } : {}),
+    ...(run.attempts !== undefined ? { attempts: run.attempts } : {}),
+    ...(run.conversationId ? { conversationId: run.conversationId } : {}),
+    ...(run.archivedAt ? { archivedAt: run.archivedAt } : {}),
   };
 }
 
@@ -264,8 +330,23 @@ export function runHostDoc(run: WorkflowRunDoc): SessionDoc {
 }
 
 /**
- * What start-up recovery writes on a run the app stopped in (plan 5.1 step
- * 5): `failed` with `RUN_INTERRUPTED_ERROR`, and so is any step still running.
+ * What start-up recovery writes on a run 119 accepted that the app stopped
+ * in and that may start again (`attempts` below `RUN_MAX_ATTEMPTS`):
+ * `queued`, from scratch (no steps, output, error or answer), in line from
+ * when it was first accepted (its `queuedAt` is kept).
+ */
+export const REQUEUED_RUN_PATCH: Readonly<Partial<WorkflowRunDoc>> = {
+  status: 'queued',
+  steps: [],
+  output: undefined,
+  error: undefined,
+  answer: undefined,
+};
+
+/**
+ * What start-up recovery writes on a run the app stopped in
+ * `RUN_MAX_ATTEMPTS` times (plan 5.1 step 5): `failed` with
+ * `RUN_INTERRUPTED_ERROR`, and so is any step still running.
  * A step stored `suspended` fails too: a checkpoint can store the waiting
  * step before the end write stores the run `suspended` (data-model 3.16
  * allows a suspended step only on a suspended run).
@@ -602,7 +683,12 @@ export class RunStepTracker {
    * agent step that is running (its current attempt); none running, or the
    * step holding `STEP_TOOL_CALL_CAP` calls already, drops it.
    */
-  noteTool(name: string, input?: string, rationale?: string): void {
+  noteTool(
+    name: string,
+    input?: string,
+    rationale?: string,
+    signed?: { agent?: string; teammate?: string },
+  ): void {
     const key = this.runningAgentStep();
     if (!key) return;
     const calls = this.calls.get(key) ?? [];
@@ -612,6 +698,8 @@ export class RunStepTracker {
         tool: name,
         ...callInput(input),
         ...(rationale ? { rationale: rationale.slice(0, RATIONALE_CAP) } : {}),
+        ...(signed?.agent ? { agent: signed.agent } : {}),
+        ...(signed?.teammate ? { teammate: signed.teammate } : {}),
       },
       startedAt: this.now().getTime(),
       done: false,
@@ -630,6 +718,7 @@ export class RunStepTracker {
     input?: string;
     rowCount?: number;
     error?: string;
+    reply?: string;
   }): void {
     const key = this.runningAgentStep();
     if (!key) return;
@@ -653,6 +742,9 @@ export class RunStepTracker {
       ...(typeof result.error === 'string' && result.error
         ? { error: result.error }
         : {}),
+      ...(typeof result.reply === 'string' && result.reply
+        ? { reply: result.reply.slice(0, TOOL_CALL_INPUT_CAP) }
+        : {}),
       ...(tracked.startedAt !== undefined
         ? { durationMs: Math.max(0, this.now().getTime() - tracked.startedAt) }
         : {}),
@@ -668,7 +760,7 @@ export class RunStepTracker {
    * repeated step's attempts one after the other.
    */
   finish(
-    status: Exclude<WorkflowRunStatus, 'running'>,
+    status: Exclude<WorkflowRunStatus, 'running' | 'queued'>,
     error?: string,
   ): { steps: WorkflowRunStep[]; changed: WorkflowRunStep[] } {
     const changed: WorkflowRunStep[] = [];
@@ -852,7 +944,15 @@ export function noteToolFrame(
   if (event.type === 'tool') {
     const name = text(frame['name']);
     if (name) {
-      tracker.noteTool(name, text(frame['input']), text(frame['rationale']));
+      // Avery signs her own calls, and names the teammate a team call hands.
+      const agent = text(frame['agent']);
+      const teammate = text(frame['teammate']);
+      tracker.noteTool(
+        name,
+        text(frame['input']),
+        text(frame['rationale']),
+        agent || teammate ? { agent, teammate } : undefined,
+      );
     }
     return;
   }
@@ -864,6 +964,7 @@ export function noteToolFrame(
     input: text(frame['input']),
     ...(typeof rowCount === 'number' ? { rowCount } : {}),
     error: text(frame['error']),
+    reply: text(frame['reply']),
   });
 }
 

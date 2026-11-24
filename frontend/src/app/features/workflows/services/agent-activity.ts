@@ -19,6 +19,10 @@ export interface ActivityCall {
   finished?: boolean;
   /** The latest progress message of a long-running tool. */
   progress?: string;
+  /** Who made it, when the step's agent delegates: Avery signs her own calls. */
+  agent?: string;
+  /** A team call (Avery's): the agent it hands the work to. */
+  teammate?: string;
 }
 
 /** `current` is the one step under way; there is at most one. */
@@ -36,6 +40,12 @@ export interface ActivityStep {
   tool: string;
   /** The tooltip's technical line: `run_readonly_sql · 66 rows · 0.4 s`. */
   detail: string;
+  /** What the call was about (its brief, skill file or table), as it came. */
+  input?: string;
+  /** Who made it, when the step's agent delegates: Avery signs her own calls. */
+  agent?: string;
+  /** A team call (Avery's): the agent it hands the work to. */
+  teammate?: string;
 }
 
 /** What a tool call is said to do, in three forms. */
@@ -159,7 +169,17 @@ function stepOf(call: ActivityCall, current: boolean): ActivityStep {
   } else {
     label = reason || phrase.done;
   }
-  return { label, state, rows, query, tool: shortToolName(call.tool), detail };
+  return {
+    label,
+    state,
+    rows,
+    query,
+    tool: shortToolName(call.tool),
+    detail,
+    ...(call.input ? { input: call.input } : {}),
+    ...(call.agent ? { agent: call.agent } : {}),
+    ...(call.teammate ? { teammate: call.teammate } : {}),
+  };
 }
 
 /**

@@ -48,21 +48,36 @@
       data-testid="runs-list"
       class="flex flex-col gap-3"
     >
-      <div class="relative">
-        <lucide-angular
-          [img]="Search"
-          [size]="15"
-          class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-fg-muted"
-        />
-        <input
-          type="search"
-          data-testid="runs-search"
-          placeholder="Search runs by title, user journey or ID…"
-          aria-label="Search runs"
-          [value]="query()"
-          (input)="onSearch($event)"
-          class="field pl-10"
-        />
+      <div class="flex items-center gap-2">
+        <div class="relative min-w-0 flex-1">
+          <lucide-angular
+            [img]="Search"
+            [size]="15"
+            class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-fg-muted"
+          />
+          <input
+            type="search"
+            data-testid="runs-search"
+            placeholder="Search runs by title, user journey or ID…"
+            aria-label="Search runs"
+            [value]="query()"
+            (input)="onSearch($event)"
+            class="field pl-10"
+          />
+        </div>
+        <button
+          type="button"
+          data-testid="runs-filter-archived"
+          [attr.aria-pressed]="runsState.showArchived()"
+          title="Show only archived conversations"
+          (click)="toggleArchived()"
+          class="btn shrink-0 px-2.5 py-1.5"
+          [class.btn-primary]="runsState.showArchived()"
+          [class.btn-ghost]="!runsState.showArchived()"
+        >
+          <lucide-angular [img]="Archive" [size]="14" />
+          <span>Archived</span>
+        </button>
       </div>
 
       @if (!runsState.runsLoaded() && runsState.runs().length === 0) {
@@ -75,7 +90,11 @@
           class="py-10 text-center text-[13px] text-fg-muted"
           data-testid="runs-empty"
         >
-          No runs yet. Open a user journey and run it.
+          @if (runsState.showArchived()) {
+            No archived conversations.
+          } @else {
+            No runs yet. Open a user journey and run it.
+          }
         </p>
       } @else if (visible().length === 0) {
         <p class="py-10 text-center text-[13px] text-fg-muted">
@@ -108,6 +127,13 @@
                 <lucide-angular [img]="Workflow" [size]="12" class="shrink-0" />
                 <span class="truncate">{{ run.workflowName }}</span>
               </span>
+              @if (run.archivedAt !== undefined) {
+                <span
+                  data-testid="row-run-archived"
+                  class="chip chip-neutral shrink-0"
+                  >Archived</span
+                >
+              }
               <span
                 data-testid="row-run-status"
                 class="chip shrink-0"

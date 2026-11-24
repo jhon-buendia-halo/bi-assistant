@@ -105,6 +105,75 @@ describe('WorkflowRunInputRequired (ui.md 4.4b waiting card)', () => {
     );
   });
 
+  describe('approval gate (workflows R44)', () => {
+    const GATE: WorkflowWaitingFor = {
+      ...WAITING,
+      title: 'Plan',
+      question: 'Olivia’s plan is ready. Approve it or write what to change.',
+      options: ['Approve'],
+      review: '## The plan\n\n- **Count** the goals',
+    };
+
+    it('shows the approval heading and the review as Markdown, without option buttons', () => {
+      mount(GATE);
+      expect(el().querySelector('h2')?.textContent?.trim()).toBe(
+        'Waiting for your approval',
+      );
+      expect(q('workflow-run-input-step')?.textContent?.trim()).toBe('Plan');
+      expect(q('workflow-run-input-question')?.textContent).toContain(
+        'plan is ready',
+      );
+      const review = q('workflow-run-input-review')!;
+      expect(review.querySelector('h2')?.textContent).toBe('The plan');
+      expect(review.querySelector('strong')?.textContent).toBe('Count');
+      expect(q('workflow-run-input-option-0')).toBeNull();
+    });
+
+    it('Approve sends the answer Approve', () => {
+      mount(GATE);
+      const approve = q<HTMLButtonElement>('workflow-run-input-approve')!;
+      expect(approve.textContent?.trim()).toBe('Approve');
+      approve.click();
+      expect(answered).toEqual(['Approve']);
+    });
+
+    it('Ask for changes stays disabled while blank, then sends the typed text', () => {
+      mount(GATE);
+      const ask = q<HTMLButtonElement>('workflow-run-input-continue')!;
+      expect(ask.textContent?.trim()).toBe('Ask for changes');
+      expect(el().textContent).toContain('Or say what to change');
+      expect(ask.disabled).toBeTrue();
+      type('  shorter, please ');
+      expect(ask.disabled).toBeFalse();
+      ask.click();
+      expect(answered).toEqual(['shorter, please']);
+    });
+
+    it('turns Approve off while sending', () => {
+      mount(GATE);
+      fixture.componentRef.setInput('busy', true);
+      fixture.detectChanges();
+      expect(
+        q<HTMLButtonElement>('workflow-run-input-approve')!.disabled,
+      ).toBeTrue();
+    });
+
+    it('a plain question has no review, no Approve and the old labels', () => {
+      mount(WAITING);
+      expect(q('workflow-run-input-review')).toBeNull();
+      expect(q('workflow-run-input-approve')).toBeNull();
+      expect(q('workflow-run-input-continue')?.textContent?.trim()).toBe(
+        'Continue',
+      );
+    });
+
+    it('expired gate: no Approve, Run again with my answer', () => {
+      mount({ ...GATE, expired: true });
+      expect(q('workflow-run-input-approve')).toBeNull();
+      expect(q('workflow-run-input-rerun')).not.toBeNull();
+    });
+  });
+
   it('expired: says it can no longer continue and offers Run again with my answer', () => {
     mount({ ...WAITING, expired: true });
     expect(q('workflow-run-input-expired')?.textContent).toContain(
@@ -117,11 +186,102 @@ describe('WorkflowRunInputRequired (ui.md 4.4b waiting card)', () => {
     q<HTMLButtonElement>('workflow-run-input-option-0')!.click();
     fixture.detectChanges();
     expect(answered).toEqual([]);
-    expect(
-      q<HTMLTextAreaElement>('workflow-run-input-answer')!.value,
-    ).toBe('2018');
+    expect(q<HTMLTextAreaElement>('workflow-run-input-answer')!.value).toBe(
+      '2018',
+    );
     expect(again.disabled).toBeFalse();
     again.click();
     expect(rerun).toEqual(['2018']);
+  });
+
+  describe('visual gate (Build visual)', () => {
+    const GATE: WorkflowWaitingFor = {
+      ...WAITING,
+      options: [],
+      review: '**Ryan** built a visual: Goals by team',
+      visualId: 'vis-1',
+    };
+    let withImages: { answer: string; images: string[] }[];
+    let opened: string[];
+
+    function mountGate(waiting: WorkflowWaitingFor = GATE): void {
+      mount(waiting);
+      withImages = [];
+      opened = [];
+      fixture.componentInstance.answeredWithImages.subscribe((a) =>
+        withImages.push(a),
+      );
+      fixture.componentInstance.openVisual.subscribe((id) => opened.push(id));
+    }
+
+    async function attach(): Promise<void> {
+      const input = el().querySelector<HTMLInputElement>(
+        '[data-testid="workflow-input-images-file"]',
+      )!;
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['x'], 'a.png', { type: 'image/png' }));
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change'));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      fixture.detectChanges();
+    }
+
+    it('shows Open visual, the image control and the visual wording', () => {
+      mountGate();
+      expect(q('workflow-run-input-open-visual')).not.toBeNull();
+      expect(q('workflow-run-input-images')).not.toBeNull();
+      expect(el().textContent).toContain(
+        'Or say what to change (a filter, another chart…)',
+      );
+    });
+
+    it('Open visual emits the visual id', () => {
+      mountGate();
+      q('workflow-run-input-open-visual')!.click();
+      expect(opened).toEqual(['vis-1']);
+    });
+
+    it('Ask for changes is enabled with only an image and sends answer "" with it', async () => {
+      mountGate();
+      expect(
+        q<HTMLButtonElement>('workflow-run-input-continue')!.disabled,
+      ).toBeTrue();
+      await attach();
+      expect(
+        el().querySelector('[data-testid="workflow-input-images-thumb-0"]'),
+      ).not.toBeNull();
+      const button = q<HTMLButtonElement>('workflow-run-input-continue')!;
+      expect(button.disabled).toBeFalse();
+      button.click();
+      fixture.detectChanges();
+      expect(withImages.length).toBe(1);
+      expect(withImages[0].answer).toBe('');
+      expect(withImages[0].images.length).toBe(1);
+      expect(withImages[0].images[0]).toMatch(/^data:image\/png/);
+      expect(
+        el().querySelector('[data-testid="workflow-input-images-thumb-0"]'),
+      ).toBeNull();
+    });
+
+    it('sends the trimmed text with no images', () => {
+      mountGate();
+      type('  add a filter  ');
+      q('workflow-run-input-continue')!.click();
+      expect(withImages).toEqual([{ answer: 'add a filter', images: [] }]);
+    });
+
+    it('Approve still answers Approve', () => {
+      mountGate();
+      q('workflow-run-input-approve')!.click();
+      expect(answered).toEqual(['Approve']);
+    });
+
+    it('a gate without a visual shows neither Open visual nor the images', () => {
+      mountGate({ ...GATE, visualId: undefined });
+      expect(q('workflow-run-input-open-visual')).toBeNull();
+      expect(q('workflow-run-input-images')).toBeNull();
+      expect(el().textContent).toContain('Or say what to change');
+      expect(el().textContent).not.toContain('a filter, another chart');
+    });
   });
 });

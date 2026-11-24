@@ -26,8 +26,6 @@ jest.mock('../../mastra/model-resolver', () => ({
     typeof c === 'object' && c !== null && 'kind' in c,
   resolveAgentModelConfig: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
 }));
-// The query inspector's page path a follow-up pages through (roadmap 1.28.8).
-const mockPageQuery = jest.fn();
 jest.mock('../../mastra/tool-services', () => ({
   setDatasetToolServices: jest.fn(),
   // v2's Load catalog step reads the datasets as the dataset tools do.
@@ -43,7 +41,6 @@ jest.mock('../../mastra/tool-services', () => ({
           },
         ].filter((d) => names.includes(d.name)),
       ),
-    pageQuery: (...args: unknown[]) => mockPageQuery(...args) as unknown,
   }),
 }));
 jest.mock('../../mastra/tools/dataset.tools', () => ({
@@ -118,6 +115,7 @@ import {
 } from '../../mastra/workflows/answer-business-question.steps';
 import { ANALYSE_VISUAL_LINE } from '../../mastra/workflows/answer-business-question.prompts';
 import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
+import { orchestratedAnswerWorkflow } from '../../mastra/workflows/orchestrated-answer.workflow';
 import { askAgentWorkflow } from '../../mastra/workflows/ask-agent.workflow';
 import {
   DATA_READINESS_ASSESSMENT_STEPS,
@@ -145,6 +143,20 @@ import type { WorkflowsService } from '../workflows/workflows.service';
 import type { SessionDoc } from './entities/session.entity';
 import { SessionsService, type StreamEvent } from './sessions.service';
 import { streamStored } from './testing/stream-stored';
+import {
+  ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+  type OrchestratorToolsRuntime,
+} from '../../mastra/workflows/orchestrated-answer.steps';
+import {
+  DASHBOARD_TOOLS_RUNTIME_KEY,
+  type DashboardToolsRuntime,
+} from '../../mastra/tools/dashboard.tools';
+import type { DashboardDraft } from '../../mastra/workflows/bi-dashboard.schemas';
+import type { NewDashboardVersion } from '../artifacts/artifacts.service';
+import type {
+  DashboardRef,
+  DashboardVersionData,
+} from '../artifacts/entities/artifact.entity';
 
 async function* streamOf(chunks: unknown[]): AsyncGenerator<unknown> {
   for (const chunk of chunks) {
@@ -186,14 +198,33 @@ const V2_WORKFLOW = {
   contractHash: CODE_WORKFLOWS[0].contractHash,
 };
 
+const READINESS_SOURCE = CODE_WORKFLOWS.find(
+  (w) => w.id === 'data-readiness-assessment',
+)!;
+
 /** The workflow detail the fake catalogue answers for Assess Data Readiness. */
 const READINESS_WORKFLOW = {
   id: 'data-readiness-assessment',
   name: 'Assess Data Readiness',
-  input: CODE_WORKFLOWS[1].input,
+  input: READINESS_SOURCE.input,
   agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
   steps: DATA_READINESS_ASSESSMENT_STEPS,
-  edges: CODE_WORKFLOWS[1].edges,
+  edges: READINESS_SOURCE.edges,
+};
+
+const ORCHESTRATED_SOURCE = CODE_WORKFLOWS.find(
+  (w) => w.id === 'orchestrated-answer',
+)!;
+
+/** The workflow detail the fake catalogue answers for the orchestrated answer. */
+const ORCHESTRATED_WORKFLOW = {
+  id: 'orchestrated-answer',
+  name: ORCHESTRATED_SOURCE.name,
+  input: ORCHESTRATED_SOURCE.input,
+  agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
+  steps: ORCHESTRATED_SOURCE.steps,
+  edges: ORCHESTRATED_SOURCE.edges,
+  contractHash: ORCHESTRATED_SOURCE.contractHash,
 };
 
 /** The report the fake engine scores for World Cup. */
@@ -255,11 +286,14 @@ const SESSIONS: Record<Workflow, Partial<SessionDoc>> = {
 
 /** The v2 run input that asks what the chat message asks. */
 // Build visual is on unless the run turns it off (workflows R41): the runs
-// below turn it off; the Build visual runs set it.
+// below turn it off; the Build visual runs set it. Approve each step is on
+// unless turned off too (workflows R44): these runs turn it off, and the
+// approval runs below set it.
 const V2_INPUT = {
   question: 'Who won?',
   datasets: ['World Cup'],
   buildVisual: false,
+  approveSteps: false,
 };
 // What the engine is given: the flag only picks the branch (the runtime's
 // `buildsVisual`), it is not an input of the workflow's steps.
@@ -289,6 +323,18 @@ interface BuildOptions {
   visuals?: object;
   /** The datasources service's guarded read-only SQL (roadmap 1.28.11). */
   runReadOnlySql?: jest.Mock;
+  /**
+   * An agent's own scripted stream, by its key: it may call the tools'
+   * runtimes on the call's requestContext as the real tools would.
+   */
+  streams?: Record<
+    string,
+    (opts: StreamCall['options']) => AsyncIterable<unknown>
+  >;
+  /** The artifacts service (Clara's dashboards, agents.md 5.22). */
+  artifacts?: object;
+  /** Avery's conversation exporter (agents.md 3.18). */
+  exporter?: object;
 }
 
 /** v2's Analyse turn: one successful query, then its note. */
@@ -336,6 +382,13 @@ function build(options: BuildOptions = {}) {
       }),
       stream: jest.fn((input: unknown, opts: StreamCall['options']) => {
         calls[key].push({ input, options: opts });
+        const scripted = options.streams?.[key];
+        if (scripted) {
+          return Promise.resolve({
+            fullStream: scripted(opts),
+            text: Promise.resolve(''),
+          });
+        }
         if (options.holdUntilAbort) {
           return Promise.resolve({
             fullStream: (async function* () {
@@ -384,6 +437,8 @@ function build(options: BuildOptions = {}) {
     assistant: agentFor('assistant', 'Questions to Insights Assistant'),
     'insights-analyst': agentFor('insights-analyst', 'Insights Analyst'),
     'data-readiness': agentFor('data-readiness', 'Data Readiness Agent'),
+    'chief-of-staff': agentFor('chief-of-staff', 'Avery'),
+    'bi-analyst': agentFor('bi-analyst', 'Business Intelligence Analyst'),
   };
   // Suspended v2 runs dropped (their snapshots deleted, ADR-0043).
   const discards = { count: 0 };
@@ -399,15 +454,25 @@ function build(options: BuildOptions = {}) {
               requestContext,
               discards,
             )
-          : key === 'data-readiness-assessment'
+          : key === 'orchestrated-answer'
             ? streamStubWorkflow(
-                dataReadinessAssessmentWorkflow,
+                orchestratedAnswerWorkflow,
                 inputData,
                 requestContext,
               )
-            : key === 'ask-agent'
-              ? streamStubWorkflow(askAgentWorkflow, inputData, requestContext)
-              : streamTurnWorkflow(key, inputData, requestContext),
+            : key === 'data-readiness-assessment'
+              ? streamStubWorkflow(
+                  dataReadinessAssessmentWorkflow,
+                  inputData,
+                  requestContext,
+                )
+              : key === 'ask-agent'
+                ? streamStubWorkflow(
+                    askAgentWorkflow,
+                    inputData,
+                    requestContext,
+                  )
+                : streamTurnWorkflow(key, inputData, requestContext),
     ),
     discardSuspendedWorkflowRuns: jest.fn().mockResolvedValue(0),
     ensureSessionWorkspace: jest.fn((id: string) =>
@@ -431,8 +496,7 @@ function build(options: BuildOptions = {}) {
         return Promise.resolve({ plan: planOf({}, question), stopped: false });
       },
     ),
-    // Nathan's reading of a follow-up (roadmap 1.28.8): a new question
-    // unless a test says otherwise.
+    // Nathan is no step of the workflow any more: this stand-in stays unused.
     interpretResult: jest.fn((input: unknown, opts?: unknown) => {
       void input;
       void opts;
@@ -515,6 +579,10 @@ function build(options: BuildOptions = {}) {
     } as never,
     userAgents as never,
     options.readiness as never,
+    undefined,
+    options.artifacts as never,
+    undefined,
+    options.exporter as never,
   );
   const workflows = {
     definition: jest.fn((id: string) =>
@@ -522,7 +590,9 @@ function build(options: BuildOptions = {}) {
         ? Promise.resolve(V2_WORKFLOW)
         : id === READINESS_WORKFLOW.id
           ? Promise.resolve(READINESS_WORKFLOW)
-          : Promise.reject(new Error(`Workflow "${id}" not found`)),
+          : id === ORCHESTRATED_WORKFLOW.id
+            ? Promise.resolve(ORCHESTRATED_WORKFLOW)
+            : Promise.reject(new Error(`Workflow "${id}" not found`)),
     ),
   };
   const runsRepository = new WorkflowRunsRepository(
@@ -541,8 +611,11 @@ function build(options: BuildOptions = {}) {
       ),
     ),
     {} as never,
-    // No stored artifact: no workflow here takes one.
-    { list: () => Promise.resolve([]) } as never,
+    // No stored artifact: no workflow here takes one; nothing is saved.
+    {
+      list: () => Promise.resolve([]),
+      isVersionSaved: () => Promise.resolve(null),
+    } as never,
   );
   /** A chat session over the same input as `workflow`'s run. */
   const chat = (workflow: Workflow): SessionDoc => {
@@ -600,8 +673,10 @@ async function runOf(
   signal?: AbortSignal,
 ): Promise<{ events: RunStreamEvent[]; run: WorkflowRun }> {
   const events: RunStreamEvent[] = [];
+  // Approve each step is on by default (workflows R44): a run here turns it
+  // off unless its input sets it, so it runs straight through as before.
   const prepared = await ctx.runs.prepare(V2_WORKFLOW.id, {
-    input,
+    input: { approveSteps: false, ...input },
     ...extra,
   });
   const run = await ctx.runs.stream(prepared, (e) => events.push(e), signal);
@@ -679,6 +754,28 @@ function withoutTime<T extends { at?: string }>(message: T | undefined) {
   void at;
   return rest;
 }
+
+describe('an Answer a Business Question (orchestrated) run (agents.md 5.22)', () => {
+  it("ends success with Avery's closing words as its answer, the one Orchestrate step run by her alone", async () => {
+    const ctx = build();
+    await ctx.sessions.onModuleInit();
+    const prepared = await ctx.runs.prepare('orchestrated-answer', {
+      input: { question: 'Who won?', datasets: ['World Cup'] },
+    });
+    const events: RunStreamEvent[] = [];
+    const run = await ctx.runs.stream(prepared, (e) => events.push(e));
+
+    expect(run.status).toBe('success');
+    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
+      'orchestrate:success',
+    ]);
+    // No team call was made, so her own words are the answer.
+    expect(run.answer?.content).toBe('Brazil won.');
+    expect(ctx.calls['chief-of-staff']).toHaveLength(1);
+    expect(ctx.calls['insights-analyst'] ?? []).toHaveLength(0);
+    expect(events.at(-1)?.type).toBe('done');
+  });
+});
 
 describe('a run sends the same model request as a chat turn (plan 1.24.2; agents.md 5.14)', () => {
   it('v2: the same input, options, system blocks and tools context, and the same answer', async () => {
@@ -1084,7 +1181,7 @@ describe('the run host (agents.md 5.14)', () => {
       stopped: false,
     });
     const { suspension } = await v2HostTurn(ctx, 'stop-resume');
-    expect(suspension?.stepId).toBe('clarify');
+    expect(suspension?.stepId).toBe('plan');
     const abort = new AbortController();
     abort.abort();
     await suspension!.resume('Matches won', {
@@ -1131,8 +1228,6 @@ describe('the run host (agents.md 5.14)', () => {
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
-      'interpret-follow-up:running',
-      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -1145,32 +1240,24 @@ describe('the run host (agents.md 5.14)', () => {
       'wrap-up:success',
       // No reference images (workflows R35).
       'read-images:skipped',
-      'clarify:skipped',
       // Not asked for (agents.md 5.11).
       'build-visual:skipped',
-      'page-result:skipped',
-      'page-answer:skipped',
     ]);
     expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
       'read-images:skipped',
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
-      'clarify:skipped',
       'analyse:success',
       'validate:success',
       'write-answer:success',
       'build-visual:skipped',
       'wrap-up:success',
-      'page-result:skipped',
-      'page-answer:skipped',
     ]);
-    // The loops' steps carry their attempt (api.md 3.6): Plan (Clarify
-    // loops back to it) and the analysis's.
+    // The loop's steps carry their attempt (api.md 3.6): the analysis's.
     expect(
       run.steps.filter((s) => s.attempt !== undefined).map((s) => s.id),
-    ).toEqual(['plan', 'analyse', 'validate']);
+    ).toEqual(['analyse', 'validate']);
     expect(run.output).toMatchObject({
       sqlQueries: 1,
       failedQueries: 0,
@@ -2026,7 +2113,7 @@ const stepLine = (s: { id: string; status: string; attempt?: number }) =>
   `${s.id}:${s.status}${s.attempt ? `#${s.attempt}` : ''}`;
 
 describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
-  it('suspends at Clarify: the waiting step, input-required, then done with the run suspended', async () => {
+  it('suspends at Plan: the waiting step, input-required, then done with the run suspended', async () => {
     const ctx = build();
     ctx.mastra.planAnalysis.mockResolvedValueOnce({
       plan: ASKING_PLAN,
@@ -2039,15 +2126,14 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     const tail = events.slice(-3);
     expect(tail[0]).toMatchObject({
       type: 'step',
-      id: 'clarify',
+      id: 'plan',
       status: 'suspended',
-      attempt: 1,
     });
     expect(tail[1]).toEqual({
       type: 'input-required',
       runId: run.id,
-      stepId: 'clarify',
-      title: 'Clarify',
+      stepId: 'plan',
+      title: 'Plan',
       question: 'Dominant by what measure?',
       options: ['Matches won', 'Goals scored'],
       expiresAt: expect.any(String) as unknown,
@@ -2055,8 +2141,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(tail[2]).toMatchObject({ type: 'done', run: { id: run.id } });
     expect(run.status).toBe('suspended');
     expect(run.waitingFor).toEqual({
-      stepId: 'clarify',
-      title: 'Clarify',
+      stepId: 'plan',
+      title: 'Plan',
       question: 'Dominant by what measure?',
       options: ['Matches won', 'Goals scored'],
       since: expect.any(String) as unknown,
@@ -2069,9 +2155,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(run.steps.map(stepLine)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
-      'plan:success#1',
-      'clarify:suspended#1',
+      'plan:suspended',
     ]);
     expect(run.finishedAt).toBeUndefined();
     expect(run.answer).toBeUndefined();
@@ -2085,7 +2169,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(ctx.discards.count).toBe(0);
   });
 
-  it('resumes the same run with the answer: Clarify goes back to Plan, which plans with it, then the analysis and the answer', async () => {
+  it('resumes the same run with the answer: Plan plans again with it, then the analysis and the answer', async () => {
     const ctx = build();
     ctx.mastra.planAnalysis.mockResolvedValueOnce({
       plan: ASKING_PLAN,
@@ -2097,7 +2181,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       buildVisual: false,
     });
     const { events, run } = await resumeOf(ctx, started.run.id, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: '  Matches won ',
     });
     expect(events[0]).toEqual({
@@ -2109,10 +2193,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       (e): e is Extract<RunStreamEvent, { type: 'step' }> => e.type === 'step',
     );
     expect(steps.map(stepLine)).toEqual([
-      'clarify:running#1',
-      'clarify:success#1',
-      'plan:running#2',
-      'plan:success#2',
+      'plan:running',
+      'plan:success',
       'analyse:running#1',
       'analyse:success#1',
       'validate:running#1',
@@ -2123,8 +2205,6 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'wrap-up:success',
       'read-images:skipped',
       'build-visual:skipped',
-      'page-result:skipped',
-      'page-answer:skipped',
     ]);
     expect(events.at(-1)).toMatchObject({ type: 'done' });
     expect(events.some((e) => e.type === 'input-required')).toBe(false);
@@ -2136,17 +2216,12 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'read-images:skipped',
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
-      'plan:success#1',
-      'plan:success#2',
-      'clarify:success#1',
+      'plan:success',
       'analyse:success#1',
       'validate:success#1',
       'write-answer:success',
       'build-visual:skipped',
       'wrap-up:success',
-      'page-result:skipped',
-      'page-answer:skipped',
     ]);
     // Plan planned again with its question and the trimmed answer.
     expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(2);
@@ -2165,7 +2240,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(ctx.discards.count).toBe(1);
     // Resumed once: a second answer is refused.
     await expect(
-      ctx.runs.prepareResume(run.id, { stepId: 'clarify', answer: 'Again' }),
+      ctx.runs.prepareResume(run.id, { stepId: 'plan', answer: 'Again' }),
     ).rejects.toThrow(`Run "${run.id}" is not waiting for an answer`);
   });
 
@@ -2191,8 +2266,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(started.run.steps.map(stepLine)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
-      'plan:success#1',
+      'plan:success',
       'analyse:suspended#1',
     ]);
     // The question stopped the agent's stream, not the run.
@@ -2220,10 +2294,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'wrap-up:running',
       'wrap-up:success',
       'read-images:skipped',
-      'clarify:skipped',
       'build-visual:skipped',
-      'page-result:skipped',
-      'page-answer:skipped',
     ]);
     // The agent runs again (no memory thread) with the conversation so far:
     // the question, its clarifying question and the user's answer.
@@ -2248,14 +2319,14 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
   it('refuses a resume before any frame: 404, 409, 400 answer, 400 step', async () => {
     const ctx = build();
     await expect(
-      ctx.runs.prepareResume('nope', { stepId: 'clarify', answer: 'a' }),
+      ctx.runs.prepareResume('nope', { stepId: 'plan', answer: 'a' }),
     ).rejects.toMatchObject({
       status: 404,
       message: 'Run "nope" not found',
     });
     const done = await runOf(ctx, V2_INPUT);
     await expect(
-      ctx.runs.prepareResume(done.run.id, { stepId: 'clarify', answer: 'a' }),
+      ctx.runs.prepareResume(done.run.id, { stepId: 'plan', answer: 'a' }),
     ).rejects.toMatchObject({
       status: 409,
       message: `Run "${done.run.id}" is not waiting for an answer`,
@@ -2267,7 +2338,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     const waiting = await runOf(ctx, V2_INPUT);
     await expect(
       ctx.runs.prepareResume(waiting.run.id, {
-        stepId: 'clarify',
+        stepId: 'plan',
         answer: ' ',
       }),
     ).rejects.toMatchObject({ status: 400, message: 'Answer is required' });
@@ -2282,7 +2353,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     });
     // The refusals took nothing: the run still waits.
     const { run } = await resumeOf(ctx, waiting.run.id, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Matches won',
     });
     expect(run.status).toBe('success');
@@ -2303,7 +2374,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       await jest.runAllTimersAsync();
       await expect(
         ctx.runs.prepareResume(waiting.run.id, {
-          stepId: 'clarify',
+          stepId: 'plan',
           answer: 'Matches won',
         }),
       ).rejects.toMatchObject({
@@ -2314,12 +2385,10 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       const stored = await ctx.runs.get(waiting.run.id);
       expect(stored.status).toBe('stopped');
       expect(stored.waitingFor).toMatchObject({
-        stepId: 'clarify',
+        stepId: 'plan',
         expired: true,
       });
-      expect(stored.steps.find((s) => s.id === 'clarify')?.status).toBe(
-        'stopped',
-      );
+      expect(stored.steps.find((s) => s.id === 'plan')?.status).toBe('stopped');
       expect(ctx.discards.count).toBe(1);
       // Its host left memory; its memory threads stay with the run.
       expect(ctx.mastra.deleteMemoryThread).not.toHaveBeenCalled();
@@ -2328,7 +2397,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     }
   });
 
-  it('answers 410 to a run stored under another contract (the Clarify path moved, roadmap 1.28.8): stopped with waitingFor expired, its turn dropped', async () => {
+  it('answers 410 to a run stored under another contract (its contract changed): stopped with waitingFor expired, its turn dropped', async () => {
     const ctx = build();
     ctx.mastra.planAnalysis.mockResolvedValueOnce({
       plan: ASKING_PLAN,
@@ -2340,7 +2409,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     });
     await expect(
       ctx.runs.prepareResume(waiting.run.id, {
-        stepId: 'clarify',
+        stepId: 'plan',
         answer: 'Matches won',
       }),
     ).rejects.toMatchObject({
@@ -2351,7 +2420,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     const stored = await ctx.runs.get(waiting.run.id);
     expect(stored.status).toBe('stopped');
     expect(stored.waitingFor).toMatchObject({
-      stepId: 'clarify',
+      stepId: 'plan',
       expired: true,
     });
     expect(ctx.discards.count).toBe(1);
@@ -2371,12 +2440,16 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     await ctx.runs.onModuleInit();
     await expect(
       ctx.runs.prepareResume(waiting.run.id, {
-        stepId: 'clarify',
+        stepId: 'plan',
         answer: 'Matches won',
       }),
     ).rejects.toMatchObject({ status: 410 });
     const prepared = await ctx.runs.prepare(V2_WORKFLOW.id, {
-      input: { question: 'Matches won', datasets: ['World Cup'] },
+      input: {
+        question: 'Matches won',
+        datasets: ['World Cup'],
+        approveSteps: false,
+      },
       context: { fromRunId: waiting.run.id },
     });
     expect(prepared.context).toEqual({
@@ -2413,7 +2486,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     const stored = await ctx.runsRepository.get(waiting.run.id);
     expect(stored).toMatchObject({
       status: 'stopped',
-      waitingFor: { stepId: 'clarify', expired: true },
+      waitingFor: { stepId: 'plan', expired: true },
       finishedAt: expect.any(String) as unknown,
     });
     // No key: every registered workflow's leftover snapshots are deleted.
@@ -2444,96 +2517,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
   });
 });
 
-describe('a follow-up run over an earlier result (roadmap 1.28.8; workflows R36)', () => {
-  const PAGE_2 = {
-    columns: ['winner'],
-    columnKinds: { winner: 'text' },
-    rows: [{ winner: 'Italy' }],
-    page: 2,
-    pageSize: 1,
-    pageCount: 3,
-    matchedRows: 3,
-    capped: false,
-    view: { filters: [], sort: [], page: 2, pageSize: 1, matchedRows: 3 },
-    ranAt: '2026-11-16T10:00:00.000Z',
-    datasourceId: 'ds-pg',
-  };
-
-  beforeEach(() => mockPageQuery.mockReset());
-
-  it("pages the earlier answer's query instead of planning: one result-explorer call, the page recorded as explore_result with its view, the answer written by code", async () => {
-    const ctx = build();
-    const first = await runOf(ctx, V2_INPUT);
-    // A first run has no earlier result: no extra model call.
-    expect(ctx.mastra.interpretResult).not.toHaveBeenCalled();
-    ctx.mastra.interpretResult.mockResolvedValueOnce({
-      action: 'explore',
-      query: 0,
-      interpretation: { request: { page: 2 }, understood: 'page 2' },
-    });
-    mockPageQuery.mockResolvedValueOnce(PAGE_2);
-    const { events, run } = await runOf(
-      ctx,
-      { question: 'next page', datasets: ['World Cup'] },
-      { context: { fromRunId: first.run.id } },
-    );
-    expect(ctx.mastra.interpretResult).toHaveBeenCalledTimes(1);
-    expect(ctx.mastra.interpretResult.mock.calls[0][0]).toMatchObject({
-      text: 'next page',
-      candidates: [
-        { ref: 'Q1', columns: [{ name: 'winner', values: ['Brazil'] }] },
-      ],
-      view: null,
-    });
-    expect(mockPageQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sql: 'SELECT winner FROM matches',
-        columns: ['winner'],
-      }),
-      ['World Cup'],
-      { page: 2 },
-    );
-    // No planning, no analysis, no Write answer on the follow-up.
-    expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(1);
-    expect(ctx.calls['insights-analyst']).toHaveLength(1);
-    expect(ctx.mastra.writeAnswer).toHaveBeenCalledTimes(1);
-    expect(run.status).toBe('success');
-    expect(
-      run.steps
-        .filter((step) => step.status !== 'skipped')
-        .map((step) => step.id),
-    ).toEqual([
-      'receive-question',
-      'load-catalog',
-      'interpret-follow-up',
-      'page-result',
-      'page-answer',
-    ]);
-    expect(run.answer?.content.split('\n')[0]).toBe('Rows 2–2 of 3');
-    expect(run.answer?.content).toContain('| Italy |');
-    // The page is the answer's query: its source SQL and the page's rows,
-    // its view as evidence, so the inspector opens on page 2.
-    expect(run.answer?.data).toEqual([
-      expect.objectContaining({
-        tool: 'explore_result',
-        input: 'SELECT winner FROM matches',
-        rows: [{ winner: 'Italy' }],
-        truncated: true,
-      }),
-    ]);
-    expect(run.answer?.evidence?.[0]).toMatchObject({
-      index: 0,
-      view: PAGE_2.view,
-    });
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'tool',
-        content: expect.stringContaining('"name":"explore_result"') as string,
-      }),
-    );
-  });
-
-  it('plans the follow-up as a new question when result-explorer reads one', async () => {
+describe('a follow-up run over an earlier run (workflows R36)', () => {
+  it('plans a follow-up as a new question: Nathan reads nothing, the run goes plan, analyse, answer', async () => {
     const ctx = build();
     const first = await runOf(ctx, V2_INPUT);
     const { run } = await runOf(
@@ -2541,8 +2526,7 @@ describe('a follow-up run over an earlier result (roadmap 1.28.8; workflows R36)
       { question: 'And in 2014?', datasets: ['World Cup'] },
       { context: { fromRunId: first.run.id } },
     );
-    expect(ctx.mastra.interpretResult).toHaveBeenCalledTimes(1);
-    expect(mockPageQuery).not.toHaveBeenCalled();
+    expect(ctx.mastra.interpretResult).not.toHaveBeenCalled();
     expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(2);
     expect(run.answer?.content).toBe('Brazil won.');
   });
@@ -2676,7 +2660,7 @@ describe('a v2 run with reference images (workflows R35; agents.md 2.15, 5.11)',
     expect(system.at(-1)).toMatch(/^Analysis plan for this turn:/);
   });
 
-  it('keeps the notes through a Clarify wait and its resume, without reading the images again', async () => {
+  it('keeps the notes through a wait at Plan and its resume, without reading the images again', async () => {
     ctx.mastra.planAnalysis.mockResolvedValueOnce({
       plan: ASKING_PLAN,
       stopped: false,
@@ -2688,7 +2672,7 @@ describe('a v2 run with reference images (workflows R35; agents.md 2.15, 5.11)',
     });
     expect(started.run.status).toBe('suspended');
     const { run } = await resumeOf(ctx, started.run.id, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Matches won',
     });
     expect(run.status).toBe('success');
@@ -2743,5 +2727,619 @@ describe('a v2 run with reference images (workflows R35; agents.md 2.15, 5.11)',
       { reference?: string },
     ];
     expect(source.reference).toBe(IMAGE_NOTES);
+  });
+});
+
+/** Clara's dashboard of goals by team, bound to her data query's columns. */
+const GOALS_DRAFT: DashboardDraft = {
+  title: 'Goals by team',
+  summary: 'Goals per team.',
+  theme: { mode: 'light', accent: '#2563eb', palette: ['#2563eb', '#16a34a'] },
+  layout: 'A KPI, then goals by team.',
+  filters: [{ id: 'team', label: 'Team', kind: 'select', column: 'team' }],
+  widgets: [
+    {
+      id: 'goals',
+      title: 'Goals',
+      kind: 'kpi',
+      span: 4,
+      measures: [
+        {
+          label: 'Goals',
+          column: 'goals',
+          aggregation: 'sum',
+          format: 'number',
+          unit: '',
+        },
+      ],
+      dimension: '',
+      description: 'All goals.',
+      filteredBy: ['team'],
+    },
+    {
+      id: 'by-team',
+      title: 'Goals by team',
+      kind: 'bar',
+      span: 8,
+      measures: [
+        {
+          label: 'Goals',
+          column: 'goals',
+          aggregation: 'sum',
+          format: 'number',
+          unit: '',
+        },
+      ],
+      dimension: 'team',
+      description: 'Goals per team.',
+      filteredBy: ['team'],
+    },
+  ],
+  columns: [
+    { name: 'team', type: 'string', description: 'The team.' },
+    { name: 'goals', type: 'number', description: 'Goals scored.' },
+  ],
+};
+const GOALS_SQL =
+  'SELECT team, sum(goals) AS goals FROM wc.public.goals GROUP BY team';
+const GOALS_BRIEF = 'A dashboard of goals by team, filterable by team.';
+
+/** The artifacts service, as Clara's saves reach it (plan bi-dashboard 2.5). */
+function dashboardArtifacts() {
+  const versions: (NewDashboardVersion & { version: number })[] = [];
+  const refOf = (
+    input: NewDashboardVersion,
+    version: number,
+    action: DashboardRef['action'],
+  ): DashboardRef => ({
+    artifactId: 'a-1',
+    version,
+    title: input.blueprint.title,
+    action,
+    widgetCount: input.blueprint.widgets.length,
+    filterCount: input.blueprint.filters.length,
+    rowCount: input.rows.length,
+    saved: false,
+  });
+  return {
+    versions,
+    createDashboard: jest.fn((input: NewDashboardVersion) => {
+      versions.push({ ...input, version: 1 });
+      return Promise.resolve(refOf(input, 1, 'created'));
+    }),
+    addDashboardVersion: jest.fn((_id: string, input: NewDashboardVersion) => {
+      const version = versions.length + 1;
+      versions.push({ ...input, version });
+      return Promise.resolve(refOf(input, version, 'updated'));
+    }),
+    dashboardVersion: jest.fn((id: string): Promise<DashboardVersionData> => {
+      const last = versions.at(-1);
+      if (id !== 'a-1' || !last) {
+        return Promise.reject(new Error(`Artifact "${id}" not found`));
+      }
+      return Promise.resolve({
+        artifactId: id,
+        version: last.version,
+        title: last.blueprint.title,
+        name: last.blueprint.title,
+        blueprint: last.blueprint,
+        query: last.query,
+        columns: last.columns,
+        rowCount: last.rows.length,
+        widgetCount: last.blueprint.widgets.length,
+        filterCount: last.blueprint.filters.length,
+        createdAt: '2026-11-22T10:00:00.000Z',
+        rows: last.rows,
+      });
+    }),
+  };
+}
+
+/**
+ * Avery calls build_dashboard with `brief` (her tool runs Clara through the
+ * runtime, as the real tool does), then closes with `closing`; `told` gets
+ * what the tool answered her.
+ */
+function averyBuilds(
+  brief: string,
+  closing: string,
+  told: string[],
+): (opts: StreamCall['options']) => AsyncIterable<unknown> {
+  return (opts) =>
+    (async function* () {
+      const tools = opts.requestContext.values.get(
+        ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+      ) as OrchestratorToolsRuntime;
+      yield {
+        type: 'tool-call',
+        payload: {
+          toolCallId: 'b1',
+          toolName: 'build_dashboard',
+          args: { brief },
+        },
+      };
+      const result = await tools.buildDashboard(brief);
+      told.push(result);
+      yield {
+        type: 'tool-result',
+        payload: {
+          toolCallId: 'b1',
+          toolName: 'build_dashboard',
+          result: { result },
+        },
+      };
+      yield { type: 'text-delta', payload: { text: closing } };
+    })();
+}
+
+/**
+ * Clara submits `draft` with `sql` (her submit_dashboard runs through the
+ * runtime, as the real tool does), then replies to Avery; `outcomes` gets
+ * what the host answered, and `afterSubmit` runs once it has.
+ */
+function claraSubmits(
+  outcomes: unknown[],
+  draft: DashboardDraft = GOALS_DRAFT,
+  sql: string = GOALS_SQL,
+  afterSubmit?: () => void,
+): (opts: StreamCall['options']) => AsyncIterable<unknown> {
+  return (opts) =>
+    (async function* () {
+      const runtime = opts.requestContext.values.get(
+        DASHBOARD_TOOLS_RUNTIME_KEY,
+      ) as DashboardToolsRuntime;
+      const args = { dashboard: draft, sql, rationale: 'Goals per team.' };
+      yield {
+        type: 'tool-call',
+        payload: { toolCallId: 's1', toolName: 'submit_dashboard', args },
+      };
+      const outcome = await runtime.submit({ ...args, datasourceId: 'ds-pg' });
+      outcomes.push(outcome);
+      afterSubmit?.();
+      yield {
+        type: 'tool-result',
+        payload: {
+          toolCallId: 's1',
+          toolName: 'submit_dashboard',
+          result: outcome.accepted
+            ? { result: 'Accepted.' }
+            : { error: outcome.error },
+        },
+      };
+      yield {
+        type: 'text-delta',
+        payload: { text: 'I built goals by team with a team filter.' },
+      };
+    })();
+}
+
+/** The goals query's rows, numbers as Postgres sends a sum (text). */
+const goalsRows = () =>
+  jest.fn().mockResolvedValue({
+    columns: ['team', 'goals'],
+    rows: [
+      { team: 'Brazil', goals: '12' },
+      { team: 'Germany', goals: '9' },
+    ],
+    totalRows: 2,
+  });
+
+/** A run event as `<type>:<tool name>`, for the activity's order. */
+function activityOf(events: RunStreamEvent[]): string[] {
+  return events
+    .filter((e) => e.type === 'tool' || e.type === 'tool-result')
+    .map((e) => {
+      const body = JSON.parse((e as { content: string }).content) as {
+        name?: string;
+        tool?: string;
+      };
+      return `${e.type}:${body.name ?? body.tool}`;
+    });
+}
+
+describe("Clara builds Avery's dashboards (agents.md 2.22, 5.22)", () => {
+  it('runs her data query with 5,000 rows, saves the dashboard on its rows and carries it on the answer, with her query as a source', async () => {
+    const artifacts = dashboardArtifacts();
+    const runReadOnlySql = goalsRows();
+    const told: string[] = [];
+    const outcomes: unknown[] = [];
+    const ctx = build({
+      artifacts,
+      runReadOnlySql,
+      streams: {
+        'chief-of-staff': averyBuilds(
+          GOALS_BRIEF,
+          'Your dashboard is ready.',
+          told,
+        ),
+        'bi-analyst': claraSubmits(outcomes),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const prepared = await ctx.runs.prepare('orchestrated-answer', {
+      input: {
+        question: 'Create a dashboard of goals by team',
+        datasets: ['World Cup'],
+      },
+    });
+    const events: RunStreamEvent[] = [];
+    const run = await ctx.runs.stream(prepared, (e) => events.push(e));
+
+    expect(run.status).toBe('success');
+    // The host ran her query itself, past the 500-row clamp, with the stop.
+    expect(runReadOnlySql).toHaveBeenCalledWith(
+      'ds-pg',
+      GOALS_SQL,
+      5000,
+      5000,
+      { signal: expect.any(AbortSignal) as unknown },
+    );
+    expect(outcomes).toEqual([
+      { accepted: true, rowCount: 2, columns: ['team', 'goals'] },
+    ]);
+    expect(artifacts.createDashboard).toHaveBeenCalledTimes(1);
+    const [saved] = artifacts.versions;
+    expect(saved).toMatchObject({
+      query: {
+        sql: GOALS_SQL,
+        datasourceId: 'ds-pg',
+        rationale: 'Goals per team.',
+      },
+      columns: ['team', 'goals'],
+      rows: [
+        { team: 'Brazil', goals: 12 },
+        { team: 'Germany', goals: 9 },
+      ],
+      instruction: GOALS_BRIEF,
+      source: { runId: run.id, workflowId: 'orchestrated-answer' },
+    });
+    expect(saved.blueprint.widgets.map((w) => w.id)).toEqual([
+      'goals',
+      'by-team',
+    ]);
+    // The answer: Avery's words (never Clara's) and the dashboard's card.
+    expect(run.answer?.content).toBe('Your dashboard is ready.');
+    expect(run.answer?.dashboard).toEqual({
+      artifactId: 'a-1',
+      version: 1,
+      title: 'Goals by team',
+      action: 'created',
+      widgetCount: 2,
+      filterCount: 1,
+      rowCount: 2,
+      // A draft: the user saves it to Artifacts from the panel.
+      saved: false,
+    });
+    expect(told[0]).toContain(
+      'Built dashboard "Goals by team", version 1 (created): 2 widgets, 1 filters, 2 rows.',
+    );
+    // Her query is one of the answer's sources: the inspector opens it.
+    expect(run.answer?.data).toEqual([
+      expect.objectContaining({
+        tool: 'run_readonly_sql',
+        input: GOALS_SQL,
+        rowCount: 2,
+        rationale: 'Goals per team.',
+      }),
+    ]);
+    expect(run.answer?.evidence).toEqual([
+      expect.objectContaining({
+        index: 0,
+        datasourceId: 'ds-pg',
+        rowLimit: 5000,
+        totalRows: 2,
+      }),
+    ]);
+    // Her calls come between Avery's call and its result; the host's
+    // query follows her submit's result, so each call pairs.
+    expect(activityOf(events)).toEqual([
+      'tool:build_dashboard',
+      'tool:submit_dashboard',
+      'tool-result:submit_dashboard',
+      'tool:run_readonly_sql',
+      'tool-result:run_readonly_sql',
+      'tool-result:build_dashboard',
+    ]);
+    // Clara: no memory, her brief and the catalog, the gate's fact for Avery.
+    const [clara] = ctx.calls['bi-analyst'];
+    expect(clara.options.memory).toBeUndefined();
+    expect(clara.input).toEqual([
+      { role: 'user', content: 'Create a dashboard of goals by team' },
+    ]);
+    expect(
+      clara.options.context.some((block) =>
+        block.content.startsWith(
+          `Brief from Avery, the Chief of Staff: ${GOALS_BRIEF}`,
+        ),
+      ),
+    ).toBe(true);
+    const [avery] = ctx.calls['chief-of-staff'];
+    expect(avery.options.context[0].content).toContain(
+      'The user asked for a dashboard: build_dashboard is available.',
+    );
+  });
+
+  it('refuses a query that the 5,000-row cap cut, and a draft bound to a column it does not return; nothing is saved', async () => {
+    const artifacts = dashboardArtifacts();
+    const told: string[] = [];
+    const outcomes: unknown[] = [];
+    const ctx = build({
+      artifacts,
+      runReadOnlySql: jest.fn().mockResolvedValue({
+        columns: ['team', 'goals'],
+        rows: Array.from({ length: 5000 }, (_, n) => ({
+          team: `T${n}`,
+          goals: n,
+        })),
+        totalRows: 7000,
+      }),
+      streams: {
+        'chief-of-staff': averyBuilds(GOALS_BRIEF, 'No dashboard.', told),
+        'bi-analyst': claraSubmits(outcomes),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const prepared = await ctx.runs.prepare('orchestrated-answer', {
+      input: { question: 'A dashboard of goals', datasets: ['World Cup'] },
+    });
+    const run = await ctx.runs.stream(prepared, () => undefined);
+    expect(outcomes).toEqual([
+      {
+        accepted: false,
+        error:
+          'More than 5,000 rows: group the query to the grain the widgets need',
+      },
+    ]);
+    expect(artifacts.createDashboard).not.toHaveBeenCalled();
+    expect(run.answer?.dashboard).toBeUndefined();
+    expect(told[0]).toMatch(/^Clara built no dashboard: /);
+
+    const unbound = build({
+      artifacts,
+      runReadOnlySql: goalsRows(),
+      streams: {
+        'chief-of-staff': averyBuilds(GOALS_BRIEF, 'No dashboard.', told),
+        'bi-analyst': claraSubmits(outcomes, {
+          ...GOALS_DRAFT,
+          filters: [
+            { id: 'stage', label: 'Stage', kind: 'select', column: 'stage' },
+          ],
+        }),
+      },
+    });
+    await unbound.sessions.onModuleInit();
+    const again = await unbound.runs.stream(
+      await unbound.runs.prepare('orchestrated-answer', {
+        input: { question: 'A dashboard of goals', datasets: ['World Cup'] },
+      }),
+      () => undefined,
+    );
+    expect(outcomes[1]).toMatchObject({ accepted: false });
+    expect((outcomes[1] as { error: string }).error).toContain('stage');
+    expect(artifacts.createDashboard).not.toHaveBeenCalled();
+    expect(again.answer?.dashboard).toBeUndefined();
+  });
+
+  it('saves nothing when the run is stopped while Clara works', async () => {
+    const artifacts = dashboardArtifacts();
+    const abort = new AbortController();
+    const outcomes: unknown[] = [];
+    const ctx = build({
+      artifacts,
+      runReadOnlySql: goalsRows(),
+      streams: {
+        'chief-of-staff': averyBuilds(GOALS_BRIEF, 'Ready.', []),
+        'bi-analyst': claraSubmits(outcomes, GOALS_DRAFT, GOALS_SQL, () =>
+          abort.abort(),
+        ),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const prepared = await ctx.runs.prepare('orchestrated-answer', {
+      input: { question: 'A dashboard of goals', datasets: ['World Cup'] },
+    });
+    const run = await ctx.runs.stream(prepared, () => undefined, abort.signal);
+    // Accepted, then stopped before the save.
+    expect(outcomes).toEqual([expect.objectContaining({ accepted: true })]);
+    expect(run.status).toBe('stopped');
+    expect(artifacts.createDashboard).not.toHaveBeenCalled();
+    expect(artifacts.addDashboardVersion).not.toHaveBeenCalled();
+    expect(run.answer?.dashboard).toBeUndefined();
+  });
+
+  it("a follow-up changes the conversation's dashboard into its next version, whatever it says", async () => {
+    const artifacts = dashboardArtifacts();
+    const ctx = build({
+      artifacts,
+      runReadOnlySql: goalsRows(),
+      streams: {
+        'chief-of-staff': averyBuilds(GOALS_BRIEF, 'Ready.', []),
+        'bi-analyst': claraSubmits([]),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const first = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: {
+          question: 'Create a dashboard of goals by team',
+          datasets: ['World Cup'],
+        },
+      }),
+      () => undefined,
+    );
+    expect(first.answer?.dashboard).toMatchObject({ version: 1 });
+
+    const second = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: { question: 'add a filter by team', datasets: ['World Cup'] },
+        context: { fromRunId: first.id },
+      }),
+      () => undefined,
+    );
+    expect(artifacts.dashboardVersion).toHaveBeenCalledWith('a-1');
+    expect(artifacts.addDashboardVersion).toHaveBeenCalledWith(
+      'a-1',
+      expect.objectContaining({ instruction: GOALS_BRIEF }),
+    );
+    expect(second.answer?.dashboard).toMatchObject({
+      artifactId: 'a-1',
+      version: 2,
+      action: 'updated',
+    });
+    // Avery reads the conversation's dashboard; Clara gets it to change.
+    const avery = ctx.calls['chief-of-staff'].at(-1)!;
+    expect(avery.options.context[0].content).toContain(
+      'The conversation has a dashboard: "Goals by team", version 1 (2 widgets, 1 filters). build_dashboard changes it into version 2.',
+    );
+    const clara = ctx.calls['bi-analyst'].at(-1)!;
+    const brief = clara.options.context.find((block) =>
+      block.content.startsWith('Brief from Avery'),
+    );
+    expect(brief?.content).toContain(
+      'The current dashboard: "Goals by team", version 1.',
+    );
+    expect(brief?.content).toContain(
+      `Its data query (datasource ds-pg): ${GOALS_SQL}`,
+    );
+  });
+
+  it('carries nothing when the artifact is gone: the gate reads the message alone', async () => {
+    const artifacts = dashboardArtifacts();
+    const ctx = build({
+      artifacts,
+      runReadOnlySql: goalsRows(),
+      streams: {
+        'chief-of-staff': averyBuilds(GOALS_BRIEF, 'Ready.', []),
+        'bi-analyst': claraSubmits([]),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const first = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: {
+          question: 'Create a dashboard of goals by team',
+          datasets: ['World Cup'],
+        },
+      }),
+      () => undefined,
+    );
+    artifacts.dashboardVersion.mockRejectedValueOnce(
+      new Error('Artifact "a-1" not found'),
+    );
+    // Avery answers in words this time: no dashboard tool call.
+    ctx.registry['chief-of-staff'].stream.mockImplementationOnce(
+      (input: unknown, opts: StreamCall['options']) => {
+        ctx.calls['chief-of-staff'].push({ input, options: opts });
+        return Promise.resolve({
+          fullStream: streamOf([
+            { type: 'text-delta', payload: { text: 'Brazil.' } },
+          ]),
+          text: Promise.resolve(''),
+        });
+      },
+    );
+    const second = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: { question: 'Who scored most?', datasets: ['World Cup'] },
+        context: { fromRunId: first.id },
+      }),
+      () => undefined,
+    );
+    expect(second.status).toBe('success');
+    const avery = ctx.calls['chief-of-staff'].at(-1)!;
+    expect(avery.options.context[0].content).not.toContain('dashboard');
+    const tools = avery.options.requestContext.values.get(
+      ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+    ) as OrchestratorToolsRuntime;
+    expect(tools.buildsDashboard).toBe(false);
+    expect(second.answer?.dashboard).toBeUndefined();
+  });
+});
+
+describe('Avery exports the conversation (agents.md 3.18; workflows R45)', () => {
+  const EXPORT = {
+    id: 'x-1',
+    title: 'Who won the World Cup',
+    createdAt: '2026-11-23T10:00:00.000Z',
+    files: [{ format: 'pdf', fileName: 'w.pdf', bytes: 3, pages: 4 }],
+  };
+
+  /** Avery: on an export request she calls export_conversation, else answers. */
+  function averyExports(told: string[]) {
+    return (opts: StreamCall['options']) =>
+      (async function* () {
+        const tools = opts.requestContext.values.get(
+          ORCHESTRATOR_TOOLS_RUNTIME_KEY,
+        ) as OrchestratorToolsRuntime;
+        if (tools.exportsConversation) {
+          const result = await tools.exportConversation({
+            formats: ['pdf'],
+            title: 'Who won the World Cup',
+            summary: ['Brazil won.', 'The answer named the winner.'],
+            turns: [{ number: 1, headline: 'Brazil won', points: [] }],
+            includeSql: false,
+          });
+          told.push(result);
+        }
+        yield { type: 'text-delta', payload: { text: 'Done.' } };
+      })();
+  }
+
+  it('opens on the request, reads the earlier turns, exports them and carries the export on the answer', async () => {
+    const exporter = {
+      turns: jest.fn().mockResolvedValue({
+        questions: ['Who won?'],
+        answers: ['Brazil won.'],
+      }),
+      export: jest.fn().mockResolvedValue(EXPORT),
+    };
+    const told: string[] = [];
+    const ctx = build({
+      exporter,
+      streams: { 'chief-of-staff': averyExports(told) },
+    });
+    await ctx.sessions.onModuleInit();
+    const first = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: { question: 'Who won?', datasets: ['World Cup'] },
+      }),
+      () => undefined,
+    );
+    // A question that is no export: no export line, no call to the exporter.
+    expect(
+      ctx.calls['chief-of-staff'][0].options.context[0].content,
+    ).not.toContain('export');
+    expect(exporter.turns).not.toHaveBeenCalled();
+    expect(first.answer?.export).toBeUndefined();
+
+    const second = await ctx.runs.stream(
+      await ctx.runs.prepare('orchestrated-answer', {
+        input: {
+          question: 'Export this conversation to PDF',
+          datasets: ['World Cup'],
+        },
+        context: { fromRunId: first.id },
+      }),
+      () => undefined,
+    );
+    expect(second.status).toBe('success');
+    expect(exporter.turns).toHaveBeenCalledWith(first.id, second.id);
+    const avery = ctx.calls['chief-of-staff'].at(-1)!;
+    expect(avery.options.context[0].content).toContain(
+      'The user asked to export the conversation: export_conversation is available. Its earlier questions, in order: 1. "Who won?"',
+    );
+    expect(exporter.export).toHaveBeenCalledWith({
+      conversationId: first.id,
+      beforeRunId: second.id,
+      content: expect.objectContaining({
+        title: 'Who won the World Cup',
+      }) as unknown,
+      brand: 'halo',
+    });
+    expect(told).toEqual([
+      'Exported "Who won the World Cup": PDF (4 pages). The user sees the download card with the answer: do not repeat the summary.',
+    ]);
+    expect(second.answer?.export).toEqual(EXPORT);
+    expect(second.answer?.content).toBe('Done.');
   });
 });

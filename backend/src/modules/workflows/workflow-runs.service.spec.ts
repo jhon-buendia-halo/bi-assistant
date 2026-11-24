@@ -13,7 +13,11 @@ jest.mock('../sessions/sessions.service', () => ({
   RUN_HOST_ID_PREFIX: 'run-',
 }));
 
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
@@ -102,8 +106,6 @@ const V2_STEPS_BEFORE: StepEvent[] = [
   stepResult('receive-question', { question: 'Who won in 2002?' }),
   stepStart('load-catalog', { question: 'Who won in 2002?' }),
   stepResult('load-catalog', { entities: 1 }),
-  stepStart('interpret-follow-up', { question: 'Who won in 2002?' }),
-  stepResult('interpret-follow-up', { followUp: null }),
   stepStart('plan', { question: 'Who won in 2002?' }),
   stepResult('plan', PLAN_OUTPUT),
   stepStart('analyse', { question: 'Who won in 2002?' }),
@@ -172,23 +174,30 @@ function build(
     data?: unknown[];
   }[] = [];
   let draftHost = false;
+  let orchestratedHost = false;
+  const workspaceFiles = new Map<string, Buffer>();
   const sessions = {
     createRunHost: jest.fn(
       (spec: {
         runId: string;
+        workflowId?: string;
         draftAgentId?: string;
         context?: { question: string; answer: string };
+        transcript?: { role: string; content: string }[];
         image?: unknown;
         inputFiles?: { path: string; data: Buffer }[];
         inputImages?: string[];
       }) => {
         draftHost = !!spec.draftAgentId;
-        hostMessages = spec.context
-          ? [
-              { role: 'user', content: spec.context.question, at: 't' },
-              { role: 'assistant', content: spec.context.answer, at: 't' },
-            ]
-          : [];
+        orchestratedHost = spec.workflowId === 'orchestrated-answer';
+        hostMessages = spec.transcript
+          ? spec.transcript.map((m) => ({ ...m, at: 't' }))
+          : spec.context
+            ? [
+                { role: 'user', content: spec.context.question, at: 't' },
+                { role: 'assistant', content: spec.context.answer, at: 't' },
+              ]
+            : [];
         return Promise.resolve({ id: `run-${spec.runId}` });
       },
     ),
@@ -202,6 +211,16 @@ function build(
         onStep: (event: unknown) => void,
       ) => {
         hostMessages.push({ role: 'user', content: question, at: 't' });
+        if (orchestratedHost) {
+          // Avery's one step: Orchestrate.
+          onStep(stepStart('orchestrate', { question }));
+          for (const event of script.events ?? []) emit(event);
+          const answer = script.answer ?? 'Brazil won.';
+          onStep(stepResult('orchestrate', { answer }));
+          hostMessages.push({ role: 'assistant', content: answer, at: 't' });
+          emit({ type: 'done', session: { id: 'host' } });
+          return;
+        }
         const agentStep = draftHost ? 'answer' : 'analyse';
         for (const step of script.steps ??
           (draftHost ? [stepStart('answer')] : V2_STEPS_BEFORE)) {
@@ -292,11 +311,23 @@ function build(
         }),
     ),
     runHostWorkspaceIds: jest.fn((): string[] => []),
-    // A run's input image from its host's workspace: gone unless a test sets it.
+    // The run workspaces' files, as `<hostId>/<path>`: a queued run's input
+    // images are written as it is accepted and read back as it starts.
+    writeRunHostFile: jest.fn((hostId: string, path: string, data: Buffer) => {
+      workspaceFiles.set(`${hostId}/${path}`, data);
+      return Promise.resolve();
+    }),
+    // A run's input image from its host's workspace: gone unless written.
     runHostImage: jest.fn<
       Promise<{ data: Buffer; mediaType: string }>,
       [hostId: string, path: string]
-    >(() => Promise.reject(new Error('gone'))),
+    >((hostId, path) => {
+      const data = workspaceFiles.get(`${hostId}/${path}`);
+      if (!data) return Promise.reject(new Error('gone'));
+      const ext = path.slice(path.lastIndexOf('.') + 1);
+      const mediaType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+      return Promise.resolve({ data, mediaType });
+    }),
     // A run-backed host as the API shows it (api.md 2.1): derived fields.
     toView: jest.fn((host: { id: string; panelItems?: unknown[] }) =>
       Promise.resolve({
@@ -398,6 +429,11 @@ function build(
     rerun: jest.fn(),
     exportRows: jest.fn(),
   };
+  const artifacts = {
+    list: () => Promise.resolve([]),
+    // A dashboard card's saved state is read when a run is (api.md 121).
+    isVersionSaved: jest.fn().mockResolvedValue(null),
+  };
   const service = new WorkflowRunsService(
     workflows,
     sessions as unknown as SessionsService,
@@ -407,11 +443,12 @@ function build(
     nodeChats,
     queryEvidence as unknown as QueryEvidenceService,
     // No stored artifact: no workflow here takes one.
-    { list: () => Promise.resolve([]) } as never,
+    artifacts as never,
   );
   return {
     db,
     service,
+    artifacts,
     repository,
     nodeChats,
     queryEvidence,
@@ -433,6 +470,18 @@ function build(
     userAgents,
     workflows,
   };
+}
+
+/**
+ * Let pending work (sqlite writes, a queued run's start) land until `done`
+ * holds; setImmediate is never faked, so this works under fake timers too.
+ */
+async function until(done: () => boolean | Promise<boolean>): Promise<void> {
+  for (let i = 0; i < 500; i += 1) {
+    if (await done()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error('Gave up waiting');
 }
 
 /** The step ids and statuses of a run's `step` events, in order. */
@@ -599,8 +648,10 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       workflowId: 'answer-business-question',
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
-      // Build visual is on unless the run turns it off (workflows R41).
+      // Build visual is on unless the run turns it off (workflows R41),
+      // and so is Approve each step (workflows R44).
       buildVisual: true,
+      approveSteps: true,
     });
     // Careful is no field of v2's input: the turn runs without it.
     // The turn runs on its own signal: the no-progress watchdog's.
@@ -625,8 +676,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
-      'interpret-follow-up:running',
-      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -640,12 +689,9 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'wrap-up:running',
       'wrap-up:success',
       // The steps the run never took end skipped: Read images (no image
-      // attached) and the Clarify branch.
+      // attached).
       'read-images:skipped',
-      'clarify:skipped',
       'build-visual:skipped',
-      'page-result:skipped',
-      'page-answer:skipped',
       'done',
     ]);
     expect(events[0]).toEqual({
@@ -662,7 +708,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
       startedAt: expect.any(String) as string,
     });
-    expect(events[12]).toEqual({
+    expect(events[10]).toEqual({
       type: 'step',
       id: 'analyse',
       title: 'Analyse',
@@ -696,9 +742,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success', output: { entities: 1 } },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success', output: PLAN_OUTPUT },
-        { id: 'clarify', title: 'Clarify', status: 'skipped' },
         {
           id: 'analyse',
           title: 'Analyse',
@@ -710,8 +754,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'write-answer', status: 'success', output: ANSWER_OUTPUT },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'success', output: WRAP_UP_OUTPUT },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
       output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
@@ -723,7 +765,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     expect(run.input).not.toHaveProperty('careful');
     expect(run.finishedAt).toBeDefined();
     // Every step that ran has its start and end times, the end never before
-    // the start; the skipped Clarify has none.
+    // the start; the skipped steps have none.
     for (const step of run.steps.filter((s) => s.status !== 'skipped')) {
       expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
         Date.parse(step.startedAt!),
@@ -832,9 +874,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         {
           id: 'analyse',
           status: 'failed',
@@ -845,19 +885,14 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
-    expect(stepTrail(events).slice(-8)).toEqual([
-      'clarify:skipped',
+    expect(stepTrail(events).slice(-5)).toEqual([
       'analyse:failed',
       'validate:skipped',
       'write-answer:skipped',
       'build-visual:skipped',
       'wrap-up:skipped',
-      'page-result:skipped',
-      'page-answer:skipped',
     ]);
     expect(run.answer).toBeUndefined();
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
@@ -886,8 +921,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
-      'interpret-follow-up:running',
-      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -900,13 +933,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       brief: 'Not reached',
       source: 'generic',
     };
-    expect(run.steps.slice(5)).toEqual([
-      {
-        id: 'clarify',
-        title: 'Clarify',
-        status: 'skipped',
-        story: expect.objectContaining({ source: 'step' }) as unknown,
-      },
+    expect(run.steps.slice(4)).toEqual([
       {
         id: 'analyse',
         title: 'Analyse',
@@ -942,18 +969,6 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         story: notReached,
       },
       { id: 'wrap-up', title: 'Wrap up', status: 'skipped', story: notReached },
-      {
-        id: 'page-result',
-        title: 'Page result',
-        status: 'skipped',
-        story: notReached,
-      },
-      {
-        id: 'page-answer',
-        title: 'Page answer',
-        status: 'skipped',
-        story: notReached,
-      },
     ]);
     // The turn's own signal aborts with the request's.
     expect(ctx.sessions.streamRunTurn.mock.calls[0][3]?.aborted).toBe(true);
@@ -975,6 +990,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
       buildVisual: true,
+      approveSteps: true,
       context: {
         question: 'Who won in 2002?',
         answer: 'Brazil won in 2002.',
@@ -1374,16 +1390,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: message },
         { id: 'validate', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
   });
@@ -1438,16 +1450,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'success' },
         { id: 'validate', status: 'success' },
         { id: 'write-answer', status: 'success' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'success' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
       output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
@@ -1489,16 +1497,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: 'Model error' },
         { id: 'validate', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
     ctx.db.close();
@@ -1516,16 +1520,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
-        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
-        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'stopped' },
         { id: 'validate', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
-        { id: 'page-result', status: 'skipped' },
-        { id: 'page-answer', status: 'skipped' },
       ],
     });
   });
@@ -1567,7 +1567,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     });
   });
 
-  it('at start-up fails a run left running, deletes its memory thread and keeps its workspace; deletes orphan run workspaces', async () => {
+  it('at start-up queues a run 119 accepted and left running again from scratch (its memory threads deleted, its workspace kept), fails one that started 3 times and one never queued, and deletes orphan run workspaces', async () => {
     ctx = build();
     await ctx.repository.insert({
       id: 'left',
@@ -1575,9 +1575,36 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       workflowName: 'Assistant',
       input: ASK,
       status: 'running',
+      queuedAt: '2026-11-11T09:59:00.000Z',
+      attempts: 2,
       steps: [{ id: 'answer', title: 'Answer', status: 'running' }],
+      answer: { role: 'assistant', content: 'Bra', at: 't' },
       datasets: [],
       startedAt: '2026-11-11T10:00:00.000Z',
+    });
+    // An inline 118 run, or one stored before the queue: no `queuedAt`.
+    await ctx.repository.insert({
+      id: 'inline',
+      workflowId: 'agent:assistant',
+      workflowName: 'Assistant',
+      input: ASK,
+      status: 'running',
+      attempts: 1,
+      steps: [],
+      datasets: [],
+      startedAt: '2026-11-11T10:10:00.000Z',
+    });
+    await ctx.repository.insert({
+      id: 'worn',
+      workflowId: 'agent:assistant',
+      workflowName: 'Assistant',
+      input: ASK,
+      status: 'running',
+      queuedAt: '2026-11-11T08:00:00.000Z',
+      attempts: 3,
+      steps: [{ id: 'answer', title: 'Answer', status: 'running' }],
+      datasets: [],
+      startedAt: '2026-11-11T10:30:00.000Z',
     });
     await ctx.repository.insert({
       id: 'done',
@@ -1591,13 +1618,26 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     });
     ctx.sessions.runHostWorkspaceIds.mockReturnValue([
       'run-left',
+      'run-inline',
+      'run-worn',
       'run-done',
       'run-orphan',
     ]);
     await ctx.service.onModuleInit();
-    await expect(ctx.repository.get('left')).resolves.toMatchObject({
+    const left = await ctx.repository.get('left');
+    // In line again from when it was first accepted.
+    expect(left).toMatchObject({
+      status: 'queued',
+      steps: [],
+      attempts: 2,
+      queuedAt: '2026-11-11T09:59:00.000Z',
+    });
+    expect(left).not.toHaveProperty('answer');
+    expect(left).not.toHaveProperty('error');
+    await expect(ctx.repository.get('worn')).resolves.toMatchObject({
       status: 'failed',
       error: 'The app stopped before the run finished',
+      attempts: 3,
       steps: [
         {
           id: 'answer',
@@ -1606,10 +1646,17 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         },
       ],
     });
+    await expect(ctx.repository.get('inline')).resolves.toMatchObject({
+      status: 'failed',
+      error: 'The app stopped before the run finished',
+    });
     await expect(ctx.repository.get('done')).resolves.toMatchObject({
       status: 'success',
     });
-    // A failed run keeps its memory threads, as any finished run does.
+    // The queued run starts from scratch; a failed run keeps its memory
+    // threads, as any finished run does.
+    expect(ctx.deleteMemoryResource).toHaveBeenCalledTimes(1);
+    expect(ctx.deleteMemoryResource).toHaveBeenCalledWith('run-left');
     expect(ctx.deleteMemoryThread).not.toHaveBeenCalled();
     expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledTimes(1);
     expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
@@ -1617,7 +1664,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     );
   });
 
-  it('a start-up recovery that cannot list workspaces still fails the runs left running', async () => {
+  it('a start-up recovery that cannot list workspaces still queues the runs left running again', async () => {
     ctx = build();
     await ctx.repository.insert({
       id: 'left',
@@ -1625,6 +1672,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       workflowName: 'Sequential test workflow',
       input: { text: 'a' },
       status: 'running',
+      queuedAt: 't',
       steps: [],
       datasets: [],
       startedAt: 't',
@@ -1634,7 +1682,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     });
     await ctx.service.onModuleInit();
     await expect(ctx.repository.get('left')).resolves.toMatchObject({
-      status: 'failed',
+      status: 'queued',
     });
   });
 });
@@ -1745,6 +1793,7 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
         title: 'Who won in 2002?',
         startedAt: '2026-11-11T12:00:00.000Z',
         finishedAt: v2.run.finishedAt,
+        attempts: 1,
       },
       {
         id: 'old-seq',
@@ -2101,6 +2150,241 @@ const RUN_VISUAL = {
   visualization: { id: 'v1', document: '<html>', version: 2 },
 };
 
+describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 120, 159, 160)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  const FIRST = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+  const ORCHESTRATED = 'orchestrated-answer';
+
+  /** A first message and a follow-up to it, both finished. */
+  async function conversation() {
+    ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
+    const first = await streamed(ctx, ORCHESTRATED, { input: FIRST });
+    const second = await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'And in 2006?', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.run.id },
+    });
+    return { first: first.run, second: second.run };
+  }
+
+  it('starts a conversation on a first message: its conversation is its own id', async () => {
+    ctx = build();
+    const { run } = await streamed(ctx, ORCHESTRATED, { input: FIRST });
+    expect(run.conversationId).toBe(run.id);
+    // Another workflow's run belongs to no conversation.
+    const other = await streamed(ctx, 'answer-business-question', {
+      input: FIRST,
+    });
+    expect(other.run.conversationId).toBeUndefined();
+  });
+
+  it("joins the earlier run's conversation on a follow-up, and Avery reads its turns", async () => {
+    const { first, second } = await conversation();
+    expect(second.conversationId).toBe(first.id);
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      transcript?: { role: string; content: string }[];
+    };
+    expect(spec.transcript).toEqual([
+      { role: 'user', content: 'Who won in 2002?' },
+      { role: 'assistant', content: 'Brazil won in 2002.' },
+    ]);
+    // Avery holds the conversation: her team starts from no copied thread.
+    expect(spec).not.toHaveProperty('continuesThreadsOf');
+
+    const third = await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'And 2010?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    expect(third.run.conversationId).toBe(first.id);
+    const next = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      transcript?: { role: string; content: string }[];
+    };
+    expect(next.transcript?.map((m) => m.content)).toEqual([
+      'Who won in 2002?',
+      'Brazil won in 2002.',
+      'And in 2006?',
+      'Brazil won in 2002.',
+    ]);
+  });
+
+  it('archives every run of the conversation, and hides them from the list', async () => {
+    const { first, second } = await conversation();
+    expect(await ctx.service.list()).toHaveLength(2);
+    expect(await ctx.service.archive(second.id)).toEqual({
+      ok: true,
+      conversationId: first.id,
+      archived: 2,
+    });
+    for (const id of [first.id, second.id]) {
+      expect((await ctx.repository.get(id))?.archivedAt).toEqual(
+        expect.any(String),
+      );
+    }
+    expect(await ctx.service.list()).toEqual([]);
+    expect(
+      (await ctx.service.list(undefined, true)).map((run) => run.id).sort(),
+    ).toEqual([first.id, second.id].sort());
+  });
+
+  it('refuses to archive while a run of the conversation is running or waiting, and an unknown run is 404', async () => {
+    const { first, second } = await conversation();
+    await ctx.repository.update(second.id, { status: 'running' });
+    await expect(ctx.service.archive(first.id)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await ctx.repository.update(second.id, { status: 'suspended' });
+    await expect(ctx.service.archive(first.id)).rejects.toThrow(
+      'The run is still running',
+    );
+    expect((await ctx.repository.get(first.id))?.archivedAt).toBeUndefined();
+    await expect(ctx.service.archive('nope')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it("hands a follow-up the conversation's last dashboard, however many turns ago (agents.md 5.22)", async () => {
+    const { first, second } = await conversation();
+    const dashboard = {
+      artifactId: 'a-1',
+      version: 1,
+      title: 'Goals by team',
+      action: 'created' as const,
+      widgetCount: 3,
+      filterCount: 1,
+      rowCount: 32,
+      saved: false,
+    };
+    // The first answer built it; the second carries none of its own.
+    const answered = await ctx.repository.get(first.id);
+    await ctx.repository.update(first.id, {
+      answer: { ...answered!.answer!, dashboard },
+    });
+    await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'Add a stage filter', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      contextDashboard?: string;
+    };
+    expect(spec.contextDashboard).toBe('a-1');
+
+    // A later version replaces it as the one the next message changes.
+    const latest = await ctx.repository.get(second.id);
+    await ctx.repository.update(second.id, {
+      answer: {
+        ...latest!.answer!,
+        dashboard: { ...dashboard, artifactId: 'a-2', version: 2 },
+      },
+    });
+    await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'Make it dark', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.id },
+    });
+    expect(
+      (
+        ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+          contextDashboard?: string;
+        }
+      ).contextDashboard,
+    ).toBe('a-2');
+  });
+
+  it("reads a dashboard card's saved state when the run is read, not the run's snapshot", async () => {
+    const { second } = await conversation();
+    const answered = await ctx.repository.get(second.id);
+    await ctx.repository.update(second.id, {
+      answer: {
+        ...answered!.answer!,
+        dashboard: {
+          artifactId: 'a-1',
+          version: 2,
+          title: 'Goals',
+          action: 'updated',
+          widgetCount: 1,
+          filterCount: 0,
+          rowCount: 1,
+          saved: false,
+        },
+      },
+    });
+    ctx.artifacts.isVersionSaved.mockResolvedValue(true);
+    const run = await ctx.service.get(second.id);
+    expect(run.answer?.dashboard?.saved).toBe(true);
+    expect(ctx.artifacts.isVersionSaved).toHaveBeenCalledWith('a-1', 2);
+    // A deleted artifact leaves the snapshot as it was.
+    ctx.artifacts.isVersionSaved.mockResolvedValue(null);
+    expect((await ctx.service.get(second.id)).answer?.dashboard?.saved).toBe(
+      false,
+    );
+  });
+
+  it('carries no dashboard into a conversation that has none, and an archived one still takes no message', async () => {
+    const { second } = await conversation();
+    await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'And 2010?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    expect(
+      ctx.sessions.createRunHost.mock.calls.at(-1)?.[0],
+    ).not.toHaveProperty('contextDashboard');
+    const answered = await ctx.repository.get(second.id);
+    await ctx.repository.update(second.id, {
+      answer: {
+        ...answered!.answer!,
+        dashboard: {
+          artifactId: 'a-1',
+          version: 1,
+          title: 'Goals',
+          action: 'created',
+          widgetCount: 1,
+          filterCount: 0,
+          rowCount: 1,
+          saved: false,
+        },
+      },
+    });
+    await ctx.service.archive(second.id);
+    const hosts = ctx.sessions.createRunHost.mock.calls.length;
+    await expect(
+      ctx.service.prepare(ORCHESTRATED, {
+        input: { question: 'More?', datasets: ['World Cup Core'] },
+        context: { fromRunId: second.id },
+      }),
+    ).rejects.toThrow('This conversation is archived');
+    expect(ctx.sessions.createRunHost.mock.calls).toHaveLength(hosts);
+  });
+
+  it('refuses a follow-up to an archived conversation (409)', async () => {
+    const { second } = await conversation();
+    await ctx.service.archive(second.id);
+    const refusal = ctx.service.prepare(ORCHESTRATED, {
+      input: { question: 'More?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    await expect(refusal).rejects.toBeInstanceOf(ConflictException);
+    await expect(refusal).rejects.toThrow('This conversation is archived');
+  });
+
+  it('unarchive brings the conversation back: listed again and open to a new message', async () => {
+    const { first, second } = await conversation();
+    await ctx.service.archive(first.id);
+    expect(await ctx.service.unarchive(second.id)).toEqual({
+      ok: true,
+      conversationId: first.id,
+      unarchived: 2,
+    });
+    expect((await ctx.repository.get(first.id))?.archivedAt).toBeUndefined();
+    expect(await ctx.service.list()).toHaveLength(2);
+    expect(await ctx.service.list(undefined, true)).toEqual([]);
+    const again = await streamed(ctx, ORCHESTRATED, {
+      input: { question: 'More?', datasets: ['World Cup Core'] },
+      context: { fromRunId: second.id },
+    });
+    expect(again.run.conversationId).toBe(first.id);
+  });
+});
+
 describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
   it('lists, gets, deletes and serves the files of runs', async () => {
     const runs = {
@@ -2110,6 +2394,16 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
           ? Promise.resolve({ id: 'r1', status: 'success' })
           : Promise.reject(new NotFoundException(`Run "${id}" not found`)),
       ),
+      archive: jest.fn().mockResolvedValue({
+        ok: true,
+        conversationId: 'r1',
+        archived: 2,
+      }),
+      unarchive: jest.fn().mockResolvedValue({
+        ok: true,
+        conversationId: 'r1',
+        unarchived: 2,
+      }),
       delete: jest.fn((id: string) =>
         id === 'busy'
           ? Promise.reject(
@@ -2154,11 +2448,21 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
       await request(server)
         .get('/workflow-runs')
         .expect(200, { runs: [{ id: 'r1' }] });
-      expect(runs.list).toHaveBeenLastCalledWith(undefined);
+      expect(runs.list).toHaveBeenLastCalledWith(undefined, false);
       await request(server)
         .get('/workflow-runs?workflowId=agent%3Aassistant')
         .expect(200);
-      expect(runs.list).toHaveBeenLastCalledWith('agent:assistant');
+      expect(runs.list).toHaveBeenLastCalledWith('agent:assistant', false);
+      await request(server).get('/workflow-runs?archived=true').expect(200);
+      expect(runs.list).toHaveBeenLastCalledWith(undefined, true);
+      await request(server)
+        .post('/workflow-runs/r1/archive')
+        .expect(200, { ok: true, conversationId: 'r1', archived: 2 });
+      expect(runs.archive).toHaveBeenCalledWith('r1');
+      await request(server)
+        .post('/workflow-runs/r1/unarchive')
+        .expect(200, { ok: true, conversationId: 'r1', unarchived: 2 });
+      expect(runs.unarchive).toHaveBeenCalledWith('r1');
       await request(server)
         .get('/workflow-runs/r1')
         .expect(200, { id: 'r1', status: 'success' });
@@ -2489,6 +2793,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
     const first = follow(id);
     expect(first.got[0]).toBe('1:run');
     first.leave!();
+    await until(() => ctx.sessions.streamRunTurn.mock.calls.length === 1);
     expect((await ctx.service.get(id)).status).toBe('running');
     // The turn runs on the registry's signal, never the request's.
     const signal = ctx.sessions.streamRunTurn.mock.calls[0]?.[3];
@@ -2559,7 +2864,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
   describe('a run that waits for the user (138)', () => {
     function suspendingTurn() {
       const suspension = {
-        stepId: 'clarify',
+        stepId: 'plan',
         question: 'Which measure?',
         options: ['Goals', 'Wins'],
         resume: jest.fn(
@@ -2593,7 +2898,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
       ]);
       const last = Number(waiting.got.at(-1)!.split(':')[0]);
       const prepared = await ctx.service.prepareResume(id, {
-        stepId: 'clarify',
+        stepId: 'plan',
         answer: 'Goals',
       });
       expect(ctx.service.resumeDetached(prepared)).toBe(id);
@@ -2821,6 +3126,46 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
         context: { fromRunId: first.run.id },
       }),
     ).rejects.toThrow('Reference images must be PNG, JPEG or WebP images');
+  });
+
+  it('a run 119 accepts writes its images to its workspace at once; they reach its host when it starts, and again after a restart', async () => {
+    ctx = build();
+    withImagesField();
+    // The first start is cut off by the restart.
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      () => new Promise<undefined>(() => undefined),
+    );
+    const id = await ctx.service.launch(
+      await ctx.service.prepare('answer-business-question', {
+        input: { ...ASK, images: [url(PNG)] },
+      }),
+    );
+    expect(ctx.sessions.writeRunHostFile).toHaveBeenCalledWith(
+      `run-${id}`,
+      'inputs/images/1.png',
+      PNG,
+    );
+    expect((await ctx.repository.get(id))?.input.images).toEqual([
+      'inputs/images/1.png',
+    ]);
+    await until(() => ctx.sessions.streamRunTurn.mock.calls.length === 1);
+    const fresh = ctx.restarted();
+    await fresh.onModuleInit();
+    await fresh.onApplicationBootstrap();
+    await fresh.live.whenEnded(id);
+    expect(await ctx.repository.get(id)).toMatchObject({
+      status: 'success',
+      attempts: 2,
+      input: { images: ['inputs/images/1.png'] },
+    });
+    expect(ctx.sessions.createRunHost).toHaveBeenCalledTimes(2);
+    for (const [spec] of ctx.sessions.createRunHost.mock.calls) {
+      expect(spec).toMatchObject({
+        runId: id,
+        inputFiles: [{ path: 'inputs/images/1.png', data: PNG }],
+        inputImages: ['inputs/images/1.png'],
+      });
+    }
   });
 
   describe('inputImage (151)', () => {
@@ -3139,7 +3484,6 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     expect(await storedTrail(id)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
       'analyse:running',
     ]);
@@ -3200,13 +3544,14 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
         return real.update(id, patch);
       });
     const id = await launch();
+    await until(() => slowed);
     await settled();
     // The turn is over, but its end waits for the checkpoint in flight.
-    expect(order).toEqual([]);
+    expect(order).toEqual(['running']);
     expect((await ctx.repository.get(id))?.status).toBe('running');
     open();
     await ctx.service.live.whenEnded(id);
-    expect(order).toEqual(['checkpoint', 'success']);
+    expect(order).toEqual(['running', 'checkpoint', 'success']);
     const stored = await ctx.repository.get(id);
     expect(stored?.status).toBe('success');
     expect(stored?.steps.find((step) => step.id === 'wrap-up')?.status).toBe(
@@ -3214,40 +3559,30 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     );
   });
 
-  it('after a restart a run cut off mid-way is failed, keeps its finished steps, and its running step is failed', async () => {
+  it('after a restart a run cut off mid-way is queued again from scratch: its stored steps are dropped', async () => {
     ctx = build();
     stagedTurn();
     const id = await launch();
-    await settled();
+    await until(async () => (await storedTrail(id)).length === 4);
     const fresh = ctx.restarted();
     await fresh.onModuleInit();
-    const stored = await ctx.repository.get(id);
-    expect(stored).toMatchObject({
-      status: 'failed',
-      error: 'The app stopped before the run finished',
+    expect(await ctx.repository.get(id)).toMatchObject({
+      status: 'queued',
+      attempts: 1,
+      steps: [],
     });
-    expect(stored?.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
-      'receive-question:success',
-      'load-catalog:success',
-      'interpret-follow-up:success',
-      'plan:success',
-      'analyse:failed',
-    ]);
-    expect(stored?.steps.at(-1)?.error).toBe(
-      'The app stopped before the run finished',
-    );
   });
 
-  it('after a restart a run whose checkpoint stored its step suspended, before the run was stored suspended, is failed with that step failed', async () => {
+  it('after a restart a run whose checkpoint stored its step suspended, before the run was stored suspended, is queued again with no step left', async () => {
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, _emit, _signal, _careful, onStep) => {
-        for (const step of V2_STEPS_BEFORE.slice(0, -1)) onStep(step);
-        onStep(stepStart('clarify', PLAN_OUTPUT));
+        for (const step of V2_STEPS_BEFORE.slice(0, -3)) onStep(step);
+        onStep(stepStart('plan', { question: 'Who won in 2002?' }));
         onStep({
           type: 'workflow-step-suspended',
           payload: {
-            id: 'clarify',
+            id: 'plan',
             status: 'suspended',
             suspendPayload: { question: 'Which measure?' },
           },
@@ -3257,43 +3592,35 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
       },
     );
     const id = await launch();
-    await settled();
-    expect((await storedTrail(id)).at(-1)).toBe('clarify:suspended');
+    await until(
+      async () => (await storedTrail(id)).at(-1) === 'plan:suspended',
+    );
     expect((await ctx.repository.get(id))?.status).toBe('running');
     const fresh = ctx.restarted();
     await fresh.onModuleInit();
-    const stored = await ctx.repository.get(id);
-    expect(stored).toMatchObject({
-      status: 'failed',
-      error: 'The app stopped before the run finished',
+    expect(await ctx.repository.get(id)).toMatchObject({
+      status: 'queued',
+      steps: [],
     });
-    expect(stored?.steps.at(-1)).toMatchObject({
-      id: 'clarify',
-      status: 'failed',
-      error: 'The app stopped before the run finished',
-    });
-    expect(stored?.steps.some((step) => step.status === 'suspended')).toBe(
-      false,
-    );
   });
 
   it('a run that throws while suspending is stored failed with its suspended step failed, not left suspended', async () => {
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, _emit, _signal, _careful, onStep) => {
-        for (const step of V2_STEPS_BEFORE.slice(0, -1)) onStep(step);
-        onStep(stepStart('clarify', PLAN_OUTPUT));
+        for (const step of V2_STEPS_BEFORE.slice(0, -3)) onStep(step);
+        onStep(stepStart('plan', { question: 'Who won in 2002?' }));
         onStep({
           type: 'workflow-step-suspended',
           payload: {
-            id: 'clarify',
+            id: 'plan',
             status: 'suspended',
             suspendPayload: { question: 'Which measure?' },
           },
         });
         await settled();
         return {
-          stepId: 'clarify',
+          stepId: 'plan',
           question: 'Which measure?',
           options: ['Goals', 'Wins'],
           resume: jest.fn(() => Promise.resolve(undefined)),
@@ -3309,7 +3636,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     const stored = await ctx.repository.get(id);
     expect(stored).toMatchObject({ status: 'failed', error: 'host lost' });
     expect(stored?.steps.at(-1)).toMatchObject({
-      id: 'clarify',
+      id: 'plan',
       status: 'failed',
       error: 'host lost',
     });
@@ -3338,7 +3665,6 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     expect(stored?.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
       // The turn ended with Analyse unfinished, so the tracker closed it;
       // the checkpoint had stored it running.
@@ -3347,87 +3673,309 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
   });
 });
 
-describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () => {
+describe('WorkflowRunsService: the line for a slot (api.md 119 queued, 138, 150)', () => {
   let ctx: ReturnType<typeof build>;
-  afterEach(() => ctx.db.close());
+  beforeEach(() => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    ctx.db.close();
+  });
 
   const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
-  const FULL =
-    'Too many runs are in progress (1). Wait for one to finish, or stop one.';
 
-  /** A service whose live runs hold one slot. */
-  function buildCapped() {
+  /** A service whose live runs hold `cap` slots. */
+  function buildCapped(cap = 1) {
     ctx = build();
-    Object.assign(ctx.service, { live: new LiveRuns(undefined, undefined, 1) });
+    Object.assign(ctx.service, {
+      live: new LiveRuns(undefined, undefined, cap),
+    });
   }
 
   const prepared = () =>
     ctx.service.prepare('answer-business-question', { input: ASK });
+  const launch = async () => ctx.service.launch(await prepared());
 
-  /** The next turn waits until released or stopped. */
-  function holdTurn(): () => void {
-    let release!: () => void;
-    const released = new Promise<void>((resolve) => (release = resolve));
-    ctx.sessions.streamRunTurn.mockImplementationOnce(
-      async (_hostId, _question, _emit, signal) => {
+  /**
+   * Every turn waits until released (or stopped), then runs as the fake
+   * host's does; `started` holds the run ids in the order their turns began.
+   */
+  function heldTurns() {
+    const started: string[] = [];
+    const releases = new Map<string, () => void>();
+    const original = ctx.sessions.streamRunTurn.getMockImplementation()!;
+    ctx.sessions.streamRunTurn.mockImplementation(
+      async (hostId, question, emit, signal, careful, onStep) => {
+        const id = hostId.slice('run-'.length);
+        started.push(id);
         await Promise.race([
-          released,
+          new Promise<void>((resolve) => releases.set(id, resolve)),
           new Promise<void>((resolve) =>
             signal?.addEventListener('abort', () => resolve()),
           ),
         ]);
+        if (signal?.aborted) return;
+        await original(hostId, question, emit, signal, careful, onStep);
       },
     );
-    return release;
+    return { started, release: (id: string) => releases.get(id)!() };
   }
 
-  const refusal = (failure: unknown) => ({
-    status: (failure as { getStatus?: () => number }).getStatus?.(),
-    message: (failure as Error).message,
+  const statuses = (ids: string[]) =>
+    Promise.all(ids.map(async (id) => (await ctx.repository.get(id))?.status));
+
+  /** What a follower from seq 0 gets: the event types, and its end. */
+  function follow(id: string) {
+    const got: string[] = [];
+    const state = { ended: false };
+    ctx.service.live.subscribe(id, 0, {
+      event: ({ event }) => got.push(event.type),
+      end: () => (state.ended = true),
+    });
+    return { got, state };
+  }
+
+  it('20 runs with 8 slots: 8 run and 12 wait queued, never refused; all 20 succeed, the waiting ones started oldest first', async () => {
+    buildCapped(8);
+    const turns = heldTurns();
+    const ids: string[] = [];
+    for (let i = 0; i < 20; i += 1) ids.push(await launch());
+    await until(() => turns.started.length === 8);
+    expect([...turns.started].sort()).toEqual(ids.slice(0, 8).sort());
+    expect(await statuses(ids)).toEqual([
+      ...Array<string>(8).fill('running'),
+      ...Array<string>(12).fill('queued'),
+    ]);
+    const waiting = await ctx.repository.get(ids[8]);
+    expect(waiting?.steps).toEqual([]);
+    expect(typeof waiting?.queuedAt).toBe('string');
+    expect(waiting).not.toHaveProperty('attempts');
+    expect(follow(ids[8]).got).toEqual(['run', 'queued']);
+    expect(follow(ids[0]).got).not.toContain('queued');
+    // Each run that ends lets the oldest waiting one start.
+    for (let k = 0; k < 12; k += 1) {
+      turns.release(turns.started[k]);
+      await until(() => turns.started.length === 9 + k);
+    }
+    expect(turns.started.slice(8)).toEqual(ids.slice(8));
+    for (const id of turns.started.slice(12)) turns.release(id);
+    for (const id of ids) await ctx.service.live.whenEnded(id);
+    expect(await statuses(ids)).toEqual(Array<string>(20).fill('success'));
+    const last = await ctx.repository.get(ids[19]);
+    expect(last).toMatchObject({ attempts: 1, queuedAt: waiting?.queuedAt });
+    expect(follow(ids[19]).got.slice(0, 3)).toEqual(['run', 'queued', 'step']);
   });
 
-  it('two launches together with one slot free: one run, one 429, and nothing stored for the refused one', async () => {
-    buildCapped();
-    holdTurn();
-    const [a, b] = [await prepared(), await prepared()];
-    const results = await Promise.allSettled([
-      ctx.service.launch(a),
-      ctx.service.launch(b),
+  it('Stop (150) on a waiting run stores it stopped with no steps and ends its log; it never starts, and the line goes on', async () => {
+    buildCapped(1);
+    const turns = heldTurns();
+    const busy = await launch();
+    const waiting = await launch();
+    const next = await launch();
+    await until(() => turns.started.length === 1);
+    const watcher = follow(waiting);
+    const run = await ctx.service.stop(waiting);
+    expect(run).toMatchObject({ id: waiting, status: 'stopped', steps: [] });
+    expect(run.finishedAt).toBeDefined();
+    expect(watcher.got).toEqual(['run', 'queued', 'done']);
+    expect(watcher.state.ended).toBe(true);
+    expect(await statuses([busy, next])).toEqual(['running', 'queued']);
+    turns.release(busy);
+    await until(() => turns.started.length === 2);
+    expect(turns.started).toEqual([busy, next]);
+    turns.release(next);
+    await ctx.service.live.whenEnded(next);
+    expect(await statuses([busy, waiting, next])).toEqual([
+      'success',
+      'stopped',
+      'success',
     ]);
-    const started = results.filter((result) => result.status === 'fulfilled');
-    const refused = results.filter((result) => result.status === 'rejected');
-    expect(started).toHaveLength(1);
-    expect(refused).toHaveLength(1);
-    expect(refusal(refused[0]?.reason)).toEqual({
-      status: 429,
-      message: FULL,
+    expect(ctx.sessions.createRunHost).toHaveBeenCalledTimes(2);
+  });
+
+  it('a waiting run counts as active: delete, archive, evidence and visuals wait for it', async () => {
+    buildCapped(1);
+    const turns = heldTurns();
+    const busy = await launch();
+    const waiting = await launch();
+    await until(() => turns.started.length === 1);
+    await expect(ctx.service.delete(waiting)).rejects.toThrow(
+      'Stop the run before deleting it',
+    );
+    await expect(ctx.service.archive(waiting)).rejects.toThrow(
+      'The run is still running',
+    );
+    await expect(ctx.service.prepareEvidence(waiting)).rejects.toThrow(
+      'Wait for the run to finish',
+    );
+    await expect(ctx.service.generateVisualization(waiting)).rejects.toThrow(
+      'Wait for the run to finish',
+    );
+    turns.release(busy);
+    await until(() => turns.started.length === 2);
+    turns.release(waiting);
+    await ctx.service.live.whenEnded(waiting);
+  });
+
+  it('a waiting run whose dataset is gone when its turn comes ends failed with the refusal', async () => {
+    buildCapped(1);
+    const turns = heldTurns();
+    const busy = await launch();
+    const waiting = await launch();
+    await until(() => turns.started.length === 1);
+    const datasets = (
+      ctx.service as unknown as { datasets: { list: jest.Mock } }
+    ).datasets;
+    datasets.list.mockResolvedValue([]);
+    const refusal = await prepared().then(
+      () => '',
+      (failure: Error) => failure.message,
+    );
+    expect(refusal).not.toBe('');
+    turns.release(busy);
+    await until(() => !ctx.service.live.isRunning(waiting));
+    expect(await ctx.repository.get(waiting)).toMatchObject({
+      status: 'failed',
+      error: refusal,
+      steps: [],
+    });
+    expect(follow(waiting).got).toEqual(['run', 'queued', 'error']);
+    expect(turns.started).toEqual([busy]);
+  });
+
+  it('Stop (150) while a seated run is being prepared again keeps it stopped: it never starts, even when the prepare outlasts the unwind wait', async () => {
+    buildCapped(1);
+    type Definition = Awaited<ReturnType<WorkflowsService['definition']>>;
+    const definition = ctx.workflows.definition.bind(ctx.workflows) as (
+      id: string,
+    ) => Promise<Definition>;
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    let reads = 0;
+    // The request's prepare goes through; the re-prepare as the run starts
+    // waits at the gate.
+    const spy = jest
+      .spyOn(ctx.workflows, 'definition')
+      .mockImplementation(async (name) => {
+        reads += 1;
+        if (reads > 1) await gate;
+        return definition(name);
+      });
+    const id = await launch();
+    await until(() => reads === 2);
+    const stopping = ctx.service.stop(id);
+    await jest.advanceTimersByTimeAsync(10_000);
+    await expect(stopping).resolves.toMatchObject({ status: 'stopped' });
+    open();
+    await until(async () => {
+      for (let i = 0; i < 10; i += 1) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+      return true;
+    });
+    const stored = await ctx.repository.get(id);
+    expect(stored).toMatchObject({ status: 'stopped', steps: [] });
+    expect(stored?.attempts).toBeUndefined();
+    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+    // Its slot is free again.
+    spy.mockRestore();
+    const next = await launch();
+    await ctx.service.live.whenEnded(next);
+    expect((await ctx.repository.get(next))?.status).toBe('success');
+  });
+
+  it('after a restart a run cut off mid-way is queued again and, once the app is up, starts from scratch under the same id and succeeds with attempts 2', async () => {
+    buildCapped(8);
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+        for (const step of V2_STEPS_BEFORE) onStep(step);
+        await new Promise<void>(() => undefined);
+      },
+    );
+    const id = await launch();
+    await until(async () => (await ctx.repository.get(id))?.steps.length === 4);
+    const before = (await ctx.repository.get(id))!;
+    expect(before).toMatchObject({ status: 'running', attempts: 1 });
+    const fresh = ctx.restarted();
+    await fresh.onModuleInit();
+    expect(await ctx.repository.get(id)).toMatchObject({
+      status: 'queued',
+      steps: [],
+      attempts: 1,
+      queuedAt: before.queuedAt,
+    });
+    expect(ctx.deleteMemoryResource).toHaveBeenCalledWith(`run-${id}`);
+    await fresh.onApplicationBootstrap();
+    await fresh.live.whenEnded(id);
+    const after = (await ctx.repository.get(id))!;
+    expect(after).toMatchObject({
+      id,
+      status: 'success',
+      attempts: 2,
+      queuedAt: before.queuedAt,
+    });
+    expect(after.startedAt >= before.startedAt).toBe(true);
+    expect(
+      after.steps.every((step) => ['success', 'skipped'].includes(step.status)),
+    ).toBe(true);
+    expect(after.steps.at(-1)).toMatchObject({
+      id: 'wrap-up',
+      status: 'success',
     });
     expect(await ctx.repository.list()).toHaveLength(1);
-    expect(ctx.sessions.createRunHost).toHaveBeenCalledTimes(1);
   });
 
-  it('the slot frees when the run ends, fails or is stopped', async () => {
-    buildCapped();
-    const ended = await ctx.service.launch(await prepared());
-    await ctx.service.live.whenEnded(ended);
-    holdTurn();
-    const stopped = await ctx.service.launch(await prepared());
-    await expect(ctx.service.launch(await prepared())).rejects.toThrow(FULL);
-    await ctx.service.stop(stopped);
-    ctx.sessions.streamRunTurn.mockImplementationOnce(() =>
-      Promise.reject(new Error('The provider failed')),
-    );
-    const failed = await ctx.service.launch(await prepared());
-    await ctx.service.live.whenEnded(failed);
-    expect((await ctx.service.get(failed)).status).toBe('failed');
-    const next = await ctx.service.launch(await prepared());
-    await ctx.service.live.whenEnded(next);
+  it('a run the app stopped in three times is failed at the next start-up and never starts again', async () => {
+    buildCapped(8);
+    const hang = () =>
+      ctx.sessions.streamRunTurn.mockImplementationOnce(
+        () => new Promise<undefined>(() => undefined),
+      );
+    hang();
+    const id = await launch();
+    for (const attempts of [1, 2]) {
+      await until(
+        () => ctx.sessions.streamRunTurn.mock.calls.length === attempts,
+      );
+      const fresh = ctx.restarted();
+      await fresh.onModuleInit();
+      expect((await ctx.repository.get(id))?.status).toBe('queued');
+      hang();
+      await fresh.onApplicationBootstrap();
+    }
+    await until(() => ctx.sessions.streamRunTurn.mock.calls.length === 3);
+    expect((await ctx.repository.get(id))?.attempts).toBe(3);
+    const last = ctx.restarted();
+    await last.onModuleInit();
+    expect(await ctx.repository.get(id)).toMatchObject({
+      status: 'failed',
+      error: 'The app stopped before the run finished',
+      attempts: 3,
+    });
+    await last.onApplicationBootstrap();
+    expect(last.live.has(id)).toBe(false);
+  });
+
+  it('a dispatched run is dispatched once: a second start-up pass leaves it as it is', async () => {
+    buildCapped(1);
+    const turns = heldTurns();
+    const busy = await launch();
+    const waiting = await launch();
+    await ctx.service.onApplicationBootstrap();
+    await until(() => turns.started.length === 1);
+    turns.release(busy);
+    await until(() => turns.started.length === 2);
+    turns.release(waiting);
+    await ctx.service.live.whenEnded(waiting);
+    expect(turns.started).toEqual([busy, waiting]);
+    expect(ctx.sessions.createRunHost).toHaveBeenCalledTimes(2);
   });
 
   it('a run waiting for the user holds no slot, and its resume is never refused', async () => {
-    buildCapped();
+    buildCapped(1);
     const suspension = {
-      stepId: 'clarify',
+      stepId: 'plan',
       question: 'Which measure?',
       options: ['Goals', 'Wins'],
       resume: jest.fn(() => Promise.resolve(undefined)),
@@ -3441,31 +3989,39 @@ describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () =
         Promise.resolve({ datasets: ['World Cup Core'] }),
       ),
     });
-    const waiting = await ctx.service.launch(await prepared());
+    const waiting = await launch();
     await ctx.service.live.whenEnded(waiting);
     expect((await ctx.service.get(waiting)).status).toBe('suspended');
-    const release = holdTurn();
-    const other = await ctx.service.launch(await prepared());
+    const turns = heldTurns();
+    const other = await launch();
+    await until(() => turns.started.length === 1);
     const resume = await ctx.service.prepareResume(waiting, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Goals',
     });
     expect(ctx.service.resumeDetached(resume)).toBe(waiting);
     await ctx.service.live.whenEnded(waiting);
-    release();
+    turns.release(other);
     await ctx.service.live.whenEnded(other);
+    expect((await ctx.service.get(other)).status).toBe('success');
   });
 
-  it('a draft run (Try it) holds no slot', async () => {
-    buildCapped();
-    holdTurn();
-    await ctx.service.launch(await prepared());
+  it('a draft run (Try it) holds no slot and never waits', async () => {
+    buildCapped(1);
+    const turns = heldTurns();
+    const busy = await launch();
+    await until(() => turns.started.length === 1);
     const draft = await ctx.service.prepareDraft('sales-helper', {
       input: { question: 'Who won?' },
     });
-    await expect(ctx.service.stream(draft, () => undefined)).resolves.toEqual(
+    const tried = ctx.service.stream(draft, () => undefined);
+    await until(() => turns.started.length === 2);
+    turns.release(turns.started[1]);
+    await expect(tried).resolves.toEqual(
       expect.objectContaining({ status: 'success' }),
     );
+    turns.release(busy);
+    await ctx.service.live.whenEnded(busy);
   });
 });
 
@@ -3609,7 +4165,7 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
     t.state.ctx = build();
     let resumedSignal: AbortSignal | undefined;
     const suspension = {
-      stepId: 'clarify',
+      stepId: 'plan',
       question: 'Which measure?',
       options: ['Goals', 'Wins'],
       resume: jest.fn(
@@ -3642,7 +4198,7 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
     // The clock was stopped when the run suspended, not merely ignored.
     expect(stall).not.toHaveBeenCalled();
     const prepared = await t.ctx().service.prepareResume(id, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Goals',
     });
     t.ctx().service.resumeDetached(prepared);
@@ -3686,8 +4242,9 @@ describe('WorkflowRunsService: a run that makes no progress is ended (workflows 
     const kinds = update.mock.calls.map(([, patch]) =>
       Object.keys(patch).join() === 'steps' ? 'checkpoint' : patch.status,
     );
+    expect(kinds[0]).toBe('running');
     expect(kinds.at(-1)).toBe('failed');
-    expect(kinds.slice(0, -1).every((kind) => kind === 'checkpoint')).toBe(
+    expect(kinds.slice(1, -1).every((kind) => kind === 'checkpoint')).toBe(
       true,
     );
   });
@@ -3794,7 +4351,6 @@ describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 am
     expect(run.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'interpret-follow-up:success',
       'plan:success',
       'analyse:stopped',
     ]);
@@ -3910,7 +4466,7 @@ describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 am
   it('a Stop before a resume starts ends the run stopped without resuming its turn, the waiting turn dropped', async () => {
     t.state.ctx = build();
     const suspension = {
-      stepId: 'clarify',
+      stepId: 'plan',
       question: 'Which measure?',
       options: ['Goals', 'Wins'],
       resume: jest.fn(() => Promise.resolve(undefined)),
@@ -3927,7 +4483,7 @@ describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 am
     const id = await t.launch();
     await t.ctx().service.live.whenEnded(id);
     const prepared = await t.ctx().service.prepareResume(id, {
-      stepId: 'clarify',
+      stepId: 'plan',
       answer: 'Goals',
     });
     // The Stop lands while the resume stores the run running again.

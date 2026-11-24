@@ -15,6 +15,11 @@ import type {
 import { flaggedQueries } from './answer-business-question.steps';
 import { coverageOf } from '../../modules/sessions/query-evidence/query-coverage';
 import { imageNotesBlock } from './read-images.steps';
+import {
+  interactiveBlocks,
+  revisionBlock,
+  type Revision,
+} from './answer-business-question.review';
 
 /** The Plan step's instructions' first line (the stub model routes by it). */
 export const PLAN_FIRST_LINE =
@@ -123,6 +128,19 @@ export function planRequest(
   ].join('\n');
 }
 
+/**
+ * An orchestrator's request to a teammate (Avery, agents.md 2.21): the
+ * question restated to stand alone, then what she needs. It ends Plan's
+ * and Write answer's request; '' when there is none (Answer a Business
+ * Question sends none, so its requests are unchanged).
+ */
+export function orchestratorBriefBlock(brief: string | undefined): string {
+  const text = brief?.trim();
+  return text
+    ? `Request from Avery, the Chief of Staff who coordinates the team (the user's own words are above): ${text}`
+    : '';
+}
+
 /** A message of the Plan step's request. */
 export interface PlanMessage {
   role: 'user' | 'assistant';
@@ -146,11 +164,25 @@ export function planMessages(input: {
   answered?: { question: string; options: readonly string[]; answer: string };
   /** Read images' notes (agents.md 2.15); absent or `''` without images. */
   imageNotes?: string;
+  /**
+   * The changes the user asked for on Plan's approval gate (workflows R44):
+   * the request ends with the earlier plan and their words.
+   */
+  revision?: Revision;
+  /** An orchestrator's request (Avery): it ends the request. */
+  brief?: string;
 }): { messages: string | PlanMessage[]; fallback: string } {
   const before = Array.isArray(input.messages)
     ? (input.messages as PlanMessage[]).slice(0, -1)
     : [];
   const { answered } = input;
+  const briefBlock = orchestratorBriefBlock(input.brief);
+  const revised = (request: string) =>
+    [
+      request,
+      ...(input.revision ? [revisionBlock(input.revision)] : []),
+      ...(briefBlock ? [briefBlock] : []),
+    ].join('\n\n');
   if (answered) {
     return {
       messages: [
@@ -165,20 +197,16 @@ export function planMessages(input: {
         },
         {
           role: 'user',
-          content: planRequest(
-            answered.answer,
-            input.catalogBlock,
-            input.imageNotes,
+          content: revised(
+            planRequest(answered.answer, input.catalogBlock, input.imageNotes),
           ),
         },
       ],
       fallback: `${input.question} (${answered.answer})`,
     };
   }
-  const request = planRequest(
-    input.question,
-    input.catalogBlock,
-    input.imageNotes,
+  const request = revised(
+    planRequest(input.question, input.catalogBlock, input.imageNotes),
   );
   return {
     messages: Array.isArray(input.messages)
@@ -235,6 +263,31 @@ export function writeAnswerRequest(input: {
   /** Read images' notes (agents.md 2.15); absent or `''` without images. */
   imageNotes?: string;
   /** Build visual runs after it and the request cues a visual (`visualCued`). */
+  visualFollows?: boolean;
+  /**
+   * An interactive run (workflows R44): the clarify rule, her answered
+   * question or the user's revision end the request. Absent: unchanged.
+   */
+  canAsk?: boolean;
+  answered?: { question: string; answer: string };
+  revision?: Revision;
+  /** An orchestrator's request (Avery): it ends the request. */
+  brief?: string;
+}): string {
+  const interactive = interactiveBlocks(input);
+  const request = writeAnswerBody(input);
+  const briefBlock = orchestratorBriefBlock(input.brief);
+  const blocks = [...interactive, ...(briefBlock ? [briefBlock] : [])];
+  return blocks.length ? [request, ...blocks].join('\n\n') : request;
+}
+
+/** The Write answer request before any interactive block. */
+function writeAnswerBody(input: {
+  question: string;
+  plan: Plan;
+  queries: readonly AnalyseQuery[];
+  findings: readonly Finding[];
+  imageNotes?: string;
   visualFollows?: boolean;
 }): string {
   const notes = imageNotesBlock(input.imageNotes);
@@ -398,4 +451,58 @@ export function analyseSystemBlocks(input: {
     ...(notes ? [notes] : []),
     ...(input.visualFollows ? [ANALYSE_VISUAL_LINE] : []),
   ];
+}
+
+/** A list in the review's Markdown, or `none` when it is empty. */
+function reviewList(items: readonly string[]): string[] {
+  return items.length ? items.map((item) => `- ${item}`) : ['- none'];
+}
+
+/**
+ * Olivia's plan on her approval gate (workflows R44), in the user's words:
+ * the question as planned, the measures, entities, scope and assumptions.
+ */
+export function planReview(plan: Plan): string {
+  return [
+    `**Question:** ${plan.question}`,
+    '',
+    '**Measures**',
+    ...reviewList(plan.measures),
+    '',
+    '**Entities**',
+    ...reviewList(plan.entities),
+    '',
+    `**Scope:** ${plan.scope || 'none given'}`,
+    '',
+    '**Assumptions**',
+    ...reviewList(plan.assumptions),
+  ].join('\n');
+}
+
+/** The most queries Michael's review lists. */
+const REVIEW_QUERIES_SHOWN = 12;
+
+/**
+ * Michael's analysis on its approval gate (workflows R44): each query he
+ * ran, why and what came back, then his own note.
+ */
+export function analysisReview(outcome: {
+  queries: readonly AnalyseQuery[];
+  text: string;
+}): string {
+  const lines = outcome.queries
+    .slice(0, REVIEW_QUERIES_SHOWN)
+    .map((query, index) => {
+      const facts = query.error
+        ? `failed: ${query.error}`
+        : `${query.rowCount.toLocaleString('en-US')} rows${query.truncated ? ', cut at its row limit' : ''}`;
+      return `${index + 1}. ${query.rationale ?? 'A query'} (${facts})`;
+    });
+  const more = outcome.queries.length - REVIEW_QUERIES_SHOWN;
+  return [
+    `**Queries run:** ${outcome.queries.length}`,
+    ...lines,
+    ...(more > 0 ? [`…and ${more} more.`] : []),
+    ...(outcome.text.trim() ? ['', '**His note**', outcome.text.trim()] : []),
+  ].join('\n');
 }

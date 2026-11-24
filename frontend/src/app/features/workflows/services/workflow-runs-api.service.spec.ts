@@ -190,6 +190,28 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     expect(steps[0]).toEqual(full as WorkflowRunStep);
   });
 
+  it('reports a queued frame between the run and its first step', async () => {
+    fetchSpy.and.resolveTo(
+      sseResponse(
+        { type: 'run', runId: 'r1', workflowId: 'answer-business-question' },
+        { type: 'queued' },
+        { type: 'step', id: 'plan', title: 'Plan', status: 'running' },
+        { type: 'done', run: RUN },
+      ),
+    );
+    const seen: string[] = [];
+    await service.streamRun(
+      'answer-business-question',
+      { input: { question: 'Q' } },
+      {
+        onRun: () => seen.push('run'),
+        onQueued: () => seen.push('queued'),
+        onStep: (step) => seen.push(`step:${step.id}`),
+      },
+    );
+    expect(seen).toEqual(['run', 'queued', 'step:plan']);
+  });
+
   it("reports a refusal with the server's message, before anything streams", async () => {
     fetchSpy.and.resolveTo(
       new Response(
@@ -761,5 +783,40 @@ describe('WorkflowRunsApiService, a run input image (api.md 151)', () => {
     expect(service.inputImageUrl('run 1', 'inputs/images/1.png')).toBe(
       `${API_BASE_URL}/workflow-runs/run%201/input-image?path=inputs%2Fimages%2F1.png`,
     );
+  });
+});
+
+describe('WorkflowRunsApiService, archive and unarchive (api.md 120, 159, 160)', () => {
+  let service: WorkflowRunsApiService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(WorkflowRunsApiService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('lists archived runs with ?archived=true and the default without', () => {
+    service.list().subscribe();
+    http.expectOne((r) => r.urlWithParams.endsWith('/workflow-runs')).flush({ runs: [] });
+    service.list({ archived: true }).subscribe();
+    http
+      .expectOne((r) => r.urlWithParams.endsWith('/workflow-runs?archived=true'))
+      .flush({ runs: [] });
+  });
+
+  it('archives and unarchives with a POST', () => {
+    service.archive('run 1').subscribe();
+    const archive = http.expectOne((r) => r.url.endsWith('/workflow-runs/run%201/archive'));
+    expect(archive.request.method).toBe('POST');
+    archive.flush({ ok: true, conversationId: 'run 1', archived: 2 });
+    service.unarchive('run 1').subscribe();
+    const unarchive = http.expectOne((r) => r.url.endsWith('/workflow-runs/run%201/unarchive'));
+    expect(unarchive.request.method).toBe('POST');
+    unarchive.flush({ ok: true, conversationId: 'run 1', unarchived: 2 });
   });
 });

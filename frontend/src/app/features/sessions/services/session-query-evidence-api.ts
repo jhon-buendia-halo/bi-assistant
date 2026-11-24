@@ -48,9 +48,18 @@ export class SessionQueryEvidenceApi implements QueryEvidenceApi {
     () => this.target,
     ({ ref, message }) => this.show(ref, message),
     {
-      prepare: (t) => this.withRef(t, this.sessions.prepareEvidence(t.sessionId, t.message)),
-      explain: (t, i) =>
-        this.withRef(t, this.sessions.explainQuery(t.sessionId, t.message, i)),
+      prepare: (t) =>
+        this.withRef(t, this.sessions.prepareEvidence(t.sessionId, t.message)),
+      explain: (t, i, refresh) =>
+        this.withRef(
+          t,
+          this.sessions.explainQuery(t.sessionId, t.message, i, refresh),
+        ),
+      previewStep: (t, i, step) =>
+        this.withRef(
+          t,
+          this.sessions.previewQueryStep(t.sessionId, t.message, i, step),
+        ),
       countStages: (t, i) =>
         this.withRef(
           t,
@@ -66,7 +75,10 @@ export class SessionQueryEvidenceApi implements QueryEvidenceApi {
   );
 
   prepare = (): Observable<void> => this.api.prepare();
-  explain = (index: number): Observable<void> => this.api.explain(index);
+  explain = (index: number, refresh?: boolean): Observable<void> =>
+    this.api.explain(index, refresh);
+  previewStep = (index: number, step: number): Observable<void> =>
+    this.api.previewStep(index, step);
   countStages = (index: number): Observable<void> =>
     this.api.countStages(index);
   rerun = (index: number): Observable<QueryRerunResult> =>

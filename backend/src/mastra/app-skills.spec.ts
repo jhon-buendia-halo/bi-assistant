@@ -450,6 +450,8 @@ describe('skill folders', () => {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const fresh = require('./app-skills') as typeof import('./app-skills');
         expect([...fresh.appSkills().keys()].sort()).toEqual([
+          'avery-playbooks',
+          'conversation-export',
           'curated-knowledge',
           'data-readiness',
           'interactive-visuals',
@@ -463,6 +465,17 @@ describe('skill folders', () => {
         expect(
           fresh.catalogSkills('insights-analyst').map((skill) => skill.name),
         ).toEqual(['curated-knowledge', 'result-validation', 'sql-analysis']);
+        const [playbooks] = fresh.catalogSkills('chief-of-staff');
+        expect(playbooks.name).toBe('avery-playbooks');
+        expect(Object.keys(fresh.skillReferences(playbooks)).sort()).toEqual([
+          'reference/ambiguous.md',
+          'reference/dashboard.md',
+          'reference/export.md',
+          'reference/failed-check.md',
+          'reference/no-answer.md',
+          'reference/period-change.md',
+          'reference/ranking.md',
+        ]);
       });
     } finally {
       if (saved === undefined) delete process.env.APP_DATA_DIR;

@@ -6,9 +6,9 @@
  * 1.23.35 (`seq-text-demo`, `deep-analysis`, `agent:assistant`) and
  * sessions bound to them still list and read as plain runs and sessions,
  * their files served from their workspace, and cannot run again; after the
- * backend restarts, a run it was killed in is `failed`, an orphan run
- * workspace is gone, and a stored run is still the context of a follow-up
- * run.
+ * backend restarts, a run it was killed in is queued again and starts from
+ * scratch (its second attempt) until it succeeds, an orphan run workspace
+ * is gone, and a stored run is still the context of a follow-up run.
  *
  * Needs no Postgres: the dataset points at a closed port, and the stub model
  * calls no tool. Set `WORKFLOW_RUN_HISTORY_TRANSCRIPT=<file>` to write the
@@ -50,6 +50,8 @@ interface WireRun {
   workflowId: string;
   workflowName: string;
   status: string;
+  attempts?: number;
+  queuedAt?: string;
   question?: string;
   error?: string;
   answer?: { role: string; content: string };
@@ -279,7 +281,11 @@ describe('Stored runs: the run history API (API)', () => {
         ? held
         : undefined;
     const pending = runStream('answer-business-question', {
-      input: { question: HOLD_QUESTION, datasets: ['World Cup Core'] },
+      input: {
+        question: HOLD_QUESTION,
+        datasets: ['World Cup Core'],
+        approveSteps: false,
+      },
     });
     await waitForModelCall(HOLD_QUESTION);
     const listedWhileRunning = (
@@ -325,8 +331,12 @@ describe('Stored runs: the run history API (API)', () => {
         title: HOLD_QUESTION,
         startedAt: run.startedAt,
         finishedAt: run.finishedAt,
+        // Accepted queued, then started once (api.md 119).
+        queuedAt: run.queuedAt,
+        attempts: 1,
       },
     ]);
+    expect(run.queuedAt).toEqual(expect.any(String));
     const other = (
       await http().get('/workflow-runs?workflowId=seq-text-demo').expect(200)
     ).body as { runs: unknown[] };
@@ -481,7 +491,11 @@ describe('Stored runs: the run history API (API)', () => {
 
     it('a v2 run may continue from one with an answer; one without is refused clearly', async () => {
       const followUp = await runStream('answer-business-question', {
-        input: { question: 'And why now?', datasets: ['World Cup Core'] },
+        input: {
+          question: 'And why now?',
+          datasets: ['World Cup Core'],
+          approveSteps: false,
+        },
         context: { fromRunId: 'old-deep' },
       });
       expect(followUp.status).toBe(200);
@@ -492,7 +506,11 @@ describe('Stored runs: the run history API (API)', () => {
       const refused = await http()
         .post('/workflows/answer-business-question/runs/stream')
         .send({
-          input: { question: 'And?', datasets: ['World Cup Core'] },
+          input: {
+            question: 'And?',
+            datasets: ['World Cup Core'],
+            approveSteps: false,
+          },
           context: { fromRunId: 'old-seq' },
         })
         .expect(400);
@@ -522,9 +540,13 @@ describe('Stored runs: the run history API (API)', () => {
     });
   });
 
-  it('after a restart: a run the app was killed in is failed, an orphan run workspace is gone, and a stored run is still context', async () => {
+  it('after a restart: a run the app was killed in starts again from scratch and succeeds, an orphan run workspace is gone, and a stored run is still context', async () => {
     const first = await runStream('answer-business-question', {
-      input: { question: 'Who hosted in 2002?', datasets: ['World Cup Core'] },
+      input: {
+        question: 'Who hosted in 2002?',
+        datasets: ['World Cup Core'],
+        approveSteps: false,
+      },
     });
     const firstId = first.frames[0].runId!;
     expect(first.frames.at(-1)!.type).toBe('done');
@@ -543,7 +565,11 @@ describe('Stored runs: the run history API (API)', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input: { question: 'Hold this one', datasets: ['World Cup Core'] },
+          input: {
+            question: 'Hold this one',
+            datasets: ['World Cup Core'],
+            approveSteps: false,
+          },
         }),
         signal: controller.signal,
       },
@@ -565,22 +591,48 @@ describe('Stored runs: the run history API (API)', () => {
     stub.hold = undefined;
     mkdirSync(workspace('run-orphan'), { recursive: true });
 
+    const asked = stub.requests.length;
     backend = await boot(dataDir);
 
-    const recovered = (await http().get(`/workflow-runs/${cut.id}`).expect(200))
-      .body as WireRun;
+    // Queued again at start-up, it starts once the app is up and runs to
+    // its end on its second attempt.
+    const read = async () =>
+      (await http().get(`/workflow-runs/${cut.id}`).expect(200))
+        .body as WireRun;
+    let recovered = await read();
+    const deadline = Date.now() + 30_000;
+    while (
+      (recovered.status === 'queued' || recovered.status === 'running') &&
+      Date.now() < deadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      recovered = await read();
+    }
     note(`GET /workflow-runs/${cut.id} (after a restart)`, recovered);
     expect(recovered).toMatchObject({
-      status: 'failed',
-      error: 'The app stopped before the run finished',
+      id: cut.id,
+      status: 'success',
+      attempts: 2,
+      question: 'Hold this one',
     });
+    expect(recovered.error).toBeUndefined();
+    expect(recovered.queuedAt).toBeDefined();
     expect(recovered.finishedAt).toBeDefined();
+    expect(
+      stub.requests
+        .slice(asked)
+        .some((req) => lastQuestion(req).includes('Hold this one')),
+    ).toBe(true);
     expect(existsSync(workspace(`run-${cut.id}`))).toBe(true);
     expect(existsSync(workspace('run-orphan'))).toBe(false);
 
     const before = stub.requests.length;
     const followUp = await runStream('answer-business-question', {
-      input: { question: 'And in 2006?', datasets: ['World Cup Core'] },
+      input: {
+        question: 'And in 2006?',
+        datasets: ['World Cup Core'],
+        approveSteps: false,
+      },
       context: { fromRunId: firstId },
     });
     expect(followUp.frames.at(-1)!.type).toBe('done');

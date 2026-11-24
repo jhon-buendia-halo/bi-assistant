@@ -172,7 +172,12 @@ export class WorkflowRunDock {
             ? 'chip chip-warning'
             : 'chip chip-info';
     return {
-      label: status === 'suspended' ? 'Waiting for you' : status,
+      label:
+        status === 'suspended'
+          ? 'Waiting for you'
+          : status === 'queued'
+            ? 'Queued'
+            : status,
       chip,
     };
   });

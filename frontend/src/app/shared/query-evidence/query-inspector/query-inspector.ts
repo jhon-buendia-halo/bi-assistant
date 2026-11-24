@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   ElementRef,
@@ -13,6 +14,7 @@ import {
   viewChild,
 } from '@angular/core';
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -66,6 +68,21 @@ interface FunnelStep {
   /** The count on the right, or null when the step has none. */
   count: string | null;
   tint: boolean;
+  /** Its rows can be shown: a statement to run, or (show) the query's own rows. */
+  previewable: boolean;
+}
+
+/** The rows shown under an open step: at most this many. */
+const STEP_ROWS_SHOWN = 5;
+
+/** What an open step shows under it (ui.md 4.12.2). */
+export interface StepRowsView {
+  columns: string[];
+  rows: Record<string, unknown>[];
+  /** `16 partidos after this step · showing the first 5`. */
+  caption: string;
+  /** The rows may not be the step's: their number differs from its verified count. */
+  differs: boolean;
 }
 
 function errorText(err: unknown): string {
@@ -85,7 +102,7 @@ function rowsLabel(count: number): string {
  */
 @Component({
   selector: 'app-query-inspector',
-  imports: [LucideAngularModule, QueryResult],
+  imports: [LucideAngularModule, NgTemplateOutlet, QueryResult],
   templateUrl: './query-inspector.html',
   host: {
     class: 'flex h-full min-h-0 flex-col bg-surface',
@@ -97,6 +114,7 @@ function rowsLabel(count: number): string {
   },
 })
 export class QueryInspector {
+  protected readonly ChevronDown = ChevronDown;
   protected readonly ChevronLeft = ChevronLeft;
   protected readonly ChevronRight = ChevronRight;
   protected readonly Copy = Copy;
@@ -147,7 +165,8 @@ export class QueryInspector {
     () => this.message().data?.[this.index()] ?? null,
   );
   protected readonly evidence = computed<QueryEvidence | null>(
-    () => this.message().evidence?.find((e) => e.index === this.index()) ?? null,
+    () =>
+      this.message().evidence?.find((e) => e.index === this.index()) ?? null,
   );
   protected readonly failed = computed(() => !!this.record()?.error);
   protected readonly label = computed(() => sourceLabel(this.index()));
@@ -192,7 +211,9 @@ export class QueryInspector {
   });
   protected readonly columns = computed(() => {
     const rerun = this.rerun();
-    return this.showRerun() && rerun !== null ? rerun.columns : this.storedColumns();
+    return this.showRerun() && rerun !== null
+      ? rerun.columns
+      : this.storedColumns();
   });
   protected readonly resultNote = computed(() => {
     const rerun = this.rerun();
@@ -253,7 +274,9 @@ export class QueryInspector {
     if (explanation === null) return [];
     const verified = this.verified();
     const before = explanation.steps.filter((s) => s.verb !== 'show');
-    const lastBefore = [...before].reverse().find((s) => s.rows !== undefined)?.rows;
+    const lastBefore = [...before]
+      .reverse()
+      .find((s) => s.rows !== undefined)?.rows;
     return explanation.steps.map((step, i) => {
       let count: string | null = null;
       if (step.rows !== undefined) {
@@ -272,24 +295,174 @@ export class QueryInspector {
         number: i + 1,
         label: VERB_LABELS[step.verb] ?? step.verb,
         // The Show step's text is written whole by code ("Show the first 100").
-        text: step.verb === 'show' ? step.text.replace(/^Show\s+/, '') : step.text,
+        text:
+          step.verb === 'show' ? step.text.replace(/^Show\s+/, '') : step.text,
         count,
         tint: step.verb === 'show',
+        previewable:
+          step.verb === 'show'
+            ? (this.record()?.rows?.length ?? 0) > 0
+            : !!step.previewSql,
       };
     });
   });
+
+  /** The steps opened to show their rows, for the query shown; another query closes them. */
+  protected readonly openSteps = linkedSignal<number, ReadonlySet<number>>({
+    source: this.index,
+    computation: () => new Set<number>(),
+  });
+  /** The steps whose rows are being read. */
+  protected readonly previewing = signal<ReadonlySet<string>>(new Set());
+  /** A step whose rows could not be read, by `<query>:<step>`. */
+  protected readonly previewErrors = signal<ReadonlyMap<string, string>>(
+    new Map(),
+  );
+  /** An explanation from before step previews: explaining again gives them. */
+  protected readonly canExplainAgain = computed(() => {
+    const explanation = this.explanation();
+    return (
+      explanation !== null &&
+      !this.failed() &&
+      this.record()?.tool !== 'sample_rows' &&
+      !explanation.steps.some((s) => s.verb !== 'show' && !!s.previewSql)
+    );
+  });
+  protected readonly explainingAgain = signal(false);
+
+  protected isOpen(step: number): boolean {
+    return this.openSteps().has(step);
+  }
+
+  protected isPreviewing(step: number): boolean {
+    return this.previewing().has(`${this.index()}:${step}`);
+  }
+
+  protected previewError(step: number): string | null {
+    return this.previewErrors().get(`${this.index()}:${step}`) ?? null;
+  }
+
+  /**
+   * Open or close a step's rows. Opening a step whose rows were never read
+   * asks the host to read them (one statement); the show step's rows are the
+   * query's own, read from the answer.
+   */
+  protected toggleStep(item: FunnelStep, step: number): void {
+    const open = new Set(this.openSteps());
+    if (open.has(step)) {
+      open.delete(step);
+      this.openSteps.set(open);
+      return;
+    }
+    open.add(step);
+    this.openSteps.set(open);
+    if (item.step.verb === 'show' || item.step.preview) return;
+    const index = this.index();
+    const key = `${index}:${step}`;
+    if (this.previewing().has(key)) return;
+    this.previewing.update((keys) => new Set(keys).add(key));
+    this.previewErrors.update((errors) => {
+      const next = new Map(errors);
+      next.delete(key);
+      return next;
+    });
+    const done = () =>
+      this.previewing.update((keys) => {
+        const next = new Set(keys);
+        next.delete(key);
+        return next;
+      });
+    this.api.previewStep(index, step).subscribe({
+      next: done,
+      error: (err) => {
+        done();
+        this.previewErrors.update((errors) =>
+          new Map(errors).set(key, errorText(err)),
+        );
+      },
+    });
+  }
+
+  /** What an open step shows: its first rows and what they are; null until read. */
+  protected stepRows(item: FunnelStep): StepRowsView | null {
+    const step = item.step;
+    const unit = step.unit ?? 'rows';
+    const record = this.record();
+    const source =
+      step.verb === 'show'
+        ? record?.rows?.length
+          ? {
+              columns: record.columns?.length
+                ? record.columns
+                : Object.keys(record.rows[0]),
+              rows: record.rows,
+              total: record.rowCount ?? record.rows.length,
+            }
+          : null
+        : step.preview
+          ? {
+              columns: step.preview.columns,
+              rows: step.preview.rows,
+              total:
+                step.preview.total ??
+                step.rows ??
+                (step.preview.more ? undefined : step.preview.rows.length),
+            }
+          : null;
+    if (!source) return null;
+    const shown = source.rows.slice(0, STEP_ROWS_SHOWN);
+    const total = source.total;
+    const caption =
+      shown.length === 0
+        ? 'No rows after this step.'
+        : [
+            total !== undefined
+              ? `${formatCount(total)} ${total === 1 && unit === 'rows' ? 'row' : unit} after this step`
+              : `More than ${formatCount(source.rows.length)} ${unit} after this step`,
+            total === undefined || total > shown.length
+              ? `showing the first ${shown.length}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+    return {
+      columns: source.columns,
+      rows: shown,
+      caption,
+      differs: step.verb !== 'show' && step.preview?.check === 'differs',
+    };
+  }
+
+  /** Explain the query again, so its steps can show their rows. */
+  protected explainAgain(): void {
+    const index = this.index();
+    this.explainingAgain.set(true);
+    this.api.explain(index, true).subscribe({
+      next: () => this.explainingAgain.set(false),
+      error: (err) => {
+        this.explainingAgain.set(false);
+        this.explainError.set({ index, message: errorText(err) });
+      },
+    });
+  }
   protected readonly stepsError = computed(() => {
     const error = this.explainError();
-    return error !== null && error.index === this.index() ? error.message : null;
+    return error !== null && error.index === this.index()
+      ? error.message
+      : null;
   });
 
   protected readonly canRerun = computed(
     () =>
-      !this.failed() && this.record()?.tool !== 'sample_rows' && this.sql() !== '',
+      !this.failed() &&
+      this.record()?.tool !== 'sample_rows' &&
+      this.sql() !== '',
   );
   protected readonly downloadLabel = computed(() => {
     const record = this.record();
-    const known = this.evidence()?.totalRows ?? (record?.truncated ? undefined : record?.rowCount);
+    const known =
+      this.evidence()?.totalRows ??
+      (record?.truncated ? undefined : record?.rowCount);
     return known !== undefined
       ? known === 1
         ? 'Download the row (CSV)'
@@ -326,8 +499,7 @@ export class QueryInspector {
   protected explain(index = this.index()): void {
     this.explainError.set(null);
     this.api.explain(index).subscribe({
-      error: (err) =>
-        this.explainError.set({ index, message: errorText(err) }),
+      error: (err) => this.explainError.set({ index, message: errorText(err) }),
     });
   }
 
@@ -341,11 +513,14 @@ export class QueryInspector {
       event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
     if (step === 0) return;
     event.preventDefault();
-    const next = TABS[(TABS.indexOf(this.tab()) + step + TABS.length) % TABS.length];
+    const next =
+      TABS[(TABS.indexOf(this.tab()) + step + TABS.length) % TABS.length];
     this.tab.set(next);
     queueMicrotask(() =>
       (event.currentTarget as HTMLElement)
-        .querySelector<HTMLElement>(`[data-testid="query-inspector-tab-${next}"]`)
+        .querySelector<HTMLElement>(
+          `[data-testid="query-inspector-tab-${next}"]`,
+        )
         ?.focus(),
     );
   }

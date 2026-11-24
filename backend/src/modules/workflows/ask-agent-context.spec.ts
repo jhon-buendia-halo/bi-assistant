@@ -239,12 +239,8 @@ describe('askHostOf (agents.md 5.21)', () => {
     });
   });
 
-  it('asks Olivia, Nathan and Zoe as the step alone', () => {
-    for (const step of [
-      'plan',
-      'interpret-follow-up',
-      'read-images',
-    ] as const) {
+  it('asks Olivia and Zoe as the step alone', () => {
+    for (const step of ['plan', 'read-images'] as const) {
       expect(askHostOf(earlierRun(), step)).toEqual({
         ask: { step },
         continuesThreads: true,

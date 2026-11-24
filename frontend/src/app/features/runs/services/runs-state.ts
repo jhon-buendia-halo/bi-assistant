@@ -10,6 +10,7 @@ import { WorkflowDesigner } from '../../workflows/services/workflow-designer.ser
 import { WorkflowRunsApiService } from '../../workflows/services/workflow-runs-api.service';
 import { WorkflowsApiService } from '../../workflows/services/workflows-api.service';
 import { WorkflowsNavState } from '../../workflows/services/workflows-nav-state';
+import { isLiveRun } from '../../workflows/services/workflows.util';
 
 /** The two tabs of the Runs page (app-shell R3, R46). */
 export type RunsTab = 'runs' | 'past-chats';
@@ -30,6 +31,8 @@ export class RunsState {
   readonly tab = signal<RunsTab>('runs');
   readonly runs = signal<WorkflowRunSummary[]>([]);
   readonly runsLoaded = signal(false);
+  /** The Runs list shows only archived runs (api.md 120 `?archived=true`). */
+  readonly showArchived = signal(false);
   readonly deletingRun = signal<string | null>(null);
 
   readonly activeRun = signal<WorkflowRun | null>(null);
@@ -50,9 +53,14 @@ export class RunsState {
     this.tab.set(tab);
   }
 
+  setShowArchived(on: boolean): void {
+    this.showArchived.set(on);
+    this.loadRuns();
+  }
+
   loadRuns(): void {
     this.api
-      .list()
+      .list(this.showArchived() ? { archived: true } : {})
       .pipe(
         retry({
           count: 12,
@@ -135,7 +143,7 @@ export class RunsState {
   }
 
   deleteRun(run: WorkflowRunSummary): void {
-    if (run.status === 'running') {
+    if (isLiveRun(run.status)) {
       this.toast.error('Stop the run before deleting it');
       return;
     }

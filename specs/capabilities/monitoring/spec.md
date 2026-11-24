@@ -1,14 +1,14 @@
 # Monitoring
 
-The **Monitoring** area shows every LLM call the app's agents make, so a person can spot the slow, failing or expensive ones without a developer tool. It also shows what the agents did across a whole session. It has two tabs and two detail pages. The **LLM calls** tab is a filterable, paged table of calls, newest first. A **call page** opens from a row and shows the call's facts, what filled its **context window** (seven boxes, each tagged by who owns it, with an estimated size and the exact text), and the model steps of the run. The **Sessions** tab is a filterable, paged table of sessions, most recent first. A **session page** opens from a row and shows the **session flow**: each question with the path the agent took (model requests and tool calls, in order), its answer, and, on demand, a **waterfall** of the turn's timeline.
+The **Monitoring** area shows every LLM call the app's agents make, so a person can spot the slow, failing or expensive ones without a developer tool. It also shows what the agents did across a whole session. It has three tabs and two detail pages. The **LLM calls** tab is a filterable, paged table of calls, newest first. A **call page** opens from a row and shows the call's facts, what filled its **context window** (seven boxes, each tagged by who owns it, with an estimated size and the exact text), and the model steps of the run. The **Sessions** tab is a filterable, paged table of sessions, most recent first. The **Agent quality** tab shows, for each agent persona, how it scores on its evals and how it behaves in live calls. A **session page** opens from a row and shows the **session flow**: each question with the path the agent took (model requests and tool calls, in order), its answer, and, on demand, a **waterfall** of the turn's timeline.
 
 The app records nothing of its own for this. It reads the trace store the agent framework already writes (ADR-0038). The area is read-only: it edits no prices, deletes and exports no calls, and sends nothing anywhere.
 
 ## Concepts
 
-Defined in [../../product/glossary.md](../../product/glossary.md): LLM call, context window box, session, session flow, waterfall, framework span, dataset, agent, assistant.
+Defined in [../../product/glossary.md](../../product/glossary.md): LLM call, eval call, live call, pass^3, context window box, session, session flow, waterfall, framework span, dataset, agent, assistant.
 
-Capability-local vocabulary is limited to the UI words "LLM calls", "Runs", "Clear filters", "Context window", "Steps", "Show text", "Hide text", "Open call", "Open timeline", "Hide timeline", "Show more" and "Show framework spans".
+Capability-local vocabulary is limited to the UI words "LLM calls", "Runs", "Agent quality", "Clear filters", "Context window", "Steps", "Show text", "Hide text", "Open call", "Open timeline", "Hide timeline", "Show more" and "Show framework spans".
 
 A **turn** is one question of a session and the agent's work to answer it. In the trace store a turn is one trace (`traceId`), and the session is the `threadId` its agent run carries ([../../system/data-model.md](../../system/data-model.md) 1.2).
 
@@ -75,7 +75,7 @@ General
 - R25. The Monitoring page SHALL work in the light and dark themes, and its controls SHALL have accessible names (each filter, the table, the row buttons, the paging controls and the box toggles).
 
 Tabs
-- R26. The Monitoring page SHALL show two tabs under its heading, **LLM calls** and **Runs** (`role="tablist"`, the arrow keys move between them). **LLM calls** is chosen when the page opens for the first time. The note under the heading follows the tab: "LLM calls made by the app's agent personas, newest first." or "Runs with recorded agent persona calls, most recent first.". The chosen tab, and each tab's own filters, page and page size, SHALL be kept while the app runs, so leaving to a call page or a session page and coming back finds them as they were left.
+- R26. The Monitoring page SHALL show three tabs under its heading, **LLM calls**, **Runs** and **Agent quality** (`role="tablist"`). ArrowRight and ArrowLeft SHALL move to the next and previous tab and wrap around (from **Agent quality** to **LLM calls** and back); Home and End SHALL choose the first and the last. **LLM calls** is chosen when the page opens for the first time. The note under the heading follows the tab: "LLM calls made by the app's agent personas, newest first.", "Runs with recorded agent persona calls, most recent first." or "How each agent persona scores on its evals and behaves in live calls.". The chosen tab, and each tab's own filters, page and page size, SHALL be kept while the app runs, so leaving to a call page or a session page and coming back finds them as they were left.
 
 The Sessions table
 - R27. The **Runs** tab (named **Sessions** until 2026-11-11, roadmap 1.23.21; its test ids keep `sessions`) SHALL list **sessions**, which the tab and the page now call runs: one row per session that has at least one recorded agent run, read from the trace store (ADR-0038). A session is a distinct `threadId` on the agent runs. Rows SHALL be ordered by last activity, newest first. A session whose chat was deleted, or that was a preview or an eval, is listed too.
@@ -120,6 +120,19 @@ Costs (usage and cost)
 - R56. **Most expensive runs** SHALL list the period's 10 costliest workflow runs, highest first: the run's title (its question, as the run history titles it; "Run" and the first 8 characters of its id for a deleted run), its workflow, the start of its first call in the period, its calls and its cost. Choosing a stored run SHALL open it as the Runs page does ([../workflows/spec.md](../workflows/spec.md) R19); a deleted run is not a link.
 - R57. **Where the cost goes** SHALL split the period's cost into **Input** (uncached input tokens at the input price), **Cache writes**, **Cache reads** and **Output**, priced as in R5, each with its cost, its share of the total and its tokens, and SHALL say how much the cache reads saved against the full input price when they saved anything.
 
+Agent quality (2026-11-22, ADR-0054, roadmap plan `monitoring-agent-quality`)
+- R58. The **Agent quality** tab SHALL list one row per built-in agent persona that has at least one eval set ([../agents-evals/spec.md](../agents-evals/spec.md) R26, R34), sorted by persona name. A row SHALL show: **Agent persona** (its name, with its role muted below), **Eval pass rate (last run)** (R62), **pass^3** (R63), **Tool calls per question** (one decimal), **Tool errors** (`x %`), **p95 latency (live)** (`17.3 s`), **Cost per call (live)** (`$0.0213`) and **Last eval** (`Nov 21`). A value that is not known is shown as a dash.
+- R59. The eval figures SHALL come from the agent persona's eval runs ([../agents-evals/spec.md](../agents-evals/spec.md) R264) and the live figures from its LLM calls outside eval runs. A model call is an **eval call** when any span of its trace carries `metadata."eval-run-id"` (ADR-0054, [../agents-evals/spec.md](../agents-evals/spec.md) R266); every other call is a **live call**, including calls recorded before the marker existed. The live figures SHALL leave the eval calls out. The tab reads eval runs and the trace store and changes neither (R24).
+- R60. The filters SHALL be **Agent persona** (`All agent personas`), **Eval set** (`All sets`; its options narrow to the chosen agent persona's sets, and choosing another agent persona clears the set), **Model** (`All models`), **Date** (Last 7 days, **Last 30 days** by default, Last 90 days, All time; a period starts at local midnight of its first day and ends now, as the Costs page, R48) and **Clear filters** (resets the defaults; disabled at the defaults). Their options (the facets) SHALL NOT be narrowed by the filters: the agent personas with sets, every set, and the models of their runs plus the models of their live calls, sorted, with `Unknown` last.
+- R61. **Which runs count.** Only runs with status `completed`. An old run's set is the stored one; with none stored, the single set of the agent whose cases hold every one of the run's case ids, and none when no single set does (such a run counts only under All sets). Its model is the stored one, else `Unknown`. A run is in scope when its set matches the Eval set filter, its finish time (start time when none) is inside the period, and its model matches the Model filter. **M**, the model the eval figures are on, is the Model filter when set, else the model of the newest run in scope; the figures are over the runs in scope on M, newest first.
+- R62. **Eval pass rate (last run)** SHALL be the newest run's passed questions over its questions, shown as `<passed>/<total> · <rate> %` rounded to a whole number, in a chip that is success when the rate is exactly 100 %, warning from 80 %, else danger. **Last eval** is that run's finish date.
+- R63. **pass^3** is the share of questions that passed in each of their last 3 runs on the same model M, not the unbiased estimator of the literature. Runs with model `Unknown` are never pooled: the cell is a dash with the tooltip `Model not recorded for these runs`. Otherwise the questions counted are those of the runs on M that are still in the agent persona's current sets (only the chosen set's with the Eval set filter); a question counts once it has 3 results on M, and the figure is the share of those whose 3 latest results all passed, with the muted `(k of N)` when k of the N questions have 3. With no question counted the cell reads `needs 3 runs (n of 3)`, n being the most results any question has, up to 2. The chip has the tones of R62.
+- R64. **Tool calls per question** SHALL be the tool calls of the runs on M over their question results, and **Tool errors** the share of those calls that ended with an error; each is a dash when its denominator is 0.
+- R65. **p95 latency (live)** SHALL be the nearest-rank 95th percentile of the duration of the agent persona's finished live calls in the period (succeeded or failed; running ones excluded), and **Cost per call (live)** the mean estimated cost of its priced live calls (R5); a model with no price adds no cost, and a call of an unpriced model does not count in the mean. With the Model filter, only calls of that model count (`Unknown` matches none). With no live call the cell is a dash with the tooltip `No live calls in this period`.
+- R66. A row with no completed run ever SHALL show `No eval run yet` in the pass-rate cell and dashes in the other eval cells; with runs but none matching the filters, `No eval run matches these filters`. While loading the tab SHALL show `Loading agent quality…`; a failed load shows an inline alert with the backend's message; with no row, `No agent persona matches these filters.`. A legend SHALL read: `pass^3: share of questions that passed in each of their last 3 runs on the same model. Eval figures come from the agent persona's eval runs; live figures from its LLM calls outside eval runs. Choose a row to open its eval executions.`
+- R67. Choosing a row (click or Enter) SHALL open that agent persona's page on its **Evals** tab, sub-tab **Executions** ([../agents-evals/spec.md](../agents-evals/spec.md) R34), with **Agent personas** the current rail item.
+- R68. `GET /monitoring/agent-quality` SHALL reject a From or To that is not a date (`From is not a valid date`, `To is not a valid date`) and a From after To (`From must not be after To`) with HTTP 400. An unknown agent, set or model is not an error: it matches nothing. A data dir with no trace table gives live figures of 0 calls. The endpoint is read-only (R24).
+
 ## Edge cases and errors
 
 - Fresh data dir, or a trace store with no table yet: "No LLM calls yet." (R12).
@@ -139,23 +152,25 @@ Costs (usage and cost)
 - A turn with only framework spans besides its agent run: the waterfall shows the agent row and "(N hidden)" (R40).
 - Costs page with calls of a model that has no price: they count in the calls, the tiles say how many have no cost, and the model ranks with "No price" (R47, R49, R51).
 - Costs page on a period with no calls: the tiles at $0.00, "No LLM calls in this period." and the monthly chart (R53).
+- Agent quality: an agent persona with sets but no completed run shows `No eval run yet` (R66); runs recorded before the model was stored have model `Unknown` and no pass^3 (R61, R63); a set filter keeps only that set's runs and cases (R61, R63); fewer than 3 runs of a question show `needs 3 runs (n of 3)` (R63); a model with no price adds no cost to the live cost per call (R65).
 
 ## Contracts
 
-- Endpoints: `GET /monitoring/llm-calls`, `GET /monitoring/llm-calls/:id`, `GET /monitoring/sessions`, `GET /monitoring/sessions/:id`, `GET /monitoring/traces/:traceId` and `GET /monitoring/usage` (the Costs page). See [../../system/api.md](../../system/api.md) (section 2.8c).
-- Source data: the `span_events` table of `observability.duckdb`, read in-process, no new collection. See [../../system/data-model.md](../../system/data-model.md) (1.2).
-- Decision: [../../system/architecture.md](../../system/architecture.md) ADR-0038.
+- Endpoints: `GET /monitoring/llm-calls`, `GET /monitoring/llm-calls/:id`, `GET /monitoring/sessions`, `GET /monitoring/sessions/:id`, `GET /monitoring/traces/:traceId`, `GET /monitoring/usage` (the Costs page) and `GET /monitoring/agent-quality` (the Agent quality tab, #163). See [../../system/api.md](../../system/api.md) (section 2.8c).
+- Source data: the `span_events` table of `observability.duckdb`, read in-process, and, for Agent quality, the `eval_runs` collection read-only; no new collection. See [../../system/data-model.md](../../system/data-model.md) (1.2).
+- Decision: [../../system/architecture.md](../../system/architecture.md) ADR-0038 and ADR-0054 (the eval marker and Agent quality).
 - Related: [../app-shell/spec.md](../app-shell/spec.md) R3b (the rail item and the page), [../../system/agents.md](../../system/agents.md) 4.1 (the per-turn context blocks that fill the Dataset box), [../developer-settings/spec.md](../developer-settings/spec.md) (the opt-in trace viewers this area does not depend on).
 
 ## UI
 
 Placement: the **Monitoring** item on the navigation rail opens the Monitoring page ([../app-shell/spec.md](../app-shell/spec.md) R3b, [../../system/ui.md](../../system/ui.md) 4.8d). A row opens the call page under a **Monitoring** back control ([../../system/ui.md](../../system/ui.md) 4.8e). A session row opens the session page under a **Monitoring** back control ([../../system/ui.md](../../system/ui.md) 4.8f, 4.8g). Monitoring stays the current rail item on all of them.
 
-- Monitoring page: heading "Monitoring", the tabs **LLM calls** and **Runs**, the note that follows the tab, then the tab's content.
+- Monitoring page: heading "Monitoring", the tabs **LLM calls**, **Runs** and **Agent quality**, the note that follows the tab, then the tab's content.
 - LLM calls tab: a filter bar (Agent, Model, Provider, Status, Session, Date, **Clear filters**), the table, and the footer with the range, **Rows per page**, **Previous** and **Next**.
 - Call page: heading, the facts grid, the error box when failed, **Context window** (caption, stacked bar, legend, seven boxes), **Steps**.
 - Runs tab: a filter bar (Agent, Date, **Clear filters**), the table and the same footer.
 - Session page: heading, the totals strip, **Open chat**, then each turn (question, meta line, path, answer, **Open timeline**) and the waterfall under the turn that opened it.
+- Agent quality tab: a filter bar (Agent persona, Eval set, Model, Date, **Clear filters**), the table (one row per agent persona with sets) and the legend.
 - Costs page (rail **Costs**, [../../system/ui.md](../../system/ui.md) 4.8j): heading "Costs", the note and **Period**, the five tiles, **Daily cost**, **Monthly cost**, **Cost per user journey run**, then **Most expensive runs** beside **Where the cost goes**, then **By model** beside **By agent persona** on a wide window.
 
 ## Flows
@@ -325,6 +340,56 @@ Feature: Runs in Monitoring
     Then the call is listed under the run "Assistant: <title>"
     When I open the call and follow its run link
     Then I see the run with one turn, its path and its waterfall
+
+```
+
+E2E: `frontend/e2e/monitoring-agent-quality.spec.ts`
+
+```gherkin
+Feature: Agent quality
+
+  Scenario: The tab shows its note and the three tabs cycle with the arrow keys
+    Given I open "Monitoring"
+    When I choose the "Agent quality" tab
+    Then I see the note "How each agent persona scores on its evals and behaves in live calls."
+    When I press ArrowRight on the "Agent quality" tab
+    Then the "LLM calls" tab is chosen
+    When I press ArrowLeft
+    Then the "Agent quality" tab is chosen
+
+  Scenario: An agent persona with no eval run shows No eval run yet
+    Given an agent persona has eval sets and no completed run
+    When I open the "Agent quality" tab
+    Then its row shows "No eval run yet" and dashes in the other eval cells
+
+  Scenario: After one eval run the row shows the pass rate and needs 3 runs
+    Given I ran the assistant's evals once on one question
+    When I open the "Agent quality" tab
+    Then the assistant's pass rate chip reads "<passed>/1 · <rate> %"
+    And its pass^3 reads "needs 3 runs (1 of 3)"
+    And its p95 latency and cost per call are dashes because its eval calls are not live calls
+
+  Scenario: A live run shows its agent persona's p95 latency
+    Given I ran Insights Analyst on a question
+    When I open the "Agent quality" tab
+    Then the Insights Analyst row shows a p95 latency in seconds
+
+  Scenario: The Model filter offers the model of the run
+    Given an eval run recorded its model
+    When I open the "Model" filter
+    Then it offers that model
+
+  Scenario: Clear filters restores the defaults
+    Given I chose a model and the period "All time"
+    When I click "Clear filters"
+    Then the filters are back to "All models" and "Last 30 days"
+    And "Clear filters" is disabled
+
+  Scenario: A row opens the agent persona's eval executions
+    Given the assistant has an eval run
+    When I choose the assistant's row
+    Then I see the Agent personas page on the Evals tab, sub-tab Executions, listing the run
+    And "Agent personas" is the current rail item
 ```
 
 ## Acceptance
@@ -338,5 +403,6 @@ Feature: Runs in Monitoring
 - A run's call is listed under `<workflow>: <title>`, offered in the Session filter, and its link opens the run's session page with one turn, its path and its waterfall (R45).
 - The Costs page's totals, daily, model, workflow and agent sums each equal the sum of the LLM calls of the period, a workflow run's calls (its step agents' included) count under its workflow and as one run, and the cost split adds up to the total (R47–R57); backend unit tests cover them on the real-shape fixture and pin the time-zone bucketing.
 - Back keeps the tab, filters and page, and a call opened from a session returns to it (R26, R43). Backend unit tests cover R27–R30, R33, R34, R36 and R38–R41 at service and controller level, pinned to the same real-shape fixture.
+- The Agent quality tab lists one row per agent persona with eval sets; after one eval run the assistant shows its pass rate, `needs 3 runs (1 of 3)` and dashes for the live columns, a live run shows p95 for its agent persona, the Model filter offers the run's model, and a row opens its Executions (R58–R68). Backend unit tests cover the formulas (R61–R65) and the 400 messages (R68) on the real-shape fixture, with eval-marked traces excluded from the live figures (R59).
 
 <!-- sources: backend/src/modules/monitoring/**, backend/src/mastra/storage.ts, frontend/src/app/features/monitoring/**, frontend/src/app/features/costs/**, frontend/src/app/app.html (monitoring, llm-call and costs views) -->

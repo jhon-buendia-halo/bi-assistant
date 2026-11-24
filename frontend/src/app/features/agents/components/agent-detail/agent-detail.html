@@ -213,6 +213,7 @@
           [agent]="agent"
           [library]="librarySkills()"
           [builtInSkills]="builtInSkills()"
+          [agentSkills]="skills()?.skills ?? null"
           (saved)="reloadAgent()"
         />
       </div>

@@ -4,7 +4,7 @@ import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DATASET } from './helpers/app-actions';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import { LlmStub, StubReply, StubRequest, startLlmStub } from './helpers/llm-stub';
-import { openRunTab, openWorkflowPage, runAnswer } from './helpers/run-ui';
+import { answerPickAsk, openRunTab, openWorkflowPage, runAnswer, sendRun } from './helpers/run-ui';
 import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
 
 /**
@@ -66,10 +66,9 @@ test.describe('Feature: Every workflow whose answer ran queries gets the query i
         async () => {
           await openWorkflowPage(page, 'data-readiness-assessment', 'Assess Data Readiness');
           await openRunTab(page);
-          await page
-            .getByTestId('workflow-input-dataset')
-            .selectOption({ label: WORLD_CUP_DATASET });
-          await page.getByTestId('workflow-run').click();
+          // Its question has a default: Send runs with it, after the agent asks for the dataset.
+          await sendRun(page);
+          await answerPickAsk(page, WORLD_CUP_DATASET, 'dataset');
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded', {
             timeout: 60_000,
           });

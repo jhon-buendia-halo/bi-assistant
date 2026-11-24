@@ -296,6 +296,11 @@ export class AgentDetail implements OnDestroy {
         return;
       this.pageState.requestedTab.set(null);
       this.activeTab.set(tab);
+      // Applied after the agent-change reset (which sets `questions`): this
+      // effect waits for `loading()` to clear, which that reset starts.
+      const sub = this.pageState.requestedEvalTab();
+      this.pageState.requestedEvalTab.set(null);
+      if (sub) untracked(() => this.selectEvalTab(sub));
     });
 
     // Keep the open question pointing at its latest result as polls land.

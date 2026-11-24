@@ -1,8 +1,21 @@
+import fs from 'node:fs';
 import type { Page } from '@playwright/test';
 import { test } from '../fixtures/app.fixture';
+import { videoSeconds } from './video-clock';
 
 const DEMO = process.env['DEMO'] === '1';
 const CAPTION_ID = 'qti-demo-caption';
+/**
+ * A walkthrough (scripts/walkthrough.mjs, skill walkthrough-video): each step
+ * is written as a subtitle cue to this JSON-lines file instead of being drawn
+ * on the page, its text taken from the narration file when it names the step.
+ */
+const CUES_FILE = process.env['WALKTHROUGH_CUES'];
+const NARRATION: Record<string, string> = process.env['WALKTHROUGH_NARRATION']
+  ? (JSON.parse(
+      fs.readFileSync(process.env['WALKTHROUGH_NARRATION'], 'utf8'),
+    ) as Record<string, string>)
+  : {};
 
 /**
  * Runs one Gherkin line of a scenario as a Playwright step:
@@ -20,6 +33,19 @@ export async function scenarioStep(
   body: () => Promise<void>,
 ): Promise<void> {
   await test.step(title, async () => {
+    if (DEMO && CUES_FILE) {
+      const start = videoSeconds(page);
+      await page.waitForTimeout(700);
+      await body();
+      await page.waitForTimeout(1200);
+      const cue = {
+        start,
+        end: videoSeconds(page),
+        text: NARRATION[title] ?? title,
+      };
+      fs.appendFileSync(CUES_FILE, `${JSON.stringify(cue)}\n`);
+      return;
+    }
     if (DEMO) await showCaption(page, title);
     await body();
     if (DEMO) await page.waitForTimeout(1200);

@@ -39,8 +39,10 @@ export interface RunVisualResult {
 
 /** What a streamed run reports (api.md 3.6), beside the agent turn's events. */
 export interface RunStreamHandlers extends AgentStreamHandlers {
-  /** First frame: the run started and is stored as `running`. */
+  /** First frame: the run was accepted and is stored (`queued`, then `running` once it starts). */
   onRun?: (run: { runId: string; workflowId: string }) => void;
+  /** No slot was free: the run waits `queued`; its step events follow once it starts. */
+  onQueued?: () => void;
   /** A step started (`running`) or ended. */
   onStep?: (step: WorkflowRunStep) => void;
   /** The run suspended: the question it waits on (api.md 3.6 `input-required`); `done` follows. */
@@ -143,10 +145,34 @@ export class WorkflowRunsApiService {
   private readonly http = inject(HttpClient);
 
   /** The run history, newest first (api.md 120). */
-  list(): Observable<{ runs: WorkflowRunSummary[] }> {
+  list(options: { archived?: boolean } = {}): Observable<{
+    runs: WorkflowRunSummary[];
+  }> {
     return this.http.get<{ runs: WorkflowRunSummary[] }>(
-      `${API_BASE_URL}/workflow-runs`,
+      `${API_BASE_URL}/workflow-runs${options.archived === true ? '?archived=true' : ''}`,
     );
+  }
+
+  /** Archive a run's whole conversation: hidden and read-only (api.md 159). */
+  archive(
+    id: string,
+  ): Observable<{ ok: boolean; conversationId: string; archived: number }> {
+    return this.http.post<{
+      ok: boolean;
+      conversationId: string;
+      archived: number;
+    }>(`${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/archive`, {});
+  }
+
+  /** Bring an archived conversation back (api.md 160). */
+  unarchive(
+    id: string,
+  ): Observable<{ ok: boolean; conversationId: string; unarchived: number }> {
+    return this.http.post<{
+      ok: boolean;
+      conversationId: string;
+      unarchived: number;
+    }>(`${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/unarchive`, {});
   }
 
   /** Delete a stored run with its workspace (api.md 122). */
@@ -290,9 +316,22 @@ export class WorkflowRunsApiService {
   explainQuery(
     id: string,
     index: number,
+    refresh = false,
   ): Observable<{ ok: boolean; run: WorkflowRun }> {
     return this.http.post<{ ok: boolean; run: WorkflowRun }>(
       `${this.answerUrl(id)}/queries/${index}/explanation`,
+      refresh ? { refresh: true } : {},
+    );
+  }
+
+  /** The first rows one step of a query leaves (api.md 161). Answers the updated run. */
+  previewQueryStep(
+    id: string,
+    index: number,
+    step: number,
+  ): Observable<{ ok: boolean; run: WorkflowRun }> {
+    return this.http.post<{ ok: boolean; run: WorkflowRun }>(
+      `${this.answerUrl(id)}/queries/${index}/steps/${step}/preview`,
       {},
     );
   }
@@ -338,7 +377,10 @@ export class WorkflowRunsApiService {
     text: string,
     view: ResultView | null,
   ): Observable<{ ok: boolean; interpretation: FilterInterpretation }> {
-    return this.http.post<{ ok: boolean; interpretation: FilterInterpretation }>(
+    return this.http.post<{
+      ok: boolean;
+      interpretation: FilterInterpretation;
+    }>(
       `${this.answerUrl(id)}/queries/${index}/interpret-filter`,
       view === null ? { text } : { text, view },
     );
@@ -491,10 +533,11 @@ export class WorkflowRunsApiService {
     answer: string,
     handlers: RunStreamHandlers,
     signal?: AbortSignal,
+    images: readonly string[] = [],
   ): Promise<void> {
     await this.postStream(
       `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/resume/stream`,
-      { stepId, answer },
+      { stepId, answer, ...(images.length > 0 ? { images } : {}) },
       handlers,
       signal,
       this.runFrames('', handlers),
@@ -514,6 +557,9 @@ export class WorkflowRunsApiService {
             workflowId: String(event['workflowId'] ?? workflowId),
           });
           return false;
+        case 'queued':
+          handlers.onQueued?.();
+          return false;
         case 'step':
           handlers.onStep?.(stepOf(event));
           return false;
@@ -527,6 +573,13 @@ export class WorkflowRunsApiService {
               ? event['options'].map(String)
               : [],
             expiresAt: String(event['expiresAt'] ?? ''),
+            ...(typeof event['review'] === 'string' && event['review'] !== ''
+              ? { review: event['review'] }
+              : {}),
+            ...(typeof event['visualId'] === 'string' &&
+            event['visualId'] !== ''
+              ? { visualId: event['visualId'] }
+              : {}),
           });
           return false;
         case 'done':

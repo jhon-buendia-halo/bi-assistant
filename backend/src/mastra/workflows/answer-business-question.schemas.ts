@@ -8,18 +8,16 @@
  * catalogue can load it without Mastra.
  *
  * The flow (agents.md 5.11): Read images when the run has reference images
- * (its schemas are ./read-images.schemas.ts), Receive question → Load catalog
- * → Interpret follow-up, then either Page result → Page answer (a follow-up
- * over an earlier result, roadmap 1.28.8) or Plan, then a branch: Clarify
- * (the run waits for the user's answer, then goes back to
- * Plan with it), or the analysis loop (Analyse → Validate, retried once;
- * Analyse can wait for an answer too) → Write answer → Wrap up. A step
- * passes on what the steps after it read, so each carries the question, the
- * catalog, the plan and Read images' notes forward: the engine hands a step
- * only its previous step's output.
+ * (its schemas are ./read-images.schemas.ts), then one line since
+ * 2026-11-19: Receive question → Load catalog → Plan (which may wait for the
+ * user's answer to its own question) → the analysis loop (Analyse →
+ * Validate, retried once; Analyse can wait for an answer too) → Write answer
+ * → Build visual when the run builds one → Wrap up. A step passes on what
+ * the steps after it read, so each carries the question, the catalog, the
+ * plan and Read images' notes forward: the engine hands a step only its
+ * previous step's output.
  */
 import { z } from 'zod';
-import { FILTER_OPS } from '../../modules/datasources/connectors/paged-sql.types';
 
 /** A turn's question and datasets (the eval target's input, agents.md 8). */
 export const turnInputSchema = z.object({
@@ -126,100 +124,6 @@ export const catalogedQuestionSchema = z.object({
   imageNotes: imageNotesSchema,
 });
 
-const filterValueSchema = z.union([z.string(), z.number(), z.boolean()]);
-
-/** One condition on one result column (paged-sql.types `FilterSpec`). */
-export const filterSpecSchema = z.object({
-  column: z.string().describe('The result column.'),
-  op: z.enum(FILTER_OPS).describe('The operator.'),
-  value: filterValueSchema.optional().describe('Its value.'),
-  valueTo: filterValueSchema.optional().describe('The upper bound of between.'),
-  values: z
-    .array(filterValueSchema)
-    .optional()
-    .describe('The values of in and not_in.'),
-});
-
-/** One sort key (paged-sql.types `SortSpec`). */
-export const sortSpecSchema = z.object({
-  column: z.string().describe('The result column.'),
-  direction: z.enum(['asc', 'desc']).describe('Its direction.'),
-});
-
-/** A page of a stored result, as asked for (paged-sql.types `PageRequest`). */
-export const pageRequestSchema = z.object({
-  page: z.number().optional().describe('1-based; default 1.'),
-  pageSize: z.number().optional().describe('Rows a page; default 50.'),
-  filters: z
-    .array(filterSpecSchema)
-    .optional()
-    .describe('The filters, AND-ed.'),
-  sort: z
-    .array(sortSpecSchema)
-    .optional()
-    .describe('The sort keys; none is the default order.'),
-});
-
-/** The view a page was read with (paged-sql.types `ResultView`). */
-export const resultViewSchema = z.object({
-  filters: z.array(filterSpecSchema).describe('The filters, AND-ed.'),
-  sort: z.array(sortSpecSchema).describe('The sort keys.'),
-  page: z.number().describe('The page, 1-based.'),
-  pageSize: z.number().describe('Rows a page.'),
-  matchedRows: z.number().optional().describe('Rows matching the filters.'),
-  capped: z.boolean().optional().describe('More rows matched than paged.'),
-});
-
-/**
- * What Interpret follow-up read in a follow-up's words (roadmap 1.28.8):
- * another page, a filter or an order over one of the run's earlier
- * queries. A new question is no follow-up (`followUp: null`).
- */
-export const followUpSchema = z.object({
-  action: z
-    .literal('explore')
-    .describe('The words ask for the earlier rows paged, filtered or sorted.'),
-  query: z
-    .number()
-    .describe("The 0-based index of the earlier query in the run's queries."),
-  ref: z.string().describe('Its label: Q1, Q2, …'),
-  request: pageRequestSchema.describe('The page, filters and sort to read.'),
-  understood: z.string().describe('The request in one line of words.'),
-});
-
-/**
- * What Interpret follow-up passes on: Load catalog's output with the
- * follow-up it read, or null when the run plans a new analysis.
- */
-export const followedUpQuestionSchema = catalogedQuestionSchema.extend({
-  followUp: followUpSchema
-    .nullable()
-    .describe(
-      'The page of an earlier result the words ask for; null: a new question, planned.',
-    ),
-  stopped: z
-    .boolean()
-    .optional()
-    .describe(
-      'Set when the turn was stopped while the words were read: nothing after runs.',
-    ),
-});
-
-/** What Page result passes on: one page of the earlier query's full result. */
-export const pagedResultSchema = z.object({
-  title: z.string().describe('The earlier query, in words.'),
-  columns: z.array(z.string()).describe("The result's columns."),
-  rows: z
-    .array(z.record(z.string(), z.unknown()))
-    .describe("The page's rows, at most 100."),
-  page: z.number().describe('The page read, 1-based.'),
-  pageCount: z.number().describe('Pages the matching rows fill.'),
-  matchedRows: z.number().describe('Rows matching the filters.'),
-  capped: z.boolean().describe('More rows matched than can be paged.'),
-  view: resultViewSchema.describe('The view the page was read with.'),
-  understood: z.string().describe('The view in one line of words.'),
-});
-
 /** The clarifying question a plan asks instead of analysing. */
 export const planClarificationSchema = z.object({
   question: z.string().describe('One short clarifying question.'),
@@ -234,11 +138,35 @@ export const planClarificationSchema = z.object({
 
 /**
  * What a waiting step suspends with (the run's `waitingFor`, api.md 138):
- * one clarifying question and its options.
+ * one clarifying question and its options. In an interactive run
+ * (answer-business-question.review.ts) a step also waits on its approval
+ * gate: `kind: 'review'`, the outcome in words (`review`), the step's output
+ * passed on once approved (`outcome`) and the agent's reply (`reply`).
+ * Mastra keeps only the fields this schema names.
  */
 export const clarifyingQuestionSchema = z.object({
+  kind: z
+    .enum(['clarify', 'review'])
+    .optional()
+    .describe("'review': an approval gate; else a clarifying question."),
   question: z.string().describe('The clarifying question the run waits on.'),
   options: z.array(z.string()).describe('Its 2-4 answer options.'),
+  review: z
+    .string()
+    .optional()
+    .describe("An approval gate's outcome, in the user's words (Markdown)."),
+  outcome: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe("An approval gate's step output, passed on once approved."),
+  reply: z
+    .string()
+    .optional()
+    .describe("An approval gate's agent reply, shown again on a revision."),
+  visualId: z
+    .string()
+    .optional()
+    .describe("Build visual's approval gate: the visual Ryan built."),
 });
 
 /** What resumes a waiting step (api.md 138): the user's answer. */
@@ -246,6 +174,12 @@ export const clarificationAnswerSchema = z.object({
   answer: z
     .string()
     .describe("The user's answer: one of the options or their own words."),
+  images: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "On Build visual's approval gate (workflows R44): reference images for the change, as their paths in the run's workspace.",
+    ),
 });
 
 /** A clarifying question with the user's answer to it. */
@@ -255,22 +189,13 @@ export const answeredClarificationSchema = z.object({
   answer: z.string().describe("The user's answer."),
 });
 
-/** What Plan receives: Load catalog's output, or Clarify's with the answer. */
+/**
+ * What Plan receives: Load catalog's output. Its own clarifying question and
+ * the user's answer come back on resume, not in its input (agents.md 5.11).
+ */
 export const planInputSchema = catalogedQuestionSchema.extend({
-  // Clarify re-parses the plan round's input on resume (see above).
+  // A resumed Plan re-reads its input from a snapshot that may hold no notes.
   imageNotes: resumableImageNotesSchema,
-  clarification: answeredClarificationSchema
-    .optional()
-    .describe(
-      'After Clarify: its question and the answer. Plan plans with them and never asks again.',
-    ),
-});
-
-/** What Clarify passes back to Plan: Plan's input with the answer. */
-export const clarifiedQuestionSchema = catalogedQuestionSchema.extend({
-  clarification: answeredClarificationSchema.describe(
-    'The clarifying question and the answer Plan plans with.',
-  ),
 });
 
 /** The plan the Plan step's model writes (PlanOutput). */
@@ -325,11 +250,6 @@ export const plannedQuestionSchema = z.object({
       'Set when the turn was stopped while Plan ran: nothing after Plan runs.',
     ),
   imageNotes: imageNotesSchema,
-});
-
-/** What Clarify receives: Plan's output, which a resumed run may hold without notes. */
-export const clarifyInputSchema = plannedQuestionSchema.extend({
-  imageNotes: resumableImageNotesSchema,
 });
 
 /** One check Validate ran over an analysis attempt. */
@@ -569,16 +489,12 @@ export const turnSummarySchema = z.object({
 });
 
 /**
- * The run's result (the workflow's output): the branch taken after
- * Interpret follow-up, keyed by its nested workflow id. `explore-result`
- * holds Page answer's summary (a follow-up over an earlier result,
- * roadmap 1.28.8); `question-path` holds the branch taken after the plan
- * loop: `analysis-path` with `answer-path`'s Wrap up summary (absent when
- * the turn was stopped). A run waiting for an answer has no result until
- * it is resumed.
+ * The run's result (the workflow's output), keyed by its nested workflow
+ * ids: `question-path` holds `analysis-path` with `answer-path`'s Wrap up
+ * summary (absent when the turn was stopped). A run waiting for an answer
+ * has no result until it is resumed.
  */
 export const answerBusinessQuestionResultSchema = z.object({
-  'explore-result': turnSummarySchema.optional(),
   'question-path': z
     .object({
       'analysis-path': z
@@ -598,18 +514,12 @@ export const ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS = {
     input: receivedQuestionSchema,
     output: catalogedQuestionSchema,
   },
-  // A follow-up over an earlier result (roadmap 1.28.8): no model call on
-  // a run without earlier queries.
-  'interpret-follow-up': {
-    input: catalogedQuestionSchema,
-    output: followedUpQuestionSchema,
-  },
-  plan: { input: planInputSchema, output: plannedQuestionSchema },
-  // Clarify and Analyse can wait for the user (api.md 138): what they
-  // suspend with, and what resumes them.
-  clarify: {
-    input: clarifyInputSchema,
-    output: clarifiedQuestionSchema,
+  // Every step agent can wait for the user (api.md 138): its clarifying
+  // question (Plan and Analyse always; the others in an interactive run,
+  // workflows R44), or its approval gate.
+  plan: {
+    input: planInputSchema,
+    output: plannedQuestionSchema,
     suspend: clarifyingQuestionSchema,
     resume: clarificationAnswerSchema,
   },
@@ -623,11 +533,17 @@ export const ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS = {
   'write-answer': {
     input: writeAnswerInputSchema,
     output: writtenAnswerSchema,
+    suspend: clarifyingQuestionSchema,
+    resume: clarificationAnswerSchema,
   },
   // Optional (the input's `buildVisual`): Ryan's visual of the answer.
-  'build-visual': { input: visualInputSchema, output: visualBuiltSchema },
+  // In an interactive run Ryan's visual waits for approval (workflows R44);
+  // a change, with reference images or not, makes a new version of it.
+  'build-visual': {
+    input: visualInputSchema,
+    output: visualBuiltSchema,
+    suspend: clarifyingQuestionSchema,
+    resume: clarificationAnswerSchema,
+  },
   'wrap-up': { input: wrapUpInputSchema, output: turnSummarySchema },
-  // The follow-up branch: the earlier query's page, then the answer.
-  'page-result': { input: followedUpQuestionSchema, output: pagedResultSchema },
-  'page-answer': { input: pagedResultSchema, output: turnSummarySchema },
 } as const;

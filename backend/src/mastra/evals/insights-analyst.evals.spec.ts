@@ -127,10 +127,11 @@ describe('insights-analyst registration', () => {
     const ownCases = EVAL_SETS.filter(
       (set) => set.agentKey === 'insights-analyst',
     );
-    // Its World Cup set and the Edge Cases set (story 1.29.6).
+    // Its World Cup, Edge Cases (story 1.29.6) and Retail Ops sets.
     expect(ownCases.map((set) => set.id).sort()).toEqual([
       'insights-analyst',
       'insights-analyst-edge',
+      'insights-analyst-retail',
     ]);
   });
 
@@ -155,11 +156,12 @@ describe('insights-analyst registration', () => {
   it('builds its target through evalTargetFor', () => {
     const target = evalTargetFor('insights-analyst');
     expect(target.agentKey).toBe('insights-analyst');
-    // The Edge Cases set (story 1.29.6) runs on the same target.
+    // The Edge Cases (story 1.29.6) and Retail Ops sets run on the same target.
     expect(target.sets[0]).toBe(INSIGHTS_ANALYST_EVAL_SET);
     expect(target.sets.map((set) => set.id)).toEqual([
       'insights-analyst',
       'insights-analyst-edge',
+      'insights-analyst-retail',
     ]);
     expect((target.agent as unknown as { id: string }).id).toBe(
       'insights-analyst',

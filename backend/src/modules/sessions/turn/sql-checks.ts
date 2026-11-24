@@ -91,7 +91,8 @@ export class SqlChecks {
   /**
    * `DatasourcesService.runReadOnlySql` with the turn's stop signal when
    * there is one (datasources R38): an abort cancels the statement at the
-   * source and rejects with the signal's reason.
+   * source and rejects with the signal's reason. `options.maxRows` lifts
+   * the connectors' 500-row clamp (a dashboard's data query, 5,000).
    */
   private runReadOnly(
     datasourceId: string,
@@ -100,11 +101,19 @@ export class SqlChecks {
     options?: SqlCallOptions,
   ) {
     const { datasourcesService } = this.deps;
-    return options?.signal
-      ? datasourcesService.runReadOnlySql(datasourceId, sql, limit, undefined, {
-          signal: options.signal,
-        })
-      : datasourcesService.runReadOnlySql(datasourceId, sql, limit);
+    const maxRows = options?.maxRows;
+    if (options?.signal) {
+      return datasourcesService.runReadOnlySql(
+        datasourceId,
+        sql,
+        limit,
+        maxRows,
+        { signal: options.signal },
+      );
+    }
+    return maxRows === undefined
+      ? datasourcesService.runReadOnlySql(datasourceId, sql, limit)
+      : datasourcesService.runReadOnlySql(datasourceId, sql, limit, maxRows);
   }
 
   // ----------------------------------------------------- SQL self-correction

@@ -17,13 +17,11 @@ import {
   IMAGE_READER_AGENT_KEY,
   LAYER_MAPPER_AGENT_KEY,
   REQUIREMENTS_ANALYST_AGENT_KEY,
-  RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
 import { getDatasetToolServices } from '../../../mastra/tool-services';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
-import { pageExplorableQuery } from '../../../mastra/tools/explore-result.tool';
 import { readinessModelOutput } from '../../../mastra/tools/readiness.tools';
 import {
   ASSESSED_REPORT_CONTEXT_KEY,
@@ -84,6 +82,60 @@ import {
   type AnswerBusinessQuestionRuntime,
 } from '../../../mastra/workflows/answer-business-question.steps';
 import { analyseSystemBlocks } from '../../../mastra/workflows/answer-business-question.prompts';
+import {
+  ORCHESTRATED_ANSWER_RUNTIME_KEY,
+  ORCHESTRATED_ANSWER_WORKFLOW_ID,
+  ORCHESTRATOR_MODEL,
+  orchestratorTeamOf,
+  type OrchestratedAnswerRuntime,
+} from '../../../mastra/workflows/orchestrated-answer.steps';
+import {
+  currentDashboardBlock,
+  orchestratorState,
+  runOrchestratorTurn,
+  type OrchestratorTeam,
+} from './orchestrator-turn';
+import {
+  BI_ANALYST_AGENT_KEY,
+  BI_ANALYST_MAX_STEPS,
+} from '../../../mastra/agents/bi-analyst-catalog';
+import {
+  DASHBOARD_DATA_CHAR_CAP,
+  DASHBOARD_ROWS_CAP,
+  SUBMIT_DASHBOARD_TOOL,
+  blueprintFromDraft,
+  dashboardBindingErrors,
+  prepareDashboardRows,
+  type DashboardDraft,
+} from '../../../mastra/workflows/bi-dashboard.schemas';
+import { asksForDashboard } from '../../../mastra/workflows/dashboard-request';
+import { asksForExport } from '../../../mastra/workflows/export-request';
+import type {
+  ConversationExporter,
+  ConversationTurns,
+} from '../../conversation-export/conversation-export.contract';
+import { exportBrand } from '../../conversation-export/export-brand';
+import {
+  DASHBOARD_TOOLS_RUNTIME_KEY,
+  type DashboardToolsRuntime,
+} from '../../../mastra/tools/dashboard.tools';
+import { runErrorMessage } from '../../../mastra/workflows/workflow-run';
+import type {
+  CurrentDashboard,
+  DashboardQuery,
+  DashboardRef,
+  DashboardRow,
+  DashboardVersionData,
+} from '../../artifacts/entities/artifact.entity';
+import type { NewDashboardVersion } from '../../artifacts/artifacts.service';
+import { ANSWER_BUSINESS_QUESTION_MODEL } from '../../../mastra/workflows/answer-business-question.review';
+import { resolveAgentModelConfig } from '../../../mastra/model-resolver';
+import {
+  STEP_MODEL_CONTEXT_KEY,
+  servesClaude,
+  type StepModel,
+} from '../../../mastra/step-model';
+import { turnProviderOptions } from './session-datasets';
 import {
   READ_IMAGES_RUNTIME_KEY,
   imageNotesBlock,
@@ -246,6 +298,24 @@ export interface TurnEngineDeps {
     image: { data: Buffer; mediaType: string } | undefined,
   ): Promise<{ id: string; name: string }>;
   /**
+   * A dashboard artifact's current version with its rows (agents.md 5.22,
+   * the follow-up carry): what Clara changes. Throws when it is unknown.
+   */
+  dashboardVersion?(artifactId: string): Promise<DashboardVersionData>;
+  /**
+   * Avery's conversation export (agents.md 3.18): the earlier turns and the
+   * files. Absent when its module is not loaded (the export stays closed).
+   */
+  conversationExporter?: ConversationExporter;
+  /**
+   * Save the dashboard Clara built (agents.md 5.22): a new artifact, or
+   * the next version of `artifactId`; the run is its source.
+   */
+  saveDashboard?: (
+    sessionId: string,
+    input: Omit<NewDashboardVersion, 'source'> & { artifactId?: string },
+  ) => Promise<DashboardRef>;
+  /**
    * Build visual (agents.md 5.11): Ryan designs a visual from an answer not
    * stored yet; `at` is the time the answer message is stored with. With
    * an `instruction` (a follow-up that asks Build visual alone, 5.21),
@@ -262,7 +332,20 @@ export interface TurnEngineDeps {
       data: ToolDataRecord[];
       instruction?: string;
       reference?: string;
+      /** The workflow's step model (agents.md 1.3), when it has one. */
+      stepModel?: StepModel;
     },
+    abortSignal?: AbortSignal,
+  ): Promise<SessionVisualization>;
+  /**
+   * A new version of a visual of the session from the user's words (Build
+   * visual's approval gate, workflows R44); `reference` is Zoe's notes on
+   * the reference images they attached, absent without any.
+   */
+  reviseVisual(
+    sessionId: string,
+    visualId: string,
+    change: { instruction: string; reference?: string; stepModel?: StepModel },
     abortSignal?: AbortSignal,
   ): Promise<SessionVisualization>;
   /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
@@ -290,7 +373,9 @@ type TurnRunOutcome =
       stepId: string;
       question: string;
       options: string[];
-      resume?: (answer: string) => Promise<TurnRunOutcome>;
+      review?: string;
+      visualId?: string;
+      resume?: (answer: string, images?: string[]) => Promise<TurnRunOutcome>;
       discard: () => Promise<void>;
     };
 
@@ -378,9 +463,6 @@ export class TurnEngine {
       session.messages,
     );
     options.requestContext.set(EXPLORABLE_QUERIES_CONTEXT_KEY, explorable);
-    // What v2's Interpret follow-up may page (roadmap 1.28.8): the earlier
-    // queries as the turn starts, before it runs any of its own.
-    const followUp: readonly ExplorableQuery[] = [...explorable];
     let stream: Awaited<ReturnType<typeof agent.stream>> | undefined;
 
     let text = '';
@@ -414,6 +496,36 @@ export class TurnEngine {
     const workflow = turnWorkflowOf(session);
     // v2's answer is its Write answer step's only (agents.md 5.11).
     const v2 = workflow.engineId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID;
+    // v2 runs its step agents on its own model and effort (agents.md 1.3)
+    // when the saved model is served as a Claude model: its agents read it
+    // from the context, and every step call and Analyse's turn send its
+    // effort. Otherwise the saved model and effort, as every agent.
+    // Answer a Business Question (orchestrated): Avery calls the same
+    // agents as her tools, on the same model; she runs on Opus 5.5 high
+    // (agents.md 5.22).
+    const orchestrated = workflow.engineId === ORCHESTRATED_ANSWER_WORKFLOW_ID;
+    const claude = servesClaude(await resolveAgentModelConfig());
+    const stepModel =
+      (v2 || orchestrated) && claude
+        ? ANSWER_BUSINESS_QUESTION_MODEL
+        : undefined;
+    if (stepModel) {
+      options.requestContext.set(STEP_MODEL_CONTEXT_KEY, stepModel);
+      options.providerOptions = await turnProviderOptions(
+        { reasoningEffort: stepModel.reasoningEffort },
+        stepModel.model,
+      );
+    }
+    const orchestratorModel =
+      orchestrated && claude ? { ...ORCHESTRATOR_MODEL } : undefined;
+    const orchestratorProviderOptions = orchestratorModel
+      ? await turnProviderOptions(
+          { reasoningEffort: orchestratorModel.reasoningEffort },
+          orchestratorModel.model,
+        )
+      : (options.providerOptions as Record<string, unknown> | undefined);
+    // What Avery's team produced: it outlives a wait for the user.
+    const orchState = orchestratorState();
     // A follow-up that asks one agent (agents.md 5.21): only the Analyst
     // and Sarah answer as an agent turn; every other asked step's answer is
     // its model call's or the code's, which no synthesis replaces.
@@ -421,8 +533,12 @@ export class TurnEngine {
       workflow.engineId === ASK_AGENT_WORKFLOW_ID
         ? (session.ask?.step as AskableStepId | undefined)
         : undefined;
+    // Answer a Business Question (orchestrated) writes its answer by code
+    // until its orchestrator is built (agents.md 5.22).
     const codeAnswer =
-      v2 || (asked !== undefined && !AGENT_TURN_ASK_STEPS.includes(asked));
+      v2 ||
+      workflow.engineId === ORCHESTRATED_ANSWER_WORKFLOW_ID ||
+      (asked !== undefined && !AGENT_TURN_ASK_STEPS.includes(asked));
     // A query record of the turn: kept for the answer with its facts,
     // explorable from then on, and shown as its call's result.
     const captureRecord = (record: ToolDataRecord, callId?: string) => {
@@ -445,6 +561,13 @@ export class TurnEngine {
           rationale: record.rationale,
         }),
       });
+    };
+    // The host's run of Clara's data query (agents.md 5.22): recorded once
+    // her submit_dashboard has its result, so the activity pairs (the gap
+    // queries' hold, 5.20).
+    const heldQueries: (() => void)[] = [];
+    const flushHeldQueries = () => {
+      for (const replay of heldQueries.splice(0)) replay();
     };
     // A follow-up that asks Write answer or Build visual alone (agents.md
     // 5.21): the earlier answer's records join this turn's, each with the
@@ -677,6 +800,8 @@ export class TurnEngine {
                 }),
               });
             }
+            // Clara's submit ran her data query: it follows the result.
+            if (toolName === SUBMIT_DASHBOARD_TOOL) flushHeldQueries();
           }
         }
       } catch (error) {
@@ -776,7 +901,17 @@ export class TurnEngine {
       // in her thread, stopped with `signal` (the turn's, or an early job's
       // own). A model error fails the step with its own message.
       const readImagesOn = async (
-        { question, images }: { question: string; images: string[] },
+        {
+          question,
+          images,
+          ...interactive
+        }: {
+          question: string;
+          images: string[];
+          canAsk?: boolean;
+          answered?: { question: string; answer: string };
+          revision?: { previous: string; note: string };
+        },
         signal: AbortSignal,
       ) => {
         const loaded: StepImage[] = [];
@@ -785,8 +920,9 @@ export class TurnEngine {
           loaded.push({ data, mediaType });
         }
         try {
+          // An interactive run's extras (workflows R44), only when given.
           const read = await this.deps.mastra.readImages(
-            { question, images: loaded },
+            { question, images: loaded, ...interactive },
             { ...stepModelOf(IMAGE_READER_AGENT_KEY), abortSignal: signal },
           );
           return { ...read, stopped: read.stopped || signal.aborted };
@@ -862,6 +998,13 @@ export class TurnEngine {
         // The current request's stream: a resumed turn reports to its own.
         (event) => emit(event),
         {
+          // A run of v2 whose input ticked Approve each step is interactive
+          // (workflows R44): its step agents may ask first, and each outcome
+          // waits for the user's approval. A past chat's turn never is: it
+          // cannot wait.
+          ...(v2 && suspendable && session.approveSteps === true
+            ? { interactive: true }
+            : {}),
           // v2's steps (agents.md 5.11): Plan and Write answer call the
           // agent's model without tools; Analyse streams the agent itself.
           plan: async ({
@@ -869,6 +1012,8 @@ export class TurnEngine {
             catalogBlock,
             clarification: answered,
             imageNotes,
+            revision,
+            brief,
           }) => {
             try {
               // After Clarify, Plan plans with its question and the answer;
@@ -879,6 +1024,9 @@ export class TurnEngine {
                   question,
                   catalogBlock,
                   ...(answered ? { answered } : {}),
+                  ...(revision ? { revision } : {}),
+                  // Avery's request, in the orchestrated workflow only.
+                  ...(brief ? { brief } : {}),
                   imageNotes,
                 }),
                 stepModelOf(ANALYSIS_PLANNER_AGENT_KEY),
@@ -1093,6 +1241,8 @@ export class TurnEngine {
                   data: keptRecords(queries),
                   ...(instruction !== undefined ? { instruction } : {}),
                   ...(imageNotes?.trim() ? { reference: imageNotes } : {}),
+                  // Ryan on v2's own model and effort (agents.md 1.3).
+                  ...(stepModel ? { stepModel } : {}),
                 },
                 turn.signal,
               );
@@ -1112,73 +1262,343 @@ export class TurnEngine {
               };
             }
           },
-          // v2's follow-up branch (roadmap 1.28.8): the earlier queries,
-          // Nathan's reading of the words, the page and the answer.
-          followUp,
-          interpretFollowUp: async (request) => {
+          // A change asked on Ryan's approval gate (workflows R44): Zoe reads
+          // any new reference images, then Ryan makes a new version of the
+          // visual from the user's words and her notes. Never a failed run.
+          reviseVisual: async ({ visualId, instruction, images }) => {
+            const stop = () => ({ visual: {}, stopped: true });
+            if (turn.signal.aborted) return stop();
             try {
-              const spec = await this.deps.mastra.interpretResult(request, {
-                abortSignal: turn.signal,
-                onExchange: stepModelOf(RESULT_EXPLORER_AGENT_KEY).onExchange,
-              });
-              return { spec, stopped: turn.signal.aborted };
-            } catch (error) {
-              if (turn.signal.aborted) return { spec: null, stopped: true };
-              // The step plans the question instead; the reason is logged.
-              this.deps.logger.warn(
-                `Could not read the follow-up of ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
+              const notes = images?.length
+                ? (
+                    await readImagesOn(
+                      { question: instruction, images },
+                      turn.signal,
+                    )
+                  ).imageNotes
+                : '';
+              if (turn.signal.aborted) return stop();
+              const metadata = await this.deps.reviseVisual(
+                id,
+                visualId,
+                {
+                  instruction,
+                  ...(notes.trim() ? { reference: notes } : {}),
+                  ...(stepModel ? { stepModel } : {}),
+                },
+                turn.signal,
               );
-              throw error;
+              return {
+                visual: { visualId: metadata.id, title: metadata.title },
+                stopped: turn.signal.aborted,
+              };
+            } catch (error) {
+              if (turn.signal.aborted) return stop();
+              return {
+                visual: {
+                  error: error instanceof Error ? error.message : String(error),
+                },
+                stopped: false,
+              };
             }
           },
-          // The page is an `explore_result` call of the turn: its record
-          // (the source SQL, the page's rows) and its view as evidence, so
-          // the answer's query opens the inspector on that view.
-          pageResult: async ({ query, request, understood }) => {
-            const target = followUp[query];
-            if (!target)
-              throw new Error('The earlier query is no longer known');
-            const args = {
-              query: target.sql,
-              // Named as the reader saw it (agent-answers R69): `Source 5`.
-              rationale: `${understood.toLowerCase() === 'all rows' ? 'The rows' : understood} of the earlier answer's ${target.source ? `Source ${target.source}` : 'query'}.`,
+          // Clara's build (agents.md 2.22, 5.22): her turn inside this
+          // turn's stream, through the same consumer as Michael's, without
+          // memory and with her text kept out of the answer. Her
+          // submit_dashboard reaches the runtime below: the host runs her
+          // data query (up to 5,000 rows, the turn's stop), checks it and
+          // keeps the last accepted submission, which is saved once her
+          // stream ends. Never a failed run: a problem is told to Avery.
+          buildDashboard: async ({
+            question,
+            brief,
+            catalogBlock,
+            current,
+            earlierBlock,
+          }) => {
+            if (turn.signal.aborted) return { reply: '', stopped: true };
+            const save = this.deps.saveDashboard;
+            if (!save) {
+              return {
+                reply: '',
+                error: 'Dashboards are not available.',
+                stopped: false,
+              };
+            }
+            let accepted:
+              | {
+                  draft: DashboardDraft;
+                  query: DashboardQuery;
+                  columns: string[];
+                  rows: DashboardRow[];
+                }
+              | undefined;
+            // The host's run, recorded as a `run_readonly_sql` source with
+            // its facts, held until submit_dashboard's result (5.20's hold).
+            const hold = (
+              args: { sql: string; rationale: string },
+              result: unknown,
+              facts: QueryFacts,
+            ) =>
+              heldQueries.push(() => {
+                emit({
+                  type: 'tool',
+                  content: JSON.stringify({
+                    name: 'run_readonly_sql',
+                    ...(statedRationale(args.rationale)
+                      ? { rationale: statedRationale(args.rationale) }
+                      : {}),
+                    input: toolCallInput('run_readonly_sql', args),
+                  }),
+                });
+                const callId = `dashboard-query-${randomUUID()}`;
+                queryFacts.set(callId, facts);
+                const record = toolDataRecord('run_readonly_sql', args, result);
+                if (record) captureRecord(record, callId);
+              });
+            const submitter: DashboardToolsRuntime = {
+              submit: async ({
+                dashboard: draft,
+                sql,
+                datasourceId,
+                rationale,
+              }) => {
+                const args = { sql, rationale };
+                const facts: QueryFacts = {
+                  datasourceId,
+                  rowLimit: DASHBOARD_ROWS_CAP,
+                };
+                let ran: Awaited<ReturnType<SqlChecks['runSqlWithRepair']>>;
+                try {
+                  ran = await this.deps.sql.runSqlWithRepair(
+                    datasourceId,
+                    sql,
+                    DASHBOARD_ROWS_CAP,
+                    session.datasets,
+                    { signal: turn.signal, maxRows: DASHBOARD_ROWS_CAP },
+                  );
+                } catch (error) {
+                  // A query the stop cut short is no failed query.
+                  if (turn.signal.aborted) throw error;
+                  const message =
+                    error instanceof Error ? error.message : String(error);
+                  hold(args, { error: message }, facts);
+                  return {
+                    accepted: false,
+                    error: `The query failed: ${message}`,
+                  };
+                }
+                const { totalRows, ...result } = ran;
+                hold(args, result, {
+                  ...facts,
+                  ...(typeof totalRows === 'number' ? { totalRows } : {}),
+                });
+                if (ran.truncated) {
+                  return {
+                    accepted: false,
+                    error: `More than ${DASHBOARD_ROWS_CAP.toLocaleString('en-US')} rows: group the query to the grain the widgets need`,
+                  };
+                }
+                if (!ran.rows.length) {
+                  return {
+                    accepted: false,
+                    error:
+                      'The query returned no rows: check its filters, then submit again.',
+                  };
+                }
+                const unbound = dashboardBindingErrors(draft, ran.columns);
+                if (unbound.length) {
+                  return { accepted: false, error: unbound.join('\n') };
+                }
+                const rows = prepareDashboardRows(ran.rows, draft);
+                if (JSON.stringify(rows).length > DASHBOARD_DATA_CHAR_CAP) {
+                  return {
+                    accepted: false,
+                    error: `The rows are more than ${DASHBOARD_DATA_CHAR_CAP.toLocaleString('en-US')} characters: group the query further or drop the columns no widget reads.`,
+                  };
+                }
+                const columns = draft.columns.map((column) => column.name);
+                // The last accepted submission is the one saved.
+                accepted = {
+                  draft,
+                  query: {
+                    sql: ran.correctedSql ?? sql,
+                    datasourceId,
+                    ...(rationale.trim()
+                      ? { rationale: rationale.trim() }
+                      : {}),
+                  },
+                  columns,
+                  rows,
+                };
+                return { accepted: true, rowCount: rows.length, columns };
+              },
             };
-            calledTools.add('explore_result');
-            emit({
-              type: 'tool',
-              content: JSON.stringify({
-                name: 'explore_result',
-                rationale: args.rationale,
-                input: toolCallInput('explore_result', args),
-              }),
-            });
-            const callId = `follow-up-${randomUUID()}`;
-            const result = await pageExplorableQuery(
-              target,
-              request,
-              understood,
-              options.requestContext,
-              callId,
-            );
-            const record = toolDataRecord('explore_result', args, result);
-            if (record) captureRecord(record, callId);
-            if ('error' in result) throw new Error(result.error);
-            return {
-              title: target.rationale ?? target.ref,
-              columns: result.columns,
-              rows: result.rows,
-              page: result.page,
-              pageCount: result.pageCount,
-              matchedRows: result.matchedRows,
-              capped: result.capped,
-              view: result.view,
-              understood: result.understood,
-            };
+            options.requestContext.set(DASHBOARD_TOOLS_RUNTIME_KEY, submitter);
+            // Her own stop: the turn's, or five idle minutes (workflows R43).
+            const idle = streamIdleWatch(turn.signal);
+            const claraOptions: typeof options = { ...options };
+            delete (claraOptions as { memory?: unknown }).memory;
+            let failure: unknown;
+            let reply = '';
+            notes = '';
+            try {
+              await consume(
+                idle.watch(
+                  await this.deps.mastra
+                    .getAgent(BI_ANALYST_AGENT_KEY)
+                    .stream([{ role: 'user', content: question }] as never, {
+                      ...claraOptions,
+                      maxSteps: BI_ANALYST_MAX_STEPS,
+                      abortSignal: idle.signal,
+                      // The catalog, then Avery's brief with the dashboard
+                      // to change and the queries behind the last answer.
+                      context: [
+                        ...options.context,
+                        ...[
+                          catalogBlock,
+                          [
+                            `Brief from Avery, the Chief of Staff: ${brief}`,
+                            ...(current
+                              ? ['', currentDashboardBlock(current)]
+                              : []),
+                            ...(earlierBlock ? ['', earlierBlock] : []),
+                          ].join('\n'),
+                        ]
+                          .filter((content) => content.trim())
+                          .map((content) => ({
+                            role: 'system' as const,
+                            content,
+                          })),
+                      ],
+                    }),
+                ),
+              );
+            } catch (error) {
+              if (!idle.timedOut()) failure = error;
+            } finally {
+              idle.dispose();
+              reply = (notes ?? '').trim();
+              notes = undefined;
+              flushHeldQueries();
+            }
+            try {
+              idle.check('Build dashboard');
+            } catch (error) {
+              failure ??= error;
+            }
+            // Her model error is told to Avery, never the turn's.
+            if (streamError !== undefined) {
+              failure ??= streamError;
+              streamError = undefined;
+            }
+            if (turn.signal.aborted) return { reply, stopped: true };
+            if (!accepted) {
+              return {
+                reply,
+                error:
+                  failure !== undefined
+                    ? runErrorMessage(failure)
+                    : 'she submitted no dashboard the run could accept.',
+                stopped: false,
+              };
+            }
+            const blueprint = blueprintFromDraft(accepted.draft, accepted.rows);
+            try {
+              const ref = await save(id, {
+                ...(current ? { artifactId: current.artifactId } : {}),
+                blueprint,
+                query: accepted.query,
+                columns: accepted.columns,
+                rows: accepted.rows,
+                instruction: brief,
+              });
+              const saved: CurrentDashboard = {
+                artifactId: ref.artifactId,
+                version: ref.version,
+                title: ref.title,
+                blueprint,
+                query: accepted.query,
+                columns: accepted.columns,
+                rowCount: ref.rowCount,
+                widgetCount: ref.widgetCount,
+                filterCount: ref.filterCount,
+              };
+              return { dashboard: ref, saved, reply, stopped: false };
+            } catch (error) {
+              return {
+                reply,
+                error: `the dashboard could not be saved: ${error instanceof Error ? error.message : String(error)}`,
+                stopped: false,
+              };
+            }
           },
           deliverAnswer: (answer) => {
             text = answer;
             emit({ type: 'text', content: answer });
             return Promise.resolve();
+          },
+          // Avery's turn (agents.md 5.22): the team as her tools; her answer
+          // is delivered once she is done (only she talks to the user).
+          orchestrate: async (input, team: OrchestratorTeam) => {
+            // The conversation's dashboard (the follow-up carry, 5.22): its
+            // current version, or none when it is gone or holds no query.
+            const currentDashboard = await this.currentDashboardOf(session);
+            // The export gate (2.21): the message asks to export the
+            // conversation, and the run knows its conversation.
+            const exporting = await this.exportOf(session, trimmed);
+            const done = await runOrchestratorTurn(
+              {
+                getAgent: (key) => this.deps.mastra.getAgent(key),
+                team: exporting
+                  ? { ...team, exportConversation: exporting.run }
+                  : team,
+                state: orchState,
+                emit: (event) => emit(event),
+                signal: turn.signal,
+                datasets: session.datasets,
+                images: [...(session.inputImages ?? [])],
+                buildsVisual: session.buildVisual === true,
+                // The dashboard gate (2.21): the message asks for one, or
+                // the conversation has one.
+                buildsDashboard:
+                  asksForDashboard(trimmed) || currentDashboard !== undefined,
+                ...(currentDashboard ? { currentDashboard } : {}),
+                exportsConversation: exporting !== undefined,
+                ...(exporting ? { earlierTurns: exporting.turns } : {}),
+                // The conversation so far (workflows R45): the host's
+                // transcript before this message.
+                history: session.messages
+                  .slice(0, -1)
+                  .filter(
+                    (message) =>
+                      (message.role === 'user' ||
+                        message.role === 'assistant') &&
+                      typeof message.content === 'string' &&
+                      message.content.trim() !== '',
+                  )
+                  .map((message) => ({
+                    role: message.role,
+                    content: message.content,
+                  })),
+                // The last answer's queries, for Michael on a follow-up.
+                ...(session.contextQueries?.length
+                  ? { earlierQueries: session.contextQueries }
+                  : {}),
+                // Her team in this workflow (Avery + Michael: Michael alone).
+                tools: orchestratorTeamOf(workflow.id).tools,
+                ...(orchestratorModel ? { orchestratorModel } : {}),
+                ...(orchestratorProviderOptions
+                  ? { providerOptions: orchestratorProviderOptions }
+                  : {}),
+              },
+              input,
+            );
+            if (!done.clarification && done.answer) {
+              text = done.answer;
+              emit({ type: 'text', content: done.answer });
+            }
+            return done;
           },
           // A follow-up that asks Write answer alone (agents.md 5.21): the
           // earlier answer's records come into this answer with their
@@ -1216,17 +1636,23 @@ export class TurnEngine {
               imageNotes: earlier?.imageNotes ?? '',
             };
           },
-          writeAnswer: async (written) => {
+          writeAnswer: async ({ quiet, ...written }) => {
             try {
               // Zoe's notes only when the run has images (agents.md 5.11).
+              // An answer that waits on its approval gate is not streamed:
+              // the step delivers it once approved (workflows R44).
               const result = await this.deps.mastra.writeAnswer(
                 withImageNotes(written),
                 {
                   ...stepModelOf(ANSWER_WRITER_AGENT_KEY),
-                  onText: (delta) => {
-                    text += delta;
-                    emit({ type: 'text', content: delta });
-                  },
+                  ...(quiet
+                    ? {}
+                    : {
+                        onText: (delta: string) => {
+                          text += delta;
+                          emit({ type: 'text', content: delta });
+                        },
+                      }),
                 },
               );
               // The stored answer is the step's whole answer.
@@ -1234,6 +1660,9 @@ export class TurnEngine {
               return {
                 answer: result.answer,
                 stopped: result.stopped || turn.signal.aborted,
+                ...(result.clarification
+                  ? { clarification: result.clarification }
+                  : {}),
               };
             } catch (error) {
               throw await stepError(error);
@@ -1773,6 +2202,8 @@ export class TurnEngine {
             stepId: outcome.stepId,
             question: outcome.question,
             options: outcome.options,
+            ...(outcome.review ? { review: outcome.review } : {}),
+            ...(outcome.visualId ? { visualId: outcome.visualId } : {}),
             resume: async (answer: string, io: TurnResumeIo) => {
               emit = io.emit;
               abortSignal = io.abortSignal;
@@ -1785,7 +2216,7 @@ export class TurnEngine {
                 });
               let next: TurnRunOutcome;
               try {
-                next = await resumeRun(answer);
+                next = await resumeRun(answer, io.images);
               } finally {
                 await early.settle();
                 abortSignal?.removeEventListener('abort', forwardAbort);
@@ -1877,6 +2308,10 @@ export class TurnEngine {
       const knowledge = knowledgeUsed(options.requestContext);
       // One entry per query record, beside `data` (never on a record).
       const evidence = evidenceOf(data, factsOf);
+      // The dashboard Clara saved in this turn (agents.md 5.22).
+      const dashboard = orchState.dashboard;
+      // The conversation Avery exported in this turn (agents.md 3.18).
+      const exported = orchState.export;
       if (clarification) {
         // The turn stops here, but the schema/sample work done before the
         // question is real work — keep it on the card instead of dropping it.
@@ -1891,8 +2326,16 @@ export class TurnEngine {
           ...(reasoning ? { reasoning } : {}),
           ...(knowledge ? { knowledge } : {}),
           ...(readinessReport ? { readinessReport } : {}),
+          ...(dashboard ? { dashboard } : {}),
+          ...(exported ? { export: exported } : {}),
         });
-      } else if (text.trim() || visualEvent || readinessReport) {
+      } else if (
+        text.trim() ||
+        visualEvent ||
+        readinessReport ||
+        dashboard ||
+        exported
+      ) {
         const interpretation = interpretationLine(data, entities);
         // Careful mode only, and only when there is a result set to corroborate.
         // The assistant's only: another agent runs no SQL to cross-check.
@@ -1911,7 +2354,11 @@ export class TurnEngine {
             text.trim() ||
             (visualEvent
               ? `${visualEvent.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent.title}" (v${visualEvent.version}).`
-              : readinessAnswerFallback(readinessReport!)),
+              : dashboard
+                ? `${dashboard.action === 'created' ? 'Created' : 'Updated'} dashboard "${dashboard.title}" (version ${dashboard.version}).`
+                : exported
+                  ? `Exported "${exported.title}".`
+                  : readinessAnswerFallback(readinessReport!)),
           at: answerAt ?? new Date().toISOString(),
           ...(data.length ? { data } : {}),
           ...(evidence.length ? { evidence } : {}),
@@ -1923,6 +2370,8 @@ export class TurnEngine {
             ? { verified: true }
             : {}),
           ...(visualEvent ? { visual: visualEvent } : {}),
+          ...(dashboard ? { dashboard } : {}),
+          ...(exported ? { export: exported } : {}),
           ...(crossChecked ? { crossCheck: crossChecked } : {}),
           ...(readinessReport ? { readinessReport } : {}),
         });
@@ -1950,6 +2399,95 @@ export class TurnEngine {
    * hands every step event to `onStepEvent`, whatever the bar (agents.md
    * 5.14).
    */
+  /**
+   * The export a message to Avery opens (agents.md 2.21, 3.18): when it
+   * asks to export the conversation and the run knows its conversation,
+   * the conversation's earlier turns and the team call that makes the
+   * files. None otherwise, or when the turns cannot be read.
+   */
+  private async exportOf(
+    session: SessionDoc,
+    message: string,
+  ): Promise<
+    | {
+        turns: ConversationTurns;
+        run: NonNullable<OrchestratorTeam['exportConversation']>;
+      }
+    | undefined
+  > {
+    const conversation = session.contextConversation;
+    const exporter = this.deps.conversationExporter;
+    if (!conversation || !exporter || !asksForExport(message)) {
+      return undefined;
+    }
+    let turns: ConversationTurns;
+    try {
+      turns = await exporter.turns(
+        conversation.conversationId,
+        conversation.runId,
+      );
+    } catch (error) {
+      this.deps.logger.warn(
+        `The conversation ${conversation.conversationId} cannot be read for an export: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
+    }
+    return {
+      turns,
+      run: async (content) => {
+        try {
+          return {
+            export: await exporter.export({
+              conversationId: conversation.conversationId,
+              beforeRunId: conversation.runId,
+              content,
+              brand: exportBrand(),
+            }),
+          };
+        } catch (error) {
+          return {
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
+    };
+  }
+
+  /**
+   * The conversation's dashboard, as a message to Avery changes it
+   * (agents.md 5.22, the follow-up carry): the current version of the
+   * host's `contextDashboard`. None when the host carries none, the
+   * artifact is gone, or its version holds no data query (a dashboard
+   * read from an image).
+   */
+  private async currentDashboardOf(
+    session: SessionDoc,
+  ): Promise<CurrentDashboard | undefined> {
+    const artifactId = session.contextDashboard;
+    if (!artifactId || !this.deps.dashboardVersion) return undefined;
+    let shown: DashboardVersionData;
+    try {
+      shown = await this.deps.dashboardVersion(artifactId);
+    } catch (error) {
+      this.deps.logger.warn(
+        `The dashboard ${artifactId} of ${session.id} cannot be read: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
+    }
+    if (!shown.query) return undefined;
+    return {
+      artifactId: shown.artifactId,
+      version: shown.version,
+      title: shown.title,
+      blueprint: shown.blueprint,
+      query: shown.query,
+      columns: shown.columns,
+      rowCount: shown.rowCount,
+      widgetCount: shown.widgetCount,
+      filterCount: shown.filterCount,
+    };
+  }
+
   /**
    * Review a Website's runtime (agents.md 5.19): the browser work of the
    * run, taken when a step first asks for it, and the run's report and
@@ -1985,7 +2523,7 @@ export class TurnEngine {
       Required<
         Pick<
           AnswerBusinessQuestionRuntime,
-          'buildVisual' | 'interpretFollowUp' | 'pageResult' | 'deliverAnswer'
+          'buildVisual' | 'reviseVisual' | 'deliverAnswer'
         >
       > &
       AgentTurnRuntime &
@@ -1998,6 +2536,13 @@ export class TurnEngine {
         consumptionGap: ConsumptionGapRuntime;
         /** A follow-up that asks Write answer alone (agents.md 5.21). */
         earlierAnswer: () => EarlierAnswerInput;
+        /** Avery's turn, with her team (agents.md 5.22). */
+        orchestrate: (
+          input: Parameters<OrchestratedAnswerRuntime['orchestrate']>[0],
+          team: OrchestratorTeam,
+        ) => ReturnType<OrchestratedAnswerRuntime['orchestrate']>;
+        /** Clara's build, one of Avery's team calls (agents.md 5.22). */
+        buildDashboard: NonNullable<OrchestratorTeam['buildDashboard']>;
         /** A follow-up that asks Build visual alone (agents.md 5.21). */
         earlierVisual: () => EarlierVisualInput;
         /** Its designer call, the follow-up as Ryan's instruction. */
@@ -2023,16 +2568,29 @@ export class TurnEngine {
     const review = workflow.engineId === REVIEW_WEBSITE_WORKFLOW_ID;
     const gap = workflow.engineId === CONSUMPTION_GAP_WORKFLOW_ID;
     const ask = workflow.engineId === ASK_AGENT_WORKFLOW_ID;
-    if (ask) {
+    const orchestrated = workflow.engineId === ORCHESTRATED_ANSWER_WORKFLOW_ID;
+    if (orchestrated) {
+      // Answer a Business Question (orchestrated): Avery calls the team
+      // through the same calls Answer a Business Question's steps make.
+      requestContext.set(ORCHESTRATED_ANSWER_RUNTIME_KEY, {
+        orchestrate: (input) =>
+          captured(() =>
+            runtime.orchestrate(input, {
+              readImages: (read) => runtime.readImages(read),
+              plan: (planned) => runtime.plan(planned),
+              analyse: (attempt) => runtime.analyse(attempt),
+              writeAnswer: (written) => runtime.writeAnswer(written),
+              buildVisual: (built) => runtime.buildVisual(built),
+              buildDashboard: (built) => runtime.buildDashboard(built),
+            }),
+          ),
+      } satisfies OrchestratedAnswerRuntime);
+    } else if (ask) {
       // A follow-up that asks one agent (agents.md 5.21): the same calls
       // the workflow's own steps make, on this turn's records.
       requestContext.set(ASK_AGENT_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
         readImages: (input) => captured(() => runtime.readImages(input)),
-        followUp: runtime.followUp ?? [],
-        interpretFollowUp: (input) =>
-          captured(() => runtime.interpretFollowUp(input)),
-        pageResult: (input) => captured(() => runtime.pageResult(input)),
         plan: (input) => captured(() => runtime.plan(input)),
         earlierAnswer: () => runtime.earlierAnswer(),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
@@ -2151,17 +2709,15 @@ export class TurnEngine {
       } satisfies ConsumptionGapRuntime);
     } else {
       requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
+        // A run host's turn (workflows R44): its agents ask and wait.
+        ...(runtime.interactive ? { interactive: true } : {}),
         plan: (input) => captured(() => runtime.plan(input)),
         analyse: (input) => captured(() => runtime.analyse(input)),
         // Only a run host whose input ticked it (agents.md 5.11).
         buildsVisual: session.buildVisual === true,
         buildVisual: (input) => captured(() => runtime.buildVisual(input)),
+        reviseVisual: (input) => captured(() => runtime.reviseVisual(input)),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
-        // A follow-up over an earlier result (roadmap 1.28.8). Nathan's
-        // failure is no step's: the run plans the question instead.
-        ...(runtime.followUp ? { followUp: runtime.followUp } : {}),
-        interpretFollowUp: (input) => runtime.interpretFollowUp(input),
-        pageResult: (input) => captured(() => runtime.pageResult(input)),
         deliverAnswer: (answer) => runtime.deliverAnswer(answer),
       } satisfies AnswerBusinessQuestionRuntime);
     }
@@ -2173,6 +2729,11 @@ export class TurnEngine {
     if (readsImages) {
       requestContext.set(READ_IMAGES_RUNTIME_KEY, {
         readImages: (input) => captured(() => runtime.readImages(input)),
+        // Only a run of Answer a Business Question waits on Zoe (R44).
+        ...(runtime.interactive &&
+        workflow.engineId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID
+          ? { interactive: true }
+          : {}),
       } satisfies ReadImagesRuntime);
     }
     // The run's reference images (their stored paths), only when it has
@@ -2309,13 +2870,19 @@ export class TurnEngine {
           stepId,
           question: asked.question,
           options: asked.options,
+          ...(asked.review ? { review: asked.review } : {}),
+          ...(asked.visualId ? { visualId: asked.visualId } : {}),
           ...(resumeRun
             ? {
-                resume: (answer: string) =>
+                resume: (answer: string, images?: string[]) =>
                   drive(
                     resumeRun({
                       step: path,
-                      resumeData: { answer },
+                      // Reference images only with a change to Ryan's visual.
+                      resumeData: {
+                        answer,
+                        ...(images?.length ? { images } : {}),
+                      },
                       requestContext,
                     }),
                     true,

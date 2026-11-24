@@ -181,45 +181,100 @@ describe('LiveRuns (api.md 119, 138, 149, 150; ADR-0048)', () => {
   });
 });
 
-describe('LiveRuns: the cap on live runs (api.md 119 429)', () => {
-  it('reserves a slot until the cap is reached, then refuses; an ended run frees its slot', () => {
+describe('LiveRuns: the cap on live runs and the line for a slot (api.md 119 queued)', () => {
+  /** Let settled promises run their callbacks. */
+  const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+  /** Begin `ids` in order, each joining the line; answers who got a slot, in order. */
+  function lineUp(runs: LiveRuns, ids: string[]) {
+    const seated: string[] = [];
+    const refused: string[] = [];
+    for (const id of ids) {
+      runs.begin(id);
+      runs.waitForSlot(id).then(
+        () => seated.push(id),
+        () => refused.push(id),
+      );
+    }
+    return { seated, refused };
+  }
+
+  it('seats runs until the cap; the others wait in line and are seated oldest first as slots free', async () => {
     const runs = new LiveRuns(LIVE_RUN_RETENTION_MS, LIVE_RUN_MAX_EVENTS, 2);
     expect(runs.cap).toBe(2);
-    const first = runs.reserve();
-    const second = runs.reserve();
-    expect(first).toBeDefined();
-    expect(second).toBeDefined();
-    expect(runs.reserve()).toBeUndefined();
-    runs.begin('run-1', first);
-    runs.begin('run-2', second);
-    expect(runs.reserve()).toBeUndefined();
-    runs.end('run-1');
-    const third = runs.reserve();
-    expect(third).toBeDefined();
-    expect(runs.reserve()).toBeUndefined();
+    const ids = ['r1', 'r2', 'r3', 'r4', 'r5'];
+    const line = lineUp(runs, ids);
+    await flush();
+    expect(line.seated).toEqual(['r1', 'r2']);
+    runs.end('r2');
+    await flush();
+    expect(line.seated).toEqual(['r1', 'r2', 'r3']);
+    runs.end('r1');
+    runs.end('r3');
+    await flush();
+    expect(line.seated).toEqual(['r1', 'r2', 'r3', 'r4', 'r5']);
+    expect(line.refused).toEqual([]);
   });
 
-  it('a released reservation (its run was never stored) frees its slot once', () => {
+  it('a freed slot goes to the run waiting longest, never to one arriving as it frees', async () => {
     const runs = new LiveRuns(LIVE_RUN_RETENTION_MS, LIVE_RUN_MAX_EVENTS, 1);
-    const slot = runs.reserve()!;
-    slot.release();
-    slot.release();
-    const next = runs.reserve();
-    expect(next).toBeDefined();
-    expect(runs.reserve()).toBeUndefined();
+    const line = lineUp(runs, ['first', 'second']);
+    runs.end('first');
+    // The slot went to `second` as `first` ended.
+    runs.begin('late');
+    expect(runs.seat('late')).toBe(false);
+    await flush();
+    expect(line.seated).toEqual(['first', 'second']);
   });
 
-  it('a run begun without a slot holds none; a claimed slot is never refused and still counts', () => {
+  it('a stopped or ended waiting run leaves the line: its wait rejects and the next one is seated', async () => {
+    const runs = new LiveRuns(LIVE_RUN_RETENTION_MS, LIVE_RUN_MAX_EVENTS, 1);
+    const line = lineUp(runs, ['busy', 'stopped', 'ended', 'next']);
+    await flush();
+    expect(runs.stop('stopped')).toBe(true);
+    runs.end('ended');
+    await flush();
+    expect(line.refused).toEqual(['stopped', 'ended']);
+    runs.end('busy');
+    await flush();
+    expect(line.seated).toEqual(['busy', 'next']);
+  });
+
+  it('a stopped waiting run that ends frees no slot it never held', async () => {
+    const runs = new LiveRuns(LIVE_RUN_RETENTION_MS, LIVE_RUN_MAX_EVENTS, 1);
+    const line = lineUp(runs, ['busy', 'waiting', 'next']);
+    runs.stop('waiting');
+    runs.end('waiting');
+    await flush();
+    // `busy` still holds the only slot.
+    expect(line.seated).toEqual(['busy']);
+    runs.end('busy');
+    await flush();
+    expect(line.seated).toEqual(['busy', 'next']);
+  });
+
+  it('a claimed slot (a resume, 138) is never refused and still counts; a released slot frees once', async () => {
     const runs = new LiveRuns(LIVE_RUN_RETENTION_MS, LIVE_RUN_MAX_EVENTS, 1);
     runs.begin('free');
-    const held = runs.reserve()!;
-    runs.begin('held', held);
-    // A resume (138) claims a slot over the cap.
-    runs.begin('resumed', runs.claim());
-    runs.end('held');
-    expect(runs.reserve()).toBeUndefined();
-    runs.end('resumed');
-    expect(runs.reserve()).toBeDefined();
+    // A resume claims a slot over the cap.
+    const claimed = runs.claim();
+    runs.begin('resumed', claimed);
+    const line = lineUp(runs, ['queued']);
+    await flush();
+    expect(line.seated).toEqual([]);
+    claimed.release();
+    claimed.release();
+    await flush();
+    expect(line.seated).toEqual(['queued']);
+    runs.begin('other');
+    expect(runs.seat('other')).toBe(false);
+  });
+
+  it('waiting for a slot of a run not held rejects', async () => {
+    const runs = new LiveRuns(LIVE_RUN_RETENTION_MS, LIVE_RUN_MAX_EVENTS, 1);
+    await expect(runs.waitForSlot('unknown')).rejects.toThrow(
+      'Run "unknown" is not running',
+    );
   });
 });
 

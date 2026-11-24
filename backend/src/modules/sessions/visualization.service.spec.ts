@@ -2278,7 +2278,7 @@ describe('VisualizationService usage sink (agents-evals R219)', () => {
       'visual-1',
       'add a table',
       undefined,
-      sink,
+      { usageSink: sink },
     );
 
     expect(sink).toHaveBeenCalledWith(

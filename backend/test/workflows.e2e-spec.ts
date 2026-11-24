@@ -98,27 +98,70 @@ describe('The workflow catalogue (API)', () => {
     expect(res.body).toEqual({ ok: true });
   });
 
-  it('lists the six code workflows, Answer a Business Question and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
+  it("lists Answer a Business Question (orchestrated) with Avery as its step's agent, and no approve-steps input (agents.md 5.22)", async () => {
+    const listed = (await workflows()).find(
+      (w) => w.id === 'orchestrated-answer',
+    )!;
+    expect(listed.input.map((field) => field.name)).toEqual([
+      'question',
+      'images',
+      'datasets',
+      'buildVisual',
+    ]);
+    expect(listed.stepCount).toBe(1);
+    expect(listed.agents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'chief-of-staff',
+          name: 'Avery',
+          role: 'Chief of Staff',
+        }) as object,
+      ]),
+    );
+    const detail = (
+      await http().get('/workflows/orchestrated-answer').expect(200)
+    ).body as {
+      steps: { id: string; kind: string; agent?: { key: string } }[];
+      exits?: unknown;
+    };
+    expect(detail.steps).toEqual([
+      expect.objectContaining({
+        id: 'orchestrate',
+        kind: 'agent',
+        agent: expect.objectContaining({ key: 'chief-of-staff' }) as object,
+      }),
+    ]);
+    const avery = (await http().get('/agents/chief-of-staff').expect(200))
+      .body as { name: string; usedInWorkflows: { id: string }[] };
+    expect(avery).toMatchObject({ name: 'Avery' });
+    expect(avery.usedInWorkflows.map((w) => w.id)).toEqual([
+      'orchestrated-answer',
+      'orchestrated-answer-michael',
+    ]);
+  });
+
+  it('lists the eight code workflows, Answer a Business Question, its orchestrated and Avery + Michael versions and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
     const listed = await workflows();
     expect(listed.map((w) => w.id)).toEqual([
       'answer-business-question',
+      'orchestrated-answer',
+      'orchestrated-answer-michael',
       'data-readiness-assessment',
       'recreate-dashboard',
       'map-dashboard-data',
       'review-website',
       'consumption-gap-analysis',
     ]);
-    expect(listed.slice(0, 2)).toEqual([
+    expect([listed[0], listed[3]]).toEqual([
       {
         id: 'answer-business-question',
         name: 'Answer a Business Question',
         description: expect.any(String) as string,
         kind: 'code',
         owner: 'Official',
-        // Michael analyses; Zoe reads the reference images, Nathan reads a
-        // follow-up over an earlier result, Olivia plans, Jessica writes and
-        // Ryan builds the visual unless the run turns it off (agents.md
-        // 5.11).
+        // Michael analyses; Zoe reads the reference images, Olivia plans,
+        // Jessica writes and Ryan builds the visual unless the run turns it
+        // off (agents.md 5.11).
         agents: [
           {
             key: 'insights-analyst',
@@ -126,7 +169,6 @@ describe('The workflow catalogue (API)', () => {
             role: 'Insights Analyst',
           },
           { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
-          { key: 'result-explorer', name: 'Nathan', role: 'Result Explorer' },
           { key: 'analysis-planner', name: 'Olivia', role: 'Analysis Lead' },
           { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
           {
@@ -135,7 +177,7 @@ describe('The workflow catalogue (API)', () => {
             role: 'Visualization Designer',
           },
         ],
-        stepCount: 13,
+        stepCount: 9,
         bar: 'steps',
         trigger: 'run',
         input: [
@@ -168,6 +210,15 @@ describe('The workflow catalogue (API)', () => {
             // It picks the branch to Build visual; no step reads it.
             name: 'buildVisual',
             label: 'Build a visual: Ryan charts the results of the answer',
+            type: 'boolean',
+            required: false,
+            default: true,
+            usedBy: [],
+          },
+          {
+            // No step reads it; it makes the run interactive.
+            name: 'approveSteps',
+            label: "Approve each step: every agent's work waits for your OK",
             type: 'boolean',
             required: false,
             default: true,
@@ -330,6 +381,8 @@ describe('The workflow catalogue (API)', () => {
     it('a published user agent adds no workflow: agents are a library', async () => {
       expect((await workflows()).map((w) => w.id)).toEqual([
         'answer-business-question',
+        'orchestrated-answer',
+        'orchestrated-answer-michael',
         'data-readiness-assessment',
         'recreate-dashboard',
         'map-dashboard-data',
@@ -356,16 +409,12 @@ describe('The workflow catalogue (API)', () => {
         'read-images',
         'receive-question',
         'load-catalog',
-        'interpret-follow-up',
         'plan',
-        'clarify',
         'analyse',
         'validate',
         'write-answer',
         'build-visual',
         'wrap-up',
-        'page-result',
-        'page-answer',
       ]);
       // The Start node: each field with its rules and the steps reading it.
       expect(
@@ -400,6 +449,12 @@ describe('The workflow catalogue (API)', () => {
           maxLength: undefined,
           usedBy: [],
         },
+        {
+          name: 'approveSteps',
+          required: false,
+          maxLength: undefined,
+          usedBy: [],
+        },
       ]);
       // Receive question no longer fails on an empty question: the input
       // node refuses it before the run.
@@ -417,7 +472,6 @@ describe('The workflow catalogue (API)', () => {
           .map((step) => [step.id, step.agent?.key, step.agent?.tools.length]),
       ).toEqual([
         ['read-images', 'image-reader', 0],
-        ['interpret-follow-up', 'result-explorer', 0],
         ['plan', 'analysis-planner', 0],
         ['analyse', 'insights-analyst', 6],
         ['write-answer', 'answer-writer', 0],
@@ -432,23 +486,13 @@ describe('The workflow catalogue (API)', () => {
           systemPrompt: expect.any(String) as string,
           toolDetails: expect.any(Array) as unknown[],
         },
-        // Zoe, Nathan, Olivia and Jessica: their job descriptions, no tools.
+        // Zoe, Olivia and Jessica: their job descriptions, no tools.
         {
           key: 'image-reader',
           name: 'Zoe',
           role: 'Image Analyst',
           model: null,
           systemPrompt: expect.any(String) as string,
-          toolDetails: [],
-        },
-        {
-          key: 'result-explorer',
-          name: 'Nathan',
-          role: 'Result Explorer',
-          model: null,
-          systemPrompt: expect.stringMatching(
-            /^You turn a user's words about a query's result into a view/,
-          ) as string,
           toolDetails: [],
         },
         {
@@ -547,10 +591,8 @@ describe('The workflow catalogue (API)', () => {
       // Write answer's output is the answer (AnswerOutput) and the calls.
       const written = v2.steps.find((step) => step.id === 'write-answer')!;
       expect(written.output).toEqual(['headline', 'answer', 'calls']);
-      // The flow is its edges (117): a branch after Interpret follow-up (a
-      // new question, or the earlier result paged), a branch after Plan, a
-      // loop back from Clarify to Plan once answered, a loop back from
-      // Validate to Analyse, End after Wrap up or Page answer.
+      // The flow is its edges (117): one line, with a loop back from
+      // Validate to Analyse, and End after Wrap up.
       const { edges } = (
         await http().get('/workflows/answer-business-question').expect(200)
       ).body as {
@@ -586,27 +628,8 @@ describe('The workflow catalogue (API)', () => {
         },
         { from: 'read-images', to: 'receive-question', kind: 'next' },
         { from: 'receive-question', to: 'load-catalog', kind: 'next' },
-        { from: 'load-catalog', to: 'interpret-follow-up', kind: 'next' },
-        {
-          from: 'interpret-follow-up',
-          to: 'plan',
-          kind: 'branch',
-          label: 'New question',
-        },
-        {
-          from: 'interpret-follow-up',
-          to: 'page-result',
-          kind: 'branch',
-          label: 'Explore the earlier result',
-        },
-        {
-          from: 'plan',
-          to: 'clarify',
-          kind: 'branch',
-          label: 'Needs clarification',
-        },
-        { from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' },
-        { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
+        { from: 'load-catalog', to: 'plan', kind: 'next' },
+        { from: 'plan', to: 'analyse', kind: 'next' },
         { from: 'analyse', to: 'validate', kind: 'next' },
         { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
         {
@@ -625,8 +648,6 @@ describe('The workflow catalogue (API)', () => {
         },
         { from: 'build-visual', to: 'wrap-up', kind: 'next' },
         { from: 'wrap-up', to: 'end', kind: 'next' },
-        { from: 'page-result', to: 'page-answer', kind: 'next' },
-        { from: 'page-answer', to: 'end', kind: 'next' },
       ]);
       // 116 is unchanged: the summary carries neither.
       const [summary] = await workflows();
@@ -659,6 +680,20 @@ describe('The workflow catalogue (API)', () => {
               id: 'answer-business-question',
               name: 'Answer a Business Question',
             },
+            // Michael alone is also the primary agent of its orchestrated
+            // version (agents.md 5.22).
+            ...(key === 'insights-analyst'
+              ? [
+                  {
+                    id: 'orchestrated-answer',
+                    name: 'Answer a Business Question (orchestrated)',
+                  },
+                  {
+                    id: 'orchestrated-answer-michael',
+                    name: 'Answer a Business Question (Avery + Michael)',
+                  },
+                ]
+              : []),
           ],
         });
       }

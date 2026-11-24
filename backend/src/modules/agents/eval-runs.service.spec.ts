@@ -7,6 +7,7 @@ jest.mock('../sessions/sessions.service', () => ({
 jest.mock('../ontology/ontology.service', () => ({
   OntologyService: class {},
 }));
+jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 // One set per agent: a set's agent is its `agentKey`, `assistant` by default.
 jest.mock('../../mastra/evals/eval-sets', () => {
   const sets = [
@@ -39,6 +40,7 @@ jest.mock('../../mastra/tool-services', () => ({
   getDatasetToolServices: () => ({ getDatasets: mockGetDatasets }),
 }));
 jest.mock('../../mastra/evals/assistant.evals', () => ({
+  selectEvalSets: jest.fn((_ids: unknown, sets: unknown[]) => sets),
   selectEvalCases: jest.fn(() => [
     { id: 'champion-2022', question: 'Who won the 2022 World Cup?' },
   ]),
@@ -66,9 +68,11 @@ import {
   fixtureForCases,
   runAssistantEvalCase,
   selectEvalCases,
+  selectEvalSets,
 } from '../../mastra/evals/assistant.evals';
 import { evalTargetFor } from '../../mastra/evals/eval-sets';
 import { LEARNING_STORE } from '../memory/learning-store.port';
+import { currentEvalRunId } from '../../mastra/evals/eval-run-scope';
 
 describe('EvalRunsService dataset validation', () => {
   const datasets = { list: jest.fn() };
@@ -78,6 +82,11 @@ describe('EvalRunsService dataset validation', () => {
     mostRecentCompleted: jest.fn(),
   };
   const knowledge = { definitionBlock: jest.fn().mockResolvedValue('') };
+  const llm = {
+    getView: jest
+      .fn()
+      .mockResolvedValue({ provider: 'copilot', model: 'gpt-5' }),
+  };
   /** A test body, kept as a wrapper so the cases read as before. */
   const asDemoUser =
     <T>(fn: () => Promise<T>) =>
@@ -90,6 +99,7 @@ describe('EvalRunsService dataset validation', () => {
       {} as never,
       {} as never,
       knowledge as never,
+      llm as never,
     );
 
   beforeEach(() => jest.clearAllMocks());
@@ -147,6 +157,7 @@ describe('EvalRunsService dataset validation', () => {
       const result = await runner.start('assistant', 'wc');
       expect(result).toEqual({ jobId: expect.any(String) as string });
       await new Promise((resolve) => setImmediate(resolve));
+      if (!('jobId' in result)) throw new Error('Run did not start');
       // No judge option given: the judge is off (R144).
       expect(runAssistantEvalCase).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'champion-2022' }),
@@ -157,10 +168,18 @@ describe('EvalRunsService dataset validation', () => {
         { mode: 'off' },
         {
           model: 'openai/gpt-4o-mini',
+          evalRunId: result.jobId,
           visualBuilder: expect.any(Function) as unknown,
         },
       );
-      if (!('jobId' in result)) throw new Error('Run did not start');
+      expect(repository.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'app',
+          setId: 'world-cup',
+          provider: 'copilot',
+          model: 'gpt-5',
+        }),
+      );
       expect((await runner.status(result.jobId))?.status).toBe('completed');
       // R40: the baseline must also share a question with this run.
       expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
@@ -207,6 +226,7 @@ describe('EvalRunsService dataset validation', () => {
         {} as never,
         sessions as never,
         knowledge as never,
+        llm as never,
       );
       const result = await runner.start('assistant', 'wc');
       if (!('jobId' in result)) throw new Error('Run did not start');
@@ -230,6 +250,9 @@ describe('EvalRunsService dataset validation', () => {
 });
 
 describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
+  const llm = {
+    getView: jest.fn().mockResolvedValue({ provider: null, model: null }),
+  };
   const sample = [
     {
       name: 'Sample',
@@ -261,9 +284,20 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
       {} as never,
       {} as never,
       { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      llm as never,
     );
 
   beforeEach(() => jest.clearAllMocks());
+
+  it('records no set when the questions span several sets', async () => {
+    jest
+      .mocked(selectEvalSets)
+      .mockReturnValueOnce([{ id: 'a' }, { id: 'b' }] as never);
+    await service().start('assistant', 'wc');
+    expect(repository.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ setId: null }),
+    );
+  });
 
   it('refuses an agent with no eval set', async () => {
     await expect(service().start('visualization', 'wc')).resolves.toEqual({
@@ -281,6 +315,14 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
     jest
       .mocked(runAssistantEvalCase)
       .mockResolvedValueOnce({ id: 'dr-first', passed: true } as never);
+    // The clean-up runs in the run's scope, so its model calls are marked.
+    const finishScopes: (string | undefined)[] = [];
+    (
+      evalTargetFor('data-readiness') as unknown as { finish: jest.Mock }
+    ).finish.mockImplementationOnce(() => {
+      finishScopes.push(currentEvalRunId());
+      return Promise.resolve();
+    });
 
     const started = await service().start('data-readiness', 'wc', ['dr-first']);
 
@@ -299,6 +341,10 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
         agentKey: 'data-readiness',
         caseIds: ['dr-first'],
         totalCases: 1,
+        setId: 'data-readiness',
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        source: 'app',
       }),
     );
     for (let i = 0; i < 5; i++) {
@@ -316,14 +362,19 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
       { mode: 'off' },
       {
         model: 'openai/gpt-4o-mini',
+        evalRunId: (started as { jobId: string }).jobId,
         visualBuilder: expect.any(Function) as unknown,
       },
     );
     expect(target.finish).toHaveBeenCalledWith(['Sample']);
+    expect(finishScopes).toEqual([(started as { jobId: string }).jobId]);
   });
 });
 
 describe('EvalRunsService one running run per agent', () => {
+  const llm = {
+    getView: jest.fn().mockResolvedValue({ provider: null, model: null }),
+  };
   const sample = [
     {
       name: 'Sample',
@@ -366,6 +417,7 @@ describe('EvalRunsService one running run per agent', () => {
       {} as never,
       {} as never,
       { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      llm as never,
     );
 
     const started = await service.start('assistant', 'wc');
@@ -421,6 +473,7 @@ describe('EvalRunsService judge option and summary (R144, R148)', () => {
       {} as never,
       {} as never,
       { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      { getView: jest.fn().mockResolvedValue({}) } as never,
     );
   /** A test body, kept as a wrapper so the cases read as before. */
   const asDemoUser = <T>(fn: () => Promise<T>): Promise<T> => fn();
@@ -475,6 +528,7 @@ describe('EvalRunsService judge option and summary (R144, R148)', () => {
         judge,
         {
           model: 'openai/gpt-4o-mini',
+          evalRunId: expect.any(String) as unknown,
           visualBuilder: expect.any(Function) as unknown,
         },
       );
@@ -598,6 +652,7 @@ describe('EvalRunsService repeats, attempts and usage (R209 to R211, R219 to R22
       {} as never,
       {} as never,
       { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      { getView: jest.fn().mockResolvedValue({}) } as never,
     );
   /** The assistant's tokens on one model for one call. */
   const usage = (model: string, inputTokens: number) => [
@@ -690,7 +745,9 @@ describe('EvalRunsService repeats, attempts and usage (R209 to R211, R219 to R22
     expect(started).toEqual({ jobId: expect.any(String) as string });
     expect(inserted[0]).toMatchObject({
       repeats: 3,
-      model: 'openai/gpt-4o-mini',
+      // The saved LLM settings' label (ADR-0054), not the router id.
+      provider: 'openai',
+      model: 'gpt-4o-mini',
       usage: [],
       costUsd: 0,
       source: 'app',
@@ -847,7 +904,8 @@ describe('EvalRunsService repeats, attempts and usage (R209 to R211, R219 to R22
         datasourceId: 'wc',
         datasets: ['Sample'],
         repeats: 1,
-        model: 'openai/gpt-4o-mini',
+        provider: 'openai',
+        model: 'gpt-4o-mini',
         caseIds: ['champion-2022', 'shot-conversion-2022'],
       });
       expect(inserted[0]).toMatchObject({ source: 'cli', status: 'running' });
@@ -949,6 +1007,7 @@ describe('EvalRunsService memory arm (R19 step 10, R231, R232, R238, R246)', () 
       {} as never,
       {} as never,
       { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      { getView: jest.fn().mockResolvedValue({}) } as never,
       ref as never,
     );
   const settle = async () => {
@@ -1048,6 +1107,7 @@ describe('EvalRunsService memory arm (R19 step 10, R231, R232, R238, R246)', () 
     for (const call of jest.mocked(runAssistantEvalCase).mock.calls) {
       expect(call[6]).toEqual({
         model: 'openai/gpt-4o-mini',
+        evalRunId: expect.any(String) as unknown,
         visualBuilder: expect.any(Function) as unknown,
       });
     }
@@ -1070,6 +1130,7 @@ describe('EvalRunsService memory arm (R19 step 10, R231, R232, R238, R246)', () 
     expect(options).toEqual(
       [1, 2, 3].map((attempt) => ({
         model: 'openai/gpt-4o-mini',
+        evalRunId: started.jobId,
         visualBuilder: expect.any(Function) as unknown,
         memory: {
           store,

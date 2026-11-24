@@ -5,6 +5,7 @@ import { DatasetsRepository } from '../datasets/repositories/datasets.repository
 import { DatasourcesService } from '../datasources/datasources.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { OntologyService } from '../ontology/ontology.service';
+import { LlmService } from '../llm/llm.service';
 import { EvalRunsRepository } from './repositories/eval-runs.repository';
 import {
   computeRegressionDiff,
@@ -21,6 +22,7 @@ import {
   fixtureForCases,
   runAssistantEvalCase,
   selectEvalCases,
+  selectEvalSets,
 } from '../../mastra/evals/assistant.evals';
 import {
   evalSetsFor,
@@ -29,6 +31,8 @@ import {
   evalTargetOf,
 } from '../../mastra/evals/eval-sets';
 import type { EvalTargetOverride } from '../../mastra/evals/eval-target-option';
+import { savedLlmLabel } from '../../mastra/evals/eval-cli-run';
+import { inEvalRun } from '../../mastra/evals/eval-run-scope';
 import type { SampleFixture } from '../testing-data/fixtures/registry';
 import { parseJudgeSetting } from '../../mastra/evals/judge-option';
 import type { EvalJudgeSetting } from '../../mastra/evals/judge-option';
@@ -75,6 +79,20 @@ export interface EvalRunView {
   startedAt: string;
   finishedAt?: string;
   /**
+   * The eval set the questions belong to; null when they span several sets.
+   * Absent on runs recorded before ADR-0054.
+   */
+  setId?: string | null;
+  /**
+   * What the run ran on, as the saved LLM settings (or `EVAL_LLM_*`) name it:
+   * `anthropic` and `claude-sonnet-5-5`. Monitoring's Agent quality pools
+   * pass^3 by it (ADR-0054). Absent on runs recorded before ADR-0054; on
+   * BA-9 runs saved before the merge with main, `model` holds the router id
+   * (`anthropic/claude-sonnet-5-5`) and `provider` is absent.
+   */
+  provider?: string;
+  model?: string;
+  /**
    * Regression comparison against the most recent previous completed run
    * for this agent with the same datasource, datasets and memory arm,
    * computed once this run finishes. Absent when no
@@ -102,8 +120,6 @@ export interface EvalRunView {
    * overrode the set's own (R252); absent for a run on the set's own target.
    */
   target?: EvalTargetOverride;
-  /** Router id of the model the agent runs on, resolved at start (R219). */
-  model?: string;
   /**
    * The results' usage summed by agent and model (R219): empty at start,
    * absent on runs saved before usage was recorded.
@@ -140,6 +156,11 @@ export interface CommandLineEvalRun {
   arm: EvalArm;
   /** From `EVAL_TARGET`: another target than the set's own (R252). */
   target?: EvalTargetOverride;
+  /**
+   * The `EVAL_LLM_*` endpoint the run records as its provider and model;
+   * the saved LLM settings when absent (ADR-0054).
+   */
+  llmLabel?: { provider: string; model: string };
 }
 
 /** The refusal of an arm whose memory this build does not have (R232). */
@@ -169,6 +190,7 @@ export class EvalRunsService {
     private readonly datasources: DatasourcesService,
     private readonly sessions: SessionsService,
     private readonly knowledge: OntologyService,
+    private readonly llm: LlmService,
     /** Finds the memory port's store, when the build has one (R232). */
     private readonly moduleRef?: ModuleRef,
   ) {}
@@ -341,6 +363,7 @@ export class EvalRunsService {
       repeats: request.repeats,
       arm: request.arm,
       ...(request.target ? { target: request.target } : {}),
+      ...(request.llmLabel ? { llmLabel: request.llmLabel } : {}),
       source: 'cli',
     });
     await this.run(view, cases, onResult, memory.store);
@@ -405,8 +428,8 @@ export class EvalRunsService {
 
   /**
    * A new run, in memory and in the store, holding the agent until it ends
-   * (R22): its repeats, its arm, the model the agent runs on, no usage yet
-   * and its source.
+   * (R22): its repeats, its arm, its set, provider and model (ADR-0054), no
+   * usage yet and its source.
    */
   private async record(fields: {
     agentKey: string;
@@ -417,9 +440,14 @@ export class EvalRunsService {
     repeats: EvalRepeats;
     arm: EvalArm;
     target?: EvalTargetOverride;
+    llmLabel?: { provider: string; model: string };
     source: EvalRunSource;
   }): Promise<EvalRunView> {
-    const model = await evalRunModel();
+    const caseIds = fields.cases.map((evalCase) => evalCase.id);
+    // What the run runs on, recorded so pass^3 never mixes models (ADR-0054).
+    const touched = selectEvalSets(caseIds, evalSetsFor(fields.agentKey));
+    const { provider, model } =
+      fields.llmLabel ?? savedLlmLabel(await this.llm.getView());
     const view: EvalRunView = {
       jobId: randomUUID(),
       agentKey: fields.agentKey,
@@ -427,7 +455,7 @@ export class EvalRunsService {
       datasets: fields.datasets,
       status: 'running',
       results: [],
-      caseIds: fields.cases.map((evalCase) => evalCase.id),
+      caseIds,
       totalCases: fields.cases.length,
       currentQuestion: fields.cases[0]?.question,
       currentAttempt: 1,
@@ -436,7 +464,9 @@ export class EvalRunsService {
       repeats: fields.repeats,
       arm: { ...fields.arm },
       ...(fields.target ? { target: fields.target } : {}),
-      ...(model ? { model } : {}),
+      setId: touched.length === 1 ? touched[0].id : null,
+      provider,
+      model,
       usage: [],
       costUsd: 0,
       source: fields.source,
@@ -482,6 +512,9 @@ export class EvalRunsService {
     // TurnOptions.agentContext, computed once per run — every case in
     // the run shares the same datasets.
     const knowledgeBlock = await this.knowledge.definitionBlock(view.datasets);
+    // The router id each call with no model of its own is recorded under
+    // (R219), resolved once for the run.
+    const agentModel = await evalRunModel();
     try {
       for (const [index, evalCase] of cases.entries()) {
         view.currentQuestion = evalCase.question;
@@ -500,7 +533,9 @@ export class EvalRunsService {
               target,
               view.judge,
               {
-                model: view.model,
+                ...(agentModel ? { model: agentModel } : {}),
+                // The trace marker (ADR-0054).
+                evalRunId: view.jobId,
                 // Ryan on the throwaway host, for a whole-workflow target's
                 // Build visual (agents-evals R257).
                 ...(evalSession
@@ -555,8 +590,9 @@ export class EvalRunsService {
       view.finishedAt = new Date().toISOString();
       this.active.delete(view.agentKey);
       await this.repository.save(view);
-      // The agent's own clean-up of what this run created, if any.
-      await target.finish?.(view.datasets);
+      // The agent's own clean-up of what this run created, if any, inside
+      // the run's scope so any model call it makes is marked (ADR-0054).
+      await inEvalRun(view.jobId, async () => target.finish?.(view.datasets));
       await cleanupEvalHost(this.sessions, evalSession);
     }
   }

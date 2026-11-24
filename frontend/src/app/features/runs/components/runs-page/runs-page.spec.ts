@@ -45,6 +45,21 @@ describe('RunsPage (app-shell R46; plan 1.24.11)', () => {
 
   afterEach(() => http.verify());
 
+  it('the Archived filter asks for archived runs only and tags their rows', () => {
+    const el = mount([summary(1)]);
+    el.querySelector<HTMLButtonElement>('[data-testid="runs-filter-archived"]')!.click();
+    fixture.detectChanges();
+    http
+      .expectOne((r) => r.urlWithParams.endsWith('/workflow-runs?archived=true'))
+      .flush({ runs: [{ ...summary(2), archivedAt: '2026-11-20T10:00:00Z' }] });
+    fixture.detectChanges();
+    expect(
+      el.querySelector('[data-testid="runs-filter-archived"]')!.getAttribute('aria-pressed'),
+    ).toBe('true');
+    expect(el.querySelectorAll('[data-testid^="run-run-"]').length).toBe(1);
+    expect(el.querySelector('[data-testid="row-run-archived"]')?.textContent).toContain('Archived');
+  });
+
   it('lists runs ten to a page with a range and paging', () => {
     const el = mount(Array.from({ length: 12 }, (_, i) => summary(i + 1)));
     expect(el.querySelectorAll('[data-testid^="run-run-"]').length).toBe(10);
@@ -67,6 +82,13 @@ describe('RunsPage (app-shell R46; plan 1.24.11)', () => {
     expect(chips[0].textContent?.trim()).toBe('Waiting for you');
     expect(chips[0].classList).toContain('chip-warning');
     expect(chips[1].textContent?.trim()).toBe('Done');
+  });
+
+  it('shows a queued run with a neutral Queued chip', () => {
+    const el = mount([{ ...summary(1), status: 'queued' }]);
+    const chip = el.querySelector('[data-testid="row-run-status"]')!;
+    expect(chip.textContent?.trim()).toBe('Queued');
+    expect(chip.classList).toContain('chip-neutral');
   });
 
   it('shows the title, workflow, status and id of a run, and opens it on click', () => {

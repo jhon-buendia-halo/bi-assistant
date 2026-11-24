@@ -179,6 +179,14 @@ export interface JsonSchema {
   [keyword: string]: unknown;
 }
 
+/** One tool of an orchestrator and the agent behind it (api.md 117). */
+export interface WorkflowTeamMember {
+  tool: string;
+  key: string;
+  name: string;
+  role: string;
+}
+
 /** One step of a workflow detail: an agent step also names its agent's key (api.md 117). */
 export type WorkflowDetailStep = Omit<
   AgentWorkflow['steps'][number],
@@ -186,6 +194,11 @@ export type WorkflowDetailStep = Omit<
 > & {
   agent?: NonNullable<AgentWorkflow['steps'][number]['agent']> & {
     key?: string;
+    /**
+     * An orchestrator's team (Avery, api.md 117): each of its tools that
+     * calls an agent, with that agent's key and persona.
+     */
+    team?: WorkflowTeamMember[];
   };
   /** The step's declared input contract; absent from an older backend. */
   inputSchema?: JsonSchema;
@@ -281,6 +294,12 @@ export interface WorkflowRunToolCall {
   durationMs?: number;
   /** Why the agent made the call, in its words (the `tool` event's `rationale`). */
   rationale?: string;
+  /** Who made it, when the step's agent delegates: Avery signs her own calls. */
+  agent?: string;
+  /** A team call (Avery's): the agent it hands the work to. */
+  teammate?: string;
+  /** A team call's result: what the teammate handed back, in their words (at most 2 000 characters). */
+  reply?: string;
 }
 
 /** One labelled fact under a step story's headline (api.md 3.6 `step.story`). */
@@ -388,6 +407,10 @@ export interface WorkflowWaitingFor {
   expiresAt: string;
   /** The run can no longer continue (30 minutes passed, or the app restarted). */
   expired?: true;
+  /** An approval gate's outcome in words, as Markdown (workflows R44). */
+  review?: string;
+  /** The visual an approval gate holds (Build visual): it opens, takes reference images. */
+  visualId?: string;
 }
 
 /** The `input-required` event of a run stream (api.md 3.6). */
@@ -398,6 +421,10 @@ export interface WorkflowInputRequired {
   question: string;
   options: string[];
   expiresAt: string;
+  /** An approval gate's outcome in words, as Markdown (workflows R44). */
+  review?: string;
+  /** The visual an approval gate holds (Build visual): it opens, takes reference images. */
+  visualId?: string;
 }
 
 /** The body of `POST /workflows/:id/runs/stream` (api.md 118, 119). */
@@ -405,6 +432,10 @@ export interface WorkflowRunRequest {
   input: Record<string, WorkflowInputValue>;
   context?: { fromRunId: string; askStep?: string };
 }
+
+/** `queued`: accepted, waiting for a free slot (or re-queued after a restart). */
+export type WorkflowRunStatus =
+  'queued' | 'running' | 'suspended' | 'success' | 'failed' | 'stopped';
 
 /**
  * A stored run (api.md 3.6 `WorkflowRun`, 121), as `done.run` carries it.
@@ -417,7 +448,15 @@ export interface WorkflowRun {
   workflowName: string;
   input: Record<string, WorkflowInputValue>;
   context?: { fromRunId: string; askStep?: string };
-  status: 'running' | 'success' | 'failed' | 'stopped' | 'suspended';
+  /** Answer a Business Question (orchestrated): the conversation this run belongs to. */
+  conversationId?: string;
+  /** Set while the run's conversation is archived (hidden, read-only). */
+  archivedAt?: string;
+  status: WorkflowRunStatus;
+  /** When the run was accepted (it may wait queued); legacy runs lack it. */
+  queuedAt?: string;
+  /** Times the run has started (run level, not the step's `attempt`); absent while never started. */
+  attempts?: number;
   /** A suspended run (or an expired one, `expired: true`): the question it waits on. */
   waitingFor?: WorkflowWaitingFor;
   steps: WorkflowRunStep[];
@@ -456,6 +495,10 @@ export interface LiveToolCall {
   progress?: string;
   /** Its `tool-result` arrived. */
   finished: boolean;
+  /** Who made it, when the step's agent delegates: Avery signs her own calls. */
+  agent?: string;
+  /** A team call (Avery's): the agent it hands the work to. */
+  teammate?: string;
 }
 
 /** One step of the run shown, in the workflow's order. */
@@ -503,6 +546,10 @@ export interface WorkflowRunSummary {
   workflowName: string;
   status: WorkflowRun['status'];
   title: string;
+  queuedAt?: string;
+  attempts?: number;
   startedAt: string;
   finishedAt?: string;
+  conversationId?: string;
+  archivedAt?: string;
 }

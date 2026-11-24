@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { ShellState } from '../../../core/shell/shell-state';
 import { SessionsState } from '../../sessions/services/sessions-state';
+import { AgentPageState } from './agent-page-state.service';
 import { AgentEditorService } from './agent-editor.service';
 import { Agent } from './agents-api.service';
 
@@ -14,6 +15,7 @@ export class AgentsNavState {
   private readonly shell = inject(ShellState);
   private readonly sessions = inject(SessionsState);
   private readonly agentEditor = inject(AgentEditorService);
+  private readonly pageState = inject(AgentPageState);
 
   /** Registry key of the agent open in the detail view. */
   readonly activeAgentKey = signal<string | null>(null);
@@ -37,6 +39,20 @@ export class AgentsNavState {
     if (!this.shell.confirmLeaveAgentEditor()) return;
     this.activeAgentKey.set(key);
     this.shell.mainView.set('agent-detail');
+  }
+
+  /**
+   * An agent's Evals tab on Executions (monitoring R67, agents-evals R34). A
+   * refusal by the shell (unsaved edits) clears both requests.
+   */
+  openAgentEvalRuns(key: string): void {
+    this.pageState.requestedTab.set('evals');
+    this.pageState.requestedEvalTab.set('runs');
+    this.openAgentByKey(key);
+    if (this.activeAgentKey() !== key) {
+      this.pageState.requestedTab.set(null);
+      this.pageState.requestedEvalTab.set(null);
+    }
   }
 
   /** All agents, from an agent's page; asks about an unsaved edit first. */

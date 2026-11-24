@@ -4,9 +4,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 
 ## Process and hand-over
 - When a request names a UI concept or region ("layer for…", "right panel"), ask which screen and which object it attaches to in the first clarifying question, quoting the user's screenshot.
-- Ask only the questions with no safe default, all in one picker call; state the defaults for the rest and proceed.
 - When a request could become a repo change, ask whether the result lives in the repo (fixture, seed) or only on this machine before building it.
-- Answer an out-of-band question in the very next reply, before any status update.
 - Hand over the running app after the wave check (`node scripts/qa.mjs --wave <ids> --base <ref>`; add `--demo <id>` and `node scripts/demo-page.mjs <id>` for the wave's user-visible milestone), and after a restart tell the user to hard-reload the open tab (Ctrl+Shift+R / Cmd+Shift+R).
 - Before an L epic or an unclear M feature, show a cheap prototype, then ask one batched confirmation per epic (spec, ADR, questions with recommendations, branch); re-plan a direction change once, not story by story.
 - Before planning a change to a shared component, list its hosts (`grep -rn "<app-<name>" frontend/src`) and open the real app on each entry point: a stored item may open on another page than the one you are changing.
@@ -18,7 +16,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 
 ## Subagents and parallel units
 - Give parallel units one written contract first (types, routes copied from `specs/system/api.md`, test ids, copy); a helper or Feature file two units might both add belongs to exactly one of them, and each unit that adds endpoints gets its own `api.md` number range. In a roadmap entry cite the plan by story id (`plan 1.25.3`) or link, never `plan section 2`: that pulls section 2 of every plan file into the story pack.
-- Brief every subagent: Edit/Write tools only, a private scratch subfolder (never shared `/tmp` names), never kill a process it did not start, and "if a build or budget blocks you, report it; do not change build config".
+- Open every subagent brief with `Read .claude/worker.md before anything else.`, then the goal, the task and the brand; the rules every subagent follows live in [.claude/worker.md](.claude/worker.md).
 - Do not trust a subagent's report: the lead's wave check (`qa.mjs --wave`) re-runs the gates (build, related unit tests, the Features' E2E, `check-specs`) once over the merged wave, especially after a builder was stopped and resumed.
 - On "keep going" with no context, check for another live session on the epic (commits in the last minutes, files changing under you) and ask who owns the work.
 - At the gate, run `git merge-base --is-ancestor <branch> HEAD` for every `unit/<EPIC-ID>-*` branch and merge anything missing before E2E or evals.

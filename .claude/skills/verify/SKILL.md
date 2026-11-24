@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Use for the wave check (qa.mjs --wave, the demo and hand-over), the plain-session fast run (qa.mjs --fast) and at workflow step 9 (qa.mjs --gate: builds, unit tests, lint, check-specs, the impacted E2E specs and, when an agent's input changed, its evals against the base; fix until green), and to verify a change in the running web app (build, launch an isolated CLI instance, drive it in Chromium with Playwright).
+description: Use for the wave check (qa.mjs --wave, the demo and hand-over), the plain-session fast run (qa.mjs --fast) and at workflow step 9 (qa.mjs --gate: builds, unit tests, lint, check-specs, the impacted E2E specs and, when an agent's input changed, its evals against the base; fix until green), and to drive a running instance in Chromium with Playwright (selectors and gotchas; the instance itself comes from local-instance).
 ---
 
 # Wave check, step 9, and the running app
@@ -19,7 +19,7 @@ Part of the [`workflow-strict`](../workflow-strict/SKILL.md) workflow (the wave 
 
 Its prompt, skills, tools, context blocks or model routing. Run the agent's eval set (`npm run evals:assistant` with `EVAL_SET` or `EVAL_CASES`, see [delivery.md](../../../specs/system/delivery.md) 2) on the **base commit and on the branch**, same model, same data:
 
-- **Run in parallel.** Three runs per build at once, each on its own copy of the data dir and its own `EVAL_RESULTS_FILE`, not one after another. Before starting, print the copy's saved provider and model; use `EVAL_LLM_*` for any other target.
+- **Run in parallel.** Three runs per build at once, each on its own copy of the data dir and its own `EVAL_RESULTS_FILE`, not one after another. Before starting, print the copy's saved provider and model, agree the model with the user and check its key and credit (about 3 × cases × 2 turns); use `EVAL_LLM_*` for any other target.
 - **Pass bar on the branch:**
   - every **code check** (tool calls made, SQL valid, no tool errors, required fields and formats) passes in **3 of 3** runs of every case;
   - every **judged** case (`judgeRubric`) passes in **at least 2 of 3** runs and **no less often than on the base**.
@@ -31,12 +31,8 @@ Its prompt, skills, tools, context blocks or model routing. Run the agent's eval
 
 ## Check the running web app
 
-1. Build: `npm --prefix backend run build:all` (backend dist + web UI in `backend/public`).
-2. Launch an isolated instance on free ports with a throwaway data dir (copy a real data dir to test migrations on real data):
-   `node backend/dist/cli.js --no-open --port 3400 --data-dir <tmp>/verify-data`
-   Never use 3000 or a port another app/session runs; stop it by its task/PID afterwards.
-   Once it answers, configure it: `node scripts/setup-local.mjs http://127.0.0.1:3400`. It saves the LLM from `.env.llm.local` (custom endpoint, Anthropic style by default) and loads every Testing Data fixture ([delivery.md](../../../specs/system/delivery.md) 2). If `.env.llm.local` is missing, ask the user for the endpoint rather than guessing.
-3. Drive it with Playwright from Node, resolving the package from the frontend:
+1. Start an isolated instance with [`local-instance`](../local-instance/SKILL.md) (a throwaway data dir, a free port, ready with an LLM), and stop it by its PID afterwards.
+2. Drive it with Playwright from Node, resolving the package from the frontend:
    `const { chromium } = require(require.resolve('playwright', { paths: ['<worktree>/frontend'] }))`.
    No sign-in exists (ADR-0030): `page.goto(url)` lands on the welcome page.
    - Rail buttons: scope to `getByRole('complementary', { name: 'Navigation rail' })` (the welcome page also has "Agents"/"Datasets" buttons).
@@ -46,5 +42,5 @@ Its prompt, skills, tools, context blocks or model routing. Run the agent's eval
    - Right panel: `getByRole('complementary', { name: 'Details panel' })`, history menu `button[title="Shown in this session"]`, items `.menu-item`.
    - Visual frame: `page.frames()` gives the sandboxed iframe; `frame.evaluate` reads its `data-theme`.
    - Theme: switch through Settings → Appearance radios; the saved preference wins over `emulateMedia`.
-4. A real agent turn uses the data dir's saved LLM settings (live model calls). Poll `data-testid="skill-step"` and the Thinking block while it streams.
-5. Gotchas: `addInitScript` also runs inside the sandboxed visual iframe (localStorage SecurityError there is the script, not the app); the worktree sandbox refuses compound shell commands — write scripts to files and run them plainly.
+3. A real agent turn uses the data dir's saved LLM settings (live model calls). Poll `data-testid="skill-step"` and the Thinking block while it streams.
+4. Gotchas: `addInitScript` also runs inside the sandboxed visual iframe (localStorage SecurityError there is the script, not the app); the worktree sandbox refuses compound shell commands — write scripts to files and run them plainly.

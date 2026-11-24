@@ -21,6 +21,8 @@ const SQL =
   'SELECT product, COUNT(*) AS n FROM shop.public.returns GROUP BY product ORDER BY n DESC LIMIT 100';
 const SIZE = 'SELECT COUNT(*) AS n FROM "public"."returns"';
 const SQL_ALL = 'SELECT COUNT(*) AS n FROM shop.public.returns';
+const PREVIEW =
+  'SELECT product, COUNT(*) AS n FROM shop.public.returns GROUP BY product';
 
 const ANSWER: ChatMessage = {
   role: 'assistant',
@@ -96,7 +98,12 @@ function build() {
         table: 'shop.public.returns',
         countSql: SQL_ALL,
       },
-      { verb: 'group', text: 'By product', unit: 'rows' },
+      {
+        verb: 'group',
+        text: 'By product',
+        unit: 'rows',
+        previewSql: PREVIEW,
+      },
       { verb: 'show', text: 'Show 100', unit: 'rows', rows: 100 },
     ],
     at: 't',
@@ -159,6 +166,77 @@ describe('AnswerEvidenceService: the engine on any answer host (plan section 5)'
     expect(state.answer.evidence?.[0].explanation?.stageCounts?.status).toBe(
       'unverified',
     );
+  });
+
+  it("previews a step once: its statement's first rows, stored on the step; then no query", async () => {
+    const ctx = build();
+    const { host, state } = fakeHost();
+    await ctx.engine.explain(host, 0);
+    ctx.runReadOnlySql.mockClear();
+
+    const previewed = await ctx.engine.previewStep(host, 0, 1);
+    const step = previewed.evidence?.[0].explanation?.steps[1];
+    expect(ctx.runReadOnlySql).toHaveBeenCalledWith('ds-1', PREVIEW, 10);
+    expect(step?.preview).toMatchObject({
+      columns: ['product', 'n'],
+      rows: [{ product: 'b', n: 1 }],
+      more: false,
+    });
+    expect(step?.preview?.check).toBeUndefined();
+    expect(state.answer.evidence?.[0].explanation?.steps[1].preview).toEqual(
+      step?.preview,
+    );
+
+    await ctx.engine.previewStep(host, 0, 1);
+    expect(ctx.runReadOnlySql).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a preview before the explanation, for the show step, a step without a statement, or one reading another table', async () => {
+    const ctx = build();
+    const { host, state } = fakeHost();
+    await expect(ctx.engine.previewStep(host, 0, 1)).rejects.toThrow(
+      'Explain query 0 first',
+    );
+    await ctx.engine.explain(host, 0);
+    await expect(ctx.engine.previewStep(host, 0, 2)).rejects.toThrow(
+      'Query 0 has no step 2',
+    );
+    // The model's start step had none; an older explanation has none at all.
+    const explanation = state.answer.evidence![0].explanation!;
+    state.answer = {
+      ...state.answer,
+      evidence: [
+        {
+          ...state.answer.evidence![0],
+          explanation: {
+            ...explanation,
+            steps: [
+              { ...explanation.steps[0], previewSql: undefined },
+              {
+                ...explanation.steps[1],
+                previewSql: 'SELECT * FROM shop.public.orders',
+              },
+              explanation.steps[2],
+            ],
+          },
+        },
+        ...state.answer.evidence!.slice(1),
+      ],
+    };
+    await expect(ctx.engine.previewStep(host, 0, 0)).rejects.toThrow(
+      'Step 1 has no preview: explain the query again',
+    );
+    await expect(ctx.engine.previewStep(host, 0, 1)).rejects.toThrow(
+      'Step 2 reads shop.public.orders, which the query does not read',
+    );
+  });
+
+  it('explains a query again on refresh: one more model request, the new steps stored', async () => {
+    const ctx = build();
+    const { host } = fakeHost();
+    await ctx.engine.explain(host, 0);
+    await ctx.engine.explain(host, 0, true);
+    expect(ctx.explainQuery).toHaveBeenCalledTimes(2);
   });
 
   it('re-run returns rows and stores nothing', async () => {

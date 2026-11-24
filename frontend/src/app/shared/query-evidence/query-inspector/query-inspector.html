@@ -1,5 +1,7 @@
 <!-- Header: where this query sits in the answer, its title and meta, the way out. -->
-<header class="flex shrink-0 items-start gap-2 border-b border-border px-4 py-3">
+<header
+  class="flex shrink-0 items-start gap-2 border-b border-border px-4 py-3"
+>
   <div class="min-w-0 flex-1">
     <p class="m-0 flex items-center gap-2 text-[12px] text-fg-muted">
       <span data-testid="query-inspector-position">{{ position() }}</span>
@@ -14,7 +16,10 @@
       {{ title() }}
     </h2>
     @if (meta()) {
-      <p data-testid="query-inspector-meta" class="m-0 mt-0.5 text-[12px] text-fg-muted">
+      <p
+        data-testid="query-inspector-meta"
+        class="m-0 mt-0.5 text-[12px] text-fg-muted"
+      >
         {{ meta() }}
       </p>
     }
@@ -91,7 +96,7 @@
   class="min-h-0 flex-1 overflow-auto px-4 py-3 focus-visible:outline-2 focus-visible:outline-focus"
 >
   @switch (tab()) {
-    @case ('steps') {
+    @case ("steps") {
       @if (failed()) {
         <p
           role="alert"
@@ -100,36 +105,160 @@
           {{ record()?.error }}
         </p>
       } @else if (explanation(); as explained) {
-        <ol data-testid="query-funnel" class="m-0 flex list-none flex-col gap-2 p-0">
-          @for (item of funnel(); track $index) {
-            <li
-              data-testid="query-funnel-step"
-              [attr.data-verb]="item.step.verb"
-              [attr.data-rows]="item.step.rows ?? ''"
-              class="flex items-start gap-3 rounded-lg border border-border px-3 py-2"
-              [class.bg-warning-soft]="item.tint"
-            >
+        <ol
+          data-testid="query-funnel"
+          class="m-0 flex list-none flex-col gap-2 p-0"
+        >
+          @for (item of funnel(); track $index; let i = $index) {
+            <ng-template #stepLine>
               <span
                 class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-muted text-[11px] font-semibold text-fg-muted"
                 aria-hidden="true"
                 >{{ item.number }}</span
               >
               <div class="min-w-0 flex-1 text-[13px] leading-5 text-fg">
-                <span class="font-semibold text-fg-strong">{{ item.label }}</span>
+                <span class="font-semibold text-fg-strong">{{
+                  item.label
+                }}</span>
                 {{ " " }}<span>{{ item.text }}</span>
                 @if (item.step.table) {
-                  {{ " " }}<code class="font-mono text-[12px]">{{ item.step.table }}</code>
+                  {{ " "
+                  }}<code class="font-mono text-[12px]">{{
+                    item.step.table
+                  }}</code>
                 }
                 @if (item.step.note) {
-                  <span class="block text-[12px] text-fg-muted">{{ item.step.note }}</span>
+                  <span class="block text-[12px] text-fg-muted">{{
+                    item.step.note
+                  }}</span>
                 }
               </div>
               @if (item.count) {
-                <span class="shrink-0 text-[12px] text-fg-muted">{{ item.count }}</span>
+                <span class="shrink-0 text-[12px] text-fg-muted">{{
+                  item.count
+                }}</span>
+              }
+            </ng-template>
+            <li
+              data-testid="query-funnel-step"
+              [attr.data-verb]="item.step.verb"
+              [attr.data-rows]="item.step.rows ?? ''"
+              class="flex flex-col rounded-lg border"
+              [class.border-border]="!isOpen(i)"
+              [class.border-primary]="isOpen(i)"
+              [class.bg-warning-soft]="item.tint"
+            >
+              @if (item.previewable) {
+                <!-- A step that can show its rows: a click opens them under it (ui.md 4.12.2) -->
+                <button
+                  type="button"
+                  class="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
+                  data-testid="query-step-toggle"
+                  [attr.aria-expanded]="isOpen(i)"
+                  [attr.aria-label]="
+                    (isOpen(i)
+                      ? 'Hide the rows after step '
+                      : 'Show the rows after step ') + item.number
+                  "
+                  (click)="toggleStep(item, i)"
+                >
+                  <ng-container [ngTemplateOutlet]="stepLine" />
+                  <lucide-angular
+                    [img]="isOpen(i) ? ChevronDown : ChevronRight"
+                    [size]="14"
+                    class="mt-[3px] shrink-0 text-fg-muted"
+                    aria-hidden="true"
+                  />
+                </button>
+              } @else {
+                <div class="flex items-start gap-3 px-3 py-2">
+                  <ng-container [ngTemplateOutlet]="stepLine" />
+                </div>
+              }
+              @if (isOpen(i)) {
+                <div class="px-3 pb-3 pl-11" data-testid="query-step-rows">
+                  @if (stepRows(item); as view) {
+                    @if (view.rows.length > 0) {
+                      <div
+                        class="overflow-x-auto rounded-md border border-border bg-surface focus-visible:outline-2 focus-visible:outline-focus"
+                        tabindex="0"
+                        role="region"
+                        [attr.aria-label]="'Rows after step ' + item.number"
+                      >
+                        <table class="w-full border-collapse text-[12px]">
+                          <thead>
+                            <tr>
+                              @for (column of view.columns; track column) {
+                                <th
+                                  scope="col"
+                                  class="border-b border-border px-2 py-1 text-left font-mono text-[11px] font-medium whitespace-nowrap text-fg-muted"
+                                >
+                                  {{ column }}
+                                </th>
+                              }
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (row of view.rows; track $index) {
+                              <tr>
+                                @for (column of view.columns; track column) {
+                                  <td
+                                    class="border-b border-border px-2 py-1 whitespace-nowrap text-fg"
+                                  >
+                                    {{ cell(row[column]) }}
+                                  </td>
+                                }
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+                    }
+                    <p
+                      class="m-0 mt-1.5 text-[12px] text-fg-muted"
+                      data-testid="query-step-rows-caption"
+                    >
+                      {{ view.caption }}
+                    </p>
+                    @if (view.differs) {
+                      <p
+                        class="m-0 mt-1 text-[12px] text-on-warning-soft"
+                        data-testid="query-step-rows-differs"
+                      >
+                        These rows may not be the step's: their number does not
+                        match the step's count.
+                      </p>
+                    }
+                  } @else if (previewError(i); as error) {
+                    <p role="alert" class="m-0 text-[12px] text-on-danger-soft">
+                      {{ error }}
+                    </p>
+                  } @else {
+                    <p class="m-0 text-[12px] text-fg-muted" role="status">
+                      Reading the rows…
+                    </p>
+                  }
+                </div>
               }
             </li>
           }
         </ol>
+        @if (canExplainAgain()) {
+          <!-- Explained before step previews: explaining again lets each step show its rows -->
+          <button
+            type="button"
+            data-testid="query-explain-again"
+            class="mt-3 mr-2 text-[12px] text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+            [disabled]="explainingAgain()"
+            (click)="explainAgain()"
+          >
+            {{
+              explainingAgain()
+                ? "Explaining again…"
+                : "Explain again to see each step's rows"
+            }}
+          </button>
+        }
         @if (canCount()) {
           <button
             type="button"
@@ -142,14 +271,23 @@
           </button>
         }
         @if (unverified()) {
-          <p data-testid="query-counts-unverified" class="m-0 mt-3 text-[12px] text-fg-muted">
+          <p
+            data-testid="query-counts-unverified"
+            class="m-0 mt-3 text-[12px] text-fg-muted"
+          >
             The row counts could not be verified, so they are not shown.
           </p>
         }
       } @else if (stepsError(); as message) {
-        <div data-testid="query-explain-error" class="flex flex-col items-start gap-2">
-          <p class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft">
-            The steps could not be explained: {{ message }}. The SQL tab shows the query.
+        <div
+          data-testid="query-explain-error"
+          class="flex flex-col items-start gap-2"
+        >
+          <p
+            class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+          >
+            The steps could not be explained: {{ message }}. The SQL tab shows
+            the query.
           </p>
           <button
             type="button"
@@ -161,10 +299,12 @@
           </button>
         </div>
       } @else {
-        <p role="status" class="m-0 text-[13px] text-fg-muted">Reading the query…</p>
+        <p role="status" class="m-0 text-[13px] text-fg-muted">
+          Reading the query…
+        </p>
       }
     }
-    @case ('result') {
+    @case ("result") {
       @if (failed()) {
         <p
           role="alert"
@@ -179,11 +319,7 @@
             class="m-0 mb-2 flex flex-wrap items-center gap-2 rounded-md bg-info-soft px-3 py-2 text-[12px] text-on-info-soft"
           >
             <span>{{ banner }}</span>
-            <button
-              type="button"
-              class="underline"
-              (click)="showStoredRows()"
-            >
+            <button type="button" class="underline" (click)="showStoredRows()">
               Show the answer's rows
             </button>
           </p>
@@ -200,17 +336,18 @@
         />
       }
     }
-    @case ('sql') {
+    @case ("sql") {
       <pre
         data-testid="query-sql"
         class="m-0 overflow-auto rounded-lg bg-surface-muted p-3 font-mono text-[12px] leading-5 break-words whitespace-pre-wrap text-fg"
-        >{{ sql() }}</pre
-      >
+        >{{ sql() }}</pre>
     }
   }
 </div>
 
-<footer class="flex shrink-0 flex-wrap items-center gap-2 border-t border-border px-4 py-3">
+<footer
+  class="flex shrink-0 flex-wrap items-center gap-2 border-t border-border px-4 py-3"
+>
   @if (!failed()) {
     <button
       type="button"

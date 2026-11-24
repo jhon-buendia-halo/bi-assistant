@@ -3,17 +3,13 @@ import { z } from 'zod';
 import { builtVisualSchema } from './answer-business-question.schemas';
 import {
   chartableQueries,
-  interpretFollowUp,
   loadCatalog,
-  pageAnswer,
   planCatalogBlock,
   type BuiltVisual,
 } from './answer-business-question.steps';
 import {
   ASK_AGENT_RUNTIME_KEY,
   ASK_AGENT_WORKFLOW_ID,
-  ASK_NEW_QUESTION_REPLY,
-  ASK_NO_RESULT_REPLY,
   ASK_NO_ROWS_REPLY,
   ASKABLE_STEP_IDS,
   imageNotesAnswer,
@@ -51,7 +47,6 @@ type AskOutcome = z.output<typeof askOutcome>;
 /** Step titles, as Answer a Business Question names them. */
 const TITLES: Record<AskableStepId, string> = {
   'read-images': 'Read images',
-  'interpret-follow-up': 'Interpret follow-up',
   plan: 'Plan',
   analyse: 'Analyse',
   'write-answer': 'Write answer',
@@ -107,47 +102,6 @@ const WORK: Record<
       return { step: 'read-images', answerLength: 0, stopped: true };
     }
     return delivered(runtime, 'read-images', imageNotesAnswer(read));
-  },
-  // Nathan reads the words over the earlier queries and pages one; a new
-  // question is answered with where to ask it, never planned.
-  'interpret-follow-up': async (runtime, input) => {
-    if (!runtime.followUp.length) {
-      return delivered(runtime, 'interpret-follow-up', ASK_NO_RESULT_REPLY);
-    }
-    // In the whole workflow a model error plans the question instead; asked
-    // alone, Nathan's error is the step's (agents.md 5.21).
-    let failure: Error | undefined;
-    const { followUp, stopped } = await interpretFollowUp(input.question, {
-      followUp: runtime.followUp,
-      interpretFollowUp: async (request) => {
-        try {
-          return await runtime.interpretFollowUp(request);
-        } catch (error) {
-          failure =
-            error instanceof Error
-              ? error
-              : new Error(String(error ?? 'Result Explorer failed'));
-          throw failure;
-        }
-      },
-    });
-    if (failure !== undefined) throw failure;
-    if (stopped) {
-      return { step: 'interpret-follow-up', answerLength: 0, stopped: true };
-    }
-    if (!followUp) {
-      return delivered(runtime, 'interpret-follow-up', ASK_NEW_QUESTION_REPLY);
-    }
-    const page = await runtime.pageResult({
-      query: followUp.query,
-      request: followUp.request,
-      understood: followUp.understood,
-    });
-    return delivered(
-      runtime,
-      'interpret-follow-up',
-      pageAnswer(page.view, page, page.title),
-    );
   },
   // Olivia plans the question over the run's catalog; her plan, in words,
   // is the answer.

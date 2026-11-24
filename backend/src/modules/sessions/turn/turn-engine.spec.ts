@@ -381,7 +381,7 @@ describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
     expect((error as Error).message).toBe(
       'Analyse failed: the model sent nothing for 5 minutes. The model may be busy or rate limited: run again later.',
     );
-    expect(lastMove(events)).toMatchObject({ current: 7, failed: 7 });
+    expect(lastMove(events)).toMatchObject({ current: 5, failed: 5 });
     expect(ctx.signals[0].aborted).toBe(true);
     expect(ctx.agent.stream).toHaveBeenCalledTimes(1);
     expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
@@ -427,7 +427,7 @@ describe('the idle deadline of a streamed agent turn (workflows R43)', () => {
     await jest.advanceTimersByTimeAsync(10 * MINUTE);
     expect(await outcome).toBe('done');
     const move = lastMove(events);
-    expect(move).toMatchObject({ current: 7, done: [2, 3, 4, 5] });
+    expect(move).toMatchObject({ current: 5, done: [2, 3, 4] });
     expect(move.failed).toBeUndefined();
     expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
   });

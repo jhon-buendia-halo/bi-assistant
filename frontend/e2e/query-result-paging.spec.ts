@@ -1,4 +1,4 @@
-import { pickDataset } from './helpers/run-ui';
+import { fillRun as fillRunInTab, openRunTab, sendRun } from './helpers/run-ui';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { scenarioStep } from './support/demo-captions';
@@ -77,16 +77,14 @@ async function openWorkflowPage(
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(name);
 }
 
+/** Opens the Run tab, adds `dataset` through +, turns approvals off and types `question`. */
 async function fillRun(
   page: Page,
   question: string,
   dataset: string,
 ): Promise<void> {
-  await page.getByTestId('workflow-execute').click();
-  await expect(page.getByTestId('workflow-run')).toBeVisible();
-  // The searchable dataset picker of the run form (ui.md 4.4b).
-  await pickDataset(page, dataset);
-  await page.getByTestId('workflow-input-question').fill(question);
+  await openRunTab(page);
+  await fillRunInTab(page, question, dataset);
 }
 
 test.describe("Feature: Page, sort and filter a query's result", () => {
@@ -123,7 +121,7 @@ test.describe("Feature: Page, sort and filter a query's result", () => {
         async () => {
           await openWorkflowPage(page, V2_ID, V2);
           await fillRun(page, QUESTION, WORLD_CUP_DATASET);
-          await page.getByTestId('workflow-run').click();
+          await sendRun(page);
           await expect(page.getByTestId('workflow-run-status')).toHaveText(
             'Run succeeded',
           );

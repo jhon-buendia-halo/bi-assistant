@@ -44,7 +44,9 @@ export class TryItInspector extends RunEvidenceApi {
   readonly open = computed(() => {
     const index = this.openIndex();
     const answer = this.answer();
-    return index !== null && answer !== null && answer.data?.[index] !== undefined
+    return index !== null &&
+      answer !== null &&
+      answer.data?.[index] !== undefined
       ? { index, answer }
       : null;
   });
@@ -110,8 +112,12 @@ export class TryItInspector extends RunEvidenceApi {
     return super.prepare().pipe(this.noteGone());
   }
 
-  override explain(index: number): Observable<void> {
-    return super.explain(index).pipe(this.noteGone());
+  override explain(index: number, refresh = false): Observable<void> {
+    return super.explain(index, refresh).pipe(this.noteGone());
+  }
+
+  override previewStep(index: number, step: number): Observable<void> {
+    return super.previewStep(index, step).pipe(this.noteGone());
   }
 
   override countStages(index: number): Observable<void> {

@@ -54,7 +54,7 @@ describe('Answer a Business Question step stories (ui.md 4.4b, Logs Story)', () 
     });
   });
 
-  it('Plan restates the question, lists the plan and says Clarify was not needed', () => {
+  it('Plan restates the question, lists the plan and says Analyse ran next', () => {
     expect(tell(step('plan', { output: { plan: PLAN } }), context())).toEqual({
       headline: `Read the question as “${PLAN.question}”`,
       facts: [
@@ -63,33 +63,7 @@ describe('Answer a Business Question step stories (ui.md 4.4b, Logs Story)', () 
         { label: 'Scope', values: ['Matches of the 2022 World Cup'] },
         { label: 'Assumed', values: ["Shoot-out penalties don't count"] },
       ],
-      next: 'Nothing was ambiguous, so Clarify was skipped and Analyse ran next.',
-    });
-  });
-
-  it('Plan says what Clarify asks when the plan needs an answer', () => {
-    const asks = {
-      ...PLAN,
-      needsClarification: true,
-      clarification: { question: 'Count own goals?', options: ['Yes', 'No'] },
-    };
-    expect(
-      tell(step('plan', { output: { plan: asks } }), context())?.next,
-    ).toBe(
-      'Something in the question changes the analysis, so Clarify asks you: “Count own goals?”',
-    );
-  });
-
-  it("a skipped Clarify gives the plan's reason", () => {
-    const planStep = step('plan', { output: { plan: PLAN } });
-    expect(
-      tell(
-        step('clarify', { status: 'skipped' }),
-        context({ steps: [planStep] }),
-      ),
-    ).toEqual({
-      headline: 'Skipped: nothing in the plan needed your answer.',
-      brief: 'Nothing to clarify',
+      next: 'Analyse ran next with this plan.',
     });
   });
 

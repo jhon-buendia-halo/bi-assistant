@@ -24,6 +24,7 @@ import {
   usesStoredValue,
 } from './insights-analyst-eval-checks';
 import { INSIGHTS_ANALYST_EDGE_EVAL_SET } from './insights-analyst-edge.evals';
+import { INSIGHTS_ANALYST_RETAIL_EVAL_SET } from './insights-analyst-retail.evals';
 
 /**
  * The data-analyst eval set of Insights Analyst (agents.md 8.1, 2.11):
@@ -367,7 +368,11 @@ export function insightsAnalystEvalTarget(
       run ??= wholeTurn((agent ??= loadAgent()));
       return run;
     },
-    sets: [INSIGHTS_ANALYST_EVAL_SET, INSIGHTS_ANALYST_EDGE_EVAL_SET],
+    sets: [
+      INSIGHTS_ANALYST_EVAL_SET,
+      INSIGHTS_ANALYST_EDGE_EVAL_SET,
+      INSIGHTS_ANALYST_RETAIL_EVAL_SET,
+    ],
     notApplicable: workflowNotApplicable,
     scoresWorkflowSteps: true,
     // The judge checks that every fact rests on a query, so it reads the

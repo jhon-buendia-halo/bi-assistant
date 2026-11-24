@@ -1945,7 +1945,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       'visual-1',
       'break it down further',
       turnRecords,
-      undefined,
+      {},
     );
   });
 
@@ -1969,7 +1969,9 @@ describe('SessionsService visual tool bridge (turn records)', () => {
     );
 
     expect((visuals.create.mock.calls as unknown[][])[0][4]).toBe(sink);
-    expect((visuals.update.mock.calls as unknown[][])[0][4]).toBe(sink);
+    expect((visuals.update.mock.calls as unknown[][])[0][4]).toEqual({
+      usageSink: sink,
+    });
   });
 
   it('passes nothing through for a tool call outside a turn (REST tailoring parity)', async () => {
@@ -1990,7 +1992,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       'visual-1',
       'tweak it',
       undefined,
-      undefined,
+      {},
     );
   });
 });

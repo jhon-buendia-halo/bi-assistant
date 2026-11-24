@@ -251,6 +251,43 @@ describe('AnswerView', () => {
     }));
   });
 
+  describe('answer first (ui.md 4.4b)', () => {
+    const bluf: ChatMessage = {
+      ...answer,
+      content:
+        '**France scored most: 14.** Only the 2018 and 2022 finals.\n\n| Team | Goals |\n|---|---|\n| France | 14 |\n\n**How I worked it out**\n- Home and away goals.',
+    };
+
+    it('leads with the bottom line and its scope, the body open and how it was worked out folded', () => {
+      const el = render(bluf, { queryInspector: true, bluf: true });
+      const text = (id: string) =>
+        el.querySelector(`[data-testid="${id}"]`)?.textContent?.trim();
+      expect(text('answer-bluf-headline')).toBe('France scored most: 14.');
+      expect(text('answer-bluf-context')).toBe('Only the 2018 and 2022 finals.');
+      expect(el.querySelector('[data-testid="answer-prose"] table')).not.toBeNull();
+      const more = el.querySelector<HTMLDetailsElement>(
+        '[data-testid="answer-bluf-more"]',
+      )!;
+      expect(more.open).toBeFalse();
+      expect(more.querySelector('summary')?.textContent?.trim()).toBe(
+        'How I worked it out',
+      );
+    });
+
+    it('reads as written without the host asking for it, or for an answer with no bold opening', () => {
+      expect(
+        render(bluf, { queryInspector: true }).querySelector(
+          '[data-testid="answer-bluf"]',
+        ),
+      ).toBeNull();
+      expect(
+        render(answer, { queryInspector: true, bluf: true }).querySelector(
+          '[data-testid="answer-bluf"]',
+        ),
+      ).toBeNull();
+    });
+  });
+
   describe('the rating', () => {
     it('is hidden unless the host turns it on', () => {
       const el = render(answer);

@@ -5,6 +5,8 @@ import {
   followUpRequest,
   initialInputValues,
   questionFieldName,
+  isActiveRun,
+  isLiveRun,
   runInput,
   filterRuns,
   runAgainValues,
@@ -119,6 +121,11 @@ describe('workflows.util', () => {
       expect(workflowKindLabel(THREE_STEPS)).toBe('3 steps');
     });
 
+    it('reads "1 step" for a workflow of one step', () => {
+      expect(workflowKindLabel({ stepCount: 1 })).toBe('1 step');
+      expect(workflowKindLabel({ stepCount: 0 })).toBe('0 steps');
+    });
+
     it('says nothing about agents for a workflow that calls none', () => {
       expect(workflowUsesLabel(THREE_STEPS)).toBe('');
     });
@@ -176,6 +183,7 @@ describe('workflows.util', () => {
       expect(runStatusLine({ status: 'failed' })).toBe('Run failed');
       expect(runStatusLine({ status: 'stopped' })).toBe('Run stopped');
       expect(runStatusLine({ status: 'running' })).toBe('Running…');
+      expect(runStatusLine({ status: 'queued' })).toBe('Queued…');
     });
 
     it('labels a step Running, Done, Failed, Skipped or Stopped', () => {
@@ -355,6 +363,20 @@ describe('Runs list helpers (plan 1.24.11)', () => {
   it('labels a run row status', () => {
     expect(runRowStatus('success')).toBe('Done');
     expect(runRowStatus('running')).toBe('Running');
+    expect(runRowStatus('queued')).toBe('Queued');
+  });
+
+  it('tells a live run (queued or running) from an active one (also suspended)', () => {
+    expect(isLiveRun('queued')).toBeTrue();
+    expect(isLiveRun('running')).toBeTrue();
+    expect(isLiveRun('suspended')).toBeFalse();
+    expect(isActiveRun('queued')).toBeTrue();
+    expect(isActiveRun('running')).toBeTrue();
+    expect(isActiveRun('suspended')).toBeTrue();
+    for (const ended of ['success', 'failed', 'stopped'] as const) {
+      expect(isActiveRun(ended)).toBeFalse();
+      expect(isLiveRun(ended)).toBeFalse();
+    }
   });
 
   it('refills a form from a stored input, keeping the defaults of fields it lacks', () => {

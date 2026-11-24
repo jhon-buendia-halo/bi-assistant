@@ -17,11 +17,15 @@ import { DataReadinessModule } from './modules/data-readiness/data-readiness.mod
 import { SyntheticDataModule } from './modules/synthetic-data/synthetic-data.module';
 import { MonitoringModule } from './modules/monitoring/monitoring.module';
 import { WorkflowsModule } from './modules/workflows/workflows.module';
+import { ConversationExportModule } from './modules/conversation-export/conversation-export.module';
 import { HealthController } from './modules/health/health.controller';
 
 @Module({
   imports: [
     DatabaseModule,
+    // Global: Avery's conversation export, which the sessions' turn engine
+    // reaches by token (agents.md 3.18).
+    ConversationExportModule,
     DatasourcesModule,
     LlmModule,
     DatasetsModule,

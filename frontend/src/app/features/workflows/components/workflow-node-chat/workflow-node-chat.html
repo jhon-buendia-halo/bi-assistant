@@ -25,6 +25,7 @@
       aria-label="Chat with this step's agent persona"
       data-testid="workflow-node-chat-messages"
       tabindex="0"
+      [style.padding-right.px]="historyItems().length >= 2 ? 48 : null"
       class="flex max-h-[60vh] min-h-[120px] flex-col gap-3 overflow-y-auto rounded-lg border border-border p-3"
     >
       @if (loading()) {

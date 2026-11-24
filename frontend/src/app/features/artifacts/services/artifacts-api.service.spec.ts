@@ -50,6 +50,21 @@ describe('ArtifactsApiService', () => {
     req.flush({ ...SUMMARY, blueprint: {}, document: '<html></html>' });
   });
 
+  it('saves a version with a POST to /save (api.md 166)', () => {
+    service.save('a/1', 3).subscribe();
+    const req = http.expectOne(`${API_BASE_URL}/artifacts/a%2F1/save`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ version: 3 });
+    req.flush({ ...SUMMARY, blueprint: {}, document: '' });
+  });
+
+  it('saves the latest version when none is given', () => {
+    service.save('a-1').subscribe();
+    const req = http.expectOne(`${API_BASE_URL}/artifacts/a-1/save`);
+    expect(req.request.body).toEqual({});
+    req.flush({ ...SUMMARY, blueprint: {}, document: '' });
+  });
+
   it('renames with a PATCH of the name', () => {
     service.rename('a-1', 'New').subscribe();
     const req = http.expectOne(`${API_BASE_URL}/artifacts/a-1`);

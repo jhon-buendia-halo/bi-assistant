@@ -14,6 +14,8 @@ import {
   evalJudgeOutputSchema,
 } from '../agents/eval-judge.agent';
 import { ASSISTANT_MAX_STEPS } from '../agent-constants';
+import { EVAL_RUN_CONTEXT_KEY } from './eval-trace-marker';
+import { inEvalRun } from './eval-run-scope';
 import { DATASETS_CONTEXT_KEY } from '../tools/dataset.tools';
 import {
   SESSION_ID_CONTEXT_KEY,
@@ -920,8 +922,11 @@ function evalRequestContext(
   question: string,
   agentTools: readonly OptionalAgentTool[] | undefined,
   usageSink: UsageSink,
+  /** The eval run's job id; marks the case's traffic in the trace store (ADR-0054). */
+  evalRunId?: string,
 ): RequestContext {
   const requestContext = new RequestContext();
+  if (evalRunId) requestContext.set(EVAL_RUN_CONTEXT_KEY, evalRunId);
   requestContext.set(DATASETS_CONTEXT_KEY, datasets);
   if (sessionId) requestContext.set(SESSION_ID_CONTEXT_KEY, sessionId);
   requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
@@ -1128,6 +1133,8 @@ async function runJudgeCheck(
   /** What the target reports the assistant was given (`judgeContext`). */
   context?: string,
   usageSink?: UsageSink,
+  /** The case's request context, so the judge's spans carry the eval marker. */
+  requestContext?: RequestContext,
 ): Promise<ScoredCheckResult | undefined> {
   if (!evalCase.judgeRubric) return undefined;
   const description = `LLM judge: ${evalCase.judgeRubric}`;
@@ -1155,6 +1162,7 @@ async function runJudgeCheck(
     const result = await evalJudgeAgent.generate(prompt, {
       maxSteps: 1,
       toolChoice: 'none',
+      requestContext,
       providerOptions,
       structuredOutput: {
         schema: evalJudgeOutputSchema,
@@ -1209,6 +1217,8 @@ async function judgeCheckFor(
   /** What the target reports the assistant was given (`judgeContext`). */
   context?: string,
   usageSink?: UsageSink,
+  /** The case's request context, so the judge's spans carry the eval marker. */
+  requestContext?: RequestContext,
 ): Promise<EvalCheckResult | undefined> {
   if (!evalCase.judgeRubric) return undefined;
   const criterion = judgeCriterion(evalCase.category);
@@ -1231,6 +1241,7 @@ async function judgeCheckFor(
     history,
     context,
     usageSink,
+    requestContext,
   );
   return check ? withStatus(check, criterion) : undefined;
 }
@@ -1255,6 +1266,13 @@ export interface EvalAttemptOptions {
    * whole-workflow target's Build visual. Absent: Build visual is off.
    */
   visualBuilder?: EvalVisualBuilder;
+  /**
+   * The eval run's job id: the trace marker (ADR-0054). The whole attempt
+   * runs in the run's scope (`inEvalRun`), so every span any model call of
+   * it starts is marked, whatever request context the target's own code
+   * builds; it is also set on the attempt's request context.
+   */
+  evalRunId?: string;
 }
 
 /**
@@ -1289,7 +1307,7 @@ function anyAnswer() {
   return checks.includes('');
 }
 
-export async function runAssistantEvalCase(
+export function runAssistantEvalCase(
   evalCase: AssistantEvalCase,
   datasets: string[],
   sessionId?: string,
@@ -1306,6 +1324,29 @@ export async function runAssistantEvalCase(
   /** The run's judge option (R144); off unless the caller says otherwise. */
   judge: Readonly<EvalJudgeSetting> = JUDGE_OFF,
   options: EvalAttemptOptions = {},
+): Promise<AssistantEvalCaseResult> {
+  return inEvalRun(options.evalRunId, () =>
+    runCaseInScope(
+      evalCase,
+      datasets,
+      sessionId,
+      knowledgeBlock,
+      target,
+      judge,
+      options,
+    ),
+  );
+}
+
+/** `runAssistantEvalCase`, inside the run's scope (ADR-0054). */
+async function runCaseInScope(
+  evalCase: AssistantEvalCase,
+  datasets: string[],
+  sessionId: string | undefined,
+  knowledgeBlock: string | undefined,
+  target: EvalTarget,
+  judge: Readonly<EvalJudgeSetting>,
+  options: EvalAttemptOptions,
 ): Promise<AssistantEvalCaseResult> {
   const startedAt = Date.now();
   // The question sent: the case's own, unless the target's setup fills it.
@@ -1412,6 +1453,7 @@ export async function runAssistantEvalCase(
       question,
       evalCase.agentTools,
       usageSink,
+      options.evalRunId,
     );
     // The case itself, for a target that reads its frozen `input`.
     requestContext.set(EVAL_CASE_CONTEXT_KEY, evalCase);
@@ -1650,6 +1692,7 @@ export async function runAssistantEvalCase(
       history,
       details.judgeContext,
       usageSink,
+      requestContext,
     );
     if (judgeCheck) checkResults.push(judgeCheck);
 

@@ -16,6 +16,7 @@ const SAMPLES = [
   { id: 'us-health', name: 'US Health', required: 45 },
   { id: 'edge-cases', name: 'Edge Cases', required: 19 },
   { id: 'world-cup-medallion', name: 'World Cup Medallion', required: 11 },
+  { id: 'retail-ops', name: 'Retail Ops', required: 19 },
   { id: 'world-cup-excel', name: 'World Cup Excel', required: 4 },
   { id: 'world-cup-rest', name: 'World Cup (REST API)', required: 10 },
   { id: 'finance', name: 'Finance', required: 17 },

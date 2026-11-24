@@ -17,8 +17,6 @@ import {
   answerOf,
   answerWithRowTables,
   expandRowTables,
-  interpretFollowUp,
-  pageAnswer,
   ROW_TABLE_CAP,
   chartableQueries,
   catalogBlock,
@@ -28,7 +26,6 @@ import {
   PLAN_COLUMNS_TOTAL,
   planAfterAnswer,
   planCatalogBlock,
-  planLoopDone,
   planOf,
   receiveQuestion,
   turnSummaryOf,
@@ -36,11 +33,8 @@ import {
   wrapUp,
   type AnalyseQuery,
   type AnalysisPlan,
-  type AnswerBusinessQuestionRuntime,
 } from './answer-business-question.steps';
-import type { ExplorableQuery } from '../../modules/sessions/query-evidence/explorable-queries';
 import { INSIGHTS_ANALYST_PROMPT } from '../agents/system-prompts';
-import type { ExplorerSpec } from '../agents/result-explorer.prompts';
 import {
   ANALYSE_VISUAL_LINE,
   ANSWER_REQUEST_CAP,
@@ -57,6 +51,7 @@ import {
   analyseSystemBlocks,
   earlierQueriesBlock,
   findingStatus,
+  orchestratorBriefBlock,
   planMessages,
   visualCued,
   writeAnswerRequest,
@@ -88,7 +83,7 @@ const query = (partial: Partial<AnalyseQuery> = {}): AnalyseQuery => ({
 });
 
 describe('answer-business-question steps (agents.md 5.11)', () => {
-  it('lists the thirteen steps with their ids, titles and kinds, Read images first, Interpret follow-up before Plan, Clarify after Plan, Build visual after Write answer and the follow-up branch last', () => {
+  it('lists the nine steps with their ids, titles and kinds, Read images first, Plan after Load catalog, Build visual after Write answer and Wrap up last', () => {
     expect(
       ANSWER_BUSINESS_QUESTION_STEPS.map(({ id, title, kind }) => ({
         id,
@@ -99,35 +94,21 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       { id: 'read-images', title: 'Read images', kind: 'agent' },
       { id: 'receive-question', title: 'Receive question', kind: 'code' },
       { id: 'load-catalog', title: 'Load catalog', kind: 'code' },
-      {
-        id: 'interpret-follow-up',
-        title: 'Interpret follow-up',
-        kind: 'agent',
-      },
       { id: 'plan', title: 'Plan', kind: 'agent' },
-      { id: 'clarify', title: 'Clarify', kind: 'code' },
       { id: 'analyse', title: 'Analyse', kind: 'agent' },
       { id: 'validate', title: 'Validate', kind: 'code' },
       { id: 'write-answer', title: 'Write answer', kind: 'agent' },
       { id: 'build-visual', title: 'Build visual', kind: 'agent' },
       { id: 'wrap-up', title: 'Wrap up', kind: 'code' },
-      { id: 'page-result', title: 'Page result', kind: 'code' },
-      { id: 'page-answer', title: 'Page answer', kind: 'code' },
     ]);
     expect(
       ANSWER_BUSINESS_QUESTION_STEPS.filter((step) => step.modelOnly).map(
         (s) => s.id,
       ),
-    ).toEqual([
-      'read-images',
-      'interpret-follow-up',
-      'plan',
-      'write-answer',
-      'build-visual',
-    ]);
+    ).toEqual(['read-images', 'plan', 'write-answer', 'build-visual']);
   });
 
-  it('connects them with the edges of api.md 117: Read images is an optional branch from Start, Clarify loops back to Plan once answered; a follow-up over an earlier result pages it instead of planning', () => {
+  it('connects them with the edges of api.md 117: Read images is an optional branch from Start, the rest is one line with a retry loop from Validate to Analyse', () => {
     expect(
       ANSWER_BUSINESS_QUESTION_EDGES.map(
         (e) => `${e.from}->${e.to} ${e.kind}${e.label ? ` "${e.label}"` : ''}`,
@@ -137,12 +118,8 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       'start->read-images branch "Reference images"',
       'read-images->receive-question next',
       'receive-question->load-catalog next',
-      'load-catalog->interpret-follow-up next',
-      'interpret-follow-up->plan branch "New question"',
-      'interpret-follow-up->page-result branch "Explore the earlier result"',
-      'plan->clarify branch "Needs clarification"',
-      'clarify->plan loop "Answered"',
-      'plan->analyse branch "Clear"',
+      'load-catalog->plan next',
+      'plan->analyse next',
       'analyse->validate next',
       'validate->analyse loop "Retry once"',
       'validate->write-answer next "Valid or retried"',
@@ -150,8 +127,6 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       'write-answer->build-visual branch "Build a visual"',
       'build-visual->wrap-up next',
       'wrap-up->end next',
-      'page-result->page-answer next',
-      'page-answer->end next',
     ]);
   });
 
@@ -191,27 +166,12 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
     ).toMatchObject({ needsClarification: false, clarification: null });
   });
 
-  it('ends the plan loop on a plan, and goes round again on Clarify’s answer (planLoopDone)', () => {
-    expect(planLoopDone({ question: 'Q', catalog: [], plan: {} })).toBe(true);
-    expect(
-      planLoopDone({ question: 'Q', catalog: [], plan: {}, stopped: true }),
-    ).toBe(true);
-    expect(
-      planLoopDone({
-        question: 'Q',
-        catalog: [],
-        columns: [],
-        clarification: { question: 'Which?', options: [], answer: 'a' },
-      }),
-    ).toBe(false);
-  });
-
   it('reads a waiting step’s question from its suspend payload, the engine’s own fields dropped', () => {
     expect(
       clarifyingQuestionOf({
         question: ' Which? ',
         options: ['a', 2, 'b'],
-        __workflow_meta: { runId: 'r', path: ['clarify'] },
+        __workflow_meta: { runId: 'r', path: ['question-path', 'plan'] },
       }),
     ).toEqual({ question: 'Which?', options: ['a', 'b'] });
     expect(clarifyingQuestionOf({ options: ['a'] })).toBeUndefined();
@@ -234,7 +194,7 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
 
   // Read images dominates no step (it is a branch from Start), so Receive
   // question defaults the notes and every later step requires them from the
-  // step before it: they survive a Clarify wait and a resume (plan D1, D2).
+  // step before it: they survive a wait and a resume (plan D1, D2).
   it("carries Read images' notes in every step's data after Receive question, and keeps the images out of it", () => {
     const step = (id: string) =>
       ANSWER_BUSINESS_QUESTION_STEPS.find((entry) => entry.id === id)!;
@@ -245,14 +205,13 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
     for (const id of [
       'load-catalog',
       'plan',
-      'clarify',
       'analyse',
       'validate',
       'write-answer',
     ]) {
       // The steps a waiting run is resumed at default the notes to '': a
       // run stored before Read images existed has none (workflows R35).
-      const resumable = ['plan', 'clarify', 'analyse'].includes(id);
+      const resumable = ['plan', 'analyse'].includes(id);
       expect([id, step(id).inputSchema.required ?? []]).toEqual([
         id,
         resumable
@@ -511,9 +470,7 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
           'question-path': { 'analysis-path': { 'answer-path': summary } },
         }),
       ).toEqual(summary);
-      // A follow-up over an earlier result: Page answer's summary.
-      expect(turnSummaryOf({ 'explore-result': summary })).toEqual(summary);
-      // The shape before Interpret follow-up is no longer read.
+      // The shape before the question path is no longer read.
       expect(
         turnSummaryOf({ 'analysis-path': { 'answer-path': summary } }),
       ).toBeUndefined();
@@ -588,6 +545,28 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
         { role: 'assistant', content: 'Reply' },
         { role: 'user', content: 'Question: Q\n\nCAT' },
       ]);
+    });
+
+    it("ends the request with an orchestrator's brief, after the user's own words; nothing without one", () => {
+      const BRIEF_BLOCK =
+        "Request from Avery, the Chief of Staff who coordinates the team (the user's own words are above): Who won the 2018 and 2022 World Cups?";
+      expect(
+        planMessages({
+          messages: 'And who won each one?',
+          question: 'And who won each one?',
+          catalogBlock: 'CAT',
+          brief: ' Who won the 2018 and 2022 World Cups? ',
+        }).messages,
+      ).toBe(`Question: And who won each one?\n\nCAT\n\n${BRIEF_BLOCK}`);
+      expect(
+        planMessages({
+          messages: 'Q',
+          question: 'Q',
+          catalogBlock: 'CAT',
+          brief: '   ',
+        }).messages,
+      ).toBe('Question: Q\n\nCAT');
+      expect(orchestratorBriefBlock(undefined)).toBe('');
     });
 
     it('after Clarify: the question, the clarifying question Plan asked, then the answer with the catalog', () => {
@@ -1000,6 +979,25 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       expect(request).toContain('- passed: Ran a query. 1 of 2.');
     });
 
+    it("ends Write answer's request with an orchestrator's brief; without one the request is unchanged", () => {
+      const base = {
+        question: 'And who won each one?',
+        plan: PLAN,
+        queries: [query()],
+        findings: [],
+      };
+      const plain = writeAnswerRequest(base);
+      const briefed = writeAnswerRequest({
+        ...base,
+        brief:
+          'Who won the 2018 and 2022 World Cups? The user knows there are two.',
+      });
+      expect(briefed).toBe(
+        `${plain}\n\nRequest from Avery, the Chief of Staff who coordinates the team (the user's own words are above): Who won the 2018 and 2022 World Cups? The user knows there are two.`,
+      );
+      expect(writeAnswerRequest({ ...base, brief: '' })).toBe(plain);
+    });
+
     it('says how many rows a long result has and how many Write answer is shown (plan 1.25.6)', () => {
       const rows = Array.from({ length: 102 }, (_, n) => ({ n }));
       const request = writeAnswerRequest({
@@ -1050,246 +1048,6 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       expect(retry).toContain('Attempt 1 of this analysis failed validation.');
       expect(retry).toContain('- Ran a query: No SQL query ran.');
       expect(retry).not.toContain('No unresolved tool error');
-    });
-  });
-
-  describe('interpretFollowUp: the code gate, then result-explorer (roadmap 1.28.8)', () => {
-    const EARLIER: ExplorableQuery = {
-      ref: 'Q1',
-      sql: 'SELECT m.id AS match_id, m.stage FROM wc.public.matches m',
-      datasourceId: 'ds-pg',
-      columns: ['match_id', 'stage'],
-      kinds: { match_id: 'number', stage: 'text' },
-      sampleValues: { match_id: [1, 2], stage: ['final', 'group'] },
-      rationale: 'I list each match with its stage.',
-    };
-    const SECOND: ExplorableQuery = {
-      ...EARLIER,
-      ref: 'Q2',
-      sql: 'SELECT name FROM wc.public.teams',
-      columns: ['name'],
-      kinds: { name: 'text' },
-      sampleValues: { name: ['Brazil'] },
-      view: { filters: [], sort: [], page: 3, pageSize: 50, matchedRows: 400 },
-    };
-    const spec = (partial: Partial<ExplorerSpec> = {}): ExplorerSpec => ({
-      action: 'explore',
-      query: 0,
-      interpretation: {
-        request: { filters: [], sort: [], page: 2, pageSize: 50 },
-        understood: 'page 2',
-      },
-      ...partial,
-    });
-    const turn = (
-      followUp: ExplorableQuery[] | undefined,
-      reply: () => Promise<{ spec: ExplorerSpec; stopped: boolean }>,
-    ) => {
-      const interpretFollowUp = jest.fn(reply);
-      return {
-        runtime: {
-          ...(followUp ? { followUp } : {}),
-          interpretFollowUp,
-        } as Pick<
-          AnswerBusinessQuestionRuntime,
-          'followUp' | 'interpretFollowUp'
-        >,
-        interpretFollowUp,
-      };
-    };
-
-    it('makes no model call on a run without earlier queries (every first run, every eval case)', async () => {
-      for (const followUp of [undefined, []]) {
-        const { runtime, interpretFollowUp: call } = turn(followUp, () =>
-          Promise.resolve({ spec: spec(), stopped: false }),
-        );
-        await expect(interpretFollowUp('next page', runtime)).resolves.toEqual({
-          followUp: null,
-          stopped: false,
-        });
-        expect(call).not.toHaveBeenCalled();
-      }
-      // No runtime at all: no follow-up either (Plan reports the missing turn).
-      await expect(interpretFollowUp('next page', undefined)).resolves.toEqual({
-        followUp: null,
-        stopped: false,
-      });
-    });
-
-    it("asks result-explorer once with the words, every earlier query as a candidate and the latest query's view", async () => {
-      const { runtime, interpretFollowUp: call } = turn([EARLIER, SECOND], () =>
-        Promise.resolve({
-          spec: spec({ query: 0 }),
-          stopped: false,
-        }),
-      );
-      const read = await interpretFollowUp('next page of Q1', runtime);
-      expect(call).toHaveBeenCalledTimes(1);
-      expect(call).toHaveBeenCalledWith({
-        text: 'next page of Q1',
-        candidates: [
-          expect.objectContaining({ ref: 'Q1', view: null }),
-          expect.objectContaining({ ref: 'Q2', view: SECOND.view }),
-        ],
-        view: SECOND.view,
-        pageCount: 8,
-      });
-      expect(read).toEqual({
-        followUp: {
-          action: 'explore',
-          query: 0,
-          ref: 'Q1',
-          request: { filters: [], sort: [], page: 2, pageSize: 50 },
-          understood: 'page 2',
-        },
-        stopped: false,
-      });
-    });
-
-    it('falls through to planning on a new question, a part it could not read, or a model error; never fails the run', async () => {
-      const replies: (() => Promise<{
-        spec: ExplorerSpec;
-        stopped: boolean;
-      }>)[] = [
-        () =>
-          Promise.resolve({
-            spec: spec({ action: 'new-question' }),
-            stopped: false,
-          }),
-        () =>
-          Promise.resolve({
-            spec: spec({
-              interpretation: {
-                request: {},
-                understood: 'All rows',
-                rejected: ['goals per team'],
-              },
-            }),
-            stopped: false,
-          }),
-        () => Promise.reject(new Error('The provider failed')),
-      ];
-      for (const reply of replies) {
-        const { runtime } = turn([EARLIER], reply);
-        await expect(
-          interpretFollowUp('goals per team', runtime),
-        ).resolves.toEqual({ followUp: null, stopped: false });
-      }
-    });
-
-    it('says the turn was stopped while the words were read', async () => {
-      const { runtime } = turn([EARLIER], () =>
-        Promise.resolve({ spec: spec(), stopped: true }),
-      );
-      await expect(interpretFollowUp('next page', runtime)).resolves.toEqual({
-        followUp: null,
-        stopped: true,
-      });
-    });
-  });
-
-  describe('pageAnswer (roadmap 1.28.8)', () => {
-    const view = {
-      filters: [],
-      sort: [],
-      page: 2,
-      pageSize: 50,
-      matchedRows: 1264,
-    };
-    const rows = Array.from({ length: 50 }, (_, i) => ({
-      match_id: 2 + Math.floor(i / 23),
-      stage: 'final',
-      player_id: 51 + i,
-      shirt_number: null,
-    }));
-
-    it('heads the answer with the rows shown and the total, then the query, the understood line and a table of the page', () => {
-      const answer = pageAnswer(
-        view,
-        {
-          columns: ['match_id', 'stage', 'player_id', 'shirt_number'],
-          rows,
-          pageCount: 26,
-          matchedRows: 1264,
-          capped: false,
-          understood: 'page 2',
-        },
-        'I list each match with its squad members.',
-      );
-      const lines = answer.split('\n');
-      expect(lines[0]).toBe('Rows 51–100 of 1,264');
-      expect(answer).toContain(
-        'Query: I list each match with its squad members.',
-      );
-      expect(answer).toContain('Understood as: page 2');
-      expect(answer).toContain(
-        '| Match id | Stage | Player id | Shirt number |',
-      );
-      expect(answer).toContain('| 2 | final | 51 |  |');
-      expect(lines.filter((line) => line.startsWith('| ')).length).toBe(2 + 50);
-      expect(answer).toContain(
-        'Page 2 of 26. Open the query to page, filter or sort the full result.',
-      );
-    });
-
-    it('says when the rows are filtered, capped or none match', () => {
-      const filtered = {
-        ...view,
-        page: 1,
-        filters: [{ column: 'stage', op: 'eq' as const, value: 'final' }],
-      };
-      const page = {
-        columns: ['stage'],
-        rows: [{ stage: 'final' }],
-        pageCount: 1,
-        matchedRows: 1,
-        capped: false,
-        understood: 'Stage is final',
-      };
-      expect(pageAnswer(filtered, page, 'Q1').split('\n')[0]).toBe(
-        'Rows 1–1 of 1 matching',
-      );
-      expect(
-        pageAnswer(
-          { ...view, page: 1 },
-          {
-            ...page,
-            rows: rows.slice(0, 50),
-            matchedRows: 50000,
-            capped: true,
-          },
-          'Q1',
-        ).split('\n')[0],
-      ).toBe('Rows 1–50 of 50,000+');
-      const none = pageAnswer(
-        filtered,
-        { ...page, rows: [], matchedRows: 0 },
-        'Q1',
-      );
-      expect(none.split('\n')[0]).toBe('No rows match these filters.');
-      expect(none).not.toContain('| ');
-    });
-
-    // A page read straight from the connector (the pg driver hands a
-    // timestamp over as a Date) shows its instants as the stored rows
-    // do, never as JSON with its quotes (found by the live-LLM layer).
-    it('writes a timestamp cell as its ISO instant, without JSON quotes', () => {
-      const answer = pageAnswer(
-        { ...view, page: 1 },
-        {
-          columns: ['stage', 'kicked_off_at'],
-          rows: [
-            { stage: 'final', kicked_off_at: new Date('2018-07-15T15:00:00Z') },
-          ],
-          pageCount: 1,
-          matchedRows: 1,
-          capped: false,
-          understood: 'Stage is final',
-        },
-        'Q1',
-      );
-      expect(answer).toContain('| final | 2018-07-15T15:00:00.000Z |');
-      expect(answer).not.toContain('"2018');
     });
   });
 

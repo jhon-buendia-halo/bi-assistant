@@ -12,6 +12,7 @@ import { createConnection } from 'node:net';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { markVideoStart } from '../support/video-clock';
 
 /**
  * Which app the suite drives. `web` (the default, see the Test target
@@ -262,6 +263,7 @@ async function launchWeb(
       : {}),
   });
   const page = await context.newPage();
+  markVideoStart(page);
   await page.goto(cli.url);
   await waitForShell(page);
   return {

@@ -59,6 +59,31 @@ export interface QueryStep {
   countSql?: string;
   /** start = the table's size, show = rows produced (both from code); others only once verified. */
   rows?: number;
+  /**
+   * From the explainer: a statement returning the rows after this step (the
+   * intermediate result), run on demand for its preview. Never on show:
+   * the show step's rows are the query's own.
+   */
+  previewSql?: string;
+  /** The first rows after this step, once asked for (api.md 161, 162). */
+  preview?: StepPreview;
+}
+
+/** The rows a step leaves, as its preview shows them (ui.md 4.4b). */
+export interface StepPreview {
+  columns: string[];
+  /** At most `STEP_PREVIEW_ROWS`. */
+  rows: Record<string, unknown>[];
+  /** More rows than these came back. */
+  more: boolean;
+  /** The rows the statement produced before the cap, when the datasource says. */
+  total?: number;
+  at: string;
+  /**
+   * Against the step's counted rows, when they are known: `differs` means
+   * the statement may not be the step's. Absent when nothing could be checked.
+   */
+  check?: 'matches' | 'differs';
 }
 
 export interface QueryExplanation {

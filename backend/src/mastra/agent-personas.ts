@@ -71,6 +71,13 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       'I check whether a dataset is ready for analysis. I score its quality dimension by dimension and explain what needs fixing.',
   },
+  'chief-of-staff': {
+    name: 'Avery',
+    role: 'Chief of Staff',
+    domain: 'analysis',
+    intro:
+      "I'm your one point of contact for a question: I decide who on the team works on it, brief them, check what they bring back and hand you one answer.",
+  },
   visualization: {
     name: 'Ryan',
     role: 'Visualization Designer',
@@ -119,6 +126,13 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     domain: 'storytelling',
     intro:
       'I turn the rows and findings of an analysis into a clear answer you can act on.',
+  },
+  'bi-analyst': {
+    name: 'Clara',
+    role: 'Business Intelligence Analyst',
+    domain: 'storytelling',
+    intro:
+      'Ask for a dashboard and I build it on your real data: filters, KPIs and charts that recompute as you click, ready to download.',
   },
   'dashboard-reader': {
     name: 'Grace',

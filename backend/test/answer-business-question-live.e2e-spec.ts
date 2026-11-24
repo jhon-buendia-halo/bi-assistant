@@ -1,6 +1,6 @@
 /**
  * Border cases of Answer a Business Question that need real rows (agents.md
- * 5.11 Validate, Build visual, Interpret follow-up; api.md 119), end
+ * 5.11 Validate, Build visual; api.md 119), end
  * to end on the real Mastra engine and the World Cup Postgres on 55432: the
  * built backend in its own process and data dir, the stub model scripted
  * per step, and Analyse's queries run for real, so Validate judges real
@@ -118,7 +118,13 @@ describeLive(
       context?: { fromRunId: string },
     ) =>
       client.run(WORKFLOW, {
-        input: { question, datasets: [DATASET], buildVisual: false, ...extra },
+        input: {
+          question,
+          datasets: [DATASET],
+          buildVisual: false,
+          approveSteps: false,
+          ...extra,
+        },
         ...(context ? { context } : {}),
       });
 
@@ -373,7 +379,7 @@ describeLive(
       expect(built.output).toHaveProperty('visual');
     });
 
-    describe('a follow-up over an earlier result (Interpret follow-up, roadmap 1.28.8)', () => {
+    describe('a follow-up run plans a new question (no Interpret follow-up, no paging)', () => {
       /** A first run with one real query to follow up on. */
       const firstRun = async () => {
         useV2Steps(
@@ -392,36 +398,6 @@ describeLive(
         return res.run!.id;
       };
 
-      it('"next page" pages the earlier result: no Plan, no Analyse, the explore branch answers', async () => {
-        const fromRunId = await firstRun();
-        stub.explore = () => ({
-          action: 'explore',
-          query: null,
-          filters: [],
-          sort: [],
-          page: { move: 'next', to: null },
-          understood: 'Page 2',
-        });
-        const { result: res, requests } = await recorded(() =>
-          ask('Show me the next page', {}, { fromRunId }),
-        );
-        expect(res.run?.status).toBe('success');
-        expect(res.steps).toEqual(
-          expect.arrayContaining([
-            'interpret-follow-up:success',
-            'page-result:success',
-            'page-answer:success',
-          ]),
-        );
-        expect(res.steps.some((s) => s.startsWith('plan:running'))).toBe(false);
-        expect(res.steps.some((s) => s.startsWith('analyse:running'))).toBe(
-          false,
-        );
-        expect(requests.some(isPlanRequest)).toBe(false);
-        expect(requests.some(isAnalyseRequest)).toBe(false);
-        expect(res.run!.answer?.content).toEqual(expect.any(String));
-      });
-
       it('a new question plans as before', async () => {
         const fromRunId = await firstRun();
         useV2Steps(stub, analyse([[{ sql: COUNT_SQL }]]));
@@ -429,34 +405,26 @@ describeLive(
           ask('How many matches were there in all?', {}, { fromRunId }),
         );
         expect(res.run?.status).toBe('success');
-        expect(res.steps).toContain('plan:success:1');
-        expect(res.steps).not.toContain('page-result:running');
+        expect(res.steps).toContain('plan:success');
+        expect(res.steps.some((x) => x.startsWith('page-'))).toBe(false);
         expect(requests.filter(isPlanRequest)).toHaveLength(1);
       });
 
-      it('a model error in Interpret follow-up never fails the run: it plans the question', async () => {
+      it('"next page" is no paging of the earlier result: the follow-up run plans it as a new question', async () => {
         const fromRunId = await firstRun();
         useV2Steps(stub, analyse([[{ sql: COUNT_SQL }]]));
-        stub.intercept = (req) =>
-          req.messages.some(
-            (m) =>
-              m.role === 'system' &&
-              messageText(m).startsWith(
-                "You turn a user's words about a query's result",
-              ),
-          )
-            ? { status: 400, message: 'The explorer is down.' }
-            : undefined;
-        const res = await ask('And the next page?', {}, { fromRunId });
+        const { result: res, requests } = await recorded(() =>
+          ask('Show me the next page', {}, { fromRunId }),
+        );
         expect(res.run?.status).toBe('success');
         expect(res.steps).toEqual(
-          expect.arrayContaining([
-            'interpret-follow-up:success',
-            'plan:success:1',
-            'write-answer:success',
-          ]),
+          expect.arrayContaining(['plan:success', 'write-answer:success']),
         );
-        expect(res.steps).not.toContain('page-result:running');
+        expect(res.steps.some((x) => x.startsWith('page-'))).toBe(false);
+        expect(res.steps.some((x) => x.startsWith('interpret-follow-up'))).toBe(
+          false,
+        );
+        expect(requests.filter(isPlanRequest)).toHaveLength(1);
       });
     });
   },

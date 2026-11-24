@@ -44,7 +44,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds six code workflows: Insights Analyst, Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18), Review a Website (5.19) and Consumption Gap Analysis (5.20)', () => {
+  it('holds eight code workflows: Insights Analyst, its orchestrated version (5.22) and Avery + Michael (5.23), Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18), Review a Website (5.19) and Consumption Gap Analysis (5.20)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -57,6 +57,20 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       {
         id: 'answer-business-question',
         name: 'Answer a Business Question',
+        primaryFor: 'insights-analyst',
+        bar: 'steps',
+        trigger: 'run',
+      },
+      {
+        id: 'orchestrated-answer',
+        name: 'Answer a Business Question (orchestrated)',
+        primaryFor: 'insights-analyst',
+        bar: 'steps',
+        trigger: 'run',
+      },
+      {
+        id: 'orchestrated-answer-michael',
+        name: 'Answer a Business Question (Avery + Michael)',
         primaryFor: 'insights-analyst',
         bar: 'steps',
         trigger: 'run',
@@ -101,23 +115,17 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'read-images',
       'receive-question',
       'load-catalog',
-      'interpret-follow-up',
       'plan',
-      'clarify',
       'analyse',
       'validate',
       'write-answer',
       'build-visual',
       'wrap-up',
-      'page-result',
-      'page-answer',
     ]);
     // The flow is its edges (api.md 117): the optional branch to Read
-    // images from Start, a branch after Interpret follow-up (a new
-    // question, or the earlier result paged), a branch after Plan, a loop
-    // back from Clarify to Plan once answered, a loop back from Validate to
-    // Analyse, and the optional branch from Write answer to Build visual.
-    expect(CODE_WORKFLOWS[0].edges).toHaveLength(19);
+    // images from Start, a loop back from Validate to Analyse, and the
+    // optional branch from Write answer to Build visual; the rest is one line.
+    expect(CODE_WORKFLOWS[0].edges).toHaveLength(13);
     expect(
       CODE_WORKFLOWS[0].edges
         .filter((edge) => edge.kind !== 'next')
@@ -129,26 +137,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         kind: 'branch',
         label: 'Reference images',
       },
-      {
-        from: 'interpret-follow-up',
-        to: 'plan',
-        kind: 'branch',
-        label: 'New question',
-      },
-      {
-        from: 'interpret-follow-up',
-        to: 'page-result',
-        kind: 'branch',
-        label: 'Explore the earlier result',
-      },
-      {
-        from: 'plan',
-        to: 'clarify',
-        kind: 'branch',
-        label: 'Needs clarification',
-      },
-      { from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' },
-      { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
       { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
       {
         from: 'write-answer',
@@ -174,6 +162,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       {
         name: 'buildVisual',
         label: 'Build a visual: Ryan charts the results of the answer',
+        type: 'boolean',
+        required: false,
+        default: true,
+      },
+      {
+        name: 'approveSteps',
+        label: "Approve each step: every agent's work waits for your OK",
         type: 'boolean',
         required: false,
         default: true,
@@ -261,6 +256,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         images: ['read-images'],
         datasets: ['receive-question'],
         buildVisual: [],
+        approveSteps: [],
       });
       // Resolve dataset starts Zoe's reading of the images (agents.md 5.13).
       expect(usedBy('data-readiness-assessment')).toEqual({
@@ -608,6 +604,14 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it('insights-analyst is used in Insights Analyst', () => {
       expect(workflowsUsingAgent('insights-analyst')).toEqual([
         { id: 'answer-business-question', name: 'Answer a Business Question' },
+        {
+          id: 'orchestrated-answer',
+          name: 'Answer a Business Question (orchestrated)',
+        },
+        {
+          id: 'orchestrated-answer-michael',
+          name: 'Answer a Business Question (Avery + Michael)',
+        },
       ]);
     });
 

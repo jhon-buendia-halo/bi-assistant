@@ -1218,7 +1218,7 @@ flowchart LR
   - **New `appId`:** rejected; the new app would install beside the old one and start with an empty profile.
 
 #### ADR-0047 — Long work the user starts runs as a background task owned by the shell, not by the screen that started it
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0057 (a queued run is a running task)
 - **Date:** 2026-11-15
 - **Context:**
   - The renderer has no router: changing area, view, tab or opening Settings destroys the screen. Twenty slow operations kept their in-progress state in the component, so leaving made the work invisible (a dataset save, a Testing Data load, ontology suggestions), cancelled it (an inventory load, a synthetic profile) or left it untracked (an eval run, whose poll timer even outlived the page). The user saw a dataset appear only when its save ended and asked for the process to stay visible.
@@ -1239,7 +1239,7 @@ flowchart LR
   - **Backend job queue for every operation:** rejected for now; the requests already complete if the client keeps the connection, so a queue would add endpoints and storage for no visible gain.
 
 #### ADR-0048 — A workflow run runs detached from its connection: a live-run registry with a numbered event log, re-attach and a Stop endpoint
-- **Status:** Accepted; amended 2026-11-17 (a no-progress watchdog and a forced stop, last Consequences bullet)
+- **Status:** Accepted; amended 2026-11-17 (a no-progress watchdog and a forced stop, last Consequences bullet); amended by ADR-0057 (the run cap queues instead of refusing, and a restart queues a running run again instead of failing it)
 - **Date:** 2026-11-15
 - **Context:**
   - A run's stream (api.md 119, 138) was its lifetime: the backend aborted the run when the connection closed, and the workflow page closed it when it was left (the renderer has no router, ADR-0047). Leaving the page, reloading or closing the window stopped the run; the user asked for runs to keep going and show in Background tasks (roadmap 1.26.5).
@@ -1253,7 +1253,7 @@ flowchart LR
   - **Unchanged:** Try it (129) and a step's chat (137) stay tied to their connection; 118 runs inline.
   - **Amends ADR-0043:** a run's runtime stays in server memory, now while it runs too, not only while it waits.
 - **Consequences:**
-  - A backend restart still ends a running run: it is stored `failed` at start-up (workflows R20), and a waiting one `stopped`, as before; nothing of the registry is persisted.
+  - A backend restart still ends a running run: it is stored `failed` at start-up (workflows R20; since ADR-0057 it is queued again instead), and a waiting one `stopped`, as before; nothing of the registry is persisted.
   - The stream's frames gain `seq` (api.md 3.6); a stopped run's stream ends with `done` rather than nothing; a client must call 150 to stop.
   - Memory: one log per live run and per run ended in the last 10 minutes, bounded by the cap.
   - **Stack-neutral:** a rebuild needs a server-side run that outlives its request, a replayable event log per run, a follow endpoint and a stop endpoint.
@@ -1376,6 +1376,8 @@ flowchart LR
   - The picker lists only steps that ran in the shown run; a run that asked one agent has only that step, so its own follow-up offers that agent or the whole workflow.
   - `answer-business-question`'s graph and contract hash are unchanged, so no eval set and no stored suspended run is affected.
   - **Stack-neutral:** a rebuild needs a run store with a context field, a way to run one step's model call outside its workflow, and the shared answer path.
+  - **Amended 2026-11-20:** the picker is gone from the UI together with the whole follow-up composer ("the follow-up question is useless since it was removed"); the backend keeps `context.askStep` and the `ask-agent` engine, which no screen sends.
+  - **Amended 2026-11-19:** Answer a Business Question became one line ("the workflow will be linear, there will be no follow-up questions"): Interpret follow-up, Page result, Page answer and Clarify left it (Plan asks in its own step), so Nathan is no longer askable and the graph and contract hash above changed. The rest of this record is kept as written.
 - **Alternatives considered:**
   - **A router inside the workflow (more `.branch()` arms after Interpret follow-up):** automatic, but a wrong route is invisible to the user; not picked.
   - **A supervisor agent with subagents (`agents:` in Mastra 1.66):** flexible, but the flow would come from a prompt (against ADR-0034), with a supervisor call on top of every subagent call; not picked.
@@ -1386,6 +1388,106 @@ flowchart LR
   - Ryan designs a new visual (v1) from the earlier answer's question, text and records, with the follow-up text as his instruction; no query runs. His answer is code-written (`Here's a new visual of the earlier answer: "<title>".`, or `I couldn't build a new visual: <reason>`), so it is not an agent turn.
   - It is the one askable step whose earlier `skipped` status (Build a visual unticked) or `visual.skipped` does not refuse it: rows are what it needs, and with none the request is refused with `The earlier answer has no query rows to chart`.
   - The Decision and Consequences above stand; the graph and contract hash of `answer-business-question` are still unchanged.
+
+#### ADR-0054 — Eval traffic is marked in the trace, and Monitoring reads eval runs for Agent quality
+- **Status:** Accepted. Amends ADR-0038.
+- **Date:** 2026-11-22
+- **Context:**
+  - The operator approved an Agent quality tab on Monitoring: one row per agent persona with its eval pass rate, pass^3 and tool figures from its eval runs, and its p95 latency and cost per call from live calls.
+  - Eval runs call the same agents as users do, and nothing tells their traces apart (no tag, metadata or resource id; they show `session: null`, as previews do).
+  - CLI eval runs (`run-assistant-evals.ts`) were never saved, and no run recorded its set or model, so pass^3 could mix models.
+- **Decision:**
+  - **Marker.** Every eval case runs inside its run's scope: `runAssistantEvalCase` wraps the whole case (setup, target, synthesis, judge, clean-up) in `inEvalRun(jobId)`, an `AsyncLocalStorage` scope (`mastra/evals/eval-run-scope.ts`), and a run's `finish` runs in it too. The Observability config's span output processor `EvalRunMarker` writes `eval-run-id = <jobId>` (`EVAL_RUN_CONTEXT_KEY`, `mastra/evals/eval-trace-marker.ts`) into the `metadata` of every span started inside a scope: agent runs, model generations, steps, tool calls and workflow spans, whatever request context the span was created with. Mastra runs output processors synchronously when a span starts, in the caller's async context, so this holds for the wrapper targets (Result Explorer, Query Explainer, Site Reviewer, isolated calls, whole-workflow runs) whose app functions build their own call and start a new trace. The case's request context also carries the key, listed in `requestContextKeys`, as a second path.
+  - **Classification.** A model call is an eval call when any span of its trace carries `metadata."eval-run-id"`. Every other call is live, including calls recorded before this change.
+  - **Monitoring reads `eval_runs` read-only** through `EvalRunsRepository`. Endpoint #163 joins those runs (by agent registry key) with the trace store's live calls (by Mastra agent id).
+  - **Every run records `setId`, `provider`, `model` and `source`.** The CLI saves its runs to `eval_runs` as the UI does; a record is inserted only once its first question has finished, so a preflight refusal leaves nothing. Old runs: the set is derived from `caseIds` when one set holds them all; the model is `Unknown`, and such runs are never pooled into pass^3.
+- **Alternatives considered:**
+  - **`tracingOptions.tags`/`metadata`:** rejected; they go on the root span only, and every wrapper target, the judge and the synthesis would need them threaded by hand.
+  - **The request context alone (the first build):** rejected after a real run; the Result Explorer target's app function builds its own call without the case's request context, so its 39 model generations started unmarked traces and counted as live. Forwarding it through every app function would leave each new target to remember it.
+  - **Matching the throwaway host id `run-eval-<uuid>`:** rejected; best-effort, and absent from calls made without a session.
+  - **A new eval-calls collection:** rejected; it duplicates the trace store (ADR-0038).
+- **Consequences:**
+  - Every span of an eval trace carries one more metadata key; other traces are unchanged.
+  - Any model call a case makes is marked, in a new trace or not, as long as it runs in the case's async call chain; work handed to a queue or worker started outside the scope would not be. A guard test (`eval-run-marker-guard.spec.ts`) runs a case of every target in `EVAL_SETS` and fails when the runner uses the target outside the scope.
+  - Live calls running at the same time as an eval run are not marked: the scope follows each async call chain, not the process.
+  - Live figures include old eval calls until they leave the period.
+  - The CLI writes to the data dir it boots on, and beside a running app it shares SQLite and Mastra's DuckDB lock, as it already did.
+  - **Stack-neutral:** a rebuild needs an async-context scope per eval case whose id a span hook writes onto every span started in it, a run store with set and model, and a read path over both.
+
+#### ADR-0055 — Live dashboards: a row snapshot per artifact version, drawn by the fixed runtime
+- **Status:** Accepted
+- **Date:** 2026-11-22
+- **Context:**
+  - Avery's team had no way to give the user an interactive dashboard on real data. Dashboard Image to Artifact (agents.md 5.17) draws a dashboard from a screenshot with **invented** values, and Map a Dashboard to Data (5.18) maps one to columns without drawing the rows. The user wants to ask Avery for a dashboard, ask again to change it, and take it away as plain files.
+  - The fixed runtime (`recreate-dashboard.runtime.ts`) already draws any dashboard blueprint with working filters, and the blueprint schema already names columns (a measure's column, a widget's dimension, a filter's column), so the same drawing can run on real rows.
+  - The connectors clamp a query to 500 rows unless a limit is passed, and a turn's stored records keep 200 rows, so neither carries a dashboard's data.
+  - Artifacts had no versions and were rendered at each read.
+- **Decision:**
+  - **A new teammate, Clara (`bi-analyst`), who designs data, not code.** Avery calls her through `build_dashboard`, offered only when the user asks for a dashboard or the conversation has one. Clara explores with the read-only dataset tools and submits one **draft** (title, theme, filters, widgets and measures over columns) together with **one data query** (`submit_dashboard`). Her draft schema is her own; the blueprint schema and the contract hashes of the two dashboard workflows do not change.
+  - **The host runs the query and keeps a row snapshot.** The host runs the submitted query with a row limit of 5,000 (carried to every connector), checks that every column the draft names is in the result, converts numbers and dates, and keeps the rows as the file `artifacts/<id>/v<N>/rows.json`, beside a version of the artifact (not in the document store, whose documents stay small). The snapshot is what the dashboard shows from then on; it is not refreshed.
+  - **A version per turn, the same artifact for the whole conversation.** An artifact holds `versions`: each turn of the conversation that changes the dashboard adds the next one, built from the conversation's current version, which a later turn is handed by the host. A version never changes. The top-level `blueprint` is the current version's, so existing readers keep working, and a legacy document reads as a version 1 without rows. The fields are optional: no migration.
+  - **The fixed runtime draws the rows.** The runtime's `mount` takes the rows and draws on them with its own filter logic; no model writes markup, style or script, as for the other dashboards. A download is the same runtime and the same rows as plain files (`index.html`, `styles.css`, `app.js`, `data.js`, `query.sql`, `README.txt`) that open from the computer's files.
+- **Consequences:**
+  - The dashboard is a **snapshot of at most 5,000 rows and 2 MB**: a question that needs more rows is answered by aggregating in Clara's query. It is stale the moment the data changes; a new version re-runs the query.
+  - Nothing a model wrote is executed in the dashboard or in the zip: the model's text reaches the page only as text, and the data is escaped JSON.
+  - Row files are user data in the app's data directory: they are removed with the artifact and are not part of any export of the document store.
+  - Clara's quality is bounded by the draft schema (the widget and filter kinds the runtime draws) and is measured by her own eval set (agents.md 8.1); Avery's own choices have no eval set (agents.md, open gaps), the gate keeping the tool out of runs without a dashboard.
+  - **Stack-neutral:** a rebuild needs a store for versions with a side file per version, a runtime that draws a blueprint from rows, a way to run one read-only query with a larger row limit, and a zip writer.
+- **Alternatives considered:**
+  - **B. A visual spec per dashboard, drawn by the visual designer's runtime (agents.md 6.8):** reuses Ryan's pipeline and its charts, but a spec describes one visual, not a set of widgets sharing filters over one dataset, so the filters would need a second runtime; rejected.
+  - **C. The model writes the dashboard's code (HTML, CSS and JS):** the most flexible, and the same route Ryan's legacy mode took, but every dashboard would need validation and repair, a follow-up would rewrite the code and drift, and the zip would ship code nobody reviewed; rejected against ADR-0034 (the flow and the code come from the host).
+  - **A (chosen): the blueprint drawn by the fixed runtime on real rows,** which reuses the runtime, its filters and its tests, makes a version a small diffable draft, and keeps the model's output to data.
+
+#### ADR-0056 — The conversation export is built by the backend and drawn by the computer's own browser
+- **Status:** Accepted
+- **Date:** 2026-11-23
+- **Context:**
+  - A conversation with Avery (workflows R45) holds answers, their queries and a dashboard that changes version by version. The user wants to take the whole conversation away as a file to share, a PDF and a PowerPoint, **dashboards included**, and asks Avery for it in the conversation itself.
+  - The dashboards are drawn by the fixed runtime (ADR-0055) in a browser: no server-side library draws their charts as the user sees them.
+  - Review a Website (ADR-0049) already drives the computer's own Edge or Chrome headless from the backend through `playwright-core`, which ships no browser.
+  - Avery writes the file's words; a summary is where an invented figure would hide.
+- **Decision:**
+  - **Avery's own tool, behind a gate.** `export_conversation` (agents.md 3.18) is offered only when the message asks to export or share the conversation (`asksForExport`, a pure function of its words, English and Spanish). With the gate closed her tools, run facts, instructions and skills are unchanged. She writes only the title, a summary and one headline (and up to three points) per earlier question, in the conversation's language, following the `conversation-export` skill; the rest of the files is the conversation itself, read by the backend.
+  - **The figures are checked before anything is drawn.** Every number she writes must be one of the conversation's answers (the same string, or the same value under `1,234.5` or `1.234,5` grouping); otherwise the tool names the figures and makes nothing.
+  - **The backend builds the report and the browser draws it** (approach A, chosen by the operator on 2026-11-23). A global `conversation-export` module reads the conversation's runs and their dashboard versions, draws each version in the browser of ADR-0049 at 1280 px and cuts it into **one image per row of widgets** (table widgets read as text), so no page or slide cuts a widget. The PDF is the browser's print of an HTML report; the PowerPoint is written with `pptxgenjs` (MIT) as native text and tables, the dashboard rows as images. The latest version of a dashboard goes in full, each earlier one as its first row. The layout is the operator's accepted prototype.
+  - **The files are kept.** They go to `<data dir>/exports/<id>/`, with a `conversation_exports` document (data-model 3.20), and the answer carries the export (`answer.export`) for its card; api.md 167 serves them.
+- **Consequences:**
+  - Exporting needs Edge or Chrome on the computer, as Review a Website does; without one, Avery says so and no file is made. One export runs at a time.
+  - A table widget shows the rows the dashboard runtime shows (at most 25): its full data stays in the dashboard. An answer's table on a slide is cut at 6 columns and 11 rows, a table widget at 12 rows, each with a note; the full answer is in the slide's notes and the PDF.
+  - The report prints with scripts off and the answers' raw HTML escaped: what a model wrote reaches the files as text only.
+  - A new dependency, `pptxgenjs` 4.0.1, and a new collection and data folder with no way yet to list or delete an export.
+  - The brand comes from `APP_BRAND` (Halo by default): the backend does not otherwise know the build's brand.
+  - **Stack-neutral:** a rebuild needs a headless browser that prints HTML to PDF and screenshots a page region, a PowerPoint writer, and the conversation's runs and dashboard versions.
+- **Alternatives considered:**
+  - **Native PDF (`pdfkit`) and PowerPoint charts (`pptxgenjs` charts):** no browser, but every dashboard widget kind would need a second drawing in two libraries that would never match the runtime's; rejected by the operator.
+  - **The tab exports it (the renderer prints or captures the open conversation):** the browser is already there, but the export would need the conversation and its dashboards open on screen, would not work for Avery from the conversation's words, and would leave nothing on the run; rejected by the operator.
+  - **A (chosen): the backend builds the files and drives the local browser,** which reuses ADR-0049's browser and ADR-0055's runtime, draws the dashboards exactly as the user saw them, and keeps the files with the run.
+
+#### ADR-0057 — Persistent run queue and restart recovery
+- **Status:** Accepted. Amends ADR-0048 (and ADR-0047 for its task rows).
+- **Date:** 2026-11-23
+- **Context:**
+  - A workflow run (api.md 119) holds one of `WORKFLOW_MAX_LIVE_RUNS` slots (8). The ninth start was refused with `429`, so the user had to retry by hand.
+  - A backend restart marked every `running` run `failed` (`The app stopped before the run finished`), although the user's question was still good and nothing was lost but the run's own work.
+  - The runs already live in `workflow_runs` (data-model 3.16), and `LiveRuns` (ADR-0048) already holds each run's abort signal and event log in memory.
+- **Decision:**
+  - **The queue is `workflow_runs` plus a FIFO wait in `LiveRuns`.** 119 inserts the run `queued` (with `queuedAt`), writes its input images to its workspace, holds it in `LiveRuns` and sends `run`, then `queued` when no slot is free. When a slot frees, the oldest queued run (by `queuedAt`) starts. A dispatched run is prepared again from its stored doc, so a follow-up gets a fresh transcript; a refusal there ends the run `failed` with that message.
+  - **The cap bounds running runs, not accepted ones.** 118 stays inline with no slot; resumes (138) and suspended runs behave as before. A queued run counts as active for delete, archive, visuals, evidence and node chats, and Stop stores it `stopped` at once.
+  - **At-least-once, from scratch, 3 attempts.** At start-up a `running` run with fewer than 3 starts (`attempts`, `RUN_MAX_ATTEMPTS`) becomes `queued`: steps, output, error and answer cleared, its memory threads deleted, workspace inputs kept. A run cut off after its third start becomes `failed` as before. Queued runs are dispatched once the whole app is up (`onApplicationBootstrap`). Suspended runs are unchanged.
+  - **No step resume.** The restarted run repeats its steps; resuming mid-run is ADR-0043's approach C, still deferred.
+- **Consequences:**
+  - A crash repeats the run's LLM calls and cost, up to 3 times per run.
+  - Input images are written when the run is accepted, not when it starts, so a queued run uses disk before it uses a slot.
+  - A re-prepare can refuse (a dataset or workflow removed while the run waited); the run then ends `failed` with the refusal.
+  - `queued` joins the status union and the wire shape gains `queuedAt` and `attempts`; both are optional, so no migration.
+  - The idle watchdog times only running time: a queued run is never timed.
+  - **Stack-neutral:** a rebuild needs a durable run record with a queued state, an in-memory wait ordered by acceptance time, a start-up pass that re-queues interrupted runs under an attempt limit, and a dispatch step after start-up.
+- **Alternatives considered:**
+  - **A library queue on PGlite (pg-boss):** rejected; a second store and worker model for a queue the run table already is.
+  - **BullMQ:** rejected; it needs Redis, which a desktop app does not run.
+  - **DBOS:** rejected; it needs Postgres, and its SQLite support is an open PR (#1288).
+  - **Inngest or Temporal sidecars:** rejected; a separate server process for one local app.
+  - **Mastra `restart()`:** rejected for now; it needs workflow snapshots the app disables, and the agent turns' state is not in them (ADR-0043 approach C, deferred).
 
 ## Level 4 — Code
 

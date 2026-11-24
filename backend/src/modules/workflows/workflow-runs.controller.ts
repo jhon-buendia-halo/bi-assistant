@@ -90,10 +90,13 @@ export class WorkflowRunsController {
   @Get()
   async list(
     @Query('workflowId') workflowId?: string,
+    @Query('archived') archived?: string,
   ): Promise<{ runs: WorkflowRunSummary[] }> {
     return {
       runs: await this.runs.list(
         typeof workflowId === 'string' && workflowId ? workflowId : undefined,
+        // Archived conversations only when asked for (api.md 120, 159).
+        archived === 'true',
       ),
     };
   }
@@ -132,15 +135,37 @@ export class WorkflowRunsController {
     return { ok: true, run: await this.runs.prepareEvidence(id) };
   }
 
-  /** Explain one query step by step (api.md 140). */
+  /** Explain one query step by step (api.md 140); `{ refresh: true }` explains it again. */
   @Post(':id/answer/queries/:index/explanation')
   async explainQuery(
     @Param('id') id: string,
     @Param('index') index: string,
+    @Body() body?: { refresh?: unknown },
   ): Promise<{ ok: true; run: WorkflowRun }> {
     return {
       ok: true,
-      run: await this.runs.explainQuery(id, parseQueryIndex(index)),
+      run: await this.runs.explainQuery(
+        id,
+        parseQueryIndex(index),
+        body?.refresh === true,
+      ),
+    };
+  }
+
+  /** The first rows one step of an explained query leaves (api.md 161). */
+  @Post(':id/answer/queries/:index/steps/:step/preview')
+  async previewQueryStep(
+    @Param('id') id: string,
+    @Param('index') index: string,
+    @Param('step') step: string,
+  ): Promise<{ ok: true; run: WorkflowRun }> {
+    return {
+      ok: true,
+      run: await this.runs.previewQueryStep(
+        id,
+        parseQueryIndex(index),
+        parseQueryIndex(step),
+      ),
     };
   }
 
@@ -263,6 +288,28 @@ export class WorkflowRunsController {
    * answered as stored. Idempotent: a run that already ended answers as it
    * is.
    */
+  /** Archive the run's conversation with Avery (api.md 159; workflows R45). */
+  @Post(':id/archive')
+  @HttpCode(200)
+  archive(@Param('id') id: string): Promise<{
+    ok: true;
+    conversationId: string;
+    archived: number;
+  }> {
+    return this.runs.archive(id);
+  }
+
+  /** Bring an archived conversation back (api.md 160; workflows R45). */
+  @Post(':id/unarchive')
+  @HttpCode(200)
+  unarchive(@Param('id') id: string): Promise<{
+    ok: true;
+    conversationId: string;
+    unarchived: number;
+  }> {
+    return this.runs.unarchive(id);
+  }
+
   @Post(':id/stop')
   @HttpCode(200)
   async stop(

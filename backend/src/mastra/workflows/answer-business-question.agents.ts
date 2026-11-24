@@ -21,6 +21,10 @@ import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from './workflow-run';
 import { cutReply, guardedCall, ReplyCutError } from './model-call';
 import {
+  clarificationIn,
+  type Revision,
+} from './answer-business-question.review';
+import {
   answerDeltas,
   answerOf,
   answerWithRowTables,
@@ -120,6 +124,10 @@ export async function planWithModel(
      * not empty; absent or `''`, the request is what it was before.
      */
     imageNotes?: string;
+    /** The changes the user asked for on Plan's approval gate (R44). */
+    revision?: Revision;
+    /** An orchestrator's request (Avery, agents.md 2.21): it ends the request. */
+    brief?: string;
   },
   options: StepModelOptions,
 ): Promise<{ plan: AnalysisPlan; stopped: boolean }> {
@@ -230,9 +238,19 @@ export async function writeAnswerWithModel(
      * request ends with the line saying so; absent, it is as before.
      */
     visualFollows?: boolean;
+    /** An interactive run (workflows R44): she may ask the user first. */
+    canAsk?: boolean;
+    answered?: { question: string; answer: string };
+    revision?: Revision;
+    /** An orchestrator's request (Avery, agents.md 2.21): it ends the request. */
+    brief?: string;
   },
   options: StepModelOptions & { onText?: (delta: string) => void },
-): Promise<{ answer: BusinessAnswer; stopped: boolean }> {
+): Promise<{
+  answer: BusinessAnswer;
+  stopped: boolean;
+  clarification?: { question: string; options: string[] };
+}> {
   const deltas = answerDeltas(input.queries, options.onText);
   const request = writeAnswerRequest(input);
   try {
@@ -283,6 +301,20 @@ export async function writeAnswerWithModel(
         deltas.finish(answer.answer);
         await noteExchange(call, request, replyText(object, text));
         return { answer, stopped: false };
+      }
+      // She asked the user first (only offered when she may): nothing of
+      // the reply is the answer, and nothing more is shown.
+      const asked =
+        input.canAsk && !input.answered && !stoppedBy(call)
+          ? clarificationIn(text || object)
+          : undefined;
+      if (asked) {
+        await noteExchange(call, request, replyText(object, text));
+        return {
+          answer: { headline: '', answer: '' },
+          stopped: false,
+          clarification: asked,
+        };
       }
       const answer = answerWithRowTables(
         answerOf(object ?? text),

@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { agentInstructions } from '../agent-prompt-overrides';
 import { ANALYSIS_PLANNER_AGENT_KEY } from '../agent-constants';
 import { resolveAgentModel } from '../model-resolver';
+import { stepModelFrom } from '../step-model';
 import { PLAN_INSTRUCTIONS } from '../workflows/answer-business-question.prompts';
 
 /**
@@ -20,5 +21,7 @@ export const analysisPlannerAgent = new Agent({
     'Plans the analysis of one question: measures, entities, scope, assumptions, and whether to clarify first. No tools.',
   instructions: () =>
     agentInstructions(ANALYSIS_PLANNER_AGENT_KEY, PLAN_INSTRUCTIONS),
-  model: async () => resolveAgentModel(),
+  // A workflow may run its step agents on its own model (agents.md 1.3).
+  model: async ({ requestContext }) =>
+    resolveAgentModel(stepModelFrom(requestContext)?.model),
 });

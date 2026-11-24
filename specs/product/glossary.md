@@ -74,6 +74,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Entity.** A queryable table or view, named in full as `catalog.schema.table`. Every datasource kind is normalised to this three-level shape. The UI says "entities". An entity may be *browse-only* (visible but not queryable with the credentials); it is shown greyed.
 
+**Eval call.** An *LLM call* made while an eval run was running: any model call of a trace in which a span carries `metadata."eval-run-id"` (ADR-0054). Monitoring's Agent quality tab leaves it out of the live figures. See *Live call*, *Eval run*.
+
 **Eval case.** One question in an *eval set*, with the intent it probes and a list of *eval checks* (for example "answer includes Argentina", result-set comparison, or an LLM-judge rubric).
 
 **Eval check.** One scorer that grades an eval case's answer or tool calls.
@@ -118,6 +120,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Live (agent).** The published version of a *user agent*. It is the version that starts sessions. Editing a Live agent changes only its *draft*, and the Live version keeps serving until the draft is published.
 
+**Live call.** An *LLM call* that is not an *eval call*, including calls recorded before eval traffic was marked. The live columns of Monitoring's Agent quality tab (p95 latency, cost per call) are over live calls. See [monitoring](../capabilities/monitoring/spec.md) R59.
+
 **LLM call.** One model call of one agent run, as recorded in the trace store (`observability.duckdb`, a `model_generation` span): its agent, model, provider, session, tokens, duration, estimated cost and status. A run's several requests to the model are its *steps*, inside one LLM call. Listed on the Monitoring page, newest first. See [monitoring](../capabilities/monitoring/spec.md) and ADR-0038.
 
 **Session flow.** The Monitoring view of one *session* as a list of turns. Each turn (one question, one trace) shows the question, the path the agent took (its model requests and tool calls in time order), the answer and its cost, and can open a *waterfall*. Shown on the session page, which opens from the Sessions tab. See [monitoring](../capabilities/monitoring/spec.md) R26–R44.
@@ -154,6 +158,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Panel item.** One thing an agent showed in the right panel with `show_in_panel`, saved on the *session* with the time it was shown: a workspace file, a Markdown document, a query result table or a *visual*. The latest one is what the panel opens on; every one is listed in the *session panel*'s shown-items menu. See [agent-panel](../capabilities/agent-panel/spec.md).
 
+**pass^3.** The share of an agent persona's eval questions that passed in each of their last 3 runs on the same model, shown in Monitoring's Agent quality tab. A question with fewer than 3 results on that model is not counted, and runs that recorded no model are never pooled. See [monitoring](../capabilities/monitoring/spec.md) R63.
+
 **Past chat.** A *session* saved before chats were retired. It stays on disk and opens read-only under Runs: its transcript, visuals and files, and Delete. No chat can continue (ADR-0041).
 
 **Persona (agent).** The human identity of an agent in the Agents catalogue: a first name and a job title (`name` and `role` in `GET /agents`). Every built-in agent has one (the assistant is Emily, Data Analyst; the table is in [../system/agents.md](../system/agents.md) 1.1); a user agent has the name it was given and an optional job title. Presentation only: traces, monitoring, workflow steps and chat sessions keep the agent's technical name, and the model never sees it. Not a *User persona*, which profiles a person who asks questions.
@@ -187,7 +193,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Row cap.** A limit on rows returned or stored. See [non-functional.md](non-functional.md). A result clipped by a cap is marked *truncated*.
 
-**Run.** One execution of a *workflow* on a typed input: its steps run once and each reports its status and output. A run of an agent workflow is stored and listed under Runs; a run can carry one earlier run as context (Follow up, a clarification answer). Replaces the chat (ADR-0041).
+**Run.** One execution of a *workflow* on a typed input: its steps run once and each reports its status and output. A run of an agent workflow is stored and listed under Runs; a run can carry one earlier run as context (a clarification answer or Run again with my answer; the free Follow up was removed from the UI on 2026-11-20). Replaces the chat (ADR-0041).
 
 **Run workflow.** A *workflow* that is started by a *run* on its typed input fields, defined in code, rather than by a chat. Since ADR-0041 every workflow is a run workflow.
 

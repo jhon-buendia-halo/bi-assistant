@@ -80,6 +80,7 @@ interface CliRun {
   repeats: EvalRepeats;
   arm: EvalArm;
   target?: EvalTargetOverride;
+  llmLabel?: { provider: string; model: string };
 }
 
 /**
@@ -184,6 +185,15 @@ export async function main(
       repeats: repeats.repeats,
       arm: { memory: memory.memory },
       ...(override.target ? { target: override.target } : {}),
+      // An EVAL_LLM_* endpoint is what the run records it ran on (ADR-0054).
+      ...(llmTarget.kind === 'custom'
+        ? {
+            llmLabel: {
+              provider: 'custom',
+              model: llmTarget.endpoint.model,
+            },
+          }
+        : {}),
     });
   } finally {
     await app.close();
@@ -215,6 +225,7 @@ export async function runEvals(
       repeats: cli.repeats,
       arm: cli.arm,
       ...(cli.target ? { target: cli.target } : {}),
+      ...(cli.llmLabel ? { llmLabel: cli.llmLabel } : {}),
     },
     (result) => printResult(result, cli.repeats, out),
   );

@@ -1077,6 +1077,7 @@ describe('a register-only fixture (no bundled SQL)', () => {
       'us-health',
       'edge-cases',
       'world-cup-medallion',
+      'retail-ops',
       'world-cup-excel',
       'world-cup-rest',
       'finance',

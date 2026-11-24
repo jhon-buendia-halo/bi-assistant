@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   DestroyRef,
@@ -28,6 +29,10 @@ import { WorkflowNodeDialog } from '../workflow-node-dialog/workflow-node-dialog
 import { StoryQueryOpen } from '../workflow-step-story/workflow-step-story';
 import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
 import { WorkflowRunChat } from '../workflow-run-chat/workflow-run-chat';
+import { relayQueryOf } from '../../services/team-relay';
+import { RunDashboardPanel } from '../../../runs/components/run-dashboard-panel/run-dashboard-panel';
+import { RunDashboardState } from '../../../runs/services/run-dashboard-state';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import {
   WorkflowView,
   readWorkflowView,
@@ -47,8 +52,11 @@ import {
 @Component({
   selector: 'app-workflow-detail',
   imports: [
+    AgentAvatar,
     LucideAngularModule,
+    NgTemplateOutlet,
     QueryInspector,
+    RunDashboardPanel,
     WorkflowCanvas,
     WorkflowNodeDialog,
     WorkflowRunChat,
@@ -65,6 +73,8 @@ export class WorkflowDetailPage {
   readonly FileText = FileText;
 
   protected readonly designer = inject(WorkflowDesigner);
+  /** The dashboard open beside the chat (dashboard-panel). */
+  protected readonly dashboards = inject(RunDashboardState);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly workflowId = input.required<string>();
@@ -113,8 +123,30 @@ export class WorkflowDetailPage {
       const id = this.workflowId();
       untracked(() => this.designer.load(id));
     });
+    // A run shown in the chat that ended (or was opened) with a dashboard
+    // opens it beside the chat; a later run's newer version replaces it
+    // (dashboard-panel).
+    effect(() => {
+      const dashboard = this.designer.running()
+        ? null
+        : (this.designer.runResult()?.answer?.dashboard ?? null);
+      untracked(() => this.dashboards.follow(dashboard));
+    });
+    // Another workflow: its own conversation, so no dashboard yet.
+    let shownWorkflow: string | null = null;
+    effect(() => {
+      const id = this.designer.workflow()?.id ?? null;
+      untracked(() => {
+        if (shownWorkflow !== null && id !== shownWorkflow)
+          this.dashboards.reset();
+        if (id !== null) shownWorkflow = id;
+      });
+    });
     // Leaving the page discards the workflow and its run (R13).
-    inject(DestroyRef).onDestroy(() => this.designer.clear());
+    inject(DestroyRef).onDestroy(() => {
+      this.designer.clear();
+      this.dashboards.reset();
+    });
   }
 
   /**
@@ -162,12 +194,42 @@ export class WorkflowDetailPage {
   });
 
   /**
+   * Who ran the open query, when a teammate ran it in an orchestrator's
+   * relay (ui.md 4.4b *relay*): the teammate, for whom, which of their
+   * queries and what they were asked; null for any other query.
+   */
+  readonly queryContext = computed(() => {
+    const open = this.openQuery();
+    if (!open) return null;
+    const record = open.answer.data?.[open.index];
+    for (const story of this.designer.agentStories().values()) {
+      const place = relayQueryOf(story.relay, record);
+      if (place) return { ...place, lead: story.agent };
+    }
+    return null;
+  });
+
+  /**
    * The sheet closes; the focus goes back to the chip or row that opened it
    * (found again by its test id when the answer was redrawn meanwhile).
    */
   closeQuery(): void {
     focusQueryOpener(this.designer.closeQuery());
   }
+
+  /** The relay of the open orchestrator step or teammate, in the run shown (ui.md 4.4b). */
+  readonly openRelay = computed(() => {
+    const open = this.designer.openInspection();
+    // A teammate's tool opens their orchestrator's relay; her own step, hers.
+    const stepId = open?.tool?.teammate
+      ? open.tool.stepId
+      : open?.kind === 'agent'
+        ? open.step?.id
+        : undefined;
+    return stepId
+      ? (this.designer.agentStories().get(stepId)?.relay ?? null)
+      : null;
+  });
 
   /** The answer's records a node's Story links its queries to; null when the page does not inspect queries. */
   readonly storyAnswerData = computed(() =>

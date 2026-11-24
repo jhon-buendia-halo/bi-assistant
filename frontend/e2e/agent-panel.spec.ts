@@ -170,6 +170,7 @@ function runV2On(page: Page, question: string) {
     question,
     datasets: [WORLD_CUP_DATASET],
     buildVisual: false,
+    approveSteps: false,
   });
 }
 
@@ -195,21 +196,17 @@ const STAGE_TURN: TurnScript = {
   answer: 'The group stage holds most of the matches.',
 };
 
-/** Its steps in catalogue order: Clarify is the other way after Plan. */
+/** Its steps in catalogue order. */
 const V2_STEP_TITLES = [
   'Read images',
   'Receive question',
   'Load catalog',
-  'Interpret follow-up',
   'Plan',
-  'Clarify',
   'Analyse',
   'Validate',
   'Write answer',
   'Build visual',
   'Wrap up',
-  'Page result',
-  'Page answer',
 ];
 
 // --------------------------------------------------------------- scenarios
@@ -282,11 +279,10 @@ test("a v2 run's workflow never appears among its panel items", async ({
 
 // ------------------------------------------- Insights Analyst (R8a)
 
-/** The steps a clear question runs, in order (Clarify is skipped). */
+/** The steps a clear question runs, in order. */
 const V2_STEPS = [
   'receive-question',
   'load-catalog',
-  'interpret-follow-up',
   'plan',
   'analyse',
   'validate',
@@ -347,11 +343,9 @@ test('Insights Analyst shows its code-defined steps advancing', async ({
   expect(run.workflow?.phases.map((phase) => phase.title)).toEqual(
     V2_STEP_TITLES,
   );
-  // Every step but Read images (1, no image), Clarify (6), Build visual
-  // (10) and the explore path (12, 13): the branches a first, clear
-  // question without images or the visual (unticked) skips.
-  expect(run.workflow?.done).toEqual([2, 3, 4, 5, 7, 8, 9, 11]);
-  expect(stepStatuses(result, 'clarify').at(-1)).toBe('skipped');
+  // Every step but Read images (1, no image) and Build visual (8): the
+  // branches a clear question without images or the visual (unticked) skips.
+  expect(run.workflow?.done).toEqual([2, 3, 4, 5, 6, 7, 9]);
   expect(stepStatuses(result, 'build-visual').at(-1)).toBe('skipped');
 });
 
@@ -365,6 +359,7 @@ test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
     question: V2_QUESTION,
     datasets: [WORLD_CUP_DATASET],
     buildVisual: false,
+    approveSteps: false,
   });
   expect(result.status).toBe(200);
   expect(stepStatuses(result, 'receive-question').at(-1)).toBe('success');

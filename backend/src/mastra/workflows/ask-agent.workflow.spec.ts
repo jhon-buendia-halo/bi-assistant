@@ -26,15 +26,11 @@ jest.mock('../tool-services', () => ({
 }));
 
 import { RequestContext } from '@mastra/core/request-context';
-import type { ExplorableQuery } from '../../modules/sessions/query-evidence/explorable-queries';
-import type { ExplorerSpec } from '../agents/result-explorer.prompts';
 import { askAgentWorkflow } from './ask-agent.workflow';
 import {
   ASK_AGENT_RUNTIME_KEY,
   ASK_AGENT_WORKFLOW_ID,
-  ASK_NEW_QUESTION_REPLY,
   ASK_NO_IMAGES_REPLY,
-  ASK_NO_RESULT_REPLY,
   ASK_NO_ROWS_REPLY,
   ASKABLE_STEP_IDS,
   visualAnswer,
@@ -69,43 +65,8 @@ const PLAN: AnalysisPlan = {
   clarification: null,
 };
 
-const EARLIER: ExplorableQuery = {
-  ref: 'Q1',
-  sql: 'SELECT year, COUNT(*) AS matches FROM wc.public.matches GROUP BY year',
-  datasourceId: 'ds-pg',
-  columns: ['year', 'matches'],
-  kinds: { year: 'number', matches: 'number' },
-  sampleValues: { year: [2022], matches: [64] },
-  rationale: 'Matches per year.',
-};
-
-const NEXT_PAGE: ExplorerSpec = {
-  action: 'explore',
-  query: 0,
-  interpretation: {
-    request: { filters: [], sort: [], page: 2, pageSize: 50 },
-    understood: 'page 2',
-  },
-};
-
-const PAGE = {
-  title: 'Matches per year.',
-  columns: ['year', 'matches'],
-  rows: [{ year: 1990, matches: 52 }],
-  page: 2,
-  pageCount: 2,
-  matchedRows: 51,
-  capped: false,
-  view: {
-    filters: [],
-    sort: [],
-    page: 2,
-    pageSize: 50,
-    matchedRows: 51,
-    capped: false,
-  },
-  understood: 'page 2',
-};
+const EARLIER_SQL =
+  'SELECT year, COUNT(*) AS matches FROM wc.public.matches GROUP BY year';
 
 /** The runtime with every function a typed Jest mock. */
 type Mocked<T> = {
@@ -133,15 +94,10 @@ function runtime(overrides: Partial<Turn> = {}): Turn {
         stopped: false,
       }),
     ),
-    followUp: [EARLIER],
-    interpretFollowUp: mockOf('interpretFollowUp', () =>
-      Promise.resolve({ spec: NEXT_PAGE, stopped: false }),
-    ),
-    pageResult: mockOf('pageResult', () => Promise.resolve(PAGE)),
     plan: mockOf('plan', () => Promise.resolve({ plan: PLAN, stopped: false })),
     earlierAnswer: mockOf('earlierAnswer', () => ({
       plan: PLAN,
-      queries: [{ sql: EARLIER.sql, rows: [], rowCount: 0, truncated: false }],
+      queries: [{ sql: EARLIER_SQL, rows: [], rowCount: 0, truncated: false }],
       findings: [],
       imageNotes: '',
     })),
@@ -157,7 +113,7 @@ function runtime(overrides: Partial<Turn> = {}): Turn {
       answer: 'There were 64 matches in 2022.',
       queries: [
         {
-          sql: EARLIER.sql,
+          sql: EARLIER_SQL,
           rows: [{ year: 2022, matches: 64 }],
           rowCount: 1,
           truncated: false,
@@ -236,7 +192,7 @@ describe('ask-agent workflow (workflows R40; agents.md 5.21)', () => {
     expect(turn.writeAnswer).toHaveBeenCalledWith({
       question: 'Next page',
       plan: PLAN,
-      queries: [expect.objectContaining({ sql: EARLIER.sql })],
+      queries: [expect.objectContaining({ sql: EARLIER_SQL })],
       findings: [],
       imageNotes: '',
     });
@@ -253,55 +209,6 @@ describe('ask-agent workflow (workflows R40; agents.md 5.21)', () => {
     expect(answer).toContain('**How I would analyse it:**');
     expect(answer).toContain('- match count per year');
     expect(answer).toContain('no data was read');
-  });
-
-  it('asks Nathan to page the earlier result: Page result, then the page as the answer', async () => {
-    const turn = runtime();
-    await ask('interpret-follow-up', turn);
-    expect(turn.interpretFollowUp).toHaveBeenCalledWith(
-      expect.objectContaining({ text: 'Next page' }),
-    );
-    expect(turn.pageResult).toHaveBeenCalledWith({
-      query: 0,
-      request: NEXT_PAGE.interpretation.request,
-      understood: 'page 2',
-    });
-    const answer = turn.deliverAnswer.mock.calls[0][0];
-    expect(answer).toContain('Rows 51–51 of 51');
-    expect(answer).toContain('Query: Matches per year.');
-  });
-
-  it('has Nathan say a new question is not his, and never plans it', async () => {
-    const turn = runtime({
-      interpretFollowUp: mockOf('interpretFollowUp', () =>
-        Promise.resolve({
-          spec: { action: 'new-question' } as unknown as ExplorerSpec,
-          stopped: false,
-        }),
-      ),
-    });
-    await ask('interpret-follow-up', turn);
-    expect(turn.pageResult).not.toHaveBeenCalled();
-    expect(turn.plan).not.toHaveBeenCalled();
-    expect(turn.deliverAnswer).toHaveBeenCalledWith(ASK_NEW_QUESTION_REPLY);
-  });
-
-  it('has Nathan say so, with no model call, when the earlier answer ran no query', async () => {
-    const turn = runtime({ followUp: [] });
-    await ask('interpret-follow-up', turn);
-    expect(turn.interpretFollowUp).not.toHaveBeenCalled();
-    expect(turn.deliverAnswer).toHaveBeenCalledWith(ASK_NO_RESULT_REPLY);
-  });
-
-  it("fails the step on Nathan's model error, instead of planning", async () => {
-    const turn = runtime({
-      interpretFollowUp: mockOf('interpretFollowUp', () =>
-        Promise.reject(new Error('The model is down')),
-      ),
-    });
-    const { result } = await ask('interpret-follow-up', turn);
-    expect(result.status).toBe('failed');
-    expect(turn.deliverAnswer).not.toHaveBeenCalled();
   });
 
   it("asks Zoe to read the run's images again with the question", async () => {
@@ -355,7 +262,7 @@ describe('ask-agent workflow (workflows R40; agents.md 5.21)', () => {
         answer: 'There were 64 matches in 2022.',
         queries: [
           {
-            sql: EARLIER.sql,
+            sql: EARLIER_SQL,
             rows: [{ year: 2022, matches: 64 }],
             rowCount: 1,
             truncated: false,
@@ -399,7 +306,7 @@ describe('ask-agent workflow (workflows R40; agents.md 5.21)', () => {
         question: 'How many matches were played per year?',
         answer: 'No matches.',
         queries: [
-          { sql: EARLIER.sql, rows: [], rowCount: 0, truncated: false },
+          { sql: EARLIER_SQL, rows: [], rowCount: 0, truncated: false },
         ],
         imageNotes: '',
       })),

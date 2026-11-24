@@ -191,6 +191,7 @@ test('an Answer a Business Question run runs v2 on every question', async ({
     const result = await runWorkflow(page, 'answer-business-question', {
       question,
       datasets: [WORLD_CUP_DATASET],
+      approveSteps: false,
     });
     expect(result.status, result.body).toBe(200);
     expect(result.text).toContain(STUB_ANSWER);

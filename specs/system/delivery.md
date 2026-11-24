@@ -370,7 +370,7 @@ Runs on every pull request, on every push to `main`, and on manual dispatch. It 
 | Check | Fails when |
 |---|---|
 | Layout | a product or system spec is missing, or the capability or epic tables in `specs/README.md` don't match the folders on disk |
-| Links | a relative link in `CLAUDE.md`, `README.md`, `roadmap.md`, any spec, any project skill (`.claude/skills/*/SKILL.md`) or any tool README (`.claude/tools/**/*.md`) doesn't resolve. `changelog.md` and `retrospective.md` are skipped, because their past entries are never rewritten. |
+| Links | a relative link in `CLAUDE.md`, `README.md`, `roadmap.md`, any spec, any project skill (`.claude/skills/*/SKILL.md`), `.claude/worker.md` or any tool README (`.claude/tools/**/*.md`) doesn't resolve. `changelog.md` and `retrospective.md` are skipped, because their past entries are never rewritten. |
 | Capability format | a capability spec lacks one of the required sections |
 | E2E mirror | a `frontend/e2e/*.spec.ts` file is not the `E2E:` line of exactly one capability spec, or an `E2E:` line names a missing file |
 | API | a backend controller route is not written as `` `METHOD /path` `` in `system/api.md` |
@@ -463,7 +463,7 @@ Defaults are shared state: the desktop app uses Electron's `userData` directory 
 | Observability profile | same project; ports 6006, 3001, 4317, 4318 | `docker compose -p <name>` plus `PHOENIX_PORT`, `GRAFANA_PORT`, `OTLP_GRPC_PORT`, `OTLP_HTTP_PORT` (see *Observability profile* above) |
 | Playwright | needs port 3000 free | one e2e run at a time per machine; each test already gets its own temp profile |
 
-The project rule: when work happens in a worktree, ask which target (shared or isolated) before starting the app or the Compose stack. See *Worktree deploy convention* in the [`workflow-implement`](../../.claude/skills/workflow-implement/SKILL.md) project skill.
+The project rule: when work happens in a worktree, ask which target (shared or isolated) before starting the app or the Compose stack. See the [`local-instance`](../../.claude/skills/local-instance/SKILL.md) project skill.
 
 ## 8. The product page (`site/`)
 
@@ -549,7 +549,7 @@ Opens a **Workflow** pane (the right-hand sidebar in a wide fullscreen terminal 
 
 Developer tooling for people who work on this repository in Claude Code, not part of the app or its releases. Epic [BA-119](../epics/BA-119/spec.md); merged from nine skills into four by roadmap 0.5.2 ([M0-5](../epics/M0-5/spec.md)); two workflows since roadmap 0.6.1–0.6.3 ([M0-6](../epics/M0-6/spec.md)).
 
-**Two workflows (roadmap 0.6.1).** `CLAUDE.md` is a router of under 60 lines: what the app is, the mandatory first action (read `lessons.md`), *Choose the workflow*, the rules both workflows share (never on `main`, specs change with the code, ports and Postgres from a worktree, repo-only planning, read and output rules, automatic versioning, session hygiene), bootstrap, the process documents and the model routing table. In a new session, after `lessons.md`, Claude reads `.context/workflow-mode` (`strict` or `free-style`, per workspace, git-ignored): when it exists, Claude names the mode in one line and goes on; otherwise it asks with one picker and writes the answer. It then loads the matching skill. "Switch to strict" or "switch to free style" rewrites the file and loads the other skill; going to Strict mid-change adds the roadmap story for the work already done. `builder` and `reviewer` skip the choice (they work from a brief).
+**Two workflows (roadmap 0.6.1).** `CLAUDE.md` is a router: what the app is, the mandatory first action (read `lessons.md`), then five sections. *Non-negotiables* holds one line per rule both workflows share (never on `main`, specs change with the code, a local instance is ready to test, workflows start from Mastra's docs, the query inspector, repo-only planning, read and output rules, automatic versioning, the first line of every subagent brief), each naming the skill that carries it out, then bootstrap and *Choose the brand*. *Principles* points at `lessons.md` and `retrospective.md`, then lists the principles in five groups, one line each: when it applies, then the rule. *Core*: Laziness Protocol, Foundational Thinking, Redesign from First Principles, Attack the Premise, Subtract Before You Add, Minimize Reader Load, Outcome-Oriented Execution, Experience First, Exhaust the Design Space, Build the Lever. *Architecture*: Model the Domain, Boundary Discipline, Type System Discipline, Make Operations Idempotent, Migrate Callers Then Delete Legacy APIs, Separate Before Serializing Shared State. *Verification*: Prove It Works, Fix Root Causes, Sequence Work into Verifiable Units, Test Behavior Not Implementation, Explain the Number. *Delegation*: Guard the Context Window, Never Block on the Human. *Meta*: Encode Lessons in Structure. *Autonomy* holds when to stop and ask (the app or Postgres from a worktree), and that an explicit pause (a rule, a skill step that waits for the user, the user's instruction) wins over *Never Block on the Human*. *Writing the reply* holds the reply rules. *How to work* holds *Choose the workflow* and *Task skills* (its heading must not start with `## Workflow`: the `workflow-steps` mod would read it as the step list). The process documents and the model routing table follow. In a new session, after `lessons.md`, Claude reads `.context/workflow-mode` (`strict` or `free-style`, per workspace, git-ignored): when it exists, Claude names the mode in one line and goes on; otherwise it asks with one picker and writes the answer. It then loads the matching skill. "Switch to strict" or "switch to free style" rewrites the file and loads the other skill; going to Strict mid-change adds the roadmap story for the work already done. `builder` and `reviewer` skip the choice (they work from a brief).
 
 | Workflow skill | Holds |
 |---|---|
@@ -561,9 +561,23 @@ The steps' conventions live in four step skills. Claude loads a skill before its
 | Skill | Steps | Holds |
 |---|---|---|
 | `workflow-start` | 1–5 | restating the goal and sizing it, clarifying questions, Planning convention, Epic gate (repo-only epics), Branching convention, Architecture convention (C4, ADRs), Spec convention (where facts go, Gherkin, CI coverage) |
-| `workflow-implement` | 8 | Code rules, the lean builder lane, Worktree deploy convention |
-| `verify` | wave check, 9 | `qa.mjs --wave` (agent-built stories), `--fast` (plain session, S change) and `--gate`, the eval bar (base vs branch, parallel runs), checking a change in the running web app |
-| `workflow-gate` | 6, 7, 10, 11 | E2E impact analysis and test conventions, Test target convention, per-story evidence, the per-epic changelog entry and PR, the demo artifact, the `.context/handoff.md` template, post-merge cleanup, the per-epic retrospective and `lessons.md` |
+| `workflow-implement` | 8 | Code rules, the lean builder lane |
+| `verify` | wave check, 9 | `qa.mjs --wave` (agent-built stories), `--fast` (plain session, S change) and `--gate`, the eval bar (base vs branch, parallel runs), driving a running instance with Playwright |
+| `workflow-gate` | 6, 7, 10, 11 | E2E impact analysis and test conventions, Test target convention, per-story evidence, the per-epic changelog entry and PR, the demo artifact, post-merge cleanup, the per-epic retrospective and `lessons.md` |
+
+**Task skills.** A workflow decides which steps run; a task skill says how to do one kind of task inside them. Both workflows share them. They were playbooks (`.claude/playbooks/`, Markdown with no frontmatter, routed by a table in `CLAUDE.md`) until they became skills: a playbook cost the same context as a skill (its table row against a skill's `description`) and loaded the same way (`Read` against `Skill`), but needed a second index kept by hand and had no `/<name>`. A task skill's `description` says when it applies; Claude loads every one that matches the task and copies its steps into the todo list. A step that names a workflow step in brackets (`[Understand]`, `[Implement]`, `[Checks]`) fills that step. A task skill points at other skills' sections and `lessons.md` rather than copying them, and ends with what the reply reports. A task no skill fits follows the workflow's steps alone.
+
+| Task skill | For | Holds |
+|---|---|---|
+| `mastra-workflows` | a new or changed Mastra workflow | Mastra's docs against the installed types, the reuse inventory, three approaches, the build rules, checks and hand-over |
+| `agent-change` | a new agent, or a change to what an agent receives | the full *query inspector* rule, the eval decision and the eval run |
+| `bug-fix` | a defect in shipped behaviour | reproduce with real traffic, flake rate, failing test first |
+| `local-instance` | starting the app or the compose stack, for the user or a check | the only place that starts and stops an instance: ask the target (shared or isolated), ports, web-mode build, the default LLM and `setup-local.mjs`, stop by PID |
+| `ship` | recording what shipped, the PR, post-merge cleanup | the order of `workflow-gate` steps 10 and 11 for each workflow |
+| `visual-options` | options for a change that can be seen | three options drawn as wireframes on a real screenshot, one artifact per option |
+| `show-the-change` | finishing any feature or change | screenshots of the running change with real data, axe, one artifact per image |
+| `deploy-labs-site` | publishing a Labs product page | section 8 |
+| `eval-loop` | one round of the supervised improvement loop (BA-242) | section 2, *Improvement loop* |
 
 **The story lane (roadmap 1.23.28, [M1-23](../epics/M1-23/spec.md)).** It replaces the per-story fast loop for agent-built stories. A `builder` starts from its story pack, writes the code, its unit tests, for a UI story one Playwright scenario (`@demo @story-<id>`) and only the spec lines its change makes false, and runs only the related unit tests and its own Playwright file, with no axe scan, screenshots, evidence, demo or `qa.mjs` unless the brief asks. The lead merges the wave (the stories built in parallel) and runs one `qa.mjs --wave`, then hands over the running app, with a demo only for the wave's user-visible milestone. Evidence and demos are recorded per wave; the acceptance gate stays per epic. A plain session without a builder, and every S change, may run `qa.mjs <id> --fast` instead.
 
@@ -575,13 +589,11 @@ The steps' conventions live in four step skills. Claude loads a skill before its
 
 **Read and output rules, for every agent.** Never read a file over 500 lines whole: `grep -n` or the generated section index [specs/INDEX.md](../INDEX.md) (`path:start-end heading`), then read the range. Run Playwright with `--reporter=dot` (or `line`) and Jest with `--silent`, send builds and test runs to a log file, and read back only the summary or the failure block.
 
-**Session hygiene.** One lead session per epic wave; before a new session, write `.context/handoff.md` (template in `workflow-gate`).
-
 **Change sizes.** S (a fix, copy, config, dependency, docs or process change with no new user flow, endpoint, persisted shape or agent input) runs a reduced set of steps with no demo (`qa.mjs --no-demo`), no new epic spec and one changelog bullet; M (a story) runs every step; L (architectural) adds an ADR and a written plan. The table is in `workflow-strict`.
 
 **Process records.** `lessons.md` (about 80 lines, the distilled rules) is the mandatory first read; `retrospective.md` stays the full append-only history, one entry per epic. `changelog.md` gets one entry per epic, when its PR opens, with a bullet per story linking its evidence folder. Each story's `evidence/<roadmap-id>/` holds what `qa.mjs` writes plus a one-line `README.md` with the demo artifact URL.
 
-Other project skills are task runbooks, not workflow steps: `deploy-labs-site` (section 8) and `eval-loop` (one round of the supervised improvement loop, section 2, *Improvement loop*; BA-242). Each step line in `workflow-strict` keeps the `<n>. **<title>** — <description>` form, followed by `Skill: \`<name>\``, so the `workflow-steps` mod (section 9) still parses it. `check-specs.py` checks the relative links inside `CLAUDE.md`, `lessons.md`, every `SKILL.md` and every Markdown file under `.claude/tools/` (section 5).
+Each step line in `workflow-strict` keeps the `<n>. **<title>** — <description>` form, followed by `Skill: \`<name>\``, so the `workflow-steps` mod (section 9) still parses it. `check-specs.py` checks the relative links inside `CLAUDE.md`, `lessons.md`, every `SKILL.md`, `.claude/worker.md` and every Markdown file under `.claude/tools/` (section 5).
 
 ## 11. Claude Code tools (`.claude/tools/`)
 
@@ -610,9 +622,9 @@ Developer tooling for people who work on this repository in Claude Code, not par
 
 `builder` and `reviewer` set `omitClaudeMd: true`: they work from their brief, so they don't load `CLAUDE.md` (roadmap 0.5.2).
 
-Rules every builder follows (from the retrospective):
-- Write files with Edit/Write, or in a scratch folder of its own; never use shared `/tmp` names.
-- Never stop a process it did not start; record the PIDs it starts.
+**Worker rules (`.claude/worker.md`).** The rules every subagent follows, in one file: write with Edit/Write or in a scratch folder of its own (never shared `/tmp` names), never stop a process it did not start (record PIDs, stop by PID), report a build or budget block instead of changing build config, use the brand the brief names, read ranges and keep output quiet, never edit `version`, never commit a placeholder message. `CLAUDE.md` (*Non-negotiables*) makes `Read .claude/worker.md before anything else.` the first line of every subagent brief, and the file asks each subagent to pass that line on to any subagent it starts. `builder` reads it first (it sets `omitClaudeMd: true`, so it would not see the rule in `CLAUDE.md`). `reviewer` and `manager` cannot write files or run commands, so they skip it. The story pack's builder rules (`BUILDER_RULES` in `scripts/spec-index-lib.mjs`) repeat a short form of it.
+
+Rules every builder follows on top (from the retrospective):
 - Run Playwright with `E2E_SKIP_DOCKER=1` when a Postgres is already listening on 55432.
 - Never run `npm test`/`build` alongside `test:e2e` in the same worktree.
 - Never start the app on the default ports.
@@ -662,6 +674,10 @@ node scripts/qa.mjs --free [--base <ref>] [--rebuild] [--dry-run]
   2. The Claude session publishes it with its Artifact tool: `file_path` = the generated `demo-page.html`, `files` = `{ "demo.webm": "evidence/<roadmap-id>/demo.webm" }` (omitted for `demo.txt`), an `icon` such as `video` on the first publish and a one-sentence `description`. Publishing the same story's page again (for example after the gate adds `tests.md`) updates the same artifact: pass its `url`.
   3. The artifact link is recorded in `evidence/<roadmap-id>/README.md` and linked from the story's changelog entry (`Demo: <artifact url>`). Artifacts are private by default: sharing the link with teammates, from the page's Share menu, is the human's step.
   4. When: publish right after `qa.mjs --wave … --demo <id>` (or the plain-session `qa.mjs --fast`) so the user can review the demo by hand; at step 10, regenerate and republish to the same URL only when the demo changed after the wave check; the epic's changelog entry links it.
+- **Walkthrough video (`scripts/walkthrough.mjs`, skill `walkthrough-video`, since 2026-11-23).** Every implemented change, in either workflow, ends with a subtitled walkthrough of the change running, shown in the chat as a Conductor artifact:
+  1. `node scripts/walkthrough.mjs --spec <e2e file> --grep <test title> --title <title> --summary <summary.md> [--narration <narration.json>] [--lang es] --out .context/artifacts/<dir>` runs that one test on the web target with `DEMO=1` and `WALKTHROUGH_CUES` set. In that mode `scenarioStep` draws no caption on the page. Instead it appends one cue per step to a JSON-lines file: the seconds since the page's video started (`frontend/e2e/support/video-clock.ts`, marked by the app fixture) and the step's text. The text comes from `WALKTHROUGH_NARRATION` when that file names the step; otherwise the cue keeps the step's Gherkin line.
+  2. The video is re-encoded with Playwright's own ffmpeg (VP8, 1280 down to 640 px) until it is at most 1.4 MB. The page is one HTML file of at most 2 MB, as Conductor artifacts require. It holds the title, the summary, the video as a `data:` URL with its subtitles drawn over it in sync (a CC toggle) and a transcript whose lines seek the video. The video and a `.vtt` stay in `.qa-reports/walkthrough/<dir>/`; nothing is committed.
+  3. Exit codes: 0 written, 1 failed (the test failed, it has no `scenarioStep`, or the video cannot fit), 2 bad usage. The page and cue helpers are pure (`scripts/walkthrough-lib.mjs`) and tested by `node --test scripts/walkthrough-lib.test.mjs`.
 - **Playwright configuration** (`frontend/playwright.config.ts`): when `QA_REPORT_DIR` is set, the reporters are `list`, `json` (`<dir>/results.json`) and `html` (`<dir>/html`). `DEMO=1` is read by the app fixture (video, `slowMo`) and by `scenarioStep` (captions).
 - **Playwright workers (`E2E_WORKERS`, since roadmap 1.23.32):** spec files run in parallel, 3 workers locally and 1 on CI (`CI` set); `E2E_WORKERS=<n>` overrides both (e.g. `E2E_WORKERS=1` for a serial run while debugging). Tests within one file stay in order (`fullyParallel: false`). This is safe because each web test has its own CLI port, data dir and stub servers, and the specs that create databases on the shared Postgres give them unique names. A new spec that writes to the shared Postgres must do the same (a unique database name, or rows it creates and deletes itself). The QA lane still covers the whole Playwright phase, so one worktree's workers never overlap another's. Timings: [evidence/1.23.32/timings.md](../../evidence/1.23.32/timings.md).
 - **`check-specs.py` on Windows:** paths are compared with forward slashes, so the Playwright-mirror check passes on Windows as it does on Linux.
