@@ -1,0 +1,52 @@
+Before: 97d932a5 (63 questions, openai/gpt-4o-mini, repeats 3, judge off); 3ebeaeb7 (68 questions, openai/gpt-4o-mini, repeats 3, judge off)
+After:  14850ea0 (63 questions, openai/gpt-4o-mini, repeats 3, judge off); 74674793 (68 questions, openai/gpt-4o-mini, repeats 3, judge off)
+
+Split     Category        Before         After           Change    95% interval of change  Flag
+dev       lookup          0/2 (0–66%)    1/2 (9–91%)     +50 pts   −27 to +91 pts          within
+dev       aggregate       1/9 (2–43%)    5/9 (27–81%)    +44 pts   +1 to +72 pts           up
+dev       join            1/6 (3–56%)    0/6 (0–39%)     −17 pts   −56 to +25 pts          within
+dev       ranking         0/12 (0–24%)   0/12 (0–24%)    0 pts     −24 to +24 pts          within
+dev       ratio           0/10 (0–28%)   0/10 (0–28%)    0 pts     −28 to +28 pts          within
+dev       null            0/5 (0–43%)    0/5 (0–43%)     0 pts     −43 to +43 pts          within
+dev       encoding        0/9 (0–30%)    0/9 (0–30%)     0 pts     −30 to +30 pts          within
+dev       reasoning       0/1 (0–79%)    0/1 (0–79%)     0 pts     −79 to +79 pts          within
+dev       discovery       1/3 (6–79%)    2/3 (21–94%)    +33 pts   −32 to +72 pts          within
+dev       ambiguous       1/4 (5–70%)    1/4 (5–70%)     0 pts     −49 to +49 pts          within
+dev       fuzzy-scope     1/2 (9–91%)    1/2 (9–91%)     0 pts     −57 to +57 pts          within
+dev       out-of-scope    1/3 (6–79%)    1/3 (6–79%)     0 pts     −53 to +53 pts          within
+dev       non-existent    1/1 (21–100%)  1/1 (21–100%)   0 pts     −79 to +79 pts          within
+dev       business-term   0/8 (0–32%)    0/8 (0–32%)     0 pts     −32 to +32 pts          within
+dev       default-filter  0/5 (0–43%)    0/5 (0–43%)     0 pts     −43 to +43 pts          within
+dev       visual          1/3 (6–79%)    1/3 (6–79%)     0 pts     −53 to +53 pts          within
+dev       paraphrase      1/13 (1–33%)   2/13 (4–42%)    +8 pts    −20 to +35 pts          within
+dev       all             9/96 (5–17%)   15/96 (10–24%)  +6 pts    −3 to +16 pts           within
+held-out  aggregate       0/2 (0–66%)    1/2 (9–91%)     +50 pts   −27 to +91 pts          within
+held-out  join            0/3 (0–56%)    0/3 (0–56%)     0 pts     −56 to +56 pts          within
+held-out  ranking         1/4 (5–70%)    0/4 (0–49%)     −25 pts   −70 to +28 pts          within
+held-out  ratio           0/3 (0–56%)    0/3 (0–56%)     0 pts     −56 to +56 pts          within
+held-out  null            0/1 (0–79%)    0/1 (0–79%)     0 pts     −79 to +79 pts          within
+held-out  encoding        0/3 (0–56%)    0/3 (0–56%)     0 pts     −56 to +56 pts          within
+held-out  discovery       1/2 (9–91%)    1/2 (9–91%)     0 pts     −57 to +57 pts          within
+held-out  ambiguous       0/2 (0–66%)    0/2 (0–66%)     0 pts     −66 to +66 pts          within
+held-out  out-of-scope    1/2 (9–91%)    1/2 (9–91%)     0 pts     −57 to +57 pts          within
+held-out  non-existent    0/1 (0–79%)    1/1 (21–100%)   +100 pts  −12 to +100 pts         within
+held-out  business-term   0/3 (0–56%)    0/3 (0–56%)     0 pts     −56 to +56 pts          within
+held-out  default-filter  1/2 (9–91%)    0/2 (0–66%)     −50 pts   −91 to +27 pts          within
+held-out  paraphrase      0/7 (0–35%)    0/7 (0–35%)     0 pts     −35 to +35 pts          within
+held-out  all             4/35 (5–26%)   4/35 (5–26%)    0 pts     −16 to +16 pts          within
+
+Flips, dev:
+  Now passing: top-scorer-2022 (aggregate), schema-discovery (discovery), most-fouls-team-reworded (paraphrase), mandzukic-goals-2018-reworded (paraphrase), fiscal-2026-q2-months (lookup), loans-by-currency (aggregate), customers-per-segment (aggregate), loans-per-product (aggregate)
+  Now failing: goals-by-defenders-reworded (paraphrase), accounts-opened-by-region-2024 (join)
+Flips, held-out:
+  Now passing: relationship-manager-assets (non-existent), branches-per-region (aggregate)
+  Now failing: branches-opened-12-accounts-2024 (ranking), transactions-march-2025 (default-filter)
+Only before: none
+Only after: none
+
+Cost before: $1.0215 · $0.0078 per question
+Cost after: $0.8867 · $0.0068 per question
+Cost per question: −13.2%
+
+Draft change log: Round <…>: <…>. <…> Dev 9/96 → 15/96, held-out 4/35 → 4/35; dev aggregate up; cost per question $0.0078 → $0.0068. Runs 97d932a5, 3ebeaeb7 → 14850ea0, 74674793.
+Accept rule: met

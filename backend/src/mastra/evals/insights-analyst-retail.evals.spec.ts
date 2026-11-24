@@ -9,7 +9,17 @@ jest.mock('@mastra/evals/checks', () => ({
     },
   ),
 }));
-jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
+// The check scorers are built when the sets load: a stand-in that never runs.
+jest.mock('@mastra/core/evals', () => ({
+  runEvals: jest.fn(),
+  createScorer: (config: Record<string, unknown>) => {
+    const scorer: Record<string, unknown> = { ...config };
+    for (const step of ['analyze', 'generateScore', 'generateReason']) {
+      scorer[step] = () => scorer;
+    }
+    return scorer;
+  },
+}));
 jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
 jest.mock('../agents/data-readiness.agent', () => ({
   dataReadinessAgent: { id: 'data-readiness' },

@@ -88,15 +88,6 @@ Not yet sequenced into a release. The detailed phase plans below predate this ro
   - The dry-run stories in 0.4.4 report their token totals.
 - **Notes:** `brief.mjs` (0.4.4) uses this digest. It is a rule change to the first action, approved by the user on 2026-11-09.
 
-### Moved from Milestone 1.1 — Golden Dataset and Evals (2026-11-12)
-
-#### 1.1.1 — Golden dataset and eval suite  `📋 Planned`
-- **Intent:** know, with numbers, whether a change made answers better or worse.
-- **Scope:** a golden dataset of representative questions with known-correct answers on the sample fixtures. An eval suite (LLM judge plus SQL and result checks) that runs against it, building on the existing `assistant-eval-judge` agent and `mastra/evals/` and the Agents → Evals tab.
-- **Out of scope:** evals on customer data.
-- **Acceptance:** the suite runs on demand against the golden dataset and reports per-question and per-category results. Results can be compared run to run, and a knowledge on/off comparison is possible (needed by 1.3.3).
-- **Notes:** Jira has no stories under this epic yet, so this feature mirrors the epic. Split it into stories in Jira first, then mirror them here.
-
 ### Moved from Milestone 1.2 — Data Model DSL (2026-11-12)
 
 #### 1.2.1 — Data Model DSL  `📋 Planned`

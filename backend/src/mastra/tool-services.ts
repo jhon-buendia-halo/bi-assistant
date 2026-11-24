@@ -9,6 +9,7 @@ import type {
   ExplorerCandidate,
   ExplorerSpec,
 } from './agents/result-explorer.prompts';
+import type { UsageSink } from './usage-sink';
 
 // The query facts' side channel (plan m1-25 1.25.1): the data tools write
 // `QueryFacts` beside their result under this requestContext key.
@@ -83,6 +84,11 @@ export interface SqlRunResult {
  */
 export interface SqlCallOptions {
   signal?: AbortSignal;
+  /**
+   * Set only inside an eval attempt: hears each fixer call (agents-evals
+   * R219).
+   */
+  usageSink?: UsageSink;
   /**
    * The clamp on the call's row limit, when it is not the connectors'
    * default 500: the host's run of a dashboard's data query passes 5,000
@@ -180,6 +186,7 @@ export interface DatasetToolServices {
     sourceMessageAt: string | undefined,
     instruction: string | undefined,
     turnRecords?: DatasetToolTurnRecord[],
+    usageSink?: UsageSink,
   ): Promise<VisualToolResult>;
   /**
    * Produce a new version of an existing visual from a tailoring request.
@@ -191,6 +198,7 @@ export interface DatasetToolServices {
     visualId: string,
     instruction: string,
     turnRecords?: DatasetToolTurnRecord[],
+    usageSink?: UsageSink,
   ): Promise<VisualToolResult>;
   /**
    * Show something in the session's right panel: validate it, store it as a
@@ -222,7 +230,9 @@ export interface DatasetToolServices {
   /**
    * Runs the statement and repairs it on execution errors — `datasets` names
    * the datasets whose schema the fixer may draw on. `options.signal`, the
-   * tool call's abort signal, cancels the statement and the repair.
+   * tool call's abort signal, cancels the statement and the repair;
+   * `options.usageSink`, set only inside an eval attempt, hears each fixer
+   * call (agents-evals R219).
    */
   runReadOnlySql(
     datasourceId: string,

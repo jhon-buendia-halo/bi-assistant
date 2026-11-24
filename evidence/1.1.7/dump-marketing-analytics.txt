@@ -1,0 +1,23 @@
+# Marketing analytics dump (npm run fixture:dump -- --fixture marketing-analytics --database ba9_marketing_analytics), 2026-10-13
+
+Format: one `<relation>.json.gz` per table and view (a compact JSON array of row objects, gzipped) and a plain `_meta.json`. Row counts below are read by decompressing each file, not from `_meta.json`. A second dump of the same database was byte-identical in every `.json.gz` file.
+
+Relation | rows in the file | rows in PostgreSQL | gzipped | uncompressed
+---|---|---|---|---
+regions | 4 | 4 | 0.1 KB | 0 KB
+states | 12 | 12 | 0.2 KB | 1 KB
+carriers | 6 | 6 | 0.3 KB | 1 KB
+lines_of_business | 5 | 5 | 0.2 KB | 0 KB
+products | 24 | 24 | 0.7 KB | 3 KB
+channels | 4 | 4 | 0.2 KB | 0 KB
+periods | 9 | 9 | 0.3 KB | 2 KB
+policy_sales | 10822 | 10822 | 125.7 KB | 2045 KB
+revenue_by_period | 191 | 191 | 3.1 KB | 20 KB
+campaigns | 26 | 26 | 0.9 KB | 5 KB
+campaign_results | 51 | 51 | 1.8 KB | 8 KB
+market_benchmarks | 955 | 955 | 9.9 KB | 136 KB
+competitor_masks | 30 | 30 | 0.3 KB | 3 KB
+analyst_access | 12 | 12 | 0.5 KB | 2 KB
+
+Every relation matches its PostgreSQL row count: True.
+Total on disk: 0.16 MB (0.15 MB of `.json.gz` and a 10 KB `_meta.json`); the same rows as compact JSON are 2.28 MB.

@@ -1,0 +1,72 @@
+SQLite references (the REST connector's engine): finance.json
+Checked 2026-10-13 by the BA-187 dialect work. Every case of the file with a PostgreSQL reference (59).
+The set that grades against them: finance-rest (fixture finance-rest).
+
+How each reference was checked
+- PostgreSQL: the case's PostgreSQL reference on database ba9_finance (127.0.0.1:55432, schema finance).
+- SQLite: the dump in backend/scripts/fixtures/finance/data materialised as rest.connector.ts materialises endpoints: one table per relation named by its key "api.finance.<table>", column affinity from the first non-null JSON value (number REAL, boolean INTEGER 1/0, string TEXT); every unquoted api.finance.<table> in the reference rewritten to the quoted key, as the connector does. Run on Python's sqlite3 (SQLite 3.51.0) and on better-sqlite3 (the engine the connector bundles, SQLite 3.53.4).
+- Precondition for the REST set: these references read every row of an endpoint, and transactions (5,400 rows), v_transactions (5,400 rows) exceed what the connector fetches by default (50 pages of 100 rows, at most 10,000 rows: MAX_PAGES, DEFAULT_PAGE_SIZE and DEFAULT_MAX_ROWS in rest.connector.ts). The REST datasource must set a page size and maxRows on those endpoints that cover them, or the SQLite references sum a partial table.
+- Comparison: as backend/src/modules/sessions/result-compare.ts compares (the result-set match): same row count and column count, rows in any order, each row's values normalised (numbers at 6 significant figures, dates as YYYY-MM-DD, text trimmed and case-folded) and sorted.
+- Static: the Step 1b check modules (backend/src/mastra/evals/checks/): dialectProblem(sql, 'sqlite') finds nothing (agents-evals R74); every table reference has 3 parts (R75), is api.finance.<table> and a required table of the sample; the reference reads the same tables as the PostgreSQL one.
+
+✓ wealth-client-count  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 31
+✓ aum-fy2025-end  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 85727112.35
+✓ fee-revenue-fy2025-by-type  sqlite  4 rows, equal to the PostgreSQL reference on both engines: ADVISORY, 478131.97; CUSTODY, 61690.28; PERFORMANCE, 56014.16; … (4 rows)
+✓ fee-revenue-fy2026-q2  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 167922.47
+✓ average-aum-per-client-fy2025-end  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 2857570.41
+✓ completed-transactions-december-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 243
+✓ portfolios-opened-2024  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 7
+✓ largest-portfolio-2025-end  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Alistair Buchanan, 6432139.64
+✓ discretionary-portfolios-open  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 16
+✓ advisory-fees-billed-march-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 26
+✓ positions-held-2024-end  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 244
+✓ refunded-fees-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 23583.01
+✓ unbilled-fees-2025-end  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 70820.02
+✓ collected-fees-fy2026-q1  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 204142.73
+✓ advisory-fee-rates  sqlite  6 rows, equal to the PostgreSQL reference on both engines: 1, 9; 0.9, 4; 0.85, 3; … (6 rows)
+✓ bond-holdings-2025-end-millions  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 25.62
+✓ most-held-securities-fy2025-end  sqlite  2 rows, equal to the PostgreSQL reference on both engines: Axle & Mast Industrials 5.60% 2030, 17; Birchwood Holdings 5.10% 2029, 17
+✓ top-three-fee-clients-fy2025  sqlite  3 rows, equal to the PostgreSQL reference on both engines: Alistair Buchanan, 81264.97; Vivienne Saint-Clair, 65083.44; Cyrus Farahani, 47831.47
+✓ branch-most-assets-2025-end  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Boston Back Bay, 18178382.99
+✓ largest-security-by-value-2025-end  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Birchwood Holdings 5.10% 2029, 5927787.8
+✓ top-equity-sectors-fy2025-end  sqlite  3 rows, equal to the PostgreSQL reference on both engines: Health Care, 5657630.86; Financials, 5634098.22; Technology, 5132214.8
+✓ fee-revenue-by-region-fy2025  sqlite  4 rows, equal to the PostgreSQL reference on both engines: Midwest, 146032.32; Northeast, 224013.73; Southeast, 115702.34; … (4 rows)
+✓ aum-by-segment-fy2025-end  sqlite  3 rows, equal to the PostgreSQL reference on both engines: BUSINESS, 30010554.05; PREMIER, 51192560.54; RETAIL, 4523997.76
+✓ aum-by-asset-class-2025-end  sqlite  4 rows, equal to the PostgreSQL reference on both engines: BOND, 25620936; CASH, 4443061.5; EQUITY, 46251880.84; … (4 rows)
+✓ open-portfolios-by-region  sqlite  4 rows, equal to the PostgreSQL reference on both engines: Midwest, 15; Northeast, 11; Southeast, 9; … (4 rows)
+✓ wealth-clients-with-mortgage  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 8
+✓ waived-share-advisory-fy2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 3.3
+✓ advisory-fee-rate-by-mandate-fy2025  sqlite  3 rows, equal to the PostgreSQL reference on both engines: ADVISORY, 0.55; DISCRETIONARY, 0.81; EXECUTION_ONLY, 0
+✓ unrealized-gain-percent-fy2025-end  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 15.4
+✓ equity-share-by-risk-profile-2025-end  sqlite  3 rows, equal to the PostgreSQL reference on both engines: BALANCED, 49.8; CONSERVATIVE, 31.4; GROWTH, 70.2
+✓ performance-share-fee-revenue-fy2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 9.3
+✓ quietest-fee-month-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 0
+✓ positions-without-cost-fy2025-end  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 62
+✓ unrealized-gain-fy2025-end  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 8842156.19
+✓ portfolios-by-base-currency  sqlite  1 rows, equal to the PostgreSQL reference on both engines: USD, 39
+✓ open-portfolios-by-mandate  sqlite  3 rows, equal to the PostgreSQL reference on both engines: ADVISORY, 15; DISCRETIONARY, 16; EXECUTION_ONLY, 8
+✓ fiscal-2026-q2-months  sqlite  3 rows, equal to the PostgreSQL reference on both engines: 2025-10-01; 2025-11-01; 2025-12-01
+✓ fee-revenue-latest-quarter  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 167922.47
+✓ chart-aum-by-quarter-end  sqlite  8 rows, equal to the PostgreSQL reference on both engines: 2024-03-31, 74022789.05; 2024-06-30, 75122448.61; 2024-09-30, 73602488.3; … (8 rows)
+✓ wealth-client-count-casual  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 31
+✓ aum-fy2025-end-typo  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 85727112.35
+✓ largest-portfolio-2025-end-casual  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Alistair Buchanan, 6432139.64
+✓ interest-share-of-loan-payments-by-product  sqlite  3 rows, equal to the PostgreSQL reference on both engines: MORTGAGE, 0.3871; PERSONAL, 0.2827; AUTO, 0.1817
+✓ outstanding-share-of-principal-by-product  sqlite  3 rows, equal to the PostgreSQL reference on both engines: MORTGAGE, 0.8225; PERSONAL, 0.3666; AUTO, 0.2676
+✓ loans-by-currency  sqlite  1 rows, equal to the PostgreSQL reference on both engines: USD, 110
+✓ transactions-with-merchant-category  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 800
+✓ branches-opened-12-accounts-2024  sqlite  2 rows, equal to the PostgreSQL reference on both engines: Atlanta Midtown, 12; Chicago Loop, 12
+✓ non-performing-loans  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 12
+✓ customer-most-card-purchases-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Xiomara Castellanos, 18
+✓ net-customer-flow-by-branch-2025  sqlite  8 rows, equal to the PostgreSQL reference on both engines: Chicago Loop, 47980354; Denver LoDo, 45823688; Atlanta Midtown, 34832793; … (8 rows)
+✓ transactions-march-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 236
+✓ accounts-opened-by-region-2024  sqlite  4 rows, equal to the PostgreSQL reference on both engines: Southeast, 20; Midwest, 18; Northeast, 13; … (4 rows)
+✓ deposit-accounts-per-branch  sqlite  8 rows, equal to the PostgreSQL reference on both engines: Chicago Loop, 34; Atlanta Midtown, 22; Columbus Short North, 17; … (8 rows)
+✓ customer-deposits-2025-usd  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 2596749.29
+✓ euro-deposits-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 340142.08
+✓ card-spend-december-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 3806.52
+✓ customers-per-segment  sqlite  3 rows, equal to the PostgreSQL reference on both engines: RETAIL, 55; PREMIER, 19; BUSINESS, 16
+✓ branches-per-region  sqlite  4 rows, equal to the PostgreSQL reference on both engines: Northeast, 3; Midwest, 2; Southeast, 2; … (4 rows)
+✓ loans-per-product  sqlite  3 rows, equal to the PostgreSQL reference on both engines: AUTO, 46; PERSONAL, 40; MORTGAGE, 24
+
+finance: 59 of 59 SQLite references return the rows of their PostgreSQL reference and pass the static checks.

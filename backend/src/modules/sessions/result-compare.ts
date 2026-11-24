@@ -1,18 +1,20 @@
 /**
- * Result-set equality, shared by the golden-set eval harness
- * (`scripts/run-eval.ts`) and careful mode's independent cross-check.
+ * Result-set equality, shared by the assistant eval suite's result-set check
+ * (`mastra/evals/result-set-check.ts`, which grades every case with a
+ * reference query, the World Cup set's included) and careful mode's independent
+ * cross-check.
  *
  * Two queries "agree" when they return the same facts, regardless of column
  * naming, column order, row order or connector-specific cell typing.
  *
  * Column *count* is the one shape difference that cannot be forgiven blindly:
- * a wider result may carry supporting figures the narrower one never computed.
- * The eval harness compares queries written against the same expected shape, so
- * it holds width strictly. Careful mode's verifier is told to project nothing
- * beyond the question, while the analysis agent selects the context columns its
- * answer and visuals need, so identical facts routinely arrive at different
- * widths — `widthTolerant` lets it ask whether the narrower result's facts are
- * present in the wider one instead of rejecting on shape alone.
+ * a wider result may carry supporting figures the narrower one never computed,
+ * so by default width is held strictly. Both callers relax it: a reference
+ * query and careful mode's verifier project nothing beyond the question, while
+ * the analysis agent selects the context columns its answer and visuals need,
+ * so identical facts routinely arrive at different widths — `widthTolerant`
+ * asks whether the narrower result's facts are present in the wider one
+ * instead of rejecting on shape alone.
  */
 
 const NUMERIC = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;

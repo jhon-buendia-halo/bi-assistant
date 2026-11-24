@@ -1,0 +1,32 @@
+# world-cup: every trap query of the 40 added questions returns rows different from its reference (PostgreSQL)
+
+Same database as references-postgres-world-cup.txt. "Differs" is the result-set match of
+backend/src/modules/sessions/result-compare.ts (same row count and width, rows in any order, values normalised)
+failing. Paraphrases share their question's trap query, so each trap is listed once.
+
+✓ shot-accuracy-by-team-2022  (ratio): trap 3 rows [Argentina; Brazil; Croatia] vs reference 3 rows [Brazil; Argentina; England] -> differs
+✓ shot-conversion-2022  (ratio): trap 1 rows [Brazil] vs reference 1 rows [Netherlands] -> differs
+✓ busiest-stadium  (ranking): trap 1 rows [Lusail Stadium] vs reference 2 rows [Saint Petersburg Stadium; Lusail Stadium] -> differs
+✓ highest-scoring-match  (ranking): trap 1 rows [France, Croatia] vs reference 2 rows [Argentina, France; France, Croatia] -> differs
+✓ top-scorer-both-tournaments  (ranking): trap 1 rows [Kylian Mbappe] vs reference 2 rows [Kylian Mbappe; Lionel Messi] -> differs
+✓ semi-final-goals-2022  (encoding): trap 1 rows [∅] vs reference 1 rows [5] -> differs
+✓ goals-by-defenders  (encoding): trap 1 rows [0] vs reference 1 rows [11] -> differs
+✓ third-place-2022  (encoding): trap 0 rows [] vs reference 1 rows [Croatia] -> differs
+✓ most-fouls-team  (ranking): trap 1 rows [4] vs reference 1 rows [Croatia] -> differs
+✓ booked-in-2022-final  (ranking): trap 1 rows [5] vs reference 1 rows [Emiliano Martinez] -> differs
+✓ quickest-goal-scorer  (ranking): trap 1 rows [6] vs reference 1 rows [Thomas Meunier] -> differs
+✓ top-assist-provider  (null): trap 1 rows [∅] vs reference 1 rows [Lionel Messi] -> differs
+✓ mandzukic-goals-2018  (business-term): trap 1 rows [3] vs reference 1 rows [2] -> differs
+✓ extra-time-goals  (business-term): trap 1 rows [19] vs reference 1 rows [7] -> differs
+✓ argentina-draws-2022  (business-term): trap 1 rows [0] vs reference 1 rows [2] -> differs
+✓ south-american-goals  (join): trap 1 rows [11] vs reference 1 rows [10] -> differs
+✓ third-placed-team-scorers-2018  (join): trap 4 rows [Eden Hazard; Fernandinho; Kevin De Bruyne; Thomas Meunier] vs reference 3 rows [Eden Hazard; Kevin De Bruyne; Thomas Meunier] -> differs
+player-data-discovery  (discovery): no trap query (none on the branch: branch category discovery)
+team-match-stats-discovery  (discovery): no trap query (none on the branch: branch category discovery)
+argentina-penalties-2022  (ambiguous): no trap query (none on the branch: branch category clarification)
+best-defence  (ambiguous): no trap query (none on the branch: branch category clarification)
+group-stage-goals-2022  (out-of-scope): no trap query (none on the branch: branch category out-of-scope)
+referee-2022-final  (out-of-scope): no trap query (none on the branch: branch category out-of-scope)
+
+Summary: 17 of 17 trap queries return rows different from the reference; 6 questions (discovery, ambiguous, out-of-scope) have none.
+finalists-groups-2022: left out of the set, see agents-evals.

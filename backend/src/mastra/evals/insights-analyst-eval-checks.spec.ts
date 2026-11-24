@@ -106,6 +106,28 @@ describe('endsOnClarifyingQuestion', () => {
       ),
     ).toBe('the answer holds more than the question and its options');
   });
+
+  it('passes an agent that asked with ask_clarification, whatever its text', () => {
+    // Emily on v2-clarify-most-dominant-team, 2026-11-23: options as one string.
+    const ask = (options: unknown, failed = false): EvalRawToolCall => ({
+      name: 'ask_clarification',
+      input: { question: 'How should I measure "most dominant"?', options },
+      output: { delivered: true },
+      failed,
+    });
+    const text = "Which of these should I use? Pick one, and I'll run it.";
+    expect(
+      run(endsOnClarifyingQuestion(), text, [
+        ask('Most titles won\nBest win record\nBiggest goal difference'),
+      ]),
+    ).toBeUndefined();
+    expect(
+      run(endsOnClarifyingQuestion(), text, [ask('Most titles won')]),
+    ).toBe('the question offers 1 options, not 2-4');
+    expect(run(endsOnClarifyingQuestion(), text, [ask('A\nB', true)])).toBe(
+      'the answer does not open with a question',
+    );
+  });
 });
 
 describe('numbersInText', () => {

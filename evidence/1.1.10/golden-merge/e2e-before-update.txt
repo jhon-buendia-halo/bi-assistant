@@ -1,0 +1,26 @@
+# Before the step-7 E2E update (same build): the 6 failures were all counts or the removed golden set
+  ✘   1 [web] › e2e/agents.spec.ts:208:5 › opens an agent from the Agents list and switches between its tabs (11.7s)
+  ✓   2 [web] › e2e/agents.spec.ts:302:5 › shows the stateless, no-tool agents accurately (1.2s)
+  ✘   3 [web] › e2e/agents.spec.ts:326:5 › offers the configured datasources and starts a run from the evals tab (12.8s)
+  ✘   4 [web] › e2e/agents.spec.ts:355:5 › runs only the ticked questions (11.4s)
+  ✓   5 [web] › e2e/agents.spec.ts:387:5 › refuses to run against a datasource with no datasets (1.5s)
+  ✓   6 [web] › e2e/agents.spec.ts:404:5 › explains an incomplete eval dataset without starting a run (1.8s)
+  ✓   7 [web] › e2e/agents.spec.ts:424:5 › opens a question in the right panel with what it is scored on (1.0s)
+  ✘   8 [web] › e2e/agents.spec.ts:453:5 › separates the question suite from past executions (12.7s)
+  ✓   9 [web] › e2e/agents.spec.ts:485:5 › downloads an execution as a Markdown report (3.6s)
+  ✘  10 [web] › e2e/agents.spec.ts:556:5 › lists every question set, the golden set among them (10.9s)
+  ✘  11 [web] › e2e/agents.spec.ts:599:5 › starts a run of the golden set on the World Cup datasource (1.0m)
+  ✓  12 [web] › e2e/agents.spec.ts:624:5 › runs with the judge off by default (3.5s)
+  ✓  13 [web] › e2e/agents.spec.ts:681:5 › reports pass rate by category (5.1s)
+    Expected substring: "12 questions"
+    Received string:    "World Cup63 questionsQuestions against the bundled World Cup sample (2018 and 2022). Select its PostgreSQL datasource with a saved dataset containing the world_cup tables and views."
+    Expected substring: "Run 12 selected"
+    Received string:    "Run 63 selected"
+    Expected substring: "Run 12 selected"
+    Received string:    "Run 63 selected"
+    Expected: 12
+    Received: 63
+    Expected: 18
+    Received: 15
+  6 failed
+  7 passed (2.4m)

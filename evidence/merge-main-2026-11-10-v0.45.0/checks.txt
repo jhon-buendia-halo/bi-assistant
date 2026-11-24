@@ -1,0 +1,23 @@
+# Checks after merging main v0.45.0 (89bdf5ce), 2026-11-10
+
+## PR #81 feat/BA-9-golden-dataset-evals (merge 386fe55d)
+backend: npx tsc -p tsconfig.json --noEmit -> exit 0 (specs included)
+backend: npx tsc -p tsconfig.build.json --noEmit -> exit 0
+backend: npx jest --silent
+  Test Suites: 194 passed, 194 total
+  Tests:       3336 passed, 3336 total
+frontend: npx ng test --watch=false --browsers=ChromeHeadless
+  TOTAL: 567 SUCCESS
+frontend: npx ng build (production) -> exit 0
+  | Initial total | 1.00 MB | 230.75 kB
+  budget warning 500 kB exceeded (also on main); error budget 1.1 MB (tech-stack.md) met
+python3 scripts/check-specs.py
+  ALL CHECKS PASSED
+
+## PR #60 docs/BA-123-knowledge-store-research (merge ac8231dd)
+python3 scripts/check-specs.py
+  ALL CHECKS PASSED
+
+## PR #61 docs/BA-124-knowledge-store-execution-plan (merge 31ad818f, of the updated #60)
+python3 scripts/check-specs.py
+  ALL CHECKS PASSED

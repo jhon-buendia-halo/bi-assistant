@@ -364,16 +364,8 @@ export class SessionsService implements OnModuleInit {
       },
       writeFile: (sessionId, path, data) =>
         writeWorkspaceFile(sessionId, path, data),
-      buildVisual: async (sessionId, source, abortSignal) => {
-        const session = await this.get(sessionId);
-        const { metadata } = await this.visuals.createFromAnswer(
-          session,
-          source,
-          abortSignal,
-        );
-        await this.saveVisualMetadata(session, metadata);
-        return metadata;
-      },
+      buildVisual: (sessionId, source, abortSignal) =>
+        this.buildVisualOnHost(sessionId, source, abortSignal),
       // A change on Build visual's approval gate (workflows R44): a new
       // version of the same visual.
       reviseVisual: async (sessionId, visualId, change, abortSignal) => {
@@ -433,7 +425,8 @@ export class SessionsService implements OnModuleInit {
         );
         return options?.signal ? raceAbort(sample, options.signal) : sample;
       },
-      // The statement and its repair get the tool call's stop (agents.md 3.4).
+      // The statement and its repair get the tool call's stop (agents.md 3.4)
+      // and, inside an eval attempt, its usage sink (R219).
       runReadOnlySql: (datasourceId, sql, limit, datasets, options) =>
         options
           ? this.sqlChecks.runSqlWithRepair(
@@ -462,6 +455,7 @@ export class SessionsService implements OnModuleInit {
         sourceMessageAt,
         instruction,
         turnRecords,
+        usageSink,
       ) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.create(
@@ -469,17 +463,25 @@ export class SessionsService implements OnModuleInit {
           sourceMessageAt,
           instruction,
           turnRecords,
+          usageSink,
         );
         await this.saveVisualMetadata(session, metadata);
         return this.toolResult(metadata);
       },
-      updateVisual: async (sessionId, visualId, instruction, turnRecords) => {
+      updateVisual: async (
+        sessionId,
+        visualId,
+        instruction,
+        turnRecords,
+        usageSink,
+      ) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.update(
           session,
           visualId,
           instruction,
           turnRecords,
+          usageSink ? { usageSink } : {},
         );
         await this.saveVisualMetadata(session, metadata);
         return this.toolResult(metadata);
@@ -1470,6 +1472,27 @@ export class SessionsService implements OnModuleInit {
   }
 
   /** Upsert visual metadata on the session, optionally logging a chat event. */
+  /**
+   * Build visual's design on a host (agents.md 5.11): Ryan designs a visual
+   * from the answer and its records, stored on the host. A run's Build
+   * visual calls it through the turn engine; the eval runner calls it on its
+   * throwaway host for a whole-workflow target (agents-evals R257).
+   */
+  async buildVisualOnHost(
+    sessionId: string,
+    source: Parameters<VisualizationService['createFromAnswer']>[1],
+    abortSignal?: AbortSignal,
+  ): Promise<SessionVisualization> {
+    const session = await this.get(sessionId);
+    const { metadata } = await this.visuals.createFromAnswer(
+      session,
+      source,
+      abortSignal,
+    );
+    await this.saveVisualMetadata(session, metadata);
+    return metadata;
+  }
+
   private async saveVisualMetadata(
     session: SessionDoc,
     metadata: SessionVisualization,

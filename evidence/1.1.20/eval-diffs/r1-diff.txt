@@ -1,0 +1,55 @@
+Before: 97d932a5 (63 questions, openai/gpt-4o-mini, repeats 3, judge off); 3ebeaeb7 (68 questions, openai/gpt-4o-mini, repeats 3, judge off); 531236cd (50 questions, openai/gpt-4o-mini, repeats 3, judge off)
+After:  4e074eff (63 questions, openai/gpt-4o-mini, repeats 3, judge off); e3c0ef1d (68 questions, openai/gpt-4o-mini, repeats 3, judge off); 12d304a6 (50 questions, openai/gpt-4o-mini, repeats 3, judge off)
+
+Split     Category        Before          After            Change    95% interval of change  Flag
+dev       lookup          1/6 (3–56%)     4/6 (30–90%)     +50 pts   −4 to +77 pts           within
+dev       aggregate       1/15 (1–30%)    6/15 (20–64%)    +33 pts   +3 to +58 pts           up
+dev       join            1/9 (2–43%)     1/9 (2–43%)      0 pts     −34 to +34 pts          within
+dev       ranking         0/16 (0–19%)    1/16 (1–28%)     +6 pts    −14 to +28 pts          within
+dev       ratio           0/14 (0–22%)    1/14 (1–31%)     +7 pts    −15 to +31 pts          within
+dev       null            0/6 (0–39%)     0/6 (0–39%)      0 pts     −39 to +39 pts          within
+dev       encoding        0/10 (0–28%)    0/10 (0–28%)     0 pts     −28 to +28 pts          within
+dev       reasoning       0/2 (0–66%)     0/2 (0–66%)      0 pts     −66 to +66 pts          within
+dev       discovery       2/4 (15–85%)    3/4 (30–95%)     +25 pts   −32 to +66 pts          within
+dev       ambiguous       1/5 (4–62%)     1/5 (4–62%)      0 pts     −45 to +45 pts          within
+dev       fuzzy-scope     1/3 (6–79%)     1/3 (6–79%)      0 pts     −53 to +53 pts          within
+dev       out-of-scope    2/5 (12–77%)    2/5 (12–77%)     0 pts     −46 to +46 pts          within
+dev       non-existent    2/2 (34–100%)   2/2 (34–100%)    0 pts     −66 to +66 pts          within
+dev       business-term   0/10 (0–28%)    0/10 (0–28%)     0 pts     −28 to +28 pts          within
+dev       default-filter  0/6 (0–39%)     0/6 (0–39%)      0 pts     −39 to +39 pts          within
+dev       visual          1/4 (5–70%)     1/4 (5–70%)      0 pts     −49 to +49 pts          within
+dev       paraphrase      1/13 (1–33%)    1/13 (1–33%)     0 pts     −26 to +26 pts          within
+dev       all             13/130 (6–16%)  24/130 (13–26%)  +8 pts    0 to +17 pts            within
+held-out  lookup          1/2 (9–91%)     1/2 (9–91%)      0 pts     −57 to +57 pts          within
+held-out  aggregate       0/4 (0–49%)     1/4 (5–70%)      +25 pts   −28 to +70 pts          within
+held-out  join            0/5 (0–43%)     0/5 (0–43%)      0 pts     −43 to +43 pts          within
+held-out  ranking         1/6 (3–56%)     0/6 (0–39%)      −17 pts   −56 to +25 pts          within
+held-out  ratio           0/5 (0–43%)     0/5 (0–43%)      0 pts     −43 to +43 pts          within
+held-out  null            0/2 (0–66%)     0/2 (0–66%)      0 pts     −66 to +66 pts          within
+held-out  encoding        0/4 (0–49%)     0/4 (0–49%)      0 pts     −49 to +49 pts          within
+held-out  discovery       2/3 (21–94%)    2/3 (21–94%)     0 pts     −53 to +53 pts          within
+held-out  ambiguous       0/3 (0–56%)     0/3 (0–56%)      0 pts     −56 to +56 pts          within
+held-out  out-of-scope    2/3 (21–94%)    2/3 (21–94%)     0 pts     −53 to +53 pts          within
+held-out  non-existent    0/1 (0–79%)     1/1 (21–100%)    +100 pts  −12 to +100 pts         within
+held-out  business-term   0/4 (0–49%)     0/4 (0–49%)      0 pts     −49 to +49 pts          within
+held-out  default-filter  1/2 (9–91%)     0/2 (0–66%)      −50 pts   −91 to +27 pts          within
+held-out  paraphrase      0/7 (0–35%)     0/7 (0–35%)      0 pts     −35 to +35 pts          within
+held-out  all             7/51 (7–26%)    7/51 (7–26%)     0 pts     −14 to +14 pts          within
+
+Flips, dev:
+  Now passing: schema-discovery (discovery), most-fouls-team-reworded (paraphrase), card-types-recorded (aggregate), goals-by-type (aggregate), attendance-by-tournament (aggregate), fiscal-2026-q2-months (lookup), loans-by-currency (aggregate), loans-per-product (aggregate), fiscal-quarter-of-july-2024 (lookup), digital-channels (lookup), top-three-campaigns-by-leads-2025 (ranking), premium-per-policy-top-line-2025 (ratio)
+  Now failing: goals-by-defenders-reworded (paraphrase)
+Flips, held-out:
+  Now passing: relationship-manager-assets (non-existent), branches-per-region (aggregate)
+  Now failing: branches-opened-12-accounts-2024 (ranking), transactions-march-2025 (default-filter)
+Only before: none
+Only after: none
+
+Cost before: $1.4378 · $0.0079 per question
+Cost after: $1.1901 · $0.0066 per question
+Cost per question: −17.2%
+
+Draft change log: Round 1: context: each entity's columns and types in the turn's orientation lines. The assistant writes SQL against guessed column names because the turn lists the entities but not their columns, and the SQL fixer's repairs then change the query's meaning. Dev 13/130 → 24/130, held-out 7/51 → 7/51; dev ranking within; cost per question $0.0079 → $0.0066. Runs 97d932a5, 3ebeaeb7, 531236cd → 4e074eff, e3c0ef1d, 12d304a6.
+Draft results.tsv row:
+1	2026-10-21	The assistant writes SQL against guessed column names because the turn lists the entities but not their columns, and the SQL fixer's repairs then change the query's meaning.	context: each entity's columns and types in the turn's orientation lines		ranking	ranking:0/16;all:13/130	ranking:1/16;all:24/130	ranking:1/6;all:7/51	ranking:0/6;all:7/51		0.0079	0.0066	1.1901			97d932a5;3ebeaeb7;531236cd	4e074eff;e3c0ef1d;12d304a6
+Accept rule: not met (dev ranking is within, not up; held-out ranking fell from 1/6 to 0/6)

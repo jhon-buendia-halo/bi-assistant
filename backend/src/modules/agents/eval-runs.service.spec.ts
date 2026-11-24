@@ -24,19 +24,27 @@ jest.mock('../../mastra/evals/eval-sets', () => {
       agentKey: 'data-readiness',
       finish: jest.fn().mockResolvedValue(undefined),
     },
+    'insights-analyst': { agentKey: 'insights-analyst' },
   };
   return {
     evalSetsFor: (key: string) =>
       sets.filter((set) => (set.agentKey ?? 'assistant') === key),
     evalTargetIdFor: (key: string) => ({ targetId: key }),
     evalTargetFor: (key: string) => targets[key],
+    evalTargetOf: (id: string) => targets[id],
   };
 });
+// The command line's preflight reads the named datasets as a chat turn does.
+const mockGetDatasets = jest.fn();
+jest.mock('../../mastra/tool-services', () => ({
+  getDatasetToolServices: () => ({ getDatasets: mockGetDatasets }),
+}));
 jest.mock('../../mastra/evals/assistant.evals', () => ({
   selectEvalSets: jest.fn((_ids: unknown, sets: unknown[]) => sets),
   selectEvalCases: jest.fn(() => [
     { id: 'champion-2022', question: 'Who won the 2022 World Cup?' },
   ]),
+  evalRunModel: jest.fn().mockResolvedValue('openai/gpt-4o-mini'),
   createEvalHost: jest.fn().mockResolvedValue({ id: 'session' }),
   cleanupEvalHost: jest.fn().mockResolvedValue(undefined),
   runAssistantEvalCase: jest
@@ -54,6 +62,7 @@ jest.mock('../../mastra/evals/assistant.evals', () => ({
 }));
 
 import { EvalRunsService } from './eval-runs.service';
+import type { EvalRunView } from './eval-runs.service';
 import {
   createEvalHost,
   fixtureForCases,
@@ -62,6 +71,7 @@ import {
   selectEvalSets,
 } from '../../mastra/evals/assistant.evals';
 import { evalTargetFor } from '../../mastra/evals/eval-sets';
+import { LEARNING_STORE } from '../memory/learning-store.port';
 import { currentEvalRunId } from '../../mastra/evals/eval-run-scope';
 
 describe('EvalRunsService dataset validation', () => {
@@ -137,6 +147,7 @@ describe('EvalRunsService dataset validation', () => {
             'players',
             'goals',
             'match_team_statistics',
+            'disciplinary_events',
             'v_match_results',
             'v_player_goal_totals',
           ].map((table) => `world_cup.world_cup.${table}`),
@@ -147,13 +158,19 @@ describe('EvalRunsService dataset validation', () => {
       expect(result).toEqual({ jobId: expect.any(String) as string });
       await new Promise((resolve) => setImmediate(resolve));
       if (!('jobId' in result)) throw new Error('Run did not start');
+      // No judge option given: the judge is off (R144).
       expect(runAssistantEvalCase).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'champion-2022' }),
         ['Sample'],
         'session',
         '',
         { agentKey: 'assistant' },
-        result.jobId,
+        { mode: 'off' },
+        {
+          model: 'openai/gpt-4o-mini',
+          evalRunId: result.jobId,
+          visualBuilder: expect.any(Function) as unknown,
+        },
       );
       expect(repository.insert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -164,11 +181,69 @@ describe('EvalRunsService dataset validation', () => {
         }),
       );
       expect((await runner.status(result.jobId))?.status).toBe('completed');
+      // R40: the baseline must also share a question with this run.
       expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
         'assistant',
         result.jobId,
         'wc',
         ['Sample'],
+        ['champion-2022'],
+        'none',
+        undefined,
+      );
+    }),
+  );
+
+  it(
+    "hands every question Ryan on the run's host, for a whole-workflow target's Build visual (agents-evals R257)",
+    asDemoUser(async () => {
+      datasets.list.mockResolvedValue([
+        {
+          name: 'Sample',
+          datasourceId: 'wc',
+          datasourceKind: 'postgres',
+          tables: [
+            'tournaments',
+            'teams',
+            'matches',
+            'venues',
+            'players',
+            'goals',
+            'match_team_statistics',
+            'disciplinary_events',
+            'v_match_results',
+            'v_player_goal_totals',
+          ].map((table) => `world_cup.world_cup.${table}`),
+        },
+      ]);
+      const visual = { id: 'v1', title: 'Goals per team' };
+      const sessions = {
+        buildVisualOnHost: jest.fn().mockResolvedValue(visual),
+      };
+      const runner = new EvalRunsService(
+        datasets as never,
+        repository as never,
+        {} as never,
+        sessions as never,
+        knowledge as never,
+        llm as never,
+      );
+      const result = await runner.start('assistant', 'wc');
+      if (!('jobId' in result)) throw new Error('Run did not start');
+      await new Promise((resolve) => setImmediate(resolve));
+      const options = jest.mocked(runAssistantEvalCase).mock.calls[0][6] as {
+        visualBuilder: (source: unknown) => Promise<unknown>;
+      };
+      const source = {
+        question: 'Chart the goals.',
+        answer: 'Argentina 8.',
+        at: '2026-11-18T00:00:00.000Z',
+        data: [{ tool: 'run_readonly_sql', input: 'SELECT 1' }],
+      };
+      await expect(options.visualBuilder(source)).resolves.toBe(visual);
+      expect(sessions.buildVisualOnHost).toHaveBeenCalledWith(
+        'session',
+        source,
       );
     }),
   );
@@ -191,6 +266,7 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
         'players',
         'goals',
         'match_team_statistics',
+        'disciplinary_events',
         'v_match_results',
         'v_player_goal_totals',
       ].map((table) => `world_cup.world_cup.${table}`),
@@ -283,7 +359,12 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
       'session',
       '',
       target,
-      (started as { jobId: string }).jobId,
+      { mode: 'off' },
+      {
+        model: 'openai/gpt-4o-mini',
+        evalRunId: (started as { jobId: string }).jobId,
+        visualBuilder: expect.any(Function) as unknown,
+      },
     );
     expect(target.finish).toHaveBeenCalledWith(['Sample']);
     expect(finishScopes).toEqual([(started as { jobId: string }).jobId]);
@@ -307,6 +388,7 @@ describe('EvalRunsService one running run per agent', () => {
         'players',
         'goals',
         'match_team_statistics',
+        'disciplinary_events',
         'v_match_results',
         'v_player_goal_totals',
       ].map((table) => `world_cup.world_cup.${table}`),
@@ -356,5 +438,752 @@ describe('EvalRunsService one running run per agent', () => {
     await expect(service.status(started.jobId)).resolves.not.toMatchObject({
       status: 'running',
     });
+  });
+});
+
+describe('EvalRunsService judge option and summary (R144, R148)', () => {
+  const sample = [
+    {
+      name: 'Sample',
+      datasourceId: 'wc',
+      datasourceKind: 'postgres',
+      tables: [
+        'tournaments',
+        'teams',
+        'matches',
+        'venues',
+        'players',
+        'goals',
+        'match_team_statistics',
+        'disciplinary_events',
+        'v_match_results',
+        'v_player_goal_totals',
+      ].map((table) => `world_cup.world_cup.${table}`),
+    },
+  ];
+  const repository = {
+    insert: jest.fn(),
+    save: jest.fn(),
+    mostRecentCompleted: jest.fn(),
+  };
+  const service = () =>
+    new EvalRunsService(
+      { list: jest.fn().mockResolvedValue(sample) } as never,
+      repository as never,
+      {} as never,
+      {} as never,
+      { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      { getView: jest.fn().mockResolvedValue({}) } as never,
+    );
+  /** A test body, kept as a wrapper so the cases read as before. */
+  const asDemoUser = <T>(fn: () => Promise<T>): Promise<T> => fn();
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it.each([
+    [{ judge: 'sometimes' }, 'Unknown judge option "sometimes"'],
+    [{ judge: 'categories' }, 'Pick at least one category to judge'],
+    [
+      { judge: 'categories', judgeCategories: ['joins'] },
+      'Unknown judge category "joins". Known categories:',
+    ],
+  ])(
+    'refuses %j without recording a run or calling a model',
+    (options, message) =>
+      asDemoUser(async () => {
+        const result = await service().start(
+          'assistant',
+          'wc',
+          undefined,
+          options,
+        );
+        expect('error' in result ? result.error : '').toContain(message);
+        expect(repository.insert).not.toHaveBeenCalled();
+        expect(runAssistantEvalCase).not.toHaveBeenCalled();
+      }),
+  );
+
+  it('records the judge option and passes it to every question', () =>
+    asDemoUser(async () => {
+      const runner = service();
+      const started = await runner.start('assistant', 'wc', undefined, {
+        judge: 'categories',
+        judgeCategories: ['out-of-scope', 'ambiguous'],
+      });
+      if (!('jobId' in started)) throw new Error('Run did not start');
+      const judge = {
+        mode: 'categories',
+        categories: ['ambiguous', 'out-of-scope'],
+      };
+      expect(repository.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ judge }),
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(runAssistantEvalCase).toHaveBeenCalledWith(
+        expect.anything(),
+        ['Sample'],
+        'session',
+        '',
+        { agentKey: 'assistant' },
+        judge,
+        {
+          model: 'openai/gpt-4o-mini',
+          evalRunId: expect.any(String) as unknown,
+          visualBuilder: expect.any(Function) as unknown,
+        },
+      );
+    }));
+
+  it('keeps the summary current as questions finish', () =>
+    asDemoUser(async () => {
+      jest.mocked(runAssistantEvalCase).mockResolvedValueOnce({
+        id: 'champion-2022',
+        question: 'Who won the 2022 World Cup?',
+        category: 'out-of-scope',
+        scores: {},
+        checkResults: [
+          {
+            id: 'llm-judge',
+            description: 'LLM judge: …',
+            score: 0,
+            passed: false,
+            status: 'not-scored',
+            reason: 'Judge off for this run',
+            criterion: 'G2',
+          },
+        ],
+        answer: '',
+        toolCalls: [],
+        status: 'not-scored',
+        passed: false,
+        durationMs: 1,
+        split: 'dev',
+        passes: 0,
+        runs: 1,
+        flaky: false,
+      });
+      const runner = service();
+      const started = await runner.start('assistant', 'wc');
+      if (!('jobId' in started)) throw new Error('Run did not start');
+      // The run object is updated in place, so only its keys are checked here.
+      const inserted = (repository.insert.mock.calls[0] as [EvalRunView])[0];
+      expect(inserted.judge).toEqual({ mode: 'off' });
+      expect(inserted.summary).toBeDefined();
+      await new Promise((resolve) => setImmediate(resolve));
+      const view = await runner.status(started.jobId);
+      expect(view?.status).toBe('completed');
+      const notScored = {
+        passed: 0,
+        failed: 0,
+        notScored: 1,
+        flaky: 0,
+        total: 1,
+      };
+      const none = { passed: 0, failed: 0, notScored: 0, flaky: 0, total: 0 };
+      expect(view?.summary).toEqual({
+        passed: 0,
+        failed: 0,
+        notScored: 1,
+        flaky: 0,
+        bySplit: { dev: notScored, heldOut: none },
+        byCategory: [
+          {
+            category: 'out-of-scope',
+            ...notScored,
+            dev: notScored,
+            heldOut: none,
+          },
+        ],
+        byCriterion: [],
+      });
+      // Persisted with the summary.
+      const saved = (repository.save.mock.calls.at(-1) as [EvalRunView])[0];
+      expect(saved.summary.notScored).toBe(1);
+    }));
+});
+
+describe('EvalRunsService repeats, attempts and usage (R209 to R211, R219 to R223)', () => {
+  const sample = [
+    {
+      name: 'Sample',
+      datasourceId: 'wc',
+      datasourceKind: 'postgres',
+      tables: [
+        'tournaments',
+        'teams',
+        'matches',
+        'venues',
+        'players',
+        'goals',
+        'match_team_statistics',
+        'disciplinary_events',
+        'v_match_results',
+        'v_player_goal_totals',
+      ].map((table) => `world_cup.world_cup.${table}`),
+    },
+  ];
+  const cases = [
+    { id: 'champion-2022', question: 'Who won the 2022 World Cup?' },
+    {
+      id: 'shot-conversion-2022',
+      question: 'What share of shots were converted?',
+      split: 'held-out',
+    },
+  ];
+  /** The run as it was when each save happened. */
+  let saved: EvalRunView[];
+  let inserted: EvalRunView[];
+  const repository = {
+    insert: jest.fn((view: EvalRunView) => {
+      inserted.push(structuredClone(view));
+      return Promise.resolve(view);
+    }),
+    save: jest.fn((view: EvalRunView) => {
+      saved.push(structuredClone(view));
+      return Promise.resolve(view);
+    }),
+    get: jest.fn(),
+    mostRecentCompleted: jest.fn(),
+  };
+  const service = () =>
+    new EvalRunsService(
+      { list: jest.fn().mockResolvedValue(sample) } as never,
+      repository as never,
+      {} as never,
+      {} as never,
+      { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      { getView: jest.fn().mockResolvedValue({}) } as never,
+    );
+  /** The assistant's tokens on one model for one call. */
+  const usage = (model: string, inputTokens: number) => [
+    {
+      agent: 'assistant' as const,
+      model,
+      inputTokens,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      calls: 1,
+      unreportedCalls: 0,
+    },
+  ];
+  /** One attempt as the runner returns it. */
+  const attempt = (
+    id: string,
+    passed: boolean,
+    costUsd: number | null = 0.15,
+    model = 'gpt-4o-mini',
+  ) => ({
+    id,
+    question: id,
+    split: id === 'shot-conversion-2022' ? 'held-out' : 'dev',
+    scores: {},
+    checkResults: [],
+    answer: '',
+    toolCalls: [],
+    status: passed ? 'passed' : 'failed',
+    passed,
+    durationMs: 1,
+    passes: passed ? 1 : 0,
+    runs: 1,
+    flaky: false,
+    usage: usage(model, 1_000_000),
+    costUsd,
+  });
+  const settle = async () => {
+    for (let i = 0; i < 20; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    saved = [];
+    inserted = [];
+    jest.mocked(selectEvalCases).mockReturnValue(cases as never);
+  });
+  afterEach(() => {
+    // Back to the module mock's defaults for the tests that follow.
+    jest
+      .mocked(selectEvalCases)
+      .mockReturnValue([
+        { id: 'champion-2022', question: 'Who won the 2022 World Cup?' },
+      ] as never);
+    jest
+      .mocked(runAssistantEvalCase)
+      .mockResolvedValue({ id: 'champion-2022', passed: true } as never);
+  });
+
+  it.each([
+    [2, 'Repeats must be 1, 3 or 5 (got "2")'],
+    ['3', 'Repeats must be 1, 3 or 5 (got "3")'],
+    [true, 'Repeats must be 1, 3 or 5 (got "true")'],
+  ])(
+    'refuses repeats %j without recording a run or calling a model',
+    async (repeats, message) => {
+      await expect(
+        service().start('assistant', 'wc', undefined, { repeats }),
+      ).resolves.toEqual({ error: message });
+      expect(repository.insert).not.toHaveBeenCalled();
+      expect(runAssistantEvalCase).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses a bad judge option before bad repeats (R19 steps 8 and 9)', async () => {
+    await expect(
+      service().start('assistant', 'wc', undefined, {
+        judge: 'sometimes',
+        repeats: 2,
+      }),
+    ).resolves.toEqual({ error: 'Unknown judge option "sometimes"' });
+  });
+
+  it('records the repeats, the model, no usage yet and the source app at start (R22)', async () => {
+    const started = await service().start('assistant', 'wc', undefined, {
+      repeats: 3,
+    });
+    expect(started).toEqual({ jobId: expect.any(String) as string });
+    expect(inserted[0]).toMatchObject({
+      repeats: 3,
+      // The saved LLM settings' label (ADR-0054), not the router id.
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      usage: [],
+      costUsd: 0,
+      source: 'app',
+      currentQuestion: 'Who won the 2022 World Cup?',
+      currentAttempt: 1,
+    });
+    await settle();
+  });
+
+  it('defaults to one attempt per question', async () => {
+    await service().start('assistant', 'wc');
+    expect(inserted[0].repeats).toBe(1);
+    await settle();
+    expect(runAssistantEvalCase).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs every attempt of a question before the next, saving once per question, with the attempt in flight', async () => {
+    const seen: string[] = [];
+    let live: EvalRunView | undefined;
+    repository.insert.mockImplementationOnce((view: EvalRunView) => {
+      live = view;
+      inserted.push(structuredClone(view));
+      return Promise.resolve(view);
+    });
+    jest
+      .mocked(runAssistantEvalCase)
+      .mockImplementation((evalCase: { id: string }) => {
+        seen.push(`${evalCase.id} #${live?.currentAttempt}`);
+        // The held-out question passes 2 of its 3 attempts.
+        const passed =
+          evalCase.id !== 'shot-conversion-2022' ||
+          seen.filter((s) => s.startsWith('shot')).length !== 2;
+        return Promise.resolve(attempt(evalCase.id, passed) as never);
+      });
+
+    const runner = service();
+    const started = await runner.start('assistant', 'wc', undefined, {
+      repeats: 3,
+    });
+    if (!('jobId' in started)) throw new Error('Run did not start');
+    await settle();
+
+    expect(seen).toEqual([
+      'champion-2022 #1',
+      'champion-2022 #2',
+      'champion-2022 #3',
+      'shot-conversion-2022 #1',
+      'shot-conversion-2022 #2',
+      'shot-conversion-2022 #3',
+    ]);
+    // One save per question, then the final one.
+    expect(saved.map((view) => view.results.length)).toEqual([1, 2, 2]);
+    expect(saved[0]).toMatchObject({
+      currentQuestion: 'What share of shots were converted?',
+      currentAttempt: 1,
+    });
+    const view = await runner.status(started.jobId);
+    expect(view).toMatchObject({ status: 'completed' });
+    expect(view).not.toHaveProperty('currentAttempt', expect.anything());
+    expect(
+      view?.results.map((r) => [r.id, r.status, r.passes, r.flaky]),
+    ).toEqual([
+      ['champion-2022', 'passed', 3, false],
+      ['shot-conversion-2022', 'failed', 2, true],
+    ]);
+    expect(view?.results[1].attempts).toHaveLength(3);
+    expect(view?.summary).toMatchObject({ passed: 1, failed: 1, flaky: 1 });
+    expect(view?.summary.bySplit.heldOut).toMatchObject({
+      failed: 1,
+      flaky: 1,
+    });
+    // Six attempts of 1M input tokens at $0.15 per million.
+    expect(view?.usage).toEqual([
+      expect.objectContaining({
+        agent: 'assistant',
+        model: 'gpt-4o-mini',
+        inputTokens: 6_000_000,
+        calls: 6,
+      }),
+    ]);
+    expect(view?.costUsd).toBe(0.9);
+    expect(view?.rates).toEqual({
+      'gpt-4o-mini': expect.objectContaining({
+        inputPerMillionUsd: 0.15,
+      }) as unknown,
+    });
+  });
+
+  it('is not priced as a whole when one question is not', async () => {
+    jest
+      .mocked(runAssistantEvalCase)
+      .mockResolvedValueOnce(attempt('champion-2022', true) as never)
+      .mockResolvedValueOnce(
+        attempt('shot-conversion-2022', true, null, 'llama-3') as never,
+      );
+    const runner = service();
+    const started = await runner.start('assistant', 'wc');
+    if (!('jobId' in started)) throw new Error('Run did not start');
+    await settle();
+    const view = await runner.status(started.jobId);
+    expect(view?.costUsd).toBeNull();
+    expect(view?.usage?.map((entry) => entry.model)).toEqual([
+      'gpt-4o-mini',
+      'llama-3',
+    ]);
+    expect(Object.keys(view?.rates ?? {})).toEqual(['gpt-4o-mini']);
+  });
+
+  it('answers the repeats of the run it was compared with', async () => {
+    const runner = service();
+    repository.get.mockResolvedValueOnce({ jobId: 'job-0', repeats: 1 });
+    const view = {
+      comparison: {
+        previousRunId: 'job-0',
+        regressions: [],
+        improvements: [],
+        unchanged: [],
+      },
+    } as unknown as EvalRunView;
+    await expect(runner.comparedRunRepeats(view)).resolves.toBe(1);
+    expect(repository.get).toHaveBeenCalledWith('job-0');
+    await expect(
+      runner.comparedRunRepeats({} as EvalRunView),
+    ).resolves.toBeUndefined();
+  });
+
+  describe('runFromCommandLine (R42, R223)', () => {
+    const request = {
+      agentKey: 'assistant',
+      datasets: ['Sample'],
+      caseIds: ['champion-2022', 'shot-conversion-2022'],
+      judge: { mode: 'off' as const },
+      repeats: 1 as const,
+      arm: { memory: 'none' as const },
+    };
+
+    it('saves the run with the source cli and the datasource of the named datasets, and waits for it', async () => {
+      mockGetDatasets.mockResolvedValue(sample);
+      jest
+        .mocked(runAssistantEvalCase)
+        .mockResolvedValueOnce(attempt('champion-2022', true) as never)
+        .mockResolvedValueOnce(attempt('shot-conversion-2022', false) as never);
+      const heard: string[] = [];
+
+      const outcome = await service().runFromCommandLine(request, (result) =>
+        heard.push(result.id),
+      );
+
+      expect(mockGetDatasets).toHaveBeenCalledWith(['Sample']);
+      if (!('run' in outcome)) throw new Error(outcome.error);
+      expect(outcome.run).toMatchObject({
+        status: 'completed',
+        source: 'cli',
+        datasourceId: 'wc',
+        datasets: ['Sample'],
+        repeats: 1,
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        caseIds: ['champion-2022', 'shot-conversion-2022'],
+      });
+      expect(inserted[0]).toMatchObject({ source: 'cli', status: 'running' });
+      expect(heard).toEqual(['champion-2022', 'shot-conversion-2022']);
+      // Saved after each question, as the app's runs are, and compared.
+      expect(saved.map((view) => view.results.length)).toEqual([1, 2, 2]);
+      expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
+        'assistant',
+        outcome.run.jobId,
+        'wc',
+        ['Sample'],
+        ['champion-2022', 'shot-conversion-2022'],
+        'none',
+        undefined,
+      );
+    });
+
+    it('runs the questions on the target the command line named, keeps it on the run and compares on it (R252)', async () => {
+      mockGetDatasets.mockResolvedValue(sample);
+      jest
+        .mocked(runAssistantEvalCase)
+        .mockResolvedValue(attempt('champion-2022', true) as never);
+
+      const outcome = await service().runFromCommandLine({
+        ...request,
+        target: 'insights-analyst',
+      });
+
+      if (!('run' in outcome)) throw new Error(outcome.error);
+      expect(outcome.run.target).toBe('insights-analyst');
+      expect(inserted[0]).toMatchObject({ target: 'insights-analyst' });
+      const targetArg = jest.mocked(runAssistantEvalCase).mock.calls[0][4];
+      expect(targetArg).toEqual({ agentKey: 'insights-analyst' });
+      expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
+        'assistant',
+        outcome.run.jobId,
+        'wc',
+        ['Sample'],
+        ['champion-2022', 'shot-conversion-2022'],
+        'none',
+        'insights-analyst',
+      );
+    });
+
+    it('refuses datasets that do not cover the sample, recording nothing', async () => {
+      mockGetDatasets.mockResolvedValue([]);
+      const outcome = await service().runFromCommandLine(request);
+      expect(outcome).toEqual({
+        error: expect.stringContaining('Datasets not found: Sample') as string,
+      });
+      expect(repository.insert).not.toHaveBeenCalled();
+      expect(runAssistantEvalCase).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('EvalRunsService memory arm (R19 step 10, R231, R232, R238, R246)', () => {
+  const sample = [
+    {
+      name: 'Sample',
+      datasourceId: 'wc',
+      datasourceKind: 'postgres',
+      tables: [
+        'tournaments',
+        'teams',
+        'matches',
+        'venues',
+        'players',
+        'goals',
+        'match_team_statistics',
+        'disciplinary_events',
+        'v_match_results',
+        'v_player_goal_totals',
+      ].map((table) => `world_cup.world_cup.${table}`),
+    },
+  ];
+  let inserted: EvalRunView[];
+  const repository = {
+    insert: jest.fn((view: EvalRunView) => {
+      inserted.push(structuredClone(view));
+      return Promise.resolve(view);
+    }),
+    save: jest.fn(),
+    mostRecentCompleted: jest.fn(),
+  };
+  /** The memory port's store, as BA-81's module provides it. */
+  const store = { retain: jest.fn(), forget: jest.fn() };
+  /** A module ref that finds the store, or none, as this build has. */
+  const moduleRef = (found: boolean) => ({
+    get: jest.fn((token: string) => {
+      if (found && token === LEARNING_STORE) return store;
+      throw new Error(`Nest could not find ${token} element`);
+    }),
+  });
+  const service = (ref?: ReturnType<typeof moduleRef>) =>
+    new EvalRunsService(
+      { list: jest.fn().mockResolvedValue(sample) } as never,
+      repository as never,
+      {} as never,
+      {} as never,
+      { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      { getView: jest.fn().mockResolvedValue({}) } as never,
+      ref as never,
+    );
+  const settle = async () => {
+    for (let i = 0; i < 20; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    inserted = [];
+  });
+
+  it.each([
+    [
+      { memory: 'sometimes' },
+      'Unknown memory arm "sometimes"; use none, mastra or hindsight-mastra',
+    ],
+    [
+      { memory: 3 },
+      'Unknown memory arm "3"; use none, mastra or hindsight-mastra',
+    ],
+    [
+      'mastra',
+      'Unknown memory arm "mastra"; use none, mastra or hindsight-mastra',
+    ],
+    [
+      { memory: 'hindsight-mastra' },
+      'The memory arm "hindsight-mastra" is not built in this version',
+    ],
+  ])(
+    'refuses the arm %j without recording a run or calling a model',
+    async (arm, message) => {
+      const ref = moduleRef(true);
+      await expect(
+        service(ref).start('assistant', 'wc', undefined, { arm }),
+      ).resolves.toEqual({ error: message });
+      expect(repository.insert).not.toHaveBeenCalled();
+      expect(runAssistantEvalCase).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses mastra on a build with no store for the memory port (A1)', async () => {
+    for (const ref of [moduleRef(false), undefined]) {
+      await expect(
+        service(ref).start('assistant', 'wc', undefined, {
+          arm: { memory: 'mastra' },
+        }),
+      ).resolves.toEqual({
+        error: 'The memory arm "mastra" is not built in this version',
+      });
+    }
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
+
+  it('refuses a memory arm on the Data Readiness set', async () => {
+    jest
+      .mocked(selectEvalCases)
+      .mockReturnValueOnce([
+        { id: 'dr-drilldown-nulls', question: 'Which columns have nulls?' },
+      ] as never);
+    await expect(
+      service(moduleRef(true)).start(
+        'data-readiness',
+        'wc',
+        ['dr-drilldown-nulls'],
+        {
+          arm: { memory: 'mastra' },
+        },
+      ),
+    ).resolves.toEqual({ error: 'Memory arms run only on the assistant' });
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
+
+  it('refuses bad repeats before a bad arm (R19 steps 9 and 10)', async () => {
+    await expect(
+      service().start('assistant', 'wc', undefined, {
+        repeats: 2,
+        arm: { memory: 'sometimes' },
+      }),
+    ).resolves.toEqual({ error: 'Repeats must be 1, 3 or 5 (got "2")' });
+  });
+
+  it('records the arm none when none is given, and reads no store', async () => {
+    const ref = moduleRef(true);
+    await service(ref).start('assistant', 'wc', undefined, {
+      arm: { memory: 'none' },
+    });
+    await service(ref).start('data-readiness', 'wc', ['dr-drilldown-nulls']);
+    expect(inserted.map((view) => view.arm)).toEqual([
+      { memory: 'none' },
+      { memory: 'none' },
+    ]);
+    expect(ref.get).not.toHaveBeenCalled();
+    await settle();
+    // Under none no attempt is given a memory (agents.md 8.3).
+    for (const call of jest.mocked(runAssistantEvalCase).mock.calls) {
+      expect(call[6]).toEqual({
+        model: 'openai/gpt-4o-mini',
+        evalRunId: expect.any(String) as unknown,
+        visualBuilder: expect.any(Function) as unknown,
+      });
+    }
+  });
+
+  it('runs mastra with the store it finds, each attempt in a scope of its own, and compares within the arm', async () => {
+    const ref = moduleRef(true);
+    const runner = service(ref);
+    const started = await runner.start('assistant', 'wc', undefined, {
+      repeats: 3,
+      arm: { memory: 'mastra' },
+    });
+    if (!('jobId' in started)) throw new Error('Run did not start');
+    expect(ref.get).toHaveBeenCalledWith(LEARNING_STORE, { strict: false });
+    expect(inserted[0].arm).toEqual({ memory: 'mastra' });
+    await settle();
+    const options = jest
+      .mocked(runAssistantEvalCase)
+      .mock.calls.map((call) => call[6]);
+    expect(options).toEqual(
+      [1, 2, 3].map((attempt) => ({
+        model: 'openai/gpt-4o-mini',
+        evalRunId: started.jobId,
+        visualBuilder: expect.any(Function) as unknown,
+        memory: {
+          store,
+          scope: `eval-${started.jobId}-champion-2022-${attempt}`,
+          warn: expect.any(Function) as unknown,
+        },
+      })),
+    );
+    expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
+      'assistant',
+      started.jobId,
+      'wc',
+      ['Sample'],
+      ['champion-2022'],
+      'mastra',
+      undefined,
+    );
+  });
+
+  it('refuses a memory arm this build has not on the command line, after the preflight, recording nothing', async () => {
+    mockGetDatasets.mockResolvedValue(sample);
+    const request = {
+      agentKey: 'assistant',
+      datasets: ['Sample'],
+      caseIds: ['champion-2022'],
+      judge: { mode: 'off' as const },
+      repeats: 1 as const,
+    };
+    await expect(
+      service(moduleRef(false)).runFromCommandLine({
+        ...request,
+        arm: { memory: 'mastra' },
+      }),
+    ).resolves.toEqual({
+      error: 'The memory arm "mastra" is not built in this version',
+    });
+    await expect(
+      service(moduleRef(true)).runFromCommandLine({
+        ...request,
+        arm: { memory: 'hindsight-mastra' },
+      }),
+    ).resolves.toEqual({
+      error: 'The memory arm "hindsight-mastra" is not built in this version',
+    });
+    await expect(
+      service(moduleRef(true)).runFromCommandLine({
+        ...request,
+        agentKey: 'data-readiness',
+        caseIds: ['dr-drilldown-nulls'],
+        arm: { memory: 'mastra' },
+      }),
+    ).resolves.toEqual({ error: 'Memory arms run only on the assistant' });
+    expect(repository.insert).not.toHaveBeenCalled();
+    expect(runAssistantEvalCase).not.toHaveBeenCalled();
   });
 });

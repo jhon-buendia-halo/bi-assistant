@@ -1,0 +1,5 @@
+Validating Memory (Marketing Analytics) (memory-marketing-analytics, postgres) on Marketing Analytics
+✓ harborline-earned-premium-q1-2025-fiscal-quarter-memory-es  postgres  1 rows · trap 1 rows
+✓ harborline-web-policies-q4-2025-pending-memory  postgres  1 rows · trap 1 rows
+✓ curated-market-share-includes-viewer-auto-2025  postgres  1 rows · trap 1 rows
+memory-marketing-analytics: 3 of 3 memory cases (reference, trap and teach queries) passed.

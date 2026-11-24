@@ -1,0 +1,46 @@
+Fixture API: http://127.0.0.1:55096
+Backend:     http://127.0.0.1:55099
+✔ API reachable: marketing-analytics, switches {"profile":null,"paging":"page","defaultPageSize":100,"maxPageSize":500,"nested":[],"wrapped":[],"refused":[],"retryAfter":null,"tokenRequired":false}
+✔ backend reachable and signed in
+✔ discovery: 14 endpoints
+    analyst_access               page size 200 rows /data
+    campaign_results             page size 200 rows /data
+    campaigns                    page size 200 rows /data
+    carriers                     page size 200 rows /data
+    channels                     page size 200 rows /data
+    competitor_masks             page size 200 rows /data
+    lines_of_business            page size 200 rows /data
+    market_benchmarks            page size 200 rows /data
+    periods                      page size 200 rows /data
+    policy_sales                 page size 217 rows /data maxRows 10822
+    products                     page size 200 rows /data
+    regions                      page size 200 rows /data
+    revenue_by_period            page size 200 rows /data
+    states                       page size 200 rows /data
+  · policy_sales: 10822 rows, more than the connector's default cap of 10000; maxRows set to 10822
+  · policy_sales: page size raised from 200 to 217 so 10822 rows fit in 50 pages
+✔ datasource "Marketing Analytics REST API" created (0500c64a-23ee-4af2-8a5a-367b24289924)
+
+  api.marketing_analytics.analyst_access  6 columns
+  api.marketing_analytics.campaign_results  10 columns
+  api.marketing_analytics.campaigns  10 columns
+  api.marketing_analytics.carriers  6 columns
+  api.marketing_analytics.channels  4 columns
+  api.marketing_analytics.competitor_masks  4 columns
+  api.marketing_analytics.lines_of_business  4 columns
+  api.marketing_analytics.market_benchmarks  7 columns
+  api.marketing_analytics.periods  9 columns
+  api.marketing_analytics.policy_sales  11 columns
+  api.marketing_analytics.products  6 columns
+  api.marketing_analytics.regions  3 columns
+  api.marketing_analytics.revenue_by_period  6 columns
+  api.marketing_analytics.states  4 columns
+
+✔ Dataset "Marketing Analytics (REST)" saved — 14 entities
+
+Done.
+  datasource: Marketing Analytics REST API (0500c64a-23ee-4af2-8a5a-367b24289924)
+  dataset:    Marketing Analytics (REST)
+  entities:   14
+
+Run an eval set bound to the "marketing-analytics-rest" sample with the dataset "Marketing Analytics (REST)" (Agents → assistant → Evals, or EVAL_DATASETS="Marketing Analytics (REST)").

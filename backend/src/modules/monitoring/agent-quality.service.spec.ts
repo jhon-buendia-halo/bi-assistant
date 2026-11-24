@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { DuckDBConnection } from '@mastra/duckdb';
 import type { EvalRunView } from '../agents/eval-runs.service';
+import { summarizeEvalResults } from '../../mastra/evals/eval-summary';
 import type { EvalRunsRepository } from '../agents/repositories/eval-runs.repository';
 import type { QualityAgent } from './agent-quality';
 import { AgentQualityService } from './agent-quality.service';
@@ -88,8 +89,18 @@ const RUN: EvalRunView = {
       toolCalls: [],
       passed: true,
       durationMs: 1,
+      split: 'dev',
+      status: 'passed',
+      passes: 1,
+      runs: 1,
+      flaky: false,
     },
   ],
+  judge: { mode: 'off' },
+  repeats: 1,
+  arm: { memory: 'none' },
+  source: 'app',
+  summary: summarizeEvalResults([]),
   totalCases: 1,
   startedAt: '2026-11-20T10:00:00.000Z',
   finishedAt: '2026-11-20T10:01:00.000Z',

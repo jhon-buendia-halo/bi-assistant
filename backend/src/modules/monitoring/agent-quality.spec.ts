@@ -1,4 +1,5 @@
 import type { EvalRunView } from '../agents/eval-runs.service';
+import { summarizeEvalResults } from '../../mastra/evals/eval-summary';
 import {
   buildAgentQualityPage,
   evalFigures,
@@ -47,6 +48,11 @@ function result(
     toolCalls: calls.map((c) => ({ name: 't', ...c })),
     passed,
     durationMs: 1,
+    split: 'dev',
+    status: passed ? 'passed' : 'failed',
+    passes: passed ? 1 : 0,
+    runs: 1,
+    flaky: false,
   };
 }
 
@@ -55,7 +61,13 @@ function run(over: Partial<EvalRunView> & { day: number }): EvalRunView {
   n += 1;
   const { day, ...rest } = over;
   const at = `2026-11-${String(day).padStart(2, '0')}T10:00:00.000Z`;
+  const results = rest.results ?? [result('a1', true)];
   return {
+    judge: { mode: 'off' },
+    repeats: 1,
+    arm: { memory: 'none' },
+    source: 'app',
+    summary: summarizeEvalResults(results),
     jobId: `job-${n}`,
     agentKey: 'assistant',
     datasourceId: 'ds',

@@ -9,6 +9,13 @@
  */
 jest.mock('@mastra/core/evals', () => ({
   runEvals: jest.fn(() => Promise.resolve({ scores: {} })),
+  createScorer: (config: Record<string, unknown>) => {
+    const scorer: Record<string, unknown> = { ...config };
+    for (const step of ['analyze', 'generateScore', 'generateReason']) {
+      scorer[step] = () => scorer;
+    }
+    return scorer;
+  },
 }));
 jest.mock('@mastra/evals/checks', () => ({
   checks: new Proxy({}, { get: () => () => ({ id: 'stub-check' }) }),

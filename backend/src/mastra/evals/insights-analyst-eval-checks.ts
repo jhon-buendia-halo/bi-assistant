@@ -1,4 +1,5 @@
 import type { EvalCustomCheck, EvalRawToolCall } from './assistant.evals';
+import { optionsOf } from './checks/option-count';
 
 /**
  * Custom checks of the `insights-analyst` set (agents.md 8.1): deterministic parts of
@@ -196,13 +197,27 @@ export function usesStoredValue(value: string): EvalCustomCheck {
 /**
  * The run ended on one clarifying question with 2-4 options: the answer is
  * the question, then one `- <option>` line per option (how the v2 eval
- * target scores a run that ended on a clarification).
+ * target scores a run that ended on a clarification). An agent that asks
+ * with one successful `ask_clarification` call of 2-4 options ends on a
+ * clarifying question too, whatever its text says (fixed 2026-11-23: Emily
+ * failed `v2-clarify-most-dominant-team` 3 of 3 after asking right).
  */
 export function endsOnClarifyingQuestion(): EvalCustomCheck {
   return {
     id: 'ends-on-clarification',
     description: 'The run ended on one clarifying question with 2-4 options',
-    run: ({ answer }) => {
+    run: ({ answer, toolCalls }) => {
+      const asked = (toolCalls ?? []).filter(
+        (call) => call.name === 'ask_clarification' && !call.failed,
+      );
+      if (asked.length > 0) {
+        if (asked.length > 1) return 'more than one clarifying question';
+        const input = asked[0].input as { options?: unknown } | undefined;
+        const count = optionsOf(input?.options)?.length ?? 0;
+        return count >= 2 && count <= 4
+          ? undefined
+          : `the question offers ${count} options, not 2-4`;
+      }
       const lines = answer
         .split('\n')
         .map((line) => line.trim())

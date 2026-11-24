@@ -1,0 +1,24 @@
+1.1.24 and 1.1.25 (BA-188) — checks, 2026-10-26, on 61256b8 (one acceptance gate for both)
+
+python3 scripts/check-specs.py                         ALL CHECKS PASSED
+backend: npx jest                                      135 suites, 2191 tests passed
+backend: npx tsc --noEmit -p tsconfig.json             clean
+backend: npx eslint on every .ts file the two features touched   clean
+backend: npx prettier --check on the same files        clean, apart from sets/finance.json and
+         sets/world-cup.json, which were not Prettier-clean on 938c6a2 either; the repo's
+         format script covers .ts files only
+builds:  npm run test:e2e:prepare (backend build:all with the web UI)   exit 0
+frontend unit tests: CHROME_BIN=<Playwright's Chromium> npx ng test --watch=false
+         --browsers=ChromeHeadless                     366 of 366 passed (no frontend source changed)
+E2E:     e2e-results.txt                               34 of 34 passed (web)
+
+Loop rounds that measured the changes (gpt-5.6-luna, low effort, three sets, 3 repeats):
+  round 14, baseline under the fixed checks and questions   dev 113/130 -> 119/130, held-out 35/51 -> 32/51
+  round 15, Marketing Analytics seed, kept                   dev 119/130 -> 117/130, held-out 32/51 -> 39/51
+  round 16, rule A4, kept                                    dev 117/130 -> 113/130, held-out 39/51 -> 40/51
+  diffs: evidence/1.1.24/r14-diff.txt, evidence/1.1.25/r15-diff.txt and r16-diff.txt;
+  the seed's SQL verification: evidence/1.1.25/seed-verification.md
+
+Evals on a Claude model: not run. They wait for the Anthropic keys. On 2026-10-26 the user
+replaced the 100% gate for PR #81 with a comparison with main on the beta's Claude model
+(specs/epics/BA-9/spec.md, Dependencies, risks and open questions).

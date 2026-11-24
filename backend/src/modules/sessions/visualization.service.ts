@@ -15,7 +15,8 @@ import {
   resolveVisualizationModel,
   specVisualOutputSchema,
 } from '../../mastra/agents/visualization.agent';
-import { modelCallTuning } from '../../mastra/model-compat';
+import { modelCallTuning, modelIdOf } from '../../mastra/model-compat';
+import type { UsageSink } from '../../mastra/usage-sink';
 import {
   STEP_MODEL_CONTEXT_KEY,
   stepModelFrom,
@@ -122,6 +123,8 @@ interface DesignContext {
    * does not thread a turn through keeps today's behavior unchanged.
    */
   mergedData?: ToolDataRecord[];
+  /** Hears each designer call; set only inside an eval attempt (R219). */
+  usageSink?: UsageSink;
   /**
    * The caller's stop (a run's Stop, agents.md 6.7): aborts the designer call
    * in flight and starts no further attempt. Absent for every other caller.
@@ -244,6 +247,7 @@ export class VisualizationService {
     sourceMessageAt: string | undefined,
     instruction?: string,
     turnRecords?: ToolDataRecord[],
+    usageSink?: UsageSink,
     question?: string,
     reference?: string,
     abortSignal?: AbortSignal,
@@ -266,6 +270,7 @@ export class VisualizationService {
       answer,
       instruction,
       mergedData,
+      usageSink,
       ...(reference?.trim() ? { reference: reference.trim() } : {}),
       abortSignal,
       ...(stepModel ? { stepModel } : {}),
@@ -352,6 +357,7 @@ export class VisualizationService {
       source.at,
       source.instruction?.trim() || undefined,
       undefined,
+      undefined,
       instructed ? source.question : undefined,
       source.reference,
       abortSignal,
@@ -407,13 +413,15 @@ export class VisualizationService {
     /**
      * A change asked on Build visual's approval gate (workflows R44): Zoe's
      * notes on new reference images (the designer's `<reference>`), the
-     * workflow's step model, and the run's stop. Absent for every other
-     * caller.
+     * workflow's step model, and the run's stop. Inside an eval attempt,
+     * `usageSink` hears the designer call (agents-evals R219). Absent for
+     * every other caller.
      */
     options: {
       reference?: string;
       stepModel?: StepModel;
       abortSignal?: AbortSignal;
+      usageSink?: UsageSink;
     } = {},
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const trimmed = (instruction ?? '').trim();
@@ -442,6 +450,7 @@ export class VisualizationService {
       instruction: trimmed,
       current,
       mergedData,
+      usageSink: options.usageSink,
       ...(options.reference?.trim()
         ? { reference: options.reference.trim() }
         : {}),
@@ -983,18 +992,16 @@ export class VisualizationService {
     // rejects `max_tokens` outright.
     // A workflow's step model (agents.md 1.3) brings its own effort.
     const stepModel = stepModelFrom(requestContext);
-    const tuning = modelCallTuning(
-      await resolveVisualizationModel(stepModel?.model),
-      {
-        maxOutputTokens:
-          mode === 'spec'
-            ? SPEC_OUTPUT_TOKENS
-            : composed
-              ? COMPOSED_OUTPUT_TOKENS
-              : SINGLE_OUTPUT_TOKENS,
-        reasoningEffort: stepModel?.reasoningEffort ?? 'low',
-      },
-    );
+    const designerModel = await resolveVisualizationModel(stepModel?.model);
+    const tuning = modelCallTuning(designerModel, {
+      maxOutputTokens:
+        mode === 'spec'
+          ? SPEC_OUTPUT_TOKENS
+          : composed
+            ? COMPOSED_OUTPUT_TOKENS
+            : SINGLE_OUTPUT_TOKENS,
+      reasoningEffort: stepModel?.reasoningEffort ?? 'low',
+    });
 
     const abortController = new AbortController();
     const deadline = setTimeout(
@@ -1044,6 +1051,7 @@ export class VisualizationService {
     } finally {
       clearTimeout(deadline);
     }
+    context.usageSink?.('designer', result, modelIdOf(designerModel));
     let output: unknown = unwrapSchemaEnvelope(result.object);
     if (!output && result.text?.trim()) {
       const jsonText = result.text

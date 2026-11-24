@@ -8,7 +8,10 @@ import {
   type ClarifyingQuestion,
   type AnswerBusinessQuestionRuntime,
 } from '../workflows/answer-business-question.steps';
-import { analyseSystemBlocks } from '../workflows/answer-business-question.prompts';
+import {
+  analyseSystemBlocks,
+  visualCued,
+} from '../workflows/answer-business-question.prompts';
 import { DATASETS_CONTEXT_KEY } from '../tools/dataset.tools';
 import { parseClarification } from '../tools/clarification.tool';
 import { analyseAttemptOf } from '../../modules/sessions/turn/turn-workflow';
@@ -17,9 +20,13 @@ import { captureStepRecords, type EvalCustomCheck } from './assistant.evals';
 import {
   EVAL_CASE_CONTEXT_KEY,
   EVAL_DETAILS_KEY,
+  EVAL_VISUAL_BUILDER_KEY,
   recordStepOutput,
+  type EvalBuiltVisual,
   type EvalRunDetails,
+  type EvalVisualBuilder,
 } from './eval-details';
+import { EVAL_OUTCOME_KEY, type TurnOutcome } from './checks/turn';
 
 /**
  * The `insights-analyst` eval target's turn (agents.md 8.1): every case runs the
@@ -80,6 +87,25 @@ function defaultParts(): WorkflowTargetParts {
     plan: planWithModel,
     writeAnswer: writeAnswerWithModel,
   };
+}
+
+/**
+ * Why a case cannot run on the whole Answer a Business Question workflow
+ * (agents-evals R256): it takes away asking back or charting (`agentTools`
+ * without `ask_clarification` or `visuals`), which the workflow's Plan and
+ * Build visual steps do whatever the agent's tools are.
+ */
+export function workflowNotApplicable(evalCase: {
+  agentTools?: readonly string[];
+}): string | undefined {
+  const tools = evalCase.agentTools;
+  if (!tools) return undefined;
+  const removed = (['ask_clarification', 'visuals'] as const).filter(
+    (tool) => !tools.includes(tool),
+  );
+  return removed.length
+    ? `Not applicable to the Answer a Business Question workflow: the case takes away ${removed.join(' and ')}, which its Plan and Build visual steps cannot drop`
+    : undefined;
 }
 
 /** The text of the last user message of an agent input. */
@@ -241,6 +267,68 @@ function toolNamesOf(result: unknown): string[] {
   );
 }
 
+/**
+ * What the scorers read (agents-evals R253): Analyse's messages with their
+ * tool calls and results kept and their text taken out (Analyse's text is a
+ * note, never the run's answer), then one assistant message with the scored
+ * answer, Write answer's or the clarifying question, which carries how the
+ * run ended (`TurnOutcome`) in its metadata. Without it the `includes`,
+ * `matches` and deterministic checks read Analyse's note, not the answer.
+ */
+export function scoredOutput(
+  analysisOutput: unknown,
+  answer: string,
+  outcome: TurnOutcome,
+): unknown[] {
+  const kept = arrayOf(analysisOutput).map((message) => {
+    const entry = message as { role?: unknown; content?: unknown };
+    if (entry?.role !== 'assistant') return message;
+    const content = entry.content;
+    if (typeof content === 'string') return { ...entry, content: '' };
+    if (Array.isArray(content)) {
+      return {
+        ...entry,
+        content: content.filter(
+          (part) => (part as { type?: unknown })?.type !== 'text',
+        ),
+      };
+    }
+    if (content && typeof content === 'object') {
+      const body = content as { parts?: unknown; content?: unknown };
+      return {
+        ...entry,
+        content: {
+          ...body,
+          ...(typeof body.content === 'string' ? { content: '' } : {}),
+          ...(Array.isArray(body.parts)
+            ? {
+                parts: body.parts.filter(
+                  (part) => (part as { type?: unknown })?.type !== 'text',
+                ),
+              }
+            : {}),
+        },
+      };
+    }
+    return message;
+  });
+  const recorded = outcome.clarification || outcome.visual;
+  return [
+    ...kept,
+    {
+      id: 'eval-scored-answer',
+      role: 'assistant',
+      createdAt: new Date(),
+      content: {
+        format: 2,
+        parts: [{ type: 'text', text: answer }],
+        content: answer,
+        ...(recorded ? { metadata: { [EVAL_OUTCOME_KEY]: outcome } } : {}),
+      },
+    },
+  ];
+}
+
 type GenerateOptions = {
   context?: { role: 'system'; content: string }[];
   providerOptions?: Record<string, unknown>;
@@ -282,6 +370,15 @@ export function workflowTurnAgent(
     let judgeContext: string | undefined;
     // Each attempt's tool names, for the checks (`analyse-attempts`).
     const attemptTools: string[][] = [];
+    // Every attempt's tool records, what Build visual hands the designer.
+    const allRecords: ToolDataRecord[] = [];
+    const question = lastUserText(input).trim();
+    // Build visual runs as a run's does, when the question asks for a
+    // visual (R257) and the runner gave the host's designer.
+    const designer = requestContext.get(EVAL_VISUAL_BUILDER_KEY) as
+      EvalVisualBuilder | undefined;
+    const buildsVisual = Boolean(designer) && visualCued(question);
+    let builtVisual: EvalBuiltVisual | undefined;
     // Every case is a single-turn first question: the runtime holds no
     // earlier queries (`followUp`), so Interpret follow-up makes no model
     // call and the run takes the question path (roadmap 1.28.8).
@@ -333,6 +430,7 @@ export function workflowTurnAgent(
           };
         }
         attemptTools.push(toolNamesOf(result));
+        allRecords.push(...records);
         // A case that asks for a retry: attempt 1 also holds a query the
         // agent did not run, failed by the statement timeout, so Validate's
         // `No unresolved tool error` fails whatever the model wrote and the
@@ -365,12 +463,43 @@ export function workflowTurnAgent(
         answer = result.answer.answer;
         return result;
       },
+      ...(buildsVisual && designer
+        ? {
+            buildsVisual: true,
+            // As the turn engine's: never fails the run; an error is kept.
+            buildVisual: async ({ question: asked, answer: written }) => {
+              try {
+                const visual = await designer({
+                  question: asked,
+                  answer: written,
+                  at: new Date().toISOString(),
+                  data: allRecords.filter(
+                    (record) => record.tool === 'run_readonly_sql',
+                  ),
+                });
+                builtVisual = visual;
+                return {
+                  visual: { visualId: visual.id, title: visual.title },
+                  stopped: false,
+                };
+              } catch (error) {
+                return {
+                  visual: {
+                    error:
+                      error instanceof Error ? error.message : String(error),
+                  },
+                  stopped: false,
+                };
+              }
+            },
+          }
+        : {}),
     };
     requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, runtime);
     const created = await parts.workflow.createRun();
     const run = created.stream({
       inputData: {
-        question: lastUserText(input).trim(),
+        question,
         datasets: Array.isArray(datasets) ? datasets : [],
       },
       requestContext,
@@ -391,18 +520,43 @@ export function workflowTurnAgent(
     if (outcome.status === 'suspended' && created.runId) {
       await parts.workflow.deleteWorkflowRunById?.(created.runId);
     }
+    const text = clarified ? clarificationAnswer(clarified) : answer;
+    // A clarification Analyse asked is its `ask_clarification` call, scored
+    // as the agent's; only Plan's, which has no call, is the run's outcome.
+    const planAsked = clarified && !askedInResult(analysis);
+    const ended: TurnOutcome = {
+      ...(planAsked ? { clarification: clarified } : {}),
+      ...(builtVisual
+        ? {
+            visual: {
+              title: builtVisual.title,
+              ...(builtVisual.description
+                ? { description: builtVisual.description }
+                : {}),
+            },
+          }
+        : {}),
+    };
+    // No Analyse ran when Plan clarified: no tool call to score.
+    const base = analysis ?? {
+      steps: [],
+      toolCalls: [],
+      toolResults: [],
+      scoringData: { input, output: [] },
+    };
+    const scoring = (base['scoringData'] ?? {}) as Record<string, unknown>;
     return {
-      // No Analyse ran when Plan clarified: no tool call to score.
-      ...(analysis ?? {
-        steps: [],
-        toolCalls: [],
-        toolResults: [],
-        scoringData: { input, output: [] },
-      }),
-      text: clarified ? clarificationAnswer(clarified) : answer,
+      ...base,
+      scoringData: {
+        ...scoring,
+        input: scoring['input'] ?? input,
+        output: scoredOutput(scoring['output'], text, ended),
+      },
+      text,
       [EVAL_DETAILS_KEY]: {
         steps,
         ...(judgeContext ? { judgeContext } : {}),
+        ...(clarified ? { endedOnClarification: true } : {}),
       } satisfies EvalRunDetails,
     };
   };

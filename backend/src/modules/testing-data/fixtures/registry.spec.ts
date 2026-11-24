@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { splitSqlStatements } from '../sql-statements';
@@ -15,6 +15,69 @@ function seedSql(seedFile: string): string {
     ? gunzipSync(raw).toString('utf8')
     : raw.toString('utf8');
 }
+
+/**
+ * `CREATE TABLE|[MATERIALIZED] VIEW [IF NOT EXISTS] [schema.]name`, unquoted
+ * or quoted: the names created in `schema`, and every name qualified as
+ * `schema.name` (how a multi-schema sample lists its required tables, R4a).
+ */
+function createdEntities(sql: string, schema: string): Set<string> {
+  const created = new Set<string>();
+  const pattern =
+    /CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|(?:MATERIALIZED\s+)?VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"?(\w+)"?\.)?"?(\w+)"?/gi;
+  for (const match of sql.matchAll(pattern)) {
+    const [, owner, name] = match;
+    if (!owner || owner.toLowerCase() === schema.toLowerCase()) {
+      created.add(name.toLowerCase());
+    }
+    if (owner) created.add(`${owner}.${name}`.toLowerCase());
+  }
+  return created;
+}
+
+/**
+ * The bundled seed of every seedable sample, checked without a database: the
+ * file the registry names exists next to it (where `nest-cli.json` copies it
+ * into `dist`), and it creates the sample's schema and every required table
+ * and view. A sample whose seed drifted from its required list would otherwise
+ * fail only when someone loads it from the Testing Data panel.
+ */
+describe('bundled sample seeds', () => {
+  const seedable = SAMPLE_FIXTURES.filter((fixture) => fixture.seedFile);
+
+  it.each(seedable.map((fixture) => [fixture.id, fixture] as const))(
+    '%s: the seed file exists and creates its schema and every required entity',
+    (_id, fixture) => {
+      const file = fixture.seedFile as string;
+      expect(existsSync(join(__dirname, file))).toBe(true);
+      const sql = seedSql(file);
+      expect(sql).toMatch(
+        new RegExp(
+          `CREATE\\s+SCHEMA\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?"?${fixture.schema}"?`,
+          'i',
+        ),
+      );
+      const created = createdEntities(sql, fixture.schema);
+      const missing = fixture.requiredTables.filter(
+        (table) => !created.has(table.toLowerCase()),
+      );
+      expect(missing).toEqual([]);
+    },
+  );
+
+  it('gives every sample its own id, and every seedable one its own database and schema', () => {
+    const ids = SAMPLE_FIXTURES.map((fixture) => fixture.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    // World Cup Medallion shares the World Cup database by design (R3), in
+    // schemas of its own.
+    const targets = seedable.map(
+      (fixture) => `${fixture.defaults.database}.${fixture.schema}`,
+    );
+    expect(new Set(targets).size).toBe(targets.length);
+    const schemas = seedable.map((fixture) => fixture.schema);
+    expect(new Set(schemas).size).toBe(schemas.length);
+  });
+});
 
 describe('sample fixture catalogue', () => {
   // The catalogue is the single source of what a sample must expose, so a
@@ -174,8 +237,9 @@ describe('sample fixture catalogue', () => {
     it('sits after US Health and before the register-only REST sample', () => {
       const ids = SAMPLE_FIXTURES.map((sample) => sample.id);
       expect(ids.indexOf('edge-cases')).toBe(ids.indexOf('us-health') + 1);
-      expect(ids[ids.length - 1]).toBe('world-cup-rest');
-      expect(ids[ids.length - 2]).toBe('world-cup-excel');
+      expect(ids.indexOf('world-cup-rest')).toBe(
+        ids.indexOf('world-cup-excel') + 1,
+      );
     });
 
     it('generates the data in SQL, identically on every load', () => {
@@ -282,8 +346,15 @@ describe('sample fixture catalogue', () => {
       expect(ids.indexOf('retail-ops')).toBe(
         ids.indexOf('world-cup-medallion') + 1,
       );
-      expect(ids[ids.length - 1]).toBe('world-cup-rest');
-      expect(ids[ids.length - 2]).toBe('world-cup-excel');
+      // Every register-only sample (no bundled seed: Excel, REST,
+      // Databricks) comes after it.
+      const registerOnly = SAMPLE_FIXTURES.filter((sample) => !sample.seedFile);
+      expect(registerOnly.length).toBeGreaterThan(0);
+      for (const sample of registerOnly) {
+        expect(ids.indexOf(sample.id)).toBeGreaterThan(
+          ids.indexOf('retail-ops'),
+        );
+      }
     });
 
     it('generates the data in SQL, identically on every load', () => {

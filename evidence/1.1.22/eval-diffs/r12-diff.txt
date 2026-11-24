@@ -1,0 +1,55 @@
+Before: 34f4e717 (63 questions, openai/gpt-5.6-luna, repeats 3, judge off); e14dc1e3 (68 questions, openai/gpt-5.6-luna, repeats 3, judge off); 33bd0d71 (50 questions, openai/gpt-5.6-luna, repeats 3, judge off)
+After:  4d1e6c1e (63 questions, openai/gpt-5.6-luna, repeats 3, judge off); 40544f03 (68 questions, openai/gpt-5.6-luna, repeats 3, judge off); f72bcb63 (50 questions, openai/gpt-5.6-luna, repeats 3, judge off)
+
+Split     Category        Before            After             Change   95% interval of change  Flag
+dev       lookup          6/6 (61–100%)     5/6 (44–97%)      −17 pts  −56 to +25 pts          within
+dev       aggregate       11/15 (48–89%)    13/15 (62–96%)    +13 pts  −16 to +40 pts          within
+dev       join            6/9 (35–88%)      6/9 (35–88%)      0 pts    −38 to +38 pts          within
+dev       ranking         15/16 (72–99%)    16/16 (81–100%)   +6 pts   −14 to +28 pts          within
+dev       ratio           14/14 (78–100%)   14/14 (78–100%)   0 pts    −22 to +22 pts          within
+dev       null            5/6 (44–97%)      5/6 (44–97%)      0 pts    −42 to +42 pts          within
+dev       encoding        7/10 (40–89%)     7/10 (40–89%)     0 pts    −36 to +36 pts          within
+dev       reasoning       1/2 (9–91%)       0/2 (0–66%)       −50 pts  −91 to +27 pts          within
+dev       discovery       4/4 (51–100%)     4/4 (51–100%)     0 pts    −49 to +49 pts          within
+dev       ambiguous       4/5 (38–96%)      4/5 (38–96%)      0 pts    −45 to +45 pts          within
+dev       fuzzy-scope     3/3 (44–100%)     3/3 (44–100%)     0 pts    −56 to +56 pts          within
+dev       out-of-scope    4/5 (38–96%)      5/5 (57–100%)     +20 pts  −26 to +62 pts          within
+dev       non-existent    2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+dev       business-term   8/10 (49–94%)     8/10 (49–94%)     0 pts    −34 to +34 pts          within
+dev       default-filter  5/6 (44–97%)      5/6 (44–97%)      0 pts    −42 to +42 pts          within
+dev       visual          2/4 (15–85%)      3/4 (30–95%)      +25 pts  −32 to +66 pts          within
+dev       paraphrase      10/13 (50–92%)    11/13 (58–96%)    +8 pts   −23 to +37 pts          within
+dev       all             107/130 (75–88%)  111/130 (78–90%)  +3 pts   −6 to +12 pts           within
+held-out  lookup          2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+held-out  aggregate       2/4 (15–85%)      2/4 (15–85%)      0 pts    −49 to +49 pts          within
+held-out  join            2/5 (12–77%)      3/5 (23–88%)      +20 pts  −32 to +60 pts          within
+held-out  ranking         5/6 (44–97%)      5/6 (44–97%)      0 pts    −42 to +42 pts          within
+held-out  ratio           4/5 (38–96%)      4/5 (38–96%)      0 pts    −45 to +45 pts          within
+held-out  null            2/2 (34–100%)     1/2 (9–91%)       −50 pts  −91 to +27 pts          within
+held-out  encoding        1/4 (5–70%)       1/4 (5–70%)       0 pts    −49 to +49 pts          within
+held-out  discovery       1/3 (6–79%)       0/3 (0–56%)       −33 pts  −79 to +29 pts          within
+held-out  ambiguous       2/3 (21–94%)      2/3 (21–94%)      0 pts    −53 to +53 pts          within
+held-out  out-of-scope    3/3 (44–100%)     2/3 (21–94%)      −33 pts  −79 to +29 pts          within
+held-out  non-existent    1/1 (21–100%)     1/1 (21–100%)     0 pts    −79 to +79 pts          within
+held-out  business-term   2/4 (15–85%)      2/4 (15–85%)      0 pts    −49 to +49 pts          within
+held-out  default-filter  2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+held-out  paraphrase      5/7 (36–92%)      4/7 (25–84%)      −14 pts  −52 to +30 pts          within
+held-out  all             34/51 (53–78%)    31/51 (47–73%)    −6 pts   −24 to +12 pts          within
+
+Flips, dev:
+  Now passing: visual-request (visual), busiest-stadium (ranking), group-stage-goals-2022 (out-of-scope), busiest-stadium-reworded (paraphrase), booked-in-2022-final-reworded (paraphrase), fee-revenue-by-region-fy2025 (join), harborline-policies-sold-2025-q2 (aggregate), gov-auto-premium-vs-market-q2-2025 (aggregate)
+  Now failing: semi-final-goals-2022-reworded (paraphrase), fiscal-2026-q2-months (lookup), harborline-premium-by-region-2025 (join), campaign-freeze-impact (reasoning)
+Flips, held-out:
+  Now passing: argentina-draws-2022-reworded (paraphrase), market-premium-by-family-and-region-2025 (join)
+  Now failing: referee-2022-final (out-of-scope), shot-conversion-2022-reworded (paraphrase), third-place-2022-reworded (paraphrase), quarter-without-campaign-spend (null), benchmark-discovery (discovery)
+Only before: none
+Only after: none
+
+Cost before: $1.0032 · $0.0055 per question
+Cost after: $1.0160 · $0.0056 per question
+Cost per question: +1.3%
+
+Draft change log: Round 12: tools: run_readonly_sql warns when a filter sits in the ON clause of a LEFT JOIN whose table nothing else reads (it removes no row), and says where the filter goes; the fixer's refusal turned into a warning by the lead. In a chain of LEFT JOINs the assistant puts a filter on a joined table in that join's ON clause; when nothing else reads that table the condition removes no row, rows outside it are counted, and no tool result says so. Dev 107/130 → 111/130, held-out 34/51 → 31/51; dev join within; cost per question $0.0055 → $0.0056. Runs 34f4e717, e14dc1e3, 33bd0d71 → 4d1e6c1e, 40544f03, f72bcb63.
+Draft results.tsv row:
+12	2026-10-23	In a chain of LEFT JOINs the assistant puts a filter on a joined table in that join's ON clause; when nothing else reads that table the condition removes no row, rows outside it are counted, and no tool result says so.	tools: run_readonly_sql warns when a filter sits in the ON clause of a LEFT JOIN whose table nothing else reads (it removes no row), and says where the filter goes; the fixer's refusal turned into a warning by the lead		join	join:6/9;all:107/130	join:6/9;all:111/130	join:2/5;all:34/51	join:3/5;all:31/51		0.0055	0.0056	1.0160			34f4e717;e14dc1e3;33bd0d71	4d1e6c1e;40544f03;f72bcb63
+Accept rule: not met (dev join is within, not up)

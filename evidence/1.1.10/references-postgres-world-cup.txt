@@ -1,0 +1,148 @@
+# world-cup: the references of the 40 questions added on 2026-10-16 (roadmap 1.1.10, BA-188), run on PostgreSQL
+
+Database: world_cup on the isolated PostgreSQL of this worktree (127.0.0.1:55433, container bi-assistant-ba9-postgres-1),
+seeded from backend/src/modules/testing-data/fixtures/001_world_cup.sql. Never 55432.
+
+## 1. The validator (agents-evals R110) on the world-cup set
+
+validateEvalSet from backend/src/mastra/evals/validate-eval-sets.ts, run with ts-node (no nest build, dist untouched),
+with the runner the CLI uses minus the Nest boot: runReferenceSql (the 500-row limit of the result-set match) over
+the real PostgresConnector.runReadOnlySql, and as the selected datasets' entities the World Cup sample's 10 required
+entities, which is what a Testing Data load saves in the "World Cup" dataset. Script: validate-pg.ts (scratchpad).
+
+```
+Validating World Cup (world-cup, postgres) on 127.0.0.1:55433/world_cup, dataset entities = the world-cup sample's 10 required entities
+
+✓ champion-2022  postgres  1 rows
+✓ final-score-2018  postgres  1 rows
+✓ top-scorer-2022  postgres  1 rows
+✓ shootouts  postgres  4 rows
+✓ biggest-venue  postgres  1 rows
+✓ shot-accuracy-by-team-2022  postgres  3 rows
+✓ shot-conversion-2022  postgres  1 rows
+✓ busiest-stadium  postgres  2 rows
+✓ highest-scoring-match  postgres  2 rows
+✓ top-scorer-both-tournaments  postgres  2 rows
+✓ semi-final-goals-2022  postgres  1 rows
+✓ goals-by-defenders  postgres  1 rows
+✓ third-place-2022  postgres  1 rows
+✓ most-fouls-team  postgres  1 rows
+✓ booked-in-2022-final  postgres  1 rows
+✓ quickest-goal-scorer  postgres  1 rows
+✓ top-assist-provider  postgres  1 rows
+✓ mandzukic-goals-2018  postgres  1 rows
+✓ extra-time-goals  postgres  1 rows
+✓ argentina-draws-2022  postgres  1 rows
+✓ south-american-goals  postgres  1 rows
+✓ third-placed-team-scorers-2018  postgres  3 rows
+✓ shot-accuracy-by-team-2022-reworded  postgres  3 rows
+✓ shot-conversion-2022-reworded  postgres  1 rows
+✓ busiest-stadium-reworded  postgres  2 rows
+✓ highest-scoring-match-reworded  postgres  2 rows
+✓ top-scorer-both-tournaments-reworded  postgres  2 rows
+✓ semi-final-goals-2022-reworded  postgres  1 rows
+✓ goals-by-defenders-reworded  postgres  1 rows
+✓ third-place-2022-reworded  postgres  1 rows
+✓ most-fouls-team-reworded  postgres  1 rows
+✓ booked-in-2022-final-reworded  postgres  1 rows
+✓ quickest-goal-scorer-reworded  postgres  1 rows
+✓ top-assist-provider-reworded  postgres  1 rows
+✓ mandzukic-goals-2018-reworded  postgres  1 rows
+✓ extra-time-goals-reworded  postgres  1 rows
+✓ argentina-draws-2022-reworded  postgres  1 rows
+✓ south-american-goals-reworded  postgres  1 rows
+✓ third-placed-team-scorers-2018-reworded  postgres  3 rows
+
+world-cup: 39 of 39 reference queries passed; 13 cases have no reference query.
+```
+
+## 2. What the branch references would do on the same dataset
+
+The three branch references that read a table outside the sample's required entities, through the same check
+(referenceOutsideDatasets, agents-evals R110): the validator fails each without running it.
+
+```
+Validating World Cup (world-cup, postgres) on 127.0.0.1:55433/world_cup, dataset entities = the world-cup sample's 10 required entities
+
+✗ finalists-groups-2022  postgres  the reference reads world_cup.tournament_teams, which is not in the selected datasets
+✗ south-american-goals  postgres  the reference reads world_cup.countries, which is not in the selected datasets
+✗ third-placed-team-scorers-2018  postgres  the reference reads world_cup.tournament_teams, which is not in the selected datasets
+
+world-cup: 0 of 3 reference queries passed.
+```
+
+## 3. Rows of each new reference (psql), against the branch notes
+
+### shot-accuracy-by-team-2022  (ratio, dev)
+3 rows: team: Brazil; Argentina; England
+branch note: Verified 2026-09-23: Brazil 0.52381 (11/21), Argentina 0.51111 (23/45), England 0.50000 (8/16); 4th France 0.40625. Cross-checked with an independent formulation (v_seeded_team_performance 2022 rows, dense_rank on shots_on_target / total_shots): identical.
+
+### shot-conversion-2022  (ratio, held-out)
+1 rows: team: Netherlands
+branch note: Verified 2026-09-23: Netherlands 2 goals from 6 shots (0.33333), then France 7/32 (0.21875) and Argentina 8/45 (0.17778).
+
+### busiest-stadium  (ranking, dev)
+2 rows: venue: Saint Petersburg Stadium; Lusail Stadium
+branch note: Verified 2026-09-23: Saint Petersburg Stadium (2018) and Lusail Stadium (2022) both hosted 3 matches; next are Al Bayt, Fisht and Luzhniki on 2. Cross-checked with an independent formulation (rank() over v_match_results grouped by venue): the same two.
+
+### highest-scoring-match  (ranking, dev)
+2 rows: home_team, away_team: Argentina, France; France, Croatia
+branch note: Verified 2026-09-23: the 2018 final (France 4-2 Croatia) and the 2022 final (Argentina 3-3 France) both produced 6 goals; next are Russia 2-2 Croatia and Netherlands 2-2 Argentina on 4. Cross-checked with an independent formulation (goal rows per match, rank()): the same two matches on 6. The reference projects the two team names, which identify each match (neither pairing met twice).
+
+### top-scorer-both-tournaments  (ranking, held-out)
+2 rows: player: Kylian Mbappe; Lionel Messi
+branch note: Verified 2026-09-23: Lionel Messi (4, all 2022) and Kylian Mbappe (1 in 2018 + 3 in 2022) tie on 4; next Griezmann, Perisic, Alvarez, Mandzukic and Weghorst on 2. Cross-checked with an independent formulation (goal rows joined to players, own goals excluded): the same two on 4. Counting own goals does not change the top (Mandzukic reaches 3).
+
+### semi-final-goals-2022  (encoding, dev)
+1 rows: goals: 5
+branch note: Verified 2026-09-23: 5 goals (Argentina 3-0 Croatia, France 2-0 Morocco).
+
+### goals-by-defenders  (encoding, dev)
+1 rows: goals: 11
+branch note: Verified 2026-09-23: 11 goals by 11 different defenders (Dari, Vida, Maguire, Gvardiol, Trippier, Fernandes, Molina, Varane, Umtiti, Hernandez, Meunier).
+
+### third-place-2022  (encoding, held-out)
+1 rows: team: Croatia
+branch note: Verified 2026-09-23: Croatia (2-1 against Morocco).
+
+### most-fouls-team  (ranking, dev)
+1 rows: team: Croatia
+branch note: Verified 2026-09-23: Croatia, 97 fouls over 6 matches; next France 79, Argentina 59. No view carries fouls, so the name needs the join to teams.
+
+### booked-in-2022-final  (ranking, dev)
+1 rows: player: Emiliano Martinez
+branch note: Verified 2026-09-23: one booking in the 2022 final — Emiliano Martinez (Argentina), 116', yellow, time wasting.
+
+### quickest-goal-scorer  (ranking, held-out)
+1 rows: player: Thomas Meunier
+branch note: Verified 2026-09-23: Thomas Meunier (Belgium), 4th minute of the 2018 third-place play-off; next Theo Hernandez and Kieran Trippier on 5'.
+
+### top-assist-provider  (null, dev)
+1 rows: player: Lionel Messi
+branch note: Verified 2026-09-23: Lionel Messi, 2 assists (Molina's and Alvarez's second goal, both 2022) — the only assisting player recorded.
+
+### mandzukic-goals-2018  (business-term, dev)
+1 rows: goals: 2
+branch note: Verified 2026-09-23: 2 goals (109' against England, 69' in the final); his 18' own goal in the final is credited to France.
+
+### extra-time-goals  (business-term, dev)
+1 rows: goals: 7
+branch note: Verified 2026-09-23: 7 goals after the 90th minute — Vida 101', Fernandes 115', Mandzukic 109' (2018); Neymar 105'+1, Petkovic 117', Messi 108', Mbappe 118' (2022).
+
+### argentina-draws-2022  (business-term, held-out)
+1 rows: draws: 2
+branch note: Verified 2026-09-23: 2 draws — Netherlands 2-2 Argentina and Argentina 3-3 France, both won on penalties (FIFA and the usual W-D-L tables record a shoot-out match as a draw).
+
+### south-american-goals  (join, dev)
+1 rows: goals: 10
+adapted reference; the branch reference returns 1 rows: 10 -> same rows
+branch note: Verified 2026-09-23: 10 goals credited to CONMEBOL teams (Argentina 8, Brazil 2, Uruguay 0); UEFA 35, CAF 2.
+
+### third-placed-team-scorers-2018  (join, held-out)
+3 rows: player: Eden Hazard; Kevin De Bruyne; Thomas Meunier
+adapted reference; the branch reference returns 3 rows: Eden Hazard; Kevin De Bruyne; Thomas Meunier -> same rows
+branch note: Verified 2026-09-23: Belgium finished third (final_rank 3, and winners of the third-place play-off); its scorers were Kevin De Bruyne, Thomas Meunier and Eden Hazard.
+
+Summary: 17 new base references ran, each with at least 1 and fewer than 500 rows (R110); their 17 paraphrases share them (identical SQL and rows). Every figure agrees with the branch note it was checked against.
+
+finalists-groups-2022: left out of the set, see agents-evals (Eval suite content). Its branch reference returns Argentina C and France D here, but reads world_cup.tournament_teams (section 2).

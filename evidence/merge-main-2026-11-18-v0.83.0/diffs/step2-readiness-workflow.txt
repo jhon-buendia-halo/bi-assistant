@@ -1,0 +1,22 @@
+Before: 93bb6e65 (6 questions, openai/gpt-5.6-luna, repeats 3, judge on)
+After:  d015d839 (6 questions, openai/gpt-5.6-luna, repeats 3, judge on)
+
+Split     Category       Before        After         Change  95% interval of change  Flag
+dev       uncategorised  4/6 (30–90%)  4/6 (30–90%)  0 pts   −44 to +44 pts          within
+dev       all            4/6 (30–90%)  4/6 (30–90%)  0 pts   −44 to +44 pts          within
+held-out  all            —             —             —       —                       —
+
+Flips, dev:
+  Now passing: rw-orphan-order-lines (uncategorised)
+  Now failing: rw-out-of-scope-revenue (uncategorised)
+Flips, held-out:
+  Now passing: none
+  Now failing: none
+Only before: none
+Only after: none
+
+Cost before: $0.0627 · $0.0104 per question
+Cost after: $0.0591 · $0.0099 per question
+Cost per question: −5.6%
+
+Draft change log: Round <…>: <…>. <…> Dev 4/6 → 4/6, held-out — → —; <…>; cost per question $0.0104 → $0.0099. Runs 93bb6e65 → d015d839.

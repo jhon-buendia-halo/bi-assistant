@@ -1,0 +1,14 @@
+s1-branch-world-cup	branch	world-cup	World Cup	EVAL_JUDGE=off
+s1-main-world-cup	main	world-cup	World Cup	EVAL_JUDGE=off
+s1-branch-world-cup-excel	branch	world-cup-excel	World Cup Excel	EVAL_JUDGE=off
+s1-main-world-cup-excel	main	world-cup-excel	World Cup Excel	EVAL_JUDGE=off
+s2-branch-insights-analyst	branch	insights-analyst	World Cup	EVAL_JUDGE=on
+s2-main-insights-analyst	main	insights-analyst	World Cup	EVAL_JUDGE=on
+s2-branch-insights-analyst-edge	branch	insights-analyst-edge	Edge Cases	EVAL_JUDGE=on
+s2-main-insights-analyst-edge	main	insights-analyst-edge	Edge Cases	EVAL_JUDGE=on
+s2-branch-data-readiness	branch	data-readiness	World Cup	EVAL_JUDGE=on
+s2-main-data-readiness	main	data-readiness	World Cup	EVAL_JUDGE=on
+s2-branch-readiness-workflow	branch	readiness-workflow	Edge Cases	EVAL_JUDGE=on
+s2-main-readiness-workflow	main	readiness-workflow	Edge Cases	EVAL_JUDGE=on
+s3-branch-wc-heldout-on-workflow	branch	world-cup	World Cup	EVAL_JUDGE=off EVAL_SPLIT=held-out EVAL_TARGET=insights-analyst
+s3-branch-ia-on-assistant	branch	insights-analyst	World Cup	EVAL_JUDGE=on EVAL_TARGET=assistant

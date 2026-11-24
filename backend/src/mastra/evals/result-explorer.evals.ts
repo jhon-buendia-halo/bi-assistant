@@ -437,7 +437,7 @@ export const RESULT_EXPLORER_EVAL_SET: AssistantEvalSet = {
   cases: RESULT_EXPLORER_EVAL_CASES,
 };
 
-/** Edge Cases orders with awkward column names (testing-data R24). */
+/** Edge Cases orders with awkward column names (testing-data R29). */
 const EDGE_ORDER_KINDS: Record<string, ColumnKind> = {
   id: 'number',
   'Order Notes': 'text',

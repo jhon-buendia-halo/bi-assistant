@@ -1,0 +1,22 @@
+Before: 40ba868e (12 questions, openai/gpt-5.6-luna, repeats 3, judge on)
+After:  98a5dca8 (12 questions, openai/gpt-5.6-luna, repeats 3, judge on)
+
+Split     Category       Before         After          Change   95% interval of change  Flag
+dev       uncategorised  6/12 (25–75%)  8/12 (39–86%)  +17 pts  −20 to +48 pts          within
+dev       all            6/12 (25–75%)  8/12 (39–86%)  +17 pts  −20 to +48 pts          within
+held-out  all            —              —              —        —                       —
+
+Flips, dev:
+  Now passing: dr-accuracy-not-assessed (uncategorised), dr-drilldown-nulls (uncategorised)
+  Now failing: none
+Flips, held-out:
+  Now passing: none
+  Now failing: none
+Only before: none
+Only after: none
+
+Cost before: $0.0619 · $0.0052 per question
+Cost after: $0.0589 · $0.0049 per question
+Cost per question: −4.8%
+
+Draft change log: Round <…>: <…>. <…> Dev 6/12 → 8/12, held-out — → —; <…>; cost per question $0.0052 → $0.0049. Runs 40ba868e → 98a5dca8.

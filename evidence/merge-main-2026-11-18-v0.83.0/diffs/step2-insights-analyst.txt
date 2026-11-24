@@ -1,0 +1,22 @@
+Before: ceed621a (10 questions, openai/gpt-5.6-luna, repeats 3, judge on)
+After:  866bcd96 (10 questions, openai/gpt-5.6-luna, repeats 3, judge on)
+
+Split     Category       Before        After          Change   95% interval of change  Flag
+dev       uncategorised  2/10 (6–51%)  4/10 (17–69%)  +20 pts  −19 to +52 pts          within
+dev       all            2/10 (6–51%)  4/10 (17–69%)  +20 pts  −19 to +52 pts          within
+held-out  all            —             —              —        —                       —
+
+Flips, dev:
+  Now passing: v2-out-of-coverage-2014-final (uncategorised), v2-clarify-most-dominant-team (uncategorised), v2-coverage-group-stage-wins (uncategorised)
+  Now failing: v2-share-penalty-goals-2022 (uncategorised)
+Flips, held-out:
+  Now passing: none
+  Now failing: none
+Only before: none
+Only after: none
+
+Cost before: $0.1352 · $0.0135 per question
+Cost after: $0.1255 · $0.0126 per question
+Cost per question: −7.1%
+
+Draft change log: Round <…>: <…>. <…> Dev 2/10 → 4/10, held-out — → —; <…>; cost per question $0.0135 → $0.0126. Runs ceed621a → 866bcd96.
