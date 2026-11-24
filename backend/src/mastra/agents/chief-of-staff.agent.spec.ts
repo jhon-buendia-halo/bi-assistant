@@ -166,10 +166,10 @@ describe('Avery + Michael: what Avery receives is pinned', () => {
     const digest = createHash('sha256')
       .update(JSON.stringify(cases))
       .digest('hex');
-    // Re-pinned on 2026-11-23: her job description no longer routes playbook
-    // steps for Olivia and Jessica (removed with the whole-team mode).
+    // Re-pinned on 2026-11-23 (no Olivia/Jessica routing line) and on
+    // 2026-11-24 (she closes in one to three sentences, not one or two).
     expect(digest).toBe(
-      '9c4ae187b7bd1e37ed453850f5356013fff5ef200be1e29f86cb83d7f147e36b',
+      '48cf4bd31309869e7adcdf553142cf565bd70a3991bcdd97721b5ed4cdc929dc',
     );
   });
 });

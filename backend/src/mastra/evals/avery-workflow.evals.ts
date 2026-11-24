@@ -52,7 +52,7 @@ export const AVERY_EVAL_FIXTURE_ID = 'world-cup';
 /** Where the judge finds her words in the scored answer. */
 const CLOSING =
   "The final answer shows Michael's answer (the analyst's, which Avery " +
-  'does not write) and, under "Avery\'s closing:", the one or two sentences ' +
+  'does not write) and, under "Avery\'s closing:", the one to three sentences ' +
   'Avery wrote after it. Grade only her closing. ';
 
 /** Her rules in every run that answers (agents.md 5.23). */
@@ -60,7 +60,7 @@ function answered(
   question: string,
   {
     calls = [1, 2],
-    sentences = [1, 2],
+    sentences = [1, 3],
   }: { calls?: [number, number]; sentences?: [number, number] } = {},
 ) {
   return [
@@ -162,11 +162,8 @@ const AVERY_EVAL_CASES: AssistantEvalCase[] = [
     question:
       'Which goals at the 2022 World Cup were scored directly from free kicks?',
     intent:
-      'No-answer playbook on empty rows: the only free-kick goal in the data is from 2018 (Trippier), so the 2022 filter matches no rows. No invented figures; the closing says nothing matched.',
-    customChecks: (question) => [
-      ...answered(question),
-      readsPlaybook('no-answer'),
-    ],
+      'Empty rows: the only free-kick goal in the data is from 2018 (Trippier), so the 2022 filter matches no rows. No invented figures; the closing says nothing matched. Reading reference/no-answer.md is not required: when Michael already reports that nothing matched, she can close from his answer.',
+    customChecks: (question) => [...answered(question)],
     judgeRubric:
       CLOSING +
       'No goal of the 2022 World Cup in the data was scored from a free ' +
@@ -207,14 +204,14 @@ const AVERY_EVAL_CASES: AssistantEvalCase[] = [
       'covers only the 2018 and 2022 tournaments, before any result.',
   }),
   averyCase({
-    id: 'avery-simple-goals-2022',
-    question: 'How many goals were scored at the 2022 World Cup?',
+    id: 'avery-simple-attendance-2022-final',
+    question: 'How many people attended the 2022 World Cup final?',
     intent:
-      'A simple single-figure question (score 0-1): no playbook file, one brief to Michael, a one-sentence close. 24 goals in the 8 matches of 2022 in the data.',
+      'A simple single-figure question (score 0-1) the data covers whole (the final is in the sample): no playbook file, one brief to Michael, a one-sentence close. 88,966 spectators. (Until 2026-11-24 this case asked for the goals of the whole 2022 tournament, which the sample covers only in part, so reading no-answer.md was right and the check was wrong.)',
     customChecks: (question) => [
       ...answered(question, { calls: [1, 1], sentences: [1, 1] }),
       readsNoPlaybook(),
-      answerStatesNumbers([[{ value: 24 }]]),
+      answerStatesNumbers([[{ value: 88966 }]]),
     ],
   }),
   averyCase({

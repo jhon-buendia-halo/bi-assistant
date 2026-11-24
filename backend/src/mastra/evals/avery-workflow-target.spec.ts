@@ -328,7 +328,7 @@ describe('the avery-michael-workflow set', () => {
       'avery-no-rows-free-kick-goals-2022',
       'avery-false-premise-goals-drop-2022',
       'avery-partial-coverage-all-champions',
-      'avery-simple-goals-2022',
+      'avery-simple-attendance-2022-final',
       'avery-unanswerable-ticket-prices-2022-final',
     ]);
     const judged = AVERY_EVAL_SET.cases.filter((c) => c.judgeRubric);
