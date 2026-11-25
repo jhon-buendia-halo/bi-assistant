@@ -128,11 +128,15 @@ check(not no_status, "every epic spec has a Status of Draft or Confirmed", no_st
 STEP = re.compile(r"^\s*(Given|When|Then|And|But)\b")
 bare = []
 for c, t in capabilities.items():
-    ref = re.search(r"^E2E: `([^`]+)`", t, flags=re.M)
-    if not ref or not os.path.isfile(ref.group(1)):
-        continue
-    e2e = read(ref.group(1))
-    for block in re.findall(r"```gherkin\n(.*?)```", t, flags=re.S):
+    refs = list(re.finditer(r"^E2E: `([^`]+)`", t, flags=re.M))
+    for m in re.finditer(r"```gherkin\n(.*?)```", t, flags=re.S):
+        block = m.group(1)
+        # the E2E line that heads this Feature: the nearest one before the block (a spec holds several Features)
+        before = [r for r in refs if r.start() < m.start()]
+        ref = before[-1] if before else (refs[0] if refs else None)
+        if not ref or not os.path.isfile(ref.group(1)):
+            continue
+        e2e = read(ref.group(1))
         parts = re.split(r"^\s*Scenario(?: Outline)?:\s*(.*)$", block, flags=re.M)
         for title, body in zip(parts[1::2], parts[2::2]):
             if not any(STEP.match(line) for line in body.splitlines()):

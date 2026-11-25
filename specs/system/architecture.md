@@ -1468,6 +1468,28 @@ flowchart LR
   - **Inngest or Temporal sidecars:** rejected; a separate server process for one local app.
   - **Mastra `restart()`:** rejected for now; it needs workflow snapshots the app disables, and the agent turns' state is not in them (ADR-0043 approach C, deferred).
 
+#### ADR-0058 — A conversation with a built-in agent outside any workflow
+- **Status:** Accepted. Amends ADR-0041 and ADR-0042 (for built-in conversational agents) and agents-evals R53/R90.
+- **Date:** 2026-11-25
+- **Context:**
+  - The conversation of workflows R45/R46 is Avery's, in the workflow Answer a Business Question (Avery + Michael): a supervisor and a team. The product wants to compare it with **one** agent that covers the same scope alone (answers with the query inspector, the conversation's dashboard, the export, one clarifying question that waits, a conversation that never ends unless archived), and to let the user talk to her directly, **not tied to any workflow**.
+  - ADR-0041 retired chats (every message is a run) and ADR-0042 made agents and workflows separate: an agent has no run of its own and agents-evals R53 forbids "Run". Yet a run already is the unit that holds a conversation: the run host (agents.md 5.14) stores the transcript, `conversationId`, the dashboard and the export, and the run routes (117-119) take any id.
+- **Decision:**
+  - **A conversation with a built-in agent is a run of `agent:<key>` on the run host (option A).** The first built-in conversational agent is Elena, the Insights Lead (`insights-lead`, agents.md 2.23): her messages are runs of `agent:insights-lead`. The id is accepted by 117-119, never listed by 116 and not in the Workflows catalogue; `agent:` keeps meaning "an agent's own binding".
+  - **Conversational bindings.** One registry (`CONVERSATIONAL_BINDINGS`, agents.md 5.14) lists every conversational id: Avery's workflow (`kind: 'team'`) and `agent:insights-lead` (`kind: 'solo'`), each with its engine, its step, the agent the user talks to, the run host's agent and the export author. `conversationalBindingOf(workflowId)` replaces every Avery-only test (`isOrchestratedWorkflow`); there is one dispatch path, one engine factory (`conversationTurnWorkflow`) and one conversation (thread, `conversationId`, dashboard carry, export, suspend and resume, archive) for both.
+  - **A solo turn** (`runSoloTurn`) runs one agent with the tools gated by the request (dashboard, export), checks her answer (`validateAttempt`) and makes at most one repair round.
+  - **The page** is the workflow-run chat in a `conversation` variant, on Elena's Agent personas page (ask button `Ask Elena`), with a left conversations panel (collapsed by default) fed by `GET /conversations` (api.md 168).
+- **Consequences:**
+  - api.md 2.6.2: `agent:insights-lead` is accepted by 117-119 (it answered `404` before); every other `agent:<key>` still does.
+  - agents-evals R53: "Run" stays forbidden on an agent, except **Ask <name>** on a built-in conversational agent; Elena has no Try it.
+  - Avery's workflow and Elena share one path, so a change to the conversation applies to both; Avery's evals run base against branch when it changes.
+  - No new collection and no migration: the runs live in `workflow_runs` (data-model 3.16); `ChatMessage.checks` is optional.
+  - **Stack-neutral:** a rebuild needs a registry of conversational ids, one turn engine per binding kind, a run record that holds a conversation's turns, and a list of one agent's conversations.
+- **Alternatives considered:**
+  - **A (chosen): a run of `agent:<key>` on the run host,** which reuses the stored conversation, the run chat and the run routes.
+  - **B: revive chat sessions:** rejected; ADR-0041 retired them and a second conversation store would duplicate the run's.
+  - **C: a catalogue workflow for Elena:** rejected; she is not tied to a workflow, and listing her would put a one-agent "workflow" beside Avery's.
+
 ## Level 4 — Code
 
 ```mermaid
