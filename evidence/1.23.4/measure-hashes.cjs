@@ -12,9 +12,10 @@ process.env.APP_DATA_DIR ||= require('fs').mkdtempSync(
 
 const agents = {
   assistant: ['mastra/agents/assistant.agent.js', 'assistantAgent'],
-  rfp: ['mastra/agents/rfp.agent.js', 'rfpAgent'],
   'data-readiness': ['mastra/agents/data-readiness.agent.js', 'dataReadinessAgent'],
-  'assistant-v2': ['mastra/agents/assistant-v2.agent.js', 'assistantV2Agent'],
+  'chief-of-staff': ['mastra/agents/chief-of-staff.agent.js', 'chiefOfStaffAgent'],
+  'insights-analyst': ['mastra/agents/insights-analyst.agent.js', 'insightsAnalystAgent'],
+  'insights-lead': ['mastra/agents/insights-lead.agent.js', 'insightsLeadAgent'],
 };
 
 const sha = (text) => crypto.createHash('sha256').update(text).digest('hex').slice(0, 16);
