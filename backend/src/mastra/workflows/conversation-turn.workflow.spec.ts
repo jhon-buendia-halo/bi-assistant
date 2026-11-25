@@ -74,6 +74,17 @@ describe("Elena's conversation engine (plan Elena 1.3)", () => {
     });
   });
 
+  it("carries the turn's attempts on her step's output (2 after a repair round)", async () => {
+    const turn = jest.fn(() =>
+      Promise.resolve({ answer: 'Brazil.', stopped: false, attempts: 2 }),
+    );
+    const { result } = await run({ turn });
+    expect(result).toEqual({
+      status: 'success',
+      result: { answer: 'Brazil.', attempts: 2 },
+    });
+  });
+
   it('fails when the run has no turn runtime', async () => {
     const { result } = await run();
     expect(result.status).toBe('failed');

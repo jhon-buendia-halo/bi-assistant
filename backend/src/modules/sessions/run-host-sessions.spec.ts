@@ -118,7 +118,19 @@ import {
 import { readinessModelOutput } from '../../mastra/tools/readiness.tools';
 import { readinessSummary } from './readiness-bridge';
 import { dataReadinessAssessmentWorkflow } from '../../mastra/workflows/data-readiness-assessment.workflow';
-import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
+import {
+  CODE_WORKFLOWS,
+  CONVERSATION_WORKFLOWS,
+} from '../../mastra/workflows/workflow-catalog';
+import { insightsLeadConversationWorkflow } from '../../mastra/workflows/conversation-turn.workflow';
+import { resolveAgentModelConfig } from '../../mastra/model-resolver';
+import { STEP_MODEL_CONTEXT_KEY } from '../../mastra/step-model';
+import { inEvalRun } from '../../mastra/evals/eval-run-scope';
+import {
+  CONVERSATION_GATES_CONTEXT_KEY,
+  INSIGHTS_LEAD_ENGINE_ID,
+  INSIGHTS_LEAD_WORKFLOW_ID,
+} from '../../mastra/workflows/conversation-turn.steps';
 import type { ReadinessReport } from '../data-readiness/engine/types';
 import type { ReadinessProgressListener } from '../data-readiness/progress';
 import { BadGatewayException } from '@nestjs/common';
@@ -145,6 +157,7 @@ import {
 import {
   CLARA_AFTER_ACCEPT,
   DASHBOARD_TOOLS_RUNTIME_KEY,
+  SOLO_AFTER_ACCEPT,
   type DashboardToolsRuntime,
 } from '../../mastra/tools/dashboard.tools';
 import type { DashboardDraft } from '../../mastra/workflows/bi-dashboard.schemas';
@@ -210,6 +223,22 @@ const ORCHESTRATED_WORKFLOW = {
   steps: ORCHESTRATED_SOURCE.steps,
   edges: ORCHESTRATED_SOURCE.edges,
   contractHash: ORCHESTRATED_SOURCE.contractHash,
+};
+
+const ELENA_SOURCE = CONVERSATION_WORKFLOWS.find(
+  (w) => w.id === INSIGHTS_LEAD_WORKFLOW_ID,
+)!;
+
+/** The workflow detail the fake catalogue answers for Elena's conversation. */
+const ELENA_WORKFLOW = {
+  id: INSIGHTS_LEAD_WORKFLOW_ID,
+  name: ELENA_SOURCE.name,
+  input: ELENA_SOURCE.input,
+  agents: [{ key: 'insights-lead', name: 'Elena' }],
+  steps: ELENA_SOURCE.steps,
+  edges: ELENA_SOURCE.edges,
+  contractHash: ELENA_SOURCE.contractHash,
+  conversational: true,
 };
 
 /** The report the fake engine scores for World Cup. */
@@ -445,6 +474,8 @@ function build(options: BuildOptions = {}) {
     'data-readiness': agentFor('data-readiness', 'Data Readiness Agent'),
     'chief-of-staff': agentFor('chief-of-staff', 'Avery'),
     'bi-analyst': agentFor('bi-analyst', 'Business Intelligence Analyst'),
+    // A stand-in for Elena (her own agent is registered in mastra/index.ts).
+    'insights-lead': agentFor('insights-lead', 'Insights Lead'),
   };
   // Suspended Avery + Michael runs dropped (their snapshots deleted,
   // ADR-0043).
@@ -461,13 +492,20 @@ function build(options: BuildOptions = {}) {
               requestContext,
               discards,
             )
-          : key === 'data-readiness-assessment'
+          : key === INSIGHTS_LEAD_ENGINE_ID
             ? streamStubWorkflow(
-                dataReadinessAssessmentWorkflow,
+                insightsLeadConversationWorkflow,
                 inputData,
                 requestContext,
+                discards,
               )
-            : streamTurnWorkflow(key, inputData, requestContext),
+            : key === 'data-readiness-assessment'
+              ? streamStubWorkflow(
+                  dataReadinessAssessmentWorkflow,
+                  inputData,
+                  requestContext,
+                )
+              : streamTurnWorkflow(key, inputData, requestContext),
     ),
     discardSuspendedWorkflowRuns: jest.fn().mockResolvedValue(0),
     ensureSessionWorkspace: jest.fn((id: string) =>
@@ -552,7 +590,9 @@ function build(options: BuildOptions = {}) {
         ? Promise.resolve(READINESS_WORKFLOW)
         : id === ORCHESTRATED_WORKFLOW.id
           ? Promise.resolve(ORCHESTRATED_WORKFLOW)
-          : Promise.reject(new Error(`Workflow "${id}" not found`)),
+          : id === ELENA_WORKFLOW.id
+            ? Promise.resolve(ELENA_WORKFLOW)
+            : Promise.reject(new Error(`Workflow "${id}" not found`)),
     ),
   };
   const runsRepository = new WorkflowRunsRepository(
@@ -2791,11 +2831,167 @@ describe('Avery exports the conversation (agents.md 3.18; workflows R45)', () =>
         title: 'Who won the World Cup',
       }) as unknown,
       brand: 'halo',
+      // The cover's author: Avery, with her team (plan Elena 1.3).
+      author: { name: 'Avery', role: 'Chief of Staff', team: true },
     });
     expect(told).toEqual([
       'Exported "Who won the World Cup": PDF (4 pages). The user sees the download card with the answer: do not repeat the summary.',
     ]);
     expect(second.answer?.export).toEqual(EXPORT);
     expect(second.answer?.content).toBe('Done.');
+  });
+});
+
+/** Elena answers with one successful query (as Michael's analysis does). */
+const elenaAnswers = () => () => streamOf(MICHAEL_CHUNKS);
+
+/** Start a run of Elena's conversation (api.md 119). */
+async function elenaRunOf(
+  ctx: Ctx,
+  input: Record<string, unknown>,
+  extra: Record<string, unknown> = {},
+): Promise<{ events: RunStreamEvent[]; run: WorkflowRun }> {
+  const events: RunStreamEvent[] = [];
+  const prepared = await ctx.runs.prepare(INSIGHTS_LEAD_WORKFLOW_ID, {
+    input,
+    ...extra,
+  });
+  const run = await ctx.runs.stream(prepared, (e) => events.push(e));
+  return { events, run };
+}
+
+describe("Elena's conversation on the run host (plan Elena 1.3, 2.4)", () => {
+  it('runs her on her own engine: one Answer step, her host bound to her, her budget and no memory thread', async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    const { run } = await elenaRunOf(ctx, AVERY_INPUT);
+    expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
+      INSIGHTS_LEAD_ENGINE_ID,
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(run.status).toBe('success');
+    expect(run.workflowId).toBe(INSIGHTS_LEAD_WORKFLOW_ID);
+    expect(run.conversationId).toBe(run.id);
+    expect(run.steps.map(stepLine)).toEqual(['answer:success']);
+    expect(run.steps[0].output).toEqual({ answer: 'Brazil won.', attempts: 1 });
+    expect(run.answer?.content).toBe('Brazil won.');
+    // Every check passed, and they are stored on the answer.
+    expect(run.answer?.checks?.length).toBeGreaterThan(0);
+    expect(run.answer?.checks?.every((check) => check.passed)).toBe(true);
+    // Only Elena ran: no team.
+    expect(ctx.calls['insights-lead']).toHaveLength(1);
+    expect(ctx.calls['chief-of-staff']).toHaveLength(0);
+    expect(ctx.calls['insights-analyst']).toHaveLength(0);
+    const call = ctx.calls['insights-lead'][0].options;
+    expect(call.maxSteps).toBe(24);
+    expect(call.memory).toBeUndefined();
+    expect(
+      call.requestContext.values.get(CONVERSATION_GATES_CONTEXT_KEY),
+    ).toEqual({ dashboard: false, export: false });
+    expect(call.requestContext.values.has(DASHBOARD_TOOLS_RUNTIME_KEY)).toBe(
+      false,
+    );
+  });
+
+  it('runs exactly one repair round when a check fails, the findings in her request, and stores the last checks', async () => {
+    // Her stand-in's default turn runs no query: `Ran a query` fails twice.
+    const ctx = build();
+    const { run } = await elenaRunOf(ctx, AVERY_INPUT);
+    expect(ctx.calls['insights-lead']).toHaveLength(2);
+    const repair = ctx.calls['insights-lead'][1].options.context
+      .map((block) => block.content)
+      .join('\n');
+    expect(repair).toContain(
+      'Checks on your answer failed:\n- Ran a query: No SQL query ran.',
+    );
+    expect(ctx.calls['insights-lead'][1].options.maxSteps).toBe(8);
+    expect(run.steps[0].output).toMatchObject({ attempts: 2 });
+    expect(
+      run.answer?.checks?.find((check) => check.check === 'Ran a query'),
+    ).toMatchObject({ passed: false });
+  });
+
+  it("builds the conversation's dashboard when asked: her submit_dashboard, saved once, carried on the answer", async () => {
+    const artifacts = dashboardArtifacts();
+    const outcomes: unknown[] = [];
+    const runtimes: DashboardToolsRuntime[] = [];
+    const ctx = build({
+      artifacts,
+      runReadOnlySql: goalsRows(),
+      streams: {
+        'insights-lead': claraSubmits(
+          outcomes,
+          GOALS_DRAFT,
+          GOALS_SQL,
+          undefined,
+          runtimes,
+        ),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const { run } = await elenaRunOf(ctx, {
+      question: 'Create a dashboard of goals by team',
+      datasets: ['World Cup'],
+    });
+    expect(outcomes).toEqual([
+      expect.objectContaining({ accepted: true }) as unknown,
+    ]);
+    expect(runtimes[0].afterAccept).toBe(SOLO_AFTER_ACCEPT);
+    expect(
+      ctx.calls['insights-lead'][0].options.requestContext.values.get(
+        CONVERSATION_GATES_CONTEXT_KEY,
+      ),
+    ).toEqual({ dashboard: true, export: false });
+    // Her dashboard query counts as hers: the checks pass, no repair.
+    expect(ctx.calls['insights-lead']).toHaveLength(1);
+    expect(artifacts.createDashboard).toHaveBeenCalledTimes(1);
+    expect(artifacts.createDashboard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instruction: 'Create a dashboard of goals by team',
+      }),
+    );
+    expect(run.answer?.dashboard).toMatchObject({
+      artifactId: 'a-1',
+      version: 1,
+    });
+  });
+
+  it('runs her on Opus 5.5 high when the saved model is a Claude model, but never in an eval (plan Elena 2.5)', async () => {
+    const config = jest.mocked(resolveAgentModelConfig);
+    config.mockResolvedValue('anthropic/claude-sonnet-4-6');
+    try {
+      const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+      await elenaRunOf(ctx, AVERY_INPUT);
+      expect(
+        ctx.calls['insights-lead'][0].options.requestContext.values.get(
+          STEP_MODEL_CONTEXT_KEY,
+        ),
+      ).toEqual({ model: 'claude-opus-5-5', reasoningEffort: 'high' });
+      const evalCtx = build({ streams: { 'insights-lead': elenaAnswers() } });
+      await inEvalRun('eval-1', () => elenaRunOf(evalCtx, AVERY_INPUT));
+      expect(
+        evalCtx.calls['insights-lead'][0].options.requestContext.values.has(
+          STEP_MODEL_CONTEXT_KEY,
+        ),
+      ).toBe(false);
+    } finally {
+      config.mockResolvedValue('openai/gpt-4.1-mini');
+    }
+  });
+
+  it('joins a follow-up to the conversation: same conversationId, the earlier turn in her transcript', async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    const first = await elenaRunOf(ctx, AVERY_INPUT);
+    const second = await elenaRunOf(
+      ctx,
+      { question: 'And in 2002?', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id } },
+    );
+    expect(second.run.conversationId).toBe(first.run.id);
+    expect(ctx.calls['insights-lead'][1].input).toEqual([
+      { role: 'user', content: 'Who won?' },
+      { role: 'assistant', content: 'Brazil won.' },
+      { role: 'user', content: 'And in 2002?' },
+    ]);
   });
 });

@@ -89,6 +89,37 @@ export interface ExportDocument {
   datasets: string[];
   includeSql: boolean;
   turns: ExportTurn[];
+  /** Who the files say prepared them; Avery when absent. */
+  author?: ExportAuthor;
+}
+
+/**
+ * Who prepared an export (plan Elena 1.3): the conversation's agent, from
+ * its binding; `team` when she works with a team (Avery).
+ */
+export interface ExportAuthor {
+  name: string;
+  role: string;
+  team?: boolean;
+}
+
+/** Avery's export: the author when the export names none. */
+export const AVERY_EXPORT_AUTHOR: ExportAuthor = {
+  name: 'Avery',
+  role: 'Chief of Staff',
+  team: true,
+};
+
+/** The author's words in both files, in the document's language. */
+export function authorCopy(
+  copy: Pick<Copy, 'withTeam' | 'preparedShortBy'>,
+  author: ExportAuthor = AVERY_EXPORT_AUTHOR,
+): { who: string; preparedByValue: string; preparedShort: string } {
+  return {
+    who: `${author.name} · ${author.role}`,
+    preparedByValue: `${author.name}, ${author.role}${author.team ? copy.withTeam : ''}`,
+    preparedShort: copy.preparedShortBy(author.name),
+  };
 }
 
 /** A dashboard version the export needs, and how it is shown. */
@@ -146,7 +177,6 @@ export const EXPORT_COPY = {
   es: {
     locale: 'es-ES',
     question: 'Pregunta',
-    who: 'Avery · Chief of Staff',
     summary: 'Resumen',
     questions: 'Preguntas de la conversación',
     date: 'Fecha',
@@ -154,8 +184,8 @@ export const EXPORT_COPY = {
     questionsCount: 'Preguntas',
     dashboards: 'Dashboards',
     preparedBy: 'Preparado por',
-    preparedByValue: 'Avery, Chief of Staff, con su equipo',
-    preparedShort: 'preparado por Avery',
+    withTeam: ', con su equipo',
+    preparedShortBy: (name: string) => `preparado por ${name}`,
     version: 'versión',
     versions: (list: string) => `versiones ${list}`,
     and: 'y',
@@ -190,7 +220,6 @@ export const EXPORT_COPY = {
   en: {
     locale: 'en-US',
     question: 'Question',
-    who: 'Avery · Chief of Staff',
     summary: 'Summary',
     questions: "The conversation's questions",
     date: 'Date',
@@ -198,8 +227,8 @@ export const EXPORT_COPY = {
     questionsCount: 'Questions',
     dashboards: 'Dashboards',
     preparedBy: 'Prepared by',
-    preparedByValue: 'Avery, Chief of Staff, with her team',
-    preparedShort: 'prepared by Avery',
+    withTeam: ', with her team',
+    preparedShortBy: (name: string) => `prepared by ${name}`,
     version: 'version',
     versions: (list: string) => `versions ${list}`,
     and: 'and',
@@ -314,6 +343,8 @@ export function exportDocument(input: {
   brand: ExportBrand;
   /** The drawn dashboards, by run id. */
   dashboards: ReadonlyMap<string, ExportDashboard>;
+  /** Who prepared it; Avery when absent. */
+  author?: ExportAuthor;
 }): ExportDocument {
   const { runs, content } = input;
   const turns = runs.map((run, index): ExportTurn => {
@@ -343,6 +374,7 @@ export function exportDocument(input: {
     datasets: [...new Set(runs.flatMap((run) => run.datasets))],
     includeSql: content.includeSql,
     turns,
+    ...(input.author ? { author: input.author } : {}),
   };
 }
 
@@ -517,7 +549,7 @@ export function exportHtml(doc: ExportDocument): string {
           ? `<ul class="points">${turn.points.map((point) => `<li>${esc(point)}</li>`).join('')}</ul>`
           : ''
       }
-      <div class="a"><div class="who">${esc(copy.who)}</div>${answerMarkdown.parse(turn.answer, { async: false })}</div>
+      <div class="a"><div class="who">${esc(authorCopy(copy, doc.author).who)}</div>${answerMarkdown.parse(turn.answer, { async: false })}</div>
       ${turn.dashboard ? dashboardHtml(turn.dashboard, copy) : ''}
     </section>`,
     )
@@ -544,7 +576,7 @@ export function exportHtml(doc: ExportDocument): string {
     <section class="cover">
       <div class="brand"><span class="dot"></span>${esc(palette.name)}</div>
       <div><h1>${esc(doc.title)}</h1>${doc.subtitle ? `<p class="sub">${esc(doc.subtitle)}</p>` : ''}</div>
-      <div class="meta"><span>${esc(copy.date)}</span><span>${esc(day(doc.date, copy))}</span><span>${esc(copy.data)}</span><span>${esc(doc.datasets.join(', ') || '—')}</span><span>${esc(copy.questionsCount)}</span><span>${doc.turns.length}</span><span>${esc(copy.dashboards)}</span><span>${esc(dashboardsLine(doc, copy))}</span><span>${esc(copy.preparedBy)}</span><span>${esc(copy.preparedByValue)}</span></div>
+      <div class="meta"><span>${esc(copy.date)}</span><span>${esc(day(doc.date, copy))}</span><span>${esc(copy.data)}</span><span>${esc(doc.datasets.join(', ') || '—')}</span><span>${esc(copy.questionsCount)}</span><span>${doc.turns.length}</span><span>${esc(copy.dashboards)}</span><span>${esc(dashboardsLine(doc, copy))}</span><span>${esc(copy.preparedBy)}</span><span>${esc(authorCopy(copy, doc.author).preparedByValue)}</span></div>
     </section>
     <section class="summary"><h2 class="sec">${esc(copy.summary)}</h2><ul>${doc.summary.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>
       <h2 class="sec" style="margin-top:22px">${esc(copy.questions)}</h2><ol>${doc.turns.map((turn) => `<li>${esc(turn.question)}</li>`).join('')}</ol></section>
@@ -708,7 +740,7 @@ export function exportSlides(doc: ExportDocument): SlideSpec[] {
           day(doc.date, copy),
           ...(doc.datasets.length ? [doc.datasets.join(', ')] : []),
           `${doc.turns.length} ${copy.questionsShort}`,
-          copy.preparedShort,
+          authorCopy(copy, doc.author).preparedShort,
         ].join(' · '),
         0.8,
         6.3,

@@ -6,6 +6,10 @@ import {
   INSIGHTS_ANALYST_AGENT_KEY,
   INSIGHTS_ANALYST_MAX_STEPS,
 } from '../../../mastra/agents/insights-analyst-catalog';
+import {
+  INSIGHTS_LEAD_AGENT_KEY,
+  INSIGHTS_LEAD_MAX_STEPS,
+} from '../../../mastra/agents/insights-lead-catalog';
 import type { MastraService } from '../../../mastra/mastra.service';
 import {
   AGENT_OVERRIDES_CONTEXT_KEY,
@@ -257,7 +261,24 @@ export class TurnOptions {
       return this.readinessAgentOptions(session, question, abortSignal);
     }
     if (session.agentKey === INSIGHTS_ANALYST_AGENT_KEY) {
-      return this.insightsAnalystAgentOptions(session, question, abortSignal);
+      return this.analystAgentOptions(
+        session,
+        question,
+        abortSignal,
+        INSIGHTS_ANALYST_MAX_STEPS,
+      );
+    }
+    // Elena (plan Elena 2.3): Michael's context, her own budget, and no
+    // memory thread (the run host sends the conversation as a transcript).
+    if (session.agentKey === INSIGHTS_LEAD_AGENT_KEY) {
+      const { memory: _memory, ...options } = await this.analystAgentOptions(
+        session,
+        question,
+        abortSignal,
+        INSIGHTS_LEAD_MAX_STEPS,
+      );
+      void _memory;
+      return options;
     }
     return {
       ...(await this.agentContext(
@@ -272,17 +293,19 @@ export class TurnOptions {
   }
 
   /**
-   * A turn of Insights Analyst (agents.md 2.11, 4.1, 4.2): Block 1's
+   * A turn of Insights Analyst (agents.md 2.11, 4.1, 4.2), and of Elena
+   * with `maxSteps` her budget (plan Elena 2.3): Block 1's
    * dataset half with the `sample_rows` hint (no visuals lines), then the
    * governed metrics, curated knowledge and verified-query blocks, built by
    * the same services and in the same order as the assistant's (no
    * agent-instructions block), and the `datasets`, `session-id`,
    * `turn-question` and `knowledge-used` keys.
    */
-  private async insightsAnalystAgentOptions(
+  private async analystAgentOptions(
     session: SessionDoc,
-    question?: string,
-    abortSignal?: AbortSignal,
+    question: string | undefined,
+    abortSignal: AbortSignal | undefined,
+    maxSteps: number,
   ) {
     const requestContext = new RequestContext();
     requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
@@ -300,7 +323,7 @@ export class TurnOptions {
     // The answer records the knowledge the model saw (agents.md 4.1 Block 3).
     requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
     return {
-      maxSteps: INSIGHTS_ANALYST_MAX_STEPS,
+      maxSteps,
       providerOptions: await turnProviderOptions({ reasoningEffort }),
       context: [
         {

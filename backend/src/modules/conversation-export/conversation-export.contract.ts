@@ -44,9 +44,14 @@ export interface ConversationExportInput {
   conversationId: string;
   /** The run asking for it: only the runs before it are exported. */
   beforeRunId: string;
-  /** What Avery wrote for the file (the tool's input). */
+  /** What the agent wrote for the file (the tool's input). */
   content: ExportContent;
   brand: ExportBrand;
+  /**
+   * Who the files say prepared them (the conversation's binding author);
+   * Avery, with her team, when absent.
+   */
+  author?: { name: string; role: string; team?: boolean };
 }
 
 /** The conversation's ended turns before a run, oldest first. */

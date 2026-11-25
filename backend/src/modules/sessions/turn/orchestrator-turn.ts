@@ -268,21 +268,44 @@ function runFacts(deps: OrchestratorTurnDeps): string {
       : 'The run has no reference images.',
     // Unchanged since her whole team's workflow: no run builds a visual.
     'The run builds no visual.',
-    // Only with the gate open: a run that is not about a dashboard sends
-    // her what it sent before (agents.md 2.21).
-    ...(deps.buildsDashboard ? [dashboardFact(deps.currentDashboard)] : []),
-    // The same for the export (agents.md 2.21).
-    ...(deps.exportsConversation
-      ? [exportFact(deps.earlierTurns?.questions ?? [])]
-      : []),
+    ...conversationFacts(deps, 'build_dashboard'),
   ].join('\n');
 }
 
+/**
+ * A conversation's facts about its gates (agents.md 2.21), Avery's and
+ * Elena's: only with a gate open, so a run that is not about a dashboard or
+ * an export sends what it sent before. `dashboardTool` is the tool that
+ * builds it (Avery's `build_dashboard`, Elena's `submit_dashboard`).
+ */
+export function conversationFacts(
+  gates: Pick<
+    OrchestratorTurnDeps,
+    | 'buildsDashboard'
+    | 'currentDashboard'
+    | 'exportsConversation'
+    | 'earlierTurns'
+  >,
+  dashboardTool: string,
+): string[] {
+  return [
+    ...(gates.buildsDashboard
+      ? [dashboardFact(gates.currentDashboard, dashboardTool)]
+      : []),
+    ...(gates.exportsConversation
+      ? [exportFact(gates.earlierTurns?.questions ?? [])]
+      : []),
+  ];
+}
+
 /** The run's dashboard fact, when the gate is open (agents.md 2.21). */
-function dashboardFact(current: CurrentDashboard | undefined): string {
+function dashboardFact(
+  current: CurrentDashboard | undefined,
+  tool: string,
+): string {
   return current
-    ? `The conversation has a dashboard: "${current.title}", version ${current.version} (${current.widgetCount} widgets, ${current.filterCount} filters). build_dashboard changes it into version ${current.version + 1}.`
-    : 'The user asked for a dashboard: build_dashboard is available.';
+    ? `The conversation has a dashboard: "${current.title}", version ${current.version} (${current.widgetCount} widgets, ${current.filterCount} filters). ${tool} changes it into version ${current.version + 1}.`
+    : `The user asked for a dashboard: ${tool} is available.`;
 }
 
 export { currentDashboardBlock };
@@ -476,7 +499,7 @@ export function orchestratorTools(
     ...exportRuntime(
       state,
       deps.earlierTurns,
-      deps.exportsConversation ? team.exportConversation : undefined,
+      deps.exportsConversation ? team : undefined,
     ),
   };
 }
@@ -491,7 +514,7 @@ export interface ExportState {
 
 /**
  * The runtime export_conversation calls (agents.md 3.18), Avery's and
- * Elena's: offered when the turn has a `run` (the gate is open); at most
+ * Elena's: offered when the turn has an `exporter` (the gate is open); at most
  * twice per turn; every figure the agent wrote is checked against the
  * conversation's answers (`turns`) before anything is drawn; the export
  * made is kept on `state`.
@@ -499,12 +522,12 @@ export interface ExportState {
 export function exportRuntime(
   state: ExportState,
   turns: ConversationTurns | undefined,
-  run: OrchestratorTeam['exportConversation'],
+  exporter: Pick<OrchestratorTeam, 'exportConversation'> | undefined,
 ): ExportToolsRuntime {
   return {
-    exportsConversation: run !== undefined,
+    exportsConversation: !!exporter?.exportConversation,
     exportConversation: async (content: ExportContent) => {
-      if (!run) return 'This run exports nothing.';
+      if (!exporter?.exportConversation) return 'This run exports nothing.';
       if (state.exportCalls >= EXPORT_CONVERSATION_MAX_CALLS) {
         return 'export_conversation already ran twice in this run: close from what it said.';
       }
@@ -514,7 +537,7 @@ export function exportRuntime(
         turns?.answers ?? [],
       );
       if (refused.length) return refusedFiguresReply(refused);
-      const made = await run(content);
+      const made = await exporter.exportConversation(content);
       if (!made.export) {
         return `The conversation was not exported: ${made.error ?? 'no file was made'}`;
       }
@@ -566,7 +589,7 @@ export async function runOrchestratorTurn(
   // export_conversation reads its own key (agents.md 3.18).
   requestContext.set(EXPORT_TOOLS_RUNTIME_KEY, {
     exportsConversation: tools.exportsConversation,
-    exportConversation: tools.exportConversation,
+    exportConversation: (content) => tools.exportConversation(content),
   } satisfies ExportToolsRuntime);
   if (deps.orchestratorModel) {
     requestContext.set(STEP_MODEL_CONTEXT_KEY, deps.orchestratorModel);

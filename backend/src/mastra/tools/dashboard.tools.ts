@@ -23,6 +23,13 @@ export const DASHBOARD_TOOLS_RUNTIME_KEY = 'dashboard-tools-runtime';
  */
 export const CLARA_AFTER_ACCEPT = 'Reply to Avery in one or two sentences.';
 
+/**
+ * Elena's line after an accepted dashboard (plan Elena 2.4): she answers the
+ * user herself.
+ */
+export const SOLO_AFTER_ACCEPT =
+  'Tell the user in one or two sentences what the dashboard shows; do not repeat its figures.';
+
 /** What submit_dashboard calls: the run that builds the dashboard. */
 export interface DashboardToolsRuntime {
   /**
@@ -52,7 +59,7 @@ export const submitDashboardTool = createTool({
     );
     if (!runtime || !requestContext) {
       return {
-        error: 'This tool only runs when Avery asks Clara for a dashboard.',
+        error: 'This tool only runs when the run builds a dashboard.',
       };
     }
     const target = resolveDatasource(

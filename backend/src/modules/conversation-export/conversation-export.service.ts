@@ -196,6 +196,7 @@ export class ConversationExportService implements ConversationExporter {
         content: input.content,
         brand: input.brand,
         dashboards,
+        ...(input.author ? { author: input.author } : {}),
       });
       if (formats.includes('pdf')) {
         pdf = await browser.printPdf(exportHtml(doc), exportFooterHtml(doc));

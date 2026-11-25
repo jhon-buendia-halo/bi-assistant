@@ -24,6 +24,12 @@ import {
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import { INSIGHTS_ANALYST_AGENT_KEY } from '../agents/insights-analyst-catalog';
+import { INSIGHTS_LEAD_AGENT_KEY } from '../agents/insights-lead-catalog';
+import {
+  INSIGHTS_LEAD_EDGES,
+  INSIGHTS_LEAD_STEPS,
+  INSIGHTS_LEAD_WORKFLOW_ID,
+} from './conversation-turn.steps';
 import {
   conversationalBindingOf,
   type ConversationalBinding,
@@ -496,6 +502,35 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         'map-requirements': LAYER_MAPPER_AGENT_KEY,
       },
       edges: CONSUMPTION_GAP_EDGES,
+      bar: 'steps',
+    },
+  ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
+
+/** The name of Elena's conversation as a run shows it (api.md 117, 120). */
+export const INSIGHTS_LEAD_WORKFLOW_NAME = 'Conversation with Elena';
+
+/**
+ * The built-in agents' conversations outside any workflow (plan Elena 1.1),
+ * as `GET /workflows/:id` (117) and the run routes (118, 119) resolve them:
+ * Elena's `agent:insights-lead`, one Answer step on her own. Never in
+ * `CODE_WORKFLOWS`, so `GET /workflows` (116) never lists one.
+ */
+export const CONVERSATION_WORKFLOWS: readonly CodeWorkflowSource[] =
+  assertWorkflowContracts<Omit<CodeWorkflowSource, 'contractHash'>>([
+    {
+      id: INSIGHTS_LEAD_WORKFLOW_ID,
+      name: INSIGHTS_LEAD_WORKFLOW_NAME,
+      category: 'data-analytics',
+      description:
+        'A conversation with Elena, the Insights Lead: she queries your data, checks every figure and writes the answer on her own, and builds a dashboard or exports the conversation when you ask.',
+      primaryFor: INSIGHTS_LEAD_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
+        DATASETS_FIELD,
+      ],
+      steps: INSIGHTS_LEAD_STEPS,
+      edges: INSIGHTS_LEAD_EDGES,
       bar: 'steps',
     },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));

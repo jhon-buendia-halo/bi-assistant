@@ -81,6 +81,9 @@ import {
   CONVERSATION_TURN_RUNTIME_KEY,
   type ConversationTurnRuntime,
 } from '../../../mastra/workflows/conversation-turn.steps';
+import { currentEvalRunId } from '../../../mastra/evals/eval-run-scope';
+import type { ExportAuthor } from '../../conversation-export/export-document';
+import { runSoloTurn, type SoloTurnState } from './solo-turn';
 import {
   conversationalBindingOf,
   type ConversationalBinding,
@@ -114,6 +117,7 @@ import { exportBrand } from '../../conversation-export/export-brand';
 import {
   CLARA_AFTER_ACCEPT,
   DASHBOARD_TOOLS_RUNTIME_KEY,
+  SOLO_AFTER_ACCEPT,
   type DashboardToolsRuntime,
 } from '../../../mastra/tools/dashboard.tools';
 import { runErrorMessage } from '../../../mastra/workflows/workflow-run';
@@ -463,11 +467,26 @@ export class TurnEngine {
     // when the saved model is served as a Claude model, the agents Avery
     // calls run on the team's step model (their model functions read it
     // from the context, and every call sends its effort), and she runs on
-    // Opus 5.5 high. Otherwise the saved model and effort, as every agent.
+    // Opus 5.5 high. Elena, on a run host, runs on Opus 5.5 high herself
+    // (plan Elena 2.5). Opus is for runs, never for evals: an eval runs
+    // either on the saved model. Otherwise the saved model and effort, as
+    // every agent.
     const conversation = conversationOfTurn(workflow);
     const orchestrated = conversation?.kind === 'team';
     const claude = servesClaude(await resolveAgentModelConfig());
+    const opus = claude && currentEvalRunId() === undefined;
     const stepModel = orchestrated && claude ? TEAM_STEP_MODEL : undefined;
+    const soloModel =
+      conversation?.kind === 'solo' && session.run && opus
+        ? { ...ORCHESTRATOR_MODEL }
+        : undefined;
+    if (soloModel) {
+      options.requestContext.set(STEP_MODEL_CONTEXT_KEY, soloModel);
+      options.providerOptions = await turnProviderOptions(
+        { reasoningEffort: soloModel.reasoningEffort },
+        soloModel.model,
+      );
+    }
     if (stepModel) {
       options.requestContext.set(STEP_MODEL_CONTEXT_KEY, stepModel);
       options.providerOptions = await turnProviderOptions(
@@ -476,15 +495,18 @@ export class TurnEngine {
       );
     }
     const orchestratorModel =
-      orchestrated && claude ? { ...ORCHESTRATOR_MODEL } : undefined;
+      orchestrated && opus ? { ...ORCHESTRATOR_MODEL } : undefined;
     const orchestratorProviderOptions = orchestratorModel
       ? await turnProviderOptions(
           { reasoningEffort: orchestratorModel.reasoningEffort },
           orchestratorModel.model,
         )
       : (options.providerOptions as Record<string, unknown> | undefined);
-    // What Avery's team produced: it outlives a wait for the user.
-    const orchState = orchestratorState();
+    // What Avery's team (or Elena) produced: it outlives a wait for the user.
+    const orchState: SoloTurnState = orchestratorState();
+    // Elena's dashboard submitter (plan Elena 2.4): made on her first
+    // attempt, so a resumed attempt keeps its last accepted submission.
+    let soloSubmitter: ReturnType<TurnEngine['dashboardSubmitter']> | undefined;
     // A conversation's answer is its agent's (Avery's: Michael's, then her
     // closing words): no synthesis replaces it.
     const codeAnswer = conversation !== undefined;
@@ -1012,6 +1034,8 @@ export class TurnEngine {
               notes = undefined;
               attemptStop = undefined;
               turn.signal.removeEventListener('abort', stopAttempt);
+              // A dashboard query Elena's submit ran counts as hers.
+              flushHeldQueries();
             }
             try {
               idle.check('Analyse');
@@ -1184,15 +1208,74 @@ export class TurnEngine {
           // calls the team as her tools; her answer is delivered once she
           // is done (only she talks to the user).
           converse: async (input, team: OrchestratorTeam) => {
-            if (conversation?.kind !== 'team') {
+            if (!conversation) {
               throw new Error('This conversation has no turn to run');
+            }
+            // The export's author: the conversation's agent (plan Elena 1.3).
+            const author = {
+              ...conversation.author,
+              team: conversation.kind === 'team',
+            };
+            if (conversation.kind === 'solo') {
+              // Elena alone (plan Elena 2.4): her gates, her attempt through
+              // the analysis consumer, one repair round, her dashboard.
+              const currentDashboard = await this.currentDashboardOf(session);
+              const exporting = await this.exportOf(session, trimmed, author);
+              const save = this.deps.saveDashboard;
+              if (save && !soloSubmitter) {
+                soloSubmitter = this.dashboardSubmitter(
+                  session,
+                  turn.signal,
+                  holdQuery,
+                  SOLO_AFTER_ACCEPT,
+                );
+              }
+              const submitter = soloSubmitter;
+              const done = await runSoloTurn<AcceptedDashboard>(
+                {
+                  analyse: (attempt) => team.analyse(attempt),
+                  state: orchState,
+                  datasets: session.datasets,
+                  signal: turn.signal,
+                  requestContext: options.requestContext,
+                  message: trimmed,
+                  asksForDashboard: asksForDashboard(trimmed),
+                  ...(currentDashboard ? { currentDashboard } : {}),
+                  ...(save && submitter
+                    ? {
+                        dashboard: {
+                          runtime: submitter.runtime,
+                          accepted: () => submitter.accepted(),
+                          save: (accepted, current, instruction) =>
+                            this.saveAccepted(
+                              save,
+                              id,
+                              accepted,
+                              current,
+                              instruction,
+                            ),
+                        },
+                      }
+                    : {}),
+                  ...(exporting ? { exporting } : {}),
+                  ...(session.contextQueries?.length
+                    ? { earlierQueries: session.contextQueries }
+                    : {}),
+                },
+                input,
+              );
+              if (!done.clarification && done.answer) {
+                text = done.answer;
+                emit({ type: 'text', content: done.answer });
+              }
+              return done;
             }
             // The conversation's dashboard (the follow-up carry, 5.22): its
             // current version, or none when it is gone or holds no query.
             const currentDashboard = await this.currentDashboardOf(session);
             // The export gate (2.21): the message asks to export the
             // conversation, and the run knows its conversation.
-            const exporting = await this.exportOf(session, trimmed);
+            const exporting = await this.exportOf(session, trimmed, author);
             const done = await runOrchestratorTurn(
               {
                 getAgent: (key) => this.deps.mastra.getAgent(key),
@@ -1887,6 +1970,11 @@ export class TurnEngine {
       const dashboard = orchState.dashboard;
       // The conversation Avery exported in this turn (agents.md 3.18).
       const exported = orchState.export;
+      // A conversation's checks (data-model 3.4.1): the last attempt's.
+      const checks =
+        conversation && orchState.findings.length
+          ? orchState.findings.map((finding) => ({ ...finding }))
+          : undefined;
       if (clarification) {
         // The turn stops here, but the schema/sample work done before the
         // question is real work — keep it on the card instead of dropping it.
@@ -1947,6 +2035,7 @@ export class TurnEngine {
           ...(visualEvent ? { visual: visualEvent } : {}),
           ...(dashboard ? { dashboard } : {}),
           ...(exported ? { export: exported } : {}),
+          ...(checks ? { checks } : {}),
           ...(crossChecked ? { crossCheck: crossChecked } : {}),
           ...(readinessReport ? { readinessReport } : {}),
         });
@@ -1983,6 +2072,7 @@ export class TurnEngine {
   private async exportOf(
     session: SessionDoc,
     message: string,
+    author?: ExportAuthor,
   ): Promise<
     | {
         turns: ConversationTurns;
@@ -2017,6 +2107,7 @@ export class TurnEngine {
               beforeRunId: conversation.runId,
               content,
               brand: exportBrand(),
+              ...(author ? { author } : {}),
             }),
           };
         } catch (error) {

@@ -3,6 +3,7 @@
  * Orchestrate and Elena's Answer share its step schemas and runtime. Plain
  * data and pure code, no framework import.
  */
+import { z } from 'zod';
 import {
   contractStepEntry,
   type ContractStepEntry,
@@ -27,6 +28,11 @@ export interface ConversationTurnRuntime {
     answer: string;
     stopped: boolean;
     clarification?: { question: string; options: string[] };
+    /**
+     * Elena's turn: how many attempts it made, 1, or 2 after a repair round
+     * (plan Elena 2.4); her step's output carries it.
+     */
+    attempts?: number;
   }>;
 }
 
@@ -36,6 +42,22 @@ export interface ConversationTurnRuntime {
  */
 export const CONVERSATION_STEP_SCHEMAS =
   ORCHESTRATED_MICHAEL_STEP_SCHEMAS.orchestrate;
+
+/**
+ * Elena's Answer step's input, output, suspend and resume: a conversation
+ * step's, with the turn's `attempts` on the output (plan Elena 2.4).
+ */
+export const INSIGHTS_LEAD_STEP_SCHEMAS = {
+  ...CONVERSATION_STEP_SCHEMAS,
+  output: CONVERSATION_STEP_SCHEMAS.output.extend({
+    attempts: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe('How many attempts the turn made: 2 after a repair round.'),
+  }),
+} as const;
 
 /** Elena's binding id: her own conversation, outside any workflow. */
 export const INSIGHTS_LEAD_WORKFLOW_ID = 'agent:insights-lead';
@@ -58,7 +80,7 @@ export const INSIGHTS_LEAD_STEPS: readonly ContractStepEntry[] = [
         { label: 'if it asks you a question', outcome: 'waits' },
       ],
     },
-    CONVERSATION_STEP_SCHEMAS,
+    INSIGHTS_LEAD_STEP_SCHEMAS,
   ),
 ];
 

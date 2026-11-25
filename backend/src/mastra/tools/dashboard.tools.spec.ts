@@ -168,7 +168,9 @@ describe('submit_dashboard', () => {
   it('refuses outside a dashboard build', async () => {
     setDatasetToolServices(services(['ds-pg']));
     const result = await execute(INPUT, { requestContext: contextWith() });
-    expect(result.error).toContain('only runs when Avery asks Clara');
+    expect(result.error).toBe(
+      'This tool only runs when the run builds a dashboard.',
+    );
   });
 
   it('turns a failed submit into an error the model reads', async () => {

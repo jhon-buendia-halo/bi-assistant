@@ -6,6 +6,11 @@
  * can read it without loading Mastra.
  */
 import {
+  INSIGHTS_LEAD_AGENT_KEY,
+  INSIGHTS_LEAD_MAX_STEPS,
+  INSIGHTS_LEAD_TOOL_NAMES,
+} from '../agents/insights-lead-catalog';
+import {
   INSIGHTS_ANALYST_AGENT_KEY,
   INSIGHTS_ANALYST_MAX_STEPS,
   INSIGHTS_ANALYST_NAME,
@@ -94,6 +99,12 @@ const STEP_AGENTS: Record<
     tools: AVERY_TEAM.tools,
     maxSteps: ORCHESTRATOR_MAX_STEPS,
     team: AVERY_TEAM.team,
+  },
+  // Elena's Answer step (plan Elena 2.3): her own tools, alone.
+  [INSIGHTS_LEAD_AGENT_KEY]: {
+    name: 'Elena',
+    tools: INSIGHTS_LEAD_TOOL_NAMES,
+    maxSteps: INSIGHTS_LEAD_MAX_STEPS,
   },
   [INSIGHTS_ANALYST_AGENT_KEY]: {
     name: INSIGHTS_ANALYST_NAME,
