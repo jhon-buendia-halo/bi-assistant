@@ -409,10 +409,13 @@ export function orchestratorTools(
         ...attempt.clarification.options.map((option) => `- ${option}`),
       ].join('\n');
     }
+    // The catalog and the question too: the data-date check reads them.
     const { findings } = validateAttempt({
       plan: current,
       calls: attempt.calls,
       queries: attempt.queries,
+      catalog,
+      question,
     });
     // The kept queries: this attempt's, after any earlier one's.
     state.queries = [...state.queries, ...attempt.queries];

@@ -42,7 +42,10 @@ describe('turnWorkflowOf (agents.md 5.11, 5.16)', () => {
   it("runs Elena's host's turn on her conversation engine, its one step Answer driving the bar", () => {
     expect(
       turnWorkflowOf(
-        session({ workflowId: 'agent:insights-lead', agentKey: 'insights-lead' }),
+        session({
+          workflowId: 'agent:insights-lead',
+          agentKey: 'insights-lead',
+        }),
       ),
     ).toEqual({
       id: 'agent:insights-lead',

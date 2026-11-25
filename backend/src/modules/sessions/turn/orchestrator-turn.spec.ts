@@ -167,6 +167,59 @@ describe('Avery runs her turn (agents.md 5.23)', () => {
     expect(deps.state.answer).toBe('There are 64 matches.');
   });
 
+  it("checks Michael's queries against the data's date: the catalog and the question reach the checks (plan Elena 2.6)", async () => {
+    const state = orchestratorState();
+    // The World Cup data ends years before today.
+    state.catalog = [
+      {
+        entity: 'wc.public.matches',
+        dataset: 'World Cup',
+        datasourceId: 'ds-pg',
+        datasourceKind: 'postgres',
+        columnCount: 1,
+        dataEndsAt: '2018-07-15',
+      },
+    ];
+    state.columns = [
+      {
+        entity: 'wc.public.matches',
+        columns: [{ name: 'played_on', type: 'date' }],
+        more: 0,
+      },
+    ];
+    const members = team({
+      analyse: jest.fn(() =>
+        Promise.resolve({
+          ...ATTEMPT,
+          queries: [
+            {
+              sql: 'SELECT count(*) AS n FROM wc.public.matches WHERE played_on > CURRENT_DATE - 365',
+              rationale: 'I count the matches of the last year.',
+              rows: [{ n: 0 }],
+              rowCount: 1,
+              truncated: false,
+            },
+          ],
+        }),
+      ),
+    });
+    const { deps } = fixture(
+      async (tools) => {
+        await tools.answerFromData('Count the matches of the last year.');
+        return [text('Done.')];
+      },
+      { team: members, deps: { state } },
+    );
+    await runOrchestratorTurn(deps, {
+      question: 'How many matches were played in the last year?',
+    });
+    expect(
+      deps.state.findings.find(
+        (finding) => finding.check === "Measured from the data's date",
+      ),
+    ).toMatchObject({ passed: false });
+  });
+
   it("on a follow-up, Michael reads the last answer's queries as a block after her brief", async () => {
     const { deps, members } = fixture(
       async (tools) => {
