@@ -2894,8 +2894,18 @@ describe("Elena's conversation on the run host (plan Elena 1.3, 2.4)", () => {
   });
 
   it('runs exactly one repair round when a check fails, the findings in her request, and stores the last checks', async () => {
-    // Her stand-in's default turn runs no query: `Ran a query` fails twice.
-    const ctx = build();
+    // A figure with no query behind it: `Ran a query` fails twice.
+    const ctx = build({
+      streams: {
+        'insights-lead': () =>
+          (async function* () {
+            yield {
+              type: 'text-delta',
+              payload: { text: 'Brazil won 5 titles.' },
+            };
+          })(),
+      },
+    });
     const { run } = await elenaRunOf(ctx, AVERY_INPUT);
     expect(ctx.calls['insights-lead']).toHaveLength(2);
     const repair = ctx.calls['insights-lead'][1].options.context

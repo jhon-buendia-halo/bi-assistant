@@ -1121,6 +1121,9 @@ describe('Streamed runs of Answer a Business Question (Avery + Michael) (API)', 
     });
 
     it('streams a run of hers: the Answer step, her own model calls (no Avery), the answer, and GET /workflow-runs/:id shows step answer with its checks', async () => {
+      // A figure with no query behind it: the checks fail and repair it once.
+      const FIGURE = 'There were 64 matches.';
+      stub.reply = () => ({ text: FIGURE });
       const sent = await recorded(async () => {
         const res = await runStream(ELENA, ask('How many matches were there?'));
         expect(res.status).toBe(200);
@@ -1131,7 +1134,7 @@ describe('Streamed runs of Answer a Business Question (Avery + Michael) (API)', 
         expect(run).toMatchObject({
           workflowId: ELENA,
           status: 'success',
-          answer: { role: 'assistant', content: STUB_ANSWER },
+          answer: { role: 'assistant', content: FIGURE },
         });
         const stored = (
           await http().get(`/workflow-runs/${run.id}`).expect(200)
