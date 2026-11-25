@@ -69,7 +69,7 @@
       </div>
       @if (dashboards.shown() !== null) {
         @defer (on immediate) {
-          <app-run-dashboard-panel />
+          <app-run-dashboard-panel [lead]="agentName()" />
         }
       }
       @if (openQuery(); as open) {

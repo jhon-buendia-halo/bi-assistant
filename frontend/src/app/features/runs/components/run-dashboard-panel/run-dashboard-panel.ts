@@ -5,6 +5,7 @@ import {
   computed,
   effect,
   inject,
+  input,
   signal,
   untracked,
   viewChild,
@@ -171,11 +172,11 @@ function plural(n: number, one: string): string {
           data-testid="run-dashboard-panel-note"
         >
           @if (d.saved) {
-            Saved as version {{ d.version }}. Keep asking {{ lead }} for
+            Saved as version {{ d.version }}. Keep asking {{ lead() }} for
             changes: they show here as a new draft until you save again.
           } @else {
-            Ask {{ lead }} for changes in the chat: this panel updates with each
-            version. Save it when you like it; then you can download it.
+            Ask {{ lead() }} for changes in the chat: this panel updates with
+            each version. Save it when you like it; then you can download it.
           }
         </p>
         @if (state.loading()) {
@@ -219,8 +220,8 @@ export class RunDashboardPanel {
   protected readonly Save = Save;
   protected readonly X = X;
 
-  /** Who the user asks for changes: the conversation's lead agent. */
-  protected readonly lead = 'Avery';
+  /** Who the user asks for changes: the conversation's lead agent (Avery on her pages, Elena on hers). */
+  readonly lead = input('Avery');
 
   /** Whether the dashboard fills the window (Escape or the backdrop leaves). */
   protected readonly fullScreen = signal(false);

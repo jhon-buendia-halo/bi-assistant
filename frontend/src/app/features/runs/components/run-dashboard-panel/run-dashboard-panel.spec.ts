@@ -82,6 +82,26 @@ describe('RunDashboardPanel', () => {
     expect(panel.getAttribute('aria-label')).toBe('Dashboard');
   });
 
+  it("names the conversation's own agent in the draft note: Elena on hers", () => {
+    TestBed.configureTestingModule({
+      imports: [RunDashboardPanel],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    http = TestBed.inject(HttpTestingController);
+    state = TestBed.inject(RunDashboardState);
+    fixture = TestBed.createComponent(RunDashboardPanel);
+    fixture.componentRef.setInput('lead', 'Elena');
+    el = fixture.nativeElement as HTMLElement;
+    state.open(REF);
+    http
+      .expectOne((r) => r.url === `${API_BASE_URL}/artifacts/a-1`)
+      .flush(artifact(REF.version, []));
+    fixture.detectChanges();
+    expect(text('run-dashboard-panel-note')).toContain(
+      'Ask Elena for changes in the chat',
+    );
+  });
+
   it('a draft: Draft chip, meta, the draft note and Save to Artifacts only', () => {
     render();
     expect(text('run-dashboard-panel-title')).toBe('Penetration by client');
