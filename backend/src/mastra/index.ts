@@ -62,7 +62,7 @@ export const mastra = new Mastra({
     'chief-of-staff': chiefOfStaffAgent,
     // Clara, Avery's teammate behind build_dashboard (plan bi-dashboard).
     'bi-analyst': biAnalystAgent,
-    // Elena, the Insights Lead: alone in her own conversation (plan Elena 2).
+    // Elena, the Insights Lead, alone in her own conversation (plan Elena 2).
     'insights-lead': insightsLeadAgent,
     // The agents of Dashboard Image to Artifact's two model steps (agents.md 5.17).
     'dashboard-reader': dashboardReaderAgent,
