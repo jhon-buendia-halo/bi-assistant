@@ -2899,10 +2899,10 @@ describe("Elena's conversation on the run host (plan Elena 1.3, 2.4)", () => {
       streams: {
         'insights-lead': () =>
           (async function* () {
-            yield {
+            yield await Promise.resolve({
               type: 'text-delta',
               payload: { text: 'Brazil won 5 titles.' },
-            };
+            });
           })(),
       },
     });
