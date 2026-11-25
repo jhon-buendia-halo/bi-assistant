@@ -223,6 +223,32 @@ describe('AgentsService (built-in and user agents)', () => {
   );
 
   it(
+    'lists Elena as Official and gives only her the conversation she is asked in (plan Elena 1.2)',
+    asDemoUser(async () => {
+      const ctx = build({
+        'insights-lead': fakeAgent('Insights Lead', ['run_readonly_sql']),
+        'chief-of-staff': fakeAgent('Chief of Staff', []),
+      });
+      const entry = (await ctx.service.list()).find(
+        (agent) => agent.key === 'insights-lead',
+      );
+      expect(entry).toMatchObject({
+        kind: 'official',
+        owner: 'Official',
+        name: 'Elena',
+        role: 'Insights Lead',
+      });
+      expect((await ctx.service.get('insights-lead'))?.conversation).toEqual({
+        workflowId: 'agent:insights-lead',
+      });
+      for (const key of ['assistant', 'chief-of-staff']) {
+        expect((await ctx.service.get(key))?.conversation).toBeUndefined();
+      }
+      ctx.db.close();
+    }),
+  );
+
+  it(
     "adds the editable prompt to a built-in agent's detail only (ADR-0026)",
     asDemoUser(async () => {
       const view = {

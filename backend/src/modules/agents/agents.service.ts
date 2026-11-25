@@ -55,6 +55,7 @@ import type {
 } from '../user-agents/entities/user-agent.entity';
 
 import { OFFICIAL_AGENT_KEYS } from '../../mastra/agent-constants';
+import { CONVERSATIONAL_BINDINGS } from '../../mastra/conversational-agents';
 import {
   DEFAULT_AGENT_DOMAIN,
   builtinAgentPersona,
@@ -65,6 +66,18 @@ import {
   type AgentWorkflow,
 } from '../../mastra/workflows/agent-workflows';
 import { workflowsUsingAgent } from '../../mastra/workflows/workflow-catalog';
+
+/**
+ * The conversation a built-in agent is talked to in on her own (plan Elena
+ * 1.2): its solo binding's id (`agent:insights-lead`); undefined for every
+ * other agent, Avery included (her conversation is her workflow's).
+ */
+function conversationOf(key: string): { workflowId: string } | undefined {
+  const binding = CONVERSATIONAL_BINDINGS.find(
+    (entry) => entry.kind === 'solo' && entry.agentKey === key,
+  );
+  return binding ? { workflowId: binding.workflowId } : undefined;
+}
 
 /** The registry key of the official agent; every other built-in is `system`. */
 const OFFICIAL_AGENT_KEY = 'assistant';
@@ -249,11 +262,13 @@ export class AgentsService {
       const prompt = await this.prompts?.view(key);
       // A workflow-backed agent's turn, for its Graph tab (R108).
       const workflow = agentWorkflow(key);
+      const conversation = conversationOf(key);
       return {
         ...detail,
         llm: await this.llmDetail(),
         ...(prompt ? { prompt } : {}),
         ...(workflow ? { workflow } : {}),
+        ...(conversation ? { conversation } : {}),
       };
     }
     const doc = await this.userAgents.get(key);

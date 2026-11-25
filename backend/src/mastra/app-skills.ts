@@ -43,6 +43,17 @@ export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
     'sql-analysis',
     'result-validation',
   ],
+  // Elena's skills (plan Elena 2.1): Michael's three, her playbooks, and
+  // the dashboard and export rules, each offered only while its gate is
+  // open (insights-lead.agent.ts).
+  'insights-lead': [
+    'curated-knowledge',
+    'sql-analysis',
+    'result-validation',
+    'answer-playbooks',
+    'dashboard-building',
+    'conversation-export',
+  ],
 };
 
 /** Built-in skills code sends to each agent itself (agents.md 7.4). */
