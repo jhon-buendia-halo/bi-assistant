@@ -17,8 +17,26 @@ import { resolveDatasource, sessionDatasets } from './dataset.tools';
 /** The requestContext key of the run's `DashboardToolsRuntime`. */
 export const DASHBOARD_TOOLS_RUNTIME_KEY = 'dashboard-tools-runtime';
 
+/**
+ * Clara's line after an accepted dashboard: she answers Avery, not the user.
+ * Her runtime passes it as `afterAccept`.
+ */
+export const CLARA_AFTER_ACCEPT = 'Reply to Avery in one or two sentences.';
+
+/**
+ * Elena's line after an accepted dashboard (plan Elena 2.4): she answers the
+ * user herself.
+ */
+export const SOLO_AFTER_ACCEPT =
+  'Tell the user in one or two sentences what the dashboard shows; do not repeat its figures.';
+
 /** What submit_dashboard calls: the run that builds the dashboard. */
 export interface DashboardToolsRuntime {
+  /**
+   * What the accepted text asks next, appended after "Accepted: …" (Clara:
+   * `CLARA_AFTER_ACCEPT`); nothing is appended without one.
+   */
+  afterAccept?: string;
   submit(
     input: z.output<typeof submitDashboardInputSchema> & {
       datasourceId: string;
@@ -41,7 +59,7 @@ export const submitDashboardTool = createTool({
     );
     if (!runtime || !requestContext) {
       return {
-        error: 'This tool only runs when Avery asks Clara for a dashboard.',
+        error: 'This tool only runs when the run builds a dashboard.',
       };
     }
     const target = resolveDatasource(
@@ -56,7 +74,12 @@ export const submitDashboardTool = createTool({
       });
       if (!submitted.accepted) return { error: submitted.error };
       return {
-        result: `Accepted: the dashboard is drawn on ${submitted.rowCount} rows of your query (${submitted.columns.length} columns). Reply to Avery in one or two sentences.`,
+        result: [
+          `Accepted: the dashboard is drawn on ${submitted.rowCount} rows of your query (${submitted.columns.length} columns).`,
+          runtime.afterAccept,
+        ]
+          .filter(Boolean)
+          .join(' '),
       };
     } catch (err) {
       // A submit the stop cut short is no failed submit: the call ends.

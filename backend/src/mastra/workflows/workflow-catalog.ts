@@ -24,6 +24,16 @@ import {
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import { INSIGHTS_ANALYST_AGENT_KEY } from '../agents/insights-analyst-catalog';
+import { INSIGHTS_LEAD_AGENT_KEY } from '../agents/insights-lead-catalog';
+import {
+  INSIGHTS_LEAD_EDGES,
+  INSIGHTS_LEAD_STEPS,
+  INSIGHTS_LEAD_WORKFLOW_ID,
+} from './conversation-turn.steps';
+import {
+  conversationalBindingOf,
+  type ConversationalBinding,
+} from '../conversational-agents';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
 import {
   ORCHESTRATED_MICHAEL_EDGES,
@@ -496,6 +506,35 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
     },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
 
+/** The name of Elena's conversation as a run shows it (api.md 117, 120). */
+export const INSIGHTS_LEAD_WORKFLOW_NAME = 'Conversation with Elena';
+
+/**
+ * The built-in agents' conversations outside any workflow (plan Elena 1.1),
+ * as `GET /workflows/:id` (117) and the run routes (118, 119) resolve them:
+ * Elena's `agent:insights-lead`, one Answer step on her own. Never in
+ * `CODE_WORKFLOWS`, so `GET /workflows` (116) never lists one.
+ */
+export const CONVERSATION_WORKFLOWS: readonly CodeWorkflowSource[] =
+  assertWorkflowContracts<Omit<CodeWorkflowSource, 'contractHash'>>([
+    {
+      id: INSIGHTS_LEAD_WORKFLOW_ID,
+      name: INSIGHTS_LEAD_WORKFLOW_NAME,
+      category: 'data-analytics',
+      description:
+        'A conversation with Elena, the Insights Lead: she queries your data, checks every figure and writes the answer on her own, and builds a dashboard or exports the conversation when you ask.',
+      primaryFor: INSIGHTS_LEAD_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
+        DATASETS_FIELD,
+      ],
+      steps: INSIGHTS_LEAD_STEPS,
+      edges: INSIGHTS_LEAD_EDGES,
+      bar: 'steps',
+    },
+  ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
+
 /**
  * The code workflows removed from the catalogue (data-model 3.16 M18): their
  * stored runs are deleted at startup, and a past chat that ran one keeps its
@@ -613,11 +652,14 @@ export function agentWorkflowId(agentKeyOrId: string): string {
 export type ParsedWorkflowId =
   | { kind: 'code'; source: CodeWorkflowSource }
   | { kind: 'builtin-agent'; agentKey: string }
+  | { kind: 'conversation'; binding: ConversationalBinding }
   | { kind: 'user-agent'; agentId: string };
 
 /**
- * What a session's workflow id names: a code workflow, or the agent-turn
- * binding of a wrapped built-in agent or a user agent. Undefined for an
+ * What a session's workflow id names: a code workflow, a built-in agent's
+ * conversation outside any workflow (`agent:insights-lead`, plan Elena
+ * 1.3; Avery's conversational workflow stays a code workflow), or the
+ * agent-turn binding of a wrapped built-in agent or a user agent. Undefined for an
  * unknown id (a removed workflow such as `seq-text-demo` or
  * `deep-analysis`), a System agent's key and the `primaryFor` agent of a
  * code workflow (it runs that workflow). Any other `agent:` id names a user
@@ -634,6 +676,8 @@ export function parseWorkflowId(id: string): ParsedWorkflowId | undefined {
   if (WRAPPED_AGENT_KEYS.includes(key)) {
     return { kind: 'builtin-agent', agentKey: key };
   }
+  const binding = conversationalBindingOf(id);
+  if (binding) return { kind: 'conversation', binding };
   if (
     SYSTEM_AGENT_KEYS.includes(key) ||
     CODE_WORKFLOWS.some((workflow) => workflow.primaryFor === key)

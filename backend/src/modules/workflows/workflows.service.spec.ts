@@ -121,6 +121,13 @@ function build(
       '',
       'You are Avery.',
     ),
+    // Elena, the Insights Lead (plan Elena 2): a stand-in.
+    'insights-lead': fakeAgent(
+      'Insights Lead',
+      ['list_entities', 'run_readonly_sql', 'submit_dashboard'],
+      '',
+      'You are Elena.',
+    ),
     // Olivia and Jessica, in the library (agents.md 5.11).
     'analysis-planner': fakeAgent(
       'Analysis Planner',
@@ -247,6 +254,65 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     expect(workflows).toEqual([AVERY_MICHAEL_SUMMARY, READINESS_SUMMARY]);
     expect(workflows[0]).not.toHaveProperty('runRequirement');
     expect(workflows[0]).not.toHaveProperty('chatRequirement');
+  });
+
+  describe('conversations (plan Elena 1.1, 1.2)', () => {
+    it("marks Avery's workflow conversational, and never lists Elena's", async () => {
+      ctx = build();
+      const listed = await ctx.service.list();
+      expect(listed.map((workflow) => workflow.id)).not.toContain(
+        'agent:insights-lead',
+      );
+      expect(listed[0]).toMatchObject({
+        id: 'orchestrated-answer-michael',
+        conversational: true,
+      });
+      expect(listed[1]).not.toHaveProperty('conversational');
+    });
+
+    it("details Elena's agent:insights-lead (117): one Answer step, Elena its agent, conversational, a question and datasets", async () => {
+      ctx = build();
+      const detail = await ctx.service.get('agent:insights-lead');
+      expect(detail).toMatchObject({
+        id: 'agent:insights-lead',
+        name: 'Conversation with Elena',
+        conversational: true,
+        stepCount: 1,
+        bar: 'steps',
+        datasets: [],
+      });
+      expect(
+        detail.agents.map((agent) => [agent.key, agent.name, agent.role]),
+      ).toEqual([['insights-lead', 'Elena', 'Insights Lead']]);
+      expect(detail.steps.map((step) => step.id)).toEqual(['answer']);
+      expect(detail.steps[0].agent).toMatchObject({
+        key: 'insights-lead',
+        name: 'Elena',
+        maxSteps: 24,
+      });
+      expect(detail.edges).toEqual([
+        { from: 'start', to: 'answer', kind: 'next' },
+        { from: 'answer', to: 'end', kind: 'next' },
+      ]);
+      expect(detail.input.map((field) => field.name)).toEqual([
+        'question',
+        'datasets',
+      ]);
+      expect(detail.contractHash).toMatch(/^[0-9a-f]{12}$/);
+      await expect(
+        ctx.service.definition('agent:insights-lead'),
+      ).resolves.toMatchObject({
+        conversational: true,
+        contractHash: detail.contractHash,
+      });
+    });
+
+    it('still answers 404 for any other agent: id', async () => {
+      ctx = build();
+      await expect(ctx.service.get('agent:assistant')).rejects.toThrow(
+        'Workflow "agent:assistant" not found',
+      );
+    });
   });
 
   describe('get', () => {

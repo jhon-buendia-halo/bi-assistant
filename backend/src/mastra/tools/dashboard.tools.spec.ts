@@ -5,6 +5,7 @@ import {
 } from '../tool-services';
 import { DATASETS_CONTEXT_KEY } from './dataset-tool-context';
 import {
+  CLARA_AFTER_ACCEPT,
   DASHBOARD_TOOLS_RUNTIME_KEY,
   submitDashboardTool,
   type DashboardToolsRuntime,
@@ -94,6 +95,46 @@ describe('submit_dashboard', () => {
     expect(result).not.toHaveProperty('rows');
   });
 
+  it("appends the runtime's afterAccept line to the accepted text", async () => {
+    setDatasetToolServices(services(['ds-pg']));
+    const submit = jest.fn().mockResolvedValue({
+      accepted: true,
+      rowCount: 32,
+      columns: ['team', 'goals'],
+    });
+    const result = await execute(INPUT, {
+      requestContext: contextWith({
+        submit,
+        afterAccept: 'Answer the user in one or two sentences.',
+      }),
+    });
+    expect(result.result).toBe(
+      'Accepted: the dashboard is drawn on 32 rows of your query (2 columns). Answer the user in one or two sentences.',
+    );
+  });
+
+  it("keeps Clara's text unchanged with her line, and adds nothing without one", async () => {
+    setDatasetToolServices(services(['ds-pg']));
+    const submit = jest.fn().mockResolvedValue({
+      accepted: true,
+      rowCount: 32,
+      columns: ['team', 'goals'],
+    });
+    expect(CLARA_AFTER_ACCEPT).toBe('Reply to Avery in one or two sentences.');
+    const clara = await execute(INPUT, {
+      requestContext: contextWith({ submit, afterAccept: CLARA_AFTER_ACCEPT }),
+    });
+    expect(clara.result).toBe(
+      'Accepted: the dashboard is drawn on 32 rows of your query (2 columns). Reply to Avery in one or two sentences.',
+    );
+    const bare = await execute(INPUT, {
+      requestContext: contextWith({ submit }),
+    });
+    expect(bare.result).toBe(
+      'Accepted: the dashboard is drawn on 32 rows of your query (2 columns).',
+    );
+  });
+
   it('returns what to fix when the run refuses the dashboard', async () => {
     setDatasetToolServices(services(['ds-pg']));
     const submit = jest.fn().mockResolvedValue({
@@ -127,7 +168,9 @@ describe('submit_dashboard', () => {
   it('refuses outside a dashboard build', async () => {
     setDatasetToolServices(services(['ds-pg']));
     const result = await execute(INPUT, { requestContext: contextWith() });
-    expect(result.error).toContain('only runs when Avery asks Clara');
+    expect(result.error).toBe(
+      'This tool only runs when the run builds a dashboard.',
+    );
   });
 
   it('turns a failed submit into an error the model reads', async () => {

@@ -6,6 +6,8 @@ import { DatasetsModule } from '../datasets/datasets.module';
 import { SessionsModule } from '../sessions/sessions.module';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
+import { ConversationsController } from './conversations.controller';
+import { ConversationsService } from './conversations.service';
 import { DraftRunsController } from './draft-runs.controller';
 import { WorkflowNodeChatsService } from './workflow-node-chats.service';
 import { WorkflowRunsController } from './workflow-runs.controller';
@@ -38,9 +40,11 @@ import { AveryEvalBridge } from './avery-eval-bridge';
     WorkflowsController,
     WorkflowRunsController,
     DraftRunsController,
+    ConversationsController,
   ],
   providers: [
     WorkflowsService,
+    ConversationsService,
     WorkflowRunsService,
     WorkflowRunsRepository,
     WorkflowNodeChatsService,

@@ -5,11 +5,11 @@ import {
   teammateOfTool,
   type OrchestratorToolsRuntime,
 } from '../workflows/orchestrated-answer-michael.steps';
+import { buildDashboardTool, orchestratorTools } from './orchestrator.tools';
 import {
-  buildDashboardTool,
+  EXPORT_TOOLS_RUNTIME_KEY,
   exportConversationTool,
-  orchestratorTools,
-} from './orchestrator.tools';
+} from './export.tools';
 
 function runtime(
   overrides: Partial<OrchestratorToolsRuntime> = {},
@@ -133,9 +133,12 @@ describe("Avery's export_conversation (agents.md 3.18)", () => {
       input: unknown,
       context: { requestContext: RequestContext },
     ) => Promise<unknown>;
-    await expect(
-      execute(content, { requestContext: contextWith(run) }),
-    ).resolves.toEqual({ result: 'Exported.' });
+    // Avery's run sets the export key from her tools runtime.
+    const requestContext = contextWith(run);
+    requestContext.set(EXPORT_TOOLS_RUNTIME_KEY, run);
+    await expect(execute(content, { requestContext })).resolves.toEqual({
+      result: 'Exported.',
+    });
     expect(exportConversation).toHaveBeenCalledWith({
       ...content,
       formats: ['pdf', 'pptx'],

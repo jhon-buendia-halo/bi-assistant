@@ -38,6 +38,7 @@ import {
 import { ExecutionId } from '../../../../shared/execution-id/execution-id';
 import { RunArtifactCard } from '../../../runs/components/run-artifact-card/run-artifact-card';
 import { RunDashboardCard } from '../../../runs/components/run-dashboard-card/run-dashboard-card';
+import { RunWorkSummary } from '../run-work-summary/run-work-summary';
 import { RunExportCard } from '../../../runs/components/run-export-card/run-export-card';
 import {
   ConversationTurn,
@@ -129,7 +130,11 @@ import {
 
 /** The workflow a saved dashboard is mapped in, and its artifact field. */
 const MAP_WORKFLOW_ID = 'map-dashboard-data';
-/** Avery, the Chief of Staff: a workflow she runs is a never-ending conversation. */
+/**
+ * Avery, the Chief of Staff: a workflow she runs is a never-ending
+ * conversation. TODO(ELENA-U1): drop this fallback once the workflow's
+ * `conversational: true` (api.md 116/117) is served for Avery's workflow.
+ */
 const AVERY_AGENT_KEY = 'chief-of-staff';
 const MAP_ARTIFACT_FIELD = 'artifact';
 
@@ -201,6 +206,7 @@ export function conversationIsSpanish(questions: readonly string[]): boolean {
     ChatHistoryNav,
     RunArtifactCard,
     RunDashboardCard,
+    RunWorkSummary,
     RunExportCard,
   ],
   providers: [WorkflowConversation],
@@ -279,8 +285,16 @@ export class WorkflowRunChat {
    * with the agents' thread but no live tool calls or How it ran; a run's
    * details open in the Builder view.
    */
-  readonly variant = input<'panel' | 'business'>('panel');
-  protected readonly business = computed(() => this.variant() === 'business');
+  readonly variant = input<'panel' | 'business' | 'conversation'>('panel');
+  /**
+   * `conversation`: a chat with a conversational agent outside any workflow
+   * (Elena, agents-evals R115): the Business thread, a work summary instead
+   * of the team, no Run again, Open in Builder or view toggle.
+   */
+  protected readonly isConversationVariant = computed(
+    () => this.variant() === 'conversation',
+  );
+  protected readonly business = computed(() => this.variant() !== 'panel');
 
   /**
    * The chat reads the whole thread of earlier turns: always in the Business
@@ -290,14 +304,16 @@ export class WorkflowRunChat {
   protected readonly threaded = computed(
     () => this.business() || this.isAveryWorkflow(),
   );
-  // Answer a Business Question (Avery + Michael): any
-  // workflow whose step runs Avery (workflows R45).
-  private readonly isAveryWorkflow = computed(
-    () =>
-      this.designer
-        .workflow()
-        ?.steps.some((step) => step.agent?.key === AVERY_AGENT_KEY) ?? false,
-  );
+  // A conversational workflow (workflows R45, agents-evals R115): the
+  // workflow says so, else any workflow whose step runs Avery.
+  private readonly isAveryWorkflow = computed(() => {
+    const workflow = this.designer.workflow();
+    return (
+      workflow?.conversational === true ||
+      (workflow?.steps.some((step) => step.agent?.key === AVERY_AGENT_KEY) ??
+        false)
+    );
+  });
 
   /** The shown run is an ended, not archived run of Avery's conversation. */
   protected readonly averyOpen = computed(() => {

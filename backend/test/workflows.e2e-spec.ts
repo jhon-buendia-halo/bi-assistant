@@ -156,6 +156,8 @@ describe('The workflow catalogue (API)', () => {
         kind: 'code',
         owner: 'Official',
         category: { id: 'data-analytics', name: 'Data Analytics' },
+        // A conversation with Avery (plan Elena 1.2, ADR-0058).
+        conversational: true,
         // Michael analyses; Avery briefs him and is the only one you talk to.
         agents: [
           {

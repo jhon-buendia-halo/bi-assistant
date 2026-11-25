@@ -177,7 +177,7 @@ User agents (definitions)
 - R50. Deleting a user agent SHALL remove only its definition. Sessions that reference it SHALL keep their transcript (their behaviour is in [../agent-answers/spec.md](../agent-answers/spec.md)).
 - R51. Saving a draft, publishing, deleting or pinning an agent that does not exist SHALL fail with `Agent "<id>" not found` (an `ok: false` answer); requesting the detail of one SHALL fail with HTTP 404 as in R8.
 - R52. User agents SHALL persist across restarts of the backend.
-- R53. Agents are a library, not workflows (ADR-0042, 2026-11-12): they are configured here (prompt, tools, skills, evals, versions) and the workflow steps of [workflows](../workflows/spec.md) call them. **Start chat** SHALL NOT be offered on any agent or workflow (chats are retired, ADR-0041), and **Run** (running the agent as a one-step workflow) SHALL NOT be offered on any agent: not on a hub card, not in an agent's detail header and not in any tab. The only way to run a user agent is **Try it** on its draft (R60). Only the six catalogue workflows are workflows, and they run from the Workflows page. The agent summary no longer carries a `chatRequirement` ([api.md](../../system/api.md) 33).
+- R53. Agents are a library, not workflows (ADR-0042, 2026-11-12): they are configured here (prompt, tools, skills, evals, versions) and the workflow steps of [workflows](../workflows/spec.md) call them. **Start chat** SHALL NOT be offered on any agent or workflow (chats are retired, ADR-0041), and **Run** (running the agent as a one-step workflow) SHALL NOT be offered on any agent: not on a hub card, not in an agent's detail header and not in any tab. The one exception is **Ask <name>** on a built-in conversational agent (Elena, R115; ADR-0058), which is not a run button: it opens a conversation. The only way to run a user agent is **Try it** on its draft (R60). Only the six catalogue workflows are workflows, and they run from the Workflows page. The agent summary no longer carries a `chatRequirement` ([api.md](../../system/api.md) 33).
 
 ### Agent editor
 
@@ -264,7 +264,7 @@ The agent detail's tabs for tools, their links and the model settings ([../../sy
 
 The Try it, Job Description and Skills tabs of the agent detail, which work as in the agent-poc reference (ADR-0025; [../../system/ui.md](../../system/ui.md) 4.5, 4.5.8-4.5.10). The other tabs are R6, R7, R87-R89.
 
-- R90. **Try it** SHALL be the first tab of a user agent (its id stays `chat`), and SHALL exist for user agents only. Official and System agents SHALL NOT have it: an Official agent is not run from its page (R53). (It replaced **Chat Box** in 1.23.23.)
+- R90. **Try it** SHALL be the first tab of a user agent (its id stays `chat`), and SHALL exist for user agents only. Official and System agents SHALL NOT have it: an Official agent is not run from its page (R53). Elena has no Try it either: **Ask Elena** opens her conversation (R115). (It replaced **Chat Box** in 1.23.23.)
   - **User agent:** the tab SHALL hold the Try it panel of R60 over the agent's **draft**, with the heading `Try the draft` and **Reset**. It SHALL run what the draft stores: edits saved from the Job Description tab (R93) apply to the next run. When the draft has no existing dataset the tab SHALL say `Add a dataset to this agent to try it.` with an **Edit** link to the agent editor and no question box.
 - R91. The tabs SHALL open on their defaults: **Try it** for user agents, **Job Description** for Official and System agents. The **Job Description** tab for the Official and System agents SHALL show the prompt as served (R6), editable (R97-R105). While it is read, every agent's job description SHALL show first as a CV (the agent's details beside the job description's own words sorted into the sections Profile, Inputs, Deliverables, Working rules and More; [ui.md](../../system/ui.md) 4.5) with a **CV / Text** switch back to the text as stored; the CV SHALL NOT add or reword any word of it.
 - R92. On a user agent, the **Job Description** tab SHALL show the assistant's core prompt read-only and collapsed, titled `Assistant core prompt (fixed)`, under the agent's own section, **Job description**: the instructions with their links as chips (R86) and an **Edit** button. Only the agent's instructions are editable here; the core prompt is the Official agent's, edited on its own page (R97).
@@ -315,6 +315,12 @@ The Job Description tab (the system prompt) of the Official and System agents, e
 - R112. **Every run records what it ran on** (ADR-0054). A run SHALL carry its `setId` (the id of the eval set its questions belong to, `null` when they span several sets), the `provider` and `model` the agents used, and its `source` (`app` for a run started from the app, `cli` for one started by the CLI runner; a run without `source` is an `app` run). A run started from the app takes the provider and model of the LLM settings (`openai` and `gpt-4o-mini`, the environment fallback, when none are saved); a CLI run with `EVAL_LLM_PROVIDER=custom` records `custom` and `EVAL_LLM_MODEL`. Runs recorded before these fields existed are read as in [../../system/data-model.md](../../system/data-model.md) 3.8.
 - R113. **CLI runs are saved.** The eval CLI ([../../system/agents.md](../../system/agents.md) 8.5) SHALL save each run to `eval_runs` as the app does, so the Executions list shows it and the comparison with the previous run works for both. The run is stored only once its first question has finished: a run the CLI refuses before the first question (a preflight failure) stores nothing. The CLI prints `Saved as eval run <jobId>`; when saving fails it prints `Could not save the run: <reason>` and its exit code is unchanged.
 - R114. **Eval calls carry a marker** (ADR-0054, [monitoring](../monitoring/spec.md) R59). Every model call of a run SHALL carry the run's id as `eval-run-id` in its request context, so the trace records it on the call's spans. This includes the calls of the judge and of the synthesis of a tool-only target, not only the question's own agent calls. A target that starts a call in a new trace SHALL forward the case's request context.
+- R115. **Ask Elena** (2026-11-25; ADR-0058; [../../system/agents.md](../../system/agents.md) 2.23, 5.14; [../../system/ui.md](../../system/ui.md) 4.5.12). Elena, the Insights Lead (`insights-lead`), SHALL answer business questions alone, in a conversation outside any workflow:
+  - **Entry.** When the agent's detail ([api.md](../../system/api.md) 34) carries `conversation`, its header SHALL show an **Ask <persona name>** button (`Ask Elena`, `agent-ask-button`) that opens the agent's conversation page with no run yet. The button is on no other agent.
+  - **The page.** Breadcrumb `Agent personas / Elena · Insights Lead`, the chip `Conversation` and `insights-lead · <datasets>`; the run chat without Business/Builder toggle, Run again or Open in Builder, with **New conversation**, **Export**, **Archive** and the composer `Message Elena`. Each answer SHALL have a **work summary** line above it (worked for N s, skills loaded, tables read, queries run, checks passed) that opens to the list of its queries; a click on a query opens the query inspector (agent-answers R56).
+  - **The conversations panel.** A panel between the app rail and the chat SHALL list Elena's conversations (api.md 168), **collapsed by default** to a 56 px strip and expandable to 272 px that pushes the chat: search, groups by day, the current conversation marked, **Archived** at the bottom. The open or closed state SHALL be remembered on the computer; the first visit is collapsed. Opening the dashboard's side panel SHALL collapse it without changing the remembered state.
+  - **A follow-up and archive.** A message in the open conversation SHALL join it (workflows R46); **Archive** SHALL move it under **Archived** and make it read-only, as for Avery's.
+  - She SHALL NOT appear in the Workflows catalogue, and the home page's Ask stays on Avery.
 
 ## Edge cases and errors
 
@@ -1268,6 +1274,21 @@ Feature: Agent definitions (API)
     Then the agent shows "Unpublished changes" and its Live copy of "fiscal-calendar" is unchanged
     When I publish it again
     Then its Live copy carries the new body
+```
+
+
+E2E: `frontend/e2e/elena-conversation.spec.ts`
+
+### Feature: Ask Elena
+
+Elena's conversation (R115): the page, its conversations panel, the work summary and archive. The backend is stubbed by the recording model; the web target runs the spec.
+
+```gherkin
+Feature: Ask Elena
+  Scenario: Ask Elena from her page opens a conversation with the panel collapsed
+  Scenario: A follow-up joins the conversation and the work summary opens to its queries
+  Scenario: The conversations panel expands, searches and remembers its state
+  Scenario: Archiving a conversation moves it under Archived
 ```
 
 ## Acceptance

@@ -67,11 +67,11 @@ import {
 } from './review-website.steps';
 import { reviewWebsiteWorkflow } from './review-website.workflow';
 import { ORCHESTRATED_MICHAEL_STEP_SCHEMAS } from './orchestrated-answer-michael.steps';
+import { ORCHESTRATED_MICHAEL_WORKFLOW_ID } from './orchestrated-answer-michael.steps';
 import {
-  ORCHESTRATED_MICHAEL_RUNTIME_KEY,
-  ORCHESTRATED_MICHAEL_WORKFLOW_ID,
-  type OrchestratedMichaelRuntime,
-} from './orchestrated-answer-michael.steps';
+  CONVERSATION_TURN_RUNTIME_KEY,
+  type ConversationTurnRuntime,
+} from './conversation-turn.steps';
 import { orchestratedMichaelWorkflow } from './orchestrated-answer-michael.workflow';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 
@@ -143,10 +143,10 @@ const ORCHESTRATED_FIXTURE: ContractFixture = {
   input: { question: 'How many matches?', datasets: ['World Cup'] },
   requestContext: () => {
     const context = new RequestContext();
-    context.set(ORCHESTRATED_MICHAEL_RUNTIME_KEY, {
-      orchestrate: () =>
+    context.set(CONVERSATION_TURN_RUNTIME_KEY, {
+      turn: () =>
         Promise.resolve({ answer: 'There were 64 matches.', stopped: false }),
-    } satisfies OrchestratedMichaelRuntime);
+    } satisfies ConversationTurnRuntime);
     return context;
   },
 };

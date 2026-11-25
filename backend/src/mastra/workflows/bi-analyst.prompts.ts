@@ -34,13 +34,16 @@ When the brief gives you the current dashboard (its draft and its data query), s
 `;
 
 /**
- * The dashboard Clara changes (agents.md 2.22): its draft (ids kept), its
- * stored data query, columns and row count, with the instruction to change
- * only what the brief asks.
+ * The dashboard Clara (or Elena) changes (agents.md 2.22): its draft (ids
+ * kept), its stored data query, columns and row count, with the instruction
+ * to change only what `asker` asks (Clara: `the brief`; Elena: `the user`).
  */
-export function currentDashboardBlock(current: CurrentDashboard): string {
+export function currentDashboardBlock(
+  current: CurrentDashboard,
+  asker = 'the brief',
+): string {
   return [
-    `The current dashboard: "${current.title}", version ${current.version}. Change it into version ${current.version + 1}: keep every id, title and binding, and change only what the brief asks. Submit the whole dashboard.`,
+    `The current dashboard: "${current.title}", version ${current.version}. Change it into version ${current.version + 1}: keep every id, title and binding, and change only what ${asker} asks. Submit the whole dashboard.`,
     `Its draft: ${JSON.stringify(draftOf(current.blueprint))}`,
     `Its data query (datasource ${current.query.datasourceId}): ${current.query.sql}`,
     `Its columns: ${current.columns.join(', ') || '(none)'}`,

@@ -6,6 +6,11 @@ import {
   WorkflowRun,
   WorkflowRunSummary,
 } from '../../workflows/models/workflow.model';
+import {
+  agentKeyOfBinding,
+  isConversationalAgentWorkflow,
+} from '../../agents/models/conversation.model';
+import { AgentsNavState } from '../../agents/services/agents-nav-state';
 import { WorkflowDesigner } from '../../workflows/services/workflow-designer.service';
 import { WorkflowRunsApiService } from '../../workflows/services/workflow-runs-api.service';
 import { WorkflowsApiService } from '../../workflows/services/workflows-api.service';
@@ -27,6 +32,7 @@ export class RunsState {
   private readonly workflowsApi = inject(WorkflowsApiService);
   private readonly designer = inject(WorkflowDesigner);
   private readonly workflowsNav = inject(WorkflowsNavState);
+  private readonly agentsNav = inject(AgentsNavState);
 
   readonly tab = signal<RunsTab>('runs');
   readonly runs = signal<WorkflowRunSummary[]>([]);
@@ -121,6 +127,14 @@ export class RunsState {
         if (!this.stillOpening(run.id)) return;
         this.opening = null;
         this.loadingRun.set(false);
+        if (isConversationalAgentWorkflow(run.workflowId)) {
+          // A conversation with an agent (agents-evals R115): its own page.
+          this.agentsNav.openConversation(
+            agentKeyOfBinding(run.workflowId),
+            run.id,
+          );
+          return;
+        }
         this.designer.showRunOnLoad(run);
         this.workflowsNav.openWorkflow(run.workflowId);
       },

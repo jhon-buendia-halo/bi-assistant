@@ -173,6 +173,31 @@ describe('the export document (agents.md 3.18)', () => {
     ).toBe('en');
   });
 
+  it("names the conversation's agent as its author: Avery with her team by default, Elena on her own (plan Elena 1.3)", () => {
+    const avery = exportDocument({
+      runs: RUNS,
+      content: CONTENT,
+      brand: 'halo',
+      dashboards: drawn(),
+    });
+    expect(exportHtml(avery)).toContain('Avery · Chief of Staff');
+    expect(exportHtml(avery)).toContain('Avery, Chief of Staff, con su equipo');
+    const elena = exportDocument({
+      runs: RUNS,
+      content: CONTENT,
+      brand: 'halo',
+      dashboards: drawn(),
+      author: { name: 'Elena', role: 'Insights Lead' },
+    });
+    const html = exportHtml(elena);
+    expect(html).toContain('Elena · Insights Lead');
+    expect(html).toContain('Elena, Insights Lead</span>');
+    expect(html).not.toContain('Avery');
+    expect(JSON.stringify(exportSlides(elena))).toContain(
+      'preparado por Elena',
+    );
+  });
+
   it('maps turn k to the k-th earlier question, and falls back to the question', () => {
     const doc = exportDocument({
       runs: RUNS,

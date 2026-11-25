@@ -604,8 +604,14 @@ export class SessionsService implements OnModuleInit {
       const parsed = spec.workflowId
         ? parseWorkflowId(spec.workflowId)
         : undefined;
+      // A code workflow runs for its `primaryFor` agent; a built-in agent's
+      // conversation (plan Elena 1.3) on its binding's host agent.
       const primary =
-        parsed?.kind === 'code' ? parsed.source.primaryFor : undefined;
+        parsed?.kind === 'code'
+          ? parsed.source.primaryFor
+          : parsed?.kind === 'conversation'
+            ? parsed.binding.hostAgentKey
+            : undefined;
       const agent = primary ? this.mastra.listAgents()[primary] : undefined;
       if (!primary || !agent) {
         throw new NotFoundException(`Workflow "${spec.workflowId}" not found`);
@@ -613,7 +619,12 @@ export class SessionsService implements OnModuleInit {
       binding = { agentKey: primary, agentName: agent.name ?? primary };
       // The run's own workflow: an agent can run more than one (the Data
       // Readiness Agent's sessions stay on its agent turn).
-      codeWorkflowId = parsed?.kind === 'code' ? parsed.source.id : undefined;
+      codeWorkflowId =
+        parsed?.kind === 'code'
+          ? parsed.source.id
+          : parsed?.kind === 'conversation'
+            ? parsed.binding.workflowId
+            : undefined;
     }
     const id = `${RUN_HOST_ID_PREFIX}${spec.runId}`;
     const name = spec.name.slice(0, 64);
@@ -1026,6 +1037,13 @@ export class SessionsService implements OnModuleInit {
         kind: 'code',
         deleted: false,
       };
+    }
+    // A built-in agent's conversation (plan Elena 1.3): her own name.
+    if (parsed?.kind === 'conversation') {
+      const key = parsed.binding.agentKey;
+      const name =
+        this.mastra.listAgents()[key]?.name ?? session.agentName ?? key;
+      return { id, name, kind: 'agent', deleted: false };
     }
     if (parsed?.kind === 'builtin-agent') {
       const name =

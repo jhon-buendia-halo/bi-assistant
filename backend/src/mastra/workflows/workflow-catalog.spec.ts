@@ -2,8 +2,10 @@ import { edgeFlow } from './workflow-contract';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { OFFICIAL_AGENT_KEYS, SYSTEM_AGENT_KEYS } from '../agent-constants';
+import { CONVERSATIONAL_BINDINGS } from '../conversational-agents';
 import { AGENT_TURN_STEPS, AGENT_TURN_WORKFLOW_ID } from './agent-turn.steps';
 import { agentWorkflow } from './agent-workflows';
+import { conversationalBindingOf } from '../conversational-agents';
 import {
   agentRunTurn,
   agentWorkflowId,
@@ -424,8 +426,14 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       );
     });
 
-    it("wraps every registered Official agent, or runs it as a code workflow's primaryFor", () => {
-      const primary = CODE_WORKFLOWS.map((source) => source.primaryFor);
+    it("wraps every registered Official agent, runs it as a code workflow's primaryFor, or talks to it in its own conversation", () => {
+      const primary = [
+        ...CODE_WORKFLOWS.map((source) => source.primaryFor),
+        // Elena, asked in her own conversation (plan Elena 1.2).
+        ...CONVERSATIONAL_BINDINGS.filter(
+          (binding) => binding.kind === 'solo',
+        ).map((binding) => binding.agentKey),
+      ];
       const registered = registeredAgentKeys().filter((key) =>
         OFFICIAL_AGENT_KEYS.includes(key),
       );
@@ -478,6 +486,26 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         });
       },
     );
+
+    it("parses Elena's agent:insights-lead as a conversational binding, before the user-agent fallback", () => {
+      expect(parseWorkflowId('agent:insights-lead')).toEqual({
+        kind: 'conversation',
+        binding: conversationalBindingOf('agent:insights-lead'),
+      });
+    });
+
+    it("keeps Avery's conversational workflow a code workflow", () => {
+      expect(parseWorkflowId('orchestrated-answer-michael')?.kind).toBe('code');
+    });
+
+    it('keeps a host stored on agent:insights-lead on it', () => {
+      expect(
+        sessionWorkflowId({
+          workflowId: 'agent:insights-lead',
+          agentKey: 'insights-lead',
+        }),
+      ).toBe('agent:insights-lead');
+    });
 
     it('no longer wraps the removed RFP Builder: agent:rfp is a user agent id the caller will not find', () => {
       expect(parseWorkflowId('agent:rfp')).toEqual({

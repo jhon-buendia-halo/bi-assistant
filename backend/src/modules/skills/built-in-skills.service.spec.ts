@@ -48,36 +48,46 @@ describe('BuiltInSkillsService', () => {
     const { service } = build();
     const list = await service.list();
     expect(list.map((skill) => skill.name)).toEqual([
+      'answer-playbooks',
       'avery-playbooks',
       'conversation-export',
       'curated-knowledge',
+      'dashboard-building',
       'data-readiness',
       'interactive-visuals',
       'readiness-drilldown',
       'result-validation',
       'sql-analysis',
     ]);
-    expect(list[0]).toMatchObject({
+    const named = (name: string) => list.find((skill) => skill.name === name);
+    // Elena's playbooks and dashboard rules (plan Elena 2.1).
+    for (const name of ['answer-playbooks', 'dashboard-building']) {
+      expect(named(name)).toMatchObject({
+        loading: 'on-demand',
+        agents: ['insights-lead'],
+      });
+    }
+    expect(named('avery-playbooks')).toMatchObject({
       loading: 'on-demand',
       agents: ['chief-of-staff'],
     });
-    // Avery's export rules: listed for her, offered only on an export.
-    expect(list[1]).toMatchObject({
+    // The export rules: listed for Avery and Elena, offered only on an export.
+    expect(named('conversation-export')).toMatchObject({
       loading: 'on-demand',
-      agents: ['chief-of-staff'],
+      agents: ['chief-of-staff', 'insights-lead'],
     });
-    expect(list[2]).toMatchObject({
+    expect(named('curated-knowledge')).toMatchObject({
       loading: 'on-demand',
-      agents: ['assistant', 'insights-analyst'],
+      agents: ['assistant', 'insights-analyst', 'insights-lead'],
       modified: false,
       builtInChanged: false,
       updatedAt: null,
     });
-    expect(list[3]).toMatchObject({
+    expect(named('data-readiness')).toMatchObject({
       loading: 'on-demand',
       agents: ['data-readiness'],
     });
-    expect(list[4]).toMatchObject({
+    expect(named('interactive-visuals')).toMatchObject({
       loading: 'harness',
       agents: ['visualization'],
     });

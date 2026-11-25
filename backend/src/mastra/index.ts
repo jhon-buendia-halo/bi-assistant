@@ -9,6 +9,7 @@ import { biAnalystAgent } from './agents/bi-analyst.agent';
 import { queryExplainerAgent } from './agents/query-explainer.agent';
 import { resultExplorerAgent } from './agents/result-explorer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
+import { insightsLeadAgent } from './agents/insights-lead.agent';
 import { dashboardReaderAgent } from './agents/dashboard-reader.agent';
 import { dataMapperAgent } from './agents/data-mapper.agent';
 import { gapAdvisorAgent } from './agents/gap-advisor.agent';
@@ -30,6 +31,7 @@ import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { orchestratedMichaelWorkflow } from './workflows/orchestrated-answer-michael.workflow';
+import { insightsLeadConversationWorkflow } from './workflows/conversation-turn.workflow';
 import { consumptionGapAnalysisWorkflow } from './workflows/consumption-gap-analysis.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 import { mapDashboardDataWorkflow } from './workflows/map-dashboard-data.workflow';
@@ -61,6 +63,8 @@ export const mastra = new Mastra({
     'chief-of-staff': chiefOfStaffAgent,
     // Clara, Avery's teammate behind build_dashboard (plan bi-dashboard).
     'bi-analyst': biAnalystAgent,
+    // Elena, the Insights Lead, alone in her own conversation (plan Elena 2).
+    'insights-lead': insightsLeadAgent,
     // The agents of Dashboard Image to Artifact's two model steps (agents.md 5.17).
     'dashboard-reader': dashboardReaderAgent,
     'data-mapper': dataMapperAgent,
@@ -86,6 +90,7 @@ export const mastra = new Mastra({
     'agent-turn': agentTurnWorkflow,
     // Answer a Business Question (Avery + Michael) (5.23).
     'orchestrated-answer-michael': orchestratedMichaelWorkflow,
+    'insights-lead-conversation': insightsLeadConversationWorkflow,
     'data-readiness-assessment': dataReadinessAssessmentWorkflow,
     'recreate-dashboard': recreateDashboardWorkflow,
     'map-dashboard-data': mapDashboardDataWorkflow,

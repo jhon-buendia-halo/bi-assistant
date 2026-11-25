@@ -31,7 +31,7 @@ import {
   type WorkflowInputError,
 } from '../../mastra/workflows/workflow-input';
 import { REVIEW_WEBSITE_WORKFLOW_ID } from '../../mastra/workflows/review-website.steps';
-import { isOrchestratedWorkflow } from '../../mastra/workflows/orchestrated-answer-michael.steps';
+import { isConversationalWorkflow } from '../../mastra/conversational-agents';
 
 /** The most turns of a conversation Avery reads (workflows R45). */
 export const CONVERSATION_TURNS = 20;
@@ -991,11 +991,11 @@ export class WorkflowRunsService
                     },
                   }),
               // Its agents go on from copies of the earlier run's threads.
-              // Avery's team gets no copy: she holds the conversation, and
-              // Michael reads the last answer's queries as a block instead
-              // (workflows R45), so every teammate starts from what she
-              // hands it.
-              ...(isOrchestratedWorkflow(workflow.id)
+              // A conversation gets no copy (Avery's team, Elena): the host's
+              // transcript holds it, and the last answer's queries come as a
+              // block instead (workflows R45), so Avery's teammates start
+              // from what she hands them.
+              ...(isConversationalWorkflow(workflow.id)
                 ? {}
                 : {
                     continuesThreadsOf: `${RUN_HOST_ID_PREFIX}${prepared.context.fromRunId}`,
@@ -1983,9 +1983,10 @@ export class WorkflowRunsService
         ? { contractHash: prepared.workflow.contractHash }
         : {}),
       input: prepared.values,
-      // Avery's runs belong to a conversation (workflows R45): a first
-      // message starts one (its own id), a follow-up joins its earlier run's.
-      ...(isOrchestratedWorkflow(prepared.workflow.id)
+      // A conversational binding's runs (Avery's, Elena's) belong to a
+      // conversation (workflows R45): a first message starts one (its own
+      // id), a follow-up joins its earlier run's.
+      ...(isConversationalWorkflow(prepared.workflow.id)
         ? { conversationId: prepared.context?.conversationId ?? id }
         : {}),
       ...(prepared.context
@@ -2069,14 +2070,14 @@ export class WorkflowRunsService
       question: earlier.question,
       answer: earlier.answer.content,
       ...(queries.length ? { queries } : {}),
-      ...(isOrchestratedWorkflow(workflowId)
+      ...(isConversationalWorkflow(workflowId)
         ? await this.conversationOf(earlier)
         : {}),
     };
   }
 
   /**
-   * The conversation a message to Avery joins (workflows R45): the earlier
+   * The conversation a message to Avery or Elena joins (workflows R45): the earlier
    * run's, and its turns so far (each run's question and answer, oldest
    * first, the last `CONVERSATION_TURNS`), and its dashboard: the last
    * one an answer of it carries (agents.md 5.22). An archived conversation
