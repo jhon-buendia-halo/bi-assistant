@@ -19,6 +19,7 @@ import {
 import { SITE_REVIEWER_INSTRUCTIONS } from './workflows/review-website.prompts';
 import { ORCHESTRATOR_MICHAEL_INSTRUCTIONS } from './workflows/orchestrated-answer-michael.prompts';
 import { BI_ANALYST_INSTRUCTIONS } from './workflows/bi-analyst.prompts';
+import { INSIGHTS_LEAD_INSTRUCTIONS } from './workflows/insights-lead.prompts';
 import {
   INSIGHTS_ANALYST_PROMPT,
   DATA_READINESS_PROMPT,
@@ -57,6 +58,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'site-reviewer': SITE_REVIEWER_INSTRUCTIONS,
   'chief-of-staff': ORCHESTRATOR_MICHAEL_INSTRUCTIONS,
   'bi-analyst': BI_ANALYST_INSTRUCTIONS,
+  'insights-lead': INSIGHTS_LEAD_INSTRUCTIONS,
 };
 
 /** The shipped editable prompt of a built-in agent; undefined for any other key. */

@@ -9,6 +9,7 @@ import { biAnalystAgent } from './agents/bi-analyst.agent';
 import { queryExplainerAgent } from './agents/query-explainer.agent';
 import { resultExplorerAgent } from './agents/result-explorer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
+import { insightsLeadAgent } from './agents/insights-lead.agent';
 import { dashboardReaderAgent } from './agents/dashboard-reader.agent';
 import { dataMapperAgent } from './agents/data-mapper.agent';
 import { gapAdvisorAgent } from './agents/gap-advisor.agent';
@@ -61,6 +62,8 @@ export const mastra = new Mastra({
     'chief-of-staff': chiefOfStaffAgent,
     // Clara, Avery's teammate behind build_dashboard (plan bi-dashboard).
     'bi-analyst': biAnalystAgent,
+    // Elena, the Insights Lead: alone in her own conversation (plan Elena 2).
+    'insights-lead': insightsLeadAgent,
     // The agents of Dashboard Image to Artifact's two model steps (agents.md 5.17).
     'dashboard-reader': dashboardReaderAgent,
     'data-mapper': dataMapperAgent,

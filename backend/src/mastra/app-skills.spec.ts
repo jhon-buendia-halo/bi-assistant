@@ -16,6 +16,8 @@ import {
   skillBody,
   skillFiles,
   catalogSkills,
+  linkedFilePaths,
+  skillReferences,
   skillsRoot,
   validateAgentSkills,
 } from './app-skills';
@@ -349,6 +351,67 @@ describe('the bundled skills', () => {
     }
   });
 
+  it("serve Elena's answer-playbooks and dashboard-building on demand, every reference resolved (plan Elena 2.1)", () => {
+    const skills = catalogSkills('insights-lead');
+    expect(skills.map((skill) => skill.name)).toEqual([
+      'answer-playbooks',
+      'conversation-export',
+      'curated-knowledge',
+      'dashboard-building',
+      'result-validation',
+      'sql-analysis',
+    ]);
+    const playbooks = skills.find((s) => s.name === 'answer-playbooks')!;
+    const dashboard = skills.find((s) => s.name === 'dashboard-building')!;
+    expect(playbooks.description).toBe(
+      'Use when a question ranks, compares periods, can be read two ways, returns no rows, or a check fails — which playbook to follow and what the answer must say.',
+    );
+    expect(dashboard.description).toBe(
+      "Use when the user asks for a dashboard or a change to the conversation's dashboard.",
+    );
+    for (const skill of [playbooks, dashboard]) {
+      expect(skill.loading).toBe('on-demand');
+      expect(skill.agents).toEqual(['insights-lead']);
+    }
+    expect(Object.keys(skillReferences(playbooks)).sort()).toEqual([
+      'reference/ambiguous.md',
+      'reference/failed-check.md',
+      'reference/no-answer.md',
+      'reference/period-change.md',
+      'reference/ranking.md',
+    ]);
+    expect(Object.keys(skillReferences(dashboard))).toEqual([
+      'reference/blueprint.md',
+    ]);
+    // Every reference the router names is a file of the skill.
+    for (const skill of [playbooks, dashboard]) {
+      const body = appSkillBody(skill.name);
+      const named = linkedFilePaths(body);
+      expect(named.length).toBeGreaterThan(0);
+      expect(named.every((path) => path in skillReferences(skill))).toBe(true);
+    }
+    // Written for one agent: no team, no briefs.
+    for (const skill of [playbooks, dashboard]) {
+      const text = [
+        appSkillBody(skill.name),
+        ...Object.values(skillReferences(skill)),
+      ].join('\n');
+      expect(text).not.toMatch(/\b(Avery|Michael|Clara|briefs?)\b/i);
+    }
+    // Their sizes stay small (plan Elena 3, U2).
+    expect(appSkillDocument('answer-playbooks').length).toBeLessThanOrEqual(
+      2500,
+    );
+    expect(appSkillDocument('dashboard-building').length).toBeLessThanOrEqual(
+      3000,
+    );
+    // Avery's skills are unchanged.
+    expect(AGENT_SKILLS['chief-of-staff']).toEqual([
+      'avery-playbooks',
+      'conversation-export',
+    ]);
+  });
+
   it('serve a skill body without its front matter', () => {
     const document = appSkillDocument('interactive-visuals');
     const body = appSkillBody('interactive-visuals');
@@ -408,17 +471,21 @@ describe('skill folders', () => {
 
   it('takes agents and loading mode from the two tables only', () => {
     const skills = loadAppSkills(skillsRoot());
-    // Shared by the assistant and Insights Analyst (agents.md 7.4).
+    // Shared by the assistant, Insights Analyst and Elena (agents.md 7.4).
     expect(skills.get('curated-knowledge')).toMatchObject({
       loading: 'on-demand',
-      agents: ['assistant', 'insights-analyst'],
+      agents: ['assistant', 'insights-analyst', 'insights-lead'],
     });
     for (const name of ['sql-analysis', 'result-validation']) {
       expect(skills.get(name)).toMatchObject({
         loading: 'on-demand',
-        agents: ['insights-analyst'],
+        agents: ['insights-analyst', 'insights-lead'],
       });
     }
+    expect(skills.get('conversation-export')).toMatchObject({
+      loading: 'on-demand',
+      agents: ['chief-of-staff', 'insights-lead'],
+    });
     expect(skills.get('interactive-visuals')).toMatchObject({
       loading: 'harness',
       agents: ['visualization'],
@@ -450,9 +517,11 @@ describe('skill folders', () => {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const fresh = require('./app-skills') as typeof import('./app-skills');
         expect([...fresh.appSkills().keys()].sort()).toEqual([
+          'answer-playbooks',
           'avery-playbooks',
           'conversation-export',
           'curated-knowledge',
+          'dashboard-building',
           'data-readiness',
           'interactive-visuals',
           'readiness-drilldown',

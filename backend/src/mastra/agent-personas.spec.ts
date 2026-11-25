@@ -64,6 +64,7 @@ describe('built-in agent personas (agents.md 1.1)', () => {
         'assistant',
         'chief-of-staff',
         'insights-analyst',
+        'insights-lead',
         'result-explorer',
       ],
       sql: ['query-explainer', 'sql-fixer', 'sql-verifier'],
@@ -76,6 +77,18 @@ describe('built-in agent personas (agents.md 1.1)', () => {
       ],
       quality: ['assistant-eval-judge', 'site-reviewer'],
     });
+  });
+
+  it('gives Elena, the Insights Lead, her persona; she is Official (plan Elena 2.1)', () => {
+    expect(OFFICIAL_AGENT_KEYS).toContain('insights-lead');
+    expect(SYSTEM_AGENT_KEYS).not.toContain('insights-lead');
+    const persona = builtinAgentPersona('insights-lead');
+    expect(persona).toMatchObject({
+      name: 'Elena',
+      role: 'Insights Lead',
+      domain: 'analysis',
+    });
+    expect(persona?.intro.length).toBeLessThanOrEqual(160);
   });
 
   it('knows the domain ids, General last', () => {

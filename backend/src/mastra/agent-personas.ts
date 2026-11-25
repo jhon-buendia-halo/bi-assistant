@@ -71,6 +71,13 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       'I check whether a dataset is ready for analysis. I score its quality dimension by dimension and explain what needs fixing.',
   },
+  'insights-lead': {
+    name: 'Elena',
+    role: 'Insights Lead',
+    domain: 'analysis',
+    intro:
+      'Ask me a business question about your data. I query it, check every figure, build a dashboard when you want one and show how I got each answer.',
+  },
   'chief-of-staff': {
     name: 'Avery',
     role: 'Chief of Staff',
