@@ -1074,6 +1074,184 @@ describe('Streamed runs of Answer a Business Question (Avery + Michael) (API)', 
     });
   });
 
+  describe('a conversation with Elena, outside any workflow (plan Elena 1.1, 1.3; api.md 117-119, 138, 159)', () => {
+    const ELENA = 'agent:insights-lead';
+    const ASKED = 'Which squad was the strongest?';
+    const CLARIFY = 'Strongest by which measure?';
+    const OPTIONS = ['Most wins', 'Most goals'];
+
+    /** Whether a request is Elena's: her prompt opens its system messages. */
+    const isElena = (req: StubRequest) =>
+      req.messages.some(
+        (message) =>
+          message.role === 'system' &&
+          messageText(message).startsWith('You are Elena'),
+      );
+    const lastUser = (req: StubRequest) =>
+      messageText([...req.messages].reverse().find((m) => m.role === 'user')!);
+
+    it('GET /workflows/agent:insights-lead (117) details her one Answer step, never listed by 116', async () => {
+      const detail = (
+        await http()
+          .get(`/workflows/${encodeURIComponent(ELENA)}`)
+          .expect(200)
+      ).body as {
+        id: string;
+        conversational?: boolean;
+        agents: { key: string; name: string; role: string }[];
+        steps: { id: string }[];
+      };
+      expect(detail).toMatchObject({ id: ELENA, conversational: true });
+      expect(detail.agents[0]).toMatchObject({
+        key: 'insights-lead',
+        name: 'Elena',
+        role: 'Insights Lead',
+      });
+      expect(detail.steps.map((step) => step.id)).toEqual(['answer']);
+      const listed = (await http().get('/workflows').expect(200)).body as {
+        workflows: { id: string; conversational?: boolean }[];
+      };
+      expect(listed.workflows.map((workflow) => workflow.id)).not.toContain(
+        ELENA,
+      );
+      // Avery's workflow is a conversation too (plan Elena 1.2).
+      expect(
+        listed.workflows.find((workflow) => workflow.id === ASK_WORKFLOW_ID),
+      ).toMatchObject({ conversational: true });
+    });
+
+    it('streams a run of hers: the Answer step, her own model calls (no Avery), the answer, and GET /workflow-runs/:id shows step answer with its checks', async () => {
+      const sent = await recorded(async () => {
+        const res = await runStream(ELENA, ask('How many matches were there?'));
+        expect(res.status).toBe(200);
+        expect(res.frames[0]).toMatchObject({ type: 'run', workflowId: ELENA });
+        const steps = res.frames.filter((f) => f.type === 'step').map(trail);
+        expect(steps).toEqual(['answer:running', 'answer:success']);
+        const run = res.frames.at(-1)!.run!;
+        expect(run).toMatchObject({
+          workflowId: ELENA,
+          status: 'success',
+          answer: { role: 'assistant', content: STUB_ANSWER },
+        });
+        const stored = (
+          await http().get(`/workflow-runs/${run.id}`).expect(200)
+        ).body as {
+          conversationId?: string;
+          steps: {
+            id: string;
+            status: string;
+            output?: { attempts?: number };
+          }[];
+          answer?: { checks?: { check: string; passed: boolean }[] };
+        };
+        expect(stored.conversationId).toBe(run.id);
+        expect(stored.steps.map(trail)).toEqual(['answer:success']);
+        // The stub runs no query: one repair round, then the last checks.
+        expect(stored.steps[0].output?.attempts).toBe(2);
+        expect(
+          stored.answer?.checks?.find((c) => c.check === 'Ran a query'),
+        ).toMatchObject({ passed: false });
+      });
+      expect(sent.some((req) => req.avery)).toBe(false);
+      expect(sent.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('joins a follow-up to the conversation: same conversationId, the earlier turn in her messages', async () => {
+      const first = (
+        await runStream(ELENA, ask('First question to Elena'))
+      ).frames.at(-1)!.run!;
+      const sent = await recorded(async () => {
+        const follow = await runStream(ELENA, {
+          ...ask('And the follow-up?'),
+          context: { fromRunId: first.id },
+        });
+        expect(follow.status).toBe(200);
+        const run = follow.frames.at(-1)!.run! as NonNullable<Frame['run']> & {
+          conversationId?: string;
+        };
+        expect(run.status).toBe('success');
+        const stored = (
+          await http().get(`/workflow-runs/${run.id}`).expect(200)
+        ).body as { conversationId?: string };
+        expect(stored.conversationId).toBe(first.id);
+      });
+      const firstCall = sent.find((req) => !req.avery)!;
+      expect(
+        firstCall.messages
+          .filter((message) => message.role !== 'system')
+          .map((message) => [message.role, messageText(message)]),
+      ).toEqual([
+        ['user', 'First question to Elena'],
+        ['assistant', STUB_ANSWER],
+        ['user', 'And the follow-up?'],
+      ]);
+    });
+
+    it('her clarifying question suspends the run at Answer; 138 runs her again with the answer, to success', async () => {
+      stub.reply = (req) =>
+        isElena(req) && req.stream && lastUser(req) === ASKED
+          ? {
+              toolCall: {
+                name: 'ask_clarification',
+                arguments: { question: CLARIFY, options: OPTIONS.join('\n') },
+              },
+            }
+          : { text: STUB_ANSWER };
+      const first = await runStream(ELENA, ask(ASKED));
+      expect(first.status).toBe(200);
+      const runId = first.frames[0].runId!;
+      const [step, required, done] = first.frames.slice(-3);
+      expect(step).toMatchObject({
+        type: 'step',
+        id: 'answer',
+        status: 'suspended',
+      });
+      expect(required).toMatchObject({
+        type: 'input-required',
+        runId,
+        stepId: 'answer',
+        title: 'Answer',
+        question: CLARIFY,
+        options: OPTIONS,
+      });
+      expect(done.run).toMatchObject({ id: runId, status: 'suspended' });
+      const resumed = await resumeStream(runId, {
+        stepId: 'answer',
+        answer: 'Most wins',
+      });
+      expect(resumed.status).toBe(200);
+      const end = resumed.frames.at(-1)!;
+      expect(end.run).toMatchObject({
+        id: runId,
+        status: 'success',
+        answer: { role: 'assistant', content: STUB_ANSWER },
+      });
+      expect(end.run!.steps.map(trail)).toEqual(['answer:success']);
+    });
+
+    it('a message to an archived conversation with her answers 409; unarchived, it runs again', async () => {
+      const first = (await runStream(ELENA, ask('Archive Elena'))).frames.at(
+        -1,
+      )!.run!;
+      expect(
+        (await http().post(`/workflow-runs/${first.id}/archive`).expect(200))
+          .body,
+      ).toEqual({ ok: true, conversationId: first.id, archived: 1 });
+      const refused = await runStream(ELENA, {
+        ...ask('Too late'),
+        context: { fromRunId: first.id },
+      });
+      expect(refused.status).toBe(409);
+      expect(refused.text).toContain('This conversation is archived');
+      await http().post(`/workflow-runs/${first.id}/unarchive`).expect(200);
+      const again = await runStream(ELENA, {
+        ...ask('Back again'),
+        context: { fromRunId: first.id },
+      });
+      expect(again.status).toBe(200);
+    });
+  });
+
   describe('refusals before any stream (Style B)', () => {
     const ASK = {
       question: 'Hi',
