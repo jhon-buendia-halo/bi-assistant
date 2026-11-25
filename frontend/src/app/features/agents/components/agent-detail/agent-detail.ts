@@ -184,6 +184,8 @@ export class AgentDetail implements OnDestroy {
   readonly deleted = output<void>();
   /** A Used in chip; the shell opens the workflow's page (R109). */
   readonly openWorkflow = output<string>();
+  /** Ask <name> on a conversational built-in agent: opens a new conversation with it. */
+  readonly ask = output<string>();
   /** Edit a user agent; the shell opens the agent editor on its draft (R54). */
   readonly edit = output<AgentDetailModel>();
   /** An admin's Edit on a built-in skill; the shell opens its editor. */

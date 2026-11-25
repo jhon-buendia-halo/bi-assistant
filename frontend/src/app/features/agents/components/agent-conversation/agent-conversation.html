@@ -1,0 +1,93 @@
+<div class="flex min-h-0 flex-1 flex-col" data-testid="agent-conversation-page">
+  <header class="shrink-0 border-b border-border px-6 py-2">
+    <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+      <nav aria-label="Breadcrumb" class="min-w-0">
+        <ol class="m-0 flex list-none items-center gap-1.5 p-0 text-[13px]">
+          <li class="shrink-0">
+            <button
+              type="button"
+              data-testid="agent-conversation-back"
+              (click)="back.emit()"
+              class="rounded text-fg-muted underline-offset-2 hover:text-fg hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+            >
+              Agent personas
+            </button>
+          </li>
+          <li class="text-fg-muted" aria-hidden="true">/</li>
+          <li class="min-w-0" aria-current="page">
+            <h1
+              data-testid="agent-conversation-breadcrumb"
+              class="m-0 truncate text-[15px] leading-6 font-semibold text-fg-strong"
+            >
+              {{ agentName() }} · {{ agentRole() }}
+            </h1>
+          </li>
+        </ol>
+      </nav>
+      <span data-testid="agent-conversation-chip" class="chip chip-info"
+        >Conversation</span
+      >
+      <span
+        data-testid="agent-conversation-binding"
+        class="font-mono text-[12px] text-fg-muted"
+        >{{ agentKey()
+        }}{{ datasets().length > 0 ? " · " + datasets().join(", ") : "" }}</span
+      >
+    </div>
+  </header>
+
+  @if (designer.loading()) {
+    <div class="flex items-center gap-2.5 px-6 py-8 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading conversation…</span>
+    </div>
+  } @else if (designer.error(); as err) {
+    <p
+      class="mx-6 mt-6 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else if (designer.workflow()) {
+    <div class="relative flex min-h-0 flex-1 overflow-hidden">
+      <app-agent-conversations-panel
+        [workflowId]="workflowId()"
+        [agentName]="agentName()"
+        [currentId]="currentId()"
+        [refreshKey]="refreshKey()"
+        [pushedAside]="dashboards.shown() !== null"
+        (open)="openFromPanel($event)"
+        (newConversation)="newConversation()"
+      />
+      <div
+        class="flex min-h-0 min-w-0 flex-1 justify-center bg-surface"
+        data-testid="agent-conversation-chat"
+      >
+        <app-workflow-run-chat
+          variant="conversation"
+          class="w-full max-w-[860px] pt-2"
+        />
+      </div>
+      @if (dashboards.shown() !== null) {
+        @defer (on immediate) {
+          <app-run-dashboard-panel />
+        }
+      }
+      @if (openQuery(); as open) {
+        <div
+          data-testid="query-inspector-sheet"
+          class="absolute inset-y-0 right-0 z-20 flex w-full max-w-[720px] flex-col border-l border-border shadow-lg"
+        >
+          @defer (on immediate) {
+            <app-query-inspector
+              class="min-h-0 flex-1"
+              [message]="open.answer"
+              [index]="open.index"
+              (close)="closeQuery()"
+              (navigate)="designer.openQuery($event)"
+            />
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

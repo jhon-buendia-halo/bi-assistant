@@ -15,7 +15,9 @@
     </h3>
     @if (designer.runResult() !== null && !designer.running()) {
       <!-- Run again: the composer opens with the shown run's whole input -->
-      @if (designer.canRunAgain() && !averyArchived()) {
+      @if (
+        designer.canRunAgain() && !averyArchived() && !isConversationVariant()
+      ) {
         <button
           type="button"
           data-testid="workflow-run-again"
@@ -76,12 +78,16 @@
         (click)="newQuestion()"
         class="btn btn-ghost px-2.5 py-1"
         [class.ml-auto]="
-          (!designer.canRunAgain() || averyArchived()) &&
+          (!designer.canRunAgain() ||
+            averyArchived() ||
+            isConversationVariant()) &&
           savedArtifactId() === null
         "
       >
         <lucide-angular [img]="SquarePen" [size]="13" />
-        <span>New question</span>
+        <span>{{
+          isConversationVariant() ? 'New conversation' : 'New question'
+        }}</span>
       </button>
     }
     @if (averyLive()) {
@@ -145,7 +151,9 @@
            Builder view's Run panel header -->
       <app-execution-id data-testid="workflow-run-execution-id" [id]="runId" />
     }
-    @if (business() && designer.runResult() !== null) {
+    @if (
+      business() && !isConversationVariant() && designer.runResult() !== null
+    ) {
       <!-- The Business view's way into the run's details: the graph, each
            step's data and How it ran are in the Builder view (R38) -->
       <button
@@ -233,6 +241,13 @@
                 [bubble]="false"
               >
                 @if (turn.answer; as answer) {
+                  @if (isConversationVariant()) {
+                    <app-run-work-summary
+                      class="mb-2 block"
+                      [source]="turn.run"
+                      (openQuery)="inspectEarlierQuery(turn, $event)"
+                    />
+                  }
                   <!-- The export first: Avery's words under it speak of it -->
                   @if (answer.export; as exported) {
                     @defer (on immediate) {
@@ -335,14 +350,16 @@
 
             <!-- The run's agents as a team: who did what, and the handoffs (ui.md
            4.4b). In the Business view (R38) a step's data opens in Builder. -->
-            @defer (on immediate) {
-              <app-workflow-run-team
-                [stories]="designer.agentStories()"
-                [thought]="reasoningSnippet()"
-                [showWork]="!business()"
-                (openNode)="openStep($event)"
-                (openQuery)="openTeamQuery($event)"
-              />
+            @if (!isConversationVariant()) {
+              @defer (on immediate) {
+                <app-workflow-run-team
+                  [stories]="designer.agentStories()"
+                  [thought]="reasoningSnippet()"
+                  [showWork]="!business()"
+                  (openNode)="openStep($event)"
+                  (openQuery)="openTeamQuery($event)"
+                />
+              }
             }
           </ng-template>
           @if (!answerFirst()) {
@@ -437,6 +454,14 @@
 
           @if (result.answer; as answer) {
             <div data-testid="run-answer">
+              @if (isConversationVariant()) {
+                <!-- What she did for this answer, folded to its queries -->
+                <app-run-work-summary
+                  class="mb-2 block"
+                  [source]="result"
+                  (openQuery)="inspectQuery($event)"
+                />
+              }
               <!-- A visual the run made: its artifact card, where it was made (visuals R42) -->
               <ng-template #artifactCard let-visual>
                 @if (designer.run(); as stored) {

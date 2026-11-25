@@ -19,6 +19,8 @@ export class AgentsNavState {
 
   /** Registry key of the agent open in the detail view. */
   readonly activeAgentKey = signal<string | null>(null);
+  /** The conversation's run open in `agent-conversation`; null = a new conversation. */
+  readonly conversationRunId = signal<string | null>(null);
   /** The user agent open in the editor; null = a new agent. */
   readonly editingAgentId = signal<string | null>(null);
   /** The built-in skill open in its editor. */
@@ -32,6 +34,18 @@ export class AgentsNavState {
     if (!this.shell.confirmLeaveAgentEditor()) return;
     this.activeAgentKey.set(agent.key);
     this.shell.mainView.set('agent-detail');
+  }
+
+  /**
+   * A conversation with a built-in conversational agent (agents-evals R115):
+   * Ask <name> on its page opens a new one (no run); a run of its binding
+   * from Runs opens that conversation.
+   */
+  openConversation(agentKey: string, runId: string | null = null): void {
+    if (!this.shell.confirmLeaveAgentEditor()) return;
+    this.activeAgentKey.set(agentKey);
+    this.conversationRunId.set(runId);
+    this.shell.mainView.set('agent-conversation');
   }
 
   /** An agent row on a workflow's page opens the agent's detail (R8). */
