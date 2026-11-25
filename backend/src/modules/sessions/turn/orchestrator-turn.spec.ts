@@ -48,6 +48,10 @@ import {
   type OrchestratorTurnDeps,
 } from './orchestrator-turn';
 import type { StreamEvent } from './stream-events';
+import {
+  EXPORT_TOOLS_RUNTIME_KEY,
+  type ExportToolsRuntime,
+} from '../../../mastra/tools/export.tools';
 import type { ExportContent } from '../../../mastra/workflows/export-request';
 import type { ConversationExportRef } from '../../conversation-export/conversation-export.contract';
 
@@ -165,6 +169,59 @@ describe('Avery runs her turn (agents.md 5.23)', () => {
     expect(deps.state.queries).toEqual(ATTEMPT.queries);
     expect(deps.state.attempts).toBe(1);
     expect(deps.state.answer).toBe('There are 64 matches.');
+  });
+
+  it("checks Michael's queries against the data's date: the catalog and the question reach the checks (plan Elena 2.6)", async () => {
+    const state = orchestratorState();
+    // The World Cup data ends years before today.
+    state.catalog = [
+      {
+        entity: 'wc.public.matches',
+        dataset: 'World Cup',
+        datasourceId: 'ds-pg',
+        datasourceKind: 'postgres',
+        columnCount: 1,
+        dataEndsAt: '2018-07-15',
+      },
+    ];
+    state.columns = [
+      {
+        entity: 'wc.public.matches',
+        columns: [{ name: 'played_on', type: 'date' }],
+        more: 0,
+      },
+    ];
+    const members = team({
+      analyse: jest.fn(() =>
+        Promise.resolve({
+          ...ATTEMPT,
+          queries: [
+            {
+              sql: 'SELECT count(*) AS n FROM wc.public.matches WHERE played_on > CURRENT_DATE - 365',
+              rationale: 'I count the matches of the last year.',
+              rows: [{ n: 0 }],
+              rowCount: 1,
+              truncated: false,
+            },
+          ],
+        }),
+      ),
+    });
+    const { deps } = fixture(
+      async (tools) => {
+        await tools.answerFromData('Count the matches of the last year.');
+        return [text('Done.')];
+      },
+      { team: members, deps: { state } },
+    );
+    await runOrchestratorTurn(deps, {
+      question: 'How many matches were played in the last year?',
+    });
+    expect(
+      deps.state.findings.find(
+        (finding) => finding.check === "Measured from the data's date",
+      ),
+    ).toMatchObject({ passed: false });
   });
 
   it("on a follow-up, Michael reads the last answer's queries as a block after her brief", async () => {
@@ -1026,6 +1083,25 @@ describe("Avery's export_conversation (agents.md 2.21, 3.18)", () => {
     expect(await runtime.exportConversation(CONTENT)).toBe(
       'Exported "Penetración de productos en Intellify": PDF (9 pages), PowerPoint (8 slides). The user sees the download card with the answer: do not repeat the summary.',
     );
+    expect(exportConversation).toHaveBeenCalledWith(CONTENT);
+    expect(deps.state.export).toEqual(EXPORTED);
+  });
+
+  it('sets the export runtime under its own key in her run, the one export_conversation reads (plan Elena 2.4)', async () => {
+    const exportConversation = jest
+      .fn()
+      .mockResolvedValue({ export: EXPORTED });
+    const { deps, streams } = fixture([text('Done.')], {
+      team: team({ exportConversation }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    await runOrchestratorTurn(deps, { question: 'Export this' });
+    const context = streams[0].options['requestContext'] as {
+      get(key: string): unknown;
+    };
+    const runtime = context.get(EXPORT_TOOLS_RUNTIME_KEY) as ExportToolsRuntime;
+    expect(runtime.exportsConversation).toBe(true);
+    await runtime.exportConversation(CONTENT);
     expect(exportConversation).toHaveBeenCalledWith(CONTENT);
     expect(deps.state.export).toEqual(EXPORTED);
   });

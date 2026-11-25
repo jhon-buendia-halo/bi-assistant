@@ -611,10 +611,10 @@ function unresolvedNow(
  * followed by a successful query that was not, and every query that kept an
  * arbitrary sample (`coverageOf`: its own LIMIT reached with no sort before
  * it) was followed by a successful query that did not (plan 1.25.7). The
- * plan's measures are
- * looked for (best effort: a word of each in some successful query's SQL,
- * rationale or columns) and reported as a warning that never fails the
- * attempt. When the catalog has a table whose data ends well before today
+ * plan's measures are looked for (best effort: a word of each in some
+ * successful query's SQL, rationale or columns) and reported as a warning
+ * that never fails the attempt; a plan that names none gets no such
+ * finding. When the catalog has a table whose data ends well before today
  * (*Data dates*), one more check fails an attempt that measured against
  * today on it (`CURRENT_DATE`, `NOW()`, …) unless the question asks about
  * today; without such a table the findings are as before.
@@ -687,15 +687,16 @@ export function validateAttempt(
     const wanted = words(measure);
     return wanted.length > 0 && !wanted.some((word) => haystack.has(word));
   });
-  const measures: ValidationFinding = {
-    check: VALIDATION_CHECKS.measures,
-    passed: missing.length === 0,
-    detail: !plan.measures.length
-      ? 'The plan named no measure.'
-      : missing.length
-        ? `Not found in any query: ${missing.join('; ')}.`
-        : 'Every planned measure appears in a query.',
-  };
+  // No measure planned, no finding: it would pass on nothing.
+  const measures: ValidationFinding | undefined = plan.measures.length
+    ? {
+        check: VALIDATION_CHECKS.measures,
+        passed: missing.length === 0,
+        detail: missing.length
+          ? `Not found in any query: ${missing.join('; ')}.`
+          : 'Every planned measure appears in a query.',
+      }
+    : undefined;
   const dataDate = dataDateFinding(input, now);
   return {
     ok:
@@ -709,7 +710,7 @@ export function validateAttempt(
       noToolError,
       rowLimit,
       sample,
-      measures,
+      ...(measures ? [measures] : []),
       ...(dataDate ? [dataDate] : []),
     ],
   };

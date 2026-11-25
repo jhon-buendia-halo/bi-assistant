@@ -68,11 +68,6 @@ export function teammateOfTool(tool: string): string | undefined {
   return AVERY_TEAM.team.find((member) => member.tool === tool)?.agent;
 }
 
-/** Whether a workflow is Avery's (a conversation with her, R45). */
-export function isOrchestratedWorkflow(id: string | undefined): boolean {
-  return id === ORCHESTRATED_MICHAEL_WORKFLOW_ID;
-}
-
 /**
  * Avery's model and effort (agents.md 1.3): Opus 5.5 at high effort when the
  * saved model is served as a Claude model; the agents she calls run on the
@@ -82,9 +77,6 @@ export const ORCHESTRATOR_MODEL = {
   model: 'claude-opus-5-5',
   reasoningEffort: 'high',
 } as const;
-
-/** The run's RequestContext key holding its `OrchestratedMichaelRuntime`. */
-export const ORCHESTRATED_MICHAEL_RUNTIME_KEY = 'orchestrated-answer-runtime';
 
 /** The step's input and output (agents.md 5.12 data contract). */
 export const ORCHESTRATED_MICHAEL_STEP_SCHEMAS = {
@@ -123,24 +115,6 @@ export const ORCHESTRATED_MICHAEL_EDGES: readonly WorkflowEdge[] = [
   { from: 'start', to: 'orchestrate', kind: 'next' },
   { from: 'orchestrate', to: 'end', kind: 'next' },
 ];
-
-/** What the session code hands the run on its RequestContext. */
-export interface OrchestratedMichaelRuntime {
-  /**
-   * Avery's turn (agents.md 5.23): she calls the team as her tools and the
-   * run's answer is Michael's written answer (else Avery's own words). A
-   * question she asks the user comes back as `clarification`: the step
-   * waits for the answer, then runs her again with it (`answered`).
-   */
-  orchestrate(input: {
-    question: string;
-    answered?: { question: string; options: string[]; answer: string };
-  }): Promise<{
-    answer: string;
-    stopped: boolean;
-    clarification?: { question: string; options: string[] };
-  }>;
-}
 
 /** Avery's tools' RequestContext key: their `OrchestratorToolsRuntime`. */
 export const ORCHESTRATOR_TOOLS_RUNTIME_KEY = 'orchestrator-tools-runtime';

@@ -31,6 +31,7 @@ import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { orchestratedMichaelWorkflow } from './workflows/orchestrated-answer-michael.workflow';
+import { insightsLeadConversationWorkflow } from './workflows/conversation-turn.workflow';
 import { consumptionGapAnalysisWorkflow } from './workflows/consumption-gap-analysis.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 import { mapDashboardDataWorkflow } from './workflows/map-dashboard-data.workflow';
@@ -89,6 +90,7 @@ export const mastra = new Mastra({
     'agent-turn': agentTurnWorkflow,
     // Answer a Business Question (Avery + Michael) (5.23).
     'orchestrated-answer-michael': orchestratedMichaelWorkflow,
+    'insights-lead-conversation': insightsLeadConversationWorkflow,
     'data-readiness-assessment': dataReadinessAssessmentWorkflow,
     'recreate-dashboard': recreateDashboardWorkflow,
     'map-dashboard-data': mapDashboardDataWorkflow,

@@ -23,7 +23,7 @@ import type { SessionDoc, ToolDataRecord } from '../entities/session.entity';
 export interface TurnWorkflow {
   /** The catalogue id (`orchestrated-answer-michael`, …), `agent:<key>` or `agent:<user-agent id>`. */
   id: string;
-  /** The registered Mastra workflow the turn runs: a code workflow's own id, or `agent-turn`. */
+  /** The registered Mastra workflow the turn runs: a code workflow's own id, a conversational binding's engine, or `agent-turn`. */
   engineId: string;
   /** What drives the bar: the run's step events, or the agent's own phases. */
   bar: WorkflowBar;
@@ -31,7 +31,8 @@ export interface TurnWorkflow {
 }
 
 /**
- * The workflow a session's turn runs: its code-defined workflow, else its
+ * The workflow a session's turn runs: its code-defined workflow, a built-in
+ * agent's conversation on its binding's engine (plan Elena 1.3), else its
  * one-step workflow on the `agent-turn` engine. A node chat's turn (a host
  * with a `contextBlock`, agents.md 5.16) is its step's agent alone, on the
  * `agent-turn` engine, never a run of the whole workflow.
@@ -45,6 +46,14 @@ export function turnWorkflowOf(session: SessionDoc): TurnWorkflow {
       engineId: parsed.source.id,
       bar: parsed.source.bar,
       stepIds: parsed.source.steps.map((step) => step.id),
+    };
+  }
+  if (parsed?.kind === 'conversation' && !session.contextBlock) {
+    return {
+      id,
+      engineId: parsed.binding.engineId,
+      bar: 'steps',
+      stepIds: [parsed.binding.stepId],
     };
   }
   return {

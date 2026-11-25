@@ -75,11 +75,19 @@ import {
 import { analyseSystemBlocks } from '../../../mastra/workflows/analysis.prompts';
 import {
   AVERY_TEAM,
-  ORCHESTRATED_MICHAEL_RUNTIME_KEY,
-  ORCHESTRATED_MICHAEL_WORKFLOW_ID,
   ORCHESTRATOR_MODEL,
-  type OrchestratedMichaelRuntime,
 } from '../../../mastra/workflows/orchestrated-answer-michael.steps';
+import {
+  CONVERSATION_TURN_RUNTIME_KEY,
+  type ConversationTurnRuntime,
+} from '../../../mastra/workflows/conversation-turn.steps';
+import { currentEvalRunId } from '../../../mastra/evals/eval-run-scope';
+import type { ExportAuthor } from '../../conversation-export/export-document';
+import { runSoloTurn, type SoloTurnState } from './solo-turn';
+import {
+  conversationalBindingOf,
+  type ConversationalBinding,
+} from '../../../mastra/conversational-agents';
 import {
   currentDashboardBlock,
   orchestratorState,
@@ -109,6 +117,7 @@ import { exportBrand } from '../../conversation-export/export-brand';
 import {
   CLARA_AFTER_ACCEPT,
   DASHBOARD_TOOLS_RUNTIME_KEY,
+  SOLO_AFTER_ACCEPT,
   type DashboardToolsRuntime,
 } from '../../../mastra/tools/dashboard.tools';
 import { runErrorMessage } from '../../../mastra/workflows/workflow-run';
@@ -323,6 +332,26 @@ type TurnRunOutcome =
       discard: () => Promise<void>;
     };
 
+/** A dashboard submission the host accepted: what is saved. */
+interface AcceptedDashboard {
+  draft: DashboardDraft;
+  query: DashboardQuery;
+  columns: string[];
+  rows: DashboardRow[];
+}
+
+/**
+ * The conversational binding a turn runs on its engine (plan Elena 1.3):
+ * Avery's or Elena's; undefined for any other turn, a node chat of the same
+ * workflow included (it runs on `agent-turn`).
+ */
+function conversationOfTurn(
+  workflow: TurnWorkflow,
+): ConversationalBinding | undefined {
+  const binding = conversationalBindingOf(workflow.id);
+  return binding?.engineId === workflow.engineId ? binding : undefined;
+}
+
 export class TurnEngine {
   constructor(private readonly deps: TurnEngineDeps) {}
 
@@ -438,10 +467,26 @@ export class TurnEngine {
     // when the saved model is served as a Claude model, the agents Avery
     // calls run on the team's step model (their model functions read it
     // from the context, and every call sends its effort), and she runs on
-    // Opus 5.5 high. Otherwise the saved model and effort, as every agent.
-    const orchestrated = workflow.engineId === ORCHESTRATED_MICHAEL_WORKFLOW_ID;
+    // Opus 5.5 high. Elena, on a run host, runs on Opus 5.5 high herself
+    // (plan Elena 2.5). Opus is for runs, never for evals: an eval runs
+    // either on the saved model. Otherwise the saved model and effort, as
+    // every agent.
+    const conversation = conversationOfTurn(workflow);
+    const orchestrated = conversation?.kind === 'team';
     const claude = servesClaude(await resolveAgentModelConfig());
+    const opus = claude && currentEvalRunId() === undefined;
     const stepModel = orchestrated && claude ? TEAM_STEP_MODEL : undefined;
+    const soloModel =
+      conversation?.kind === 'solo' && session.run && opus
+        ? { ...ORCHESTRATOR_MODEL }
+        : undefined;
+    if (soloModel) {
+      options.requestContext.set(STEP_MODEL_CONTEXT_KEY, soloModel);
+      options.providerOptions = await turnProviderOptions(
+        { reasoningEffort: soloModel.reasoningEffort },
+        soloModel.model,
+      );
+    }
     if (stepModel) {
       options.requestContext.set(STEP_MODEL_CONTEXT_KEY, stepModel);
       options.providerOptions = await turnProviderOptions(
@@ -450,18 +495,21 @@ export class TurnEngine {
       );
     }
     const orchestratorModel =
-      orchestrated && claude ? { ...ORCHESTRATOR_MODEL } : undefined;
+      orchestrated && opus ? { ...ORCHESTRATOR_MODEL } : undefined;
     const orchestratorProviderOptions = orchestratorModel
       ? await turnProviderOptions(
           { reasoningEffort: orchestratorModel.reasoningEffort },
           orchestratorModel.model,
         )
       : (options.providerOptions as Record<string, unknown> | undefined);
-    // What Avery's team produced: it outlives a wait for the user.
-    const orchState = orchestratorState();
-    // Avery's answer is hers (Michael's, then her closing words): no
-    // synthesis replaces it.
-    const codeAnswer = orchestrated;
+    // What Avery's team (or Elena) produced: it outlives a wait for the user.
+    const orchState: SoloTurnState = orchestratorState();
+    // Elena's dashboard submitter (plan Elena 2.4): made on her first
+    // attempt, so a resumed attempt keeps its last accepted submission.
+    let soloSubmitter: ReturnType<TurnEngine['dashboardSubmitter']> | undefined;
+    // A conversation's answer is its agent's (Avery's: Michael's, then her
+    // closing words): no synthesis replaces it.
+    const codeAnswer = conversation !== undefined;
     // A query record of the turn: kept for the answer with its facts,
     // explorable from then on, and shown as its call's result.
     const captureRecord = (record: ToolDataRecord, callId?: string) => {
@@ -492,6 +540,30 @@ export class TurnEngine {
     const flushHeldQueries = () => {
       for (const replay of heldQueries.splice(0)) replay();
     };
+    // A dashboard's data query the host ran (Clara's, Elena's), recorded as
+    // a `run_readonly_sql` source with its facts, held until
+    // submit_dashboard's result (5.20's hold).
+    const holdQuery = (
+      args: { sql: string; rationale: string },
+      result: unknown,
+      facts: QueryFacts,
+    ) =>
+      heldQueries.push(() => {
+        emit({
+          type: 'tool',
+          content: JSON.stringify({
+            name: 'run_readonly_sql',
+            ...(statedRationale(args.rationale)
+              ? { rationale: statedRationale(args.rationale) }
+              : {}),
+            input: toolCallInput('run_readonly_sql', args),
+          }),
+        });
+        const callId = `dashboard-query-${randomUUID()}`;
+        queryFacts.set(callId, facts);
+        const record = toolDataRecord('run_readonly_sql', args, result);
+        if (record) captureRecord(record, callId);
+      });
     // Consume one agent stream (agents.md 5.1 step 3).
     const consume = async (
       agentStream: Awaited<ReturnType<typeof agent.stream>>,
@@ -962,6 +1034,8 @@ export class TurnEngine {
               notes = undefined;
               attemptStop = undefined;
               turn.signal.removeEventListener('abort', stopAttempt);
+              // A dashboard query Elena's submit ran counts as hers.
+              flushHeldQueries();
             }
             try {
               idle.check('Analyse');
@@ -1034,117 +1108,16 @@ export class TurnEngine {
                 stopped: false,
               };
             }
-            let accepted:
-              | {
-                  draft: DashboardDraft;
-                  query: DashboardQuery;
-                  columns: string[];
-                  rows: DashboardRow[];
-                }
-              | undefined;
-            // The host's run, recorded as a `run_readonly_sql` source with
-            // its facts, held until submit_dashboard's result (5.20's hold).
-            const hold = (
-              args: { sql: string; rationale: string },
-              result: unknown,
-              facts: QueryFacts,
-            ) =>
-              heldQueries.push(() => {
-                emit({
-                  type: 'tool',
-                  content: JSON.stringify({
-                    name: 'run_readonly_sql',
-                    ...(statedRationale(args.rationale)
-                      ? { rationale: statedRationale(args.rationale) }
-                      : {}),
-                    input: toolCallInput('run_readonly_sql', args),
-                  }),
-                });
-                const callId = `dashboard-query-${randomUUID()}`;
-                queryFacts.set(callId, facts);
-                const record = toolDataRecord('run_readonly_sql', args, result);
-                if (record) captureRecord(record, callId);
-              });
-            const submitter: DashboardToolsRuntime = {
-              afterAccept: CLARA_AFTER_ACCEPT,
-              submit: async ({
-                dashboard: draft,
-                sql,
-                datasourceId,
-                rationale,
-              }) => {
-                const args = { sql, rationale };
-                const facts: QueryFacts = {
-                  datasourceId,
-                  rowLimit: DASHBOARD_ROWS_CAP,
-                };
-                let ran: Awaited<ReturnType<SqlChecks['runSqlWithRepair']>>;
-                try {
-                  ran = await this.deps.sql.runSqlWithRepair(
-                    datasourceId,
-                    sql,
-                    DASHBOARD_ROWS_CAP,
-                    session.datasets,
-                    { signal: turn.signal, maxRows: DASHBOARD_ROWS_CAP },
-                  );
-                } catch (error) {
-                  // A query the stop cut short is no failed query.
-                  if (turn.signal.aborted) throw error;
-                  const message =
-                    error instanceof Error ? error.message : String(error);
-                  hold(args, { error: message }, facts);
-                  return {
-                    accepted: false,
-                    error: `The query failed: ${message}`,
-                  };
-                }
-                const { totalRows, ...result } = ran;
-                hold(args, result, {
-                  ...facts,
-                  ...(typeof totalRows === 'number' ? { totalRows } : {}),
-                });
-                if (ran.truncated) {
-                  return {
-                    accepted: false,
-                    error: `More than ${DASHBOARD_ROWS_CAP.toLocaleString('en-US')} rows: group the query to the grain the widgets need`,
-                  };
-                }
-                if (!ran.rows.length) {
-                  return {
-                    accepted: false,
-                    error:
-                      'The query returned no rows: check its filters, then submit again.',
-                  };
-                }
-                const unbound = dashboardBindingErrors(draft, ran.columns);
-                if (unbound.length) {
-                  return { accepted: false, error: unbound.join('\n') };
-                }
-                const rows = prepareDashboardRows(ran.rows, draft);
-                if (JSON.stringify(rows).length > DASHBOARD_DATA_CHAR_CAP) {
-                  return {
-                    accepted: false,
-                    error: `The rows are more than ${DASHBOARD_DATA_CHAR_CAP.toLocaleString('en-US')} characters: group the query further or drop the columns no widget reads.`,
-                  };
-                }
-                const columns = draft.columns.map((column) => column.name);
-                // The last accepted submission is the one saved.
-                accepted = {
-                  draft,
-                  query: {
-                    sql: ran.correctedSql ?? sql,
-                    datasourceId,
-                    ...(rationale.trim()
-                      ? { rationale: rationale.trim() }
-                      : {}),
-                  },
-                  columns,
-                  rows,
-                };
-                return { accepted: true, rowCount: rows.length, columns };
-              },
-            };
-            options.requestContext.set(DASHBOARD_TOOLS_RUNTIME_KEY, submitter);
+            const submitter = this.dashboardSubmitter(
+              session,
+              turn.signal,
+              holdQuery,
+              CLARA_AFTER_ACCEPT,
+            );
+            options.requestContext.set(
+              DASHBOARD_TOOLS_RUNTIME_KEY,
+              submitter.runtime,
+            );
             // Her own stop: the turn's, or five idle minutes (workflows R43).
             const idle = streamIdleWatch(turn.signal);
             const claraOptions: typeof options = { ...options };
@@ -1203,6 +1176,7 @@ export class TurnEngine {
               streamError = undefined;
             }
             if (turn.signal.aborted) return { reply, stopped: true };
+            const accepted = submitter.accepted();
             if (!accepted) {
               return {
                 reply,
@@ -1213,27 +1187,14 @@ export class TurnEngine {
                 stopped: false,
               };
             }
-            const blueprint = blueprintFromDraft(accepted.draft, accepted.rows);
             try {
-              const ref = await save(id, {
-                ...(current ? { artifactId: current.artifactId } : {}),
-                blueprint,
-                query: accepted.query,
-                columns: accepted.columns,
-                rows: accepted.rows,
-                instruction: brief,
-              });
-              const saved: CurrentDashboard = {
-                artifactId: ref.artifactId,
-                version: ref.version,
-                title: ref.title,
-                blueprint,
-                query: accepted.query,
-                columns: accepted.columns,
-                rowCount: ref.rowCount,
-                widgetCount: ref.widgetCount,
-                filterCount: ref.filterCount,
-              };
+              const { ref, saved } = await this.saveAccepted(
+                save,
+                id,
+                accepted,
+                current,
+                brief,
+              );
               return { dashboard: ref, saved, reply, stopped: false };
             } catch (error) {
               return {
@@ -1243,15 +1204,78 @@ export class TurnEngine {
               };
             }
           },
-          // Avery's turn (agents.md 5.23): the team as her tools; her answer
-          // is delivered once she is done (only she talks to the user).
-          orchestrate: async (input, team: OrchestratorTeam) => {
+          // A conversation's turn (plan Elena 1.3): Avery's (agents.md 5.23)
+          // calls the team as her tools; her answer is delivered once she
+          // is done (only she talks to the user).
+          converse: async (input, team: OrchestratorTeam) => {
+            if (!conversation) {
+              throw new Error('This conversation has no turn to run');
+            }
+            // The export's author: the conversation's agent (plan Elena 1.3).
+            const author = {
+              ...conversation.author,
+              team: conversation.kind === 'team',
+            };
+            if (conversation.kind === 'solo') {
+              // Elena alone (plan Elena 2.4): her gates, her attempt through
+              // the analysis consumer, one repair round, her dashboard.
+              const currentDashboard = await this.currentDashboardOf(session);
+              const exporting = await this.exportOf(session, trimmed, author);
+              const save = this.deps.saveDashboard;
+              if (save && !soloSubmitter) {
+                soloSubmitter = this.dashboardSubmitter(
+                  session,
+                  turn.signal,
+                  holdQuery,
+                  SOLO_AFTER_ACCEPT,
+                );
+              }
+              const submitter = soloSubmitter;
+              const done = await runSoloTurn<AcceptedDashboard>(
+                {
+                  analyse: (attempt) => team.analyse(attempt),
+                  state: orchState,
+                  datasets: session.datasets,
+                  signal: turn.signal,
+                  requestContext: options.requestContext,
+                  message: trimmed,
+                  asksForDashboard: asksForDashboard(trimmed),
+                  ...(currentDashboard ? { currentDashboard } : {}),
+                  ...(save && submitter
+                    ? {
+                        dashboard: {
+                          runtime: submitter.runtime,
+                          accepted: () => submitter.accepted(),
+                          save: (accepted, current, instruction) =>
+                            this.saveAccepted(
+                              save,
+                              id,
+                              accepted,
+                              current,
+                              instruction,
+                            ),
+                        },
+                      }
+                    : {}),
+                  ...(exporting ? { exporting } : {}),
+                  ...(session.contextQueries?.length
+                    ? { earlierQueries: session.contextQueries }
+                    : {}),
+                },
+                input,
+              );
+              if (!done.clarification && done.answer) {
+                text = done.answer;
+                emit({ type: 'text', content: done.answer });
+              }
+              return done;
+            }
             // The conversation's dashboard (the follow-up carry, 5.22): its
             // current version, or none when it is gone or holds no query.
             const currentDashboard = await this.currentDashboardOf(session);
             // The export gate (2.21): the message asks to export the
             // conversation, and the run knows its conversation.
-            const exporting = await this.exportOf(session, trimmed);
+            const exporting = await this.exportOf(session, trimmed, author);
             const done = await runOrchestratorTurn(
               {
                 getAgent: (key) => this.deps.mastra.getAgent(key),
@@ -1946,6 +1970,11 @@ export class TurnEngine {
       const dashboard = orchState.dashboard;
       // The conversation Avery exported in this turn (agents.md 3.18).
       const exported = orchState.export;
+      // A conversation's checks (data-model 3.4.1): the last attempt's.
+      const checks =
+        conversation && orchState.findings.length
+          ? orchState.findings.map((finding) => ({ ...finding }))
+          : undefined;
       if (clarification) {
         // The turn stops here, but the schema/sample work done before the
         // question is real work — keep it on the card instead of dropping it.
@@ -2006,6 +2035,7 @@ export class TurnEngine {
           ...(visualEvent ? { visual: visualEvent } : {}),
           ...(dashboard ? { dashboard } : {}),
           ...(exported ? { export: exported } : {}),
+          ...(checks ? { checks } : {}),
           ...(crossChecked ? { crossCheck: crossChecked } : {}),
           ...(readinessReport ? { readinessReport } : {}),
         });
@@ -2023,8 +2053,8 @@ export class TurnEngine {
 
   /**
    * Run one turn as a run of the session's workflow (agents.md 5.1, 5.11,
-   * 5.12; ADR-0034, ADR-0040): `orchestrated-answer-michael` hands Avery's
-   * step `runtime.orchestrate`, `agent-turn` hands its Answer step `runtime.answer`.
+   * 5.12; ADR-0034, ADR-0040): a conversation's engine hands its step
+   * `runtime.converse`, `agent-turn` hands its Answer step `runtime.answer`.
    * Only a workflow whose steps drive the bar (`bar: 'steps'`) writes the
    * session's workflow state from the run's step events and emits each
    * change as `workflow`; a one-step workflow never does (agent-panel R15).
@@ -2042,6 +2072,7 @@ export class TurnEngine {
   private async exportOf(
     session: SessionDoc,
     message: string,
+    author?: ExportAuthor,
   ): Promise<
     | {
         turns: ConversationTurns;
@@ -2076,6 +2107,7 @@ export class TurnEngine {
               beforeRunId: conversation.runId,
               content,
               brand: exportBrand(),
+              ...(author ? { author } : {}),
             }),
           };
         } catch (error) {
@@ -2123,6 +2155,138 @@ export class TurnEngine {
   }
 
   /**
+   * The runtime submit_dashboard calls (agents.md 5.22): the host runs the
+   * dashboard's data query (up to 5,000 rows, the turn's stop), holds it as
+   * a source with `hold`, checks it and keeps the last accepted submission,
+   * which `accepted()` reads once the agent's stream ends. Clara's build and
+   * Elena's turn share it; `afterAccept` is what the accepted text asks next.
+   */
+  private dashboardSubmitter(
+    session: SessionDoc,
+    signal: AbortSignal,
+    hold: (
+      args: { sql: string; rationale: string },
+      result: unknown,
+      facts: QueryFacts,
+    ) => void,
+    afterAccept?: string,
+  ): {
+    runtime: DashboardToolsRuntime;
+    accepted(): AcceptedDashboard | undefined;
+  } {
+    let accepted: AcceptedDashboard | undefined;
+    const runtime: DashboardToolsRuntime = {
+      ...(afterAccept ? { afterAccept } : {}),
+      submit: async ({ dashboard: draft, sql, datasourceId, rationale }) => {
+        const args = { sql, rationale };
+        const facts: QueryFacts = {
+          datasourceId,
+          rowLimit: DASHBOARD_ROWS_CAP,
+        };
+        let ran: Awaited<ReturnType<SqlChecks['runSqlWithRepair']>>;
+        try {
+          ran = await this.deps.sql.runSqlWithRepair(
+            datasourceId,
+            sql,
+            DASHBOARD_ROWS_CAP,
+            session.datasets,
+            { signal, maxRows: DASHBOARD_ROWS_CAP },
+          );
+        } catch (error) {
+          // A query the stop cut short is no failed query.
+          if (signal.aborted) throw error;
+          const message =
+            error instanceof Error ? error.message : String(error);
+          hold(args, { error: message }, facts);
+          return {
+            accepted: false,
+            error: `The query failed: ${message}`,
+          };
+        }
+        const { totalRows, ...result } = ran;
+        hold(args, result, {
+          ...facts,
+          ...(typeof totalRows === 'number' ? { totalRows } : {}),
+        });
+        if (ran.truncated) {
+          return {
+            accepted: false,
+            error: `More than ${DASHBOARD_ROWS_CAP.toLocaleString('en-US')} rows: group the query to the grain the widgets need`,
+          };
+        }
+        if (!ran.rows.length) {
+          return {
+            accepted: false,
+            error:
+              'The query returned no rows: check its filters, then submit again.',
+          };
+        }
+        const unbound = dashboardBindingErrors(draft, ran.columns);
+        if (unbound.length) {
+          return { accepted: false, error: unbound.join('\n') };
+        }
+        const rows = prepareDashboardRows(ran.rows, draft);
+        if (JSON.stringify(rows).length > DASHBOARD_DATA_CHAR_CAP) {
+          return {
+            accepted: false,
+            error: `The rows are more than ${DASHBOARD_DATA_CHAR_CAP.toLocaleString('en-US')} characters: group the query further or drop the columns no widget reads.`,
+          };
+        }
+        const columns = draft.columns.map((column) => column.name);
+        // The last accepted submission is the one saved.
+        accepted = {
+          draft,
+          query: {
+            sql: ran.correctedSql ?? sql,
+            datasourceId,
+            ...(rationale.trim() ? { rationale: rationale.trim() } : {}),
+          },
+          columns,
+          rows,
+        };
+        return { accepted: true, rowCount: rows.length, columns };
+      },
+    };
+    return { runtime, accepted: () => accepted };
+  }
+
+  /**
+   * Save an accepted submission as the conversation's dashboard (agents.md
+   * 5.22): a new version of `current` when there is one, else a new
+   * dashboard; its ref and what the next message carries. Throws when the
+   * save fails.
+   */
+  private async saveAccepted(
+    save: NonNullable<TurnEngineDeps['saveDashboard']>,
+    sessionId: string,
+    accepted: AcceptedDashboard,
+    current: CurrentDashboard | undefined,
+    instruction: string,
+  ): Promise<{ ref: DashboardRef; saved: CurrentDashboard }> {
+    const blueprint = blueprintFromDraft(accepted.draft, accepted.rows);
+    const ref = await save(sessionId, {
+      ...(current ? { artifactId: current.artifactId } : {}),
+      blueprint,
+      query: accepted.query,
+      columns: accepted.columns,
+      rows: accepted.rows,
+      instruction,
+    });
+    const saved: CurrentDashboard = {
+      artifactId: ref.artifactId,
+      version: ref.version,
+      title: ref.title,
+      blueprint,
+      query: accepted.query,
+      columns: accepted.columns,
+      rowCount: ref.rowCount,
+      widgetCount: ref.widgetCount,
+      filterCount: ref.filterCount,
+    };
+    return { ref, saved };
+  }
+
+  /**
    * Review a Website's runtime (agents.md 5.19): the browser work of the
    * run, taken when a step first asks for it, and the run's report and
    * answer.
@@ -2162,11 +2326,11 @@ export class TurnEngine {
       ReviewWebsiteRuntime & {
         /** Its names overlap the others' (readDashboard, saveReport): kept apart. */
         consumptionGap: ConsumptionGapRuntime;
-        /** Avery's turn, with her team (agents.md 5.23). */
-        orchestrate: (
-          input: Parameters<OrchestratedMichaelRuntime['orchestrate']>[0],
+        /** A conversation's turn: Avery's with her team (agents.md 5.23). */
+        converse: (
+          input: Parameters<ConversationTurnRuntime['turn']>[0],
           team: OrchestratorTeam,
-        ) => ReturnType<OrchestratedMichaelRuntime['orchestrate']>;
+        ) => ReturnType<ConversationTurnRuntime['turn']>;
         /** Clara's build, one of Avery's team calls (agents.md 5.22). */
         buildDashboard: NonNullable<OrchestratorTeam['buildDashboard']>;
       },
@@ -2189,19 +2353,19 @@ export class TurnEngine {
     const mapping = workflow.engineId === MAP_DASHBOARD_DATA_WORKFLOW_ID;
     const review = workflow.engineId === REVIEW_WEBSITE_WORKFLOW_ID;
     const gap = workflow.engineId === CONSUMPTION_GAP_WORKFLOW_ID;
-    const orchestrated = workflow.engineId === ORCHESTRATED_MICHAEL_WORKFLOW_ID;
-    if (orchestrated) {
-      // Answer a Business Question (Avery + Michael) (agents.md 5.23): Avery
-      // calls Michael's analysis and Clara's build as her team.
-      requestContext.set(ORCHESTRATED_MICHAEL_RUNTIME_KEY, {
-        orchestrate: (input) =>
+    if (conversationOfTurn(workflow)) {
+      // A conversation's engine (plan Elena 1.3): its one step runs the
+      // agent's turn. Avery (agents.md 5.23) calls Michael's analysis and
+      // Clara's build as her team.
+      requestContext.set(CONVERSATION_TURN_RUNTIME_KEY, {
+        turn: (input) =>
           captured(() =>
-            runtime.orchestrate(input, {
+            runtime.converse(input, {
               analyse: (attempt) => runtime.analyse(attempt),
               buildDashboard: (built) => runtime.buildDashboard(built),
             }),
           ),
-      } satisfies OrchestratedMichaelRuntime);
+      } satisfies ConversationTurnRuntime);
     } else if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),

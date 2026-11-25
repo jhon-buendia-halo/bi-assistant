@@ -6,6 +6,7 @@ import {
 } from '../../mastra/workflows/agent-workflows';
 import {
   CODE_WORKFLOWS,
+  CONVERSATION_WORKFLOWS,
   workflowAgentKeys,
   workflowCategory,
   type CodeWorkflowSource,
@@ -33,7 +34,11 @@ import {
   TEAM_STEP_MODEL,
   type StepModel,
 } from '../../mastra/step-model';
-import { ORCHESTRATED_MICHAEL_WORKFLOW_ID } from '../../mastra/workflows/orchestrated-answer-michael.steps';
+import {
+  ORCHESTRATED_MICHAEL_WORKFLOW_ID,
+  ORCHESTRATOR_MODEL,
+} from '../../mastra/workflows/orchestrated-answer-michael.steps';
+import { conversationalBindingOf } from '../../mastra/conversational-agents';
 
 /** One workflow of the catalogue, as `GET /workflows` lists it (api.md 116). */
 export interface WorkflowSummary {
@@ -204,15 +209,18 @@ export class WorkflowsService {
   /**
    * The model a workflow runs its step agents on (agents.md 1.3): the
    * team's (`TEAM_STEP_MODEL`) for Answer a Business Question (Avery +
-   * Michael) when the saved model is served as a Claude model; otherwise
-   * none (every agent on the saved model). Never throws.
+   * Michael) and Opus 5.5 high for Elena's conversation (plan Elena 2.5)
+   * when the saved model is served as a Claude model; otherwise none (every
+   * agent on the saved model). Never throws.
    */
   private async stepModelOf(id: string): Promise<StepModel | undefined> {
-    if (id !== ORCHESTRATED_MICHAEL_WORKFLOW_ID) return undefined;
+    const binding = conversationalBindingOf(id);
+    if (!binding) return undefined;
     try {
-      return servesClaude(await resolveAgentModelConfig())
+      if (!servesClaude(await resolveAgentModelConfig())) return undefined;
+      return binding.workflowId === ORCHESTRATED_MICHAEL_WORKFLOW_ID
         ? TEAM_STEP_MODEL
-        : undefined;
+        : { ...ORCHESTRATOR_MODEL };
     } catch {
       return undefined;
     }
@@ -256,21 +264,28 @@ export class WorkflowsService {
     };
   }
 
+  /**
+   * A catalogue workflow, or a built-in agent's conversation (plan Elena
+   * 1.1: `agent:insights-lead`, never listed); 404 for anything else.
+   */
   private async find(id: string): Promise<CatalogueEntry> {
-    const entry = (await this.entries()).find(
+    const entry = (await this.entries(CONVERSATION_WORKFLOWS)).find(
       (candidate) => candidate.summary.id === id,
     );
     if (!entry) throw new NotFoundException(`Workflow "${id}" not found`);
     return entry;
   }
 
-  private async entries(): Promise<CatalogueEntry[]> {
+  /** The catalogue's entries, then `extra` (conversations) when given. */
+  private async entries(
+    extra: readonly CodeWorkflowSource[] = [],
+  ): Promise<CatalogueEntry[]> {
     const builtins = new Map(
       (await this.agents.list())
         .filter((agent) => agent.status === 'builtin')
         .map((agent) => [agent.key, agent]),
     );
-    return CODE_WORKFLOWS.flatMap((source) => {
+    return [...CODE_WORKFLOWS, ...extra].flatMap((source) => {
       const agent = builtins.get(source.primaryFor);
       return agent ? [codeEntry(source, agent, builtins)] : [];
     });
@@ -283,7 +298,10 @@ function codeEntry(
   agent: AgentSummary,
   builtins: ReadonlyMap<string, AgentSummary>,
 ): CatalogueEntry {
-  const picksDatasets = runsOnPickedDatasets(source.primaryFor);
+  // A conversation runs over the datasets its first message picks.
+  const picksDatasets =
+    runsOnPickedDatasets(source.primaryFor) ||
+    conversationalBindingOf(source.id) !== undefined;
   return {
     summary: {
       id: source.id,
@@ -304,6 +322,10 @@ function codeEntry(
       datasets: picksDatasets ? [] : [...agent.datasets],
       missingDatasets: [...agent.missingDatasets],
       starterQuestions: [...agent.starterQuestions],
+      // Its runs are the messages of one conversation (plan Elena 1.2).
+      ...(conversationalBindingOf(source.id)
+        ? { conversational: true as const }
+        : {}),
     },
     contractHash: source.contractHash,
     edges: () => source.edges.map((edge) => ({ ...edge })),

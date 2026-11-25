@@ -1336,4 +1336,24 @@ describe('data dates in the analysis (agents.md 4.1 *Data dates*, 5.11 Validate)
       expect(checked.findings).toHaveLength(5);
     }
   });
+
+  it('reports no measures finding when the plan named no measure, so it never passes trivially (plan Elena 2.6)', () => {
+    const checked = validateAttempt(
+      {
+        plan: { ...PLAN, measures: [] },
+        calls,
+        queries: [AS_OF],
+        catalog: catalog('2023-07-02'),
+        question: PLAN.question,
+      },
+      NOW,
+    );
+    expect(checked.findings.map((f) => f.check)).toEqual([
+      VALIDATION_CHECKS.ranQuery,
+      VALIDATION_CHECKS.noToolError,
+      VALIDATION_CHECKS.rowLimit,
+      VALIDATION_CHECKS.sample,
+      check,
+    ]);
+  });
 });
