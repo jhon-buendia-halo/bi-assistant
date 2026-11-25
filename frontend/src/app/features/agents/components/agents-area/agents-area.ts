@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { ShellState } from '../../../../core/shell/shell-state';
 import { WorkflowsNavState } from '../../../workflows/services/workflows-nav-state';
 import { AgentsNavState } from '../../services/agents-nav-state';
+import { AgentConversation } from '../agent-conversation/agent-conversation';
 import { AgentDetail } from '../agent-detail/agent-detail';
 import { AgentEditor } from '../agent-editor/agent-editor';
 import { AgentHub } from '../agent-hub/agent-hub';
@@ -13,6 +14,7 @@ import { SkillsLibrary } from '../skills-library/skills-library';
 @Component({
   selector: 'app-agents-area',
   imports: [
+    AgentConversation,
     AgentHub,
     AgentDetail,
     AgentEditor,

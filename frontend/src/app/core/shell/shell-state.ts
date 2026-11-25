@@ -12,6 +12,7 @@ export type MainView =
   | 'workflow-detail'
   | 'agents'
   | 'agent-detail'
+  | 'agent-conversation'
   | 'agent-editor'
   | 'skills'
   | 'skill-editor'
@@ -55,6 +56,7 @@ export const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   'workflow-detail': 'workflows',
   agents: 'agents',
   'agent-detail': 'agents',
+  'agent-conversation': 'agents',
   'agent-editor': 'agents',
   skills: 'agents',
   'skill-editor': 'agents',

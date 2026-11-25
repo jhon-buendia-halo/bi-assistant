@@ -17,8 +17,22 @@
       (edit)="agents.openAgentEditor($event.key)"
       (openBuiltInSkill)="agents.openBuiltInSkillEditor($event, true)"
       (openWorkflow)="workflows.openWorkflow($event)"
+      (ask)="agents.openConversation($event)"
     />
   </div>
+} @else if (
+  shell.mainView() === "agent-conversation" && agents.activeAgentKey();
+  as conversationAgent
+) {
+  <!-- Deferred like the workflow page: the chat stays out of the initial bundle. -->
+  @defer (on immediate) {
+    <app-agent-conversation
+      class="min-w-0 flex-1"
+      [agentKey]="conversationAgent"
+      [runId]="agents.conversationRunId()"
+      (back)="agents.closeAgentDetail()"
+    />
+  }
 } @else if (shell.mainView() === "agent-editor") {
   <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
     <app-agent-editor
