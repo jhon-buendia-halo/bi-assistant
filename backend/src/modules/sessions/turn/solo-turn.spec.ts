@@ -173,6 +173,19 @@ describe("Elena's turn (plan Elena 2.4)", () => {
     expect(state.attempts).toBe(2);
   });
 
+  it('checks nothing and repairs nothing when she only replies, calling no tool and stating no figure', async () => {
+    const reply: AnalyseAttempt = {
+      calls: [],
+      queries: [],
+      text: "You're welcome. Ask me anything else about the World Cup.",
+      stopped: false,
+    };
+    const { deps, analyse } = fixture([reply], { message: 'Thanks!' });
+    const done = await runSoloTurn(deps, { question: 'Thanks!' });
+    expect(analyse).toHaveBeenCalledTimes(1);
+    expect(done).toMatchObject({ answer: reply.text, attempts: 1, checks: [] });
+  });
+
   it('never runs a second repair round, even when the repair fails its checks too', async () => {
     const { deps, analyse } = fixture([NO_QUERY, NO_QUERY]);
     const done = await runSoloTurn(deps, QUESTION);

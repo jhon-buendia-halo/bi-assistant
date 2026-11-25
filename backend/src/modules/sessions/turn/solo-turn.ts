@@ -126,6 +126,9 @@ export function repairBlock(
 /** Whether a turn's attempt is checked (plan Elena 2.4 step 6). */
 function isChecked(attempt: AnalyseAttempt, exported: boolean): boolean {
   if (attempt.clarification) return false;
+  // A plain reply ("thanks"): no tool called and no figure stated, so no
+  // claim from the data to check. A figure with no query is still repaired.
+  if (attempt.calls.length === 0 && !/\d/.test(attempt.text)) return false;
   // An export-only message runs no query: nothing to check.
   const ranQuery = attempt.calls.some(
     (call) => call.tool === 'run_readonly_sql',
