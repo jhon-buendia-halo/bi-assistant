@@ -192,6 +192,16 @@ describe('figureText', () => {
     expect(text).toContain('7 rows');
     expect(text).not.toMatch(/\|\s*1\s*\|/);
   });
+
+  it('drops ISO dates and clock times, as her real answers write the data end date', () => {
+    // From two real insights-lead eval answers (2026-11-25).
+    const text = figureText(
+      '- The data ends on 2022-12-18.\n| 2022 final (match 64) | Lusail Stadium | 2022-12-18 15:00 UTC | 88,966 | 88,966 |',
+    );
+    expect(text).not.toMatch(/\b(12|18|15|00)\b/);
+    expect(text).toContain('88,966');
+    expect(text).toContain('64');
+  });
 });
 
 describe('figuresFromQueries', () => {

@@ -160,7 +160,7 @@ export function repairAtMostOnce(): EvalCustomCheck {
 
 /** A calendar year, or a day and month (`1 Oct`, `31 December`): dates, not figures. */
 const DATE_WORDS =
-  /\b(?:19|20)\d{2}\b|\b\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b/g;
+  /\b(?:19|20)\d{2}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?\b|\b\d{1,2}:\d{2}(?::\d{2})?\b|\b(?:19|20)\d{2}\b|\b\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b/g;
 
 /**
  * The text a figure is read from: no code (a query or a name in code
