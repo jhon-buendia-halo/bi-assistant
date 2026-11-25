@@ -129,16 +129,19 @@ export interface WorkflowRunsLike<Prepared> {
 }
 
 /**
- * The target's run service over the app's: a run is prepared as the route
- * prepares it (a refused input throws its 400) and streamed to its end; a
- * run that throws after it was stored is deleted before the error goes on.
+ * The target's run service over the app's, for one workflow id: a run is
+ * prepared as the route prepares it (a refused input throws its 400) and
+ * streamed to its end; a run that throws after it was stored is deleted
+ * before the error goes on. Avery's workflow and Elena's
+ * (`agent:insights-lead`) both run through it.
  */
-export function averyEvalRunsOf<Prepared>(
+export function workflowEvalRunsOf<Prepared>(
   runs: WorkflowRunsLike<Prepared>,
+  workflowId: string,
 ): AveryEvalRuns {
   return {
     run: async (input) => {
-      const prepared = await runs.prepare(AVERY_WORKFLOW_ID, { input });
+      const prepared = await runs.prepare(workflowId, { input });
       let runId: string | undefined;
       try {
         return await runs.stream(prepared, (event) => {
@@ -155,23 +158,38 @@ export function averyEvalRunsOf<Prepared>(
   };
 }
 
-let installed: AveryEvalRuns | undefined;
+/** Avery's workflow's run service (`workflowEvalRunsOf`). */
+export function averyEvalRunsOf<Prepared>(
+  runs: WorkflowRunsLike<Prepared>,
+): AveryEvalRuns {
+  return workflowEvalRunsOf(runs, AVERY_WORKFLOW_ID);
+}
 
-/** Installed at boot by `AveryEvalBridge`; `undefined` uninstalls. */
+let installed: WorkflowRunsLike<unknown> | undefined;
+
+/**
+ * Installed at boot by `AveryEvalBridge` (it serves every workflow eval
+ * target: Avery's and Elena's); `undefined` uninstalls.
+ */
 export function installAveryEvalRuns<Prepared>(
   runs: WorkflowRunsLike<Prepared> | undefined,
 ): void {
-  installed = runs ? averyEvalRunsOf(runs) : undefined;
+  installed = runs;
 }
 
-/** The installed run service; throws when the app did not install it. */
-export function averyEvalRuns(): AveryEvalRuns {
+/** The installed run service for one workflow; throws when none is installed. */
+export function installedEvalRuns(workflowId: string): AveryEvalRuns {
   if (!installed) {
     throw new Error(
-      'The Avery evals need the workflow run service, which the app installs at start-up',
+      'The workflow evals need the workflow run service, which the app installs at start-up',
     );
   }
-  return installed;
+  return workflowEvalRunsOf(installed, workflowId);
+}
+
+/** The installed run service for Avery's workflow. */
+export function averyEvalRuns(): AveryEvalRuns {
+  return installedEvalRuns(AVERY_WORKFLOW_ID);
 }
 
 /** The text of the last user message of an agent input. */
