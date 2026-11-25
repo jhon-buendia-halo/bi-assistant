@@ -24,6 +24,10 @@ import {
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import { INSIGHTS_ANALYST_AGENT_KEY } from '../agents/insights-analyst-catalog';
+import {
+  conversationalBindingOf,
+  type ConversationalBinding,
+} from '../conversational-agents';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
 import {
   ORCHESTRATED_MICHAEL_EDGES,
@@ -613,11 +617,14 @@ export function agentWorkflowId(agentKeyOrId: string): string {
 export type ParsedWorkflowId =
   | { kind: 'code'; source: CodeWorkflowSource }
   | { kind: 'builtin-agent'; agentKey: string }
+  | { kind: 'conversation'; binding: ConversationalBinding }
   | { kind: 'user-agent'; agentId: string };
 
 /**
- * What a session's workflow id names: a code workflow, or the agent-turn
- * binding of a wrapped built-in agent or a user agent. Undefined for an
+ * What a session's workflow id names: a code workflow, a built-in agent's
+ * conversation outside any workflow (`agent:insights-lead`, plan Elena
+ * 1.3; Avery's conversational workflow stays a code workflow), or the
+ * agent-turn binding of a wrapped built-in agent or a user agent. Undefined for an
  * unknown id (a removed workflow such as `seq-text-demo` or
  * `deep-analysis`), a System agent's key and the `primaryFor` agent of a
  * code workflow (it runs that workflow). Any other `agent:` id names a user
@@ -634,6 +641,8 @@ export function parseWorkflowId(id: string): ParsedWorkflowId | undefined {
   if (WRAPPED_AGENT_KEYS.includes(key)) {
     return { kind: 'builtin-agent', agentKey: key };
   }
+  const binding = conversationalBindingOf(id);
+  if (binding) return { kind: 'conversation', binding };
   if (
     SYSTEM_AGENT_KEYS.includes(key) ||
     CODE_WORKFLOWS.some((workflow) => workflow.primaryFor === key)

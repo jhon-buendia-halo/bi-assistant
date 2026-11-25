@@ -68,11 +68,6 @@ export function teammateOfTool(tool: string): string | undefined {
   return AVERY_TEAM.team.find((member) => member.tool === tool)?.agent;
 }
 
-/** Whether a workflow is Avery's (a conversation with her, R45). */
-export function isOrchestratedWorkflow(id: string | undefined): boolean {
-  return id === ORCHESTRATED_MICHAEL_WORKFLOW_ID;
-}
-
 /**
  * Avery's model and effort (agents.md 1.3): Opus 5.5 at high effort when the
  * saved model is served as a Claude model; the agents she calls run on the
