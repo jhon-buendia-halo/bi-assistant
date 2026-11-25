@@ -9,11 +9,13 @@ jest.mock('@mastra/core/workflows', () =>
 import { RequestContext } from '@mastra/core/request-context';
 import { orchestratedMichaelWorkflow } from './orchestrated-answer-michael.workflow';
 import {
-  ORCHESTRATED_MICHAEL_RUNTIME_KEY,
   ORCHESTRATED_MICHAEL_STEPS,
   ORCHESTRATED_MICHAEL_WORKFLOW_ID,
-  type OrchestratedMichaelRuntime,
 } from './orchestrated-answer-michael.steps';
+import {
+  CONVERSATION_TURN_RUNTIME_KEY,
+  type ConversationTurnRuntime,
+} from './conversation-turn.steps';
 
 interface StubEvent {
   type: string;
@@ -58,13 +60,13 @@ async function drain(output: StubStream) {
   return { events, result: await output.result };
 }
 
-function context(runtime?: OrchestratedMichaelRuntime) {
+function context(runtime?: ConversationTurnRuntime) {
   const requestContext = new RequestContext();
-  if (runtime) requestContext.set(ORCHESTRATED_MICHAEL_RUNTIME_KEY, runtime);
+  if (runtime) requestContext.set(CONVERSATION_TURN_RUNTIME_KEY, runtime);
   return requestContext;
 }
 
-async function run(runtime?: OrchestratedMichaelRuntime) {
+async function run(runtime?: ConversationTurnRuntime) {
   const requestContext = context(runtime);
   const engineRun = await workflow.createRun();
   const started = await drain(
@@ -97,11 +99,11 @@ describe('orchestrated-answer-michael workflow (agents.md 5.23; workflows R45)',
     expect(persist?.({ workflowStatus: 'failed' })).toBe(false);
   });
 
-  it("calls the runtime's orchestrate with the question and returns its answer", async () => {
+  it("calls the runtime's turn with the question and returns its answer", async () => {
     const orchestrate = jest.fn(() =>
       Promise.resolve({ answer: 'There were 64 matches.', stopped: false }),
     );
-    const { events, result } = await run({ orchestrate });
+    const { events, result } = await run({ turn: orchestrate });
     expect(orchestrate).toHaveBeenCalledTimes(1);
     expect(orchestrate).toHaveBeenCalledWith({ question: 'How many matches?' });
     expect(events).toEqual(['orchestrate:running', 'orchestrate:success']);
@@ -120,7 +122,7 @@ describe('orchestrated-answer-michael workflow (agents.md 5.23; workflows R45)',
         clarification: ASKED,
       })
       .mockResolvedValueOnce({ answer: 'Men: 64 matches.', stopped: false });
-    const started = await run({ orchestrate });
+    const started = await run({ turn: orchestrate });
     expect(started.result.status).toBe('suspended');
     expect(started.result.suspended).toEqual([['orchestrate']]);
     expect(started.result.steps?.orchestrate.suspendPayload).toEqual({
@@ -153,7 +155,7 @@ describe('orchestrated-answer-michael workflow (agents.md 5.23; workflows R45)',
         clarification: ASKED,
       }),
     );
-    const { result } = await run({ orchestrate });
+    const { result } = await run({ turn: orchestrate });
     expect(result).toEqual({
       status: 'success',
       result: { answer: 'partial' },

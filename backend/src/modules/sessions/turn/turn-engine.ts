@@ -75,11 +75,16 @@ import {
 import { analyseSystemBlocks } from '../../../mastra/workflows/analysis.prompts';
 import {
   AVERY_TEAM,
-  ORCHESTRATED_MICHAEL_RUNTIME_KEY,
-  ORCHESTRATED_MICHAEL_WORKFLOW_ID,
   ORCHESTRATOR_MODEL,
-  type OrchestratedMichaelRuntime,
 } from '../../../mastra/workflows/orchestrated-answer-michael.steps';
+import {
+  CONVERSATION_TURN_RUNTIME_KEY,
+  type ConversationTurnRuntime,
+} from '../../../mastra/workflows/conversation-turn.steps';
+import {
+  conversationalBindingOf,
+  type ConversationalBinding,
+} from '../../../mastra/conversational-agents';
 import {
   currentDashboardBlock,
   orchestratorState,
@@ -323,6 +328,18 @@ type TurnRunOutcome =
       discard: () => Promise<void>;
     };
 
+/**
+ * The conversational binding a turn runs on its engine (plan Elena 1.3):
+ * Avery's or Elena's; undefined for any other turn, a node chat of the same
+ * workflow included (it runs on `agent-turn`).
+ */
+function conversationOfTurn(
+  workflow: TurnWorkflow,
+): ConversationalBinding | undefined {
+  const binding = conversationalBindingOf(workflow.id);
+  return binding?.engineId === workflow.engineId ? binding : undefined;
+}
+
 export class TurnEngine {
   constructor(private readonly deps: TurnEngineDeps) {}
 
@@ -439,7 +456,8 @@ export class TurnEngine {
     // calls run on the team's step model (their model functions read it
     // from the context, and every call sends its effort), and she runs on
     // Opus 5.5 high. Otherwise the saved model and effort, as every agent.
-    const orchestrated = workflow.engineId === ORCHESTRATED_MICHAEL_WORKFLOW_ID;
+    const conversation = conversationOfTurn(workflow);
+    const orchestrated = conversation?.kind === 'team';
     const claude = servesClaude(await resolveAgentModelConfig());
     const stepModel = orchestrated && claude ? TEAM_STEP_MODEL : undefined;
     if (stepModel) {
@@ -459,9 +477,9 @@ export class TurnEngine {
       : (options.providerOptions as Record<string, unknown> | undefined);
     // What Avery's team produced: it outlives a wait for the user.
     const orchState = orchestratorState();
-    // Avery's answer is hers (Michael's, then her closing words): no
-    // synthesis replaces it.
-    const codeAnswer = orchestrated;
+    // A conversation's answer is its agent's (Avery's: Michael's, then her
+    // closing words): no synthesis replaces it.
+    const codeAnswer = conversation !== undefined;
     // A query record of the turn: kept for the answer with its facts,
     // explorable from then on, and shown as its call's result.
     const captureRecord = (record: ToolDataRecord, callId?: string) => {
@@ -1243,9 +1261,13 @@ export class TurnEngine {
               };
             }
           },
-          // Avery's turn (agents.md 5.23): the team as her tools; her answer
-          // is delivered once she is done (only she talks to the user).
-          orchestrate: async (input, team: OrchestratorTeam) => {
+          // A conversation's turn (plan Elena 1.3): Avery's (agents.md 5.23)
+          // calls the team as her tools; her answer is delivered once she
+          // is done (only she talks to the user).
+          converse: async (input, team: OrchestratorTeam) => {
+            if (conversation?.kind !== 'team') {
+              throw new Error('This conversation has no turn to run');
+            }
             // The conversation's dashboard (the follow-up carry, 5.22): its
             // current version, or none when it is gone or holds no query.
             const currentDashboard = await this.currentDashboardOf(session);
@@ -2023,8 +2045,8 @@ export class TurnEngine {
 
   /**
    * Run one turn as a run of the session's workflow (agents.md 5.1, 5.11,
-   * 5.12; ADR-0034, ADR-0040): `orchestrated-answer-michael` hands Avery's
-   * step `runtime.orchestrate`, `agent-turn` hands its Answer step `runtime.answer`.
+   * 5.12; ADR-0034, ADR-0040): a conversation's engine hands its step
+   * `runtime.converse`, `agent-turn` hands its Answer step `runtime.answer`.
    * Only a workflow whose steps drive the bar (`bar: 'steps'`) writes the
    * session's workflow state from the run's step events and emits each
    * change as `workflow`; a one-step workflow never does (agent-panel R15).
@@ -2162,11 +2184,11 @@ export class TurnEngine {
       ReviewWebsiteRuntime & {
         /** Its names overlap the others' (readDashboard, saveReport): kept apart. */
         consumptionGap: ConsumptionGapRuntime;
-        /** Avery's turn, with her team (agents.md 5.23). */
-        orchestrate: (
-          input: Parameters<OrchestratedMichaelRuntime['orchestrate']>[0],
+        /** A conversation's turn: Avery's with her team (agents.md 5.23). */
+        converse: (
+          input: Parameters<ConversationTurnRuntime['turn']>[0],
           team: OrchestratorTeam,
-        ) => ReturnType<OrchestratedMichaelRuntime['orchestrate']>;
+        ) => ReturnType<ConversationTurnRuntime['turn']>;
         /** Clara's build, one of Avery's team calls (agents.md 5.22). */
         buildDashboard: NonNullable<OrchestratorTeam['buildDashboard']>;
       },
@@ -2189,19 +2211,19 @@ export class TurnEngine {
     const mapping = workflow.engineId === MAP_DASHBOARD_DATA_WORKFLOW_ID;
     const review = workflow.engineId === REVIEW_WEBSITE_WORKFLOW_ID;
     const gap = workflow.engineId === CONSUMPTION_GAP_WORKFLOW_ID;
-    const orchestrated = workflow.engineId === ORCHESTRATED_MICHAEL_WORKFLOW_ID;
-    if (orchestrated) {
-      // Answer a Business Question (Avery + Michael) (agents.md 5.23): Avery
-      // calls Michael's analysis and Clara's build as her team.
-      requestContext.set(ORCHESTRATED_MICHAEL_RUNTIME_KEY, {
-        orchestrate: (input) =>
+    if (conversationOfTurn(workflow)) {
+      // A conversation's engine (plan Elena 1.3): its one step runs the
+      // agent's turn. Avery (agents.md 5.23) calls Michael's analysis and
+      // Clara's build as her team.
+      requestContext.set(CONVERSATION_TURN_RUNTIME_KEY, {
+        turn: (input) =>
           captured(() =>
-            runtime.orchestrate(input, {
+            runtime.converse(input, {
               analyse: (attempt) => runtime.analyse(attempt),
               buildDashboard: (built) => runtime.buildDashboard(built),
             }),
           ),
-      } satisfies OrchestratedMichaelRuntime);
+      } satisfies ConversationTurnRuntime);
     } else if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
