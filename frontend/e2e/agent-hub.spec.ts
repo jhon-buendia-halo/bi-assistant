@@ -19,7 +19,8 @@ const ASSISTANT_ROLE = 'Data Analyst';
 /** Insights Analyst's persona (agents-evals R107, BA-320). */
 const V2_AGENT = 'Michael';
 /** The workflow it runs (workflows R1). */
-const V2 = 'Answer a Business Question';
+const V2 = 'Answer a Business Question (Avery + Michael)';
+const V2_ID = 'orchestrated-answer-michael';
 const READINESS = 'Sarah';
 const V2_KEY = 'insights-analyst';
 const V2_DESCRIPTION =
@@ -201,7 +202,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
   await expect(
     section(page, 'sql').getByTestId('agent-card-sql-verifier'),
   ).toContainText('Owner: System');
-  // The agents of the Plan and Write answer steps (agents.md 5.11).
+  // Olivia and Jessica stay in the library; no workflow step calls them (agents.md 5.11).
   for (const [key, name, role] of [
     ['analysis-planner', 'Olivia', 'Analysis Lead'],
     ['answer-writer', 'Jessica', 'Insights Writer'],
@@ -681,9 +682,9 @@ function railItem(page: Page, name: string): Locator {
 }
 
 /** The Used in text of a user agent, or an Official agent no workflow uses. */
-const NOT_USED = 'Not used in any user journey.';
+const NOT_USED = 'Not used in any workflow.';
 const SYSTEM_EMPTY =
-  'Not used in any user journey. The app calls this agent persona itself.';
+  'Not used in any workflow. The app calls this agent persona itself.';
 
 test(
   'An agent shows the workflows that use it',
@@ -706,22 +707,22 @@ test(
       const usedIn = page.getByTestId('agent-used-in');
       await expect(usedIn).toContainText('Used in');
       await expect(
-        usedIn.getByTestId('agent-used-in-answer-business-question'),
+        usedIn.getByTestId(`agent-used-in-${V2_ID}`),
       ).toHaveText(V2);
       await expect(button(page, 'Start chat')).toHaveCount(0);
     });
     await scenarioStep(page, `When I click the "${V2}" chip`, async () => {
-      await page.getByTestId('agent-used-in-answer-business-question').click();
+      await page.getByTestId(`agent-used-in-${V2_ID}`).click();
     });
     await scenarioStep(
       page,
-      `Then I see the "${V2}" user journey page and "User journeys" is the current rail item`,
+      `Then I see the "${V2}" workflow page and "Workflows" is the current rail item`,
       async () => {
         await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
         await expect(page.getByTestId('workflow-detail-id')).toHaveText(
-          'answer-business-question',
+          V2_ID,
         );
-        await expect(railItem(page, 'User journeys')).toHaveAttribute(
+        await expect(railItem(page, 'Workflows')).toHaveAttribute(
           'aria-current',
           'page',
         );
@@ -751,12 +752,12 @@ test(
           'You are the Data Readiness Agent',
         );
         // Her step: Explain report in Assess Data Readiness only (Answer a
-        // Business Question no longer runs her).
+        // Business Question (Avery + Michael) never runs her).
         const usedIn = page.getByTestId('agent-used-in');
         await expect(usedIn).toContainText('Used in');
         await expect(usedIn).not.toContainText(NOT_USED);
         await expect(
-          usedIn.getByTestId('agent-used-in-answer-business-question'),
+          usedIn.getByTestId(`agent-used-in-${V2_ID}`),
         ).toHaveCount(0);
         await expect(
           usedIn.getByTestId('agent-used-in-data-readiness-assessment'),
@@ -831,7 +832,7 @@ test('the agent detail has no detectable accessibility violations in either them
   await openHub(page);
   await openAgent(page, V2_KEY, V2_AGENT);
   await expect(
-    page.getByTestId('agent-used-in-answer-business-question'),
+    page.getByTestId(`agent-used-in-${V2_ID}`),
   ).toBeVisible();
   await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
   await scan('Official agent');

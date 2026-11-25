@@ -55,7 +55,7 @@ export const LINKABLE_TOOLS: LinkOption[] = [
     kind: 'tool',
     name: 'show_in_panel',
     description:
-      'Shows a file, document, table, visual or user journey progress in the right panel.',
+      'Shows a file, document, table, visual or workflow progress in the right panel.',
   },
   {
     kind: 'tool',

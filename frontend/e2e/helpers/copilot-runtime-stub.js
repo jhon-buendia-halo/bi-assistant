@@ -27,6 +27,14 @@
  * Insights Analyst's structured steps are told apart by their system
  * message's first line (the same lines as helpers/v2-steps.ts): Plan gets a
  * clear plan, Write answer an answer whose Markdown is COPILOT_STUB_ANSWER.
+ *
+ * Avery's sessions (Answer a Business Question (Avery + Michael)) are told
+ * apart by her instructions' first line (AVERY_FIRST_LINE of
+ * helpers/v2-steps.ts) and moved as `averyMove` there: her first turn
+ * requests `answer_from_data` with the prompt as her brief, a question
+ * Michael asked is relayed through `ask_clarification`, and once he answered
+ * she closes with no words, so the run's answer is Michael's (the stub's
+ * ANSWER). COPILOT_STUB_TOOL_CALL is never requested in her sessions.
  */
 'use strict';
 
@@ -50,6 +58,55 @@ const DELTA_MS = Number(env.COPILOT_STUB_DELTA_MS ?? 40);
 /** The first lines of v2's Plan and Write answer instructions (helpers/v2-steps.ts). */
 const V2_PLAN_LINE = 'You plan a data analysis for Questions to Insights.';
 const V2_ANSWER_LINE = 'You write the final answer for Questions to Insights.';
+
+/** Avery's first line and her tool that runs Michael (helpers/v2-steps.ts). */
+const AVERY_FIRST_LINE =
+  'You are Avery, the Chief of Staff of a data team. You are the only person the user talks to: you decide who on the team works on their question, brief them, check what they bring back and hand the user one answer.';
+const AVERY_ANSWER_TOOL = 'answer_from_data';
+const MICHAEL_ASKS_PREFIX = 'Michael needs an answer before he can go on: ';
+
+function isAvery(system) {
+  return String(system ?? '')
+    .split('\n')
+    .some((line) => line.trim() === AVERY_FIRST_LINE);
+}
+
+/** A tool result's text: a string, JSON text or `{ result }`. */
+function resultText(value) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.startsWith('{')) {
+      try {
+        return resultText(JSON.parse(trimmed));
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  }
+  if (value && typeof value === 'object') {
+    for (const key of ['result', 'textResultForLlm', 'text', 'value']) {
+      if (key in value) return resultText(value[key]);
+    }
+  }
+  return '';
+}
+
+/** Avery's move after answer_from_data returned `text`: a tool to request, or null to close. */
+function averyAfter(text) {
+  if (!text.startsWith(MICHAEL_ASKS_PREFIX)) return null;
+  const [first, ...rest] = text.split('\n');
+  return {
+    name: 'ask_clarification',
+    arguments: {
+      question: first.slice(MICHAEL_ASKS_PREFIX.length).trim(),
+      options: rest
+        .filter((line) => line.startsWith('- '))
+        .map((line) => line.slice(2).trim())
+        .join('\n'),
+    },
+  };
+}
 
 function firstLine(text) {
   return (
@@ -160,6 +217,25 @@ async function answer(sessionId, text) {
   emit(sessionId, 'session.idle', { mode: 'interactive' }, true);
 }
 
+/** Requests tool `call` in the session; its result comes back through handlePendingToolCall. */
+function requestTool(sessionId, call) {
+  const requestId = randomUUID();
+  const toolCallId = `call_${requestId.slice(0, 8)}`;
+  pendingTools.set(requestId, sessionId);
+  emit(sessionId, 'tool.execution_start', {
+    toolCallId,
+    toolName: call.name,
+    arguments: call.arguments,
+  });
+  emit(sessionId, 'external_tool.requested', {
+    requestId,
+    sessionId,
+    toolCallId,
+    toolName: call.name,
+    arguments: call.arguments,
+  });
+}
+
 async function onSend(params) {
   const { sessionId } = params;
   const state = sessions.get(sessionId) ?? { tools: [], toolRequested: false };
@@ -169,6 +245,14 @@ async function onSend(params) {
   if (v2 !== null) return answer(sessionId, v2);
   const schema = params.responseFormat?.jsonSchema?.schema;
   if (schema) return answer(sessionId, JSON.stringify(sample(schema)));
+  // Avery's orchestrating turn: her instructions, with her team tool.
+  if (isAvery(state.system) && state.tools.includes(AVERY_ANSWER_TOOL)) {
+    state.avery = true;
+    return requestTool(sessionId, {
+      name: AVERY_ANSWER_TOOL,
+      arguments: { brief: String(params.prompt ?? '').trim() || 'Answer the user.' },
+    });
+  }
   if (TOOL_CALL && !state.toolRequested && state.tools.includes(TOOL_CALL.name)) {
     if (TOOL_AS_TEXT && !state.wroteToolAsText) {
       // The model writes the tool's arguments as its message (R66).
@@ -237,7 +321,14 @@ function handle(message) {
       reply({ success: true });
       if (sessionId) {
         emit(sessionId, 'external_tool.completed', { requestId: params.requestId });
-        void answer(sessionId, ANSWER);
+        const state = sessions.get(sessionId);
+        if (state && state.avery) {
+          const next = averyAfter(resultText(params.result));
+          if (next) requestTool(sessionId, next);
+          else void answer(sessionId, '');
+        } else {
+          void answer(sessionId, ANSWER);
+        }
       }
       return;
     }

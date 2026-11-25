@@ -174,8 +174,8 @@ Feature: Developer observability export
   Scenario: Workflow runs reach Phoenix when observability is on
     Given the World Cup dataset and no model is configured
     When I turn on "Developer observability", click "Save" and restart the backend
-    And I run Answer a Business Question on a question
-    Then the Phoenix receiver gets trace data for the run's workflow steps
+    And I run Answer a Business Question (Avery + Michael) on a question
+    Then the Phoenix receiver gets trace data for the run's Orchestrate step, which failed at Avery's call
 
   Scenario: Backend logs reach the OTLP endpoint when observability is on
     When I turn on "Developer observability", click "Save" and restart the backend

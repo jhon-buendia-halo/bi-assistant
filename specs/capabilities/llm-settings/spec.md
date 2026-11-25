@@ -297,9 +297,9 @@ Feature: Custom endpoint connection
 
   Scenario: a run of Answer a Business Question runs on the custom endpoint
     Given a custom endpoint configuration with the model "qwen3-8b" at "http://127.0.0.1:8317/v1" is saved
-    When I run the Assistant on a question
-    Then the server received a request to "/v1/chat/completions" for the model "qwen3-8b"
-    And I see the assistant's answer
+    When I run "Answer a Business Question (Avery + Michael)" on a question
+    Then the server received Michael's request to "/v1/chat/completions" for the model "qwen3-8b"
+    And I see his answer
 
   Scenario: Uses an endpoint that needs no key
     Given an OpenAI-compatible server that accepts requests without a credential
@@ -405,8 +405,8 @@ Feature: GitHub Copilot connection
 
   Scenario: a run of Answer a Business Question runs on GitHub Copilot
     Given GitHub Copilot is saved as the provider with the model "auto"
-    When I run the Assistant on the "World Cup Core" dataset and ask "Who won the 2018 World Cup final and what was the score?"
-    Then the answer streams in as it is written
+    When I run "Answer a Business Question (Avery + Michael)" on the "World Cup Core" dataset and ask "Who won the 2018 World Cup final and what was the score?"
+    Then Avery briefs Michael, and his reply comes back to her and becomes the run's answer
     And the thinking steps show the app's own tool calls, such as "run_readonly_sql"
     And the answer names France and the score 4–2
 

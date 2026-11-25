@@ -1,10 +1,10 @@
 /**
  * A workflow's own model for its step agents (agents.md 1.3): Answer a
- * Business Question runs its agents on `ANSWER_BUSINESS_QUESTION_MODEL`
- * (workflows/answer-business-question.review.ts) when the saved model is
- * served as a Claude model. The turn puts it on the call's requestContext;
- * only those agents' model functions read it, so every other agent resolves
- * the persisted model. Type imports only: no framework, no resolver state.
+ * Business Question (Avery + Michael) runs the agents Avery calls on
+ * `TEAM_STEP_MODEL` when the saved model is served as a Claude model. The
+ * turn puts it on the call's requestContext; only those agents' model
+ * functions read it, so every other agent resolves the persisted model.
+ * Type imports only: no framework, no resolver state.
  */
 import type { ReasoningEffort } from './effort-levels';
 import type { AgentModelConfig } from './model-resolver';
@@ -17,6 +17,16 @@ export interface StepModel {
   model: string;
   reasoningEffort: ReasoningEffort;
 }
+
+/**
+ * The model and reasoning effort the agents Avery calls run on (agents.md
+ * 1.3), when the saved model is served as a Claude model (`servesClaude`);
+ * otherwise the saved model and effort, as every agent.
+ */
+export const TEAM_STEP_MODEL: StepModel = {
+  model: 'claude-opus-5-5',
+  reasoningEffort: 'medium',
+};
 
 /** The step model on a call's requestContext, if any. */
 export function stepModelFrom(requestContext?: {

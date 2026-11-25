@@ -284,13 +284,13 @@ export class WorkflowRunChat {
 
   /**
    * The chat reads the whole thread of earlier turns: always in the Business
-   * view, and for Answer a Business Question (orchestrated) in either view,
+   * view, and for Answer a Business Question (Avery + Michael) in either view,
    * since that conversation never ends.
    */
   protected readonly threaded = computed(
     () => this.business() || this.isAveryWorkflow(),
   );
-  // Answer a Business Question (orchestrated) and (Avery + Michael): any
+  // Answer a Business Question (Avery + Michael): any
   // workflow whose step runs Avery (workflows R45).
   private readonly isAveryWorkflow = computed(
     () =>
@@ -689,19 +689,6 @@ export class WorkflowRunChat {
   protected viewVisual(event: VisualEvent): void {
     const run = this.designer.run();
     if (run !== null) this.visuals.view(run, event);
-  }
-
-  /** A gate's Open visual: the visual Ryan built opens in the side panel, answer or not. */
-  protected openGateVisual(visualId: string): void {
-    const found = this.designer
-      .run()
-      ?.visualizations?.find((visual) => visual.id === visualId);
-    this.viewVisual({
-      visualId,
-      version: found?.currentVersion ?? 1,
-      title: found?.title ?? '',
-      action: 'created',
-    });
   }
 
   /** The shown answer made a visual: its card carries Saved to Artifacts and Map to data. */

@@ -137,9 +137,9 @@
         <span class="text-[12px] text-fg-muted">
           Runs the
           <span class="font-medium text-fg">{{
-            askWorkflow()?.name ?? "Answer a Business Question"
+            askWorkflow()?.name ?? "Answer a Business Question (Avery + Michael)"
           }}</span>
-          user journey · Shift+Enter for a new line
+          workflow · Shift+Enter for a new line
         </span>
         <button
           type="submit"
@@ -171,7 +171,7 @@
             class="card m-0 p-3 text-[13px] text-fg-muted"
             data-testid="welcome-runs-empty"
           >
-            No runs yet. Your questions and user journey runs show up here.
+            No runs yet. Your questions and workflow runs show up here.
           </p>
         } @else {
           <ul
@@ -234,10 +234,10 @@
           id="welcome-workflows-title"
           class="mb-2 text-[12px] font-semibold tracking-wide text-fg-muted uppercase"
         >
-          Other user journeys
+          Other workflows
         </h3>
         @if (workflows() === null) {
-          <p class="m-0 text-[13px] text-fg-muted">Loading user journeys…</p>
+          <p class="m-0 text-[13px] text-fg-muted">Loading workflows…</p>
         } @else {
           <ul
             class="card m-0 list-none divide-y divide-border overflow-hidden p-0"

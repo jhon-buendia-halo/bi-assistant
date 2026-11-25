@@ -8,9 +8,6 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
-import { WorkflowRunAttachments } from '../workflow-run-chat/workflow-run-attachments';
-import { addImageFiles } from '../workflow-run-chat/composer-images.util';
 import { WorkflowWaitingFor } from '../../models/workflow.model';
 
 let nextId = 0;
@@ -25,7 +22,6 @@ let nextId = 0;
 @Component({
   selector: 'app-workflow-run-input-required',
   templateUrl: './workflow-run-input-required.html',
-  imports: [MarkdownPipe, WorkflowRunAttachments],
   host: { class: 'block' },
 })
 export class WorkflowRunInputRequired implements AfterViewInit {
@@ -37,10 +33,6 @@ export class WorkflowRunInputRequired implements AfterViewInit {
 
   /** Continue, or an option chosen. */
   readonly answered = output<string>();
-  /** Ask for changes on a visual gate, with the reference images attached. */
-  readonly answeredWithImages = output<{ answer: string; images: string[] }>();
-  /** Open the visual a gate holds (the side panel). */
-  readonly openVisual = output<string>();
   /** Run again with my answer (an expired run). */
   readonly rerun = output<string>();
 
@@ -48,17 +40,8 @@ export class WorkflowRunInputRequired implements AfterViewInit {
   protected readonly uid = `workflow-run-input-${nextId++}`;
   private readonly card = viewChild.required<ElementRef<HTMLElement>>('card');
 
-  protected readonly images = signal<string[]>([]);
-  protected readonly imageError = signal<string | null>(null);
-  /** The gate holds a visual: Open visual and reference images. */
-  protected readonly visualId = computed(() => this.waiting().visualId ?? null);
-
-  protected readonly blank = computed(
-    () => this.text().trim() === '' && this.images().length === 0,
-  );
+  protected readonly blank = computed(() => this.text().trim() === '');
   protected readonly expired = computed(() => this.waiting().expired === true);
-  /** An approval gate: the agent's outcome waits for an OK (workflows R44). */
-  protected readonly gate = computed(() => !!this.waiting().review);
 
   ngAfterViewInit(): void {
     this.card().nativeElement.focus();
@@ -74,38 +57,9 @@ export class WorkflowRunInputRequired implements AfterViewInit {
     else if (!this.busy()) this.answered.emit(option);
   }
 
-  /** Approve a gate: the backend reads the answer `Approve` as the OK. */
-  protected approve(): void {
-    if (!this.busy()) this.answered.emit('Approve');
-  }
-
-  protected async addImages(files: readonly File[]): Promise<void> {
-    const { accepted, error } = await addImageFiles(
-      files,
-      this.images().length,
-      'Reference images',
-      4,
-    );
-    this.images.update((list) => [...list, ...accepted].slice(0, 4));
-    this.imageError.set(error);
-  }
-
-  protected removeImage(index: number): void {
-    this.images.update((list) => list.filter((_, i) => i !== index));
-    this.imageError.set(null);
-  }
-
   protected submit(): void {
     const answer = this.text().trim();
     if (this.busy()) return;
-    if (this.visualId() !== null && !this.expired()) {
-      const images = this.images();
-      if (!answer && images.length === 0) return;
-      this.answeredWithImages.emit({ answer, images: [...images] });
-      this.images.set([]);
-      this.imageError.set(null);
-      return;
-    }
     if (!answer) return;
     if (this.expired()) this.rerun.emit(answer);
     else this.answered.emit(answer);

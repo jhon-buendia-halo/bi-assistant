@@ -15,56 +15,45 @@ import {
   messageText,
   startLlmStub,
 } from './helpers/llm-stub';
-import { runWorkflow, type StoredRun } from './helpers/runs-api';
+import {
+  ASK_STEP_ID,
+  ASK_WORKFLOW_ID,
+  ASK_WORKFLOW_NAME,
+  runWorkflow,
+  type StoredRun,
+} from './helpers/runs-api';
 import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
 import {
   answerPickAsk,
   closeComposerMenu,
   composer,
   composerMenu,
-  fillRun as fillRunDefault,
+  fillRun,
   openComposerMenu,
   pickDataset,
   pickedDataset,
   sendButton,
   sendRun,
-  setRunOption,
   unfoldMenuItem,
 } from './helpers/run-ui';
 
 /**
  * Mirrors the Feature "Workflow runs" in specs/capabilities/workflows/spec.md:
- * Answer a Business Question runs from its page's Run tab (workflows R21), on
- * the recording stub model and the World Cup dataset.
+ * Answer a Business Question (Avery + Michael) runs from its page's Run tab
+ * (workflows R21), on the recording stub model and the World Cup dataset. The
+ * stub moves Avery itself (helpers/v2-steps.ts `averyMove`): she briefs
+ * Michael through answer_from_data, and these scripts answer Michael's turn.
  */
 
-const V2_ID = 'answer-business-question';
-const V2 = 'Answer a Business Question';
+const ASK_ID = ASK_WORKFLOW_ID;
+const ASK = ASK_WORKFLOW_NAME;
 const QUESTION = 'Which team scored the most goals?';
 const ANSWER = 'Brazil scored the most goals in this data.';
 const SECOND_QUESTION = 'And the fewest?';
 const SECOND_ANSWER = 'Zaire scored the fewest goals in this data.';
 const SQL = `SELECT stage, COUNT(*) AS matches FROM ${worldCupKey('matches')} GROUP BY stage`;
-/** The steps a clear question runs. */
-const V2_STEPS = [
-  'receive-question',
-  'load-catalog',
-  'plan',
-  'analyse',
-  'validate',
-  'write-answer',
-  'wrap-up',
-];
-
-/**
- * Fills the Run tab (Approve each step off) and turns "Build a visual" off
- * (it is on by default) through `+`, so a run that is not about the visual
- * keeps its steps to the answer's.
- */
-async function fillRun(page: Page, question: string, dataset?: string): Promise<void> {
-  await fillRunDefault(page, question, dataset);
-  await setRunOption(page, 'buildVisual', false);
-}
+/** Its one step: Avery's turn, Michael's included. */
+const STEP = ASK_STEP_ID;
 
 let stub: LlmStub;
 
@@ -108,11 +97,16 @@ function lastUserText(request: StubRequest): string {
 }
 
 /**
- * A streamed call of the analysis turn whose latest user message is `text`
- * (not v2's structured Plan or Write answer call).
+ * A streamed call of Michael's turn whose latest user message is `text`
+ * (not one of Avery's calls, which the stub answers itself).
  */
 function isTurn(request: StubRequest, text: string): boolean {
-  return request.stream && request.step === undefined && lastUserText(request) === text;
+  return (
+    request.stream &&
+    request.step === undefined &&
+    !request.avery &&
+    lastUserText(request) === text
+  );
 }
 
 /** The model's last message in the request was a tool result. */
@@ -163,8 +157,8 @@ function runDock(page: Page): Locator {
 }
 
 async function openWorkflowPage(page: Page, id: string, name: string): Promise<void> {
-  await railItem(page, 'User journeys').click();
-  await expect(page.getByRole('heading', { name: 'User journeys', exact: true })).toBeVisible();
+  await railItem(page, 'Workflows').click();
+  await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible();
   await page.getByTestId(`workflow-${id}`).click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(name);
 }
@@ -188,6 +182,16 @@ function runAnswer(page: Page): Locator {
   return page.getByTestId('run-answer');
 }
 
+/**
+ * Michael's SQL call in the live relay of Avery's step (ui.md 4.4b *relay*):
+ * her answer_from_data, then his calls under it.
+ */
+function sqlCall(page: Page): Locator {
+  return page
+    .locator('[data-testid="workflow-run-relay-teammate-step"][data-tool="run_readonly_sql"]')
+    .first();
+}
+
 // ------------------------------------------------------------------ scenarios
 
 test.describe('Feature: Workflow runs', () => {
@@ -203,9 +207,9 @@ test.describe('Feature: Workflow runs', () => {
 
       await scenarioStep(
         page,
-        `When I open "${V2}" from User journeys and click Execute user journey`,
+        `When I open "${ASK}" from Workflows and click Run workflow`,
         async () => {
-          await openWorkflowPage(page, V2_ID, V2);
+          await openWorkflowPage(page, ASK_ID, ASK);
           await openRunTab(page);
         },
       );
@@ -228,8 +232,6 @@ test.describe('Feature: Workflow runs', () => {
         page,
         `When I type "${QUESTION}", click Send and add "${WORLD_CUP_DATASET}" when the agent asks`,
         async () => {
-          await setRunOption(page, 'approveSteps', false);
-          await setRunOption(page, 'buildVisual', false);
           await composer(page).fill(QUESTION);
           await sendRun(page);
           await answerPickAsk(page, WORLD_CUP_DATASET);
@@ -237,18 +239,18 @@ test.describe('Feature: Workflow runs', () => {
       );
       await scenarioStep(
         page,
-        'Then the Analyse step is running on the canvas and in the Run tab, with its SQL call',
+        'Then the Orchestrate step is running on the canvas and in the Run tab, with its SQL call',
         async () => {
-          await expect(nodeStatus(page, 'analyse')).toHaveText('Running');
-          await expect(runStep(page, 'analyse')).toHaveAttribute('data-status', 'running');
-          await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
+          await expect(nodeStatus(page, STEP)).toHaveText('Running');
+          await expect(runStep(page, STEP)).toHaveAttribute('data-status', 'running');
+          await expect(sqlCall(page)).toBeVisible();
           await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
           held.release();
         },
       );
       await scenarioStep(
         page,
-        "And I see the stub's answer with its SQL, and every step Done but Build visual",
+        "And I see the stub's answer with its SQL, and its step Done",
         async () => {
           await expect(runAnswer(page)).toContainText(ANSWER);
           await page.getByTestId('query-row-0').click();
@@ -256,19 +258,8 @@ test.describe('Feature: Workflow runs', () => {
           await expect(page.getByTestId('query-sql')).toHaveText(SQL);
           await page.getByTestId('query-inspector-close').click();
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
-          for (const id of V2_STEPS) {
-            await expect(nodeStatus(page, id)).toHaveText('Done');
-            await expect(runStep(page, id)).toHaveAttribute('data-status', 'success');
-          }
-          // The visual is off for this run, and its line says so.
-          await expect(nodeStatus(page, 'build-visual')).toHaveText('Skipped');
-          await expect(runStep(page, 'build-visual')).toHaveAttribute(
-            'data-status',
-            'skipped',
-          );
-          await expect(
-            runStep(page, 'build-visual').getByTestId('workflow-node-activity'),
-          ).toHaveText('Off for this run');
+          await expect(nodeStatus(page, STEP)).toHaveText('Done');
+          await expect(runStep(page, STEP)).toHaveAttribute('data-status', 'success');
         },
       );
       await scenarioStep(page, 'Then the composer is hidden while the answer shows', async () => {
@@ -299,84 +290,6 @@ test.describe('Feature: Workflow runs', () => {
   );
 
   test(
-    "I approve each agent's work before the next one starts",
-    { tag: ['@demo'] },
-    async ({ page }) => {
-      stub.reply = answerWithSql({ [QUESTION]: ANSWER });
-      const card = page.getByTestId('workflow-run-input-required');
-
-      await scenarioStep(
-        page,
-        `Given I open "${V2}" and its Run tab`,
-        async () => {
-          await openWorkflowPage(page, V2_ID, V2);
-          await openRunTab(page);
-        },
-      );
-      await scenarioStep(
-        page,
-        `When "Approve each step" is on by default, I ask "${QUESTION}" without a visual and click Send`,
-        async () => {
-          await openComposerMenu(page);
-          await expect(
-            composerMenu(page).getByTestId('workflow-input-approveSteps'),
-          ).toBeChecked();
-          await pickDataset(page, WORLD_CUP_DATASET);
-          await composerMenu(page)
-            .getByTestId('workflow-input-buildVisual')
-            .setChecked(false);
-          await closeComposerMenu(page);
-          await composer(page).fill(QUESTION);
-          await sendRun(page);
-        },
-      );
-      await scenarioStep(
-        page,
-        "Then the run waits for my approval of Olivia's plan, with no options and no changes asked yet",
-        async () => {
-          await expect(card).toBeVisible();
-          await expect(card).toContainText('Waiting for your approval');
-          await expect(card).toContainText("Olivia's plan is ready");
-          await expect(
-            card.getByTestId('workflow-run-input-review'),
-          ).toContainText('Measures');
-          await expect(
-            card.getByTestId('workflow-run-input-approve'),
-          ).toBeEnabled();
-          await expect(
-            card.locator('[data-testid^="workflow-run-input-option-"]'),
-          ).toHaveCount(0);
-          await expect(
-            card.getByTestId('workflow-run-input-continue'),
-          ).toHaveText('Ask for changes');
-          await expect(
-            card.getByTestId('workflow-run-input-continue'),
-          ).toBeDisabled();
-        },
-      );
-      await scenarioStep(
-        page,
-        "When I approve the plan, then Michael's analysis waits for me",
-        async () => {
-          await card.getByTestId('workflow-run-input-approve').click();
-          await expect(card).toContainText("Michael's analysis is ready");
-        },
-      );
-      await scenarioStep(
-        page,
-        'When I approve the analysis, then the run ends with an answer',
-        async () => {
-          await card.getByTestId('workflow-run-input-approve').click();
-          await expect(page.getByTestId('workflow-run-status')).toHaveText(
-            'Run succeeded',
-          );
-          await expect(runAnswer(page)).toContainText(ANSWER);
-        },
-      );
-    },
-  );
-
-  test(
     'I open a query of an answer in the inspector and read how it was built',
     { tag: ['@demo', '@story-1.25.4'] },
     async ({ page }) => {
@@ -400,7 +313,7 @@ test.describe('Feature: Workflow runs', () => {
       const sheet = page.getByTestId('query-inspector');
 
       await scenarioStep(page, `When I run "${question}" on "${WORLD_CUP_DATASET}"`, async () => {
-        await openWorkflowPage(page, V2_ID, V2);
+        await openWorkflowPage(page, ASK_ID, ASK);
         await openRunTab(page);
         await fillRun(page, question, WORLD_CUP_DATASET);
         await sendRun(page);
@@ -486,7 +399,7 @@ test.describe('Feature: Workflow runs', () => {
       };
 
       await scenarioStep(page, `Given I ran "${question}" on "${WORLD_CUP_DATASET}"`, async () => {
-        await openWorkflowPage(page, V2_ID, V2);
+        await openWorkflowPage(page, ASK_ID, ASK);
         await openRunTab(page);
         await fillRun(page, question, WORLD_CUP_DATASET);
         await sendRun(page);
@@ -496,7 +409,7 @@ test.describe('Feature: Workflow runs', () => {
         await railItem(page, 'Runs').click();
         await page.getByTestId(/^run-[0-9a-f]{8}-/).first().getByRole('button').first().click();
         // A finished run opens on its workflow's page, drawn with that run (workflows R19).
-        await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
+        await expect(page.getByTestId('workflow-detail-name')).toHaveText(ASK);
         await expect(page.getByTestId('workflow-run-question')).toHaveText(question);
         await expect(runAnswer(page)).toContainText('The data holds many matches.');
       });
@@ -527,60 +440,13 @@ test.describe('Feature: Workflow runs', () => {
   );
 
   test(
-    'Answer a Business Question builds a visual with Ryan unless it is turned off',
-    { tag: ['@demo'] },
-    async ({ page }) => {
-      stub.reply = answerWithSql({ [QUESTION]: ANSWER });
-
-      await scenarioStep(page, `Given I open "${V2}" and its Run tab`, async () => {
-        await openWorkflowPage(page, V2_ID, V2);
-        await openRunTab(page);
-      });
-      await scenarioStep(
-        page,
-        `When "Build a visual" is on by default, I add "${WORLD_CUP_DATASET}", ask "${QUESTION}" and click Send`,
-        async () => {
-          await openComposerMenu(page);
-          await expect(
-            composerMenu(page).getByTestId('workflow-input-buildVisual'),
-          ).toBeChecked();
-          await fillRunDefault(page, QUESTION, WORLD_CUP_DATASET);
-          await sendRun(page);
-        },
-      );
-      await scenarioStep(
-        page,
-        'Then "Build visual" ends Done, after Write answer and before Wrap up in How it ran',
-        async () => {
-          await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
-          await expect(nodeStatus(page, 'build-visual')).toHaveText('Done');
-          await expect(runStep(page, 'build-visual')).toHaveAttribute('data-status', 'success');
-          const order = await page
-            .getByTestId('workflow-run-story')
-            .locator('[data-testid^="workflow-run-story-step-"]')
-            .evaluateAll((els) =>
-              els.map((e) =>
-                (e.getAttribute('data-testid') ?? '').replace('workflow-run-story-step-', ''),
-              ),
-            );
-          expect(order.indexOf('build-visual')).toBeGreaterThan(order.indexOf('write-answer'));
-          expect(order.indexOf('build-visual')).toBeLessThan(order.indexOf('wrap-up'));
-        },
-      );
-      await scenarioStep(page, 'And the answer is still shown', async () => {
-        await expect(runAnswer(page)).toContainText(ANSWER);
-      });
-    },
-  );
-
-  test(
     "I rate a run's answer and it becomes a verified query",
     { tag: ['@demo', '@story-1.23.19'] },
     async ({ page }) => {
       stub.reply = answerWithSql({ [QUESTION]: ANSWER });
 
-      await scenarioStep(page, `Given I ran "${V2}" on "${QUESTION}"`, async () => {
-        await openWorkflowPage(page, V2_ID, V2);
+      await scenarioStep(page, `Given I ran "${ASK}" on "${QUESTION}"`, async () => {
+        await openWorkflowPage(page, ASK_ID, ASK);
         await openRunTab(page);
         await fillRun(page, QUESTION, WORLD_CUP_DATASET);
         await sendRun(page);
@@ -617,41 +483,40 @@ test.describe('Feature: Workflow runs', () => {
     page,
   }) => {
     stub.reply = answerWithSql({ [QUESTION]: ANSWER });
-    await test.step(`Given I am on the Run panel of "${V2}" with "${WORLD_CUP_DATASET}" added`, async () => {
-      await openWorkflowPage(page, V2_ID, V2);
+    await scenarioStep(page, `Given I am on the Run panel of "${ASK}" with "${WORLD_CUP_DATASET}" added`, async () => {
+      await openWorkflowPage(page, ASK_ID, ASK);
       await openRunTab(page);
       await pickDataset(page, WORLD_CUP_DATASET);
-      await composerMenu(page).getByTestId('workflow-input-approveSteps').setChecked(false);
       await closeComposerMenu(page);
       await expect(pickedDataset(page, WORLD_CUP_DATASET)).toBeVisible();
     });
-    await test.step('When I press Shift+Enter, the composer adds a line and nothing runs', async () => {
+    await scenarioStep(page, 'When I press Shift+Enter, the composer adds a line and nothing runs', async () => {
       await composer(page).fill('Which team');
       await composer(page).press('Shift+Enter');
       await expect(composer(page)).toHaveValue('Which team\n');
       await expect(page.getByTestId('run-user-message')).toHaveCount(0);
       await expect(page.getByTestId('workflow-run-status')).toHaveCount(0);
     });
-    await test.step('When I type the question and press Enter', async () => {
+    await scenarioStep(page, 'When I type the question and press Enter', async () => {
       await composer(page).fill(QUESTION);
       await composer(page).press('Enter');
     });
-    await test.step('Then the user journey runs and I see the answer', async () => {
+    await scenarioStep(page, 'Then the workflow runs and I see the answer', async () => {
       await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       await expect(runAnswer(page)).toContainText(ANSWER);
       await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
     });
-    await test.step('And the composer and any follow-up are gone under the answer', async () => {
+    await scenarioStep(page, 'And the composer and any follow-up are gone under the answer', async () => {
       await expect(page.getByTestId('run-composer')).toHaveCount(0);
       await expect(composer(page)).toHaveCount(0);
       await expect(page.getByTestId('workflow-follow-up-input')).toHaveCount(0);
       await expect(page.getByTestId('workflow-run-follow-up')).toHaveCount(0);
       await expect(page.getByTestId('workflow-run')).toHaveCount(0);
     });
-    await test.step('When I click New question', async () => {
+    await scenarioStep(page, 'When I click New question', async () => {
       await page.getByTestId('workflow-run-new').click();
     });
-    await test.step('Then the run is cleared, the composer is empty and focused, and the dataset stays added', async () => {
+    await scenarioStep(page, 'Then the run is cleared, the composer is empty and focused, and the dataset stays added', async () => {
       await expect(page.getByTestId('workflow-run-status')).toHaveCount(0);
       await expect(runAnswer(page)).toHaveCount(0);
       await expect(composer(page)).toBeVisible();
@@ -666,40 +531,31 @@ test.describe('Feature: Workflow runs', () => {
   test('Asking on home runs Answer a Business Question on its page', async ({ page }) => {
     stub.reply = answerWithSql({ [QUESTION]: ANSWER });
     const ask = page.getByTestId('welcome-ask');
-    await test.step(`Given I am on home with "${WORLD_CUP_DATASET}" as the only dataset`, async () => {
+    await scenarioStep(page, `Given I am on home with "${WORLD_CUP_DATASET}" as the only dataset`, async () => {
       await page.reload();
       await expect(ask.getByLabel('What do you want to know?')).toBeVisible();
       await expect(page.getByTestId('welcome-setup')).toHaveCount(0);
     });
-    await test.step('Then that dataset is already picked', async () => {
+    await scenarioStep(page, 'Then that dataset is already picked', async () => {
       await expect(
         ask.getByRole('button', { name: `Remove ${WORLD_CUP_DATASET}`, exact: true }),
       ).toBeVisible();
     });
-    await test.step('When I type the question and press Enter', async () => {
+    await scenarioStep(page, 'When I type the question and press Enter', async () => {
       const question = page.getByTestId('welcome-question');
       await question.fill(QUESTION);
       await question.press('Enter');
     });
-    await test.step(`Then "${V2}" opens, runs on my question and I see the answer`, async () => {
-      await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
-      // Home starts the run with the defaults, Approve each step among them:
-      // approve each agent's work as it waits.
-      const approve = page.getByTestId('workflow-run-input-approve');
-      await expect(async () => {
-        if (await approve.isVisible()) await approve.click();
-        await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded', {
-          timeout: 1_500,
-        });
-      }).toPass({ timeout: 30_000 });
+    await scenarioStep(page, `Then "${ASK}" opens, runs on my question and I see the answer`, async () => {
+      await expect(page.getByTestId('workflow-detail-name')).toHaveText(ASK);
       await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       await expect(runAnswer(page)).toContainText(ANSWER);
       await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
     });
-    await test.step('And home lists the run under Recent runs', async () => {
+    await scenarioStep(page, 'And home lists the run under Recent runs', async () => {
       await page.reload();
       await expect(
-        page.getByTestId('welcome-runs').getByRole('button', { name: new RegExp(V2) }),
+        page.getByTestId('welcome-runs').getByRole('button', { name: ASK }),
       ).toBeVisible();
     });
   });
@@ -709,13 +565,13 @@ test.describe('Feature: Workflow runs', () => {
     const maximize = dock.getByTestId('workflow-run-dock-maximize');
     const toggle = dock.getByTestId('workflow-state-toggle');
     const width = async () => (await dock.boundingBox())!.width;
-    await test.step(`Given I am on the Run panel of "${V2}"`, async () => {
-      await openWorkflowPage(page, V2_ID, V2);
+    await scenarioStep(page, `Given I am on the Run panel of "${ASK}"`, async () => {
+      await openWorkflowPage(page, ASK_ID, ASK);
       await openRunTab(page);
       await expect(maximize).toHaveAttribute('aria-pressed', 'false');
     });
     const normal = await width();
-    await test.step('When I maximize it, it grows; when I restore it, it returns', async () => {
+    await scenarioStep(page, 'When I maximize it, it grows; when I restore it, it returns', async () => {
       await maximize.click();
       await expect(maximize).toHaveAttribute('aria-pressed', 'true');
       await expect(maximize).toHaveAccessibleName('Restore Run panel');
@@ -725,7 +581,7 @@ test.describe('Feature: Workflow runs', () => {
       await expect(maximize).toHaveAccessibleName('Maximize Run panel');
       await expect.poll(width).toBe(normal);
     });
-    await test.step('When I fold it, it narrows to a strip; when I unfold it, it returns', async () => {
+    await scenarioStep(page, 'When I fold it, it narrows to a strip; when I unfold it, it returns', async () => {
       await toggle.click();
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
       await expect(page.getByTestId('workflow-run-chat')).toHaveCount(0);
@@ -734,7 +590,7 @@ test.describe('Feature: Workflow runs', () => {
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
       await expect.poll(width).toBe(normal);
     });
-    await test.step('When I press Arrow Right on the resize separator, the panel grows', async () => {
+    await scenarioStep(page, 'When I press Arrow Right on the resize separator, the panel grows', async () => {
       const separator = dock.getByRole('separator', { name: 'Resize Run panel' });
       await expect(separator).toHaveAttribute('aria-orientation', 'vertical');
       const before = Number(await separator.getAttribute('aria-valuenow'));
@@ -751,21 +607,19 @@ test.describe('Feature: Workflow runs', () => {
     stub.reply = answerWithSql({ [QUESTION]: ANSWER });
     const ask = page.getByTestId('run-intake-datasets');
     const option = ask.getByTestId(`run-intake-option-datasets-${WORLD_CUP_DATASET}`);
-    await test.step(`Given I am on the Run tab of "${V2}" and no dataset is added`, async () => {
-      await openWorkflowPage(page, V2_ID, V2);
+    await scenarioStep(page, `Given I am on the Run tab of "${ASK}" and no dataset is added`, async () => {
+      await openWorkflowPage(page, ASK_ID, ASK);
       await openRunTab(page);
-      await setRunOption(page, 'approveSteps', false);
-      await setRunOption(page, 'buildVisual', false);
       await expect(pickedDataset(page, WORLD_CUP_DATASET)).toHaveCount(0);
     });
-    await test.step(`When I type "${QUESTION}" and click Send`, async () => {
+    await scenarioStep(page, `When I type "${QUESTION}" and click Send`, async () => {
       await composer(page).fill(QUESTION);
       await sendRun(page);
     });
-    await test.step('Then I see my message as a bubble on the right', async () => {
+    await scenarioStep(page, 'Then I see my message as a bubble on the right', async () => {
       await expect(page.getByTestId('run-user-message')).toHaveText(QUESTION);
     });
-    await test.step(
+    await scenarioStep(page, 
       'And an agent message on the left asks which datasets to use, with option cards from the catalogue and the read-only footnote',
       async () => {
         await expect(ask.getByTestId('run-agent-message')).toHaveText(
@@ -782,27 +636,24 @@ test.describe('Feature: Workflow runs', () => {
         await expect(composer(page)).toHaveAttribute('placeholder', 'Or type a dataset name…');
       },
     );
-    await test.step(`When I click Add on "${WORLD_CUP_DATASET}"`, async () => {
+    await scenarioStep(page, `When I click Add on "${WORLD_CUP_DATASET}"`, async () => {
       await option.click();
     });
-    await test.step('Then its button reads "Added"', async () => {
+    await scenarioStep(page, 'Then its button reads "Added"', async () => {
       await expect(option).toHaveAttribute('aria-pressed', 'true');
       await expect(option).toHaveText('Added');
     });
     const started = page.waitForRequest(
-      (request) => request.method() === 'POST' && request.url().includes(`/workflows/${V2_ID}/runs/stream`),
+      (request) => request.method() === 'POST' && request.url().includes(`/workflows/${ASK_ID}/runs/stream`),
     );
-    await test.step('When I click "Continue with 1 dataset"', async () => {
+    await scenarioStep(page, 'When I click "Continue with 1 dataset"', async () => {
       await expect(ask.getByTestId('run-intake-continue')).toHaveText('Continue with 1 dataset');
       await ask.getByTestId('run-intake-continue').click();
     });
-    await test.step('Then I see my answer as a bubble and the run starts with the same request as before', async () => {
+    await scenarioStep(page, 'Then I see my answer as a bubble and the run starts with the same request as before', async () => {
       const body = (await started).postDataJSON() as { input: Record<string, unknown> };
       expect(body.input['question']).toBe(QUESTION);
       expect(body.input['datasets']).toEqual([WORLD_CUP_DATASET]);
-      // The switches turned off through + (sent false, or left out).
-      expect(body.input['approveSteps']).not.toBe(true);
-      expect(body.input['buildVisual']).not.toBe(true);
       await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       await expect(runAnswer(page)).toContainText(ANSWER);
       await expect(page.getByTestId('run-user-message').filter({ hasText: WORLD_CUP_DATASET })).toBeVisible();
@@ -815,18 +666,18 @@ test.describe('Feature: Workflow runs', () => {
     const visual = menu.getByRole('switch', { name: 'Visual review with Iris', exact: true });
     const pages = menu.getByTestId('workflow-input-maxPages');
     const chip = page.getByTestId('run-composer-chip-visualReview');
-    await test.step('Given I am on the Run tab of "Review a Website"', async () => {
+    await scenarioStep(page, 'Given I am on the Run tab of "Review a Website"', async () => {
       await openWorkflowPage(page, 'review-website', 'Review a Website');
       await openRunTab(page);
       // Its message is the entry URL: nothing to send yet.
       await expect(sendButton(page)).toBeDisabled();
     });
-    await test.step('When I click the "+" button', async () => {
+    await scenarioStep(page, 'When I click the "+" button', async () => {
       await expect(plus).toHaveAccessibleName('Add inputs and options');
       await expect(plus).toHaveAttribute('aria-expanded', 'false');
       await plus.click();
     });
-    await test.step(
+    await scenarioStep(page, 
       'Then the menu shows an ADD section and an OPTIONS section with "Visual review with Iris" as a switch',
       async () => {
         await expect(plus).toHaveAttribute('aria-expanded', 'true');
@@ -843,30 +694,30 @@ test.describe('Feature: Workflow runs', () => {
         await expect(visual).toBeChecked();
       },
     );
-    await test.step('When I switch "Visual review with Iris" off', async () => {
+    await scenarioStep(page, 'When I switch "Visual review with Iris" off', async () => {
       await visual.setChecked(false);
       await expect(visual).not.toBeChecked();
       await closeComposerMenu(page);
     });
-    await test.step('Then a removable chip for it shows above the composer', async () => {
+    await scenarioStep(page, 'Then a removable chip for it shows above the composer', async () => {
       await expect(chip).toHaveText(/Visual review with Iris off/);
     });
-    await test.step('When I remove the chip', async () => {
+    await scenarioStep(page, 'When I remove the chip', async () => {
       await chip
         .getByRole('button', { name: 'Remove Visual review with Iris off', exact: true })
         .click();
     });
-    await test.step('Then the switch is back to its default', async () => {
+    await scenarioStep(page, 'Then the switch is back to its default', async () => {
       await expect(chip).toHaveCount(0);
       await openComposerMenu(page);
       await expect(visual).toBeChecked();
     });
-    await test.step('And a text option set in the menu shows as a chip too', async () => {
+    await scenarioStep(page, 'And a text option set in the menu shows as a chip too', async () => {
       await unfoldMenuItem(page, 'maxPages');
       await pages.fill('20');
       await expect(page.getByTestId('run-composer-chip-maxPages')).toHaveText(/Max pages: 20/);
     });
-    await test.step('And a click outside the menu closes it', async () => {
+    await scenarioStep(page, 'And a click outside the menu closes it', async () => {
       // The menu covers the middle of the chat: click its top right corner.
       const box = (await page.getByTestId('workflow-run-chat-log').boundingBox())!;
       await page.mouse.click(box.x + box.width - 16, box.y + 16);
@@ -877,15 +728,15 @@ test.describe('Feature: Workflow runs', () => {
 
   test('A run needs its datasets', async ({ page }) => {
     const ask = page.getByTestId('run-intake-datasets');
-    await test.step(`Given I am on the Run tab of "${V2}"`, async () => {
-      await openWorkflowPage(page, V2_ID, V2);
+    await scenarioStep(page, `Given I am on the Run tab of "${ASK}"`, async () => {
+      await openWorkflowPage(page, ASK_ID, ASK);
       await openRunTab(page);
     });
-    await test.step(`When I type "${QUESTION}" and click Send`, async () => {
+    await scenarioStep(page, `When I type "${QUESTION}" and click Send`, async () => {
       await composer(page).fill(QUESTION);
       await sendRun(page);
     });
-    await test.step('Then the agent asks which datasets to use and nothing runs', async () => {
+    await scenarioStep(page, 'Then the agent asks which datasets to use and nothing runs', async () => {
       await expect(ask).toBeVisible();
       await expect(ask.getByTestId('run-agent-message')).toContainText('Pick one or more datasets.');
       await expect(page.getByTestId('workflow-run-error')).toHaveCount(0);
@@ -893,7 +744,7 @@ test.describe('Feature: Workflow runs', () => {
       await expect(page.getByTestId('run-answer')).toHaveCount(0);
       expect(stub.requests.filter((request) => request.stream)).toHaveLength(0);
     });
-    await test.step('And "Continue" is not offered until I add one', async () => {
+    await scenarioStep(page, 'And "Continue" is not offered until I add one', async () => {
       const next = ask.getByTestId('run-intake-continue');
       await expect(next).toBeDisabled();
       await ask.getByTestId(`run-intake-option-datasets-${WORLD_CUP_DATASET}`).click();
@@ -909,20 +760,20 @@ test.describe('Feature: Workflow runs', () => {
     stub.hold = (request) =>
       isTurn(request, QUESTION) && afterToolResult(request) ? held.promise : undefined;
     try {
-      await test.step(`Given "${V2}" is running on a question`, async () => {
-        await openWorkflowPage(page, V2_ID, V2);
+      await scenarioStep(page, `Given "${ASK}" is running on a question`, async () => {
+        await openWorkflowPage(page, ASK_ID, ASK);
         await openRunTab(page);
         await fillRun(page, QUESTION, WORLD_CUP_DATASET);
         await sendRun(page);
-        await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
+        await expect(sqlCall(page)).toBeVisible();
       });
-      await test.step('When I click Stop', async () => {
+      await scenarioStep(page, 'When I click Stop', async () => {
         await page.getByTestId('workflow-run-stop').click();
       });
-      await test.step('Then the run reads "Run stopped" and its Analyse step "Stopped"', async () => {
+      await scenarioStep(page, 'Then the run reads "Run stopped" and its Orchestrate step "Stopped"', async () => {
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run stopped');
-        await expect(runStep(page, 'analyse')).toHaveAttribute('data-status', 'stopped');
-        await expect(nodeStatus(page, 'analyse')).toHaveText('Stopped');
+        await expect(runStep(page, STEP)).toHaveAttribute('data-status', 'stopped');
+        await expect(nodeStatus(page, STEP)).toHaveText('Stopped');
         await expect(page.getByTestId('workflow-run-stop')).toHaveCount(0);
         // The composer stays hidden under the stopped run until New question.
         await expect(page.getByTestId('run-composer')).toHaveCount(0);
@@ -930,7 +781,7 @@ test.describe('Feature: Workflow runs', () => {
         await expect(composer(page)).toBeVisible();
         await expect(sendButton(page)).toBeDisabled();
       });
-      await test.step('And the run is stored "stopped" on the server, not only on the page', async () => {
+      await scenarioStep(page, 'And the run is stored "stopped" on the server, not only on the page', async () => {
         // Stop is the server's (api.md 150); leaving the page would not stop it.
         await expect
           .poll(async () => {
@@ -963,25 +814,21 @@ test.describe('Feature: Workflow runs', () => {
     let busy: ReturnType<typeof runWorkflow> | undefined;
     try {
       await scenarioStep(page, 'Given every one of the run slots is taken by a run that is running', async () => {
-        busy = runWorkflow(page, V2_ID, {
+        busy = runWorkflow(page, ASK_ID, {
           question: OTHER,
           datasets: [WORLD_CUP_DATASET],
-          buildVisual: false,
-          approveSteps: false,
         });
         await expect.poll(() => storedStatuses(page)).toEqual(['running']);
       });
-      await scenarioStep(page, `When I click Execute on a question in "${V2}"`, async () => {
-        await openWorkflowPage(page, V2_ID, V2);
+      await scenarioStep(page, `When I click Execute on a question in "${ASK}"`, async () => {
+        await openWorkflowPage(page, ASK_ID, ASK);
         await openRunTab(page);
         await fillRun(page, QUESTION, WORLD_CUP_DATASET);
         await sendRun(page);
       });
       await scenarioStep(page, 'Then the Chat shows the status "Queued…" and every node on the canvas stays idle', async () => {
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Queued…');
-        for (const id of V2_STEPS) {
-          await expect(runStep(page, id)).not.toHaveAttribute('data-status', /running|success/);
-        }
+        await expect(runStep(page, STEP)).not.toHaveAttribute('data-status', /running|success/);
         await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
       });
       await scenarioStep(page, 'And the Background tasks button lists the run with "Waiting for a free slot"', async () => {
@@ -1005,7 +852,7 @@ test.describe('Feature: Workflow runs', () => {
       await scenarioStep(page, 'Then my run starts and its steps go Running then Done as in any run', async () => {
         await expect(runAnswer(page)).toContainText(ANSWER);
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
-        await expect(runStep(page, 'write-answer')).toHaveAttribute('data-status', 'success');
+        await expect(runStep(page, STEP)).toHaveAttribute('data-status', 'success');
         await expect.poll(() => storedStatuses(page)).toEqual(['success', 'success']);
       });
     } finally {
@@ -1022,12 +869,12 @@ test.describe('Feature: Workflow runs', () => {
       isTurn(request, QUESTION) && afterToolResult(request) ? held.promise : undefined;
     let runId = '';
     try {
-      await scenarioStep(page, `Given "${V2}" is running on a question`, async () => {
-        await openWorkflowPage(page, V2_ID, V2);
+      await scenarioStep(page, `Given "${ASK}" is running on a question`, async () => {
+        await openWorkflowPage(page, ASK_ID, ASK);
         await openRunTab(page);
         await fillRun(page, QUESTION, WORLD_CUP_DATASET);
         await sendRun(page);
-        await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
+        await expect(sqlCall(page)).toBeVisible();
         const res = await page.request.get(`${apiBaseOf(page)}/workflow-runs`);
         const { runs } = (await res.json()) as { runs: { id: string; status: string }[] };
         expect(runs.map((run) => run.status)).toEqual(['running']);
@@ -1069,12 +916,12 @@ test.describe('Feature: Workflow runs', () => {
         .getByRole('complementary', { name: 'Navigation rail' })
         .getByTestId('background-tasks-button');
       try {
-        await scenarioStep(page, `Given "${V2}" is running on a question`, async () => {
-          await openWorkflowPage(page, V2_ID, V2);
+        await scenarioStep(page, `Given "${ASK}" is running on a question`, async () => {
+          await openWorkflowPage(page, ASK_ID, ASK);
           await openRunTab(page);
           await fillRun(page, QUESTION, WORLD_CUP_DATASET);
           await sendRun(page);
-          await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
+          await expect(sqlCall(page)).toBeVisible();
         });
         await scenarioStep(page, 'When I go to another area', async () => {
           await railItem(page, 'Datasets').click();
@@ -1089,7 +936,7 @@ test.describe('Feature: Workflow runs', () => {
             const panel = page.getByRole('dialog', { name: 'Background tasks' });
             const row = panel
               .getByTestId('background-task')
-              .filter({ hasText: `${V2}: ${QUESTION}` });
+              .filter({ hasText: `${ASK}: ${QUESTION}` });
             await expect(row).toHaveAttribute('data-status', 'running');
             await page.keyboard.press('Escape');
             await expect(panel).toBeHidden();
@@ -1099,16 +946,16 @@ test.describe('Feature: Workflow runs', () => {
             expect(runs.map((run) => run.status)).toEqual(['running']);
           },
         );
-        await scenarioStep(page, `When I open "${V2}" again`, async () => {
-          await openWorkflowPage(page, V2_ID, V2);
+        await scenarioStep(page, `When I open "${ASK}" again`, async () => {
+          await openWorkflowPage(page, ASK_ID, ASK);
         });
         await scenarioStep(
           page,
-          'Then the live view is there: the question, Analyse running and its SQL call',
+          'Then the live view is there: the question, Orchestrate running and its SQL call',
           async () => {
             await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
-            await expect(nodeStatus(page, 'analyse')).toHaveText('Running');
-            await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
+            await expect(nodeStatus(page, STEP)).toHaveText('Running');
+            await expect(sqlCall(page)).toBeVisible();
             await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
           },
         );
@@ -1134,7 +981,7 @@ test('the Run tab with an answer has no detectable accessibility violations in e
   stub.reply = answerWithSql({ [QUESTION]: ANSWER });
   await followOsTheme(page);
   await page.addScriptTag({ content: axe.source });
-  await openWorkflowPage(page, V2_ID, V2);
+  await openWorkflowPage(page, ASK_ID, ASK);
   await openRunTab(page);
   await fillRun(page, QUESTION, WORLD_CUP_DATASET);
   await sendRun(page);
@@ -1150,7 +997,7 @@ test('the Run tab with an answer has no detectable accessibility violations in e
       const results = await page.evaluate(async () => {
         return (window as unknown as { axe: typeof axe }).axe.run(document);
       });
-      expect(results.violations, `${V2} ${label}, ${theme}`).toEqual([]);
+      expect(results.violations, `${ASK} ${label}, ${theme}`).toEqual([]);
     }
   }
 

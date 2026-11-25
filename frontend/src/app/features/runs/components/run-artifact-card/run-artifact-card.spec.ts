@@ -119,7 +119,7 @@ describe('RunArtifactCard, a visual a run created, in its thread (visuals R42)',
     ).not.toBeNull();
   });
 
-  it('a report-drawing user journey makes a Report; anything else a Visual', () => {
+  it('a report-drawing workflow makes a Report; anything else a Visual', () => {
     expect(artifactKind('consumption-gap-analysis')).toEqual({
       label: 'Report',
       mock: false,

@@ -1,7 +1,5 @@
 import {
-  PlanOutput,
   RunView,
-  ValidateOutput,
   WorkflowDetail,
   WorkflowDetailStep,
 } from '../models/workflow.model';
@@ -61,6 +59,7 @@ export const GRAPH_WORKFLOW: WorkflowDetail = {
   description: 'Answers a question over the datasets.',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   agents: [
     { key: 'qti', name: 'Insights Analyst', model: 'openai/gpt-5' },
   ],
@@ -124,42 +123,6 @@ export const GRAPH_WORKFLOW: WorkflowDetail = {
   ],
 };
 
-export const GRAPH_PLAN: PlanOutput = {
-  question: 'How many matches per stage?',
-  measures: ['match count'],
-  entities: ['matches', 'stages'],
-  scope: 'All tournaments',
-  assumptions: ['A replayed match counts once'],
-  needsClarification: false,
-  clarification: null,
-};
-
-export const GRAPH_VALIDATE_FAILED: ValidateOutput = {
-  ok: false,
-  attempt: 1,
-  findings: [
-    {
-      check: 'A query succeeded',
-      passed: false,
-      detail: 'No query returned rows.',
-    },
-    { check: 'No tool error left', passed: true, detail: 'None.' },
-  ],
-};
-
-export const GRAPH_VALIDATE_OK: ValidateOutput = {
-  ok: true,
-  attempt: 2,
-  findings: [
-    {
-      check: 'A query succeeded',
-      passed: true,
-      detail: '1 query returned rows.',
-    },
-    { check: 'No tool error left', passed: true, detail: 'None.' },
-  ],
-};
-
 const T = (s: number) => `2026-11-13T10:00:${String(s).padStart(2, '0')}.000Z`;
 
 /** A stored run that retried Analyse and Validate once; Clarify was skipped. */
@@ -192,8 +155,7 @@ export const GRAPH_RETRY_RUN: RunView = {
       title: 'Plan',
       kind: 'agent',
       status: 'success',
-      // As the backend passes it on: the question and catalog beside the plan.
-      output: { question: GRAPH_PLAN.question, catalog: [], plan: { ...GRAPH_PLAN } },
+      output: { question: 'How many matches per stage?', catalog: [] },
       startedAt: T(2),
       endedAt: T(4),
     },
@@ -205,7 +167,7 @@ export const GRAPH_RETRY_RUN: RunView = {
       status: 'success',
       attempt: 1,
       input: { plan: 'first' },
-      output: { stopped: false, plan: { ...GRAPH_PLAN } },
+      output: { stopped: false },
       startedAt: T(4),
       endedAt: T(10),
       toolCalls: [
@@ -218,7 +180,7 @@ export const GRAPH_RETRY_RUN: RunView = {
       kind: 'code',
       status: 'success',
       attempt: 1,
-      output: { ...GRAPH_VALIDATE_FAILED, plan: { ...GRAPH_PLAN }, queries: [] },
+      output: { ok: false, attempt: 1, queries: [] },
       startedAt: T(10),
       endedAt: T(11),
     },
@@ -229,7 +191,7 @@ export const GRAPH_RETRY_RUN: RunView = {
       status: 'success',
       attempt: 2,
       input: { plan: 'second' },
-      output: { stopped: false, plan: { ...GRAPH_PLAN } },
+      output: { stopped: false },
       startedAt: T(11),
       endedAt: T(20),
       toolCalls: [{ tool: 'run_readonly_sql', input: 'select 2', rowCount: 3 }],
@@ -240,7 +202,7 @@ export const GRAPH_RETRY_RUN: RunView = {
       kind: 'code',
       status: 'success',
       attempt: 2,
-      output: { ...GRAPH_VALIDATE_OK, plan: { ...GRAPH_PLAN }, queries: [] },
+      output: { ok: true, attempt: 2, queries: [] },
       startedAt: T(20),
       endedAt: T(21),
     },

@@ -15,8 +15,8 @@ import {
 
 /**
  * What a run is given in skills, in specs/capabilities/agent-answers/spec.md.
- * The one runnable workflow is Insights Analyst (`answer-business-question`),
- * whose agent `insights-analyst` loads its built-in skills on demand
+ * The question-answering workflow is Answer a Business Question (Avery +
+ * Michael) (`orchestrated-answer-michael`), whose Michael (`insights-analyst`) loads its built-in skills on demand
  * (`curated-knowledge`, `sql-analysis`, `result-validation`): the scenario
  * checks that they reach the model through the framework's skill catalog,
  * and that a skill left in the data dir by an older version never does.

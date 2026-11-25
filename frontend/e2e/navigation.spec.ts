@@ -30,7 +30,7 @@ test('moves between areas from the rail', async ({ page }) => {
     buttons.map((button) => button.getAttribute('aria-label')),
   );
   expect(names).toEqual([
-    'User journeys',
+    'Workflows',
     'Runs',
     'Artifacts',
     'Datasets',
@@ -43,11 +43,11 @@ test('moves between areas from the rail', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
   await expectCurrent(page, 'Datasets');
 
-  await railItem(page, 'User journeys').click();
+  await railItem(page, 'Workflows').click();
   await expect(
-    page.getByRole('heading', { name: 'User journeys', exact: true }),
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
-  await expectCurrent(page, 'User journeys');
+  await expectCurrent(page, 'Workflows');
 
   await railItem(page, 'Agent personas').click();
   await expect(page.getByRole('heading', { name: 'Agent personas' })).toBeVisible();
@@ -149,21 +149,25 @@ test('the start page asks a question first and links runs, workflows and agents'
     page.getByRole('heading', { name: 'Recent runs' }),
   ).toBeVisible();
   await expect(page.getByTestId('welcome-runs-empty')).toBeVisible();
-  // Answer a Business Question is the question box; the others are listed.
+  // Answer a Business Question (Avery + Michael) is the question box; the
+  // other workflows are listed.
   const workflows = page.getByTestId('welcome-workflows');
+  await expect(
+    workflows.getByRole('heading', { name: 'Other workflows' }),
+  ).toBeVisible();
   await expect(
     workflows.getByTestId('welcome-workflow-review-website'),
   ).toBeVisible();
   await expect(
-    workflows.getByTestId('welcome-workflow-answer-business-question'),
+    workflows.getByTestId('welcome-workflow-orchestrated-answer-michael'),
   ).toHaveCount(0);
 
   // Each link opens the place it names (app-shell R51).
   await page.getByTestId('welcome-all-workflows').click();
   await expect(
-    page.getByRole('heading', { name: 'User journeys', exact: true }),
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
-  await expectCurrent(page, 'User journeys');
+  await expectCurrent(page, 'Workflows');
 
   await page.goto(page.url());
   await page.getByRole('button', { name: 'Explore agent personas' }).click();
@@ -182,21 +186,21 @@ test(
         await expect(page.getByTestId('welcome')).toBeVisible();
       },
     );
-    await scenarioStep(page, 'Then home offers to ask a question and lists the user journeys', async () => {
+    await scenarioStep(page, 'Then home offers to ask a question and lists the workflows', async () => {
       await expect(page.getByTestId('welcome-ask')).toContainText(
         'Answer a Business Question',
       );
       await expect(page.getByTestId('welcome-workflows')).toBeVisible();
     });
-    await scenarioStep(page, 'When I open User journeys', async () => {
-      await railItem(page, 'User journeys').click();
+    await scenarioStep(page, 'When I open Workflows', async () => {
+      await railItem(page, 'Workflows').click();
       await expect(
-        page.getByRole('heading', { name: 'User journeys', exact: true }),
+        page.getByRole('heading', { name: 'Workflows', exact: true }),
       ).toBeVisible();
     });
     await scenarioStep(
       page,
-      'Then every user journey has "Run" and none has "Start chat"',
+      'Then every workflow has "Run" and none has "Start chat"',
       async () => {
         const cards = page.locator('[data-testid^="workflow-card-"]');
         await expect(cards.first()).toBeVisible();
@@ -239,7 +243,7 @@ test('no Start chat, New conversation or Send message control exists outside the
   };
 
   await noChatControl(); // home
-  await railItem(page, 'User journeys').click();
+  await railItem(page, 'Workflows').click();
   await expect(page.getByTestId('workflows-page')).toBeVisible();
   await noChatControl();
   await page.locator('[data-testid^="workflow-card-"]').first().click();

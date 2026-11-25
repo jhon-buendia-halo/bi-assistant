@@ -1,4 +1,4 @@
-import { planCatalogBlock } from './answer-business-question.steps';
+import { planCatalogBlock } from './analysis.steps';
 import { mapDataRequest } from './recreate-dashboard.prompts';
 import {
   SAMPLE_BLUEPRINT_REPLY,

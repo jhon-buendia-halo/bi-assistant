@@ -12,6 +12,7 @@ import { WorkflowRunsController } from './workflow-runs.controller';
 import { WorkflowRunsService } from './workflow-runs.service';
 import { WorkflowsController } from './workflows.controller';
 import { WorkflowsService } from './workflows.service';
+import { AveryEvalBridge } from './avery-eval-bridge';
 
 /**
  * The workflow catalogue (ADR-0040) and runs (ADR-0041). Built from the
@@ -22,7 +23,8 @@ import { WorkflowsService } from './workflows.service';
  * (api.md 118, 119); DatasetsModule checks `dataset` inputs. Runs are
  * stored in `workflow_runs` (data-model 3.16), their steps' chats in
  * `workflow_run_node_chats` (3.17), and both served by `/workflow-runs`
- * (api.md 120-137).
+ * (api.md 120-137). `AveryEvalBridge` hands the run service to Avery's
+ * eval target (agents.md 8.1).
  */
 @Module({
   imports: [
@@ -43,6 +45,7 @@ import { WorkflowsService } from './workflows.service';
     WorkflowRunsRepository,
     WorkflowNodeChatsService,
     WorkflowNodeChatsRepository,
+    AveryEvalBridge,
   ],
 })
 export class WorkflowsModule {}

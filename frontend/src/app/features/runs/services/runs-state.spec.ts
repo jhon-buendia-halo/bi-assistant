@@ -36,6 +36,7 @@ const V2_DETAIL = {
   description: '',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   trigger: 'run',
   input: [
     { name: 'question', label: 'Question', type: 'textarea', required: true },

@@ -7,7 +7,6 @@ jest.mock('./workflows.service', () => ({ WorkflowsService: class {} }));
 import { NotFoundException } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
-import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/answer-business-question.steps';
 import type { SessionsService } from '../sessions/sessions.service';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
@@ -29,7 +28,7 @@ const ANALYSE_OUTPUT = {
 
 const RUN: WorkflowRunDoc = {
   id: 'r-1',
-  workflowId: 'answer-business-question',
+  workflowId: 'ask-a-question',
   workflowName: 'Insights Analyst',
   input: { question: 'How many goals in 2022?', datasets: ['World Cup Core'] },
   status: 'success',
@@ -59,14 +58,37 @@ const RUN: WorkflowRunDoc = {
   finishedAt: '2026-11-12T10:00:10.000Z',
 };
 
-/** The catalogue as the runs see it: `answer-business-question`, Analyse its agent step. */
+/**
+ * A stand-in code workflow with agent and code steps (the node chat is any
+ * workflow's): Plan, Analyse and Write answer are its agent steps.
+ */
+const STEPS = [
+  ['receive-question', 'Receive question', 'code'],
+  ['load-catalog', 'Load catalog', 'code'],
+  ['plan', 'Plan', 'agent'],
+  ['clarify', 'Clarify', 'code'],
+  ['analyse', 'Analyse', 'agent'],
+  ['validate', 'Validate', 'code'],
+  ['write-answer', 'Write answer', 'agent'],
+  ['wrap-up', 'Wrap up', 'code'],
+].map(([id, title, kind]) => ({
+  id,
+  title,
+  kind,
+  summary: '',
+  input: [] as string[],
+  output: [] as string[],
+  exits: [] as { label: string; outcome: string }[],
+}));
+
+/** The catalogue as the runs see it: the stand-in, Analyse its agent step. */
 const workflows = {
   definition: jest.fn((id: string) =>
-    id === 'answer-business-question'
+    id === 'ask-a-question'
       ? Promise.resolve({
           id,
           name: 'Insights Analyst',
-          steps: ANSWER_BUSINESS_QUESTION_STEPS.map((step) => ({
+          steps: STEPS.map((step) => ({
             ...step,
             input: [...step.input],
             output: [...step.output],
@@ -243,7 +265,7 @@ describe('WorkflowNodeChatsService: refusals before any SSE frame (api.md 137)',
     expect(await ctx.chats.get('r-1', 'analyse')).toBeNull();
   });
 
-  it("accepts v2's agent steps Plan and Write answer, refuses its code steps Clarify and Validate, and reads a retried step's last attempt", async () => {
+  it("accepts the agent steps Plan and Write answer, refuses the code steps Clarify and Validate, and reads a retried step's last attempt", async () => {
     await ctx.runs.update('r-1', {
       steps: [
         ...RUN.steps.slice(0, 2),
@@ -356,7 +378,7 @@ describe('WorkflowNodeChatsService: a chat turn (api.md 136, 137; agents.md 5.16
     };
     expect(spec).toMatchObject({
       runId: 'r-1-node-analyse',
-      workflowId: 'answer-business-question',
+      workflowId: 'ask-a-question',
       datasets: ['World Cup Core'],
       transcript: [],
     });

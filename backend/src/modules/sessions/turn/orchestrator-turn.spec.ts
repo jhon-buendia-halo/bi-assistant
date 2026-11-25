@@ -1,6 +1,5 @@
-// Avery's turn (agents.md 2.21, 5.22): her stream is scripted, the team is a
-// set of mocks; the tools' runtime calls the team as the Answer a Business
-// Question steps do, with no gate.
+// Avery's turn (agents.md 2.21, 5.23): her stream is scripted, the team is a
+// set of mocks; the tools' runtime calls Michael and Clara.
 jest.mock('../../../mastra/tool-services', () => ({
   getDatasetToolServices: () => ({
     getDatasets: (names: string[]) =>
@@ -16,16 +15,20 @@ jest.mock('../../../mastra/tool-services', () => ({
   }),
 }));
 
+import { createHash } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { CHIEF_OF_STAFF_AGENT_KEY } from '../../../mastra/agent-constants';
+import { analyseSystemBlocks } from '../../../mastra/workflows/analysis.prompts';
+import { ModelTimeoutError } from '../../../mastra/workflows/model-call';
+import { MICHAEL_ALONE_LINE } from '../../../mastra/workflows/orchestrated-answer-michael.prompts';
 import {
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   type OrchestratorToolsRuntime,
-} from '../../../mastra/workflows/orchestrated-answer.steps';
+} from '../../../mastra/workflows/orchestrated-answer-michael.steps';
 import type {
   AnalyseAttempt,
   AnalysisPlan,
-} from '../../../mastra/workflows/answer-business-question.steps';
+} from '../../../mastra/workflows/analysis.steps';
 import { orchestratorTools as avertTools } from '../../../mastra/tools/orchestrator.tools';
 import {
   blueprintFromDraft,
@@ -37,7 +40,6 @@ import type {
 } from '../../artifacts/entities/artifact.entity';
 import {
   currentDashboardBlock,
-  MICHAEL_ALONE_LINE,
   ORCHESTRATOR_HISTORY_MESSAGES,
   orchestratorState,
   orchestratorTools,
@@ -76,21 +78,7 @@ const ATTEMPT: AnalyseAttempt = {
 
 function team(overrides: Partial<OrchestratorTeam> = {}) {
   return {
-    readImages: jest.fn(() =>
-      Promise.resolve({
-        imageNotes: 'A bar chart.',
-        imageCount: 1,
-        stopped: false,
-      }),
-    ),
-    plan: jest.fn(() => Promise.resolve({ plan: PLAN, stopped: false })),
     analyse: jest.fn(() => Promise.resolve(ATTEMPT)),
-    writeAnswer: jest.fn(() =>
-      Promise.resolve({
-        answer: { headline: 'Sixty-four.', answer: 'There were 64 matches.' },
-        stopped: false,
-      }),
-    ),
     ...overrides,
   } as unknown as jest.Mocked<OrchestratorTeam>;
 }
@@ -136,7 +124,6 @@ function fixture(
     signal: new AbortController().signal,
     datasets: ['World Cup'],
     images: [],
-    buildsVisual: false,
     buildsDashboard: false,
     exportsConversation: false,
     ...options.deps,
@@ -149,7 +136,7 @@ const text = (t: string): Chunk => ({
   payload: { text: t },
 });
 
-describe('Avery runs her turn (agents.md 5.22)', () => {
+describe('Avery runs her turn (agents.md 5.23)', () => {
   it('asks the agent registered as the chief of staff', async () => {
     const { deps } = fixture([text('Hello.')]);
     await runOrchestratorTurn(deps, { question: 'Hi' });
@@ -157,73 +144,33 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
     expect(deps.getAgent).toHaveBeenCalledWith(CHIEF_OF_STAFF_AGENT_KEY);
   });
 
-  it('calls the team through her tools: plan fills the state, analyse carries her brief, write is quiet', async () => {
+  it('calls Michael through answer_from_data: the catalog, her brief, attempt 1; the state keeps his queries and answer', async () => {
     const { deps, members } = fixture(async (tools) => {
-      await tools.plan();
-      await tools.analyse('Count every match.');
-      await tools.writeAnswer();
+      await tools.answerFromData('Count every match.');
       return [text('Done.')];
     });
     await runOrchestratorTurn(deps, { question: 'How many matches?' });
 
-    expect(deps.state.plan).toEqual(PLAN);
-    expect(members.plan).toHaveBeenCalledTimes(1);
-    expect(members.plan.mock.calls[0][0]).toMatchObject({
-      question: 'How many matches?',
-      catalog: [expect.objectContaining({ dataset: 'World Cup' })],
-    });
     expect(members.analyse).toHaveBeenCalledTimes(1);
     const analyse = members.analyse.mock.calls[0][0];
-    expect(analyse.attempt).toBe(1);
+    expect(analyse).toMatchObject({
+      question: 'How many matches?',
+      catalog: [expect.objectContaining({ dataset: 'World Cup' })],
+      attempt: 1,
+      imageNotes: '',
+    });
     expect(analyse.planBlock).toContain(
       'Brief from Avery, the Chief of Staff: Count every match.',
     );
     expect(deps.state.queries).toEqual(ATTEMPT.queries);
     expect(deps.state.attempts).toBe(1);
-    expect(members.writeAnswer).toHaveBeenCalledTimes(1);
-    expect(members.writeAnswer.mock.calls[0][0]).toMatchObject({ quiet: true });
-    expect(deps.state.answer).toBe('There were 64 matches.');
-  });
-
-  it('hands Olivia and Jessica her brief (the question restated to stand alone), and none when she gives none', async () => {
-    const { deps, members } = fixture(async (tools) => {
-      await tools.plan('Who won the 2018 and 2022 World Cups?');
-      await tools.analyse('The champion of each tournament.');
-      await tools.writeAnswer(
-        'Who won the 2018 and 2022 World Cups? The user already knows there are two.',
-      );
-      return [text('Done.')];
-    });
-    await runOrchestratorTurn(deps, { question: 'And who won each one?' });
-    // The user's own words stay the question; her brief rides along.
-    expect(members.plan.mock.calls[0][0]).toMatchObject({
-      question: 'And who won each one?',
-      brief: 'Who won the 2018 and 2022 World Cups?',
-    });
-    expect(members.writeAnswer.mock.calls[0][0]).toMatchObject({
-      question: 'And who won each one?',
-      brief:
-        'Who won the 2018 and 2022 World Cups? The user already knows there are two.',
-    });
-
-    const bare = fixture(async (tools) => {
-      await tools.plan();
-      await tools.analyse('Count.');
-      await tools.writeAnswer('  ');
-      return [text('Done.')];
-    });
-    await runOrchestratorTurn(bare.deps, { question: 'How many matches?' });
-    expect(bare.members.plan.mock.calls[0][0]).not.toHaveProperty('brief');
-    expect(bare.members.writeAnswer.mock.calls[0][0]).not.toHaveProperty(
-      'brief',
-    );
+    expect(deps.state.answer).toBe('There are 64 matches.');
   });
 
   it("on a follow-up, Michael reads the last answer's queries as a block after her brief", async () => {
     const { deps, members } = fixture(
       async (tools) => {
-        await tools.plan();
-        await tools.analyse('Now by stage.');
+        await tools.answerFromData('Now by stage.');
         return [text('Done.')];
       },
       {
@@ -251,29 +198,14 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
     );
   });
 
-  it("answers Jessica's answer followed by Avery's closing words", async () => {
-    const { deps } = fixture(async (tools) => {
-      await tools.plan();
-      await tools.analyse('Count.');
-      await tools.writeAnswer();
-      return [text('Want it by year?')];
-    });
-    const done = await runOrchestratorTurn(deps, { question: 'q' });
-    expect(done).toEqual({
-      answer: 'There were 64 matches.\n\nWant it by year?',
-      stopped: false,
-    });
-  });
-
-  it("answers Jessica's answer alone when Avery adds nothing, and Avery's words alone when nothing was written", async () => {
+  it("answers Michael's answer alone when Avery adds nothing, and Avery's words alone when nothing was written", async () => {
     const written = fixture(async (tools) => {
-      await tools.analyse('Count.');
-      await tools.writeAnswer();
+      await tools.answerFromData('Count.');
       return [];
     });
     expect(
       (await runOrchestratorTurn(written.deps, { question: 'q' })).answer,
-    ).toBe('There were 64 matches.');
+    ).toBe('There are 64 matches.');
 
     const spoken = fixture([text('Hi, '), text('I am Avery.')]);
     expect(
@@ -281,31 +213,101 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
     ).toBe('Hi, I am Avery.');
   });
 
-  it('writes nothing before Michael has results, and tells Avery', async () => {
-    let told = '';
-    const { deps, members } = fixture(async (tools) => {
-      told = await tools.writeAnswer();
-      return [];
+  it('keeps only the words she writes after her last tool call as her closing, never her notes before a call', async () => {
+    // Seen in the avery-michael-workflow evals (2026-11-24, both builds):
+    // "Score 0–1, no playbook. Brief Michael." reached the user's answer.
+    const { deps } = fixture(async (tools) => {
+      await tools.answerFromData('Count the matches.');
+      return [
+        text('Score 0–1, no playbook. Brief Michael.'),
+        {
+          type: 'tool-call',
+          payload: {
+            toolName: 'answer_from_data',
+            toolCallId: 'c1',
+            args: { brief: 'Count.' },
+          },
+        },
+        {
+          type: 'tool-result',
+          payload: {
+            toolName: 'answer_from_data',
+            toolCallId: 'c1',
+            result: 'done',
+          },
+        },
+        text('That covers every match in the data.'),
+      ];
     });
-    await runOrchestratorTurn(deps, { question: 'q' });
-    expect(told).toContain('call analyse_data first');
-    expect(members.writeAnswer).not.toHaveBeenCalled();
+    const { answer } = await runOrchestratorTurn(deps, { question: 'q' });
+    expect(answer).toBe(
+      'There are 64 matches.\n\nThat covers every match in the data.',
+    );
+    expect(answer).not.toContain('Score');
   });
 
-  it('refuses a third analysis and tells her to write from the results', async () => {
+  it('tells Avery when Michael wrote no answer', async () => {
+    let told = '';
+    const { deps } = fixture(
+      async (tools) => {
+        told = await tools.answerFromData('Count.');
+        return [text('Nothing to show.')];
+      },
+      {
+        team: team({
+          analyse: jest.fn(() => Promise.resolve({ ...ATTEMPT, text: '' })),
+        }),
+      },
+    );
+    const done = await runOrchestratorTurn(deps, { question: 'q' });
+    expect(told).toContain('Michael wrote no answer.');
+    expect(done.answer).toBe('Nothing to show.');
+  });
+
+  it('refuses a third answer and tells her to close from his answer', async () => {
     const replies: string[] = [];
     const { deps, members } = fixture(async (tools) => {
-      replies.push(await tools.analyse('one'));
-      replies.push(await tools.analyse('two'));
-      replies.push(await tools.analyse('three'));
+      replies.push(await tools.answerFromData('one'));
+      replies.push(await tools.answerFromData('two'));
+      replies.push(await tools.answerFromData('three'));
       return [];
     });
     await runOrchestratorTurn(deps, { question: 'q' });
     expect(members.analyse).toHaveBeenCalledTimes(2);
     expect(members.analyse.mock.calls.map(([a]) => a.attempt)).toEqual([1, 2]);
-    expect(replies[2]).toContain('already analysed twice');
+    expect(replies[2]).toBe(
+      'Michael already answered twice in this run: close from his answer.',
+    );
     // The queries of both attempts are kept.
     expect(deps.state.queries).toHaveLength(2);
+  });
+
+  it("tells Avery Michael's clarifying question and its options, and keeps no answer", async () => {
+    let told = '';
+    const { deps } = fixture(
+      async (tools) => {
+        told = await tools.answerFromData('Count.');
+        return [];
+      },
+      {
+        team: team({
+          analyse: jest.fn(() =>
+            Promise.resolve({
+              ...ATTEMPT,
+              clarification: {
+                question: 'Which stage?',
+                options: ['All', 'Final'],
+              },
+            }),
+          ),
+        }),
+      },
+    );
+    await runOrchestratorTurn(deps, { question: 'q' });
+    expect(told).toBe(
+      'Michael needs an answer before he can go on: Which stage?\n- All\n- Final',
+    );
+    expect(deps.state.answer).toBeUndefined();
   });
 
   it('puts the conversation history before the question in her messages', async () => {
@@ -335,6 +337,18 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
     const sent = streams[0].messages as { content: string }[];
     expect(sent).toHaveLength(ORCHESTRATOR_HISTORY_MESSAGES + 1);
     expect(sent[0].content).toBe('m10');
+  });
+
+  it('tells her the run facts: its datasets, no reference images and no visual', async () => {
+    const { deps, streams } = fixture([text('ok')]);
+    await runOrchestratorTurn(deps, { question: 'q' });
+    expect(streams[0].options['context']).toEqual([
+      {
+        role: 'system',
+        content:
+          'Run facts: datasets World Cup.\nThe run has no reference images.\nThe run builds no visual.',
+      },
+    ]);
   });
 
   it('returns her clarifying question and stops her stream there', async () => {
@@ -380,10 +394,11 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
       { role: 'assistant', content: 'Which tournament?\n- Men\n- Women' },
       { role: 'user', content: 'Men' },
     ]);
+    // The plan Michael worked from (5.23); no removed teammate is named.
     const context = streams[0].options['context'] as { content: string }[];
-    expect(context.map((c) => c.content).join('\n')).toContain(
-      'Olivia already planned',
-    );
+    const read = context.map((c) => c.content).join('\n');
+    expect(read).toContain('Michael worked from this plan:');
+    expect(read).not.toContain('Olivia');
   });
 
   it('shows her tool calls as the step activity, signed, a team call naming its teammate and a skill call its file', async () => {
@@ -403,7 +418,7 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
         type: 'tool-call',
         payload: {
           toolCallId: 'c1',
-          toolName: 'analyse_data',
+          toolName: 'answer_from_data',
           args: { brief: 'Count matches' },
         },
       },
@@ -425,7 +440,7 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
       {
         type: 'tool',
         content: JSON.stringify({
-          name: 'analyse_data',
+          name: 'answer_from_data',
           input: 'Count matches',
           agent: 'chief-of-staff',
           teammate: 'insights-analyst',
@@ -433,7 +448,7 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
       },
       {
         type: 'tool-result',
-        content: JSON.stringify({ tool: 'analyse_data', reply: 'ok' }),
+        content: JSON.stringify({ tool: 'answer_from_data', reply: 'ok' }),
       },
     ]);
   });
@@ -497,21 +512,102 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
     });
   });
 
-  it('Avery + Michael (5.23): offers only answer_from_data, and every team tool with no run', () => {
+  it("fails the step when Michael's model fails, naming him, though her tool reads the error and she closes", async () => {
+    // As Mastra does: her tool's throw becomes a tool error she reads, and
+    // her stream goes on to her closing words.
+    const relayed = (tools: ReturnType<typeof orchestratorTools>) =>
+      tools.answerFromData('Count every match.').then(
+        () => [text('Done.')],
+        () => [text('Michael could not answer.')],
+      );
+    const thrown = fixture(relayed, {
+      team: team({
+        analyse: jest.fn(() =>
+          Promise.reject(new Error('The provider is down (503)')),
+        ),
+      }),
+    });
+    await expect(
+      runOrchestratorTurn(thrown.deps, { question: 'q' }),
+    ).rejects.toThrow(
+      'Michael (Insights Analyst) could not answer: The provider is down (503)',
+    );
+
+    // A model timeout is thrown as it is (workflows R43).
+    const timeout = new ModelTimeoutError('Analyse', 5 * 60_000, true);
+    const timed = fixture(relayed, {
+      team: team({ analyse: jest.fn(() => Promise.reject(timeout)) }),
+    });
+    await expect(
+      runOrchestratorTurn(timed.deps, { question: 'q' }),
+    ).rejects.toBe(timeout);
+  });
+
+  it('answers stopped when the run is stopped during Michael, and waits on his clarifying question', async () => {
+    const abort = new AbortController();
+    const stopped = fixture(
+      (tools) =>
+        tools.answerFromData('Count every match.').then(
+          () => [text('Done.')],
+          () => [],
+        ),
+      {
+        deps: { signal: abort.signal },
+        team: team({
+          analyse: jest.fn(() => {
+            abort.abort();
+            return Promise.reject(new Error('This operation was aborted'));
+          }),
+        }),
+      },
+    );
+    expect(await runOrchestratorTurn(stopped.deps, { question: 'q' })).toEqual({
+      answer: '',
+      stopped: true,
+    });
+
+    const asked = fixture(
+      async (tools) => {
+        await tools.answerFromData('Count every match.');
+        return [
+          {
+            type: 'tool-call',
+            payload: {
+              toolName: 'ask_clarification',
+              args: { question: 'Which year?', options: ['2018', '2022'] },
+            },
+          },
+        ];
+      },
+      {
+        team: team({
+          analyse: jest.fn(() =>
+            Promise.resolve({
+              ...ATTEMPT,
+              clarification: {
+                question: 'Which year?',
+                options: ['2018', '2022'],
+              },
+            }),
+          ),
+        }),
+      },
+    );
+    expect(await runOrchestratorTurn(asked.deps, { question: 'q' })).toEqual({
+      answer: '',
+      stopped: false,
+      clarification: { question: 'Which year?', options: ['2018', '2022'] },
+    });
+  });
+
+  it('Avery + Michael (5.23): offers answer_from_data, and her team tools with no run', () => {
     const alone = new RequestContext();
     alone.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, {
-      hasImages: false,
-      buildsVisual: false,
       tools: ['answer_from_data', 'ask_clarification'],
     });
     expect(Object.keys(avertTools(alone))).toEqual(['answer_from_data']);
     expect(Object.keys(avertTools(new RequestContext()))).toEqual([
-      'read_reference_images',
-      'plan_analysis',
-      'analyse_data',
       'answer_from_data',
-      'write_answer',
-      'build_visual',
       'build_dashboard',
       'export_conversation',
     ]);
@@ -538,8 +634,7 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
       },
     );
     const done = await runOrchestratorTurn(deps, { question: 'How many?' });
-    // No Olivia: no plan call, no plan block; her brief, then the alone line.
-    expect(members.plan).not.toHaveBeenCalled();
+    // No plan block: her brief, then the alone line.
     const call = members.analyse.mock.calls[0][0];
     expect(call.planBlock).not.toContain('Analysis plan for this turn');
     expect(call.planBlock).toContain(
@@ -550,61 +645,10 @@ describe('Avery runs her turn (agents.md 5.22)', () => {
       'Queries behind the answer the user just read',
     );
     expect(call.plan).toMatchObject({ question: 'How many?', measures: [] });
-    expect(members.writeAnswer).not.toHaveBeenCalled();
     expect(done).toEqual({
       answer: 'There are 64 matches.\n\nWant it by stage?',
       stopped: false,
     });
-  });
-
-  it('offers build_visual only when the run builds a visual', () => {
-    const base = { hasImages: false } as const;
-    const withVisual = new RequestContext();
-    withVisual.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, {
-      ...base,
-      buildsVisual: true,
-    });
-    const without = new RequestContext();
-    without.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, {
-      ...base,
-      buildsVisual: false,
-    });
-    expect(Object.keys(avertTools(withVisual))).toContain('build_visual');
-    expect(Object.keys(avertTools(without))).toEqual([
-      'read_reference_images',
-      'plan_analysis',
-      'analyse_data',
-      'write_answer',
-    ]);
-  });
-
-  it("tells Avery a run without a visual builds none, and Ryan's work when it does", async () => {
-    const none = fixture([]);
-    const runtime = orchestratorTools(none.deps, 'q', undefined);
-    expect(await runtime.buildVisual('chart')).toBe(
-      'This run builds no visual.',
-    );
-
-    const buildVisual = jest.fn(() =>
-      Promise.resolve({
-        visual: { visualId: 'v-1', title: 'Matches' },
-        stopped: false,
-      }),
-    );
-    const built = fixture([], {
-      team: team({ buildVisual }),
-      deps: { buildsVisual: true },
-    });
-    built.deps.state.answer = 'A.';
-    built.deps.state.queries = ATTEMPT.queries;
-    const visual = orchestratorTools(built.deps, 'q', undefined);
-    expect(await visual.buildVisual('by year')).toContain('Matches');
-    expect(buildVisual).toHaveBeenCalledWith(
-      expect.objectContaining({
-        question: expect.stringContaining('by year') as string,
-        answer: 'A.',
-      }),
-    );
   });
 });
 
@@ -1039,6 +1083,130 @@ describe("Avery's export_conversation (agents.md 2.21, 3.18)", () => {
       await orchestratorTools(deps, 'q', undefined).exportConversation(CONTENT),
     ).toBe(
       'The conversation was not exported: Exporting needs Microsoft Edge or Google Chrome on this computer.',
+    );
+  });
+});
+
+/**
+ * What Michael and Avery receive in Answer a Business Question (Avery +
+ * Michael) (agents.md 5.23), pinned to its value before the two other
+ * Answer a Business Question workflows were removed: Michael's analyse
+ * request (its input and the system blocks it streams with) on a first
+ * call, a second one and a call resumed after a clarification; Avery's
+ * messages, her run facts with each gate, and what her tool tells her.
+ */
+describe('Avery + Michael: what Michael and Avery receive is pinned', () => {
+  const MICHAEL_TOOLS = [
+    'answer_from_data',
+    'build_dashboard',
+    'export_conversation',
+    'ask_clarification',
+  ];
+
+  async function received(
+    deps: Partial<OrchestratorTurnDeps> & {
+      members?: jest.Mocked<OrchestratorTeam>;
+    },
+    input: Parameters<typeof runOrchestratorTurn>[1],
+  ) {
+    const replies: string[] = [];
+    const { members: given, ...rest } = deps;
+    const {
+      deps: full,
+      members,
+      streams,
+    } = fixture(
+      async (tools) => {
+        replies.push(
+          await tools.answerFromData(
+            'How many matches were played in the 2022 World Cup? Count every match.',
+          ),
+        );
+        replies.push(
+          await tools.answerFromData('Count the group matches separately.'),
+        );
+        replies.push(await tools.answerFromData('A third call.'));
+        return [text('Want it by stage?')];
+      },
+      {
+        ...(given ? { team: given } : {}),
+        deps: {
+          tools: MICHAEL_TOOLS,
+          history: [
+            { role: 'user', content: 'Which teams played?' },
+            { role: 'assistant', content: '32 teams played.' },
+          ],
+          earlierQueries: [
+            {
+              ref: 'Q1',
+              sql: 'SELECT DISTINCT team FROM wc.public.matches',
+              rationale: 'The teams.',
+            },
+          ],
+          ...rest,
+        },
+      },
+    );
+    const done = await runOrchestratorTurn(full, input);
+    return {
+      requests: members.analyse.mock.calls.map(([call]) => ({
+        call,
+        system: analyseSystemBlocks({
+          catalogBlock: call.catalogBlock,
+          planBlock: call.planBlock,
+          imageNotes: call.imageNotes,
+        }),
+      })),
+      replies,
+      avery: streams.map((stream) => ({
+        messages: stream.messages,
+        context: stream.options['context'],
+        maxSteps: stream.options['maxSteps'],
+      })),
+      done,
+    };
+  }
+
+  it("Michael's analyse requests and Avery's messages hash to the base value", async () => {
+    const cases = [
+      await received({}, { question: 'How many matches?' }),
+      await received(
+        {},
+        {
+          question: 'How many matches?',
+          answered: {
+            question: 'Which tournament?',
+            options: ['2018', '2022'],
+            answer: '2022',
+          },
+        },
+      ),
+      await received(
+        {
+          buildsDashboard: true,
+          members: team({ buildDashboard: jest.fn() }),
+        },
+        { question: 'Build a dashboard of the matches' },
+      ),
+      await received(
+        {
+          exportsConversation: true,
+          earlierTurns: TURNS,
+          members: team({ exportConversation: jest.fn() }),
+        },
+        { question: 'Export the conversation' },
+      ),
+    ];
+    expect(cases[0].requests).toHaveLength(2);
+    expect(cases[0].requests[0].system[1]).toContain(MICHAEL_ALONE_LINE);
+    expect(JSON.stringify(cases[2].avery[0].context)).toContain(
+      'build_dashboard is available',
+    );
+    const digest = createHash('sha256')
+      .update(JSON.stringify(cases))
+      .digest('hex');
+    expect(digest).toBe(
+      'a8641df1f40ea6bc9b309d0184afa3ebfa930298aa416863e41899b7b8a0d8ea',
     );
   });
 });

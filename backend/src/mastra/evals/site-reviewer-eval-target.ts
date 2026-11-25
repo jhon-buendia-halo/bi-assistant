@@ -16,7 +16,7 @@ import {
   type SiteScreenName,
 } from '../workflows/review-website.schemas';
 import { answerResult } from './query-explainer-eval-answer';
-import { lastUserText } from './insights-analyst-workflow-target';
+import { lastUserText } from './insights-analyst-target';
 import {
   markOfElement,
   type ReviewedScreen,

@@ -14,7 +14,8 @@ import { worldCupKey } from './helpers/world-cup-db';
 /**
  * Mirrors the Feature "Chat and visuals" in
  * specs/capabilities/agent-answers/spec.md, now through the Run tab of
- * Insights Analyst: a run streams its reasoning and tool activity, renders the answer's
+ * Answer a Business Question (Avery + Michael): a run streams Avery's relay
+ * with Michael's tool activity, renders the answer's
  * Markdown and its SQL, and can be stopped. The model is the recording stub.
  */
 
@@ -62,7 +63,9 @@ test('renders a streamed run: reasoning, tool activity, final Markdown, and supp
   stub.hold = (request) => {
     if (!request.stream) return undefined;
     if (lastUserText(request) === SLOW_QUESTION) return never.promise;
-    return lastUserText(request) === QUESTION &&
+    // Michael's turn, once his query returned (not Avery's call after his reply).
+    return !request.avery &&
+      lastUserText(request) === QUESTION &&
       request.messages.at(-1)?.role === 'tool'
       ? held.promise
       : undefined;
@@ -70,9 +73,13 @@ test('renders a streamed run: reasoning, tool activity, final Markdown, and supp
 
   try {
     await runQuestionInTab(page, QUESTION, WORLD_CUP_DATASET);
-    // The agent's query, in words under the agent (ui.md 4.4b).
+    // Michael's query, in words under him in Avery's relay (ui.md 4.4b).
     await expect(
-      page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first(),
+      page
+        .locator(
+          '[data-testid="workflow-run-relay-teammate-step"][data-tool="run_readonly_sql"]',
+        )
+        .first(),
     ).toBeVisible();
     held.release();
 

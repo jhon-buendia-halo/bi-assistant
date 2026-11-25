@@ -1,6 +1,7 @@
 import { fillRun as fillRunInTab, openRunTab, sendRun } from './helpers/run-ui';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
+import { ASK_WORKFLOW_ID, ASK_WORKFLOW_NAME } from './helpers/runs-api';
 import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DATASET } from './helpers/app-actions';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
@@ -19,8 +20,6 @@ import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
  * `result-explorer` reply comes from the LLM stub's `explore`.
  */
 
-const V2_ID = 'answer-business-question';
-const V2 = 'Answer a Business Question';
 const QUESTION = 'List the first matches of the data.';
 const WORDS = 'only the Final stage';
 
@@ -70,15 +69,15 @@ async function openWorkflowPage(
   id: string,
   name: string,
 ): Promise<void> {
-  await railItem(page, 'User journeys').click();
+  await railItem(page, 'Workflows').click();
   await expect(
-    page.getByRole('heading', { name: 'User journeys', exact: true }),
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
   await page.getByTestId(`workflow-${id}`).click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(name);
 }
 
-/** Opens the Run tab, adds `dataset` through +, turns approvals off and types `question`. */
+/** Opens the Run tab, adds `dataset` through + and types `question`. */
 async function fillRun(
   page: Page,
   question: string,
@@ -134,7 +133,7 @@ test.describe("Feature: Filter a query's result in words", () => {
         page,
         `Given I ran "${QUESTION}" on "${WORLD_CUP_DATASET}" and opened its query`,
         async () => {
-          await openWorkflowPage(page, V2_ID, V2);
+          await openWorkflowPage(page, ASK_WORKFLOW_ID, ASK_WORKFLOW_NAME);
           await fillRun(page, QUESTION, WORLD_CUP_DATASET);
           await sendRun(page);
           await expect(page.getByTestId('workflow-run-status')).toHaveText(

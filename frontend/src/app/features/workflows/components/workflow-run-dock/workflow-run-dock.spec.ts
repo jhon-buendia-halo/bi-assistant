@@ -23,6 +23,7 @@ const WORKFLOW: WorkflowDetail = {
   description: 'Answers questions over the datasets you pick.',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   agents: [],
   stepCount: 1,
   trigger: 'run',
@@ -166,7 +167,7 @@ describe('WorkflowRunDock, the Run panel on the left of the canvas (ui.md 4.4b)'
     expect(q('workflow-state-status')).toBeNull();
     expect(text('workflow-state-progress')).toBe('0 of 3 nodes ran');
     expect(text('workflow-state-run-id')).toBe(
-      "No run yet. Execute the user journey to see each node's data.",
+      "No run yet. Run the workflow to see each node's data.",
     );
     expect(text('workflow-run-activity')).toBe('');
   });

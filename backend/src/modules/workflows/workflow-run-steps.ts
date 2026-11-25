@@ -43,18 +43,6 @@ export interface WorkflowRunWaitingFor {
   title: string;
   question: string;
   options: string[];
-  /**
-   * An approval gate (workflows R44): the step agent's outcome in words
-   * (Markdown), which the user approves or asks to change. Absent on a
-   * clarifying question.
-   */
-  review?: string;
-  /**
-   * Build visual's approval gate (workflows R44): the visual Ryan built,
-   * which the user opens before approving it; a change to it may come with
-   * reference images (api.md 138).
-   */
-  visualId?: string;
   since: string;
   expiresAt: string;
   expired?: true;
@@ -152,8 +140,8 @@ export interface WorkflowRun {
   input: WorkflowInputValues;
   context?: { fromRunId: string };
   /**
-   * A conversation with Avery (Answer a Business Question (orchestrated),
-   * workflows R45): the id of its first run, shared by every run that
+   * A conversation with Avery (Answer a Business Question (Avery +
+   * Michael), workflows R45): the id of its first run, shared by every run that
    * follows up on it. Absent on other workflows' runs.
    */
   conversationId?: string;

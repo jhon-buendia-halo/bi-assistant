@@ -20,16 +20,10 @@ import {
   ANSWER_CUT_NOTE,
   planWithModel,
   writeAnswerWithModel,
-} from './answer-business-question.agents';
+} from './step-agents';
 import { ModelTimeoutError, ReplyCutError } from './model-call';
-import {
-  findingStatus,
-  writeAnswerRequest,
-} from './answer-business-question.prompts';
-import type {
-  AnalyseQuery,
-  AnalysisPlan,
-} from './answer-business-question.steps';
+import { findingStatus, writeAnswerRequest } from './analysis.prompts';
+import type { AnalyseQuery, AnalysisPlan } from './analysis.steps';
 
 const PLAN: AnalysisPlan = {
   question: 'Which 100 drivers have the most race starts?',

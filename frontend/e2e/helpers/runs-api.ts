@@ -4,9 +4,9 @@ import { apiBaseOf } from './api';
 
 /**
  * Runs a workflow through the streamed run API (`POST /workflows/:id/runs/stream`,
- * api.md 119) and reads the whole stream. The catalogue holds two workflows;
- * the helpers here send Insights Analyst, whose Analyse step runs one
- * agent turn through the turn path: the specs that check what reaches the
+ * api.md 119) and reads the whole stream. The question helpers send Answer
+ * a Business Question (Avery + Michael), whose Orchestrate step runs Avery's
+ * turn and, through her, Michael's: the specs that check what reaches the
  * model send a run.
  */
 
@@ -87,38 +87,35 @@ export async function runWorkflow(
   };
 }
 
-/** The catalogue's first workflow, the one these helpers run (workflows R1). */
-export const V2_WORKFLOW_ID = 'answer-business-question';
-export const V2_WORKFLOW_NAME = 'Answer a Business Question';
+/**
+ * The question-answering workflow, the one the home Ask runs (workflows R1):
+ * Answer a Business Question (Avery + Michael). Avery, the Chief of Staff,
+ * briefs Michael (Insights Analyst) through `answer_from_data`; the LLM stubs
+ * move her automatically (helpers/v2-steps.ts `averyMove`), so a spec scripts
+ * Michael's turn only and reads his reply as the run's answer.
+ */
+export const ASK_WORKFLOW_ID = 'orchestrated-answer-michael';
+export const ASK_WORKFLOW_NAME = 'Answer a Business Question (Avery + Michael)';
+/** Its one step: Avery's turn, Michael's included. */
+export const ASK_STEP_ID = 'orchestrate';
 
 /**
- * Runs Insights Analyst (`answer-business-question`) on `question` over the
- * datasets (the World Cup one by default). Its Analyse step is one agent turn
- * of `insights-analyst`, offered `list_entities`, `describe_entity`,
- * `sample_rows`, `run_readonly_sql`, `ask_clarification` and its on-demand
- * skills (no visual, panel or workflow tools).
+ * Runs Answer a Business Question (Avery + Michael) on `question` over the
+ * datasets (the World Cup one by default). Its Orchestrate step is Avery's
+ * turn; her `answer_from_data` runs one agent turn of `insights-analyst`,
+ * offered `list_entities`, `describe_entity`, `sample_rows`,
+ * `run_readonly_sql`, `ask_clarification`, `explore_result` and his
+ * on-demand skills.
  */
 export async function runQuestion(
   page: Page,
   question: string,
-  options: {
-    datasets?: string[];
-    fromRunId?: string;
-    buildVisual?: boolean;
-    approveSteps?: boolean;
-  } = {},
+  options: { datasets?: string[]; fromRunId?: string } = {},
 ): Promise<RunResult> {
   return runWorkflow(
     page,
-    V2_WORKFLOW_ID,
-    {
-      question,
-      datasets: options.datasets ?? [WORLD_CUP_DATASET],
-      // Off unless asked: Build visual (workflows R41) makes one more model call.
-      buildVisual: options.buildVisual ?? false,
-      // Off unless asked: with approvals on, a run stops after each agent's work.
-      approveSteps: options.approveSteps ?? false,
-    },
+    ASK_WORKFLOW_ID,
+    { question, datasets: options.datasets ?? [WORLD_CUP_DATASET] },
     options.fromRunId ? { fromRunId: options.fromRunId } : undefined,
   );
 }
@@ -127,12 +124,7 @@ export async function runQuestion(
 export async function runQuestionOk(
   page: Page,
   question: string,
-  options: {
-    datasets?: string[];
-    fromRunId?: string;
-    buildVisual?: boolean;
-    approveSteps?: boolean;
-  } = {},
+  options: { datasets?: string[]; fromRunId?: string } = {},
 ): Promise<RunResult> {
   const result = await runQuestion(page, question, options);
   expect(result.status, result.body).toBe(200);

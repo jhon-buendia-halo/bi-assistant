@@ -39,11 +39,11 @@ describe('agent page util', () => {
   });
 
   it('words the empty Used in line per agent kind (R109)', () => {
-    expect(usedInEmptyText('user')).toBe('Not used in any user journey.');
+    expect(usedInEmptyText('user')).toBe('Not used in any workflow.');
     expect(usedInEmptyText('system')).toBe(
-      'Not used in any user journey. The app calls this agent persona itself.',
+      'Not used in any workflow. The app calls this agent persona itself.',
     );
-    expect(usedInEmptyText('official')).toBe('Not used in any user journey.');
+    expect(usedInEmptyText('official')).toBe('Not used in any workflow.');
   });
 
   it('finds broken links and words the error', () => {

@@ -24,8 +24,8 @@ import {
 import {
   contractStepEntry,
   type ContractStepEntry,
-} from './answer-business-question.steps';
-import type { WorkflowEdge } from './workflow-contract';
+  type WorkflowEdge,
+} from './workflow-contract';
 import { ModelTimeoutError } from './model-call';
 
 /** The workflow's registry key and id. */

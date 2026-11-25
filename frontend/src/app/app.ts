@@ -123,9 +123,9 @@ export class App {
     label: string;
     icon: LucideIconData;
   }[] = [
-    // In the order of use (app-shell R3): run a journey and read its results,
+    // In the order of use (app-shell R3): run a workflow and read its results,
     // then the data and the agent personas behind it, then operations.
-    { area: 'workflows', label: 'User journeys', icon: Workflow },
+    { area: 'workflows', label: 'Workflows', icon: Workflow },
     { area: 'runs', label: 'Runs', icon: FolderKanban },
     { area: 'artifacts', label: 'Artifacts', icon: Boxes },
     { area: 'datasets', label: 'Datasets', icon: FlaskConical },

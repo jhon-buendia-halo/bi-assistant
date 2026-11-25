@@ -1,10 +1,10 @@
 import { RequestContext } from '@mastra/core/request-context';
 import {
-  ORCHESTRATOR_TEAMS,
+  AVERY_TEAM,
   ORCHESTRATOR_TOOLS_RUNTIME_KEY,
   teammateOfTool,
   type OrchestratorToolsRuntime,
-} from '../workflows/orchestrated-answer.steps';
+} from '../workflows/orchestrated-answer-michael.steps';
 import {
   buildDashboardTool,
   exportConversationTool,
@@ -15,16 +15,9 @@ function runtime(
   overrides: Partial<OrchestratorToolsRuntime> = {},
 ): OrchestratorToolsRuntime {
   return {
-    tools: ORCHESTRATOR_TEAMS['orchestrated-answer'].tools,
-    hasImages: false,
-    buildsVisual: true,
+    tools: AVERY_TEAM.tools,
     buildsDashboard: false,
-    readImages: jest.fn(),
-    plan: jest.fn(),
-    analyse: jest.fn(),
     answerFromData: jest.fn(),
-    writeAnswer: jest.fn(),
-    buildVisual: jest.fn(),
     buildDashboard: jest.fn().mockResolvedValue('Clara built it.'),
     exportsConversation: false,
     exportConversation: jest.fn().mockResolvedValue('Exported.'),
@@ -45,18 +38,11 @@ describe("Avery's build_dashboard (plan bi-dashboard 2.2)", () => {
     ).not.toContain('build_dashboard');
   });
 
-  it('is offered once the user asks for a dashboard, in both of her workflows', () => {
-    for (const id of ['orchestrated-answer', 'orchestrated-answer-michael']) {
-      const tools = orchestratorTools(
-        contextWith(
-          runtime({
-            tools: ORCHESTRATOR_TEAMS[id].tools,
-            buildsDashboard: true,
-          }),
-        ),
-      );
-      expect(Object.keys(tools)).toContain('build_dashboard');
-    }
+  it('is offered once the user asks for a dashboard', () => {
+    const tools = orchestratorTools(
+      contextWith(runtime({ buildsDashboard: true })),
+    );
+    expect(Object.keys(tools)).toEqual(['answer_from_data', 'build_dashboard']);
   });
 
   it('is listed with no run (her agent page)', () => {
@@ -86,17 +72,30 @@ describe("Avery's build_dashboard (plan bi-dashboard 2.2)", () => {
 
   it('is Clara’s tool in the team registry', () => {
     expect(teammateOfTool('build_dashboard')).toBe('bi-analyst');
-    expect(ORCHESTRATOR_TEAMS['orchestrated-answer-michael'].tools).toEqual([
+    expect(teammateOfTool('answer_from_data')).toBe('insights-analyst');
+    expect(AVERY_TEAM.tools).toEqual([
       'answer_from_data',
       'build_dashboard',
       'export_conversation',
       'ask_clarification',
     ]);
-    expect(ORCHESTRATOR_TEAMS['orchestrated-answer'].tools.slice(-3)).toEqual([
+  });
+
+  it("lists only Avery + Michael's team tools with no run: the whole-team tools are gone", () => {
+    expect(Object.keys(orchestratorTools(undefined))).toEqual([
+      'answer_from_data',
       'build_dashboard',
       'export_conversation',
-      'ask_clarification',
     ]);
+    for (const gone of [
+      'read_reference_images',
+      'plan_analysis',
+      'analyse_data',
+      'write_answer',
+      'build_visual',
+    ]) {
+      expect(teammateOfTool(gone)).toBeUndefined();
+    }
   });
 });
 
@@ -113,18 +112,11 @@ describe("Avery's export_conversation (agents.md 3.18)", () => {
     ).not.toContain('export_conversation');
   });
 
-  it('is offered once the user asks to export, in both of her workflows', () => {
-    for (const id of ['orchestrated-answer', 'orchestrated-answer-michael']) {
-      const tools = orchestratorTools(
-        contextWith(
-          runtime({
-            tools: ORCHESTRATOR_TEAMS[id].tools,
-            exportsConversation: true,
-          }),
-        ),
-      );
-      expect(Object.keys(tools)).toContain('export_conversation');
-    }
+  it('is offered once the user asks to export', () => {
+    const tools = orchestratorTools(
+      contextWith(runtime({ exportsConversation: true })),
+    );
+    expect(Object.keys(tools)).toContain('export_conversation');
   });
 
   it('is listed with no run (her agent page) and has no teammate behind it', () => {

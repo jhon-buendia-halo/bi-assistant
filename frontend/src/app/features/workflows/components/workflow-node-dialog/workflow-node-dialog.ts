@@ -62,7 +62,6 @@ import { ToolDataRecord } from '../../../sessions/models/session.model';
 import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import { WorkflowAttemptSwitcher } from '../workflow-attempt-switcher/workflow-attempt-switcher';
 import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
-import { WorkflowStepOutputView } from '../workflow-step-output-view/workflow-step-output-view';
 import { WorkflowNodeChat } from '../workflow-node-chat/workflow-node-chat';
 import { WorkflowStepEvidence } from '../workflow-step-evidence/workflow-step-evidence';
 import { WorkflowTeammateWork } from '../workflow-teammate-work/workflow-teammate-work';
@@ -86,10 +85,10 @@ const TAB_LABELS: Record<DialogTab, string> = {
 export type CopyTarget = 'story' | 'input' | 'output';
 
 const NOT_RUN =
-  'This node has not run yet. Execute the user journey to see its data.';
+  'This node has not run yet. Run the workflow to see its data.';
 
 const TOOL_NOT_RUN =
-  'This tool has not run yet. Execute the user journey to see its calls.';
+  'This tool has not run yet. Run the workflow to see its calls.';
 
 const KIND_ICONS = {
   trigger: Zap,
@@ -126,7 +125,6 @@ const SUMMARY_FIELDS = 4;
     WorkflowDataView,
     WorkflowNodeChat,
     WorkflowStepEvidence,
-    WorkflowStepOutputView,
     WorkflowStepStory,
     WorkflowTeammateWork,
     WorkflowLeadWork,

@@ -3,40 +3,29 @@ jest.mock('../tool-services', () => ({
   getDatasetToolServices: () => ({ getDatasets }),
 }));
 
-import { checkWorkflowContract } from './workflow-contract';
 import {
   ANALYSE_RETRY_MAX_STEPS,
-  ANSWER_BUSINESS_QUESTION_EDGES,
-  ANSWER_BUSINESS_QUESTION_STEPS,
   VALIDATION_CHECKS,
-  analysisLoopDone,
   flaggedQueries,
   keptQueryOrigins,
-  mergeAttempts,
   answerDeltas,
   answerOf,
   answerWithRowTables,
   expandRowTables,
   ROW_TABLE_CAP,
-  chartableQueries,
   catalogBlock,
   clarifyingQuestionOf,
   loadCatalog,
   PLAN_COLUMNS_PER_ENTITY,
   PLAN_COLUMNS_TOTAL,
-  planAfterAnswer,
   planCatalogBlock,
   planOf,
-  receiveQuestion,
-  turnSummaryOf,
   validateAttempt,
-  wrapUp,
   type AnalyseQuery,
   type AnalysisPlan,
-} from './answer-business-question.steps';
+} from './analysis.steps';
 import { INSIGHTS_ANALYST_PROMPT } from '../agents/system-prompts';
 import {
-  ANALYSE_VISUAL_LINE,
   ANSWER_REQUEST_CAP,
   ANSWER_ROWS_CAP,
   EARLIER_BLOCK_CAP,
@@ -46,22 +35,11 @@ import {
   PLAN_INSTRUCTIONS,
   WRITE_ANSWER_FIRST_LINE,
   WRITE_ANSWER_INSTRUCTIONS,
-  WRITE_ANSWER_VISUAL_LINE,
-  analysePlanBlock,
   analyseSystemBlocks,
   earlierQueriesBlock,
-  findingStatus,
-  orchestratorBriefBlock,
   planMessages,
-  visualCued,
   writeAnswerRequest,
-} from './answer-business-question.prompts';
-import {
-  analyseInputSchema,
-  analyseOutcomeSchema,
-  plannedQuestionSchema,
-  validateOutcomeSchema,
-} from './answer-business-question.schemas';
+} from './analysis.prompts';
 
 const PLAN: AnalysisPlan = {
   question: 'Who scored the most goals in 2018?',
@@ -82,90 +60,7 @@ const query = (partial: Partial<AnalyseQuery> = {}): AnalyseQuery => ({
   ...partial,
 });
 
-describe('answer-business-question steps (agents.md 5.11)', () => {
-  it('lists the nine steps with their ids, titles and kinds, Read images first, Plan after Load catalog, Build visual after Write answer and Wrap up last', () => {
-    expect(
-      ANSWER_BUSINESS_QUESTION_STEPS.map(({ id, title, kind }) => ({
-        id,
-        title,
-        kind,
-      })),
-    ).toEqual([
-      { id: 'read-images', title: 'Read images', kind: 'agent' },
-      { id: 'receive-question', title: 'Receive question', kind: 'code' },
-      { id: 'load-catalog', title: 'Load catalog', kind: 'code' },
-      { id: 'plan', title: 'Plan', kind: 'agent' },
-      { id: 'analyse', title: 'Analyse', kind: 'agent' },
-      { id: 'validate', title: 'Validate', kind: 'code' },
-      { id: 'write-answer', title: 'Write answer', kind: 'agent' },
-      { id: 'build-visual', title: 'Build visual', kind: 'agent' },
-      { id: 'wrap-up', title: 'Wrap up', kind: 'code' },
-    ]);
-    expect(
-      ANSWER_BUSINESS_QUESTION_STEPS.filter((step) => step.modelOnly).map(
-        (s) => s.id,
-      ),
-    ).toEqual(['read-images', 'plan', 'write-answer', 'build-visual']);
-  });
-
-  it('connects them with the edges of api.md 117: Read images is an optional branch from Start, the rest is one line with a retry loop from Validate to Analyse', () => {
-    expect(
-      ANSWER_BUSINESS_QUESTION_EDGES.map(
-        (e) => `${e.from}->${e.to} ${e.kind}${e.label ? ` "${e.label}"` : ''}`,
-      ),
-    ).toEqual([
-      'start->receive-question next "No images"',
-      'start->read-images branch "Reference images"',
-      'read-images->receive-question next',
-      'receive-question->load-catalog next',
-      'load-catalog->plan next',
-      'plan->analyse next',
-      'analyse->validate next',
-      'validate->analyse loop "Retry once"',
-      'validate->write-answer next "Valid or retried"',
-      'write-answer->wrap-up next',
-      'write-answer->build-visual branch "Build a visual"',
-      'build-visual->wrap-up next',
-      'wrap-up->end next',
-    ]);
-  });
-
-  describe('the optional Build visual (workflows R41)', () => {
-    const query = (rowCount: number, error?: string) => ({
-      sql: 'SELECT 1',
-      rows: [],
-      rowCount,
-      truncated: false,
-      ...(error ? { error } : {}),
-    });
-
-    it('has something to chart only when a query ran without error and returned rows', () => {
-      expect(chartableQueries([])).toBe(false);
-      expect(chartableQueries([query(0)])).toBe(false);
-      expect(chartableQueries([query(3, 'syntax error')])).toBe(false);
-      expect(chartableQueries([query(0), query(2)])).toBe(true);
-    });
-  });
-
-  it('never lets an answered plan ask again (planAfterAnswer)', () => {
-    const asking = planOf(
-      {
-        needsClarification: true,
-        clarification: { question: 'Which?', options: ['a', 'b'] },
-      },
-      'Q',
-    );
-    expect(asking.needsClarification).toBe(true);
-    expect(planAfterAnswer(asking, undefined)).toBe(asking);
-    expect(
-      planAfterAnswer(asking, {
-        question: 'Which?',
-        options: ['a', 'b'],
-        answer: 'a',
-      }),
-    ).toMatchObject({ needsClarification: false, clarification: null });
-  });
-
+describe('the analysis steps (agents.md 5.11)', () => {
   it('reads a waiting step’s question from its suspend payload, the engine’s own fields dropped', () => {
     expect(
       clarifyingQuestionOf({
@@ -176,61 +71,6 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
     ).toEqual({ question: 'Which?', options: ['a', 'b'] });
     expect(clarifyingQuestionOf({ options: ['a'] })).toBeUndefined();
     expect(clarifyingQuestionOf(undefined)).toBeUndefined();
-  });
-
-  it('keeps its data contract along the edges', () => {
-    expect(
-      checkWorkflowContract({
-        input: [
-          { name: 'question', label: 'Q', type: 'textarea', required: true },
-          { name: 'datasets', label: 'D', type: 'datasets', required: true },
-          { name: 'images', label: 'I', type: 'images', required: false },
-        ],
-        steps: ANSWER_BUSINESS_QUESTION_STEPS,
-        edges: ANSWER_BUSINESS_QUESTION_EDGES,
-      }),
-    ).toEqual([]);
-  });
-
-  // Read images dominates no step (it is a branch from Start), so Receive
-  // question defaults the notes and every later step requires them from the
-  // step before it: they survive a wait and a resume (plan D1, D2).
-  it("carries Read images' notes in every step's data after Receive question, and keeps the images out of it", () => {
-    const step = (id: string) =>
-      ANSWER_BUSINESS_QUESTION_STEPS.find((entry) => entry.id === id)!;
-    const receive = step('receive-question');
-    expect(receive.input).toEqual(['question', 'datasets', 'imageNotes']);
-    expect(receive.inputSchema.required ?? []).not.toContain('imageNotes');
-    expect(receive.outputSchema.required).toContain('imageNotes');
-    for (const id of [
-      'load-catalog',
-      'plan',
-      'analyse',
-      'validate',
-      'write-answer',
-    ]) {
-      // The steps a waiting run is resumed at default the notes to '': a
-      // run stored before Read images existed has none (workflows R35).
-      const resumable = ['plan', 'analyse'].includes(id);
-      expect([id, step(id).inputSchema.required ?? []]).toEqual([
-        id,
-        resumable
-          ? expect.not.arrayContaining(['imageNotes'])
-          : expect.arrayContaining(['imageNotes']),
-      ]);
-      expect(step(id).inputSchema.properties).toHaveProperty('imageNotes');
-      expect([id, step(id).outputSchema.required]).toEqual([
-        id,
-        id === 'write-answer'
-          ? expect.not.arrayContaining(['imageNotes'])
-          : expect.arrayContaining(['imageNotes']),
-      ]);
-    }
-    expect(
-      ANSWER_BUSINESS_QUESTION_STEPS.filter((entry) =>
-        entry.input.includes('images'),
-      ).map((entry) => entry.id),
-    ).toEqual(['read-images']);
   });
 
   it('opens the Plan and Write answer instructions with their fixed first lines', () => {
@@ -261,29 +101,6 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
     expect(WRITE_ANSWER_INSTRUCTIONS.split('\n')[0]).toBe(
       WRITE_ANSWER_FIRST_LINE,
     );
-  });
-
-  describe('receiveQuestion', () => {
-    it('trims the question', () => {
-      expect(receiveQuestion('  How many goals?\n')).toBe('How many goals?');
-    });
-
-    it.each(['', '   ', '\n\t'])(
-      'no longer fails on %p: the input node refuses a blank question before the run',
-      (question) => {
-        expect(receiveQuestion(question)).toBe('');
-      },
-    );
-
-    it('has no exit: Receive question cannot fail', () => {
-      const receive = ANSWER_BUSINESS_QUESTION_STEPS.find(
-        (step) => step.id === 'receive-question',
-      );
-      expect(receive?.exits).toEqual([]);
-      expect(receive?.summary).toBe(
-        'Trims the question. The input node has checked it before the run.',
-      );
-    });
   });
 
   describe('loadCatalog', () => {
@@ -434,53 +251,6 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
     });
   });
 
-  describe('wrapUp', () => {
-    it('counts the SQL calls, the failed ones and the rows of the others, with the answer', () => {
-      expect(
-        wrapUp(
-          [
-            { tool: 'run_readonly_sql', rowCount: 10, failed: false },
-            { tool: 'run_readonly_sql', rowCount: 99, failed: true },
-            { tool: 'run_readonly_sql', failed: false },
-            { tool: 'describe_entity', rowCount: 7, failed: false },
-          ],
-          'Ten rows.',
-        ),
-      ).toEqual({
-        sqlQueries: 3,
-        failedQueries: 1,
-        rows: 10,
-        answer: 'Ten rows.',
-      });
-    });
-
-    it('is all zero for a turn without SQL', () => {
-      expect(wrapUp([], '')).toEqual({
-        sqlQueries: 0,
-        failedQueries: 0,
-        rows: 0,
-        answer: '',
-      });
-    });
-
-    it("is the run's result under its branch, read back by turnSummaryOf", () => {
-      const summary = wrapUp([], 'A.');
-      expect(
-        turnSummaryOf({
-          'question-path': { 'analysis-path': { 'answer-path': summary } },
-        }),
-      ).toEqual(summary);
-      // The shape before the question path is no longer read.
-      expect(
-        turnSummaryOf({ 'analysis-path': { 'answer-path': summary } }),
-      ).toBeUndefined();
-      expect(
-        turnSummaryOf({ clarify: { question: 'Q?', options: ['a', 'b'] } }),
-      ).toBeUndefined();
-      expect(turnSummaryOf(undefined)).toBeUndefined();
-    });
-  });
-
   describe('planOf', () => {
     it('reads the JSON plan, fenced or bare', () => {
       expect(planOf('```json\n' + JSON.stringify(PLAN) + '\n```', 'Q')).toEqual(
@@ -545,28 +315,6 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
         { role: 'assistant', content: 'Reply' },
         { role: 'user', content: 'Question: Q\n\nCAT' },
       ]);
-    });
-
-    it("ends the request with an orchestrator's brief, after the user's own words; nothing without one", () => {
-      const BRIEF_BLOCK =
-        "Request from Avery, the Chief of Staff who coordinates the team (the user's own words are above): Who won the 2018 and 2022 World Cups?";
-      expect(
-        planMessages({
-          messages: 'And who won each one?',
-          question: 'And who won each one?',
-          catalogBlock: 'CAT',
-          brief: ' Who won the 2018 and 2022 World Cups? ',
-        }).messages,
-      ).toBe(`Question: And who won each one?\n\nCAT\n\n${BRIEF_BLOCK}`);
-      expect(
-        planMessages({
-          messages: 'Q',
-          question: 'Q',
-          catalogBlock: 'CAT',
-          brief: '   ',
-        }).messages,
-      ).toBe('Question: Q\n\nCAT');
-      expect(orchestratorBriefBlock(undefined)).toBe('');
     });
 
     it('after Clarify: the question, the clarifying question Plan asked, then the answer with the catalog', () => {
@@ -928,40 +676,28 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
             .finding?.passed,
         ).toBe(true);
       });
-
-      it('reaches the retry of Analyse and Write answer as the other findings do', () => {
-        const { findings } = validateAttempt({
-          plan: PLAN,
-          calls: [],
-          queries: [sample()],
-        });
-        expect(analysePlanBlock(PLAN, { attempt: 1, findings })).toContain(
-          '- No answer from a sample: 1 result kept an arbitrary sample of rows',
-        );
-        expect(
-          writeAnswerRequest({
-            question: 'Show me 5 goals',
-            plan: PLAN,
-            queries: [sample()],
-            findings,
-          }),
-        ).toContain(
-          '- failed: No answer from a sample. 1 result kept an arbitrary sample of rows',
-        );
-      });
-    });
-  });
-
-  describe('analysisLoopDone', () => {
-    it('ends on a stop, a valid attempt or the second attempt', () => {
-      expect(analysisLoopDone({ ok: false, attempt: 1 })).toBe(false);
-      expect(analysisLoopDone({ ok: true, attempt: 1 })).toBe(true);
-      expect(analysisLoopDone({ ok: false, attempt: 2 })).toBe(true);
-      expect(analysisLoopDone({ attempt: 1, stopped: true })).toBe(true);
     });
   });
 
   describe("the model steps' requests", () => {
+    it("keeps Write answer's request within its cap, shortening the rows", () => {
+      const wide = query({
+        rows: Array.from({ length: 50 }, (_, n) => ({
+          player: 'x'.repeat(1_000),
+          goals: n,
+        })),
+        rowCount: 50,
+      });
+      const request = writeAnswerRequest({
+        question: 'Who scored most?',
+        plan: PLAN,
+        queries: [wide, wide],
+        findings: [],
+      });
+      expect(request).toContain('[rows shortened to fit]');
+      expect(request.length).toBeLessThanOrEqual(ANSWER_REQUEST_CAP + 80);
+    });
+
     it('hands Write answer the question, the plan, each query with its rows, and the findings', () => {
       const request = writeAnswerRequest({
         question: 'Who scored most?',
@@ -977,25 +713,6 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       expect(request).toContain('[{"player":"Kane","goals":6}]');
       expect(request).toContain('2. (no rationale given) (failed: boom)');
       expect(request).toContain('- passed: Ran a query. 1 of 2.');
-    });
-
-    it("ends Write answer's request with an orchestrator's brief; without one the request is unchanged", () => {
-      const base = {
-        question: 'And who won each one?',
-        plan: PLAN,
-        queries: [query()],
-        findings: [],
-      };
-      const plain = writeAnswerRequest(base);
-      const briefed = writeAnswerRequest({
-        ...base,
-        brief:
-          'Who won the 2018 and 2022 World Cups? The user knows there are two.',
-      });
-      expect(briefed).toBe(
-        `${plain}\n\nRequest from Avery, the Chief of Staff who coordinates the team (the user's own words are above): Who won the 2018 and 2022 World Cups? The user knows there are two.`,
-      );
-      expect(writeAnswerRequest({ ...base, brief: '' })).toBe(plain);
     });
 
     it('says how many rows a long result has and how many Write answer is shown (plan 1.25.6)', () => {
@@ -1032,22 +749,6 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       expect(WRITE_ANSWER_INSTRUCTIONS.trimEnd().split('\n').pop()).toMatch(
         /^Counts stay exact even when you describe a spread/,
       );
-    });
-
-    it('hands a retry of Analyse the failed checks of the previous attempt', () => {
-      expect(analysePlanBlock(PLAN)).toBe(
-        `Analysis plan for this turn:\n${JSON.stringify(PLAN)}`,
-      );
-      const retry = analysePlanBlock(PLAN, {
-        attempt: 1,
-        findings: [
-          { check: 'Ran a query', passed: false, detail: 'No SQL query ran.' },
-          { check: 'No unresolved tool error', passed: true, detail: 'ok' },
-        ],
-      });
-      expect(retry).toContain('Attempt 1 of this analysis failed validation.');
-      expect(retry).toContain('- Ran a query: No SQL query ran.');
-      expect(retry).not.toContain('No unresolved tool error');
     });
   });
 
@@ -1177,104 +878,7 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
 
     // The lines that tell Analyse and Write answer a visual follows: only
     // when the run builds one and the request cues it.
-    describe('when a visual follows', () => {
-      it('cues a visual on image notes or on a visual word in the question', () => {
-        expect(visualCued('Show me a dashboard of sales')).toBe(true);
-        expect(visualCued('Chart the goals per team')).toBe(true);
-        expect(visualCued('Put employees by state on a map')).toBe(true);
-        expect(visualCued('Can you visualise the spread?')).toBe(true);
-        expect(visualCued('A HEATMAP of age by plan')).toBe(true);
-        expect(visualCued('Plot it, then pivot by year')).toBe(true);
-        // Plurals cue too.
-        expect(visualCued('Two charts and some maps, please')).toBe(true);
-        expect(visualCued('Build me dashboards for each region')).toBe(true);
-        expect(visualCued('Which team scored most goals?')).toBe(false);
-        expect(visualCued('Which team scored most goals?', '')).toBe(false);
-        expect(visualCued('Which team scored most goals?', ' \n ')).toBe(false);
-        // Whole words only: "mapping" and "charter" cue nothing.
-        expect(visualCued('Explain the mapping of the charter')).toBe(false);
-        expect(visualCued('Which team scored most goals?', NOTES)).toBe(true);
-      });
-
-      it('holds the fixed copy of the two lines', () => {
-        expect(ANALYSE_VISUAL_LINE).toBe(
-          'A later step draws the visual from your query results, so never say you cannot render a chart, a dashboard or a map. Run one query per view the request asks for, each returning the rows that view shows: the headline totals as one single-row query, and one query for each table, chart or map. For a view that crosses two dimensions, return one row per combination with the measure in one column, never one column per value, so the visual labels its columns with the values in the data.',
-        );
-        expect(WRITE_ANSWER_VISUAL_LINE).toBe(
-          'An interactive visual of these results is built right after your answer and shown under it. Never say you cannot render a chart, a dashboard or a map, and do not lay the data out as tables to stand in for one: state the findings and point the reader to the visual.',
-        );
-      });
-
-      it("adds the line last to Write answer's request, after the findings and the notes", () => {
-        expect(
-          writeAnswerRequest({ ...WRITE_INPUT, visualFollows: true }),
-        ).toBe(`${WRITE_REQUEST_BEFORE}\n\n${WRITE_ANSWER_VISUAL_LINE}`);
-        const withNotes = writeAnswerRequest({
-          ...WRITE_INPUT,
-          imageNotes: NOTES,
-          visualFollows: true,
-        });
-        expect(withNotes.endsWith(`\n\n${WRITE_ANSWER_VISUAL_LINE}`)).toBe(
-          true,
-        );
-        expect(withNotes.indexOf(NOTES)).toBeLessThan(
-          withNotes.indexOf(WRITE_ANSWER_VISUAL_LINE),
-        );
-      });
-
-      it("adds the line as Analyse's last system block, after the notes", () => {
-        expect(
-          analyseSystemBlocks({
-            catalogBlock: 'CAT',
-            planBlock: 'PLAN',
-            visualFollows: true,
-          }),
-        ).toEqual(['CAT', 'PLAN', ANALYSE_VISUAL_LINE]);
-        expect(
-          analyseSystemBlocks({
-            catalogBlock: 'CAT',
-            planBlock: 'PLAN',
-            imageNotes: NOTES,
-            visualFollows: true,
-          }),
-        ).toEqual(['CAT', 'PLAN', NOTES, ANALYSE_VISUAL_LINE]);
-      });
-
-      it('leaves both prompts byte for byte as before when no visual follows', () => {
-        expect(
-          writeAnswerRequest({ ...WRITE_INPUT, visualFollows: false }),
-        ).toBe(WRITE_REQUEST_BEFORE);
-        expect(
-          analyseSystemBlocks({
-            catalogBlock: 'CAT',
-            planBlock: 'PLAN',
-            visualFollows: false,
-          }),
-        ).toEqual(['CAT', 'PLAN']);
-      });
-
-      it("keeps Write answer's request within its cap with the line", () => {
-        const many = Array.from({ length: 50 }, (_, i) => ({
-          player: `Player ${i} ${'x'.repeat(200)}`,
-          goals: i,
-        }));
-        // Eight queries of about 11,000 characters each: over the cap.
-        const queries = Array.from({ length: 8 }, () =>
-          query({ rows: many, rowCount: many.length }),
-        );
-        const request = writeAnswerRequest({
-          ...WRITE_INPUT,
-          queries,
-          visualFollows: true,
-        });
-        expect(request.endsWith(WRITE_ANSWER_VISUAL_LINE)).toBe(true);
-        expect(request.includes('[rows shortened to fit]')).toBe(true);
-        // The line takes its room from the rows: the request is no longer.
-        const without = writeAnswerRequest({ ...WRITE_INPUT, queries });
-        expect(without.length).toBeGreaterThan(ANSWER_REQUEST_CAP);
-        expect(request.length).toBe(without.length);
-      });
-    });
+    describe('when a visual follows', () => {});
   });
 });
 
@@ -1313,92 +917,6 @@ describe('the carry-forward retry of the analysis (agents.md 5.11; workflows R27
   const firstFindings = () =>
     validateAttempt({ plan: PLAN, calls: FIRST_CALLS, queries: FIRST_QUERIES })
       .findings;
-
-  describe('the schemas keep what the retry needs', () => {
-    const COLUMNS = [
-      {
-        entity: 'world_cup.goals',
-        columns: [{ name: 'player', type: 'text' }],
-        more: 0,
-      },
-    ];
-    it("carries the columns on Plan's output and Analyse's input", () => {
-      const planned = plannedQuestionSchema.parse({
-        question: 'q',
-        catalog: [],
-        plan: PLAN,
-        imageNotes: '',
-        columns: COLUMNS,
-      });
-      expect(planned.columns).toEqual(COLUMNS);
-      expect(
-        analyseInputSchema.parse({ ...planned, extra: 1 }).columns,
-      ).toEqual(COLUMNS);
-      // A run stored before the columns were carried reads none.
-      expect(
-        analyseInputSchema.parse({ question: 'q', catalog: [], plan: PLAN })
-          .columns,
-      ).toEqual([]);
-    });
-
-    it("keeps attempt 1's calls, queries and findings in the loop's input (Validate's output to Analyse)", () => {
-      const validated = validateOutcomeSchema.parse({
-        ok: false,
-        attempt: 1,
-        findings: firstFindings(),
-        question: 'q',
-        catalog: [],
-        columns: COLUMNS,
-        plan: PLAN,
-        calls: FIRST_CALLS,
-        queries: FIRST_QUERIES,
-        imageNotes: '',
-      });
-      const next = analyseInputSchema.parse(validated);
-      expect(next.calls).toEqual(FIRST_CALLS);
-      expect(next.queries).toEqual(FIRST_QUERIES);
-      expect(next.findings).toEqual(firstFindings());
-      expect(next.columns).toEqual(COLUMNS);
-      expect(next.attempt).toBe(1);
-    });
-
-    it("keeps the earlier attempt and the retry's error on Analyse's output, and the kept set on Validate's", () => {
-      const outcome = analyseOutcomeSchema.parse({
-        question: 'q',
-        catalog: [],
-        plan: PLAN,
-        attempt: 2,
-        calls: [],
-        queries: [],
-        text: '',
-        stopped: false,
-        imageNotes: '',
-        earlier: {
-          calls: FIRST_CALLS,
-          queries: FIRST_QUERIES,
-          findings: firstFindings(),
-        },
-        retryError: 'The model failed.',
-      });
-      expect(outcome.earlier?.queries).toEqual(FIRST_QUERIES);
-      expect(outcome.retryError).toBe('The model failed.');
-      expect(outcome.columns).toEqual([]);
-      expect(
-        validateOutcomeSchema.parse({
-          ok: false,
-          attempt: 2,
-          findings: [],
-          question: 'q',
-          catalog: [],
-          plan: PLAN,
-          calls: [],
-          queries: [],
-          imageNotes: '',
-          kept: 'first',
-        }).kept,
-      ).toBe('first');
-    });
-  });
 
   describe('flaggedQueries', () => {
     it('names the failed check that flagged each query, and nothing when its check passed', () => {
@@ -1537,222 +1055,10 @@ describe('the carry-forward retry of the analysis (agents.md 5.11; workflows R27
     });
   });
 
-  describe('mergeAttempts', () => {
-    const first = () => ({
-      calls: FIRST_CALLS,
-      queries: FIRST_QUERIES,
-      findings: firstFindings(),
-    });
-
-    it("puts attempt 2's queries first, then attempt 1's that no failed check flagged", () => {
-      const merged = mergeAttempts({
-        plan: PLAN,
-        first: first(),
-        second: { calls: [sql()], queries: [ranked()] },
-      });
-      expect(merged.kept).toBe('merged');
-      expect(merged.ok).toBe(true);
-      expect(merged.queries).toEqual([ranked(), query()]);
-      // The calls follow the queries: attempt 2's, then the kept SQL call.
-      expect(merged.calls).toEqual([sql(), sql()]);
-      expect(merged.findings.every((f) => f.passed)).toBe(true);
-    });
-
-    it("checks the merged set in the order it ran: attempt 1's kept queries never resolve a problem attempt 2 left", () => {
-      // The retry takes a sample again; attempt 1's whole count ran before
-      // it, so it reads no whole data after the sample.
-      const again = sampled({
-        sql: "SELECT player, minute FROM world_cup.goals WHERE player <> '' LIMIT 2",
-      });
-      const merged = mergeAttempts({
-        plan: PLAN,
-        first: first(),
-        second: { calls: [sql()], queries: [again] },
-      });
-      expect(merged.ok).toBe(false);
-      expect(
-        merged.findings.find((f) => f.check === VALIDATION_CHECKS.sample)
-          ?.passed,
-      ).toBe(false);
-      // Write answer still reads attempt 2's queries first.
-      expect(merged.queries).toEqual([again, query()]);
-      // The same for a retry query cut at its row limit, and for a failed
-      // retry call that only attempt 1's earlier calls follow.
-      const cut = mergeAttempts({
-        plan: PLAN,
-        first: first(),
-        second: {
-          calls: [sql(), sql(true)],
-          queries: [
-            query({ truncated: true }),
-            query({ error: 'boom', rows: [], rowCount: 0 }),
-          ],
-        },
-      });
-      expect(cut.ok).toBe(false);
-    });
-
-    it("drops attempt 1's failed queries from the merged set", () => {
-      const merged = mergeAttempts({
-        plan: PLAN,
-        first: {
-          calls: [sql(true), sql(), sql()],
-          queries: [
-            query({ error: 'boom', rows: [], rowCount: 0 }),
-            query(),
-            sampled(),
-          ],
-          findings: firstFindings(),
-        },
-        second: { calls: [sql()], queries: [ranked()] },
-      });
-      expect(merged.queries).toEqual([ranked(), query()]);
-      expect(merged.calls).toEqual([sql(), sql()]);
-    });
-
-    it('keeps attempt 1 alone when the merged set fails a check attempt 1 passed', () => {
-      // Attempt 1: one result cut at its row limit (flagged), no tool error.
-      const cutQueries = [query({ truncated: true })];
-      const cutAttempt = {
-        calls: [sql()],
-        queries: cutQueries,
-        findings: validateAttempt({
-          plan: PLAN,
-          calls: [sql()],
-          queries: cutQueries,
-        }).findings,
-      };
-      // Attempt 2 fixes the cut but leaves a failed query unresolved.
-      const merged = mergeAttempts({
-        plan: PLAN,
-        first: cutAttempt,
-        second: {
-          calls: [sql(), sql(true)],
-          queries: [query(), query({ error: 'boom', rows: [], rowCount: 0 })],
-        },
-      });
-      expect(merged.kept).toBe('first');
-      expect(merged.queries).toEqual(cutQueries);
-      expect(merged.calls).toEqual([sql()]);
-      expect(merged.findings).toEqual(cutAttempt.findings);
-      expect(merged.ok).toBe(false);
-    });
-
-    it('keeps attempt 1 alone when attempt 2 ran nothing successfully', () => {
-      const merged = mergeAttempts({
-        plan: PLAN,
-        first: first(),
-        second: { calls: [], queries: [] },
-      });
-      expect(merged.kept).toBe('first');
-      expect(merged.queries).toEqual(FIRST_QUERIES);
-    });
-
-    it("keeps attempt 1 on the retry's error, with the warning-only check that never becomes a caveat", () => {
-      const merged = mergeAttempts({
-        plan: PLAN,
-        first: first(),
-        second: {
-          calls: [sql()],
-          queries: [ranked()],
-          retryError: 'the model failed',
-        },
-      });
-      expect(merged.kept).toBe('first');
-      expect(merged.queries).toEqual(FIRST_QUERIES);
-      const retry = merged.findings.at(-1)!;
-      expect(retry).toEqual({
-        check: 'Retry completed (warning only)',
-        passed: false,
-        detail:
-          "Attempt 2 stopped on an error (the model failed); the answer rests on attempt 1's queries.",
-      });
-      expect(VALIDATION_CHECKS.retry).toBe(retry.check);
-      expect(findingStatus(retry)).toBe('warning');
-      // It is never a failed check the next attempt is told to fix.
-      expect(merged.findings.slice(0, -1)).toEqual(firstFindings());
-    });
-
-    it("lets Write answer's 40,000-character cut drop attempt 1's queries before attempt 2's", () => {
-      const rows = Array.from({ length: 50 }, (_, n) => ({
-        n,
-        note: 'z'.repeat(900),
-      }));
-      const merged = mergeAttempts({
-        plan: PLAN,
-        first: {
-          calls: [sql()],
-          queries: [query({ sql: 'SELECT first_attempt', rows, rowCount: 50 })],
-          findings: [
-            {
-              check: VALIDATION_CHECKS.rowLimit,
-              passed: false,
-              detail: 'cut',
-            },
-          ],
-        },
-        second: {
-          calls: [sql()],
-          queries: [
-            query({ sql: 'SELECT second_attempt', rows, rowCount: 50 }),
-          ],
-        },
-      });
-      expect(merged.kept).toBe('merged');
-      const request = writeAnswerRequest({
-        question: 'q',
-        plan: PLAN,
-        queries: merged.queries,
-        findings: merged.findings,
-      });
-      // The cap holds the queries' room; their heading and the shortening
-      // note come on top, as before.
-      expect(request.length).toBeLessThanOrEqual(ANSWER_REQUEST_CAP + 80);
-      expect(request).toContain('1. I count the goals of each player.');
-      expect(request).toContain('SQL: SELECT second_attempt');
-      expect(request).not.toContain('SQL: SELECT first_attempt');
-    });
-  });
-
   describe('keptQueryOrigins (workflows R41)', () => {
-    const first = () => ({
-      calls: FIRST_CALLS,
-      queries: FIRST_QUERIES,
-      findings: firstFindings(),
-    });
     /** The kept set as Build visual receives it: through the workflow's state. */
     const carried = (queries: readonly AnalyseQuery[]) =>
       JSON.parse(JSON.stringify(queries)) as AnalyseQuery[];
-
-    it("finds the merged set's queries in their attempts: attempt 2's, then attempt 1's unflagged ones", () => {
-      const merged = mergeAttempts({
-        plan: PLAN,
-        first: first(),
-        second: { calls: [sql()], queries: [ranked()] },
-      });
-      expect(merged.kept).toBe('merged');
-      expect(
-        keptQueryOrigins([FIRST_QUERIES, [ranked()]], carried(merged.queries)),
-      ).toEqual([
-        { attempt: 2, index: 0 },
-        { attempt: 1, index: 0 },
-      ]);
-    });
-
-    it('finds attempt 1 alone when the merge kept it', () => {
-      const merged = mergeAttempts({
-        plan: PLAN,
-        first: first(),
-        second: { calls: [sql()], queries: [ranked()], retryError: 'down' },
-      });
-      expect(merged.kept).toBe('first');
-      expect(
-        keptQueryOrigins([FIRST_QUERIES, [ranked()]], carried(merged.queries)),
-      ).toEqual([
-        { attempt: 1, index: 0 },
-        { attempt: 1, index: 1 },
-      ]);
-    });
 
     it('tells two queries with the same SQL apart by what they returned', () => {
       const SQL = 'SELECT player FROM world_cup.goals';
@@ -2029,27 +1335,5 @@ describe('data dates in the analysis (agents.md 4.1 *Data dates*, 5.11 Validate)
       expect(checked.findings.map((f) => f.check)).not.toContain(check);
       expect(checked.findings).toHaveLength(5);
     }
-  });
-
-  it('drops the query measured against today when a retry measures from the data date', () => {
-    const first = validateAttempt(
-      {
-        plan: PLAN,
-        calls,
-        queries: [TODAY],
-        catalog: catalog('2023-07-02'),
-        question: PLAN.question,
-      },
-      NOW,
-    );
-    const merged = mergeAttempts({
-      plan: PLAN,
-      first: { calls, queries: [TODAY], findings: first.findings },
-      second: { calls, queries: [AS_OF] },
-      catalog: catalog('2023-07-02'),
-      question: PLAN.question,
-    });
-    expect(merged.ok).toBe(true);
-    expect(merged.queries).toEqual([AS_OF]);
   });
 });

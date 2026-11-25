@@ -1,36 +1,35 @@
 /**
- * The live-LLM integration layer of Answer a Business Question
- * (`npm run test:live-llm`): the built backend in its own process and data
- * dir, the REAL model (test/live-llm.ts) and the World Cup Postgres on
- * 55432, driven only through the HTTP API a client uses (api.md 30, 119,
+ * The live-LLM integration layer of Answer a Business Question (Avery +
+ * Michael) (`npm run test:live-llm`): the built backend in its own process
+ * and data dir, the REAL model (test/live-llm.ts) and the World Cup Postgres
+ * on 55432, driven only through the HTTP API a client uses (api.md 30, 119,
  * 121, 138, 140).
  *
  * It is not an eval. The evals judge how good an agent's answer is; this
  * layer checks that the parts fit together when a real model drives them:
- * every structured step's reply parses (no lenient fallback), Analyse's
- * queries run, Validate passes within its two attempts, the figures the
- * answer states equal the ones the same data gives when queried directly,
- * each query reaches the query inspector's evidence and can be explained,
- * and a wait, a resume, a follow-up and reference images keep the run on
- * its contract. Each case also writes what it saw (steps, attempts,
- * queries, timings) to `.qa-reports/live-llm/report.md` at the repo root.
+ * Avery briefs Michael, his queries run, the figures the answer states equal
+ * the ones the same data gives when queried directly, each query reaches the
+ * query inspector's evidence and can be explained, and a wait, a resume and
+ * a follow-up keep the run on its contract. Each case also writes what it
+ * saw (steps, queries, timings) to `.qa-reports/live-llm/report.md` at the
+ * repo root.
  *
- * Opt-in and not in qa.mjs: it costs model calls (about 50 per run) and a
- * real model is not deterministic. Skips, visibly, without a configured
- * model or the World Cup Postgres.
+ * Opt-in and not in qa.mjs: it costs model calls and a real model is not
+ * deterministic. Skips, visibly, without a configured model or the World Cup
+ * Postgres.
  */
 import {
   copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import request from 'supertest';
+import { ASK_WORKFLOW_ID } from '../../frontend/e2e/helpers/runs-api';
 import { type Backend, boot, stop } from './backend-process';
 import { liveLlmSettings } from './live-llm';
 import {
@@ -45,13 +44,9 @@ import {
   worldCupPool,
 } from './world-cup';
 
-const WORKFLOW = 'answer-business-question';
+const WORKFLOW = ASK_WORKFLOW_ID;
 const DATASET = 'World Cup Live LLM';
 const TABLES = ['matches', 'teams', 'goals', 'tournaments'];
-const BAR_CHART = resolve(
-  __dirname,
-  '../src/mastra/evals/__fixtures__/images/bar-chart-revenue.png',
-);
 const REPORT_DIR = resolve(__dirname, '../../.qa-reports/live-llm');
 
 jest.setTimeout(15 * 60_000);
@@ -67,15 +62,22 @@ const digits = (text: string) =>
 const states = (text: string, value: number) =>
   new RegExp(`(^|[^\\d.])${value}([^\\d]|$)`).test(digits(text));
 
-type Step = StoredRun['steps'][number];
-
-const stepsOf = (run: StoredRun, id: string): Step[] =>
-  run.steps.filter((step) => step.id === id);
-
-const sqlCalls = (run: StoredRun) =>
-  stepsOf(run, 'analyse').flatMap((step) =>
-    (step.toolCalls ?? []).filter((call) => call.tool === 'run_readonly_sql'),
-  );
+/** The run's queries: the `run_readonly_sql` records Michael's answer carries. */
+const queriesOf = (run: StoredRun) =>
+  (
+    (
+      run.answer as
+        | {
+            data?: {
+              tool: string;
+              input?: string;
+              rowCount?: number;
+              error?: string;
+            }[];
+          }
+        | undefined
+    )?.data ?? []
+  ).filter((record) => record.tool === 'run_readonly_sql');
 
 /** A whole stored run's observations for the report. */
 interface Observation {
@@ -84,7 +86,6 @@ interface Observation {
   status?: string;
   seconds: number;
   trail: string[];
-  attempts: number;
   queries: { sql?: string; rowCount?: number; error?: string }[];
   answer?: string;
   /** The run's error and each failed step's, when it failed. */
@@ -93,10 +94,10 @@ interface Observation {
 }
 
 describeLive(
-  'Answer a Business Question on the real model (live LLM, World Cup Postgres)',
+  'Answer a Business Question (Avery + Michael) on the real model (live LLM, World Cup Postgres)',
   () => {
     let backend: Backend | undefined;
-    const dataDir = mkdtempSync(join(tmpdir(), 'qti-abq-live-llm-'));
+    const dataDir = mkdtempSync(join(tmpdir(), 'qti-avery-michael-live-llm-'));
     const http = () => request.agent(backend!.url);
     const client = runClient(() => backend!.url);
     const observations: Observation[] = [];
@@ -117,8 +118,6 @@ describeLive(
         input: {
           question,
           datasets: [DATASET],
-          buildVisual: false,
-          approveSteps: false,
           ...extra,
         },
         ...(context ? { context } : {}),
@@ -141,9 +140,7 @@ describeLive(
         status: run?.status,
         seconds: Math.round((Date.now() - started) / 1000),
         trail: res.steps.filter((s) => !s.endsWith(':running')),
-        attempts: stepsOf(run, 'analyse').filter((s) => s.status !== 'skipped')
-          .length,
-        queries: sqlCalls(run).map((call) => ({
+        queries: queriesOf(run).map((call) => ({
           sql: call.input,
           rowCount: call.rowCount,
           error: call.error,
@@ -162,48 +159,12 @@ describeLive(
     };
 
     /** The contract every answered run keeps, whatever the model said. */
-    const expectAnswered = (run: StoredRun, seen: Observation) => {
+    const expectAnswered = (run: StoredRun) => {
       expect(run.status).toBe('success');
       expect(run.answer?.content?.trim().length).toBeGreaterThan(0);
-      // Plan's reply parsed: the lenient fallback leaves the scope empty.
-      const plan = stepsOf(run, 'plan').at(-1)?.output as
-        { plan?: { scope?: string; question?: string } } | undefined;
-      expect(plan?.plan?.question).toBeTruthy();
-      if (!plan?.plan?.scope)
-        seen.notes.push('Plan has no scope: its reply may not have parsed.');
-      expect(plan?.plan?.scope).toBeTruthy();
-      // At least one query ran, and the analysis ended within its attempts.
-      const calls = sqlCalls(run);
-      expect(calls.some((call) => !call.error)).toBe(true);
-      expect(seen.attempts).toBeGreaterThanOrEqual(1);
-      expect(seen.attempts).toBeLessThanOrEqual(2);
-      const last = stepsOf(run, 'validate').at(-1)?.output as
-        | {
-            ok?: boolean;
-            findings?: { check: string; passed: boolean; detail: string }[];
-          }
-        | undefined;
-      if (seen.attempts > 1) {
-        const first = stepsOf(run, 'validate')[0]?.output as typeof last;
-        seen.notes.push(
-          `Validate sent the analysis back: ${(first?.findings ?? [])
-            .filter((f) => !f.passed)
-            .map((f) => `${f.check} (${f.detail})`)
-            .join('; ')}`,
-        );
-      }
-      if (last && !last.ok) {
-        seen.notes.push(
-          `The last attempt did not pass Validate: ${(last.findings ?? [])
-            .filter((f) => !f.passed)
-            .map((f) => f.check)
-            .join(', ')}`,
-        );
-      }
-      // Wrap up counts the last attempt's queries.
-      expect(run.output).toMatchObject({
-        sqlQueries: expect.any(Number) as number,
-      });
+      // Michael ran at least one query that worked, and the answer carries it.
+      expect(queriesOf(run).some((call) => !call.error)).toBe(true);
+      expect(run.steps.map((step) => step.id)).toEqual(['orchestrate']);
     };
 
     /** The query inspector's evidence (agent-answers): one per query record, explainable. */
@@ -351,7 +312,7 @@ describeLive(
       }
       rmSync(dataDir, { recursive: true, force: true });
       const lines = [
-        `# Answer a Business Question on the real model`,
+        `# Answer a Business Question (Avery + Michael) on the real model`,
         '',
         `Model: ${settings?.provider} ${settings?.model} at ${settings?.baseUrl}. ${new Date().toISOString()}.`,
         `Truth from Postgres: ${truth.matches} matches, attendance ${truth.attendance}, top scorer ${truth.topScorer} (${truth.topGoals}).`,
@@ -361,7 +322,7 @@ describeLive(
         lines.push(
           `## ${seen.case}`,
           '',
-          `- Run ${seen.runId}: **${seen.status}** in ${seen.seconds}s, ${seen.attempts} analysis attempt(s).`,
+          `- Run ${seen.runId}: **${seen.status}** in ${seen.seconds}s.`,
           `- Steps: ${seen.trail.join(' → ')}`,
           ...seen.queries.map(
             (q, i) =>
@@ -392,7 +353,7 @@ describeLive(
       const { run, seen } = await observe('Count', () =>
         ask('How many matches were played in total?'),
       );
-      expectAnswered(run, seen);
+      expectAnswered(run);
       expect(states(run.answer!.content, truth.matches)).toBe(true);
       await expectInspectable(run, seen);
     });
@@ -401,27 +362,17 @@ describeLive(
       const { run, seen } = await observe('Ranking over a join', () =>
         ask('Which team scored the most goals?'),
       );
-      expectAnswered(run, seen);
+      expectAnswered(run);
       expect(run.answer!.content).toContain(truth.topScorer);
       expect(states(run.answer!.content, truth.topGoals)).toBe(true);
       await expectInspectable(run, seen);
     });
 
-    it("Build visual: Ryan charts the answer's rows; the answer still states the true total", async () => {
-      const { run, seen } = await observe('Build visual on', () =>
-        ask('What was the total attendance across all matches?', {
-          buildVisual: true,
-        }),
+    it('a total over every match: the answer states the true total attendance', async () => {
+      const { run } = await observe('Total attendance', () =>
+        ask('What was the total attendance across all matches?'),
       );
-      expectAnswered(run, seen);
-      const built = stepsOf(run, 'build-visual')[0];
-      expect(built?.status).toBe('success');
-      expect(built?.output).toHaveProperty('visual');
-      seen.notes.push(
-        `Build visual: ${JSON.stringify(
-          (built?.output as { visual?: unknown }).visual,
-        ).slice(0, 400)}`,
-      );
+      expectAnswered(run);
       expect(states(run.answer!.content, truth.attendance)).toBe(true);
     });
 
@@ -434,51 +385,42 @@ describeLive(
         first.seen.notes.push(
           'The model did not ask: it answered with its own reading.',
         );
-        expectAnswered(first.run, first.seen);
+        expectAnswered(first.run);
         return;
       }
       const waiting = first.run.waitingFor as
         { stepId: string; question: string; options: string[] } | undefined;
-      expect(['plan', 'analyse']).toContain(waiting?.stepId);
+      expect(waiting?.stepId).toBe('orchestrate');
       expect(waiting?.question).toBeTruthy();
       first.seen.notes.push(
-        `Asked at ${waiting!.stepId}: "${waiting!.question}" (${(waiting!.options ?? []).join(' | ')})`,
+        `Asked: "${waiting!.question}" (${(waiting!.options ?? []).join(' | ')})`,
       );
-      if (waiting!.stepId === 'plan') {
-        expect(waiting!.options.length).toBeGreaterThanOrEqual(2);
-        expect(waiting!.options.length).toBeLessThanOrEqual(4);
-      }
       const answer = waiting!.options?.[0] ?? 'The team with the most wins';
       const resumed = await observe('Ambiguous question, answered', () =>
-        client.resume(first.run.id, { stepId: waiting!.stepId, answer }),
+        client.resume(first.run.id, { stepId: 'orchestrate', answer }),
       );
       expect(resumed.run.id).toBe(first.run.id);
-      expectAnswered(resumed.run, resumed.seen);
-      // Plan never asks twice.
+      expectAnswered(resumed.run);
+      // She asks once: the answer ends the wait.
       expect(resumed.res.frames.some((f) => f.type === 'input-required')).toBe(
         false,
       );
     });
 
-    it("a reference image: Zoe's notes reach Plan, and an unrelated chart does not change the data's answer", async () => {
-      const png = `data:image/png;base64,${readFileSync(BAR_CHART).toString('base64')}`;
-      const { run, seen } = await observe('Reference image', () =>
-        ask('How many matches were played in total?', { images: [png] }),
+    it('a follow-up goes on from the earlier answer and states its own figure', async () => {
+      const first = await observe('Follow-up, first', () =>
+        ask('How many matches were played in total?'),
       );
-      expectAnswered(run, seen);
-      const read = stepsOf(run, 'read-images')[0];
-      expect(read?.status).toBe('success');
-      const imageNotes = (read?.output as { imageNotes?: unknown } | undefined)
-        ?.imageNotes;
-      const notes = typeof imageNotes === 'string' ? imageNotes : '';
-      seen.notes.push(
-        `Image notes: ${notes.replace(/\s+/g, ' ').slice(0, 300)}`,
+      expectAnswered(first.run);
+      const { run } = await observe('Follow-up', () =>
+        ask(
+          'And how many of them were finals?',
+          {},
+          { fromRunId: first.run.id },
+        ),
       );
-      expect(notes).toContain('1,204.50');
-      expect(notes).not.toContain('The Image Reader returned no description.');
-      const planInput = JSON.stringify(stepsOf(run, 'plan')[0]?.input ?? {});
-      expect(planInput).toContain('1,204.50');
-      expect(states(run.answer!.content, truth.matches)).toBe(true);
+      expectAnswered(run);
+      expect(states(run.answer!.content, truth.finals)).toBe(true);
     });
   },
 );

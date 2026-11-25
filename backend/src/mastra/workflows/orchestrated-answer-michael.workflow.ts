@@ -5,24 +5,24 @@ import {
   type ExecuteFunctionParams,
 } from '@mastra/core/workflows';
 import type { z } from 'zod';
-import { clarifyingQuestionOf } from './answer-business-question.steps';
+import { clarifyingQuestionOf } from './analysis.steps';
 import {
-  ORCHESTRATED_ANSWER_RUNTIME_KEY,
-  ORCHESTRATED_ANSWER_STEP_SCHEMAS,
-  ORCHESTRATED_ANSWER_STEPS,
-  ORCHESTRATED_ANSWER_WORKFLOW_ID,
-  type OrchestratedAnswerRuntime,
-} from './orchestrated-answer.steps';
+  ORCHESTRATED_MICHAEL_RUNTIME_KEY,
+  ORCHESTRATED_MICHAEL_STEP_SCHEMAS,
+  ORCHESTRATED_MICHAEL_STEPS,
+  ORCHESTRATED_MICHAEL_WORKFLOW_ID,
+  type OrchestratedMichaelRuntime,
+} from './orchestrated-answer-michael.steps';
 import { engineInputSchema, withContract } from './workflow-contract';
 
-// Answer a Business Question (orchestrated) as a workflow defined in code
-// (workflows R45; agents.md 5.22): one step, Orchestrate, where Avery, the
+// Answer a Business Question (Avery + Michael) as a workflow defined in code
+// (workflows R45; agents.md 5.23): one step, Orchestrate, where Avery, the
 // Chief of Staff, calls the team as her tools. When she asks the user a
 // question the step suspends the run (ADR-0043, api.md 138); resumed with
 // the answer, she goes on with it. A snapshot is kept only while it waits.
 
-const [ORCHESTRATE] = ORCHESTRATED_ANSWER_STEPS;
-const SCHEMAS = ORCHESTRATED_ANSWER_STEP_SCHEMAS.orchestrate;
+const [ORCHESTRATE] = ORCHESTRATED_MICHAEL_STEPS;
+const SCHEMAS = ORCHESTRATED_MICHAEL_STEP_SCHEMAS.orchestrate;
 
 type OrchestrateParams = ExecuteFunctionParams<
   unknown,
@@ -44,8 +44,8 @@ const orchestrateStep = createStep({
     ORCHESTRATE.title,
     SCHEMAS,
     async (params: OrchestrateParams) => {
-      const runtime: OrchestratedAnswerRuntime | undefined =
-        params.requestContext.get(ORCHESTRATED_ANSWER_RUNTIME_KEY);
+      const runtime: OrchestratedMichaelRuntime | undefined =
+        params.requestContext.get(ORCHESTRATED_MICHAEL_RUNTIME_KEY);
       if (!runtime) throw new Error('The Orchestrate step has no turn to run');
       // Resumed after Avery's question: she goes on with the user's answer.
       const asked = params.resumeData
@@ -66,7 +66,6 @@ const orchestrateStep = createStep({
       });
       if (done.clarification && !done.stopped) {
         return params.suspend({
-          kind: 'clarify',
           question: done.clarification.question,
           options: done.clarification.options,
         });
@@ -77,10 +76,10 @@ const orchestrateStep = createStep({
   ),
 });
 
-export const orchestratedAnswerWorkflow = createWorkflow({
-  id: ORCHESTRATED_ANSWER_WORKFLOW_ID,
+export const orchestratedMichaelWorkflow = createWorkflow({
+  id: ORCHESTRATED_MICHAEL_WORKFLOW_ID,
   description:
-    'Answer a Business Question (orchestrated): Avery, the Chief of Staff, decides which agents answer the question and is the only one who talks to the user.',
+    'Answer a Business Question (Avery + Michael): Avery, the Chief of Staff, briefs Michael, who answers from the data, and is the only one who talks to the user.',
   inputSchema: SCHEMAS.input,
   outputSchema: SCHEMAS.output,
   options: {

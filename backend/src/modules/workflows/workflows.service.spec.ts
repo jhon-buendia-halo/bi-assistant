@@ -22,7 +22,7 @@ import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
 import { setAgentModelResolver } from '../../mastra/model-resolver';
 import { agentWorkflow } from '../../mastra/workflows/agent-workflows';
-import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/answer-business-question.steps';
+import { ORCHESTRATED_MICHAEL_STEPS } from '../../mastra/workflows/orchestrated-answer-michael.steps';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type { SkillDoc } from '../skills/entities/skill.entity';
@@ -75,9 +75,6 @@ const ANTHROPIC_VIEW = {
   reasoningEffort: null,
 };
 
-const V2_DESCRIPTION =
-  'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.';
-
 function build(
   datasets: { name: string; datasourceKind?: string }[] = [
     { name: 'World Cup Core', datasourceKind: 'postgres' },
@@ -117,7 +114,14 @@ function build(
       '',
       'You design the visual.',
     ),
-    // The agents of v2's Plan and Write answer steps (agents.md 5.11).
+    // Avery, the orchestrator of Avery + Michael (agents.md 5.23).
+    'chief-of-staff': fakeAgent(
+      'Chief of Staff',
+      ['answer_from_data'],
+      '',
+      'You are Avery.',
+    ),
+    // Olivia and Jessica, in the library (agents.md 5.11).
     'analysis-planner': fakeAgent(
       'Analysis Planner',
       [],
@@ -170,6 +174,7 @@ const READINESS_SUMMARY = expect.objectContaining({
   name: 'Assess Data Readiness',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-engineering', name: 'Data Engineering' },
   // Read images first (workflows R35), then its seven steps (Rows behind
   // findings since roadmap 1.28.11).
   stepCount: 8,
@@ -182,93 +187,13 @@ const READINESS_SUMMARY = expect.objectContaining({
   ],
 }) as unknown;
 
-/** Insights Analyst, as `GET /workflows` lists it. */
-const ANSWER_BUSINESS_QUESTION_SUMMARY = {
-  id: 'answer-business-question',
-  name: 'Answer a Business Question',
-  description: V2_DESCRIPTION,
-  kind: 'code',
-  owner: 'Official',
-  // Every agent its steps run: Michael, then Zoe (Read images), Olivia
-  // (Plan), Jessica (Write answer) and Ryan (Build visual).
-  agents: [
-    { key: 'insights-analyst', name: 'Michael', role: 'Insights Analyst' },
-    { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
-    { key: 'analysis-planner', name: 'Olivia', role: 'Analysis Lead' },
-    { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
-    { key: 'visualization', name: 'Ryan', role: 'Visualization Designer' },
-  ],
-  stepCount: 9,
-  bar: 'steps',
-  trigger: 'run',
-  input: [
-    {
-      name: 'question',
-      label: 'Question',
-      type: 'textarea',
-      required: true,
-      placeholder: 'Ask a question about your data',
-      maxLength: 4000,
-      usedBy: ['read-images', 'receive-question'],
-    },
-    {
-      // Only Read images reads them (workflows R35; api.md 116).
-      name: 'images',
-      label: 'Reference images',
-      type: 'images',
-      required: false,
-      max: 4,
-      help: 'Paste, drop or attach up to 4 PNG, JPEG or WebP images, 5 MB each.',
-      usedBy: ['read-images'],
-    },
-    {
-      name: 'datasets',
-      label: 'Datasets',
-      type: 'datasets',
-      required: true,
-      usedBy: ['receive-question'],
-    },
-    {
-      // Picks the branch to Build visual; no step reads it.
-      name: 'buildVisual',
-      label: 'Build a visual: Ryan charts the results of the answer',
-      type: 'boolean',
-      required: false,
-      default: true,
-      usedBy: [],
-    },
-    {
-      // Makes the run interactive (workflows R44); no step reads it.
-      name: 'approveSteps',
-      label: "Approve each step: every agent's work waits for your OK",
-      type: 'boolean',
-      required: false,
-      default: true,
-      usedBy: [],
-    },
-  ],
-  datasets: [],
-  missingDatasets: [],
-  starterQuestions: [],
-};
-
-/** Answer a Business Question (orchestrated), as `GET /workflows` lists it. */
-const ORCHESTRATED_SUMMARY = expect.objectContaining({
-  id: 'orchestrated-answer',
-  name: 'Answer a Business Question (orchestrated)',
-  kind: 'code',
-  owner: 'Official',
-  stepCount: 1,
-  bar: 'steps',
-  trigger: 'run',
-}) as unknown;
-
 /** Answer a Business Question (Avery + Michael), as `GET /workflows` lists it (agents.md 5.23). */
 const AVERY_MICHAEL_SUMMARY = expect.objectContaining({
   id: 'orchestrated-answer-michael',
   name: 'Answer a Business Question (Avery + Michael)',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   stepCount: 1,
   bar: 'steps',
   trigger: 'run',
@@ -287,8 +212,6 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     await ctx.userAgents.create(agentConfig('Sketch', ['World Cup Core']));
 
     expect(await ctx.service.list()).toEqual([
-      ANSWER_BUSINESS_QUESTION_SUMMARY,
-      ORCHESTRATED_SUMMARY,
       AVERY_MICHAEL_SUMMARY,
       READINESS_SUMMARY,
     ]);
@@ -296,7 +219,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
 
   it('lists Assess Data Readiness on one PostgreSQL or Databricks dataset, its Explain report run by the Data Readiness Agent (agents.md 5.13)', async () => {
     ctx = build();
-    const [, , , readiness] = await ctx.service.list();
+    const [, readiness] = await ctx.service.list();
     expect(readiness.agents.map((agent) => agent.key)).toEqual([
       'data-readiness',
       'image-reader',
@@ -321,12 +244,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   it('lists the same workflows while no dataset qualifies for the Data Readiness Agent', async () => {
     ctx = build([{ name: 'Orders API', datasourceKind: 'rest' }]);
     const workflows = await ctx.service.list();
-    expect(workflows).toEqual([
-      ANSWER_BUSINESS_QUESTION_SUMMARY,
-      ORCHESTRATED_SUMMARY,
-      AVERY_MICHAEL_SUMMARY,
-      READINESS_SUMMARY,
-    ]);
+    expect(workflows).toEqual([AVERY_MICHAEL_SUMMARY, READINESS_SUMMARY]);
     expect(workflows[0]).not.toHaveProperty('runRequirement');
     expect(workflows[0]).not.toHaveProperty('chatRequirement');
   });
@@ -361,109 +279,31 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       ]);
     });
 
-    it("orchestrated-answer's detail is its own one step and two edges, and answer-business-question keeps its nine (they share a primary agent)", async () => {
+    it("Avery + Michael's steps are agentWorkflow('insights-analyst')'s, with their declared schemas, its edges and contract hash", async () => {
       ctx = build();
-      const orchestrated = await ctx.service.get('orchestrated-answer');
-      expect(orchestrated.steps.map((step) => step.id)).toEqual([
-        'orchestrate',
-      ]);
-      expect(orchestrated.edges).toEqual([
-        { from: 'start', to: 'orchestrate', kind: 'next' },
-        { from: 'orchestrate', to: 'end', kind: 'next' },
-      ]);
-      // Avery's step shows her own tools and limit, and the agent behind
-      // each tool of her team, never Michael's tools (agents.md 2.21).
-      expect(orchestrated.steps[0].agent).toMatchObject({
-        key: 'chief-of-staff',
-        name: 'Avery',
-        tools: [
-          'read_reference_images',
-          'plan_analysis',
-          'analyse_data',
-          'write_answer',
-          'build_visual',
-          'build_dashboard',
-          'export_conversation',
-          'ask_clarification',
-        ],
-        maxSteps: 16,
-        team: [
-          { tool: 'read_reference_images', key: 'image-reader', name: 'Zoe' },
-          { tool: 'plan_analysis', key: 'analysis-planner', name: 'Olivia' },
-          { tool: 'analyse_data', key: 'insights-analyst', name: 'Michael' },
-          { tool: 'write_answer', key: 'answer-writer', name: 'Jessica' },
-          { tool: 'build_visual', key: 'visualization', name: 'Ryan' },
-          { tool: 'build_dashboard', key: 'bi-analyst', name: 'Clara' },
-        ],
-      });
-      const answer = await ctx.service.get('answer-business-question');
-      expect(
-        answer.steps.find((s) => s.id === 'analyse')?.agent,
-      ).not.toHaveProperty('team');
-      expect(answer.steps.map((step) => step.id)).toEqual([
-        'read-images',
-        'receive-question',
-        'load-catalog',
-        'plan',
-        'analyse',
-        'validate',
-        'write-answer',
-        'build-visual',
-        'wrap-up',
-      ]);
-    });
-
-    it("answer-business-question's steps are agentWorkflow('insights-analyst')'s, with their declared schemas", async () => {
-      ctx = build();
-      const detail = await ctx.service.get('answer-business-question');
-      // Its agent steps name their own agent's key (Zoe reads the images,
-      // Olivia plans, Michael analyses, Jessica writes), and every step
-      // carries its declared input and output schema (api.md 117; agents.md
-      // 5.11, 5.12).
-      expect(
-        detail.steps.flatMap((step) => (step.agent ? [step.agent.key] : [])),
-      ).toEqual([
-        'image-reader',
-        'analysis-planner',
-        'insights-analyst',
-        'answer-writer',
-        'visualization',
-      ]);
+      const detail = await ctx.service.get('orchestrated-answer-michael');
       expect(detail.steps).toEqual(
         agentWorkflow('insights-analyst')!.steps.map((step, index) => ({
           ...step,
-          inputSchema: ANSWER_BUSINESS_QUESTION_STEPS[index].inputSchema,
-          outputSchema: ANSWER_BUSINESS_QUESTION_STEPS[index].outputSchema,
+          inputSchema: ORCHESTRATED_MICHAEL_STEPS[index].inputSchema,
+          outputSchema: ORCHESTRATED_MICHAEL_STEPS[index].outputSchema,
         })),
       );
-      expect(detail.steps.some((step) => step.agent)).toBe(true);
       expect(detail).toMatchObject({
-        id: 'answer-business-question',
-        stepCount: 9,
+        id: 'orchestrated-answer-michael',
+        stepCount: 1,
         contractHash: CODE_WORKFLOWS[0].contractHash,
       });
       expect(detail.contractHash).toMatch(/^[0-9a-f]{12}$/);
-      // Plan receives the question (a string), the catalog and Read
-      // images' notes ('' without images; optional, so a run stored before
-      // Read images existed resumes with none).
-      expect(detail.steps[3]).toMatchObject({ id: 'plan' });
-      expect(detail.steps[3].inputSchema).toMatchObject({
-        type: 'object',
-        properties: {
-          question: { type: 'string' },
-          catalog: { type: 'array', items: { type: 'object' } },
-          columns: { type: 'array', items: { type: 'object' } },
-          imageNotes: { type: 'string', default: '' },
-        },
-        required: ['question', 'catalog', 'columns'],
-      });
       // The flow is its edges, a copy of the catalogue's (api.md 117).
-      expect(detail.edges).toEqual(CODE_WORKFLOWS[0].edges);
+      expect(detail.edges).toEqual([
+        { from: 'start', to: 'orchestrate', kind: 'next' },
+        { from: 'orchestrate', to: 'end', kind: 'next' },
+      ]);
       expect(detail.edges).not.toBe(CODE_WORKFLOWS[0].edges);
-      // A run needs the hash and the edges too (data-model 3.16; the loop
-      // steps keep one entry per attempt, api.md 3.6).
+      // A run needs the hash and the edges too (data-model 3.16).
       await expect(
-        ctx.service.definition('answer-business-question'),
+        ctx.service.definition('orchestrated-answer-michael'),
       ).resolves.toMatchObject({
         contractHash: CODE_WORKFLOWS[0].contractHash,
         edges: CODE_WORKFLOWS[0].edges,
@@ -475,7 +315,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
 
     it('details the agents its steps call: their key, name, model, system prompt and tools (as api.md 34 toolDetails); no model without an LLM', async () => {
       ctx = build();
-      const detail = await ctx.service.get('answer-business-question');
+      const detail = await ctx.service.get('orchestrated-answer-michael');
       expect(detail.agents).toEqual([
         {
           key: 'insights-analyst',
@@ -484,83 +324,44 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
           role: 'Insights Analyst',
           model: null,
           systemPrompt: 'You answer with the core data tools.',
+          // No step of his own: Avery calls him, so none of his tools here.
+          toolDetails: [],
+        },
+        {
+          key: 'chief-of-staff',
+          name: 'Avery',
+          role: 'Chief of Staff',
+          model: null,
+          systemPrompt: 'You are Avery.',
           toolDetails: [
             {
-              name: 'describe_entity',
-              description: 'describe_entity description',
+              name: 'answer_from_data',
+              description: 'answer_from_data description',
               inputs: [],
-            },
-            {
-              name: 'list_entities',
-              description: 'list_entities description',
-              inputs: [],
-            },
-            {
-              name: 'run_readonly_sql',
-              description: 'run_readonly_sql description',
-              inputs: ['sql', 'reason'],
             },
           ],
-        },
-        // Zoe, Olivia and Jessica: one model call each, on their own job
-        // description (Zoe's only when the run has images).
-        {
-          key: 'image-reader',
-          name: 'Zoe',
-          role: 'Image Analyst',
-          model: null,
-          systemPrompt: 'You describe the reference images.',
-          toolDetails: [],
-        },
-        {
-          key: 'analysis-planner',
-          name: 'Olivia',
-          role: 'Analysis Lead',
-          model: null,
-          systemPrompt: 'You plan a data analysis.',
-          toolDetails: [],
-        },
-        {
-          key: 'answer-writer',
-          name: 'Jessica',
-          role: 'Insights Writer',
-          model: null,
-          systemPrompt: 'You write the final answer.',
-          toolDetails: [],
-        },
-        // Ryan designs the visual in one model call: none of his tools
-        // here, though he has some.
-        {
-          key: 'visualization',
-          name: 'Ryan',
-          role: 'Visualization Designer',
-          model: null,
-          systemPrompt: 'You design the visual.',
-          toolDetails: [],
         },
       ]);
       ctx.db.close();
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
-      const withLlm = await ctx.service.get('answer-business-question');
+      const withLlm = await ctx.service.get('orchestrated-answer-michael');
       expect(withLlm.agents[0].model).toBe('anthropic/claude-sonnet-4-6');
     });
 
-    it("shows Answer a Business Question's own model on its agents when the saved model is a Claude model (agents.md 1.3)", async () => {
+    it("shows the team's step model on Avery + Michael's agents when the saved model is a Claude model (agents.md 1.3)", async () => {
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
       setAgentModelResolver(() =>
         Promise.resolve('anthropic/claude-sonnet-4-6' as const),
       );
       try {
-        const detail = await ctx.service.get('answer-business-question');
-        expect(
-          detail.agents.map((agent) => agent.model).filter(Boolean),
-        ).not.toHaveLength(0);
+        const detail = await ctx.service.get('orchestrated-answer-michael');
+        expect(detail.agents).toHaveLength(2);
         for (const agent of detail.agents) {
           expect(agent.model).toBe('anthropic/claude-opus-5-5');
         }
         // Another saved model: every agent keeps it.
         setAgentModelResolver(() => Promise.resolve('openai/gpt-5.2' as const));
-        const other = await ctx.service.get('answer-business-question');
+        const other = await ctx.service.get('orchestrated-answer-michael');
         expect(other.agents[0].model).toBe('anthropic/claude-sonnet-4-6');
       } finally {
         setAgentModelResolver(() =>
@@ -571,13 +372,13 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
 
     it('shortens a system prompt longer than 20 000 characters, and says so', async () => {
       ctx = build(undefined, { v2Prompt: 'p'.repeat(20_001) });
-      const [agent] = (await ctx.service.get('answer-business-question'))
+      const [agent] = (await ctx.service.get('orchestrated-answer-michael'))
         .agents;
       expect(agent.systemPrompt).toHaveLength(20_000);
       expect(agent.systemPromptTruncated).toBe(true);
       ctx.db.close();
       ctx = build(undefined, { v2Prompt: 'p'.repeat(20_000) });
-      const [exact] = (await ctx.service.get('answer-business-question'))
+      const [exact] = (await ctx.service.get('orchestrated-answer-michael'))
         .agents;
       expect(exact.systemPrompt).toHaveLength(20_000);
       expect(exact).not.toHaveProperty('systemPromptTruncated');
@@ -585,13 +386,10 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
 
     it('lists the summary agents only, without model or prompt (api.md 116 unchanged)', async () => {
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
-      const [v2] = await ctx.service.list();
-      expect(v2.agents).toEqual([
+      const [avery] = await ctx.service.list();
+      expect(avery.agents).toEqual([
         { key: 'insights-analyst', name: 'Michael', role: 'Insights Analyst' },
-        { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
-        { key: 'analysis-planner', name: 'Olivia', role: 'Analysis Lead' },
-        { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
-        { key: 'visualization', name: 'Ryan', role: 'Visualization Designer' },
+        { key: 'chief-of-staff', name: 'Avery', role: 'Chief of Staff' },
       ]);
     });
 
@@ -599,9 +397,11 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       // The removed one-step agent workflows (1.23.35).
       'agent:assistant',
       'agent:data-readiness',
-      // The removed code workflows (1.23.35).
+      // The removed code workflows (1.23.35, and M18's two).
       'seq-text-demo',
       'deep-analysis',
+      'answer-business-question',
+      'orchestrated-answer',
       'agent:sql-fixer',
       'agent:insights-analyst',
       'agent:rfp',
@@ -643,11 +443,6 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
     [
       'insights-analyst',
       [
-        { id: 'answer-business-question', name: 'Answer a Business Question' },
-        {
-          id: 'orchestrated-answer',
-          name: 'Answer a Business Question (orchestrated)',
-        },
         {
           id: 'orchestrated-answer-michael',
           name: 'Answer a Business Question (Avery + Michael)',
@@ -659,10 +454,8 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
       'data-readiness',
       [{ id: 'data-readiness-assessment', name: 'Assess Data Readiness' }],
     ],
-    [
-      'visualization',
-      [{ id: 'answer-business-question', name: 'Answer a Business Question' }],
-    ],
+    // Ryan stays in the library, in no workflow.
+    ['visualization', []],
     ['sql-fixer', []],
   ])('%s is used in %p', async (key, expected) => {
     ctx = build();
@@ -695,10 +488,10 @@ describe('WorkflowsController (ids contain ":")', () => {
     const service = {
       list: jest.fn().mockResolvedValue([]),
       get: jest.fn((id: string) =>
-        id === 'answer-business-question'
+        id === 'orchestrated-answer-michael'
           ? Promise.resolve({
               id,
-              name: 'Answer a Business Question',
+              name: 'Answer a Business Question (Avery + Michael)',
               steps: [],
             })
           : Promise.reject(new NotFoundException(`Workflow "${id}" not found`)),
@@ -716,12 +509,12 @@ describe('WorkflowsController (ids contain ":")', () => {
     try {
       const server = app.getHttpServer() as Parameters<typeof request>[0];
       await request(server)
-        .get('/workflows/answer-business-question')
+        .get('/workflows/orchestrated-answer-michael')
         .expect(200)
         .expect(({ body }) =>
           expect(body).toMatchObject({
-            id: 'answer-business-question',
-            name: 'Answer a Business Question',
+            id: 'orchestrated-answer-michael',
+            name: 'Answer a Business Question (Avery + Michael)',
           }),
         );
       await request(server)
@@ -747,12 +540,12 @@ describe('WorkflowsController POST /workflows/:id/runs (api.md 118)', () => {
   it('answers 200 with the stored run, and a refusal with its status', async () => {
     const run = {
       id: 'r-1',
-      workflowId: 'answer-business-question',
+      workflowId: 'orchestrated-answer-michael',
       status: 'failed',
     };
     const service = {
       run: jest.fn((id: string, body: unknown) =>
-        id === 'answer-business-question'
+        id === 'orchestrated-answer-michael'
           ? Promise.resolve({ ...run, body })
           : Promise.reject(new NotFoundException(`Workflow "${id}" not found`)),
       ),
@@ -770,7 +563,7 @@ describe('WorkflowsController POST /workflows/:id/runs (api.md 118)', () => {
       const server = app.getHttpServer() as Parameters<typeof request>[0];
       const input = { question: 'Hi', datasets: ['World Cup Core'] };
       await request(server)
-        .post('/workflows/answer-business-question/runs')
+        .post('/workflows/orchestrated-answer-michael/runs')
         .send({ input })
         .expect(200)
         .expect(({ body }) =>

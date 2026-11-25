@@ -5,10 +5,8 @@
  * so the catalogue, the session code and the tests can read it without
  * loading Mastra. The Mastra workflow itself is built by story 1.23.4.
  */
-import type {
-  TurnCallsOutcome,
-  WorkflowStepEntry,
-} from './answer-business-question.steps';
+import type { TurnCallsOutcome } from './analysis.steps';
+import type { WorkflowStepEntry } from './workflow-contract';
 
 /** The engine every one-step workflow runs on (registered once, 1.23.4). */
 export const AGENT_TURN_WORKFLOW_ID = 'agent-turn';

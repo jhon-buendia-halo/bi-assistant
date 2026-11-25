@@ -4,9 +4,7 @@
  * workflow's, else the generic one from the step's declared output schema
  * (agents.md 5.12). No framework import.
  */
-import { answerBusinessQuestionStoryteller } from './answer-business-question.story';
 import { readImagesStory } from './read-images.story';
-import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from './answer-business-question.steps';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 import type { JsonSchema } from './workflow-contract';
 import {
@@ -17,10 +15,8 @@ import {
   type StoryStep,
 } from './workflow-story';
 
-/** The workflows that tell their own steps, by workflow id. */
-const STORYTELLERS: Readonly<Record<string, StepStoryteller>> = {
-  [ANSWER_BUSINESS_QUESTION_WORKFLOW_ID]: answerBusinessQuestionStoryteller,
-};
+/** The workflows that tell their own steps, by workflow id: none today. */
+const STORYTELLERS: Readonly<Record<string, StepStoryteller>> = {};
 
 /** A catalogued step's declared output schema, if any. */
 function outputSchemaOf(

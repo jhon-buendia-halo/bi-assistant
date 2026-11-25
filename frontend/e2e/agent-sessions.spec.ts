@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { WORLD_CUP_DATASET } from './helpers/app-actions';
-import { runWorkflow } from './helpers/runs-api';
+import { ASK_WORKFLOW_ID, runWorkflow } from './helpers/runs-api';
 import { runAnswer, runQuestionInTab } from './helpers/run-ui';
 import {
   UserAgentInput,
@@ -23,8 +23,8 @@ import { worldCupScalar } from './helpers/world-cup-db';
 /**
  * Mirrors the Feature "Sessions started from an agent" in
  * specs/capabilities/agent-answers/spec.md. Agents are a library with no Run:
- * the workflow this spec runs is Insights Analyst (`answer-business-question`),
- * whose model request equals a chat turn's. The model is a local
+ * the workflow this spec runs is Answer a Business Question (Avery + Michael)
+ * (`orchestrated-answer-michael`), whose Michael request equals a chat turn's. The model is a local
  * OpenAI-compatible stub that records what the backend sends it.
  */
 
@@ -72,10 +72,10 @@ async function openHub(page: Page): Promise<void> {
 async function openWorkflows(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'User journeys', exact: true })
+    .getByRole('button', { name: 'Workflows', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'User journeys', exact: true }),
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
 }
 
@@ -93,7 +93,7 @@ async function matchRowCount(): Promise<number> {
   return Number(await worldCupScalar('select count(*) from world_cup.matches'));
 }
 
-test('only Insights Analyst can be run, and no agent page offers a chat', async ({
+test('only Answer a Business Question can be run, and no agent page offers a chat', async ({
   page,
 }) => {
   await createUserAgent(page, {
@@ -101,11 +101,10 @@ test('only Insights Analyst can be run, and no agent page offers a chat', async 
     datasets: [WORLD_CUP_DATASET],
   });
 
-  // Given a Live user agent and a draft one, Then Workflows lists only v2.
+  // Given a Live user agent and a draft one, Then Workflows lists Answer a
+  // Business Question (Avery + Michael) and no agent of theirs.
   await openWorkflows(page);
-  await expect(
-    page.getByTestId('workflow-answer-business-question'),
-  ).toBeVisible();
+  await expect(page.getByTestId(`workflow-${ASK_WORKFLOW_ID}`)).toBeVisible();
   await expect(page.getByTestId('workflow-agent:assistant')).toHaveCount(0);
   await expect(page.getByTestId(`workflow-agent:${historianId}`)).toHaveCount(
     0,
@@ -146,32 +145,23 @@ test("an Answer a Business Question run can't write: the read-only guard rejects
   await runQuestionInTab(page, 'Tidy up the data', WORLD_CUP_DATASET);
   await expect(runAnswer(page)).toContainText(STUB_ANSWER);
 
-  // No query succeeded, so Validate sent Analyse back once (workflows R27):
-  // the DELETE was tried, and refused, in both attempts.
-  await expect(page.getByTestId('query-coverage-chip')).toHaveText([
-    'Failed',
-    'Failed',
-  ]);
-  for (const index of [0, 1]) {
-    await page.getByTestId(`query-row-${index}`).click();
-    await expect(page.getByTestId('query-inspector-position')).toHaveText(
-      `Source ${index + 1} of 2`,
-    );
-    await expect(
-      page
-        .getByTestId('query-inspector')
-        .getByText('Only read-only SELECT / WITH queries can be run.', {
-          exact: true,
-        }),
-    ).toBeVisible();
-  }
+  // Michael tried the DELETE once, and it was refused.
+  await expect(page.getByTestId('query-coverage-chip')).toHaveText(['Failed']);
+  await page.getByTestId('query-row-0').click();
+  await expect(
+    page
+      .getByTestId('query-inspector')
+      .getByText('Only read-only SELECT / WITH queries can be run.', {
+        exact: true,
+      }),
+  ).toBeVisible();
   await page.getByTestId('query-inspector-close').click();
 
   expect(rowsBefore).toBeGreaterThan(0);
   expect(await matchRowCount()).toBe(rowsBefore);
 });
 
-test('an Answer a Business Question run runs v2 on every question', async ({
+test('an Answer a Business Question run runs Michael on every question', async ({
   page,
 }) => {
   // Its five tools and the framework's skill tools (agents.md 2.11, 3.9).
@@ -188,14 +178,18 @@ test('an Answer a Business Question run runs v2 on every question', async ({
   ];
 
   for (const question of ['How many matches are there?', 'And in 2014?']) {
-    const result = await runWorkflow(page, 'answer-business-question', {
+    const result = await runWorkflow(page, ASK_WORKFLOW_ID, {
       question,
       datasets: [WORLD_CUP_DATASET],
-      approveSteps: false,
     });
     expect(result.status, result.body).toBe(200);
     expect(result.text).toContain(STUB_ANSWER);
-    // The run ran v2 (R61): its prompt and only its own tools.
+    // Avery briefed Michael, who ran with his prompt and only his own tools (R61).
+    expect(
+      stub.requests.some(
+        (request) => request.avery && JSON.stringify(request.messages).includes(question),
+      ),
+    ).toBe(true);
     const request = firstTurnRequest(question);
     expect(systemTexts(request)[0]).toContain('You are Questions to Insights');
     expect(systemTexts(request).join('\n')).not.toContain(BASE_PROMPT_START);

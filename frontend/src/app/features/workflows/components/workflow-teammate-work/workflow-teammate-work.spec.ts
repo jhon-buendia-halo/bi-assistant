@@ -181,7 +181,7 @@ describe('WorkflowTeammateWork (a teammate sub-node: asked, did, handed back)', 
   it('without a call: why there is nothing to tell, and the tool behind it in the technical details', () => {
     render({ ...TOOL, ran: false, calls: [] }, { hasRun: false });
     expect(text('workflow-teammate-empty')).toBe(
-      'Run the journey to see what Michael does when Avery calls them.',
+      'Run the workflow to see what Michael does when Avery calls them.',
     );
     render({ ...TOOL, calls: [] }, { hasRun: true });
     expect(text('workflow-teammate-empty')).toBe(

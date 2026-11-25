@@ -5,7 +5,7 @@ import {
   saveLenaiSettings,
   seedWorldCupDataset,
 } from './helpers/agents-api';
-import { V2_WORKFLOW_NAME, runQuestionOk } from './helpers/runs-api';
+import { ASK_WORKFLOW_NAME, runQuestionOk } from './helpers/runs-api';
 import {
   LlmStub,
   STUB_ANSWER,
@@ -24,14 +24,14 @@ import { scenarioStep } from './support/demo-captions';
  * 1.21.14–1.21.16). The
  * calls are real: a run's agent turn against the recording LLM stub, traced
  * by Mastra into the app's trace store and read back by the Monitoring API.
- * The runs are of Insights Analyst (`answer-business-question`), whose Analyse
- * step is one turn of the `insights-analyst` agent; a run's calls are named
- * `Insights Analyst: <the question>` (monitoring R45).
+ * The runs are of Answer a Business Question (Avery + Michael): Avery's turn
+ * briefs Michael, one turn of the `insights-analyst` agent; a run's calls are
+ * named `<the workflow>: <the question>` (monitoring R45).
  */
 
 const QUESTION = 'Which team scored the most goals?';
-/** The name Monitoring gives the v2 run on `question` (R45). */
-const runName = (question: string) => `${V2_WORKFLOW_NAME}: ${question}`;
+/** The name Monitoring gives the run on `question` (R45). */
+const runName = (question: string) => `${ASK_WORKFLOW_NAME}: ${question}`;
 /** The name the `insights-analyst` agent's calls are attributed to. */
 const AGENT = 'Insights Analyst';
 /** saveLenaiSettings' deployment name, the model the calls are made with. */
@@ -70,13 +70,13 @@ const railItem = (page: Page, name: string) =>
 const rows = (page: Page) =>
   page.getByTestId('llm-calls-table').locator('[data-testid^="llm-call-row-"]');
 
-/** The v2 agent's call of the run on QUESTION. */
+/** Michael's call of the run on QUESTION. */
 const assistantRow = (page: Page): Locator =>
   rows(page)
     .filter({ hasText: AGENT })
     .filter({ hasText: runName(QUESTION) });
 
-/** Runs Insights Analyst on QUESTION and waits for its answer. */
+/** Runs Answer a Business Question (Avery + Michael) on QUESTION and waits for its answer. */
 async function askInRun(page: Page): Promise<void> {
   const result = await runQuestionOk(page, QUESTION);
   expect(result.text).toContain(STUB_ANSWER);
@@ -146,8 +146,7 @@ test.describe('Feature: LLM calls', () => {
         `Then every call listed is a succeeded "${AGENT}" call`,
         async () => {
           await expect(assistantRow(page).first()).toBeVisible();
-          // Plan's and Write answer's calls (their own agents since Olivia
-          // and Jessica, agents.md 5.11) leave the list once the filter applies.
+          // Calls of other agents (Avery's) leave the list once the filter applies.
           await expect(
             rows(page).filter({ hasText: `${AGENT}: ` }),
           ).toHaveCount(0);
@@ -805,10 +804,10 @@ test.describe('Feature: Runs in Monitoring', () => {
     "A workflow run's call is attributed to the run",
     { tag: ['@demo', '@story-1.23.20'] },
     async ({ page }) => {
-      const runName = `${V2_WORKFLOW_NAME}: ${RUN_QUESTION}`;
+      const runName = `${ASK_WORKFLOW_NAME}: ${RUN_QUESTION}`;
       await scenarioStep(
         page,
-        `Given I ran the "${V2_WORKFLOW_NAME}" user journey on a question`,
+        `Given I ran the "${ASK_WORKFLOW_NAME}" workflow on a question`,
         async () => {
           await runQuestionOk(page, RUN_QUESTION);
         },
@@ -825,7 +824,7 @@ test.describe('Feature: Runs in Monitoring', () => {
       });
       await scenarioStep(
         page,
-        `Then the call is listed under the run "${V2_WORKFLOW_NAME}: <title>"`,
+        `Then the call is listed under the run "${ASK_WORKFLOW_NAME}: <title>"`,
         async () => {
           await expect(
             rows(page).filter({ hasText: runName }).first(),

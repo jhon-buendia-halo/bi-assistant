@@ -11,8 +11,9 @@
 import {
   contractStepEntry,
   type ContractStepEntry,
+  type WorkflowEdge,
   type WorkflowStepExit,
-} from './answer-business-question.steps';
+} from './workflow-contract';
 import { CONSUMPTION_GAP_STEP_SCHEMAS } from './consumption-gap-analysis.schemas';
 import type {
   FieldMapping,
@@ -27,7 +28,6 @@ import type {
   DashboardBlueprint,
   MockBundle,
 } from './recreate-dashboard.steps';
-import type { WorkflowEdge } from './workflow-contract';
 
 /** The workflow's registry key and id. */
 export const CONSUMPTION_GAP_WORKFLOW_ID = 'consumption-gap-analysis';

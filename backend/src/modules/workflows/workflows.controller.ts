@@ -116,8 +116,8 @@ export function streamPrepared(
  * The workflow catalogue (api.md 2.6.2; capability workflows). Workflows
  * are defined in code, so there is no write route (workflows R3); a
  * workflow with input fields can be run (118) and run streamed (119). The
- * catalogue holds only `answer-business-question` (1.23.35); any other id, such as a
- * former `agent:assistant`, answers 404. Clients send ids URL-encoded and
+ * catalogue holds only the code workflows; any other id, such as a removed
+ * one or a former `agent:assistant`, answers 404. Clients send ids URL-encoded and
  * NestJS decodes `:id`.
  */
 @Controller('workflows')

@@ -5,7 +5,6 @@ import { NodeChatAvailability } from '../../models/workflow.model';
 import { WorkflowRunsApiService } from '../../services/workflow-runs-api.service';
 import { buildNodeInspections } from '../../services/workflow-node-inspection';
 import {
-  GRAPH_PLAN,
   GRAPH_RETRY_RUN,
   GRAPH_WORKFLOW,
 } from '../../services/workflow-graph.testing';
@@ -596,7 +595,7 @@ describe('WorkflowNodeDialog', () => {
     it('explains why it cannot chat yet before a run', () => {
       openWithChat(node('analyse'), { state: 'no-run' });
       expect(text('workflow-node-chat-unavailable')).toBe(
-        "Execute the user journey, then chat with this agent persona about this step's data.",
+        "Run the workflow, then chat with this agent persona about this step's data.",
       );
       expect(byId('workflow-ndv-suggestion')).toBeNull();
     });
@@ -619,11 +618,11 @@ describe('WorkflowNodeDialog', () => {
   it('shows the not-run states', () => {
     open(FIXTURE_NODES_NOT_RUN[2], null);
     expect(text('workflow-ndv-story-empty')).toBe(
-      'This node has not run yet. Execute the user journey to see its data.',
+      'This node has not run yet. Run the workflow to see its data.',
     );
     expandCards('data');
     expect(byId('workflow-ndv-input')?.textContent).toContain(
-      'This node has not run yet. Execute the user journey to see its data.',
+      'This node has not run yet. Run the workflow to see its data.',
     );
     expect(byId('workflow-ndv-output-status')).toBeNull();
     expandCards('config');
@@ -992,7 +991,7 @@ describe('WorkflowNodeDialog', () => {
     it('says the tool has not run yet before any run', () => {
       open(FIXTURE_TOOL_NOT_RUN, null);
       const notRun =
-        'This tool has not run yet. Execute the user journey to see its calls.';
+        'This tool has not run yet. Run the workflow to see its calls.';
       expect(byId('workflow-ndv-input')?.textContent).toContain(notRun);
       expect(byId('workflow-ndv-output')?.textContent).toContain(notRun);
       expect(byId('workflow-ndv-tool-input')).toBeNull();
@@ -1176,90 +1175,6 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
   it('shows no attempt switcher for a step that ran once', () => {
     open('plan');
     expect(byId('workflow-attempts')).toBeNull();
-  });
-
-  it("shows Plan's output as a plan above the data", () => {
-    open('plan');
-    expandCards('data');
-    const view = byId('workflow-plan-view')!;
-    expect(view).not.toBeNull();
-    expect(text('workflow-plan-question')).toBe('How many matches per stage?');
-    const items = (id: string) =>
-      Array.from(byId(id)!.querySelectorAll('li')).map((li) =>
-        li.textContent?.trim(),
-      );
-    expect(items('workflow-plan-measures')).toEqual(['match count']);
-    expect(items('workflow-plan-entities')).toEqual(['matches', 'stages']);
-    expect(items('workflow-plan-assumptions')).toEqual([
-      'A replayed match counts once',
-    ]);
-    expect(text('workflow-plan-scope')).toBe('All tournaments');
-    expect(byId('workflow-plan-clarification')).toBeNull();
-    // The raw data still follows it.
-    expect(
-      view.compareDocumentPosition(
-        byId('workflow-ndv-output')!.querySelector('app-workflow-data-view')!,
-      ),
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-  });
-
-  it("shows a plan's clarification with its options", () => {
-    const run = {
-      ...GRAPH_RETRY_RUN,
-      steps: GRAPH_RETRY_RUN.steps.map((s) =>
-        s.id === 'plan'
-          ? {
-              ...s,
-              output: {
-                ...GRAPH_PLAN,
-                needsClarification: true,
-                clarification: {
-                  question: 'Which tournament?',
-                  options: ['2018', '2022'],
-                },
-              },
-            }
-          : s,
-      ),
-    };
-    open('plan', run);
-    expandCards('data');
-    expect(text('workflow-plan-clarification-question')).toBe(
-      'Which tournament?',
-    );
-    expect(
-      all('workflow-plan-clarification-option').map((o) =>
-        o.textContent?.trim(),
-      ),
-    ).toEqual(['2018', '2022']);
-  });
-
-  it('shows no plan for a step that only passes the plan on', () => {
-    open('analyse');
-    expect(byId('workflow-plan-view')).toBeNull();
-    expect(byId('workflow-validate-view')).toBeNull();
-  });
-
-  it("shows Validate's findings as a checklist, per attempt", () => {
-    open('validate');
-    expect(text('workflow-validate-ok')).toBe('Valid');
-    expect(text('workflow-validate-attempt')).toContain('Attempt 2');
-    expect(
-      all('workflow-validate-finding').map((f) =>
-        f.getAttribute('data-passed'),
-      ),
-    ).toEqual(['true', 'true']);
-
-    byId('workflow-attempt-1')!.click();
-    fixture.detectChanges();
-    expect(text('workflow-validate-ok')).toBe('Not valid');
-    const findings = all('workflow-validate-finding');
-    expect(findings.map((f) => f.getAttribute('data-passed'))).toEqual([
-      'false',
-      'true',
-    ]);
-    expect(findings[0].textContent).toContain('Failed:');
-    expect(findings[0].textContent).toContain('No query returned rows.');
   });
 
   it('offers Chat on every agent step (Plan, Analyse, Write answer), not on code steps', () => {

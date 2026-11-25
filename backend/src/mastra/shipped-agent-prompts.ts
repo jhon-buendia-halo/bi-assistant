@@ -3,7 +3,7 @@ import { assistantShippedPrompt } from './agents/assistant-prompt';
 import {
   PLAN_INSTRUCTIONS,
   WRITE_ANSWER_INSTRUCTIONS,
-} from './workflows/answer-business-question.prompts';
+} from './workflows/analysis.prompts';
 import { QUERY_EXPLAINER_INSTRUCTIONS } from './agents/query-explainer.prompts';
 import { RESULT_EXPLORER_INSTRUCTIONS } from './agents/result-explorer.prompts';
 import {
@@ -17,7 +17,7 @@ import {
   REQUIREMENTS_ANALYST_INSTRUCTIONS,
 } from './workflows/consumption-gap-analysis.prompts';
 import { SITE_REVIEWER_INSTRUCTIONS } from './workflows/review-website.prompts';
-import { ORCHESTRATOR_INSTRUCTIONS } from './workflows/orchestrated-answer.prompts';
+import { ORCHESTRATOR_MICHAEL_INSTRUCTIONS } from './workflows/orchestrated-answer-michael.prompts';
 import { BI_ANALYST_INSTRUCTIONS } from './workflows/bi-analyst.prompts';
 import {
   INSIGHTS_ANALYST_PROMPT,
@@ -55,7 +55,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
   'result-explorer': RESULT_EXPLORER_INSTRUCTIONS,
   'site-reviewer': SITE_REVIEWER_INSTRUCTIONS,
-  'chief-of-staff': ORCHESTRATOR_INSTRUCTIONS,
+  'chief-of-staff': ORCHESTRATOR_MICHAEL_INSTRUCTIONS,
   'bi-analyst': BI_ANALYST_INSTRUCTIONS,
 };
 

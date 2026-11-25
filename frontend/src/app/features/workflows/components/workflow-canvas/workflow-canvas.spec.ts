@@ -14,6 +14,7 @@ const V2: WorkflowDetail = {
   description: 'Four steps.',
   kind: 'code',
   owner: 'Official',
+  category: { id: 'data-analytics', name: 'Data Analytics' },
   agents: [
     {
       key: 'insights-analyst',
@@ -758,7 +759,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
 
   it('Execute workflow floats over the canvas and asks to execute', () => {
     const button = q('workflow-execute') as HTMLButtonElement;
-    expect(text(button)).toBe('Execute user journey');
+    expect(text(button)).toBe('Run workflow');
     expect(button.type).toBe('button');
     button.click();
     expect(executed).toBe(1);
