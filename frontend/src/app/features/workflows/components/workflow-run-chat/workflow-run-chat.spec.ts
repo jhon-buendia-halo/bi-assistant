@@ -1601,6 +1601,80 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(q('workflow-run-archived')).toBeNull();
       expect(q('workflow-avery-input')).not.toBeNull();
     });
+
+    describe('the conversation variant (a chat with an agent outside any workflow; agents-evals R115)', () => {
+      const ELENA: WorkflowDetail = {
+        ...AVERY,
+        id: 'agent:insights-lead',
+        name: 'Insights Lead',
+        conversational: true,
+        agents: [{ key: 'insights-lead', name: 'Elena', role: 'Insights Lead' }],
+        steps: AVERY.steps.map((step) => ({
+          ...step,
+          agent: { key: 'insights-lead', name: 'Elena', role: 'Insights Lead', tools: [], maxSteps: 24 },
+        })),
+      };
+      const elenaRun = (overrides: Partial<WorkflowRun> = {}) =>
+        assistantRun({
+          workflowId: 'agent:insights-lead',
+          answer: { role: 'assistant', content: 'Brazil.', at: 'x' },
+          ...overrides,
+        });
+
+      function openConversation(run: WorkflowRun, workflow: WorkflowDetail = ELENA): void {
+        designer.showRunOnLoad(run);
+        designer.load(workflow.id);
+        http
+          .expectOne((r) => r.url.endsWith(`/workflows/${encodeURIComponent(workflow.id)}`))
+          .flush(workflow);
+        http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: DATASETS });
+        fixture = TestBed.createComponent(WorkflowRunChat);
+        fixture.componentRef.setInput('variant', 'conversation');
+        fixture.detectChanges();
+        el = fixture.nativeElement as HTMLElement;
+      }
+
+      it('shows Message Elena, Export, Archive and New conversation, and no Run again or Open in Builder', () => {
+        openConversation(elenaRun());
+        const box = q('workflow-avery-input') as HTMLTextAreaElement;
+        expect(box.placeholder).toBe('Message Elena');
+        expect(q('workflow-run-export')).not.toBeNull();
+        expect(q('workflow-run-archive')).not.toBeNull();
+        expect(text('workflow-run-new')).toBe('New conversation');
+        expect(q('workflow-run-again')).toBeNull();
+        expect(q('workflow-run-open-builder')).toBeNull();
+      });
+
+      it('shows the work summary above the answer instead of the team', () => {
+        openConversation(
+          elenaRun({
+            answer: {
+              role: 'assistant',
+              content: 'Brazil.',
+              at: 'x',
+              data: [{ tool: 'run_readonly_sql', input: 'select 1', rationale: 'Count goals', rowCount: 1 }],
+              checks: [{ check: 'Figures from queries', passed: true, detail: '' }],
+            },
+          }),
+        );
+        expect(text('run-work-summary-queries')).toBe('Ran 1 query');
+        expect(text('run-work-summary-checks')).toBe('1 of 1 checks passed');
+        expect(el.querySelector('app-workflow-run-team')).toBeNull();
+        click('run-work-summary');
+        expect(text('run-work-summary-query')).toContain('Count goals');
+      });
+
+      it('keeps Avery as she was: no work summary, Run again rules and Open in Builder unchanged', () => {
+        openStored(ended());
+        expect(q('run-work-summary')).toBeNull();
+        expect(text('workflow-run-new')).toBe('New question');
+      });
+
+      it('treats a workflow that says conversational as a conversation without Avery as its agent', () => {
+        openConversation(elenaRun());
+        expect(q('workflow-run-archive')).not.toBeNull();
+      });
+    });
   });
 
   describe('reference images: paste, drop and attach (workflows R35; ui.md 4.4b)', () => {

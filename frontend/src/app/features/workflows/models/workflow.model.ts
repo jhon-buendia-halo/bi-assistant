@@ -122,6 +122,8 @@ export interface WorkflowSummary {
   starterQuestions: string[];
   /** Why a run can't start now; absent when it can (api.md 116). */
   runRequirement?: string;
+  /** A never-ending conversation with an agent (Avery's, Elena's; api.md 116/117). */
+  conversational?: true;
 }
 
 /** How a workflow starts, as its Start node says it (workflows R7). */

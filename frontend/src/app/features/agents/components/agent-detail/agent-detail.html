@@ -102,6 +102,18 @@
           }
         </div>
       </div>
+      @if (agent.conversation) {
+        <!-- Ask <name>: the entry to a conversation outside any workflow (agents-evals R115) -->
+        <button
+          type="button"
+          data-testid="agent-ask-button"
+          (click)="ask.emit(agent.key)"
+          class="btn btn-primary ml-auto shrink-0"
+        >
+          <lucide-angular [img]="MessageSquare" [size]="14" />
+          <span>Ask {{ agent.name }}</span>
+        </button>
+      }
       @if (canChange()) {
         <div class="ml-auto flex shrink-0 items-center gap-2">
           <button

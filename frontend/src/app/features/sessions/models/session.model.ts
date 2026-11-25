@@ -109,6 +109,11 @@ export interface ChatMessage {
   reasoning?: ReasoningStep[];
   /** The query inspector's facts about each data-gathering call of `data`, in `data` order. */
   evidence?: QueryEvidence[];
+  /**
+   * A conversational agent's last attempt: each check and whether it held; a
+   * warning is a check whose name ends "(warning only)" (data-model 3.4.1).
+   */
+  checks?: { check: string; passed: boolean; detail: string }[];
   /** Curated knowledge snippets this answer's context carried. */
   knowledge?: KnowledgeUse[];
   /**

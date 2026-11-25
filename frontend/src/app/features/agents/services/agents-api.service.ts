@@ -148,6 +148,8 @@ export interface AgentDetail extends Agent {
   /** User agents only: the working copy and the published copy. */
   draft?: AgentConfig;
   live?: AgentConfig;
+  /** Built-in conversational agents only (Elena): the workflow id her conversation runs on (api.md 34). */
+  conversation?: { workflowId: string };
   /** The agent's prompt template, flattened to text. */
   instructions: string;
   toolDetails: AgentToolDetail[];
