@@ -34,6 +34,21 @@ export class WorkflowRunsRepository {
     });
   }
 
+  /**
+   * One workflow's runs, the archived ones only or the not archived ones
+   * only (api.md 168), oldest `startedAt` first.
+   */
+  async listByWorkflow(
+    workflowId: string,
+    archived: boolean,
+  ): Promise<WorkflowRunDoc[]> {
+    const runs = await this.store.find(
+      { workflowId },
+      { sort: { startedAt: 1 } },
+    );
+    return runs.filter((run) => Boolean(run.archivedAt) === archived);
+  }
+
   /** The runs of one conversation with Avery, oldest first (workflows R45). */
   listConversation(conversationId: string): Promise<WorkflowRunDoc[]> {
     return this.store.find({ conversationId }, { sort: { startedAt: 1 } });
