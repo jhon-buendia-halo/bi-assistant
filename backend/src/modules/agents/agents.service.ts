@@ -195,6 +195,11 @@ export interface AgentDetail extends AgentSummary {
   prompt?: AgentPromptView;
   /** Workflow-backed built-in agents only: their turn's steps (api.md 34). */
   workflow?: AgentWorkflow;
+  /**
+   * Built-in conversational agents only (`insights-lead`): the binding id a
+   * conversation with them runs on (plan Elena 1.2).
+   */
+  conversation?: { workflowId: string };
 }
 
 @Injectable()

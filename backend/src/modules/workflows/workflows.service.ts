@@ -65,6 +65,11 @@ export interface WorkflowSummary {
   datasets: string[];
   missingDatasets: string[];
   starterQuestions: string[];
+  /**
+   * Set on a conversational binding's workflow (plan Elena 1.2): its runs are
+   * the messages of one conversation.
+   */
+  conversational?: true;
 }
 
 /** The longest system prompt a workflow detail carries, in characters. */
