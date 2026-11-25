@@ -12,10 +12,8 @@ import {
   type OrchestratorToolsRuntime,
 } from '../workflows/orchestrated-answer-michael.steps';
 import { BUILD_DASHBOARD_TOOL } from '../workflows/bi-dashboard.schemas';
-import {
-  EXPORT_CONVERSATION_TOOL,
-  exportContentSchema,
-} from '../workflows/export-request';
+import { EXPORT_CONVERSATION_TOOL } from '../workflows/export-request';
+import { exportConversationTool } from './export.tools';
 
 /** A tool's RequestContext, as the tools read it. */
 interface ContextLike {
@@ -69,19 +67,6 @@ export const buildDashboardTool = createTool({
   execute: async (input, context) => ({
     result: await runtimeOf(context?.requestContext).buildDashboard(
       input.brief,
-    ),
-  }),
-});
-
-export const exportConversationTool = createTool({
-  id: EXPORT_CONVERSATION_TOOL,
-  description:
-    "Exports the whole conversation (each earlier question, Avery's answer to it and its dashboard, and the queries behind them) to a PDF and a PowerPoint the user downloads and shares. You write the title, the summary and one headline per earlier question; every figure in them must be copied from the answers. Call it only when the user asks to export, download or share the conversation; at most twice per run. Returns what was exported, or the figures to fix.",
-  inputSchema: exportContentSchema,
-  outputSchema: reply,
-  execute: async (input, context) => ({
-    result: await runtimeOf(context?.requestContext).exportConversation(
-      exportContentSchema.parse(input),
     ),
   }),
 });

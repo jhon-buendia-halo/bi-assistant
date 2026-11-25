@@ -107,6 +107,7 @@ import type {
 } from '../../conversation-export/conversation-export.contract';
 import { exportBrand } from '../../conversation-export/export-brand';
 import {
+  CLARA_AFTER_ACCEPT,
   DASHBOARD_TOOLS_RUNTIME_KEY,
   type DashboardToolsRuntime,
 } from '../../../mastra/tools/dashboard.tools';
@@ -1065,6 +1066,7 @@ export class TurnEngine {
                 if (record) captureRecord(record, callId);
               });
             const submitter: DashboardToolsRuntime = {
+              afterAccept: CLARA_AFTER_ACCEPT,
               submit: async ({
                 dashboard: draft,
                 sql,

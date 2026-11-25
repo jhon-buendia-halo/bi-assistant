@@ -1,6 +1,7 @@
 import type { Agent } from '@mastra/core/agent';
 import { DASHBOARD_ROWS_CAP } from '../workflows/bi-dashboard.schemas';
 import {
+  CLARA_AFTER_ACCEPT,
   DASHBOARD_TOOLS_RUNTIME_KEY,
   type DashboardToolsRuntime,
 } from '../tools/dashboard.tools';
@@ -41,6 +42,7 @@ export function evalDashboardRuntime(
     getDatasetToolServices().runReadOnlySql(...args),
 ): DashboardToolsRuntime {
   return {
+    afterAccept: CLARA_AFTER_ACCEPT,
     async submit(input: Submission) {
       run.submissions += 1;
       let verdict: ReturnType<typeof judgeSubmission>;

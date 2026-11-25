@@ -143,6 +143,7 @@ import {
   type OrchestratorToolsRuntime,
 } from '../../mastra/workflows/orchestrated-answer-michael.steps';
 import {
+  CLARA_AFTER_ACCEPT,
   DASHBOARD_TOOLS_RUNTIME_KEY,
   type DashboardToolsRuntime,
 } from '../../mastra/tools/dashboard.tools';
@@ -2303,12 +2304,14 @@ function claraSubmits(
   draft: DashboardDraft = GOALS_DRAFT,
   sql: string = GOALS_SQL,
   afterSubmit?: () => void,
+  runtimes?: DashboardToolsRuntime[],
 ): (opts: StreamCall['options']) => AsyncIterable<unknown> {
   return (opts) =>
     (async function* () {
       const runtime = opts.requestContext.values.get(
         DASHBOARD_TOOLS_RUNTIME_KEY,
       ) as DashboardToolsRuntime;
+      runtimes?.push(runtime);
       const args = { dashboard: draft, sql, rationale: 'Goals per team.' };
       yield {
         type: 'tool-call',
@@ -2359,6 +2362,38 @@ function activityOf(events: RunStreamEvent[]): string[] {
 }
 
 describe("Clara builds Avery's dashboards (agents.md 2.22, 5.22)", () => {
+  it("hands Clara's submit_dashboard her old line after an accepted dashboard", async () => {
+    const runtimes: DashboardToolsRuntime[] = [];
+    const ctx = build({
+      artifacts: dashboardArtifacts(),
+      runReadOnlySql: goalsRows(),
+      streams: {
+        'chief-of-staff': averyBuilds(
+          GOALS_BRIEF,
+          'Your dashboard is ready.',
+          [],
+        ),
+        'bi-analyst': claraSubmits(
+          [],
+          GOALS_DRAFT,
+          GOALS_SQL,
+          undefined,
+          runtimes,
+        ),
+      },
+    });
+    await ctx.sessions.onModuleInit();
+    const prepared = await ctx.runs.prepare(ORCHESTRATED_WORKFLOW.id, {
+      input: {
+        question: 'Create a dashboard of goals by team',
+        datasets: ['World Cup'],
+      },
+    });
+    await ctx.runs.stream(prepared, () => undefined);
+    expect(runtimes).toHaveLength(1);
+    expect(runtimes[0].afterAccept).toBe(CLARA_AFTER_ACCEPT);
+  });
+
   it('runs her data query with 5,000 rows, saves the dashboard on its rows and carries it on the answer, with her query as a source', async () => {
     const artifacts = dashboardArtifacts();
     const runReadOnlySql = goalsRows();

@@ -96,6 +96,12 @@ export interface ChatMessage {
    */
   export?: ConversationExportRef;
   /**
+   * A conversational turn's checks (Avery's or Elena's; data-model 3.4.1):
+   * the last attempt's findings. A warning is a check whose name ends
+   * "(warning only)".
+   */
+  checks?: { check: string; passed: boolean; detail: string }[];
+  /**
    * The answer's final SQL matches a stored verified query, or the user
    * promoted it with a thumbs-up.
    */
