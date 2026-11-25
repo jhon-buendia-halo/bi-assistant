@@ -167,9 +167,10 @@ describe('Avery + Michael: what Avery receives is pinned', () => {
       .update(JSON.stringify(cases))
       .digest('hex');
     // Re-pinned on 2026-11-23 (no Olivia/Jessica routing line) and on
-    // 2026-11-24 (a short closing, no sentence count).
+    // 2026-11-24 (a short closing, no sentence count), and on 2026-11-25
+    // (export_conversation's description names no agent: Elena uses it).
     expect(digest).toBe(
-      '13b7e98b70b065540f6c4d2320b21a32369691dee6f76a9182243d9aa6279c8c',
+      'b8a4437ceab8502f864ddfce5f2ea1eabfef6ee6e60501537335b3dea0082524',
     );
   });
 });

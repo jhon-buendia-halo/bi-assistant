@@ -11,7 +11,6 @@ import {
   exportContentSchema,
   type ExportContent,
 } from '../workflows/export-request';
-import { ORCHESTRATOR_TOOLS_RUNTIME_KEY } from '../workflows/orchestrated-answer-michael.steps';
 
 /** The requestContext key of the run's `ExportToolsRuntime`. */
 export const EXPORT_TOOLS_RUNTIME_KEY = 'export-tools-runtime';
@@ -35,25 +34,21 @@ interface ContextLike {
   get(key: string): unknown;
 }
 
-/**
- * The run's export runtime: its own key, else Avery's tools runtime (which
- * carries the same two members until her run sets the export key), else an
- * error the model reads.
- */
+/** The run's export runtime, else an error the model reads. */
 function exportRuntimeOf(requestContext: unknown): ExportToolsRuntime {
   const context = requestContext as ContextLike | undefined;
-  const runtime = (context?.get(EXPORT_TOOLS_RUNTIME_KEY) ??
-    context?.get(ORCHESTRATOR_TOOLS_RUNTIME_KEY)) as
+  const runtime = context?.get(EXPORT_TOOLS_RUNTIME_KEY) as
     ExportToolsRuntime | undefined;
-  if (!runtime)
-    throw new Error('This tool only runs inside an orchestrated run.');
+  if (!runtime) {
+    throw new Error("This tool only runs inside a conversation's run.");
+  }
   return runtime;
 }
 
 export const exportConversationTool = createTool({
   id: EXPORT_CONVERSATION_TOOL,
   description:
-    "Exports the whole conversation (each earlier question, Avery's answer to it and its dashboard, and the queries behind them) to a PDF and a PowerPoint the user downloads and shares. You write the title, the summary and one headline per earlier question; every figure in them must be copied from the answers. Call it only when the user asks to export, download or share the conversation; at most twice per run. Returns what was exported, or the figures to fix.",
+    'Exports the whole conversation (each earlier question, the answer to it and its dashboard, and the queries behind them) to a PDF and a PowerPoint the user downloads and shares. You write the title, the summary and one headline per earlier question; every figure in them must be copied from the answers. Call it only when the user asks to export, download or share the conversation; at most twice per run. Returns what was exported, or the figures to fix.',
   inputSchema: exportContentSchema,
   outputSchema: z.object({ result: z.string() }),
   execute: async (input, context) => ({

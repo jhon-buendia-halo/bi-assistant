@@ -23,10 +23,10 @@ const execute = exportConversationTool.execute as unknown as (
 ) => Promise<unknown>;
 
 describe('export_conversation, shared by Avery and Elena (agents.md 3.18)', () => {
-  it('keeps its id and description', () => {
+  it('keeps its id; its description names no agent, so Elena reads it too', () => {
     expect(exportConversationTool.id).toBe('export_conversation');
     expect(exportConversationTool.description).toBe(
-      "Exports the whole conversation (each earlier question, Avery's answer to it and its dashboard, and the queries behind them) to a PDF and a PowerPoint the user downloads and shares. You write the title, the summary and one headline per earlier question; every figure in them must be copied from the answers. Call it only when the user asks to export, download or share the conversation; at most twice per run. Returns what was exported, or the figures to fix.",
+      'Exports the whole conversation (each earlier question, the answer to it and its dashboard, and the queries behind them) to a PDF and a PowerPoint the user downloads and shares. You write the title, the summary and one headline per earlier question; every figure in them must be copied from the answers. Call it only when the user asks to export, download or share the conversation; at most twice per run. Returns what was exported, or the figures to fix.',
     );
   });
 
@@ -54,7 +54,7 @@ describe('export_conversation, shared by Avery and Elena (agents.md 3.18)', () =
     });
   });
 
-  it("still reads Avery's tools runtime when no export runtime is set", async () => {
+  it("no longer reads Avery's tools runtime: her run sets the export key", async () => {
     const exportConversation = jest.fn().mockResolvedValue('Exported.');
     const avery: OrchestratorToolsRuntime = {
       tools: AVERY_TEAM.tools,
@@ -66,15 +66,15 @@ describe('export_conversation, shared by Avery and Elena (agents.md 3.18)', () =
     };
     const requestContext = new RequestContext();
     requestContext.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, avery);
-    await expect(execute(CONTENT, { requestContext })).resolves.toEqual({
-      result: 'Exported.',
-    });
-    expect(exportConversation).toHaveBeenCalledTimes(1);
+    await expect(execute(CONTENT, { requestContext })).rejects.toThrow(
+      "This tool only runs inside a conversation's run.",
+    );
+    expect(exportConversation).not.toHaveBeenCalled();
   });
 
   it('refuses outside a run', async () => {
     await expect(
       execute(CONTENT, { requestContext: new RequestContext() }),
-    ).rejects.toThrow('This tool only runs inside an orchestrated run.');
+    ).rejects.toThrow("This tool only runs inside a conversation's run.");
   });
 });

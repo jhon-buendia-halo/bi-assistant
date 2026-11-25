@@ -48,6 +48,10 @@ import {
   type OrchestratorTurnDeps,
 } from './orchestrator-turn';
 import type { StreamEvent } from './stream-events';
+import {
+  EXPORT_TOOLS_RUNTIME_KEY,
+  type ExportToolsRuntime,
+} from '../../../mastra/tools/export.tools';
 import type { ExportContent } from '../../../mastra/workflows/export-request';
 import type { ConversationExportRef } from '../../conversation-export/conversation-export.contract';
 
@@ -1079,6 +1083,25 @@ describe("Avery's export_conversation (agents.md 2.21, 3.18)", () => {
     expect(await runtime.exportConversation(CONTENT)).toBe(
       'Exported "Penetración de productos en Intellify": PDF (9 pages), PowerPoint (8 slides). The user sees the download card with the answer: do not repeat the summary.',
     );
+    expect(exportConversation).toHaveBeenCalledWith(CONTENT);
+    expect(deps.state.export).toEqual(EXPORTED);
+  });
+
+  it('sets the export runtime under its own key in her run, the one export_conversation reads (plan Elena 2.4)', async () => {
+    const exportConversation = jest
+      .fn()
+      .mockResolvedValue({ export: EXPORTED });
+    const { deps, streams } = fixture([text('Done.')], {
+      team: team({ exportConversation }),
+      deps: { exportsConversation: true, earlierTurns: TURNS },
+    });
+    await runOrchestratorTurn(deps, { question: 'Export this' });
+    const context = streams[0].options['requestContext'] as {
+      get(key: string): unknown;
+    };
+    const runtime = context.get(EXPORT_TOOLS_RUNTIME_KEY) as ExportToolsRuntime;
+    expect(runtime.exportsConversation).toBe(true);
+    await runtime.exportConversation(CONTENT);
     expect(exportConversation).toHaveBeenCalledWith(CONTENT);
     expect(deps.state.export).toEqual(EXPORTED);
   });

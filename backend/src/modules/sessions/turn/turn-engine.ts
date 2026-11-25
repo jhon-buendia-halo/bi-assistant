@@ -328,6 +328,14 @@ type TurnRunOutcome =
       discard: () => Promise<void>;
     };
 
+/** A dashboard submission the host accepted: what is saved. */
+interface AcceptedDashboard {
+  draft: DashboardDraft;
+  query: DashboardQuery;
+  columns: string[];
+  rows: DashboardRow[];
+}
+
 /**
  * The conversational binding a turn runs on its engine (plan Elena 1.3):
  * Avery's or Elena's; undefined for any other turn, a node chat of the same
@@ -510,6 +518,30 @@ export class TurnEngine {
     const flushHeldQueries = () => {
       for (const replay of heldQueries.splice(0)) replay();
     };
+    // A dashboard's data query the host ran (Clara's, Elena's), recorded as
+    // a `run_readonly_sql` source with its facts, held until
+    // submit_dashboard's result (5.20's hold).
+    const holdQuery = (
+      args: { sql: string; rationale: string },
+      result: unknown,
+      facts: QueryFacts,
+    ) =>
+      heldQueries.push(() => {
+        emit({
+          type: 'tool',
+          content: JSON.stringify({
+            name: 'run_readonly_sql',
+            ...(statedRationale(args.rationale)
+              ? { rationale: statedRationale(args.rationale) }
+              : {}),
+            input: toolCallInput('run_readonly_sql', args),
+          }),
+        });
+        const callId = `dashboard-query-${randomUUID()}`;
+        queryFacts.set(callId, facts);
+        const record = toolDataRecord('run_readonly_sql', args, result);
+        if (record) captureRecord(record, callId);
+      });
     // Consume one agent stream (agents.md 5.1 step 3).
     const consume = async (
       agentStream: Awaited<ReturnType<typeof agent.stream>>,
@@ -1052,117 +1084,16 @@ export class TurnEngine {
                 stopped: false,
               };
             }
-            let accepted:
-              | {
-                  draft: DashboardDraft;
-                  query: DashboardQuery;
-                  columns: string[];
-                  rows: DashboardRow[];
-                }
-              | undefined;
-            // The host's run, recorded as a `run_readonly_sql` source with
-            // its facts, held until submit_dashboard's result (5.20's hold).
-            const hold = (
-              args: { sql: string; rationale: string },
-              result: unknown,
-              facts: QueryFacts,
-            ) =>
-              heldQueries.push(() => {
-                emit({
-                  type: 'tool',
-                  content: JSON.stringify({
-                    name: 'run_readonly_sql',
-                    ...(statedRationale(args.rationale)
-                      ? { rationale: statedRationale(args.rationale) }
-                      : {}),
-                    input: toolCallInput('run_readonly_sql', args),
-                  }),
-                });
-                const callId = `dashboard-query-${randomUUID()}`;
-                queryFacts.set(callId, facts);
-                const record = toolDataRecord('run_readonly_sql', args, result);
-                if (record) captureRecord(record, callId);
-              });
-            const submitter: DashboardToolsRuntime = {
-              afterAccept: CLARA_AFTER_ACCEPT,
-              submit: async ({
-                dashboard: draft,
-                sql,
-                datasourceId,
-                rationale,
-              }) => {
-                const args = { sql, rationale };
-                const facts: QueryFacts = {
-                  datasourceId,
-                  rowLimit: DASHBOARD_ROWS_CAP,
-                };
-                let ran: Awaited<ReturnType<SqlChecks['runSqlWithRepair']>>;
-                try {
-                  ran = await this.deps.sql.runSqlWithRepair(
-                    datasourceId,
-                    sql,
-                    DASHBOARD_ROWS_CAP,
-                    session.datasets,
-                    { signal: turn.signal, maxRows: DASHBOARD_ROWS_CAP },
-                  );
-                } catch (error) {
-                  // A query the stop cut short is no failed query.
-                  if (turn.signal.aborted) throw error;
-                  const message =
-                    error instanceof Error ? error.message : String(error);
-                  hold(args, { error: message }, facts);
-                  return {
-                    accepted: false,
-                    error: `The query failed: ${message}`,
-                  };
-                }
-                const { totalRows, ...result } = ran;
-                hold(args, result, {
-                  ...facts,
-                  ...(typeof totalRows === 'number' ? { totalRows } : {}),
-                });
-                if (ran.truncated) {
-                  return {
-                    accepted: false,
-                    error: `More than ${DASHBOARD_ROWS_CAP.toLocaleString('en-US')} rows: group the query to the grain the widgets need`,
-                  };
-                }
-                if (!ran.rows.length) {
-                  return {
-                    accepted: false,
-                    error:
-                      'The query returned no rows: check its filters, then submit again.',
-                  };
-                }
-                const unbound = dashboardBindingErrors(draft, ran.columns);
-                if (unbound.length) {
-                  return { accepted: false, error: unbound.join('\n') };
-                }
-                const rows = prepareDashboardRows(ran.rows, draft);
-                if (JSON.stringify(rows).length > DASHBOARD_DATA_CHAR_CAP) {
-                  return {
-                    accepted: false,
-                    error: `The rows are more than ${DASHBOARD_DATA_CHAR_CAP.toLocaleString('en-US')} characters: group the query further or drop the columns no widget reads.`,
-                  };
-                }
-                const columns = draft.columns.map((column) => column.name);
-                // The last accepted submission is the one saved.
-                accepted = {
-                  draft,
-                  query: {
-                    sql: ran.correctedSql ?? sql,
-                    datasourceId,
-                    ...(rationale.trim()
-                      ? { rationale: rationale.trim() }
-                      : {}),
-                  },
-                  columns,
-                  rows,
-                };
-                return { accepted: true, rowCount: rows.length, columns };
-              },
-            };
-            options.requestContext.set(DASHBOARD_TOOLS_RUNTIME_KEY, submitter);
+            const submitter = this.dashboardSubmitter(
+              session,
+              turn.signal,
+              holdQuery,
+              CLARA_AFTER_ACCEPT,
+            );
+            options.requestContext.set(
+              DASHBOARD_TOOLS_RUNTIME_KEY,
+              submitter.runtime,
+            );
             // Her own stop: the turn's, or five idle minutes (workflows R43).
             const idle = streamIdleWatch(turn.signal);
             const claraOptions: typeof options = { ...options };
@@ -1221,6 +1152,7 @@ export class TurnEngine {
               streamError = undefined;
             }
             if (turn.signal.aborted) return { reply, stopped: true };
+            const accepted = submitter.accepted();
             if (!accepted) {
               return {
                 reply,
@@ -1231,27 +1163,14 @@ export class TurnEngine {
                 stopped: false,
               };
             }
-            const blueprint = blueprintFromDraft(accepted.draft, accepted.rows);
             try {
-              const ref = await save(id, {
-                ...(current ? { artifactId: current.artifactId } : {}),
-                blueprint,
-                query: accepted.query,
-                columns: accepted.columns,
-                rows: accepted.rows,
-                instruction: brief,
-              });
-              const saved: CurrentDashboard = {
-                artifactId: ref.artifactId,
-                version: ref.version,
-                title: ref.title,
-                blueprint,
-                query: accepted.query,
-                columns: accepted.columns,
-                rowCount: ref.rowCount,
-                widgetCount: ref.widgetCount,
-                filterCount: ref.filterCount,
-              };
+              const { ref, saved } = await this.saveAccepted(
+                save,
+                id,
+                accepted,
+                current,
+                brief,
+              );
               return { dashboard: ref, saved, reply, stopped: false };
             } catch (error) {
               return {
@@ -2142,6 +2061,138 @@ export class TurnEngine {
       widgetCount: shown.widgetCount,
       filterCount: shown.filterCount,
     };
+  }
+
+  /**
+   * The runtime submit_dashboard calls (agents.md 5.22): the host runs the
+   * dashboard's data query (up to 5,000 rows, the turn's stop), holds it as
+   * a source with `hold`, checks it and keeps the last accepted submission,
+   * which `accepted()` reads once the agent's stream ends. Clara's build and
+   * Elena's turn share it; `afterAccept` is what the accepted text asks next.
+   */
+  private dashboardSubmitter(
+    session: SessionDoc,
+    signal: AbortSignal,
+    hold: (
+      args: { sql: string; rationale: string },
+      result: unknown,
+      facts: QueryFacts,
+    ) => void,
+    afterAccept?: string,
+  ): {
+    runtime: DashboardToolsRuntime;
+    accepted(): AcceptedDashboard | undefined;
+  } {
+    let accepted: AcceptedDashboard | undefined;
+    const runtime: DashboardToolsRuntime = {
+      ...(afterAccept ? { afterAccept } : {}),
+      submit: async ({ dashboard: draft, sql, datasourceId, rationale }) => {
+        const args = { sql, rationale };
+        const facts: QueryFacts = {
+          datasourceId,
+          rowLimit: DASHBOARD_ROWS_CAP,
+        };
+        let ran: Awaited<ReturnType<SqlChecks['runSqlWithRepair']>>;
+        try {
+          ran = await this.deps.sql.runSqlWithRepair(
+            datasourceId,
+            sql,
+            DASHBOARD_ROWS_CAP,
+            session.datasets,
+            { signal, maxRows: DASHBOARD_ROWS_CAP },
+          );
+        } catch (error) {
+          // A query the stop cut short is no failed query.
+          if (signal.aborted) throw error;
+          const message =
+            error instanceof Error ? error.message : String(error);
+          hold(args, { error: message }, facts);
+          return {
+            accepted: false,
+            error: `The query failed: ${message}`,
+          };
+        }
+        const { totalRows, ...result } = ran;
+        hold(args, result, {
+          ...facts,
+          ...(typeof totalRows === 'number' ? { totalRows } : {}),
+        });
+        if (ran.truncated) {
+          return {
+            accepted: false,
+            error: `More than ${DASHBOARD_ROWS_CAP.toLocaleString('en-US')} rows: group the query to the grain the widgets need`,
+          };
+        }
+        if (!ran.rows.length) {
+          return {
+            accepted: false,
+            error:
+              'The query returned no rows: check its filters, then submit again.',
+          };
+        }
+        const unbound = dashboardBindingErrors(draft, ran.columns);
+        if (unbound.length) {
+          return { accepted: false, error: unbound.join('\n') };
+        }
+        const rows = prepareDashboardRows(ran.rows, draft);
+        if (JSON.stringify(rows).length > DASHBOARD_DATA_CHAR_CAP) {
+          return {
+            accepted: false,
+            error: `The rows are more than ${DASHBOARD_DATA_CHAR_CAP.toLocaleString('en-US')} characters: group the query further or drop the columns no widget reads.`,
+          };
+        }
+        const columns = draft.columns.map((column) => column.name);
+        // The last accepted submission is the one saved.
+        accepted = {
+          draft,
+          query: {
+            sql: ran.correctedSql ?? sql,
+            datasourceId,
+            ...(rationale.trim() ? { rationale: rationale.trim() } : {}),
+          },
+          columns,
+          rows,
+        };
+        return { accepted: true, rowCount: rows.length, columns };
+      },
+    };
+    return { runtime, accepted: () => accepted };
+  }
+
+  /**
+   * Save an accepted submission as the conversation's dashboard (agents.md
+   * 5.22): a new version of `current` when there is one, else a new
+   * dashboard; its ref and what the next message carries. Throws when the
+   * save fails.
+   */
+  private async saveAccepted(
+    save: NonNullable<TurnEngineDeps['saveDashboard']>,
+    sessionId: string,
+    accepted: AcceptedDashboard,
+    current: CurrentDashboard | undefined,
+    instruction: string,
+  ): Promise<{ ref: DashboardRef; saved: CurrentDashboard }> {
+    const blueprint = blueprintFromDraft(accepted.draft, accepted.rows);
+    const ref = await save(sessionId, {
+      ...(current ? { artifactId: current.artifactId } : {}),
+      blueprint,
+      query: accepted.query,
+      columns: accepted.columns,
+      rows: accepted.rows,
+      instruction,
+    });
+    const saved: CurrentDashboard = {
+      artifactId: ref.artifactId,
+      version: ref.version,
+      title: ref.title,
+      blueprint,
+      query: accepted.query,
+      columns: accepted.columns,
+      rowCount: ref.rowCount,
+      widgetCount: ref.widgetCount,
+      filterCount: ref.filterCount,
+    };
+    return { ref, saved };
   }
 
   /**

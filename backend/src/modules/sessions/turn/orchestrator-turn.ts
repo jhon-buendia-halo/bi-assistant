@@ -56,6 +56,10 @@ import type {
   ConversationTurns,
 } from '../../conversation-export/conversation-export.contract';
 import { currentDashboardBlock } from '../../../mastra/workflows/bi-analyst.prompts';
+import {
+  EXPORT_TOOLS_RUNTIME_KEY,
+  type ExportToolsRuntime,
+} from '../../../mastra/tools/export.tools';
 import type {
   CurrentDashboard,
   DashboardRef,
@@ -103,7 +107,7 @@ export interface OrchestratorTeam {
 }
 
 /** What the team produced so far in this turn. */
-export interface OrchestratorState {
+export interface OrchestratorState extends ExportState {
   catalog?: CatalogEntity[];
   columns?: EntityColumns[];
   /** The plan Michael worked from: the question, nothing planned. */
@@ -120,10 +124,6 @@ export interface OrchestratorState {
   builtDashboard?: CurrentDashboard;
   /** Clara's builds made (at most `BUILD_DASHBOARD_MAX_CALLS`). */
   dashboardCalls: number;
-  /** The conversation's export made in this turn: the answer carries it. */
-  export?: ConversationExportRef;
-  /** export_conversation calls made (at most `EXPORT_CONVERSATION_MAX_CALLS`). */
-  exportCalls: number;
 }
 
 /** A fresh state, for a new turn. */
@@ -473,23 +473,48 @@ export function orchestratorTools(
         'The user sees the dashboard with the answer: do not describe it in figures.',
       ].join('\n');
     },
-    exportsConversation: deps.exportsConversation && !!team.exportConversation,
-    // The export (agents.md 3.18): at most twice per run; every figure Avery
-    // wrote is checked against the answers before anything is drawn.
+    ...exportRuntime(
+      state,
+      deps.earlierTurns,
+      deps.exportsConversation ? team.exportConversation : undefined,
+    ),
+  };
+}
+
+/** What a conversation's export keeps in its turn (agents.md 3.18). */
+export interface ExportState {
+  /** The conversation's export made in this turn: the answer carries it. */
+  export?: ConversationExportRef;
+  /** export_conversation calls made (at most `EXPORT_CONVERSATION_MAX_CALLS`). */
+  exportCalls: number;
+}
+
+/**
+ * The runtime export_conversation calls (agents.md 3.18), Avery's and
+ * Elena's: offered when the turn has a `run` (the gate is open); at most
+ * twice per turn; every figure the agent wrote is checked against the
+ * conversation's answers (`turns`) before anything is drawn; the export
+ * made is kept on `state`.
+ */
+export function exportRuntime(
+  state: ExportState,
+  turns: ConversationTurns | undefined,
+  run: OrchestratorTeam['exportConversation'],
+): ExportToolsRuntime {
+  return {
+    exportsConversation: run !== undefined,
     exportConversation: async (content: ExportContent) => {
-      if (!deps.exportsConversation || !team.exportConversation) {
-        return 'This run exports nothing.';
-      }
+      if (!run) return 'This run exports nothing.';
       if (state.exportCalls >= EXPORT_CONVERSATION_MAX_CALLS) {
         return 'export_conversation already ran twice in this run: close from what it said.';
       }
       state.exportCalls += 1;
       const refused = figuresNotInAnswers(
         exportContentTexts(content),
-        deps.earlierTurns?.answers ?? [],
+        turns?.answers ?? [],
       );
       if (refused.length) return refusedFiguresReply(refused);
-      const made = await team.exportConversation(content);
+      const made = await run(content);
       if (!made.export) {
         return `The conversation was not exported: ${made.error ?? 'no file was made'}`;
       }
@@ -524,22 +549,25 @@ export async function runOrchestratorTurn(
 }> {
   const { question, answered } = input;
   const requestContext = new RequestContext();
-  requestContext.set(
-    ORCHESTRATOR_TOOLS_RUNTIME_KEY,
-    orchestratorTools(
-      deps,
-      question,
-      answered,
-      (reply) => {
-        said = reply;
-      },
-      // Michael's model failed: her stream ends there, and the turn fails.
-      (error) => {
-        failure ??= error;
-        stop.abort();
-      },
-    ),
+  const tools = orchestratorTools(
+    deps,
+    question,
+    answered,
+    (reply) => {
+      said = reply;
+    },
+    // Michael's model failed: her stream ends there, and the turn fails.
+    (error) => {
+      failure ??= error;
+      stop.abort();
+    },
   );
+  requestContext.set(ORCHESTRATOR_TOOLS_RUNTIME_KEY, tools);
+  // export_conversation reads its own key (agents.md 3.18).
+  requestContext.set(EXPORT_TOOLS_RUNTIME_KEY, {
+    exportsConversation: tools.exportsConversation,
+    exportConversation: tools.exportConversation,
+  } satisfies ExportToolsRuntime);
   if (deps.orchestratorModel) {
     requestContext.set(STEP_MODEL_CONTEXT_KEY, deps.orchestratorModel);
   }
