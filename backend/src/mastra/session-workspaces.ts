@@ -17,6 +17,23 @@ import {
 import { mastraDataDir } from './storage';
 
 export const SESSION_WORKSPACE_CONTEXT_KEY = 'session-workspace-id';
+
+/**
+ * An agent's workspace for a call (agents.md 7.1): the registered session
+ * workspace the call's `session-workspace-id` names; none without one.
+ */
+export function sessionWorkspaceOf({
+  requestContext,
+  mastra,
+}: {
+  requestContext: { get(key: string): unknown };
+  mastra?: Mastra;
+}) {
+  const workspaceId = requestContext.get(SESSION_WORKSPACE_CONTEXT_KEY);
+  if (typeof workspaceId !== 'string' || !mastra) return undefined;
+  return mastra.listWorkspaces()[workspaceId]?.workspace;
+}
+
 const WORKSPACE_PREFIX = 'session-';
 const workspacesDir = join(mastraDataDir, 'workspaces');
 const initialization = new Map<string, Promise<Workspace>>();

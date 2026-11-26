@@ -1,13 +1,11 @@
-import { Agent } from '@mastra/core/agent';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
 import type {
   QueryEvidence,
   QueryExplanation,
 } from '../../modules/sessions/query-evidence/query-evidence.types';
 import { runErrorMessage } from '../workflows/workflow-run';
-import { agentInstructions } from '../agent-prompt-overrides';
 import { QUERY_EXPLAINER_AGENT_KEY } from '../agent-constants';
-import { resolveAgentModel } from '../model-resolver';
+import { defineBuiltinAgent } from '../agent-factory';
 import {
   explainReplySchema,
   explainRequest,
@@ -22,15 +20,14 @@ import {
  * `explainQueryWithModel`; her job description is the shipped instructions
  * or their in-app override (ADR-0026).
  */
-export const queryExplainerAgent = new Agent({
-  id: 'query-explainer',
-  // The technical name traces and Monitoring show; the hub shows the persona.
+export const queryExplainerAgent = defineBuiltinAgent({
+  key: QUERY_EXPLAINER_AGENT_KEY,
   name: 'Query Explainer',
   description:
     'Explains one SQL query step by step in business words, with a count statement per step. No tools.',
-  instructions: () =>
-    agentInstructions(QUERY_EXPLAINER_AGENT_KEY, QUERY_EXPLAINER_INSTRUCTIONS),
-  model: async () => resolveAgentModel(),
+  classes: ['single-step'],
+  instructions: QUERY_EXPLAINER_INSTRUCTIONS,
+  model: 'saved',
 });
 
 /**

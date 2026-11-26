@@ -4,31 +4,10 @@
 // I/O here, so `node --test scripts/agent-inventory-lib.test.mjs` covers it.
 import { createHash } from 'node:crypto';
 
-/**
- * What each built-in agent is, by registry key (the agent-change skill,
- * "Classify the agent"). An agent may be more than one:
- * - `person`: a person talks to it (a chat, a run, a bound session);
- * - `data`: it answers from the session's datasets;
- * - `orchestrator`: it calls other agents as its tools;
- * - `single-step`: the code calls it once with a contract; no person, no tools.
- * A registered agent missing here fails the inventory: classify it.
- */
-export const AGENT_CLASSES = {
-  assistant: ['person', 'data'],
-  'insights-analyst': ['person', 'data'],
-  'insights-lead': ['person', 'data'],
-  'chief-of-staff': ['person', 'orchestrator'],
-  'bi-analyst': ['data'],
-  visualization: ['single-step'],
-  'sql-fixer': ['single-step'],
-  'sql-verifier': ['single-step'],
-  'assistant-eval-judge': ['single-step'],
-  'knowledge-bootstrap': ['single-step'],
-  'analysis-planner': ['single-step'],
-  'answer-writer': ['single-step'],
-  'query-explainer': ['single-step'],
-  'result-explorer': ['single-step'],
-};
+// An agent's classes are declared in its spec (`classes` in
+// defineBuiltinAgent, backend/src/mastra/agent-factory.ts) and read from the
+// build: `person`, `data`, `orchestrator`, `single-step` (the agent-change
+// skill, "Classify the agent").
 
 /** The tools every `data` agent has: its answers reach the query inspector through them. */
 export const DATA_KIT = [
@@ -83,6 +62,36 @@ export function agentHash({ instructions, tools, skills }) {
   return createHash('sha256').update(payload).digest('hex').slice(0, 12);
 }
 
+/**
+ * The request contexts the matrix hash reads every agent under, beyond the
+ * empty one: what a call can carry that changes an agent's instructions,
+ * tools, skills or model (agents.md 4.2). `overrides` also installs a prompt
+ * override for every agent. Keys are the app's requestContext keys.
+ */
+export const MATRIX_SCENARIOS = [
+  { name: 'tools:none', context: { 'agent-tools': [] } },
+  { name: 'tools:sample_rows', context: { 'agent-tools': ['sample_rows'] } },
+  { name: 'tools:visuals+clarify', context: { 'agent-tools': ['visuals', 'ask_clarification'] } },
+  { name: 'gates:closed', context: { 'conversation-gates': { dashboard: false, export: false } } },
+  { name: 'gates:dashboard', context: { 'conversation-gates': { dashboard: true, export: false } } },
+  { name: 'gates:export', context: { 'conversation-gates': { dashboard: false, export: true } } },
+  { name: 'team:closed', context: { 'orchestrator-tools-runtime': { buildsDashboard: false, exportsConversation: false } } },
+  { name: 'team:open', context: { 'orchestrator-tools-runtime': { buildsDashboard: true, exportsConversation: true } } },
+  { name: 'step-model', context: { 'step-model': { model: 'claude-opus-5-5' } } },
+  { name: 'user-override', context: { 'agent-overrides': { model: 'override-model' } } },
+  { name: 'overrides', context: {}, overrides: true },
+];
+
+/** The prompt override the `overrides` scenario installs for an agent. */
+export function matrixOverridePrompt(key) {
+  return `Overridden job description of ${key}.\n\n## Working rules\n\n- Answer from the data.`;
+}
+
+/** A short, stable hash of an agent's outputs across the matrix scenarios. */
+export function matrixHash(outputs) {
+  return createHash('sha256').update(JSON.stringify(outputs)).digest('hex').slice(0, 12);
+}
+
 /** What one agent misses for its classes, as sentences. */
 export function classGaps(record) {
   const names = new Set(record.tools.map((tool) => tool.name));
@@ -107,7 +116,7 @@ export function classGaps(record) {
  * (`unclassified`), classes for agents no longer registered (`stale`), and
  * each agent's gaps.
  */
-export function checkClasses(records, classes = AGENT_CLASSES) {
+export function checkClasses(records, classes) {
   const keys = new Set(records.map((record) => record.key));
   return {
     unclassified: records.filter((record) => !classes[record.key]).map((record) => record.key),
@@ -125,8 +134,13 @@ export function compareInventories(base, branch) {
   const changed = [];
   for (const [key, record] of after) {
     const old = before.get(key);
-    if (!old || old.hash === record.hash) continue;
+    const matrixChanged = Boolean(old?.matrixHash && record.matrixHash && old.matrixHash !== record.matrixHash);
+    if (!old || (old.hash === record.hash && !matrixChanged)) continue;
     const what = [];
+    if (old.hash === record.hash) {
+      changed.push({ key, what: ['what it receives under a request context (matrix)'] });
+      continue;
+    }
     if (old.instructions !== record.instructions) {
       what.push(`instructions ${old.instructions.length} → ${record.instructions.length} chars`);
     }
@@ -194,8 +208,8 @@ export function formatInventory(records, check) {
     );
   }
   out.push('', '## Class check', '');
-  for (const key of check.unclassified) out.push(`- ERROR ${key}: not in AGENT_CLASSES (scripts/agent-inventory-lib.mjs); classify it`);
-  for (const key of check.stale) out.push(`- ERROR ${key}: in AGENT_CLASSES but no longer registered; remove it`);
+  for (const key of check.unclassified) out.push(`- ERROR ${key}: declares no classes; build it with defineBuiltinAgent (mastra/agent-factory.ts) and classify it`);
+  for (const key of check.stale) out.push(`- ERROR ${key}: built with defineBuiltinAgent but not registered in mastra/index.ts`);
   for (const { key, gap } of check.gaps) out.push(`- gap ${key}: ${gap}`);
   if (!check.unclassified.length && !check.stale.length && !check.gaps.length) out.push('- every agent has the tools of its classes');
   out.push(

@@ -1,4 +1,3 @@
-import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import {
   isCopilotConfig,
@@ -8,9 +7,9 @@ import {
 } from '../model-resolver';
 import { stepModelFrom } from '../step-model';
 import { buildModel } from '../model-factory';
-import { agentInstructions } from '../agent-prompt-overrides';
+import { defineBuiltinAgent } from '../agent-factory';
 import { VISUALIZATION_PROMPT } from './system-prompts';
-import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
+import { sessionWorkspaceOf } from '../session-workspaces';
 import { visualSpecSchema } from '../../modules/sessions/visual-spec';
 
 /**
@@ -137,22 +136,19 @@ export const interactiveVisualOutputSchema = z.object({
 });
 
 /** Converts a completed analysis answer into a renderable artifact bundle. */
-export const visualizationAgent = new Agent({
+export const visualizationAgent = defineBuiltinAgent({
+  key: 'visualization',
   id: 'interactive-visual-designer',
   name: 'Interactive Visual Designer',
   description:
     'Turns a completed analysis answer into an interactive visual, and tailors it on request.',
-  // The shipped prompt, or the in-app override (ADR-0026).
-  instructions: () => agentInstructions('visualization', VISUALIZATION_PROMPT),
+  classes: ['single-step'],
+  instructions: VISUALIZATION_PROMPT,
   // Keep analysis on the configured model while using the smaller sibling for
   // the bounded code-transformation step.
   model: async ({ requestContext }) =>
     buildModel(
       await resolveVisualizationModel(stepModelFrom(requestContext)?.model),
     ),
-  workspace: ({ requestContext, mastra }) => {
-    const workspaceId = requestContext.get(SESSION_WORKSPACE_CONTEXT_KEY);
-    if (typeof workspaceId !== 'string' || !mastra) return undefined;
-    return mastra.listWorkspaces()[workspaceId]?.workspace;
-  },
+  workspace: sessionWorkspaceOf,
 });

@@ -1,10 +1,5 @@
-import { Agent } from '@mastra/core/agent';
-import { agentInstructions } from '../agent-prompt-overrides';
-import { resolveLinks } from '../agent-links';
-import { resolveAgentModel } from '../model-resolver';
+import { defineBuiltinAgent, servedPromptWithTools } from '../agent-factory';
 import { catalogFrameworkSkills } from '../skill-sources';
-import { stepModelFrom } from '../step-model';
-import { withToolSection } from '../tool-section';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { submitDashboardTool } from '../tools/dashboard.tools';
 import {
@@ -98,10 +93,9 @@ export function insightsLeadSkills(requestContext?: ContextLike) {
  * the cue-fired repair rule stays last.
  */
 export function insightsLeadInstructions(requestContext?: ContextLike): string {
-  return withToolSection(
-    resolveLinks(
-      agentInstructions(INSIGHTS_LEAD_AGENT_KEY, INSIGHTS_LEAD_INSTRUCTIONS),
-    ),
+  return servedPromptWithTools(
+    INSIGHTS_LEAD_AGENT_KEY,
+    INSIGHTS_LEAD_INSTRUCTIONS,
     insightsLeadTools(requestContext),
   );
 }
@@ -114,16 +108,15 @@ export function insightsLeadInstructions(requestContext?: ContextLike): string {
  * model is the step model on the call's requestContext, else the saved
  * model (agents.md 1.3).
  */
-export const insightsLeadAgent = new Agent({
-  id: INSIGHTS_LEAD_AGENT_KEY,
+export const insightsLeadAgent = defineBuiltinAgent({
+  key: INSIGHTS_LEAD_AGENT_KEY,
   // The technical name traces and Monitoring show; the hub shows the persona.
   name: INSIGHTS_LEAD_NAME,
   description: INSIGHTS_LEAD_DESCRIPTION,
-  instructions: ({ requestContext }) =>
-    insightsLeadInstructions(requestContext),
+  classes: ['person', 'data'],
+  instructions: insightsLeadInstructions,
   // Loaded on demand through Mastra's skill tools (ADR-0025).
   skills: ({ requestContext }) => insightsLeadSkills(requestContext),
-  model: async ({ requestContext }) =>
-    resolveAgentModel(stepModelFrom(requestContext)?.model),
+  model: 'step-model',
   tools: ({ requestContext }) => insightsLeadTools(requestContext),
 });

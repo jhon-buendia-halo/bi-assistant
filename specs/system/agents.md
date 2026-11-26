@@ -56,7 +56,14 @@ Per-call options the app uses: `maxSteps` (tool-loop budget), `toolChoice: 'none
 
 **Structured output convention.** Every single-shot agent (fixer, verifier, designer, bootstrap, judge) asks for structured output with the schema **injected inline into the prompt** (not via a provider-native JSON mode), then validates the reply against the same schema. The parsed object is taken from the framework's `object` result when present, else from the reply text parsed as JSON after stripping a leading ```` ```json ```` / ```` ``` ```` fence and trailing fence. Anything that fails validation is treated as "no usable output" by the caller (each caller's fallback is specified below).
 
-> Implementation note: agents are `@mastra/core` `Agent` instances; structured output uses `structuredOutput: { schema, jsonPromptInjection: 'inline' }` with Zod schemas. The Zod `.describe()` strings are part of the prompt the model sees and are quoted below as field descriptions.
+> Implementation note: agents are `@mastra/core` `Agent` instances, every built-in one built by `defineBuiltinAgent` (`backend/src/mastra/agent-factory.ts`, since 2026-11-26) from a spec:
+> - its key, id, name and description;
+> - its classes (`person`, `data`, `orchestrator`, `single-step`; they decide its tools, the `agent-change` skill);
+> - its shipped prompt, served as is or as its in-app override (1.1), or a function of the call's context for an agent that builds its own (the assistant, Avery; Michael and Elena add a generated `## Tools` section through `servedPromptWithTools`);
+> - a model policy (1.3): `saved`, `step-model` or `user-override`, or its own model function (the visual designer, 1.5);
+> - its tools, skills, memory (`sessionMemory()`) and workspace (`sessionWorkspaceOf`).
+>
+> Structured output uses `structuredOutput: { schema, jsonPromptInjection: 'inline' }` with Zod schemas. The Zod `.describe()` strings are part of the prompt the model sees and are quoted below as field descriptions.
 
 ### 1.2 Registry and lookup
 
