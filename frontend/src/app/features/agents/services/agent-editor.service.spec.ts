@@ -157,7 +157,7 @@ describe('AgentEditorService', () => {
       skills: ['alpha', 'deleted-id'],
     });
     expect(editor.form().instructions).toBe(
-      'Answer in one sentence.\nTools and skills: [[skill:alpha]] [[tool:sample_rows]] [[tool:ask_clarification]] [[tool:create_visual]]',
+      'Answer in one sentence.\nTools and skills: [[skill:alpha]] [[tool:sample_rows]] [[tool:ask_clarification]]',
     );
     expect(editor.legacyNotice()).toBeTrue();
     expect(editor.changed()).toBeTrue();

@@ -103,13 +103,11 @@ describe('agent page util', () => {
 
   it("lists only the built-in skills every agent gets, not an Official agent's own (R75)", () => {
     const builtIn = [
-      { name: 'curated-knowledge', agents: ['assistant'] },
-      { name: 'interactive-visuals', agents: ['visualization'] },
+      { name: 'curated-knowledge', agents: ['insights-lead'] },
       { name: 'report-carriers', agents: ['report'] },
     ];
     expect(includedInEveryAgent(builtIn).map((skill) => skill.name)).toEqual([
       'curated-knowledge',
-      'interactive-visuals',
     ]);
   });
 });

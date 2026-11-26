@@ -20,7 +20,6 @@ export type BackgroundTaskKind =
   | 'inventory-refresh'
   | 'testing-data-load'
   | 'synthetic-profile'
-  | 'visual-tailor'
   | 'visual-refresh'
   | 'eval-run'
   | 'workflow-run';

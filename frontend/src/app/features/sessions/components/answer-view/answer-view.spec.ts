@@ -111,41 +111,17 @@ describe('AnswerView', () => {
       expect(el.textContent).toContain('run_readonly_sql — 500 rows');
     });
 
-    it('renders the cross-check verdict next to the Verified badge', () => {
-      const agreed = render({
+    it('shows no cross-check chip for an answer stored with one (stored data only)', () => {
+      const el = render({
         ...answer,
         verified: true,
-        crossCheck: {
-          status: 'agree',
-          note: 'independent re-derivation returned the same results',
-        },
-      });
-      const chip = agreed.querySelector(
-        '[title="independent re-derivation returned the same results"]',
-      );
-      expect(chip?.textContent?.trim()).toBe('Cross-checked');
-      expect(chip?.className).toContain('text-on-success-soft');
+        crossCheck: { status: 'agree', note: 'same results' },
+      } as ChatMessage);
+      expect(el.textContent).not.toContain('Cross-check');
+      expect(el.querySelector('[title="same results"]')).toBeNull();
       expect(
-        agreed.querySelector('[title="Matches an approved query"]'),
+        el.querySelector('[title="Matches an approved query"]'),
       ).toBeTruthy();
-
-      const differs = render({
-        ...answer,
-        crossCheck: {
-          status: 'disagree',
-          note: 'results differ — treat with care',
-        },
-      });
-      const amber = differs.querySelector(
-        '[title="results differ — treat with care"]',
-      );
-      expect(amber?.textContent?.trim()).toBe('Cross-check differs');
-      expect(amber?.className).toContain('text-on-warning-soft');
-
-      const failed = render({ ...answer, crossCheck: { status: 'error' } });
-      const muted = failed.querySelector('[title="Cross-check failed"]');
-      expect(muted?.textContent?.trim()).toBe('Cross-check failed');
-      expect(muted?.className).toContain('text-fg-muted');
     });
 
     it('shows no cross-check chip on an ordinary answer', () => {
@@ -328,37 +304,9 @@ describe('AnswerView', () => {
     });
   });
 
-  describe('Generate interactive visuals', () => {
-    it('is offered only when the host asks for it and the answer has text', () => {
-      expect(render(answer).textContent).not.toContain(
-        'Generate interactive visuals',
-      );
-      expect(
-        render({ ...answer, content: '  ' }, { showGenerateVisual: true })
-          .textContent,
-      ).not.toContain('Generate interactive visuals');
-
-      const el = render(answer, { showGenerateVisual: true });
-      let emitted = 0;
-      fixture.componentInstance.generateVisual.subscribe(() => emitted++);
-      buttonByText(el, 'Generate interactive visuals').click();
-      expect(emitted).toBe(1);
-    });
-
-    it('shows the spinner copy and is disabled while generating or busy', () => {
-      const generating = render(answer, {
-        showGenerateVisual: true,
-        visualGenerating: true,
-      });
-      expect(
-        buttonByText(generating, 'Generating interactive visuals…').disabled,
-      ).toBeTrue();
-
-      const busy = render(answer, { showGenerateVisual: true, busy: true });
-      expect(
-        buttonByText(busy, 'Generate interactive visuals').disabled,
-      ).toBeTrue();
-    });
+  it('offers no Generate interactive visuals button (the designer is gone)', () => {
+    const el = render(answer);
+    expect(el.textContent).not.toContain('Generate interactive visuals');
   });
 
   describe('the clarification card', () => {

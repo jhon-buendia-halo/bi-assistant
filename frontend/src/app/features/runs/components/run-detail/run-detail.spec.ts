@@ -134,14 +134,9 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     expect(el.querySelector('[data-testid="run-detail-answer"]')).toBeNull();
   });
 
-  it('offers Generate interactive visuals on the answer and hands the run to the visual state', () => {
+  it('offers no Generate interactive visuals on the answer', () => {
     const el = mount(RUN);
-    const generate = spyOn(TestBed.inject(RunVisualsState), 'generate');
-    const button = Array.from(el.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes('Generate interactive visuals'),
-    )!;
-    button.click();
-    expect(generate).toHaveBeenCalledWith(RUN, jasmine.any(Function));
+    expect(el.textContent).not.toContain('Generate interactive visuals');
   });
 
   it('shows the visual cards stored on the run as artifact cards, and Open opens that visual (visuals R42)', () => {

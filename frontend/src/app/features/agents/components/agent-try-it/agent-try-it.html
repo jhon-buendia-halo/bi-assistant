@@ -78,6 +78,15 @@
         {{ thinking }}
       </p>
     }
+    @if (waiting(); as waiting) {
+      <app-workflow-run-input-required
+        data-testid="agent-tryit-waiting"
+        [waiting]="waiting"
+        [error]="waitingError()"
+        (answered)="resume($event)"
+        (rerun)="rerunWithAnswer($event)"
+      />
+    }
     @if (answer(); as message) {
       <div data-testid="agent-tryit-answer">
         <app-answer-view

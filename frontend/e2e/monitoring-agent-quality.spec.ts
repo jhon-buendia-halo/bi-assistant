@@ -14,7 +14,7 @@ import { scenarioStep } from './support/demo-captions';
 /**
  * Mirrors `Feature: Agent quality` in specs/capabilities/monitoring/spec.md
  * (docs/plans/monitoring-agent-quality.md). The eval run and the live run are
- * real: the assistant's one question and Insights Analyst's turn go to the
+ * real: Elena's one question and Insights Analyst's turn go to the
  * recording LLM stub, are traced by Mastra and read back by
  * `GET /monitoring/agent-quality`.
  */
@@ -56,15 +56,15 @@ async function openAgentQuality(page: Page): Promise<void> {
   await expect(page.getByTestId('agent-quality-table')).toBeVisible();
 }
 
-/** Runs the assistant's evals on one question and waits for the run to end. */
-async function runAssistantEvalOnce(page: Page): Promise<string> {
+/** Runs Elena's evals on one question and waits for the run to end. */
+async function runElenaEvalOnce(page: Page): Promise<string> {
   await createWorldCupDatasource(page);
   await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
   const base = apiBase(page);
   const sources = (await (
     await page.request.get(`${base}/datasources`)
   ).json()) as { datasources: { id: string }[] };
-  const started = await page.request.post(`${base}/agents/assistant/evals/run`, {
+  const started = await page.request.post(`${base}/agents/insights-lead/evals/run`, {
     data: { datasourceId: sources.datasources[0].id, caseIds: ['champion-2022'] },
   });
   const body = (await started.json()) as { ok: boolean; message: string; jobId: string };
@@ -74,7 +74,7 @@ async function runAssistantEvalOnce(page: Page): Promise<string> {
       async () =>
         (
           (await (
-            await page.request.get(`${base}/agents/assistant/evals/runs/${body.jobId}`)
+            await page.request.get(`${base}/agents/insights-lead/evals/runs/${body.jobId}`)
           ).json()) as { status: string }
         ).status,
       { timeout: 180_000, intervals: [1_000] },
@@ -155,11 +155,11 @@ test.describe('Feature: Agent quality', () => {
       page,
       'Then its row shows "No eval run yet" and dashes in the other eval cells',
       async () => {
-        const row = page.getByTestId('agent-quality-row-assistant');
-        await expect(page.getByTestId('agent-quality-pass-assistant')).toHaveText(
+        const row = page.getByTestId('agent-quality-row-insights-lead');
+        await expect(page.getByTestId('agent-quality-pass-insights-lead')).toHaveText(
           'No eval run yet',
         );
-        await expect(page.getByTestId('agent-quality-pass3-assistant')).toHaveText('—');
+        await expect(page.getByTestId('agent-quality-pass3-insights-lead')).toHaveText('—');
         await expect(row).toBeVisible();
       },
     );
@@ -170,9 +170,9 @@ test.describe('Feature: Agent quality', () => {
   }) => {
     await scenarioStep(
       page,
-      "Given I ran the assistant's evals once on one question",
+      "Given I ran Elena's evals once on one question",
       async () => {
-        await runAssistantEvalOnce(page);
+        await runElenaEvalOnce(page);
       },
     );
     await scenarioStep(page, 'When I open the "Agent quality" tab', async () => {
@@ -180,9 +180,9 @@ test.describe('Feature: Agent quality', () => {
     });
     await scenarioStep(
       page,
-      'Then the assistant\'s pass rate chip reads "<passed>/1 · <rate> %"',
+      'Then Elena\'s pass rate chip reads "<passed>/1 · <rate> %"',
       async () => {
-        await expect(page.getByTestId('agent-quality-pass-assistant')).toContainText(
+        await expect(page.getByTestId('agent-quality-pass-insights-lead')).toContainText(
           /^\d\/1 · \d+%$/,
         );
       },
@@ -191,7 +191,7 @@ test.describe('Feature: Agent quality', () => {
       page,
       'And its pass^3 reads "needs 3 runs (1 of 3)"',
       async () => {
-        await expect(page.getByTestId('agent-quality-pass3-assistant')).toHaveText(
+        await expect(page.getByTestId('agent-quality-pass3-insights-lead')).toHaveText(
           'needs 3 runs (1 of 3)',
         );
       },
@@ -200,8 +200,8 @@ test.describe('Feature: Agent quality', () => {
       page,
       'And its p95 latency and cost per call are dashes because its eval calls are not live calls',
       async () => {
-        await expect(page.getByTestId('agent-quality-p95-assistant')).toHaveText('—');
-        await expect(page.getByTestId('agent-quality-cost-assistant')).toHaveText('—');
+        await expect(page.getByTestId('agent-quality-p95-insights-lead')).toHaveText('—');
+        await expect(page.getByTestId('agent-quality-cost-insights-lead')).toHaveText('—');
       },
     );
     for (const theme of ['light', 'dark'] as const) {
@@ -243,7 +243,7 @@ test.describe('Feature: Agent quality', () => {
 
   test('The Model filter offers the model of the run', async ({ page }) => {
     await scenarioStep(page, 'Given an eval run recorded its model', async () => {
-      await runAssistantEvalOnce(page);
+      await runElenaEvalOnce(page);
     });
     await scenarioStep(page, 'When I open the "Model" filter', async () => {
       await openAgentQuality(page);
@@ -256,7 +256,7 @@ test.describe('Feature: Agent quality', () => {
   });
 
   test('Clear filters restores the defaults', async ({ page }) => {
-    await runAssistantEvalOnce(page);
+    await runElenaEvalOnce(page);
     await openAgentQuality(page);
     await expect(page.getByTestId('quality-filters-clear')).toBeDisabled();
     await scenarioStep(
@@ -288,12 +288,12 @@ test.describe('Feature: Agent quality', () => {
 
   test("A row opens the agent persona's eval executions", async ({ page }) => {
     let jobId = '';
-    await scenarioStep(page, 'Given the assistant has an eval run', async () => {
-      jobId = await runAssistantEvalOnce(page);
+    await scenarioStep(page, 'Given Elena has an eval run', async () => {
+      jobId = await runElenaEvalOnce(page);
       await openAgentQuality(page);
     });
-    await scenarioStep(page, "When I choose the assistant's row", async () => {
-      await page.getByTestId('agent-quality-row-assistant').click();
+    await scenarioStep(page, "When I choose Elena's row", async () => {
+      await page.getByTestId('agent-quality-row-insights-lead').click();
     });
     await scenarioStep(
       page,

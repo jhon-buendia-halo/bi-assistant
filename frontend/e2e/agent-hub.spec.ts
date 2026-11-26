@@ -13,16 +13,14 @@ import {
 
 /** Mirrors the Feature "Agent Hub" in specs/capabilities/agents-evals/spec.md. */
 
-/** The built-in agents' personas: a human name and a job title (R1). */
-const ASSISTANT = 'Emily';
-const ASSISTANT_ROLE = 'Data Analyst';
 /** Insights Analyst's persona (agents-evals R107, BA-320). */
 const V2_AGENT = 'Michael';
 /** The workflow it runs (workflows R1). */
 const V2 = 'Answer a Business Question (Avery + Michael)';
 const V2_ID = 'orchestrated-answer-michael';
-/** Elena, the Insights Lead: Official (agents-evals R1, R115). */
+/** Elena, the Insights Lead: Official, and the engine user agents run on (agents-evals R1, R115). */
 const ELENA = 'Elena';
+const ELENA_KEY = 'insights-lead';
 const V2_KEY = 'insights-analyst';
 const V2_DESCRIPTION =
   'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.';
@@ -38,9 +36,9 @@ const V2_TOOLS = [
 const V2_SKILLS = ['curated-knowledge', 'result-validation', 'sql-analysis'];
 /**
  * The Official cards in hub order under the Official owner, all in Analysis
- * ("Elena", "Emily", "Michael"; agents-evals R1, R107, R115).
+ * ("Elena", "Michael"; agents-evals R1, R107, R115).
  */
-const OFFICIAL_KEYS = ['insights-lead', 'assistant', V2_KEY];
+const OFFICIAL_KEYS = ['insights-lead', V2_KEY];
 /** The hub's sections under All, in domain order (agents-evals R1). */
 const DOMAIN_SECTIONS = [
   'analysis',
@@ -52,13 +50,12 @@ const DOMAIN_SECTIONS = [
 /** The Analysis section: Official by name, then System by name (R1). */
 const ANALYSIS_KEYS = [
   'insights-lead',
-  'assistant',
   V2_KEY,
   'chief-of-staff',
   'result-explorer',
 ];
-/** Every card under All: 11 built-in agents and the Background's 2. */
-const ALL_CARDS = 13;
+/** Every card under All: 8 built-in agents and the Background's 2. */
+const ALL_CARDS = 10;
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -157,31 +154,23 @@ test('shows the built-in agents and mine in sections by domain', async ({
     analysis.getByRole('heading', { name: 'Analysis', exact: true }),
   ).toBeVisible();
   expect(await cardKeys(analysis)).toEqual(ANALYSIS_KEYS);
-  await expect(analysis.getByTestId('agent-card-assistant')).toContainText(
-    ASSISTANT,
+  await expect(analysis.getByTestId('agent-card-insights-lead')).toContainText(
+    ELENA,
   );
-  await expect(analysis.getByTestId('agent-role-assistant')).toHaveText(
-    ASSISTANT_ROLE,
-  );
-  await expect(analysis.getByTestId('agent-card-assistant')).toContainText(
+  await expect(analysis.getByTestId('agent-card-insights-lead')).toContainText(
     'Owner: Official',
   );
-  await expect(analysis.getByTestId('agent-domain-assistant')).toHaveAttribute(
-    'data-domain',
-    'analysis',
-  );
+  await expect(
+    analysis.getByTestId('agent-domain-insights-lead'),
+  ).toHaveAttribute('data-domain', 'analysis');
+  // Emily, Ryan and Rachel are removed (2026-11-26): no card, no key.
+  for (const removed of ['assistant', 'visualization', 'sql-verifier']) {
+    await expect(page.getByTestId(`agent-card-${removed}`)).toHaveCount(0);
+  }
 
   for (const [id, heading, keys] of [
-    [
-      'sql',
-      'SQL Engineering',
-      ['sql-fixer', 'query-explainer', 'sql-verifier'],
-    ],
-    [
-      'storytelling',
-      'Storytelling',
-      ['bi-analyst', 'visualization'],
-    ],
+    ['sql', 'SQL Engineering', ['sql-fixer', 'query-explainer']],
+    ['storytelling', 'Storytelling', ['bi-analyst']],
     ['quality', 'Quality & Evals', ['assistant-eval-judge']],
   ] as const) {
     await expect(
@@ -190,13 +179,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
     expect(await cardKeys(section(page, id))).toEqual([...keys]);
   }
   await expect(
-    section(page, 'sql').getByTestId('agent-card-sql-verifier'),
-  ).toContainText('Rachel');
-  await expect(
-    section(page, 'sql').getByTestId('agent-role-sql-verifier'),
-  ).toHaveText('SQL Reviewer');
-  await expect(
-    section(page, 'sql').getByTestId('agent-card-sql-verifier'),
+    section(page, 'sql').getByTestId('agent-card-sql-fixer'),
   ).toContainText('Owner: System');
   // User agents with no domain chosen are General.
   const general = section(page, 'general');
@@ -241,7 +224,6 @@ test('a user agent moves to the section of the domain chosen in the editor', asy
     claimsId,
     'sql-fixer',
     'query-explainer',
-    'sql-verifier',
   ]);
   expect(await cardKeys(section(page, 'general'))).toEqual([healthId]);
 });
@@ -285,8 +267,7 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
   expect(await sectionIds(page)).toEqual(['general']);
 
   await owner.selectOption({ label: 'Official' });
-  // The assistant, Insights Analyst and Elena are Official, all in
-  // Analysis (R1, R107, R115).
+  // Elena and Insights Analyst are Official, both in Analysis (R1, R107, R115).
   await expect(cards(page)).toHaveCount(OFFICIAL_KEYS.length);
   expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
   expect(await sectionIds(page)).toEqual(['analysis']);
@@ -297,7 +278,7 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
     'true',
   );
   expect(await sectionIds(page)).toEqual(['analysis']);
-  expect(await cardKeys(page)).toEqual(['insights-lead', 'assistant', V2_KEY]);
+  expect(await cardKeys(page)).toEqual(['insights-lead', V2_KEY]);
 
   await filter(page, 'SQL Engineering').click();
   await expect(page.getByText('No agent personas match these filters.')).toBeVisible();
@@ -322,12 +303,12 @@ test('pinned agents come first in their own section and survive a restart', asyn
   await openHub(page);
 
   await button(page, `Pin ${HEALTH}`).click();
-  await button(page, `Pin ${ASSISTANT}`).click();
+  await button(page, `Pin ${ELENA}`).click();
 
-  const assistantToggle = button(page, `Unpin ${ASSISTANT}`);
-  await expect(assistantToggle).toHaveText('Pinned');
-  await expect(assistantToggle).toHaveAttribute('aria-pressed', 'true');
-  expect((await cardKeys(section(page, 'analysis')))[0]).toBe('assistant');
+  const elenaToggle = button(page, `Unpin ${ELENA}`);
+  await expect(elenaToggle).toHaveText('Pinned');
+  await expect(elenaToggle).toHaveAttribute('aria-pressed', 'true');
+  expect((await cardKeys(section(page, 'analysis')))[0]).toBe(ELENA_KEY);
 
   const healthToggle = button(page, `Unpin ${HEALTH}`);
   await expect(healthToggle).toHaveText('Pinned');
@@ -340,7 +321,7 @@ test('pinned agents come first in their own section and survive a restart', asyn
   await filter(page, 'Pinned').click();
   await expect(cards(section(page, 'pinned'))).toHaveCount(2);
   expect(await cardKeys(section(page, 'pinned'))).toEqual([
-    'assistant',
+    ELENA_KEY,
     healthId,
   ]);
 
@@ -356,13 +337,13 @@ test('pinned agents come first in their own section and survive a restart', asyn
   await filter(page, 'Pinned').click();
   await expect(cards(section(page, 'pinned'))).toHaveCount(2);
   expect(await cardKeys(section(page, 'pinned'))).toEqual([
-    'assistant',
+    ELENA_KEY,
     healthId,
   ]);
 
   await button(page, `Unpin ${HEALTH}`).click();
   await expect(cards(section(page, 'pinned'))).toHaveCount(1);
-  expect(await cardKeys(section(page, 'pinned'))).toEqual(['assistant']);
+  expect(await cardKeys(section(page, 'pinned'))).toEqual([ELENA_KEY]);
 
   await filter(page, 'All').click();
   await expect(
@@ -410,7 +391,7 @@ test("a card opens the agent's detail view with its actions", async ({
   await expect(button(page, 'Start chat')).toHaveCount(0);
 
   await button(page, 'All agent personas').click();
-  await openAgent(page, 'assistant', ASSISTANT);
+  await openAgent(page, ELENA_KEY, ELENA);
   await expect(page.getByTestId('agent-used-in')).toBeVisible();
   await expect(button(page, 'Start chat')).toHaveCount(0);
   await expect(page.getByTestId('agent-edit')).toHaveCount(0);
@@ -539,13 +520,12 @@ test(
     );
     await scenarioStep(
       page,
-      'Then I see "Elena", "Emily" and "Michael", and no other agent persona',
+      'Then I see "Elena" and "Michael", and no other agent persona',
       async () => {
-        await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
+        await expect(page.getByTestId('agent-card-insights-lead')).toBeVisible();
         expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
         for (const [key, name] of [
           ['insights-lead', ELENA],
-          ['assistant', ASSISTANT],
           [V2_KEY, V2_AGENT],
         ]) {
           const card = page.getByTestId(`agent-card-${key}`);
@@ -580,9 +560,9 @@ test('Insights Analyst is an Official card', async ({ page }) => {
   const card = analysis.getByTestId(`agent-card-${V2_KEY}`);
   await expect(card).toContainText(V2_AGENT);
   await expect(card).toContainText('Owner: Official');
-  // Right after "Emily" (R1, R107).
+  // Right after "Elena" (R1, R107).
   const keys = await cardKeys(analysis);
-  expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf('assistant') + 1);
+  expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf(ELENA_KEY) + 1);
 });
 
 test("Insights Analyst's page shows its prompt, six tools and three skills", async ({
@@ -680,7 +660,7 @@ test(
       await openHub(page);
     });
     await scenarioStep(page, 'Then no card has "Start chat"', async () => {
-      await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
+      await expect(page.getByTestId('agent-card-insights-lead')).toBeVisible();
       await expect(cards(page).first()).toBeVisible();
       await expect(
         page.getByRole('button', { name: /Start chat/ }),

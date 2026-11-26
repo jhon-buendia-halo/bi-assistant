@@ -18,7 +18,7 @@ export type AgentDomain =
   | 'general';
 
 /** The tools an agent's author can switch on or off (agents-evals R55). */
-export type AgentToolId = 'sample_rows' | 'ask_clarification' | 'visuals';
+export type AgentToolId = 'sample_rows' | 'ask_clarification';
 
 /** A user agent's stored configuration (draft or Live version). */
 export interface AgentConfig {
@@ -31,7 +31,7 @@ export interface AgentConfig {
   instructions: string;
   datasets: string[];
   starterQuestions: string[];
-  /** Absent on a draft saved before tools could be chosen: all three. */
+  /** Absent on a draft saved before tools could be chosen: both. */
   tools?: AgentToolId[];
   /** Ids of the in-app skills the agent uses (R43); absent: none. */
   skills?: string[];

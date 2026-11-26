@@ -79,122 +79,6 @@
         </div>
 
         @if (!readOnly()) {
-        <!-- Tailoring: chart type / sort / top-N become one plain-English instruction -->
-        <div class="relative">
-          <button
-            type="button"
-            (click)="toggleTailorMenu()"
-            [attr.aria-expanded]="tailorMenuOpen()"
-            [disabled]="viewingOldVersion() || !runId()"
-            [title]="
-              viewingOldVersion()
-                ? 'Make this version current before tailoring'
-                : 'Tailor this visual'
-            "
-            class="flex items-center gap-1.5 rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg hover:border-border-strong hover:bg-surface-selected disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            @if (tailoring()) {
-              <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
-            } @else {
-              <lucide-angular [img]="SlidersHorizontal" [size]="13" />
-            }
-            <span>Tailor</span>
-          </button>
-          @if (tailorMenuOpen()) {
-            <button
-              type="button"
-              aria-label="Close tailoring form"
-              class="fixed inset-0 z-20 cursor-default"
-              (click)="tailorMenuOpen.set(false)"
-            ></button>
-            <div
-              class="absolute top-full right-0 z-30 mt-1 w-72 rounded-xl border border-border bg-surface p-3 shadow-xl"
-            >
-              <label class="flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-fg-muted">Chart type</span>
-                <select
-                  aria-label="Chart type"
-                  [value]="tailorChartType()"
-                  (change)="tailorChartType.set($any($event.target).value)"
-                  class="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg outline-none focus:border-border-selected"
-                >
-                  @for (option of chartTypes; track option.value) {
-                    <option [value]="option.value">{{ option.label }}</option>
-                  }
-                </select>
-              </label>
-              <label class="mt-2.5 flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-fg-muted">Sort</span>
-                <select
-                  aria-label="Sort"
-                  [value]="tailorSort()"
-                  (change)="tailorSort.set($any($event.target).value)"
-                  class="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg outline-none focus:border-border-selected"
-                >
-                  @for (option of sorts; track option.value) {
-                    <option [value]="option.value">{{ option.label }}</option>
-                  }
-                </select>
-              </label>
-              <label class="mt-2.5 flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-fg-muted">
-                  Top N ({{ minTopN }}–{{ maxTopN }}, optional)
-                </span>
-                <input
-                  type="number"
-                  aria-label="Top N"
-                  placeholder="All items"
-                  [min]="minTopN"
-                  [max]="maxTopN"
-                  [value]="tailorTopN() ?? ''"
-                  (input)="setTopN($any($event.target).value)"
-                  class="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg outline-none placeholder:text-fg-muted focus:border-border-selected"
-                />
-              </label>
-              <label class="mt-2.5 flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-fg-muted">Describe the change (optional)</span>
-                <textarea
-                  rows="3"
-                  aria-label="Describe the change"
-                  placeholder="e.g. Show it as a stacked bar by year and highlight France"
-                  [value]="tailorFreeText()"
-                  (input)="setTailorFreeText($any($event.target).value)"
-                  (keydown)="onFreeTextKeydown($event)"
-                  class="resize-y rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg outline-none placeholder:text-fg-muted focus:border-border-selected"
-                ></textarea>
-              </label>
-              @if (tailorInstruction(); as instruction) {
-                <p class="mt-2.5 rounded-lg bg-surface-muted px-2.5 py-1.5 text-[11px] leading-5 text-fg-muted">
-                  {{ instruction }}
-                </p>
-              }
-              @if (tailorError(); as tailorError) {
-                <p class="mt-2.5 text-[11px] leading-5 text-on-danger-soft">{{ tailorError }}</p>
-              }
-              <div class="mt-3 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  (click)="tailorMenuOpen.set(false)"
-                  class="rounded-lg px-2.5 py-1.5 text-[12px] text-fg-muted hover:bg-surface-muted hover:text-fg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  (click)="applyTailoring()"
-                  [disabled]="tailoring() || tailorInstruction() === ''"
-                  class="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[12px] font-medium text-on-primary hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-fg-muted"
-                >
-                  @if (tailoring()) {
-                    <lucide-angular [img]="Loader2" [size]="12" class="animate-spin" />
-                  }
-                  <span>Apply</span>
-                </button>
-              </div>
-            </div>
-          }
-        </div>
-
         <button
           type="button"
           title="Refresh data (re-run the stored query)"
@@ -245,11 +129,10 @@
       </span>
       <div>
         <p class="text-[13px] font-medium text-fg">
-          Designing the visual
+          Loading the visual
         </p>
         <p class="mt-1 text-[12px] leading-5 text-fg-muted">
-          Building and saving HTML, CSS, and JavaScript in the session
-          workspace…
+          Reading it from the workspace…
         </p>
       </div>
     </div>
@@ -258,21 +141,12 @@
       class="flex flex-1 flex-col items-center justify-center px-8 text-center"
     >
       <p class="text-[13px] font-medium text-on-danger-soft">
-        Visual generation failed
+        The visual could not be loaded
       </p>
       <p class="mt-1 text-[12px] leading-5 text-fg-muted">{{ error() }}</p>
     </div>
   } @else if (visualization(); as visual) {
     <div class="relative min-h-0 flex-1 p-3 pb-0">
-      @if (repairing()) {
-        <!-- Silent auto-repair in flight; the banner only returns if it fails -->
-        <div
-          class="absolute inset-x-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-[12px] text-fg shadow-lg"
-        >
-          <lucide-angular [img]="Loader2" [size]="14" class="shrink-0 animate-spin" />
-          <span>Fixing the visual…</span>
-        </div>
-      }
       @if (runtimeError(); as runtimeError) {
         <div
           class="absolute inset-x-3 top-3 z-10 flex items-start gap-2 rounded-lg border border-on-danger-soft/30 bg-danger-soft px-3 py-2 text-[12px] text-on-danger-soft"
@@ -280,7 +154,7 @@
           <lucide-angular [img]="TriangleAlert" [size]="14" class="mt-0.5 shrink-0" />
           <span class="min-w-0">
             <span class="font-medium">This visual hit a runtime error.</span>
-            <span class="text-on-danger-soft"> {{ runtimeError }} — ask the assistant to fix it or revert to an earlier version.</span>
+            <span class="text-on-danger-soft"> {{ runtimeError }} — revert to an earlier version.</span>
           </span>
         </div>
       }
@@ -311,10 +185,10 @@
       </span>
       <div>
         <p class="text-[13px] font-medium text-fg">
-          No visual generated yet
+          No visual to show
         </p>
         <p class="mt-1 text-[12px] leading-5 text-fg-muted">
-          Generate an interactive visual from any completed assistant answer.
+          Pick a stored visual from this answer to open it here.
         </p>
       </div>
     </div>

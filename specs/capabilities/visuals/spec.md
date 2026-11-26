@@ -1,11 +1,9 @@
 # Interactive visuals
 
-Any completed answer can become an interactive visual: a chart, KPI tiles or a table, wrapped in a readable document. The document states the question, the takeaway, the full analysis, how it was worked out and the exact data it was built from. Visuals take part in the conversation:
-- the user creates one from an answer or by asking the assistant;
-- the user tailors it in plain English, either in the chat or from the panel's Tailor form;
-- every change becomes a new version in a history the user can browse and revert;
+A stored interactive visual (a chart, KPI tiles or a table, wrapped in a readable document) is viewed, reverted, refreshed and exported. Visuals can no longer be created or tailored: the visual designer (Ryan, `visualization`) and the visual tools were removed on 2026-11-26 (ADR-0059), so this spec keeps what is read:
+- every version is in a history the user can browse and revert;
 - its data can be refreshed in place by re-running the stored SQL;
-- a visual that breaks at runtime repairs itself once, silently.
+- the document states the question, the takeaway, the full analysis, how it was worked out and the exact data it was built from.
 
 Every version can be exported as a self-contained bundle that opens offline, without the app.
 
@@ -17,49 +15,19 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
 
 ### Creating
 
-- R1. The system SHALL create a visual only from a completed assistant answer. The answer must have non-empty text and must not be a clarification. When no answer is named, the latest such answer is used.
-- R2. Every answer with text SHALL offer "Generate interactive visuals". While generating, the label reads "Generating interactive visuals…" and the button is disabled. It is also disabled while a chat turn runs. One generation runs per session at a time.
-  - On a run (workflows R18-R20), the button sits under the answer on the run page only (`run-detail`, a legacy run). It is disabled while the run is `running`, and one generation runs at a time. The workflow page's Run panel SHALL NOT offer it (since 2026-11-15): a workflow that wants visuals makes them in a step of its own, with a specialised agent; visuals a run already has still open under its answer there.
-- R3. The assistant SHALL create a visual when the user asks for a chart or visual of an answer, and SHALL never paste HTML, CSS or JavaScript into the chat. A visual created during a turn SHALL also see that turn's query results, merged onto the source answer's data records. When both share the same SQL text, the turn's record wins.
+- R1. Retired (2026-11-26, ADR-0059). The visual designer was removed with Emily, Ryan and Rachel, so nothing creates a visual any more; a stored visual is still viewed.
+- R2. Retired (2026-11-26, ADR-0059). The "Generate interactive visuals" button is gone from answers and runs.
+- R3. Retired (2026-11-26, ADR-0059). No agent creates a visual from a chat request: the `create_visual` tool is gone.
 - R4. A new visual SHALL get a unique id and start at version 1, with `currentVersion` = 1. Its title comes from the designer, trimmed to 100 characters (default "Interactive visual"). Its description (the takeaway) also comes from the designer. Its source answer is recorded by timestamp.
 
-### Designing (spec first, freeform fallback)
+### Designing (removed 2026-11-26)
 
-- R5. The designer SHALL receive:
-  - the question;
-  - the answer text;
-  - the instruction, if any;
-  - the current visual when tailoring;
-  - the reference, when there is one: the notes that describe the image the user attached to the run, as a `<reference>` block after the answer (a run's Build visual passes the Image Reader's notes; blank notes mean no block);
-  - a bounded data block: up to 8 successful result sets with rows, in run order (when more, the 8 with the most rows), sharing a budget of 120 rows (never below 12 per set), shrunk until the block is under 40,000 characters. The block is a sample for reading the columns and the shape; the visual is not drawn from it (R11);
-  - a deterministic recommended-form block computed from the same result sets: one recommendation for a single result set, and, when two or more sets each have two or more rows, a dashboard recommendation that names a panel form for each set and the single-row sets as the source of the KPI tiles;
-  - the `interactive-visuals` skill for the mode it runs: the router with the spec-mode reference for a spec, with the freeform reference for the fallback, never both ([agents.md](../../system/agents.md) section 7.2).
-
-  When rows were cut, the prompt says so.
-- R6. When there are rows, the designer SHALL first produce a visual spec, unless it is tailoring a freeform visual (see R9). A spec has:
-  - up to 6 KPI tiles: label, columns that select a result set, column, aggregation (sum, avg, min, max, count or value), format (number, compact, percent or currency), unit and, with `max`, `min` or `value`, an optional category: the column that names the row the figure comes from, so the tile reads `FL · 262`;
-  - **either one `chart` or `panels`, never both.** A chart is one of bar, line, scatter, heatmap, metric-cards, table, donut, pivot or us-map, with select, x, y (one or several measures), series, sort, top N (≤200), stacked, labels, y format, axis labels and, for a pivot, totals. `panels` is a dashboard of 1 to 8 panels, each a title, a span (3 to 12 of a 12-column grid, 6 when omitted) and a chart of the same shape. A stored spec may hold `null` for `chart`, `panels`, `span`, `category` or `totals`, which reads as absent;
-  - an optional table with columns and a collapsed flag.
-
-  A **pivot** is a crosstab of exact figures: `x` is the row dimension. In the long shape (one row per pair) `series` is the column dimension and `y` one measure; in the wide shape (one row per `x`, a measure per column) there is no `series` and `y` lists the measures that are the columns. Rows keep the order of the data unless `sort` is set (by the row label or by the row total). A pivot has a Total row and, in the long shape, a Total column; `totals: false` drops both. A **US state map** shades one tile per state by the first measure of `y`; `x` is a column of state codes or names.
-
-  A dashboard visual holds the query results it was drawn from, not the table behind them: it has no filters and no measure, row or column pickers. A reference that shows such controls is followed by drawing the view they produce.
-- R7. Before anything is written, the system SHALL validate the spec against the exact rows it will render (the stored result sets of R11), every rule applying to each chart of the spec (the `chart`, or each panel's chart; a problem names the panel it is in):
-  - the spec has a `chart` or `panels`, one of the two and not both;
-  - every `select` must match a result set;
-  - every named column must exist;
-  - measures, and the x axis of a scatter, must be numeric in the sampled rows;
-  - x/y forms (bar, line, scatter, heatmap, donut, pivot, us-map) need both x and y;
-  - a heatmap needs a series;
-  - a pivot with a series takes one y measure; to show several measures as the columns it has no series;
-  - a us-map needs an `x` column in which most sampled values (at least 60%) are US state codes or names;
-  - a KPI `category` goes only with `max`, `min` or `value`, and must be a column of the KPI's result set;
-  - `sort.by` must be x, y, the x column or a plotted measure.
-
-  Problems go back to the designer in plain language. After 2 failed spec attempts, or when there are no rows at all, the freeform pipeline takes over.
-- R8. A freeform visual's script SHALL be compile-checked without being executed. A script that fails to parse is retried once with the parse error. If it still fails, creation fails with "visualization agent produced JavaScript that does not parse".
-- R9. Tailoring a freeform visual SHALL stay freeform. Tailoring a spec visual SHALL produce a spec, and freeform remains the fallback.
-- R10. Each designer call SHALL time out after 120 seconds with "interactive visual generation timed out; please try again". A timeout is never retried as a spec problem.
+- R5. Retired (2026-11-26, ADR-0059). The designer (its input, spec-first design, validation, timeout and freeform fallback) is gone. The spec the viewer reads, and how it is checked when a stored visual is rendered, are in [agents.md](../../system/agents.md) 6.8 and 6.9.
+- R6. Retired (2026-11-26, ADR-0059). The designer (its input, spec-first design, validation, timeout and freeform fallback) is gone. The spec the viewer reads, and how it is checked when a stored visual is rendered, are in [agents.md](../../system/agents.md) 6.8 and 6.9.
+- R7. Retired (2026-11-26, ADR-0059). The designer (its input, spec-first design, validation, timeout and freeform fallback) is gone. The spec the viewer reads, and how it is checked when a stored visual is rendered, are in [agents.md](../../system/agents.md) 6.8 and 6.9.
+- R8. Retired (2026-11-26, ADR-0059). The designer (its input, spec-first design, validation, timeout and freeform fallback) is gone. The spec the viewer reads, and how it is checked when a stored visual is rendered, are in [agents.md](../../system/agents.md) 6.8 and 6.9.
+- R9. Retired (2026-11-26, ADR-0059). The designer (its input, spec-first design, validation, timeout and freeform fallback) is gone. The spec the viewer reads, and how it is checked when a stored visual is rendered, are in [agents.md](../../system/agents.md) 6.8 and 6.9.
+- R10. Retired (2026-11-26, ADR-0059). The designer (its input, spec-first design, validation, timeout and freeform fallback) is gone. The spec the viewer reads, and how it is checked when a stored visual is rendered, are in [agents.md](../../system/agents.md) 6.8 and 6.9.
 - R11. A spec visual SHALL be drawn by one fixed, hand-written chart runtime, never by model-written code. The runtime:
   - reads every stored row of the result sets (at most 8, R5) from the embedded data, not the row sample the designer prompt carries; over 400,000 characters of embedded data, the largest set is halved (never under 20 rows) until it fits;
   - shows "No data for this view." for an empty selection;
@@ -74,24 +42,17 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
 
 ### Tailoring and versions
 
-- R12. Tailoring (from chat or the panel) SHALL require a non-blank instruction ("instruction is required"). It always produces a new version. The tailored design gets the current version's bundle, the current version's stored data (merged with the current turn's records when tailoring from chat) and the instruction. It is told to preserve everything the instruction does not ask to change.
-- R13. In chat, the assistant SHALL tailor the visual open in the panel by default, or another visual by id. If no visual is open and none is named, the tool reports "No visual is open and none was specified — ask which visual to change or create one with create_visual". The assistant confirms the change in one short sentence.
-- R14. The panel's Tailor form SHALL turn its fields into one plain-English instruction, skipping defaults:
-  - Chart type (Auto, Bar, Line, Scatter, Heatmap, Metric cards, Table, Donut, Pivot table, US state map) → "Change the visual to a bar chart." / "…a line chart." / "…a scatter plot." / "…a heatmap." / "…metric cards." / "…a compact sortable table." / "…a donut chart." / "Change the visual to a pivot table." / "Change the visual to a US state map.";
-  - Sort (None, Ascending, Descending) → "Sort ascending by the main measure." / "Sort descending by the main measure.";
-  - Top N (integer 3–50, optional) → `Show only the top <N> items and group the rest as "Other".`;
-  - Describe the change (optional multi-line free text, placeholder "e.g. Show it as a stacked bar by year and highlight France") → the trimmed text, added last. It alone is a valid instruction.
-
-  The form previews the combined instruction. "Apply" is disabled while the instruction is empty (whitespace-only free text counts as empty) or a tailor is running; Cmd/Ctrl+Enter in the free-text field applies when Apply is enabled, and plain Enter adds a new line. On success the form resets (the free text too) and closes; on an error the text stays.
-- R41. **Tailor and Refresh data are background tasks** (ADR-0047, [app-shell](../app-shell/spec.md) R58–R63). On a run's visual they SHALL start a `visual-tailor` or `visual-refresh` task keyed `<runId>/<visualId>`, titled `Tailoring visual "<title>"` or `Refreshing visual "<title>"`; the busy state of the buttons (R14, R17) SHALL come from that task, so closing the run does not stop the call and reopening the run shows the visual busy. When the task ends and the panel shows that visual, the panel SHALL apply the result as before; a panel shown later SHALL apply a result it missed once, and a closed panel SHALL apply nothing. A failed tailor SHALL keep its inline error in the form, read from the failed task. The end SHALL be toasted, with **Open** (reopens the run) or **Retry**, only when the panel no longer shows that visual. Auto-repair is not user-started and SHALL stay outside the task list.
+- R12. Retired (2026-11-26, ADR-0059). Tailoring a visual (from chat or the panel) is gone with the designer.
+- R13. Retired (2026-11-26, ADR-0059). The `update_visual` tool is gone.
+- R14. Retired (2026-11-26, ADR-0059). The panel's Tailor form is gone.
+- R41. Retired (2026-11-26, ADR-0059). Tailor is gone; **Refresh data** stays a background task keyed `<runId>/<visualId>` (`visual-refresh`, [app-shell](../app-shell/spec.md) R58–R63).
 - R15. Each version SHALL record its number, creation time, the instruction that produced it (absent for an untailored v1), its source answer and, after a refresh, its last refresh time. The visual's title and takeaway follow its current version.
 - R16. Viewing a version SHALL be read-only and SHALL NOT change the current version. While a non-current version is viewed:
-  - "Tailor" is disabled (title "Make this version current before tailoring");
   - "Refresh data" is disabled;
   - the version control is highlighted.
 - R17. Reverting SHALL only move the current-version pointer to an existing version. No files change. An unknown version is rejected with "Version <N> does not exist".
-- R18. Creating (button), tailoring (panel) and reverting SHALL each add a visual event card to the chat, persisted as an assistant message: `Created|Updated|Reverted interactive visual "<title>" (v<N>).` A chat turn that created or updated a visual carries the same card on its answer message. Refreshing and auto-repair SHALL NOT add chat messages.
-- R19. When a chat turn creates or updates a visual, the panel SHALL switch to that visual at the new version while the turn is still streaming, without disturbing the turn (see [agent-answers](../agent-answers/spec.md) R21). The visual becomes the latest item of the session's panel history ([agent-panel](../agent-panel/spec.md) R10).
+- R18. Reverting SHALL add a visual event card to the chat, persisted as an assistant message: `Created|Updated|Reverted interactive visual "<title>" (v<N>).` A chat turn that created or updated a visual carries the same card on its answer message. Refreshing and auto-repair SHALL NOT add chat messages.
+- R19. Retired (2026-11-26, ADR-0059). No chat turn creates or updates a visual any more.
 - R20. Opening a session SHALL load into the panel the latest item the agent or the user showed, at its current version when that is a visual: the visual that changed most recently when nothing else was shown after it ([agent-panel](../agent-panel/spec.md) R12). Every visual of the session is also an item of the unified shown-items history ([agent-panel](../agent-panel/spec.md) R10); an agent can bring a visual back with `show_in_panel` ([agent-panel](../agent-panel/spec.md) R6).
 
 ### Refresh data in place
@@ -104,25 +65,15 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
   - When it has several datasources, every query records "Several datasources are in scope for this session; refresh is not supported".
 - R23. The rationale of each query SHALL survive a refresh. The frame's reasoning trail SHALL still explain the original answer.
 
-### Runtime errors and silent auto-repair
+### Runtime errors
 
 - R24. The sandboxed visual SHALL report to the host:
   - uncaught errors, with the line number when known;
   - unhandled promise rejections;
   - a blank render, as "visual rendered blank". A render counts as blank when, 1.5 s after load, the visual area has no SVG, canvas, table or image and no child at least 24 px tall.
-- R25. On a reported error the panel SHALL silently request one repair, but only when all of these hold:
-  - the version on screen is the current version;
-  - no repair is already running;
-  - the version on screen is not itself an auto-repair;
-  - this `visual:version` pair has not been repair-attempted in this panel before.
-
-  While the repair runs, the panel shows "Fixing the visual…".
-- R26. A repair SHALL regenerate the current version with the runtime error, trimmed to 200 characters, as feedback. It stores the result as a new version whose instruction is `auto-repair: <error>` (or `auto-repair: the visual rendered nothing and reported no error`). The server refuses:
-  - a version that is not current: "Only the current version can be repaired (requested v<X>, current v<Y>)";
-  - a version that is already an auto-repair: "Version <N> is already an automatic repair; not repairing again".
-
-  A repair of a repair is never attempted.
-- R27. When a repair is not allowed or fails, the panel SHALL show the runtime error banner: "This visual hit a runtime error." followed by `<error> — ask the assistant to fix it or revert to an earlier version.` A new document clears the banner.
+- R25. Retired (2026-11-26, ADR-0059). There is no automatic repair. A version that errors only shows the banner of R27.
+- R26. Retired (2026-11-26, ADR-0059). Auto-repair and its endpoint (api.md 134) are gone.
+- R27. When a version reports a runtime error, the panel SHALL show the runtime error banner: "This visual hit a runtime error." followed by `<error> — revert to an earlier version.` A new document clears the banner.
 
 ### Readable frame
 
@@ -223,36 +174,24 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
 
 | Situation | Behaviour |
 |---|---|
-| No completed answer to visualize | "completed assistant answer not found" |
 | Unknown visual id | 404 "Visualization <id> not found in session <session>" |
-| Generation fails | The panel shows "Visual generation failed" with the message, plus an error toast. Without a response: "Backend unreachable". |
-| Generation succeeds | Toast "Interactive visual generated" |
-| Saved visual fails to load | The panel shows "Visual generation failed" with "Could not load the saved visual". *(Open question: the heading is misleading for a load failure.)* |
-| Answer had no rows | Spec mode is skipped and the freeform designer works from the answer text alone. |
-| Designer returns the JSON Schema instead of an instance | The payload is unwrapped when usable. Otherwise the next attempt is told to return a bare instance. |
+| Saved visual fails to load | The panel shows the load error "Could not load the saved visual". |
 | Stored spec unreadable or invalid | The stored files are rendered as a freeform visual. |
-| Tailor fails | Inline error in the Tailor form: server message, "Tailoring failed" or "Backend unreachable". |
-| Tailor succeeds | Toast "Updated to version <N>" |
 | Revert fails | Toast with the server message or "Revert failed" |
 | Revert succeeds | Toast "Reverted to version <N>" |
 | Refresh succeeds | Toast "Refreshed data for version <N>" |
 | Refresh call fails | The button returns to idle with no message. *(Open question: there is no user feedback on failure.)* |
-| Auto-repair succeeds | Toast "Repaired as version <N>". The new version shows. |
-| Auto-repair fails | Runtime error banner (R27). |
-| Viewing an old version that errors | Banner only. No repair. |
+| Viewing a version that errors | Banner only. |
 | Version entry text | `<instruction or "Initial version"> · <date>[ · refreshed <date>]` |
 
 ## Contracts
 
 - Endpoints in [api.md](../../system/api.md):
-  - generate visual;
   - load visual (optionally at a version);
   - revert;
-  - tailor;
   - refresh;
-  - repair;
   - download bundle;
-  - the `visual-updated` event of the chat stream.
+  - (generate, tailor and repair were removed 2026-11-26; the `visual-updated` event is no longer sent).
 - Data in [data-model.md](../../system/data-model.md): the session document's visual list (visual metadata and version entries), the chat message's visual event, the version directory layout in the session workspace, and the legacy un-versioned layout.
 - Agents in [agents.md](../../system/agents.md): the interactive visual designer (spec and freeform output shapes, the interactive-visuals skill, model routing including the `VISUAL_MODEL` override and swaps away from reasoning-class and nano-class models), and the assistant's `create_visual` / `update_visual` tools.
 - Chat integration: [agent-answers](../agent-answers/spec.md).
@@ -290,18 +229,16 @@ Placement in the shell's right "Details panel" is in [ui.md](../../system/ui.md)
 
 ### Covered: Chat and visuals
 
-The scenario "Renders a deterministic interactive visualization and its version controls" (generate a visual from a chat answer, the frame title, "Download bundle", the "Version history" list) is retired with the chat composer's **Generate interactive visuals** (workflows-first roadmap, plan 1.24.8). A visual the agent makes in a run is covered by "Skills the designer is given" below; the run page's panel and its versions return with plans 1.24.5 and 1.25.4.
+The scenario "Renders a deterministic interactive visualization and its version controls" (generate a visual from a chat answer, the frame title, "Download bundle", the "Version history" list) is retired with the chat composer's **Generate interactive visuals** (workflows-first roadmap, plan 1.24.8). A visual that a stored run already holds is covered by "Visual tailoring" below (the designer is gone); the run page's panel and its versions return with plans 1.24.5 and 1.25.4.
 
 ### Visual actions on a run
 
-R2 and R12-R24 hold on a stored agent run (workflows R18-R20): the answer's "Generate interactive visuals", the panel's Tailor form, version menu, "Make v<N> the current version", "Refresh data", auto-repair and "Download bundle" work over `/workflow-runs/:id/visualizations` (api.md 123, 124, 130-134) instead of a session's, on the run's workspace, with these differences:
+R20-R24 hold on a stored agent run (workflows R18-R20): the version menu, "Make v<N> the current version", "Refresh data" and "Download bundle" work over `/workflow-runs/:id/visualizations` (api.md 123, 124, 132, 133; generate, tailor and repair, 130, 131 and 134, were removed 2026-11-26) instead of a session's, on the run's workspace, with these differences:
 
 - The visual opens in a "Visual" section under the answer, in the Run tab of the designer, in the workflow page's Business view and on the run page (ui.md 4.4c); on a run host it opens from its artifact card in a side panel instead (R42): the right panel holds the designer, so there is no panel history. The card's "View" and a new visual open it there; "Close visual" hides it. **Full screen** (`data-testid="run-visual-full-screen"`, lucide `maximize-2` / `minimize-2`, `aria-pressed`) makes the section a modal dialog over the window (`role="dialog"`, `aria-modal`, 16 px from each edge, the visual filling it, a dimmed backdrop); the same button, Escape or a click on the backdrop leaves it, and closing or replacing the visual leaves it too (since 2026-11-16).
-- The cards (R18) are stored on the run (`events`, data-model 3.16), shown after the answer, and reappear when the run is reopened. The agent's own `create_visual` and `update_visual` cards stay on the answer.
-- R19 is the generate and tailor result opening in the section; R20 does not apply: a run opens with no visual until "View" is pressed.
-- A running run, or a code-only run, refuses every action (api.md 130).
-
-The scenario "I generate, tailor, revert and refresh a visual on a run answer" of the Feature below covers them.
+- The cards (R18) are stored on the run (`events`, data-model 3.16), shown after the answer, and reappear when the run is reopened. A stored `create_visual` or `update_visual` card of an old answer stays as stored.
+- R20 does not apply: a run opens with no visual until "View" is pressed.
+- A running run refuses every action.
 
 ### Feature: Visual tailoring
 
@@ -314,40 +251,18 @@ Feature: Visual tailoring
     Given a "World Cup analysis" session with an answer "France won in 2018." that ran SQL
     And the visual "World Cup champions" at version 1 is open in the right panel
 
-  Scenario: The panel is empty until a visual exists
-    Given a session with answers but no visuals is open
-    Then the right panel shows "No visual generated yet"
-    And it shows "Generate an interactive visual from any completed assistant answer."
-
-  Scenario: Tailoring from the panel creates a new version
-    When I click "Tailor"
-    Then "Apply" is disabled
-    When I choose "Bar" in "Chart type"
-    And I choose "Descending" in "Sort"
-    And I type "5" into "Top N"
-    Then I see the instruction 'Change the visual to a bar chart. Sort descending by the main measure. Show only the top 5 items and group the rest as "Other".'
-    When I click "Apply"
-    Then I see the toast "Updated to version 2"
-    And the "Version history" button reads "v2"
-    And the chat shows a card "Updated World Cup champions" with "Version 2"
-
-  Scenario: Tailoring from the chat updates the open visual
-    When I ask "Make it a line chart"
-    Then the right panel shows "World Cup champions" at "v2" while the turn completes
-    And the answer carries a card "Updated World Cup champions" with "Version 2"
-
   Scenario: Viewing and reverting to an earlier version
     Given the visual has versions 1 and 2 and version 2 is current
     When I click "Version history"
     Then I see "Version 2" tagged "current" and "Version 1" described as "Initial version"
     When I click "Version 1"
     Then the panel shows version 1
-    And "Tailor" and "Refresh data" are disabled
+    And "Refresh data" is disabled
     When I click "Version history"
     And I click "Make v1 the current version"
     Then I see the toast "Reverted to version 1"
-    And the chat shows a card "Reverted World Cup champions" with "Version 1"
-    And "Tailor" is enabled again
+    And a card "Reverted World Cup champions" with "Version 1" is stored
+    And "Refresh data" is enabled again
 
   Scenario: Refreshing data keeps the version
     When I click "Refresh data"
@@ -357,25 +272,11 @@ Feature: Visual tailoring
     When I click "Version history"
     Then version 1 shows "refreshed" with a time
 
-  Scenario: A broken visual repairs itself once, silently
+  Scenario: A broken visual shows the error banner and is never repaired
     Given version 1 throws an error when it renders
-    Then I see "Fixing the visual…"
-    And then I see the toast "Repaired as version 2"
-    And the "Version history" list shows version 2 described as "auto-repair: …"
-    And no new card appears in the chat
-
-  Scenario: A repair that also breaks shows the error banner
-    Given version 1 throws an error when it renders
-    And its automatic repair, version 2, also throws an error
     Then I see "This visual hit a runtime error."
-    And I see "— ask the assistant to fix it or revert to an earlier version."
-    And no further repair is attempted
-
-  Scenario: An old version that breaks is not repaired
-    Given version 1 throws an error when it renders and version 2 is current
-    When I view version 1 from "Version history"
-    Then I see "This visual hit a runtime error."
-    And "Fixing the visual…" is not shown
+    And I see "— revert to an earlier version."
+    And no repair is attempted
 
   Scenario: Exporting the bundle
     When I click "Download bundle"
@@ -418,43 +319,18 @@ Feature: Visual tailoring
     When I open the past chat's visual
     Then the frame and its chart are dark
 
-  Scenario: I generate, tailor, revert and refresh a visual on a run answer
 ```
 
-### Feature: Skills the designer is given
+### Skills the designer is given (removed 2026-11-26)
 
-E2E: `frontend/e2e/designer-skills.spec.ts`
-
-What the visual designer is told, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent" in [agent-answers](../agent-answers/spec.md#feature-sessions-started-from-an-agent); here it also runs one query for the answer and returns a valid spec for the designer's call. Which parts of the `interactive-visuals` skill reach the designer: [agents.md](../../system/agents.md) sections 6.4 and 7.2; decision ADR-0018.
-
-```gherkin
-Feature: Skills the designer is given
-
-  Background:
-    Given a "World Cup Core" dataset exists
-    And the model is the recording stub
-
-  Scenario: A spec visual is designed with the spec-mode instructions only
-    Given I ran the Assistant on "World Cup Core" with "How many matches were played at each stage?"
-    And the model ran a query counting the matches per stage, then answered
-    When I run the Assistant again as a follow-up of that run with "Chart the matches per stage as bars."
-    And the model calls create_visual with no instruction, then answers
-    Then the run holds the visual "Matches by stage"
-    And the designer received the interactive-visuals router and its spec-mode reference
-    And the designer received nothing of the freeform reference
-
-```
+E2E: none (the designer and its skill were removed with ADR-0059; `frontend/e2e/designer-skills.spec.ts` is deleted with it).
 
 ## Acceptance
 
-- Every scenario above passes. They run through the Assistant's workflow, as follow-up runs (`create_visual` needs an earlier answer).
-- A visual generated against real data renders a chart whose values match its "Data used" rows. Its exported `index.html` renders identically when opened offline straight from the zip.
-- No designer output can reach the frame outside the visual area. A visual with hostile markup or script can neither change the frame, reach the network nor reach the host app.
-- A broken visual is repaired at most once per version. An auto-repaired version is never repaired again.
+- Every scenario above passes.
+- A stored visual renders a chart whose values match its "Data used" rows. Its exported `index.html` renders identically when opened offline straight from the zip.
+- No visual output can reach the frame outside the visual area. A visual with hostile markup or script can neither change the frame, reach the network nor reach the host app.
 - Open questions to settle:
-  - **Version numbering after a revert.** A new version is numbered *current + 1*. After reverting from v3 to v1, the next tailor or repair writes "v2" again: it overwrites v2's files and duplicates the version-2 entry. Should new versions be numbered after the highest existing one?
   - **Download version.** The panel downloads the *current* version even while an older version is viewed, and names the file `<slug>.zip`, while the server proposes `<slug>-v<N>.zip`. Should it download the viewed version?
-  - **Repair data source.** Repair regenerates from the source answer's data, not from the current version's stored (possibly refreshed or merged) data. A repaired tailored visual can lose the rows a chat turn added.
-  - **Default source answer.** When the assistant creates a visual without naming an answer, "latest completed answer" can be a previous visual event card rather than the current turn's answer, which is not persisted yet.
 
-<!-- sources: backend/src/modules/sessions/visualization.service.ts, visualization-document.ts, visual-spec.ts, visual-runtime.ts, chart-heuristic.ts, zip-archive.ts, sessions.service.ts (generate/tailor/revert/refresh/repair/saveVisualMetadata), sessions.controller.ts; backend/src/mastra/agents/visualization.agent.ts, tools/visual.tools.ts; frontend/src/app/features/sessions/components/interactive-visual-panel/*, session-chat/session-chat.html|ts (follow-up chips), answer-view/answer-view.html (visual cards), services/sessions-api.service.ts; frontend/src/app/app.ts (showVisualization, revert, download, generate, loadLatestVisualization); frontend/e2e/chat-and-visuals.spec.ts, designer-skills.spec.ts; the frame tokens and theme bridge in visualization-document.ts, visual-runtime.ts and the interactive-visual-panel -->
+<!-- sources: backend/src/modules/sessions/visualization.service.ts, visualization-document.ts, visual-spec.ts, visual-runtime.ts, zip-archive.ts, sessions.service.ts (revert/refresh/saveVisualMetadata; generate, tailor and repair were removed 2026-11-26), sessions.controller.ts; backend/src/mastra/agents/visualization.agent.ts, tools/visual.tools.ts; frontend/src/app/features/sessions/components/interactive-visual-panel/*, session-chat/session-chat.html|ts (follow-up chips), answer-view/answer-view.html (visual cards), services/sessions-api.service.ts; frontend/src/app/app.ts (showVisualization, revert, download, generate, loadLatestVisualization); frontend/e2e/chat-and-visuals.spec.ts, designer-skills.spec.ts; the frame tokens and theme bridge in visualization-document.ts, visual-runtime.ts and the interactive-visual-panel -->

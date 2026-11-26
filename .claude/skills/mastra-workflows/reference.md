@@ -124,7 +124,7 @@ grep -nE "^\s+'?[a-z0-9-]+'?: " backend/src/mastra/index.ts
 | Registered key | Files | What it is |
 |---|---|---|
 | `orchestrated-answer-michael` | `orchestrated-answer-michael.workflow.ts` (Mastra objects), `.steps.ts` (catalogue entry, `AVERY_TEAM`, runtime interfaces, pure code), `.prompts.ts` (Avery's instructions); shared code in `analysis.steps.ts`, `analysis.schemas.ts`, `analysis.prompts.ts` and `step-agents.ts` | *Answer a Business Question (Avery + Michael)*, the one supervisor workflow: a single agent step, Orchestrate, that suspends when Avery asks the user a question. The removed `answer-business-question` (nested workflows, loops, two suspending steps) is in git history. agents.md 5.23. |
-| `agent-turn` | `agent-turn.workflow.ts`, `agent-turn.steps.ts` | The engine of a turn bound to one agent: one `answer` step that calls the runtime handed in on the `RequestContext`. Never snapshotted. agents.md 5.12. |
+| `agent-turn` | `agent-turn.workflow.ts`, `agent-turn.steps.ts` | The engine of a node chat's turn bound to one agent: one `answer` step that calls the runtime handed in on the `RequestContext`. Never snapshotted. A user agent's Try it runs on `insights-lead-conversation` instead (agents.md 5.14, ADR-0059). agents.md 5.12. |
 
 Shared modules, all without a framework import:
 
@@ -142,11 +142,9 @@ Who runs them: `MastraService.streamWorkflow` (`backend/src/mastra/mastra.servic
 
 | Key | File | Role | agents.md |
 |---|---|---|---|
-| `assistant` | `assistant.agent.ts` | Questions to Insights Assistant; its turns run on `agent-turn` | 2.1 |
+| `insights-lead` | `insights-lead.agent.ts` (data: `insights-lead-catalog.ts`) | Elena: conversations, and every user agent's Try it (`insights-lead-conversation`, ADR-0059) | 2.23 |
 | `insights-analyst` | `insights-analyst.agent.ts` (data: `insights-analyst-catalog.ts`) | Michael's analysis in Avery's `answer_from_data`, with tools | 2.11 |
-| `visualization` | `visualization.agent.ts` | Interactive Visual Designer | 2.2, 6 |
 | `sql-fixer` | `sql-fixer.agent.ts` | repairs a failed query | 2.3, 5.3 |
-| `sql-verifier` | `sql-verifier.agent.ts` | careful mode's cross-check | 2.4, 5.8 |
 | `assistant-eval-judge` | `eval-judge.agent.ts` | judges eval answers | 2.6 |
 
 ### Tools (`backend/src/mastra/tools/`)
@@ -155,9 +153,6 @@ Who runs them: `MastraService.streamWorkflow` (`backend/src/mastra/mastra.servic
 |---|---|
 | `dataset.tools.ts` | `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql` |
 | `clarification.tool.ts` | `ask_clarification` |
-| `visual.tools.ts` | `create_visual`, `update_visual` |
-| `panel.tool.ts` | `show_in_panel` |
-| `workflow.tool.ts` | `update_workflow` |
 
 Which agent has which tool: the `tools:` of each agent file, and agents.md 2 and 3.
 

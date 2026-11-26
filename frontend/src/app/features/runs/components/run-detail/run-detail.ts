@@ -26,7 +26,6 @@ import { WorkflowRunsApiService } from '../../../workflows/services/workflow-run
 import {
   IMAGES_FIELD,
   isActiveRun,
-  isLiveRun,
   runOutputEntries,
   runStatusLine,
   runStepStatusLabel,
@@ -179,7 +178,6 @@ export class RunDetail {
   protected readonly Workflow = Workflow;
 
   protected readonly stepStatus = runStepStatusLabel;
-  protected readonly isLive = isLiveRun;
 
   protected readonly status = computed(() => {
     const run = this.state.activeRun();
