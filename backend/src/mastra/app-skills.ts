@@ -32,9 +32,6 @@ export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
   // and the format rules of her conversation export, offered only while
   // the export gate is open (chief-of-staff.agent.ts).
   'chief-of-staff': ['avery-playbooks', 'conversation-export'],
-  // The Data Readiness Agent's skills: assessing and explaining, then
-  // drilling into findings with read-only SQL (agents.md 7.4, ADR-0035).
-  'data-readiness': ['data-readiness', 'readiness-drilldown'],
   // Insights Analyst's skills: the curated-knowledge rules it shares
   // with the assistant, its SQL patterns and the checks it runs on a result
   // before answering (agents.md 7.4).
@@ -450,8 +447,8 @@ export function builtInSkillNames(): string[] {
 /**
  * The built-in on-demand skills a prompt may link as mentions (BA-224):
  * the assistant's, which every agent running on it gets, so a link names one
- * without gating anything. Another agent's skills (the Data Readiness
- * Agent's) are not among them.
+ * without gating anything. Another agent's skills (Insights Analyst's) are
+ * not among them.
  */
 export function builtInOnDemandSkillNames(): string[] {
   return [...shippedSkills().values()]

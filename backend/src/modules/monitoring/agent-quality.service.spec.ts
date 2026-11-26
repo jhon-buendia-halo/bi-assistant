@@ -24,8 +24,8 @@ const CATALOGUE: QualityAgent[] = [
     sets: [{ id: 'set-a', name: 'Alpha', caseIds: ['a1'] }],
   },
   {
-    key: 'data-readiness',
-    agentId: 'data-readiness-agent',
+    key: 'query-explainer',
+    agentId: 'query-explainer',
     name: 'Dana',
     role: '',
     sets: [{ id: 'set-d', name: 'Dee', caseIds: ['d1'] }],
@@ -106,8 +106,8 @@ describe('AgentQualityService', () => {
     expect(assistant.live.calls).toBe(3);
     expect(assistant.live.p95Ms).not.toBeNull();
     expect(assistant.live.pricedCalls).toBeGreaterThan(0);
-    const readiness = page.rows.find((r) => r.agentKey === 'data-readiness')!;
-    expect(readiness.live.calls).toBe(0);
+    const explainer = page.rows.find((r) => r.agentKey === 'query-explainer')!;
+    expect(explainer.live.calls).toBe(0);
     expect(page.facets.models).toContain('claude-sonnet-5-5');
   });
 

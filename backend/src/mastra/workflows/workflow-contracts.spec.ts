@@ -23,13 +23,6 @@ jest.mock('../tool-services', () => ({
 
 import { RequestContext } from '@mastra/core/request-context';
 import type { z } from 'zod';
-import { DATA_READINESS_ASSESSMENT_STEP_SCHEMAS } from './data-readiness-assessment.schemas';
-import {
-  DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
-  DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
-  type DataReadinessAssessmentRuntime,
-} from './data-readiness-assessment.steps';
-import { dataReadinessAssessmentWorkflow } from './data-readiness-assessment.workflow';
 import { ORCHESTRATED_MICHAEL_STEP_SCHEMAS } from './orchestrated-answer-michael.steps';
 import { ORCHESTRATED_MICHAEL_WORKFLOW_ID } from './orchestrated-answer-michael.steps';
 import {
@@ -88,57 +81,6 @@ const ORCHESTRATED_FIXTURE: ContractFixture = {
 
 const FIXTURES: Record<string, ContractFixture> = {
   [ORCHESTRATED_MICHAEL_WORKFLOW_ID]: ORCHESTRATED_FIXTURE,
-  [DATA_READINESS_ASSESSMENT_WORKFLOW_ID]: {
-    workflow:
-      dataReadinessAssessmentWorkflow as unknown as ContractFixture['workflow'],
-    schemas: DATA_READINESS_ASSESSMENT_STEP_SCHEMAS,
-    input: { question: '', dataset: 'World Cup' },
-    requestContext: () => {
-      const context = new RequestContext();
-      // The stubbed assessment: a profiled, scored and stored report, and
-      // the agent's explanation.
-      context.set(DATA_READINESS_ASSESSMENT_RUNTIME_KEY, {
-        resolve: ({ dataset }) =>
-          Promise.resolve({
-            dataset,
-            datasourceName: 'World Cup DB',
-            datasourceKind: 'postgres',
-            tableCount: 2,
-          }),
-        profile: () =>
-          Promise.resolve({
-            entityCount: 2,
-            relationshipCount: 1,
-            notProfiledCount: 0,
-            stopped: false,
-          }),
-        score: () => ({
-          overallScore: 84,
-          maturity: 'Managed',
-          findingCount: 1,
-          dimensionScores: [
-            {
-              dimension: 'completeness',
-              score: 90,
-              assessed: true,
-              findingCount: 1,
-            },
-          ],
-        }),
-        save: () => Promise.resolve({ reportId: 'r-1' }),
-        startFindingRows: () => undefined,
-        findingRows: () =>
-          Promise.resolve({
-            sourceCount: 1,
-            failedSourceCount: 0,
-            stopped: false,
-          }),
-        explain: () =>
-          Promise.resolve({ answer: 'Managed (84).', stopped: false }),
-      } satisfies DataReadinessAssessmentRuntime);
-      return context;
-    },
-  },
 };
 
 describe('every catalogued workflow keeps its data contract at run time (agents.md 5.12)', () => {

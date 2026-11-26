@@ -1,9 +1,3 @@
-// The data-readiness service loads the Databricks driver (ESM-only deps)
-// at import time; the session specs never call it for real.
-jest.mock('../data-readiness/data-readiness.service', () => ({
-  DataReadinessService: class {},
-}));
-
 // Sessions bound to Insights Analyst (BA-320; api.md 2.1 #3,
 // agents.md 2.11, agent-answers R61): a past chat of his (agentKey, no
 // workflowId) keeps the removed Answer a Business Question's chip and goes

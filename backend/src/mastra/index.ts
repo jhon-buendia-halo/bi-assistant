@@ -10,7 +10,6 @@ import { queryExplainerAgent } from './agents/query-explainer.agent';
 import { resultExplorerAgent } from './agents/result-explorer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
 import { insightsLeadAgent } from './agents/insights-lead.agent';
-import { dataReadinessAgent } from './agents/data-readiness.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
@@ -25,7 +24,6 @@ import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { orchestratedMichaelWorkflow } from './workflows/orchestrated-answer-michael.workflow';
 import { insightsLeadConversationWorkflow } from './workflows/conversation-turn.workflow';
-import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 
 // Validate every bundled skill before anything is served: a broken skill
 // stops the backend here (agents.md 7.3).
@@ -43,7 +41,6 @@ export const mastra = new Mastra({
     'sql-verifier': sqlVerifierAgent,
     'assistant-eval-judge': evalJudgeAgent,
     'knowledge-bootstrap': knowledgeBootstrapAgent,
-    'data-readiness': dataReadinessAgent,
     // Olivia and Jessica, the planner and the writer (agents.md 2.11): in the
     // library, their model calls run by their evals.
     'analysis-planner': analysisPlannerAgent,
@@ -68,7 +65,6 @@ export const mastra = new Mastra({
     // Answer a Business Question (Avery + Michael) (5.23).
     'orchestrated-answer-michael': orchestratedMichaelWorkflow,
     'insights-lead-conversation': insightsLeadConversationWorkflow,
-    'data-readiness-assessment': dataReadinessAssessmentWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

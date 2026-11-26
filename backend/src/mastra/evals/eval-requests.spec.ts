@@ -16,9 +16,6 @@ jest.mock('@mastra/evals/checks', () => ({
 jest.mock('../agents/assistant.agent', () => ({
   assistantAgent: { id: 'assistant' },
 }));
-jest.mock('../agents/data-readiness.agent', () => ({
-  dataReadinessAgent: { id: 'data-readiness' },
-}));
 jest.mock('../agents/insights-analyst.agent', () => ({
   insightsAnalystAgent: { id: 'insights-analyst' },
 }));
@@ -40,7 +37,6 @@ jest.mock('../../modules/sessions/turn-data', () => ({
 import { runEvals } from '@mastra/core/evals';
 import { writeFileSync } from 'node:fs';
 import { runAssistantEvalCase } from './assistant.evals';
-import { dataReadinessEvalTarget } from './data-readiness.evals';
 import { evalSetsFor, evalTargetFor } from './eval-sets';
 
 interface SentConfig {
@@ -52,14 +48,9 @@ interface SentConfig {
 const recordings: Record<string, unknown> = {};
 
 describe('the requests an eval case sends each agent', () => {
-  for (const agentKey of ['assistant', 'data-readiness']) {
+  for (const agentKey of ['assistant']) {
     it(`${agentKey}: the first case`, async () => {
-      // The Data Readiness block says "Today is <date>": pin the clock so the
-      // snapshot does not change with the day the suite runs.
-      const target =
-        agentKey === 'data-readiness'
-          ? dataReadinessEvalTarget(() => new Date('2026-11-12T12:00:00Z'))
-          : evalTargetFor(agentKey);
+      const target = evalTargetFor(agentKey);
       const evalCase = evalSetsFor(agentKey)[0].cases[0];
       (runEvals as jest.Mock).mockClear();
       await runAssistantEvalCase(

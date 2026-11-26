@@ -64,13 +64,6 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       'I dig into your datasets to answer the question we planned: I explore the tables, write the SQL and bring back the findings.',
   },
-  'data-readiness': {
-    name: 'Sarah',
-    role: 'Data Quality Analyst',
-    domain: 'data-foundations',
-    intro:
-      'I check whether a dataset is ready for analysis. I score its quality dimension by dimension and explain what needs fixing.',
-  },
   'insights-lead': {
     name: 'Elena',
     role: 'Insights Lead',

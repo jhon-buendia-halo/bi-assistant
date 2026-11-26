@@ -4,9 +4,6 @@ jest.mock('@mastra/evals/checks', () => ({
 }));
 jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
 jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
-jest.mock('../agents/data-readiness.agent', () => ({
-  dataReadinessAgent: { id: 'data-readiness' },
-}));
 jest.mock('../agents/insights-analyst.agent', () => ({
   insightsAnalystAgent: { id: 'insights-analyst' },
 }));
@@ -102,7 +99,7 @@ describe('every eval target is marked (ADR-0054)', () => {
   const targets = everyTarget();
 
   it('enumerates the targets of every set', () => {
-    expect(targets.length).toBeGreaterThanOrEqual(10);
+    expect(targets.length).toBeGreaterThanOrEqual(9);
   });
 
   for (const { targetId, agentKey } of targets) {

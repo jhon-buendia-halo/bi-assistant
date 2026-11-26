@@ -53,9 +53,7 @@ describe('BuiltInSkillsService', () => {
       'conversation-export',
       'curated-knowledge',
       'dashboard-building',
-      'data-readiness',
       'interactive-visuals',
-      'readiness-drilldown',
       'result-validation',
       'sql-analysis',
     ]);
@@ -83,10 +81,6 @@ describe('BuiltInSkillsService', () => {
       builtInChanged: false,
       updatedAt: null,
     });
-    expect(named('data-readiness')).toMatchObject({
-      loading: 'on-demand',
-      agents: ['data-readiness'],
-    });
     expect(named('interactive-visuals')).toMatchObject({
       loading: 'harness',
       agents: ['visualization'],
@@ -108,12 +102,13 @@ describe('BuiltInSkillsService', () => {
     const { service } = build();
     const list = await service.list();
     const byName = new Map(list.map((skill) => [skill.name, skill]));
-    expect(byName.get('data-readiness')).toMatchObject({
-      agents: ['data-readiness'],
+    expect(byName.get('avery-playbooks')).toMatchObject({
+      agents: ['chief-of-staff'],
       tools: [
-        'assess_data_readiness',
-        'get_readiness_report',
-        'list_readiness_reports',
+        'answer_from_data',
+        'build_dashboard',
+        'export_conversation',
+        'ask_clarification',
       ],
     });
     for (const name of ['curated-knowledge', 'interactive-visuals']) {

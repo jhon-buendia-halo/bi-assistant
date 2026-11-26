@@ -13,9 +13,6 @@ jest.mock('@mastra/evals/checks', () => ({
 }));
 jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
 jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
-jest.mock('../agents/data-readiness.agent', () => ({
-  dataReadinessAgent: { id: 'data-readiness' },
-}));
 jest.mock('../agents/insights-analyst.agent', () => ({
   insightsAnalystAgent: { id: 'insights-analyst' },
 }));
@@ -88,38 +85,31 @@ describe('the target a run uses', () => {
     );
     expect(
       evalSetTargetId({
-        agentKey: 'data-readiness',
-        target: 'data-readiness:check-data-quality',
+        agentKey: 'chief-of-staff',
+        target: 'avery-michael-workflow',
       }),
-    ).toBe('data-readiness:check-data-quality');
+    ).toBe('avery-michael-workflow');
   });
 
   it('is one id for sets of one target and an error across targets', () => {
-    const chat = { agentKey: 'data-readiness' };
+    const chat = { agentKey: 'some-agent' };
     const check = {
-      agentKey: 'data-readiness',
-      target: 'data-readiness:check-data-quality',
+      agentKey: 'some-agent',
+      target: 'some-agent:workflow',
     };
     expect(targetIdOfSets([chat, chat], 'x')).toEqual({
-      targetId: 'data-readiness',
+      targetId: 'some-agent',
     });
     expect(targetIdOfSets([], 'x')).toEqual({ targetId: 'x' });
     expect(targetIdOfSets([chat, check], 'x')).toEqual({
       error:
-        'The selected questions run on several targets (data-readiness, data-readiness:check-data-quality) — run one set at a time',
+        'The selected questions run on several targets (some-agent, some-agent:workflow) — run one set at a time',
     });
   });
 
   it('is the agent key for an agent whose sets are all on its own target', () => {
     expect(evalTargetIdFor('query-explainer')).toEqual({
       targetId: 'query-explainer',
-    });
-  });
-
-  it("refuses to run all of an agent's sets when they use several targets", () => {
-    // Sarah's chat set and her Check data quality set (story 1.29.4).
-    expect(evalTargetIdFor('data-readiness')).toEqual({
-      error: expect.stringContaining('run one set at a time') as string,
     });
   });
 
@@ -135,25 +125,19 @@ describe('the target a run uses', () => {
     },
   );
 
-  it('builds the check-data-quality target on Sarah’s agent key', () => {
-    const target = evalTargetOf(
-      'data-readiness:check-data-quality',
-      'data-readiness',
-    );
-    expect(target.agentKey).toBe('data-readiness');
-    expect(target.sendsKnowledge).toBe(false);
-    expect(target.runTarget).not.toBe(target.agent);
-  });
-
   it('builds the whole-workflow target from its target id', () => {
-    const workflow = evalTargetOf(
-      'data-readiness:assessment-workflow',
-      'data-readiness',
-    );
-    expect(workflow.agentKey).toBe('data-readiness');
-    expect(workflow.sessionAgentKey).toBe('data-readiness');
-    expect(workflow.runTarget).not.toBe(workflow.agent);
-    const chat = evalTargetOf('data-readiness', 'data-readiness');
+    const workflow = evalTargetOf('avery-michael-workflow', 'chief-of-staff');
+    expect(workflow.agentKey).toBe('chief-of-staff');
+    expect(evalTargetIdFor('chief-of-staff')).toEqual({
+      targetId: 'avery-michael-workflow',
+    });
+    // It runs the sets on its target id, through a whole-run stand-in (read
+    // lazily, so the agent is not loaded here); a chat target has none.
+    expect(workflow.sets.length).toBeGreaterThan(0);
+    expect(workflow.sets).toEqual(setsOfTarget('avery-michael-workflow'));
+    expect(workflow.sendsKnowledge).toBe(false);
+    expect('runTarget' in workflow).toBe(true);
+    const chat = evalTargetOf('assistant', 'assistant');
     expect(chat.runTarget).toBeUndefined();
   });
 

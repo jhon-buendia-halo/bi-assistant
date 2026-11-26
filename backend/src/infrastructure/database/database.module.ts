@@ -18,7 +18,6 @@ import {
   SETTINGS_STORE,
   SKILLS_STORE,
   AGENT_PROMPT_OVERRIDES_STORE,
-  READINESS_REPORTS_STORE,
   SKILL_OVERRIDES_STORE,
   VERIFIED_QUERIES_STORE,
   WORKFLOW_RUNS_STORE,
@@ -54,7 +53,6 @@ const COLLECTIONS = [
   { token: SKILLS_STORE, table: 'skills' },
   { token: SKILL_OVERRIDES_STORE, table: 'skill_overrides' },
   { token: AGENT_PROMPT_OVERRIDES_STORE, table: 'agent_prompt_overrides' },
-  { token: READINESS_REPORTS_STORE, table: 'readiness_reports' },
   { token: WORKFLOW_RUNS_STORE, table: 'workflow_runs' },
   { token: WORKFLOW_RUN_NODE_CHATS_STORE, table: 'workflow_run_node_chats' },
   { token: ARTIFACTS_STORE, table: 'artifacts' },
@@ -506,7 +504,12 @@ export function renameLegacyAgentIds(db: Db): void {
 }
 
 /** The tables of removed features (data-model 6, M17). */
-const REMOVED_TABLES = ['user_personas', 'visual_charts', 'site_signins'];
+const REMOVED_TABLES = [
+  'user_personas',
+  'visual_charts',
+  'site_signins',
+  'readiness_reports',
+];
 
 /** The `settings` keys of removed features (data-model 6, M17). */
 const REMOVED_SETTINGS_KEYS = ['personas-seed', 'visuals-seed'];
@@ -514,7 +517,9 @@ const REMOVED_SETTINGS_KEYS = ['personas-seed', 'visuals-seed'];
 /**
  * M17: the user personas and the visuals library were removed with the
  * Context area (2026-11-15), and Review a Website's saved sign-ins
- * (`site_signins`) with that workflow (2026-11-26). Their tables and seed
+ * (`site_signins`) with that workflow (2026-11-26), and the Data Readiness
+ * Agent's stored reports (`readiness_reports`) with Assess Data Readiness
+ * (2026-11-26). Their tables and seed
  * markers are dropped so nothing is left that no code reads. Idempotent;
  * one transaction.
  */

@@ -8,14 +8,6 @@
  * them to every custom check as `details` (`{}` when the target sets none).
  */
 
-/** One tool call as the checks read it (the shape of `EvalRawToolCall`). */
-export interface EvalDetailsToolCall {
-  name: string;
-  input: unknown;
-  output: unknown;
-  failed: boolean;
-}
-
 /** Structured facts of one case's run, for the checks. */
 export interface EvalRunDetails {
   /**
@@ -28,25 +20,11 @@ export interface EvalRunDetails {
    * Whole-workflow targets: each step's output by step id, as the engine
    * handed it on (`workflow-step-result` with `success` or `bailed`). The
    * key is the step's own id without its nested workflow's prefix
-   * (`plan`, `validate`, `write-answer`, `build-visual`,
-   * `save-report`, `explain-report`); a step that ran several times
+   * (`plan`, `validate`, `write-answer`, `build-visual`); a step that ran several times
    * (Analyse and Validate on a retry) holds its last output. A step that
    * did not run has no key.
    */
   steps?: Record<string, unknown>;
-  /**
-   * Assess Data Readiness target: the summary of the report the run saved
-   * (`overallScore`, `maturity`, `dimensionScores` with each dimension's
-   * `score`, `assessed` and `findingCount`, `findingCount`, `topFindings`).
-   */
-  report?: Record<string, unknown>;
-  /**
-   * Assess Data Readiness target: Rows behind findings' sources, one
-   * `run_readonly_sql` call per top finding (`input` `{ sql, rationale }`,
-   * `output` the rows or `{ error }`). They are the run's records, not
-   * Sarah's tool calls, so they are not in `toolCalls`.
-   */
-  findingSources?: EvalDetailsToolCall[];
   /**
    * The context the agent was given before its tool calls, as text (the
    * Insights Analyst target: the catalogue block of Analyse's first request).

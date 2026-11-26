@@ -27,8 +27,8 @@ export const V2_ANSWER_LINE =
 export type V2Step = 'plan' | 'answer' | 'quality';
 
 /**
- * The first line of the former Check data quality step's request to Sarah
- * (the Data Readiness Agent; the step was replaced by Build visual): kept
+ * The first line of the former Check data quality step's request (the
+ * step was replaced by Build visual): kept
  * for the stubs that still route a call by it.
  */
 export const V2_QUALITY_LINE =
@@ -141,7 +141,7 @@ export function answerFrom(text: string): V2Answer {
 }
 
 /**
- * Sarah's reply to the former Check data quality step: the first listed engine finding
+ * The reply to the former Check data quality step: the first listed engine finding
  * (`1. [severity] ...` under `Engine findings:`) when there is one, else none.
  */
 export function dataQualityReply(request: string): {

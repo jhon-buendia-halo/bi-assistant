@@ -1,9 +1,3 @@
-// The data-readiness service loads the Databricks driver (ESM-only deps)
-// at import time; the session specs never call it for real.
-jest.mock('../data-readiness/data-readiness.service', () => ({
-  DataReadinessService: class {},
-}));
-
 // Sessions bound to a workflow (ADR-0040; workflows R4; past-chats R65):
 // every creation path stores the workflow its agent fields derive, `POST
 // /sessions { workflowId }` resolves and refuses as api.md 3 says, and every
@@ -112,7 +106,6 @@ function build() {
   const registry: Record<string, unknown> = {
     assistant: agent('Questions to Insights Assistant'),
     'insights-analyst': agent('Insights Analyst'),
-    'data-readiness': agent('Data Readiness Agent'),
     'sql-fixer': agent('SQL Fixer'),
   };
   const mastra = {
@@ -134,10 +127,6 @@ function build() {
     datasetNames: jest
       .fn()
       .mockResolvedValue(new Set(['World Cup', 'Orders API'])),
-    datasetKinds: jest.fn().mockResolvedValue([
-      { name: 'World Cup', datasourceKind: 'postgres' },
-      { name: 'Orders API', datasourceKind: 'rest' },
-    ]),
   };
   const service = new SessionsService(
     repository as never,
@@ -196,16 +185,30 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
         },
       ],
       [
-        'a Data Readiness session',
+        'a session of the removed Data Readiness Agent, read as a plain one',
         {
           agentKey: 'data-readiness',
           agentName: 'Data Readiness Agent',
           workflowId: 'agent:data-readiness',
         },
         {
-          id: 'agent:data-readiness',
-          name: 'Data Readiness Agent',
+          id: 'agent:assistant',
+          name: 'Assistant',
           kind: 'agent',
+          deleted: false,
+        },
+      ],
+      [
+        'a past chat of the removed Assess Data Readiness: its name on the chip',
+        {
+          agentKey: 'data-readiness',
+          agentName: 'Data Readiness Agent',
+          workflowId: 'data-readiness-assessment',
+        },
+        {
+          id: 'data-readiness-assessment',
+          name: 'Assess Data Readiness',
+          kind: 'code',
           deleted: false,
         },
       ],

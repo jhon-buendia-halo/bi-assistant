@@ -45,105 +45,18 @@ describe('DatabricksProfiler', () => {
       connect,
       openSession: jest.fn().mockResolvedValue({
         executeStatement: jest.fn().mockResolvedValue({
-          fetchAll: () => Promise.resolve([{ total: '1' }]),
+          fetchAll: () => Promise.resolve([]),
         }),
         close: jest.fn().mockResolvedValue(undefined),
       }),
       close: jest.fn().mockResolvedValue(undefined),
     }));
-    await profiler.columnStats(
+    await profiler.tables(
       { ...config, host: '  https://dbc-1.cloud.databricks.com/  ' },
       'cat.sch',
-      't',
-      [],
-      ['a'],
-      [],
     );
     expect(connect).toHaveBeenCalledWith(
       expect.objectContaining({ host: 'dbc-1.cloud.databricks.com' }),
-    );
-  });
-
-  it('columnStats flattens catalog.schema, backtick-quotes and maps results', async () => {
-    responder = () => [
-      { total: '10', n0: '2', d0: '5', d1: 3, mn0: '1', mx0: '9' },
-    ];
-    const out = await profiler.columnStats(
-      config,
-      'cat.sch',
-      'ta`b',
-      ['a'],
-      ['a', 'b'],
-      ['a'],
-    );
-    expect(sqls[0]).toContain('FROM `cat`.`sch`.`ta``b`');
-    expect(sqls[0]).toContain('COUNT_IF(`a` IS NULL)');
-    expect(sqls[0]).toContain('COUNT(DISTINCT `b`)');
-    expect(sqls[0]).toContain('CAST(MIN(`a`) AS STRING)');
-    expect(out).toEqual({
-      totalRows: 10,
-      nullCounts: { a: 2 },
-      distinctCounts: { a: 5, b: 3 },
-      minValues: { a: '1' },
-      maxValues: { a: '9' },
-    });
-  });
-
-  it('duplicateCount returns 0 without fields and sums excess', async () => {
-    expect(await profiler.duplicateCount(config, 'c.s', 't', [])).toBe(0);
-    expect(sqls).toHaveLength(0);
-    responder = () => [{ dup_excess: '4' }];
-    expect(await profiler.duplicateCount(config, 'c.s', 't', ['x', 'y'])).toBe(
-      4,
-    );
-    expect(sqls[0]).toContain('GROUP BY `x`, `y` HAVING COUNT(*) > 1');
-  });
-
-  it('orphanCount joins child to parent', async () => {
-    responder = () => [{ orphan_count: 7 }];
-    const n = await profiler.orphanCount(config, {
-      schema: 'c.s',
-      table: 'child',
-      column: 'pid',
-      refSchema: 'c.s2',
-      refTable: 'parent',
-      refColumn: 'id',
-    });
-    expect(n).toBe(7);
-    expect(sqls[0]).toContain('FROM `c`.`s`.`child` c');
-    expect(sqls[0]).toContain('LEFT JOIN `c`.`s2`.`parent` p');
-    expect(sqls[0]).toContain('c.`pid` = p.`id`');
-  });
-
-  it('invalidFormatCount inlines the pattern as a raw, case-insensitive literal', async () => {
-    responder = () => [{ invalid: '3' }];
-    expect(
-      await profiler.invalidFormatCount(
-        config,
-        'c.s',
-        't',
-        'col',
-        '^a\\d\\.\\s$',
-      ),
-    ).toBe(3);
-    expect(sqls[0]).toContain(
-      "NOT regexp_like(CAST(`col` AS STRING), r'(?i)^a\\d\\.\\s$')",
-    );
-  });
-
-  it('invalidFormatCount rejects a pattern with a single quote', async () => {
-    await expect(
-      profiler.invalidFormatCount(config, 'c.s', 't', 'col', "^a'b$"),
-    ).rejects.toThrow(/single quote/);
-  });
-
-  it('normalizedDistinctCount lowercases and trims', async () => {
-    responder = () => [{ d: '2' }];
-    expect(
-      await profiler.normalizedDistinctCount(config, 'c.s', 't', 'n'),
-    ).toBe(2);
-    expect(sqls[0]).toContain(
-      'COUNT(DISTINCT lower(trim(CAST(`n` AS STRING))))',
     );
   });
 
@@ -282,84 +195,10 @@ describe('DatabricksProfiler', () => {
 
   it('a failing statement surfaces an Error without the token', async () => {
     responder = () => new Error('bad auth dapiSECRET rejected');
-    const err = await profiler
-      .duplicateCount(config, 'c.s', 't', ['a'])
-      .catch((e: Error) => e);
+    const err = await profiler.tables(config, 'c.s').catch((e: Error) => e);
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).not.toContain('dapiSECRET');
     expect((err as Error).message).toContain('rejected');
-  });
-
-  it('tablePrivileges marks browse-only schemas as not selectable', async () => {
-    responder = (sql) => {
-      if (sql === 'SHOW CATALOGS') return [{ catalog: 'main' }];
-      if (sql.includes('.tables'))
-        return [
-          { table_schema: 'open', table_name: 'a' },
-          { table_schema: 'locked', table_name: 'b' },
-        ];
-      return [];
-    };
-    const fetchMock = jest.fn((url: string) =>
-      Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve(
-            url.includes('/schemas')
-              ? {
-                  schemas: [
-                    { name: 'open' },
-                    { name: 'locked', browse_only: true },
-                  ],
-                }
-              : { catalogs: [{ name: 'main' }] },
-          ),
-      }),
-    );
-    const orig = global.fetch;
-    global.fetch = fetchMock as unknown as typeof fetch;
-    try {
-      expect(await profiler.tablePrivileges(config)).toEqual([
-        { schema: 'main.open', table: 'a', selectable: true },
-        { schema: 'main.locked', table: 'b', selectable: false },
-      ]);
-    } finally {
-      global.fetch = orig;
-    }
-  });
-
-  it('rowCount runs SELECT COUNT(*) on the qualified table', async () => {
-    responder = () => [{ n: '42' }];
-    expect(await profiler.rowCount(config, 'c.s', 't')).toBe(42);
-    expect(sqls[0]).toContain('SELECT COUNT(*) AS n FROM `c`.`s`.`t`');
-  });
-
-  it('columnStats folds normalized-distinct and format aggregates into one SELECT', async () => {
-    responder = () => [{ total: '10', d0: '5', nd0: '4', nd1: 2, f0: '3' }];
-    const out = await profiler.columnStats(config, 'c.s', 't', [], ['a'], [], {
-      normalizedDistinct: ['n', 'm'],
-      formats: [{ column: 'e', pattern: '^a\\d$' }],
-    });
-    expect(sqls).toHaveLength(1);
-    expect(sqls[0]).toContain(
-      'COUNT(DISTINCT lower(trim(CAST(`n` AS STRING)))) AS nd0',
-    );
-    expect(sqls[0]).toContain(
-      "COUNT_IF(`e` IS NOT NULL AND NOT regexp_like(CAST(`e` AS STRING), r'(?i)^a\\d$')) AS f0",
-    );
-    expect(out.normalizedDistinctCounts).toEqual({ n: 4, m: 2 });
-    expect(out.invalidFormatCounts).toEqual({ e: 3 });
-  });
-
-  it('columnStats with only a normalized-distinct extra is a valid SELECT', async () => {
-    responder = () => [{ total: '10', nd0: '4' }];
-    const out = await profiler.columnStats(config, 'c.s', 't', [], [], [], {
-      normalizedDistinct: ['n'],
-    });
-    expect(sqls[0]).toBe(
-      'SELECT COUNT(*) AS total, COUNT(DISTINCT lower(trim(CAST(`n` AS STRING)))) AS nd0 FROM `c`.`s`.`t`',
-    );
-    expect(out.normalizedDistinctCounts).toEqual({ n: 4 });
   });
 
   describe('withSessions', () => {
@@ -420,19 +259,18 @@ describe('DatabricksProfiler', () => {
     it('reuses at most `size` sessions, queues the rest and closes all', async () => {
       behaviour = async () => {
         await tick();
-        return [{ n: '1' }];
+        return [];
       };
+      // Each `tables(config, schema)` runs two statements (columns, tables).
       const out = await profiler.withSessions(config, 2, undefined, async (p) =>
         Promise.all(
-          Array.from({ length: 6 }, (_, i) =>
-            p.rowCount(config, 'c.s', `t${i}`),
-          ),
+          Array.from({ length: 6 }, (_, i) => p.tables(config, `c.s${i}`)),
         ),
       );
-      expect(out).toEqual([1, 1, 1, 1, 1, 1]);
+      expect(out).toEqual([[], [], [], [], [], []]);
       expect(clients).toHaveLength(2);
       expect(maxActive).toBeLessThanOrEqual(2);
-      expect(ops).toHaveLength(6);
+      expect(ops).toHaveLength(12);
       for (const c of clients) {
         expect(c.connect).toHaveBeenCalledWith(
           expect.objectContaining({ telemetryEnabled: false }),
@@ -445,7 +283,7 @@ describe('DatabricksProfiler', () => {
     it('opens sessions lazily and closes them when fn throws', async () => {
       await expect(
         profiler.withSessions(config, 3, undefined, async (p) => {
-          await p.rowCount(config, 'c.s', 't');
+          await p.tables(config, 'c.s');
           throw new Error('boom dapiSECRET');
         }),
       ).rejects.toThrow('boom ***');
@@ -459,12 +297,12 @@ describe('DatabricksProfiler', () => {
       const ctrl = new AbortController();
       const result = profiler
         .withSessions(config, 2, ctrl.signal, async (p) => {
-          const first = p.rowCount(config, 'c.s', 't');
-          const second = p.rowCount(config, 'c.s', 'u');
+          const first = p.tables(config, 'c.s');
+          const second = p.tables(config, 'c.u');
           await tick();
           await tick();
           ctrl.abort();
-          const late = p.rowCount(config, 'c.s', 'v');
+          const late = p.tables(config, 'c.v');
           const settled = await Promise.allSettled([first, second, late]);
           return settled.map((s) =>
             s.status === 'rejected' ? (s.reason as Error).name : 'ok',
@@ -480,24 +318,22 @@ describe('DatabricksProfiler', () => {
     });
 
     it('a straggler after fn rejected neither opens nor leaks a session', async () => {
-      behaviour = () => Promise.resolve([{ n: '1' }]);
+      behaviour = () => Promise.resolve([]);
       let scoped!: {
-        rowCount: (c: typeof config, s: string, t: string) => Promise<number>;
+        tables: (c: typeof config, s: string) => Promise<unknown[]>;
       };
-      let first!: Promise<number>;
+      let first!: Promise<unknown[]>;
       await expect(
         profiler.withSessions(config, 2, undefined, (p) => {
           scoped = p;
-          first = p.rowCount(config, 'c.s', 't');
+          first = p.tables(config, 'c.s');
           first.catch(() => undefined);
           return Promise.reject(new Error('fn failed'));
         }),
       ).rejects.toThrow('fn failed');
       await first.catch(() => undefined);
       expect(clients).toHaveLength(1);
-      await expect(scoped.rowCount(config, 'c.s', 'u')).rejects.toThrow(
-        /closed/,
-      );
+      await expect(scoped.tables(config, 'c.u')).rejects.toThrow(/closed/);
       expect(clients).toHaveLength(1);
       expect(clients[0].close).toHaveBeenCalledTimes(1);
       expect(sessionCloses[0]).toHaveBeenCalledTimes(1);
@@ -508,9 +344,7 @@ describe('DatabricksProfiler', () => {
       try {
         behaviour = () => new Promise(() => undefined);
         const p = profiler
-          .withSessions(config, 1, undefined, (s) =>
-            s.rowCount(config, 'c.s', 't'),
-          )
+          .withSessions(config, 1, undefined, (s) => s.tables(config, 'c.s'))
           .catch((e: Error) => e);
         await jest.advanceTimersByTimeAsync(16_000);
         const err = (await p) as Error;
@@ -523,7 +357,7 @@ describe('DatabricksProfiler', () => {
       }
     });
 
-    it('reads the whole inventory once per scope for tables and tablePrivileges', async () => {
+    it('reads the whole inventory once per scope', async () => {
       const seen: string[] = [];
       behaviour = () => Promise.resolve([]);
       const origExec = (
@@ -547,26 +381,14 @@ describe('DatabricksProfiler', () => {
         });
         return client;
       });
-      const fetchMock = jest.fn(() =>
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ catalogs: [], schemas: [] }),
-        }),
-      );
-      const orig = global.fetch;
-      global.fetch = fetchMock as unknown as typeof fetch;
-      try {
-        await profiler.withSessions(config, 2, undefined, async (p) => {
-          await p.tables(config);
-          await p.tablePrivileges(config);
-        });
-      } finally {
-        global.fetch = orig;
-      }
+      await profiler.withSessions(config, 2, undefined, async (p) => {
+        await p.tables(config);
+        await p.tables(config);
+      });
       expect(seen.filter((q) => q === 'SHOW CATALOGS')).toHaveLength(1);
     });
 
-    describe('with a reach (data-readiness R28)', () => {
+    describe('with a reach', () => {
       const reach = {
         namespaces: ['big_cat.mkt'],
         entities: [{ namespace: 'big_cat.mkt', name: 'vw_policy' }],

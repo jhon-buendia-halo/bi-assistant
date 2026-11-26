@@ -1,12 +1,7 @@
-// The data-readiness service loads the Databricks driver (ESM-only deps)
-// at import time; the session specs never call it for real.
-jest.mock('../data-readiness/data-readiness.service', () => ({
-  DataReadinessService: class {},
-}));
-
 // Sessions bound to a built-in agent (agent-answers R52, R61; ADR-0028): the
 // derived `agent`, the turn of an agent other than the assistant, and how a
-// session of the removed RFP Builder still reads.
+// session of a removed agent (the RFP Builder, the Site Reviewer, the Data
+// Readiness Agent) still reads.
 jest.mock('@mastra/core/request-context', () => ({
   RequestContext: class {
     private readonly values = new Map<string, unknown>();
@@ -85,12 +80,7 @@ import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
 import { toolDataRecord } from './turn-data';
 import type { SessionDoc } from './entities/session.entity';
 
-const READINESS_DESCRIPTION = 'Assesses how ready a dataset is for analysis.';
-const READINESS_STARTERS = [
-  'Assess the readiness of this dataset',
-  'What are the worst data-quality problems?',
-  'Show my past assessments',
-];
+const ANALYST_DESCRIPTION = 'Answers business questions from the data.';
 
 async function* streamOf(chunks: unknown[]): AsyncGenerator<unknown> {
   for (const chunk of chunks) {
@@ -115,10 +105,10 @@ interface BuildOptions {
 function build(options: BuildOptions = {}) {
   const session: SessionDoc = {
     id: 's-1',
-    name: 'Data Readiness',
+    name: 'Insights Analyst',
     datasets: ['Claims'],
-    agentKey: 'data-readiness',
-    agentName: 'Data Readiness Agent',
+    agentKey: 'insights-analyst',
+    agentName: 'Insights Analyst',
     messages: [],
     visualizations: [],
     ...options.session,
@@ -133,10 +123,10 @@ function build(options: BuildOptions = {}) {
       return Promise.resolve(session);
     }),
   };
-  const readinessAgent = {
-    id: 'data-readiness',
-    name: 'Data Readiness Agent',
-    getDescription: () => READINESS_DESCRIPTION,
+  const analyst = {
+    id: 'insights-analyst',
+    name: 'Insights Analyst',
+    getDescription: () => ANALYST_DESCRIPTION,
     getMemory: jest.fn().mockResolvedValue({
       getThreadById: jest.fn().mockResolvedValue({ id: session.id }),
     }),
@@ -158,10 +148,11 @@ function build(options: BuildOptions = {}) {
     stream: jest.fn(),
     generate: jest.fn(),
   };
-  // The RFP Builder (`rfp`) is no longer registered.
+  // The RFP Builder (`rfp`), the Site Reviewer and the Data Readiness Agent
+  // (`data-readiness`) are no longer registered.
   const registry: Record<string, unknown> = {
     assistant,
-    'data-readiness': readinessAgent,
+    'insights-analyst': analyst,
   };
   const mastra = {
     getAgent: jest.fn((key: string) => registry[key]),
@@ -210,7 +201,7 @@ function build(options: BuildOptions = {}) {
     } as never,
     userAgents as never,
   );
-  return { service, session, repository, readinessAgent, assistant };
+  return { service, session, repository, analyst, assistant };
 }
 
 /** Run a streamed turn and collect its events. */
@@ -233,14 +224,14 @@ async function turn(
 }
 
 describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => {
-  it('derives the agent from the registered built-in with its starters (api.md 2.1)', async () => {
+  it('derives the agent from the registered built-in, with no starters (api.md 2.1)', async () => {
     const ctx = build();
     const expected = {
-      id: 'data-readiness',
-      name: 'Data Readiness Agent',
+      id: 'insights-analyst',
+      name: 'Insights Analyst',
       deleted: false,
-      description: READINESS_DESCRIPTION,
-      starterQuestions: READINESS_STARTERS,
+      description: ANALYST_DESCRIPTION,
+      starterQuestions: [],
     };
     expect((await ctx.service.toView(ctx.session)).agent).toEqual(expected);
     const plain: SessionDoc = {
@@ -260,7 +251,7 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       await turn(ctx, 'Hello', true);
       // A tool-free answer would trigger the assistant's grounding pass, and
       // careful mode its cross-check: neither runs for this agent.
-      expect(ctx.readinessAgent.generate).not.toHaveBeenCalled();
+      expect(ctx.analyst.generate).not.toHaveBeenCalled();
       expect(ctx.session.messages.at(-1)).not.toHaveProperty('crossCheck');
 
       const silent = build({
@@ -434,7 +425,7 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       });
       await turn(ctx, 'And the checkout page?');
       expect(ctx.assistant.stream).toHaveBeenCalledTimes(1);
-      expect(ctx.readinessAgent.stream).not.toHaveBeenCalled();
+      expect(ctx.analyst.stream).not.toHaveBeenCalled();
     });
 
     it('reads as plain when it never stored a workflowId', async () => {
@@ -447,6 +438,90 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
         id: 'agent:assistant',
         name: 'Assistant',
       });
+    });
+  });
+
+  describe('a stored session of the removed Data Readiness Agent', () => {
+    /** As an earlier version stored it: her report on the answer and in the panel. */
+    const legacy = {
+      agentKey: 'data-readiness',
+      agentName: 'Data Readiness Agent',
+      workflowId: 'agent:data-readiness',
+      messages: [
+        { role: 'user', content: 'Assess the readiness of Claims', at: 't1' },
+        {
+          role: 'assistant',
+          content: 'Claims scores 72.',
+          at: 't2',
+          readinessReport: {
+            reportId: 'r-1',
+            datasourceName: 'Claims PG',
+            overallScore: 72,
+            maturity: 'developing',
+            generatedAt: 't2',
+          },
+        },
+      ],
+      panelItems: [
+        {
+          id: 'readiness:r-1',
+          kind: 'readiness',
+          title: 'Claims readiness',
+          reportId: 'r-1',
+          shownAt: 't2',
+        },
+        {
+          id: 'doc-1',
+          kind: 'document',
+          title: 'Notes',
+          markdown: '# Notes',
+          shownAt: 't2',
+        },
+      ],
+    } as unknown as Partial<SessionDoc>;
+
+    it('reads as a plain Assistant session, without her report or its panel item', async () => {
+      const ctx = build({ session: legacy });
+      const view = await ctx.service.toView(ctx.session);
+      expect(view).not.toHaveProperty('agent');
+      expect(view).not.toHaveProperty('agentKey');
+      expect(view).not.toHaveProperty('agentName');
+      expect(view.workflowRef).toEqual({
+        id: 'agent:assistant',
+        name: 'Assistant',
+        kind: 'agent',
+        deleted: false,
+      });
+      // The transcript reads as stored, less the readiness report.
+      expect(view.messages.map((m) => m.content)).toEqual([
+        'Assess the readiness of Claims',
+        'Claims scores 72.',
+      ]);
+      expect(view.messages[1]).not.toHaveProperty('readinessReport');
+      expect(view.panelItems.map((item) => item.id)).toEqual(['doc-1']);
+      // A list read gives the same view; the stored document is untouched.
+      const [listed] = await ctx.service.toViews([ctx.session]);
+      expect(listed).toEqual(view);
+      expect(ctx.session.messages[1]).toHaveProperty('readinessReport');
+      expect(ctx.repository.update).not.toHaveBeenCalled();
+    });
+
+    it('runs a turn on it as the assistant', async () => {
+      const ctx = build({ session: legacy });
+      Object.assign(ctx.assistant, {
+        getMemory: jest.fn().mockResolvedValue({
+          getThreadById: jest.fn().mockResolvedValue({ id: ctx.session.id }),
+        }),
+      });
+      ctx.assistant.stream.mockResolvedValue({
+        fullStream: streamOf([
+          { type: 'text-delta', payload: { text: 'Hi.' } },
+        ]),
+        text: Promise.resolve(''),
+      });
+      await turn(ctx, 'And the members table?');
+      expect(ctx.assistant.stream).toHaveBeenCalledTimes(1);
+      expect(ctx.analyst.stream).not.toHaveBeenCalled();
     });
   });
 });
