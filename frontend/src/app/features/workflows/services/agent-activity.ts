@@ -17,8 +17,6 @@ export interface ActivityCall {
   durationMs?: number;
   /** A streamed call: false until its result arrived. Absent for a stored call. */
   finished?: boolean;
-  /** The latest progress message of a long-running tool. */
-  progress?: string;
   /** Who made it, when the step's agent delegates: Avery signs her own calls. */
   agent?: string;
   /** A team call (Avery's): the agent it hands the work to. */
@@ -165,7 +163,6 @@ function stepOf(call: ActivityCall, current: boolean): ActivityStep {
   } else if (current) {
     state = 'current';
     label = reason || `${phrase.doing}…`;
-    if (call.progress) label = `${label} · ${call.progress}`;
   } else {
     label = reason || phrase.done;
   }

@@ -707,12 +707,6 @@
                             [ngTemplateOutletContext]="{ $implicit: field }"
                           />
                         }
-                        @case ("dataset") {
-                          <ng-container
-                            [ngTemplateOutlet]="menuPick"
-                            [ngTemplateOutletContext]="{ $implicit: field }"
-                          />
-                        }
                         @case ("artifact") {
                           <ng-container
                             [ngTemplateOutlet]="menuPick"
@@ -1066,10 +1060,7 @@
                         </button>
                       }
                     </div>
-                    @if (
-                      ask.field.type === "datasets" ||
-                      ask.field.type === "dataset"
-                    ) {
+                    @if (ask.field.type === "datasets") {
                       <p
                         class="m-0 flex items-center gap-1.5 text-[12px] text-fg-muted"
                       >
