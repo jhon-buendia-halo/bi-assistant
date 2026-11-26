@@ -1,9 +1,5 @@
 import { createHash } from 'node:crypto';
 import { assistantShippedPrompt } from './agents/assistant-prompt';
-import {
-  PLAN_INSTRUCTIONS,
-  WRITE_ANSWER_INSTRUCTIONS,
-} from './workflows/analysis.prompts';
 import { QUERY_EXPLAINER_INSTRUCTIONS } from './agents/query-explainer.prompts';
 import { RESULT_EXPLORER_INSTRUCTIONS } from './agents/result-explorer.prompts';
 import { ORCHESTRATOR_MICHAEL_INSTRUCTIONS } from './workflows/orchestrated-answer-michael.prompts';
@@ -12,7 +8,6 @@ import { INSIGHTS_LEAD_INSTRUCTIONS } from './workflows/insights-lead.prompts';
 import {
   INSIGHTS_ANALYST_PROMPT,
   EVAL_JUDGE_PROMPT,
-  KNOWLEDGE_BOOTSTRAP_PROMPT,
   SQL_FIXER_PROMPT,
   SQL_VERIFIER_PROMPT,
   VISUALIZATION_PROMPT,
@@ -30,10 +25,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   visualization: VISUALIZATION_PROMPT,
   'sql-fixer': SQL_FIXER_PROMPT,
   'sql-verifier': SQL_VERIFIER_PROMPT,
-  'knowledge-bootstrap': KNOWLEDGE_BOOTSTRAP_PROMPT,
   'assistant-eval-judge': EVAL_JUDGE_PROMPT,
-  'analysis-planner': PLAN_INSTRUCTIONS,
-  'answer-writer': WRITE_ANSWER_INSTRUCTIONS,
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
   'result-explorer': RESULT_EXPLORER_INSTRUCTIONS,
   'chief-of-staff': ORCHESTRATOR_MICHAEL_INSTRUCTIONS,

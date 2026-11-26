@@ -310,7 +310,7 @@ function codeEntry(
       kind: 'code',
       owner: 'Official',
       category: workflowCategory(source.category),
-      // Every agent its steps run, by persona name: Michael, Olivia, Jessica.
+      // Every agent its steps run, by persona name.
       agents: workflowAgentKeys(source).flatMap((key) => {
         const used = builtins.get(key);
         return used ? [{ key, name: used.name, role: used.role }] : [];

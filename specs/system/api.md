@@ -497,7 +497,7 @@ With no key the request carries no credential header. Any `http`/`https` host is
 
 ### 2.6 Agents, hub and evals
 
-Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `visualization`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`, `insights-analyst`; see [agents.md](agents.md)) **or** the id of a user agent ([data-model.md](data-model.md) section 3.10); the registry is checked first. `:id` is always a user-agent id. The catalogue merges both kinds. Rules: R43-R52, R97-R104 and R106 in [agents-evals](../capabilities/agents-evals/spec.md). The user-agent routes are declared before `GET /agents/:key`.
+Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `visualization`, `sql-fixer`, `sql-verifier`, `assistant-eval-judge`, `insights-analyst`; see [agents.md](agents.md)) **or** the id of a user agent ([data-model.md](data-model.md) section 3.10); the registry is checked first. `:id` is always a user-agent id. The catalogue merges both kinds. Rules: R43-R52, R97-R104 and R106 in [agents-evals](../capabilities/agents-evals/spec.md). The user-agent routes are declared before `GET /agents/:key`.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -1280,8 +1280,8 @@ No controller prefix: the routes sit under `/datasets/:name/ontology` and `/onto
 | 50 | `POST /datasets/:name/ontology` | Create a user item in the dataset (or shared) | yes |
 | 51 | `PATCH /ontology/:id` | Partial update | yes |
 | 52 | `DELETE /ontology/:id` | Delete (204) | yes |
-| 53 | `POST /datasets/:name/ontology/bootstrap` | Draft ontology items from the dataset (one shot) | **no** |
-| 54 | `POST /datasets/:name/ontology/bootstrap/stream` | Same run, streamed progress (SSE) | yes |
+| 53 | (removed 2026-11-26) `POST /datasets/:name/ontology/bootstrap` | Drafted ontology items from the dataset (one shot) | **no** |
+| 54 | (removed 2026-11-26) `POST /datasets/:name/ontology/bootstrap/stream` | The same run, streamed progress (SSE) | yes |
 
 Route order: `/datasets/:name/ontology...` and `/ontology/:id` do not collide with the datasets routes (2.3).
 
@@ -1304,16 +1304,8 @@ Route order: `/datasets/:name/ontology...` and `/ontology/:id` do not collide wi
 - Response `204` (empty). `404 "Ontology item <id> not found"`.
 - Deleting a concept also deletes the relations whose `from` or `to` is that concept and clears `conceptId` on the constraints that name it.
 
-#### 53. `POST /datasets/:name/ontology/bootstrap`
-- No body.
-- Response `201`: `{ created: OntologyItem[] }`.
-- Errors: `400 "dataset is required"`, `400 "Dataset \"<name>\" not found"`, `400 "Ontology bootstrap failed: <reason>"` (LLM error, malformed output), `400 "Ontology bootstrap failed: the bootstrap agent returned no usable drafts"`. Never a raw 500 by design.
-- Not called by the frontend; the streamed variant (54) replaced it for UX (G3).
-
-#### 54. `POST /datasets/:name/ontology/bootstrap/stream`
-See [section 3.4](#34-ontology-bootstrap-stream-post-datasetsnameontologybootstrapstream).
-
-Bootstrap semantics shared by 53 and 54: the `knowledge-bootstrap` agent (shown as Ontology Bootstrap) drafts concepts, relations, constraints and instructions from the dataset's stored schema snapshot, sample rows, column references and governed metrics (see [agents.md](agents.md) 2.5); at most 15 drafts are kept; concepts are inserted first, relations resolve against concepts and metrics by name and are dropped when unresolved, mappings to entities outside the dataset are dropped, and a draft is skipped when its name (case-insensitive) already exists for the same kind in the dataset or earlier in the run; survivors are persisted with `dataset: <name>`, `source: "mined"`, **`enabled: false`** for human review.
+#### 53. and 54. Ontology bootstrap (removed 2026-11-26)
+The user removed the ontology's "draft with AI" with Kevin (`knowledge-bootstrap`, [agents.md](agents.md) 2.5): `POST /datasets/:name/ontology/bootstrap` and `POST /datasets/:name/ontology/bootstrap/stream` no longer exist and answer `404`. The numbers are kept so the references stay stable. Items already stored with `source: "mined"` stay listed, accepted and rejected as before.
 
 ### 2.8c Monitoring
 
@@ -1638,7 +1630,7 @@ Controller prefix `/health`. Capability: [app-shell](../capabilities/app-shell/s
 
 ## 3. Streaming and long-running work
 
-Three Server-Sent-Events endpoints exist (chat, workflow runs, ontology bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. One background-job pattern uses start + poll instead of SSE (eval runs).
+The Server-Sent-Events endpoints are those of workflow runs (3.6); the chat stream (3.1) and the ontology bootstrap stream (3.4, 2026-11-26) were removed. They are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. One background-job pattern uses start + poll instead of SSE (eval runs).
 
 ### 3.1 Chat stream (removed in 1.23.27)
 
@@ -1719,19 +1711,9 @@ Pattern: **start, poll, list, download, delete**. Endpoints 36-40.
 - Cannot delete a run while it is `running`.
 - Runs started by the CLI runner (6.2, `source: 'cli'`) are persisted too and listed here (agents-evals R113).
 
-### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
+### 3.4 Ontology bootstrap stream (removed 2026-11-26)
 
-**Request.** No body; the dataset is the `:name` path segment. Same headers and framing as 3.1 (`data: <JSON>\n\n`, HTTP 200 once started; even `dataset is required` or `Dataset "<name>" not found` arrives as an `error` event).
-
-| `type` | Payload | Meaning |
-|---|---|---|
-| `progress` | `{ type:"progress", key: "dataset"\|"schema"\|"sample"\|"draft"\|"save", message: string }` | A stage started. Messages: `Opening dataset “<name>”`, `Reading schema — <n> table(s)`, `Sampling rows — <done> of <total> table(s)` (repeats as tables complete), `Drafting concepts, relations, constraints and instructions`, `Saving <n> draft(s) for review`. |
-| `done` | `{ type:"done", created: OntologyItem[] }` | **Terminal, success.** Persisted drafts (disabled, `source:"mined"`). May be empty. |
-| `error` | `{ type:"error", message: string }` | **Terminal, failure.** Reasons as in endpoint 53. |
-
-Note the error text is in **`message`** here but in **`content`** for the chat stream. Clients treat end-of-stream without a terminal event as failure. The shipped client's fallback texts: `"Backend unreachable"`, `"Could not generate suggestions (<status>)"`, `"Could not generate suggestions — try again shortly"`.
-
-**Abort.** The client may abort the fetch. The server only records that the connection closed and stops sending; **the bootstrap run is not cancelled** and still persists its drafts (they appear on the next list). Takes about a minute on a real dataset.
+`POST /datasets/:name/ontology/bootstrap/stream` (54) was removed with the bootstrap ([agents.md](agents.md) 2.5). The section number is kept so the references stay stable.
 
 ### 3.5 Other long-running calls (no progress channel)
 
@@ -1748,7 +1730,7 @@ Note the error text is in **`message`** here but in **`content`** for the chat s
 
 **Request.** As 118: `{ input, context?: { fromRunId } }`. Every refusal (118's list) is answered with its real status before the stream starts, unlike the chat stream.
 
-**Response headers and framing.** As 3.1: `text/event-stream; charset=utf-8`, flushed at once; one `data: <JSON>\n\n` frame per event, with 3.1's `: ping` heartbeat between them (also on 149 and the ontology bootstrap stream). On 119, 138 and 149 each frame's JSON also carries `seq`, the event's number in the run's log (from 1; ADR-0048), to follow the run again after it with 149 (`after=<seq>`); 129 sends no `seq`.
+**Response headers and framing.** As 3.1: `text/event-stream; charset=utf-8`, flushed at once; one `data: <JSON>\n\n` frame per event, with 3.1's `: ping` heartbeat between them (also on 149). On 119, 138 and 149 each frame's JSON also carries `seq`, the event's number in the run's log (from 1; ADR-0048), to follow the run again after it with 149 (`after=<seq>`); 129 sends no `seq`.
 
 **Events, in order.**
 
@@ -2023,7 +2005,7 @@ No environment variables. The only runtime switch is the page protocol (`file:` 
 
 - **G1. Desktop base URL is hardcoded.** The renderer uses `http://localhost:3000` under `file://`; the preload bridge does not expose the port, so a non-default `BACKEND_PORT` breaks the desktop app (roadmap 1.7.20, BA-109). A rebuild should expose the port via the bridge.
 - **G2. `POST /sessions/:id/messages` is unused** by the frontend and is a degraded duplicate of the streaming path (no tool-data capture, clarification, grounding guard or careful mode). Open question: keep as a public non-streaming API or remove.
-- **G3. `POST /datasets/:name/ontology/bootstrap` is unused** (superseded by the streamed variant); it shares the service call.
+- **G3.** (Removed 2026-11-26 with the ontology bootstrap, 53 and 54.)
 - **G4. Eval run recovery.** In-flight run state lives in memory with write-through persistence per question. Open question: what status a run left `running` by a crash shows after restart (no reconciliation code was found).
 - **G5. Frontend type drift.** The frontend `EvalRunView` omits `comparison` (present on the wire, only used in the Markdown report). The frontend `getEvalRun` result is a loose merge type.
 - **G6. No cascade.** Deleting a datasource leaves datasets pointing at it; deleting a dataset deletes its own ontology items but leaves sessions that name it. Behaviour of such dangling references is not specified in the API.

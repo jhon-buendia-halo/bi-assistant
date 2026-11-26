@@ -468,9 +468,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'data-readiness',
       'sql-fixer',
       'u-1',
-      // Olivia, Jessica and Ryan stay in the library, in no workflow.
-      'analysis-planner',
-      'answer-writer',
+      // Ryan stays in the library, in no workflow.
       'visualization',
     ])('%s is used in none: agents are a library', (key) => {
       expect(workflowsUsingAgent(key)).toEqual([]);

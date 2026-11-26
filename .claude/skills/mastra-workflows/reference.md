@@ -144,12 +144,9 @@ Who runs them: `MastraService.streamWorkflow` (`backend/src/mastra/mastra.servic
 |---|---|---|---|
 | `assistant` | `assistant.agent.ts` | Questions to Insights Assistant; its turns run on `agent-turn` | 2.1 |
 | `insights-analyst` | `insights-analyst.agent.ts` (data: `insights-analyst-catalog.ts`) | Michael's analysis in Avery's `answer_from_data`, with tools | 2.11 |
-| `analysis-planner` | `analysis-planner.agent.ts` | the Plan step: one model call, no tools | 2.11, 5.11 |
-| `answer-writer` | `answer-writer.agent.ts` | the Write answer step: one model call, no tools | 2.11, 5.11 |
 | `visualization` | `visualization.agent.ts` | Interactive Visual Designer | 2.2, 6 |
 | `sql-fixer` | `sql-fixer.agent.ts` | repairs a failed query | 2.3, 5.3 |
 | `sql-verifier` | `sql-verifier.agent.ts` | careful mode's cross-check | 2.4, 5.8 |
-| `knowledge-bootstrap` | `knowledge-bootstrap.agent.ts` | Ontology Bootstrap | 2.5 |
 | `assistant-eval-judge` | `eval-judge.agent.ts` | judges eval answers | 2.6 |
 
 ### Tools (`backend/src/mastra/tools/`)

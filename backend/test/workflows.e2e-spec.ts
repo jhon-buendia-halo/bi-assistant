@@ -446,15 +446,8 @@ describe('The workflow catalogue (API)', () => {
       }
       // Sarah was removed with Assess Data Readiness (workflows R50).
       await http().get('/agents/data-readiness').expect(404);
-      // Olivia, Jessica and Ryan ran in the removed workflow only.
-      for (const key of [
-        'analysis-planner',
-        'answer-writer',
-        'visualization',
-        'assistant',
-        liveId,
-        draftId,
-      ]) {
+      // Ryan ran in the removed workflow only.
+      for (const key of ['visualization', 'assistant', liveId, draftId]) {
         expect({ key, used: await used(key) }).toEqual({ key, used: [] });
       }
     });

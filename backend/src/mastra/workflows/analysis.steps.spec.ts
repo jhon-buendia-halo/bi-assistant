@@ -26,19 +26,11 @@ import {
 } from './analysis.steps';
 import { INSIGHTS_ANALYST_PROMPT } from '../agents/system-prompts';
 import {
-  ANSWER_REQUEST_CAP,
-  ANSWER_ROWS_CAP,
   EARLIER_BLOCK_CAP,
   EARLIER_BLOCK_HEADER,
   EARLIER_ROWS_SHOWN,
-  PLAN_FIRST_LINE,
-  PLAN_INSTRUCTIONS,
-  WRITE_ANSWER_FIRST_LINE,
-  WRITE_ANSWER_INSTRUCTIONS,
   analyseSystemBlocks,
   earlierQueriesBlock,
-  planMessages,
-  writeAnswerRequest,
 } from './analysis.prompts';
 
 const PLAN: AnalysisPlan = {
@@ -71,36 +63,6 @@ describe('the analysis steps (agents.md 5.11)', () => {
     ).toEqual({ question: 'Which?', options: ['a', 'b'] });
     expect(clarifyingQuestionOf({ options: ['a'] })).toBeUndefined();
     expect(clarifyingQuestionOf(undefined)).toBeUndefined();
-  });
-
-  it('opens the Plan and Write answer instructions with their fixed first lines', () => {
-    expect(PLAN_FIRST_LINE).toBe(
-      'You plan a data analysis for Questions to Insights.',
-    );
-    expect(WRITE_ANSWER_FIRST_LINE).toBe(
-      'You write the final answer for Questions to Insights.',
-    );
-    expect(PLAN_INSTRUCTIONS.split('\n')[0]).toBe(PLAN_FIRST_LINE);
-    // Plan's assumptions are choices; its options rest on the columns.
-    expect(PLAN_INSTRUCTIONS).toContain(
-      'Never a fact about the world or the domain',
-    );
-    expect(PLAN_INSTRUCTIONS).toContain(
-      'Each option is a measure the listed columns can compute',
-    );
-    // Write answer rounds derived figures and adds nothing from the world.
-    expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
-      'round averages, ratios and other derived figures to at most 2 decimals, and percentages to at most 1 decimal',
-    );
-    expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
-      'leave out any that states a fact about the world or the domain',
-    );
-    expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
-      'Nothing from general knowledge anywhere, assumptions and caveats included',
-    );
-    expect(WRITE_ANSWER_INSTRUCTIONS.split('\n')[0]).toBe(
-      WRITE_ANSWER_FIRST_LINE,
-    );
   });
 
   describe('loadCatalog', () => {
@@ -291,54 +253,6 @@ describe('the analysis steps (agents.md 5.11)', () => {
         assumptions: [],
         needsClarification: false,
         clarification: null,
-      });
-    });
-  });
-
-  describe('planMessages', () => {
-    it('is the request alone for a bare question, and replaces the last message of a conversation', () => {
-      expect(
-        planMessages({ messages: 'Q', question: 'Q', catalogBlock: 'CAT' }),
-      ).toEqual({ messages: 'Question: Q\n\nCAT', fallback: 'Q' });
-      expect(
-        planMessages({
-          messages: [
-            { role: 'user', content: 'Earlier' },
-            { role: 'assistant', content: 'Reply' },
-            { role: 'user', content: 'Q' },
-          ],
-          question: 'Q',
-          catalogBlock: 'CAT',
-        }).messages,
-      ).toEqual([
-        { role: 'user', content: 'Earlier' },
-        { role: 'assistant', content: 'Reply' },
-        { role: 'user', content: 'Question: Q\n\nCAT' },
-      ]);
-    });
-
-    it('after Clarify: the question, the clarifying question Plan asked, then the answer with the catalog', () => {
-      expect(
-        planMessages({
-          messages: 'Which team was the most dominant?',
-          question: 'Which team was the most dominant?',
-          catalogBlock: 'CAT',
-          answered: {
-            question: 'Dominant by what measure?',
-            options: ['Matches won', 'Goals scored'],
-            answer: 'Matches won',
-          },
-        }),
-      ).toEqual({
-        messages: [
-          { role: 'user', content: 'Which team was the most dominant?' },
-          {
-            role: 'assistant',
-            content: 'Dominant by what measure?\n- Matches won\n- Goals scored',
-          },
-          { role: 'user', content: 'Question: Matches won\n\nCAT' },
-        ],
-        fallback: 'Which team was the most dominant? (Matches won)',
       });
     });
   });
@@ -679,142 +593,12 @@ describe('the analysis steps (agents.md 5.11)', () => {
     });
   });
 
-  describe("the model steps' requests", () => {
-    it("keeps Write answer's request within its cap, shortening the rows", () => {
-      const wide = query({
-        rows: Array.from({ length: 50 }, (_, n) => ({
-          player: 'x'.repeat(1_000),
-          goals: n,
-        })),
-        rowCount: 50,
-      });
-      const request = writeAnswerRequest({
-        question: 'Who scored most?',
-        plan: PLAN,
-        queries: [wide, wide],
-        findings: [],
-      });
-      expect(request).toContain('[rows shortened to fit]');
-      expect(request.length).toBeLessThanOrEqual(ANSWER_REQUEST_CAP + 80);
-    });
-
-    it('hands Write answer the question, the plan, each query with its rows, and the findings', () => {
-      const request = writeAnswerRequest({
-        question: 'Who scored most?',
-        plan: PLAN,
-        queries: [query(), query({ error: 'boom', rationale: undefined })],
-        findings: [{ check: 'Ran a query', passed: true, detail: '1 of 2.' }],
-      });
-      expect(request).toContain('Question: Who scored most?');
-      expect(request).toContain(JSON.stringify(PLAN));
-      expect(request).toContain(
-        '1. I count the goals of each player. (1 rows)',
-      );
-      expect(request).toContain('[{"player":"Kane","goals":6}]');
-      expect(request).toContain('2. (no rationale given) (failed: boom)');
-      expect(request).toContain('- passed: Ran a query. 1 of 2.');
-    });
-
-    it('says how many rows a long result has and how many Write answer is shown (plan 1.25.6)', () => {
-      const rows = Array.from({ length: 102 }, (_, n) => ({ n }));
-      const request = writeAnswerRequest({
-        question: 'Which 100 drivers have the most race starts?',
-        plan: PLAN,
-        queries: [query({ rows, rowCount: 102 })],
-        findings: [],
-      });
-      expect(request).toContain(
-        '1. I count the goals of each player. (102 rows, the first 50 shown)',
-      );
-      expect(request).toContain(JSON.stringify(rows.slice(0, ANSWER_ROWS_CAP)));
-      expect(request).not.toContain('{"n":50}');
-    });
-
-    it('tells Write answer to mark a result it was shown only part of, as its last rule (plan 1.25.6)', () => {
-      expect(WRITE_ANSWER_INSTRUCTIONS).toContain('[[rows:<n>]]');
-      expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
-        '[[rows:2 | name=Driver, total_race_starts=Race starts]]',
-      );
-      expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
-        "when a query's line says that only its first rows are shown",
-      );
-      // The last rule of the list, so the rules before it read in the order
-      // they always had; only the exact-counts paragraph follows (1.29.8).
-      const lines = WRITE_ANSWER_INSTRUCTIONS.trimEnd().split('\n');
-      const lastRule = lines.filter((line) => line.startsWith('- ')).pop();
-      expect(lastRule?.startsWith('- Long lists:')).toBe(true);
-    });
-
-    it('ends Write answer with the exact-counts rule (roadmap 1.29.8)', () => {
-      expect(WRITE_ANSWER_INSTRUCTIONS.trimEnd().split('\n').pop()).toMatch(
-        /^Counts stay exact even when you describe a spread/,
-      );
-    });
-  });
-
-  // Plan, Analyse and Write answer's requests, pinned byte for byte (the
-  // literals below are the builders' output).
-  describe("the model steps' requests", () => {
-    const ANSWERED = {
-      question: 'Dominant by what measure?',
-      options: ['Matches won', 'Goals scored'],
-      answer: 'Matches won',
-    };
-    const WRITE_INPUT = {
-      question: 'Who scored most?',
-      plan: PLAN,
-      queries: [query()],
-      findings: [{ check: 'Ran a query', passed: true, detail: '1 of 1.' }],
-    };
-    /** Write answer's request for WRITE_INPUT. */
-    const WRITE_REQUEST = [
-      'Question: Who scored most?',
-      '',
-      'Plan:',
-      JSON.stringify(PLAN),
-      'Queries and their result rows:',
-      '1. I count the goals of each player. (1 rows)',
-      `SQL: ${query().sql}`,
-      '[{"player":"Kane","goals":6}]',
-      '',
-      'Validation findings:',
-      '- passed: Ran a query. 1 of 1.',
-    ].join('\n');
-
-    it("builds Plan's messages, before and after Clarify", () => {
-      expect(
-        planMessages({ messages: 'Q', question: 'Q', catalogBlock: 'CAT' }),
-      ).toEqual({ messages: 'Question: Q\n\nCAT', fallback: 'Q' });
-      expect(
-        planMessages({
-          messages: 'Q',
-          question: 'Q',
-          catalogBlock: 'CAT',
-          answered: ANSWERED,
-        }).messages,
-      ).toEqual([
-        { role: 'user', content: 'Q' },
-        {
-          role: 'assistant',
-          content: 'Dominant by what measure?\n- Matches won\n- Goals scored',
-        },
-        { role: 'user', content: 'Question: Matches won\n\nCAT' },
-      ]);
-    });
-
-    it("builds Write answer's request", () => {
-      expect(writeAnswerRequest(WRITE_INPUT)).toBe(WRITE_REQUEST);
-    });
-
+  describe("Analyse's request", () => {
     it("builds Analyse's system blocks: catalog, then plan", () => {
       expect(
         analyseSystemBlocks({ catalogBlock: 'CAT', planBlock: 'PLAN' }),
       ).toEqual(['CAT', 'PLAN']);
     });
-
-    // The lines that tell Analyse and Write answer a visual follows: only
-    // when the run builds one and the request cues it.
-    describe('when a visual follows', () => {});
   });
 });
 

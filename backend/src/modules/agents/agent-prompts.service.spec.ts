@@ -41,7 +41,6 @@ const REGISTRY = {
   visualization: { name: 'Interactive Visual Designer' },
   'sql-fixer': { name: 'SQL Fixer' },
   'sql-verifier': { name: 'SQL Verifier' },
-  'knowledge-bootstrap': { name: 'Knowledge Bootstrap' },
   'assistant-eval-judge': { name: 'Assistant Eval Judge' },
 };
 

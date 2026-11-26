@@ -99,33 +99,12 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       "I'm the second opinion: I work out the SQL for a question on my own, so we can check the answer holds up.",
   },
-  'knowledge-bootstrap': {
-    name: 'Kevin',
-    role: 'Knowledge Engineer',
-    domain: 'data-foundations',
-    intro:
-      'I learn what your data means: I describe its concepts and decode the values of its coded columns.',
-  },
   'assistant-eval-judge': {
     name: 'Laura',
     role: 'QA Evaluator',
     domain: 'quality',
     intro:
       "I grade the team's answers in evals: I compare what an agent did and said against the rubric, and explain the score.",
-  },
-  'analysis-planner': {
-    name: 'Olivia',
-    role: 'Analysis Lead',
-    domain: 'analysis',
-    intro:
-      'I plan the analysis before anyone writes a query: the measures, the tables, the scope, and whether to ask you something first.',
-  },
-  'answer-writer': {
-    name: 'Jessica',
-    role: 'Insights Writer',
-    domain: 'storytelling',
-    intro:
-      'I turn the rows and findings of an analysis into a clear answer you can act on.',
   },
   'bi-analyst': {
     name: 'Clara',

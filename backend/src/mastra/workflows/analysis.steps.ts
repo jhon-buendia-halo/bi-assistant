@@ -1,8 +1,7 @@
 /**
  * Michael's analysis (agents.md 5.11, 5.23): the catalog his request
  * carries, the checks on his queries, a waiting step's question, and the
- * types of the plan, the queries and the answer that Olivia's and Jessica's
- * model calls (./step-agents.ts) share with him. Plain data and functions
+ * types of the plan, the queries and the answer. Plain data and functions
  * (its schemas are ./analysis.schemas.ts), no framework import, so the
  * session code and the tests can read it without loading Mastra.
  */

@@ -26,13 +26,6 @@ export const OFFICIAL_AGENT_KEYS: readonly string[] = [
   'insights-lead',
 ];
 
-/**
- * Olivia and Jessica, the planner and the writer (agents.md 5.11): System
- * agents of the library, each called in one model call without tools.
- */
-export const ANALYSIS_PLANNER_AGENT_KEY = 'analysis-planner';
-export const ANSWER_WRITER_AGENT_KEY = 'answer-writer';
-
 /** The agent that explains a stored query step by step (agents.md 2.12). */
 export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
 /**
@@ -62,8 +55,6 @@ export const VISUALIZATION_AGENT_KEY = 'visualization';
 
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
-  ANALYSIS_PLANNER_AGENT_KEY,
-  ANSWER_WRITER_AGENT_KEY,
   QUERY_EXPLAINER_AGENT_KEY,
   RESULT_EXPLORER_AGENT_KEY,
   VISUALIZATION_AGENT_KEY,
@@ -72,5 +63,4 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   'sql-fixer',
   'sql-verifier',
   'assistant-eval-judge',
-  'knowledge-bootstrap',
 ];

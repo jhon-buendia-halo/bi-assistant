@@ -165,7 +165,7 @@ export function stepAgent(step: WorkflowDetailStep): StepAgent | null {
 }
 
 /**
- * Who works now, for a task row: `Michael is querying the data`, `Olivia is
+ * Who works now, for a task row: `Michael is querying the data`, `Avery is
  * waiting for your answer`; null when no agent step is under way.
  */
 export function teamActivity(stories: Iterable<AgentStepStory>): string | null {
@@ -182,7 +182,7 @@ export function teamActivity(stories: Iterable<AgentStepStory>): string | null {
 
 /**
  * The line between two agents of the Run panel's team, once the second one
- * started: `Olivia passed question, plan and catalog to Michael`.
+ * started: `Avery passed the question to Michael`.
  */
 export function handoffLine(
   from: AgentStepStory,

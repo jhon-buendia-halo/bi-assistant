@@ -4,11 +4,9 @@ import { apiFetch, apiJson } from './helpers/api';
 import { WORLD_CUP_DATASET } from './helpers/app-actions';
 import {
   createOntologyItem,
-  saveLenaiSettings,
   seedDataset,
   seedWorldCupDataset,
 } from './helpers/agents-api';
-import { startLlmStub, type LlmStub } from './helpers/llm-stub';
 import { worldCupKey } from './helpers/world-cup-db';
 
 /**
@@ -27,7 +25,6 @@ import { worldCupKey } from './helpers/world-cup-db';
 
 const MATCHES = worldCupKey('matches');
 const OTHER_DATASET = 'Formula 1';
-const BOOTSTRAP_PROMPT = 'Draft ontology items for the dataset below.';
 
 /** A list row (not the form, the summary or the checkbox, which share the prefix). */
 const ROW = 'div[data-testid^="ontology-item-"]:not([data-testid="ontology-item-form"])';
@@ -131,13 +128,11 @@ test('opens the Ontology tab of a saved dataset', async ({ page }) => {
     await page.getByTestId('dataset-tab-ontology').click();
   });
 
-  await test.step('Then I see "No ontology yet" and the actions "New item" and "Generate suggestions"', async () => {
+  await test.step('Then I see "No ontology yet" and the action "New item"', async () => {
     await expect(page.getByTestId('ontology-panel')).toBeVisible();
     await expect(page.getByText('No ontology yet')).toBeVisible();
     await expect(page.getByTestId('new-ontology-item')).toHaveText('New item');
-    await expect(page.getByTestId('open-generate-suggestions')).toHaveText(
-      'Generate suggestions',
-    );
+    await expect(page.getByTestId('open-generate-suggestions')).toHaveCount(0);
   });
 });
 
@@ -504,141 +499,6 @@ test('deleting a concept deletes its relations', async ({ page }) => {
     await expect(section(page, 'relation')).toContainText('No relations yet.');
     await expect(row(section(page, 'concept'), 'Goal')).toBeVisible();
     expect((await listItems(page)).map((i) => i.name)).toEqual(['Goal']);
-  });
-});
-
-test.describe('ontology bootstrap', () => {
-  let stub: LlmStub;
-
-  test.beforeEach(async ({ page }) => {
-    stub = await startLlmStub();
-    await saveLenaiSettings(page, stub.baseUrl);
-  });
-
-  test.afterEach(async () => {
-    await stub.close();
-  });
-
-  const isBootstrap = (request: { messages: { role: string; content?: unknown }[] }) =>
-    request.messages.some(
-      (m) => m.role === 'user' && JSON.stringify(m.content ?? '').includes(BOOTSTRAP_PROMPT),
-    );
-
-  test('generates suggestions, then accepts and rejects them', async ({ page }) => {
-    stub.reply = (request) =>
-      isBootstrap(request)
-        ? {
-            text: JSON.stringify({
-              drafts: [
-                {
-                  kind: 'concept',
-                  name: 'Match',
-                  description: 'One played fixture',
-                  mappings: [{ entity: MATCHES, column: 'match_number' }],
-                },
-                {
-                  kind: 'concept',
-                  name: 'Tournament',
-                  description: 'A World Cup edition',
-                },
-                { kind: 'relation', from: 'Match', type: 'part-of', to: 'Tournament' },
-              ],
-            }),
-          }
-        : { text: 'unexpected call' };
-
-    await test.step('Given an LLM is configured and I am on the Ontology tab', async () => {
-      await openOntologyTab(page);
-    });
-
-    await test.step('When I click "Generate suggestions" and click "Generate"', async () => {
-      await page.getByTestId('open-generate-suggestions').click();
-      await expect(page.getByTestId('generate-panel')).toContainText(
-        'nothing is applied until you accept it',
-      );
-      await page.getByTestId('run-generate-suggestions').click();
-    });
-
-    await test.step('Then a toast says "3 suggestions generated" and I am shown the Pending suggestions view', async () => {
-      await expect(
-        toast(page, '3 suggestions generated — review in Pending suggestions'),
-      ).toBeVisible({ timeout: 30_000 });
-      expect(stub.requests.filter(isBootstrap)).toHaveLength(1);
-      await expect(page.getByTestId('pending-suggestions-filter')).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      );
-      await expect(page.getByTestId('pending-count')).toHaveText('3');
-      const pending = page.getByTestId('pending-list');
-      await expect(pending.locator(ROW)).toHaveCount(3);
-    });
-
-    await test.step('And each suggestion is badged "Mined" and is not enabled', async () => {
-      const pending = page.getByTestId('pending-list');
-      for (const name of ['Match', 'Tournament']) {
-        await expect(row(pending, name)).toContainText('Mined');
-      }
-      await expect(pending.getByTestId('ontology-item-summary')).toContainText([
-        'Match part-of Tournament',
-      ]);
-      const stored = await listItems(page);
-      expect(stored).toHaveLength(3);
-      for (const item of stored) {
-        expect(item).toMatchObject({ source: 'mined', enabled: false, dataset: WORLD_CUP_DATASET });
-      }
-    });
-
-    await test.step('When I click "Accept" on "Match"', async () => {
-      await row(page.getByTestId('pending-list'), 'Match')
-        .getByTestId('accept-suggestion')
-        .click();
-    });
-
-    await test.step('Then I see "Item enabled" and it leaves the pending view, enabled in the full list', async () => {
-      await expect(toast(page, 'Item enabled')).toBeVisible();
-      await expect(row(page.getByTestId('pending-list'), 'Match')).toHaveCount(0);
-      await expect(page.getByTestId('pending-count')).toHaveText('2');
-      await page.getByTestId('ontology-filter-all').click();
-      const match = row(section(page, 'concept'), 'Match');
-      await expect(match.getByTestId('ontology-item-enabled')).toBeChecked();
-      await expect(match).toContainText('Mined');
-    });
-
-    await test.step('When I reject "Tournament" and confirm, it is permanently deleted', async () => {
-      await page.getByTestId('pending-suggestions-filter').click();
-      let asked = '';
-      page.once('dialog', (dialog) => {
-        asked = dialog.message();
-        void dialog.accept();
-      });
-      await row(page.getByTestId('pending-list'), 'Tournament')
-        .getByTestId('reject-suggestion')
-        .click();
-      await expect(toast(page, 'Item deleted')).toBeVisible();
-      expect(asked).toContain('Reject “Tournament”?');
-      expect(asked).toContain('This permanently removes the suggestion.');
-      const names = (await listItems(page)).map((i) => i.name);
-      expect(names).not.toContain('Tournament');
-      expect(names).toContain('Match');
-    });
-  });
-
-  test('generation fails without adding suggestions', async ({ page }) => {
-    stub.reply = () => ({ text: 'I cannot produce drafts today.' });
-    await openOntologyTab(page);
-
-    await test.step('When I click "Generate" and the model answers no usable drafts', async () => {
-      await page.getByTestId('open-generate-suggestions').click();
-      await page.getByTestId('run-generate-suggestions').click();
-    });
-
-    await test.step('Then an error toast appears and no suggestion is added', async () => {
-      await expect(toast(page, /^Ontology bootstrap failed: /)).toBeVisible({
-        timeout: 30_000,
-      });
-      expect(await listItems(page)).toEqual([]);
-      await expect(page.getByTestId('pending-count')).toHaveCount(0);
-    });
   });
 });
 

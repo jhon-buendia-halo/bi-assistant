@@ -43,7 +43,6 @@ const V2_SKILLS = ['curated-knowledge', 'result-validation', 'sql-analysis'];
 const OFFICIAL_KEYS = ['insights-lead', 'assistant', V2_KEY];
 /** The hub's sections under All, in domain order (agents-evals R1). */
 const DOMAIN_SECTIONS = [
-  'data-foundations',
   'analysis',
   'sql',
   'storytelling',
@@ -57,10 +56,9 @@ const ANALYSIS_KEYS = [
   V2_KEY,
   'chief-of-staff',
   'result-explorer',
-  'analysis-planner',
 ];
-/** Every card under All: 15 built-in agents and the Background's 2. */
-const ALL_CARDS = 16;
+/** Every card under All: 11 built-in agents and the Background's 2. */
+const ALL_CARDS = 13;
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -174,7 +172,6 @@ test('shows the built-in agents and mine in sections by domain', async ({
   );
 
   for (const [id, heading, keys] of [
-    ['data-foundations', 'Data Foundations', ['knowledge-bootstrap']],
     [
       'sql',
       'SQL Engineering',
@@ -183,7 +180,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
     [
       'storytelling',
       'Storytelling',
-      ['bi-analyst', 'answer-writer', 'visualization'],
+      ['bi-analyst', 'visualization'],
     ],
     ['quality', 'Quality & Evals', ['assistant-eval-judge']],
   ] as const) {
@@ -201,15 +198,6 @@ test('shows the built-in agents and mine in sections by domain', async ({
   await expect(
     section(page, 'sql').getByTestId('agent-card-sql-verifier'),
   ).toContainText('Owner: System');
-  // Olivia and Jessica stay in the library; no workflow step calls them (agents.md 5.11).
-  for (const [key, name, role] of [
-    ['analysis-planner', 'Olivia', 'Analysis Lead'],
-    ['answer-writer', 'Jessica', 'Insights Writer'],
-  ]) {
-    await expect(page.getByTestId(`agent-card-${key}`)).toContainText(name);
-    await expect(page.getByTestId(`agent-role-${key}`)).toHaveText(role);
-  }
-
   // User agents with no domain chosen are General.
   const general = section(page, 'general');
   expect(await cardKeys(general)).toEqual([claimsId, healthId]);
@@ -283,7 +271,6 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
   ).toHaveText([
     'All',
     'Pinned',
-    'Data Foundations',
     'Analysis',
     'SQL Engineering',
     'Storytelling',

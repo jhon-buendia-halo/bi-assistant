@@ -2,7 +2,7 @@
  * The schemas of Michael's analysis (agents.md 5.11, 5.23): a question
  * workflow's input, the catalog, the plan, his queries and their checks, the
  * clarifying question a waiting step suspends with and the answer that
- * resumes it, and Jessica's answer. Zod only, no framework import, so Jest
+ * resumes it, and the answer. Zod only, no framework import, so Jest
  * and the catalogue can load it without Mastra.
  */
 import { z } from 'zod';

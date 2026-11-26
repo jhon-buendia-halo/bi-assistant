@@ -289,7 +289,6 @@ flowchart LR
     assistant["assistant agent"]
     designer["visualization agent"]
     sqlagents["sql-fixer, sql-verifier agents"]
-    bootstrap["knowledge-bootstrap agent<br/>(Ontology Bootstrap)"]
     tools["tools/<br/>(dataset, create/update_visual, ask_clarification)"]
     skills["skills/<br/>(built-in only; declared per agent; ADR-0018, ADR-0021)"]
     evals["evals/<br/>(assistant evals, eval-judge agent)"]
@@ -315,8 +314,6 @@ flowchart LR
   deep --> sessions
   deep -->|"assistant"| mastrasvc
   ontology --> datasets
-  ontology --> datasources
-  ontology -->|"knowledge-bootstrap"| mastrasvc
   datasets --> datasources
   testing --> datasources
   testing --> datasets
@@ -330,7 +327,6 @@ flowchart LR
   mastrasvc --> assistant
   mastrasvc --> designer
   mastrasvc --> sqlagents
-  mastrasvc --> bootstrap
   mastrasvc --> turnwf
   turnwf -.->|"agent step calls back into the session turn"| sessions
   assistant --> tools

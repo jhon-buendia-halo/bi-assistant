@@ -294,7 +294,7 @@ function clip(text: string, max: number): string {
   return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
 }
 
-/** `Olivia`, `Olivia and Michael`, `Olivia, Michael and Jessica`. */
+/** `Michael`, `Avery and Michael`, `Avery, Michael and Clara`. */
 function listOf(names: readonly string[]): string {
   if (names.length <= 1) return names.join('');
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
