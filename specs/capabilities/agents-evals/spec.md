@@ -93,7 +93,7 @@ Other entry points
 
 ### Eval suite content
 
-World Cup set (`world-cup`, on Elena's target; the REST set repeats these ten with ids `rest-<id>`, differing only in the reference queries, written for the REST sample's dialect):
+World Cup set (`world-cup`, on Elena's target; the REST set repeats these nine with ids `rest-<id>`, differing only in the reference queries, written for the REST sample's dialect):
 
 | id | Question | What must hold |
 |---|---|---|
@@ -106,7 +106,6 @@ World Cup set (`world-cup`, on Elena's target; the REST set repeats these ten wi
 | `ambiguous-best-team` | Which team performed best? | called `ask_clarification`; the run ends `suspended`; no SQL; no tool errors; judge: the answer is itself a clarifying question with 2 to 4 concrete options grounded in the data and states no figures as the answer; one dimension is enough (metric options scoped "across all tournaments" pass without naming a year) |
 | `possession-vs-result` | In the 2022 knockout rounds, did the team with more possession usually win? | ran SQL; mentions possession or %; no tool errors; judge: concludes no, backed by counts consistent with 2 won and 6 lost of 8 |
 | `out-of-scope` | How many goals did Pelé score in the 1970 World Cup? | no tool errors; judge: says it cannot answer for 1970, states the data covers 2018 and/or 2022, invents no figure |
-| `no-clarification-best-team` | Which team performed best? | run as a user-agent draft with the tool `sample_rows` (no `ask_clarification`); called `run_readonly_sql`; did not call `ask_clarification`; the run ends `completed`; no tool errors; judge: the answer names the measure it took as "best" and gives figures for it |
 
 Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 
@@ -406,19 +405,19 @@ Feature: Agents
     And I open the "Elena" agent
     And I open the Evals tab and the "world-cup" set
     Then the datasource picker offers "World Cup PostgreSQL" and "PostgreSQL"
-    And the run button reads "Run 10 selected"
+    And the run button reads "Run 9 selected"
     When I click the run button
     Then the run button reads "Running…"
-    And I see "0/10 done"
+    And I see "0/9 done"
 
   Scenario: Runs only the ticked questions
     Given a "World Cup PostgreSQL" datasource exists
     And I am on the "world-cup" set in the agent's Evals tab
-    Then the run button reads "Run 10 selected"
-    When I untick the "champion-2022" question
     Then the run button reads "Run 9 selected"
+    When I untick the "champion-2022" question
+    Then the run button reads "Run 8 selected"
     When I click select-all
-    Then the run button reads "Run 10 selected"
+    Then the run button reads "Run 9 selected"
     When I click select-all again
     Then the run button reads "Run 0 selected"
     And the run button is disabled
@@ -758,7 +757,7 @@ Feature: Agents and evals behaviour not yet covered by Playwright
   Scenario: Runs the Formula 1 set against its own datasource
     Given a Formula 1 PostgreSQL datasource with a dataset containing the formula1 tables and views
     When I open the "formula-1" set and click the run button
-    Then the run starts and shows "0/10 done"
+    Then the run starts and shows "0/9 done"
 
   Scenario: Refuses a REST set on a PostgreSQL datasource
     Given only a PostgreSQL datasource with the World Cup dataset exists
