@@ -4,6 +4,7 @@ import { WORLD_CUP_DATASET } from './helpers/app-actions';
 import { apiFetch, apiJson } from './helpers/api';
 import { ASK_STEP_ID, ASK_WORKFLOW_ID, RunResult, runWorkflow } from './helpers/runs-api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
+import { seedRunVisual } from './helpers/past-chats';
 import {
   LlmStub,
   STUB_ANSWER,
@@ -11,7 +12,6 @@ import {
   StubRequest,
   messageText,
   startLlmStub,
-  systemTexts,
   turnRequests,
 } from './helpers/llm-stub';
 import { worldCupKey } from './helpers/world-cup-db';
@@ -26,12 +26,10 @@ import { worldCupKey } from './helpers/world-cup-db';
  * of Michael's turn (`run_readonly_sql`).
  */
 
-/** Marks the designer's (non-streamed) request: it carries its skill. */
-const DESIGNER_SKILL_TAG = '<interactive-visuals-skill>';
 const VISUAL_TITLE = 'Goals per team';
 const STAGE_SQL = `SELECT stage, COUNT(*) AS matches FROM ${worldCupKey('matches')} GROUP BY stage`;
 const STAGE_RATIONALE = 'Count the matches per stage.';
-/** The designer's spec-mode answer over STAGE_SQL's columns. */
+/** The spec-mode visual an earlier version designed over STAGE_SQL's columns. */
 const VISUAL_SPEC = {
   title: VISUAL_TITLE,
   description: 'Matches played at each stage of the tournament.',
@@ -106,11 +104,6 @@ function turnOf(
 /** Scripts every turn by its latest user message (never the whole history). */
 function script(turns: TurnScript[]): void {
   stub.reply = (request): StubReply => {
-    if (
-      systemTexts(request).some((text) => text.includes(DESIGNER_SKILL_TAG))
-    ) {
-      return { text: JSON.stringify(VISUAL_SPEC) };
-    }
     if (!request.stream) return { text: STUB_ANSWER };
     const turn = turnOf(turns, request);
     if (!turn) return { text: STUB_ANSWER };
@@ -198,30 +191,37 @@ const ASK_STEP_TITLES = ['Orchestrate'];
 
 // --------------------------------------------------------------- scenarios
 
-test("a visual generated on a run's answer is the run's panel item, kept on reopening and downloaded only through its own route", async ({
+test("a stored visual of a run is the run's panel item, kept on reopening and downloaded only through its own route", async ({
+  appDataDir,
   page,
 }) => {
   // Given an Answer a Business Question (Avery + Michael) run with an answer.
   script([STAGE_TURN]);
   const { run } = await runAskOn(page, STAGE_TURN.question);
 
-  // When I generate an interactive visual from its answer (api.md 130).
-  const generated = await apiJson<{
-    run: RunDoc;
-    visualization: { id: string; title: string };
-  }>(page, 'POST', runRoute(run.id, 'visualizations'), {});
-  const visual = generated.visualization;
+  // And a visual an earlier version designed from its answer (the designer is
+  // gone; the stored visual stays viewable).
+  const visual = seedRunVisual(appDataDir, run.id, {
+    title: VISUAL_TITLE,
+    description: VISUAL_SPEC.description,
+    spec: VISUAL_SPEC.spec,
+  });
   expect(visual.title).toBe(VISUAL_TITLE);
 
   // Then the run holds one item for the visual (R10).
+  const stored = await apiJson<RunDoc>(page, 'GET', `/workflow-runs/${run.id}`);
   expect(
-    generated.run.panelItems.map((item) => [item.id, item.kind, item.title]),
+    stored.panelItems.map((item) => [item.id, item.kind, item.title]),
   ).toEqual([[`visual:${visual.id}`, 'visual', VISUAL_TITLE]]);
 
   // And the stored run reads it back after a reload.
   await page.reload();
-  const stored = await apiJson<RunDoc>(page, 'GET', `/workflow-runs/${run.id}`);
-  expect(stored.panelItems.map((item) => item.id)).toEqual([
+  const reloaded = await apiJson<RunDoc>(
+    page,
+    'GET',
+    `/workflow-runs/${run.id}`,
+  );
+  expect(reloaded.panelItems.map((item) => item.id)).toEqual([
     `visual:${visual.id}`,
   ]);
 

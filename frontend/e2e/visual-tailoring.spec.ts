@@ -11,14 +11,13 @@ import {
 } from './helpers/app-actions';
 import { apiJson } from './helpers/api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
-import { seedPastChat } from './helpers/past-chats';
+import { seedPastChat, seedRunVisual } from './helpers/past-chats';
 import { ASK_WORKFLOW_ID, ASK_WORKFLOW_NAME } from './helpers/runs-api';
 import {
   LlmStub,
   StubReply,
   StubRequest,
   startLlmStub,
-  systemTexts,
 } from './helpers/llm-stub';
 import { scenarioStep } from './support/demo-captions';
 
@@ -26,9 +25,10 @@ import { scenarioStep } from './support/demo-captions';
  * Mirrors the Feature "Visual tailoring" in specs/capabilities/visuals/spec.md,
  * against a past chat's read-only panel (the chat composer is retired, plan
  * 1.24.8; a run's own panel returns with plan 1.25.4): the scenarios "The visual follows the app's theme" and "An older visual
- * opens in the current theme" (visuals R40, BA-230). The visual is designed
- * through the real designer pipeline against the recording LLM stub, so the
- * frame under test is the document the backend builds.
+ * opens in the current theme" (visuals R40, BA-230). The visual designer is
+ * gone (2026-11-26): the visuals under test are stored ones, written the way
+ * an earlier version left them, and the frame is the document the backend
+ * builds from them.
  */
 
 const QUESTION = 'How many matches were played at each stage?';
@@ -36,7 +36,6 @@ const ANSWER = 'The group stage holds most of the matches.';
 const SQL =
   'SELECT stage, COUNT(*) AS matches FROM world_cup.world_cup.matches GROUP BY stage';
 const VISUAL_TITLE = 'Matches by stage';
-const SKILL_TAG = '<interactive-visuals-skill>';
 
 /** The frame's tokens per theme (visuals R40) and brand (ADR-0045), as computed colours. */
 const BRAND_FRAME_COLOURS = {
@@ -75,12 +74,7 @@ const EVIDENCE = path.resolve(__dirname, '../../evidence/1.14.17');
 
 let stub: LlmStub;
 
-function isDesignerCall(request: StubRequest): boolean {
-  return systemTexts(request).some((text) => text.includes(SKILL_TAG));
-}
-
 function scriptedReply(request: StubRequest): StubReply {
-  if (isDesignerCall(request)) return { text: JSON.stringify(SPEC_REPLY) };
   if (
     request.stream &&
     !request.messages.some((message) => message.role === 'tool')
@@ -296,20 +290,21 @@ test('an older visual opens in the current theme', async ({
 });
 
 /**
- * "Visual actions on a run's result" (visuals R2, R12-R24 on a run; roadmap
- * 1.23.25): the visual of a run's answer opens under it on the run page, with
- * Tailor, versions, Refresh and Download over `/workflow-runs/:id/visualizations`.
+ * "A stored visual on a run's result" (visuals R12-R24 on a run, R41, R42): the
+ * visual a run holds opens under its answer on the run page, read-only (no
+ * Generate, no Tailor), with versions, Refresh and Download over
+ * `/workflow-runs/:id/visualizations`.
  */
 test(
-  'I generate, tailor, revert and refresh a visual on a run answer',
+  'a visual stored on a run opens in the side panel, with no Generate and no Tailor',
   { tag: ['@demo', '@story-1.23.25'] },
-  async ({ page }) => {
+  async ({ appDataDir, page }) => {
     const runVisual = page.getByTestId('run-visual');
     const versionButton = runVisual.getByTitle('Version history');
     let runId = '';
     await scenarioStep(
       page,
-      `Given a run of ${ASK_WORKFLOW_NAME} with an answer`,
+      `Given a run of ${ASK_WORKFLOW_NAME} with an answer and a stored visual`,
       async () => {
         const run = await apiJson<{ id: string }>(
           page,
@@ -323,6 +318,11 @@ test(
           },
         );
         runId = run.id;
+        seedRunVisual(appDataDir, runId, {
+          title: VISUAL_TITLE,
+          description: SPEC_REPLY.description,
+          spec: SPEC_REPLY.spec,
+        });
         await page.reload();
       },
     );
@@ -341,32 +341,17 @@ test(
     });
     await scenarioStep(
       page,
-      'When a visual is made from its answer',
+      'Then the answer offers no "Generate interactive visuals"',
       async () => {
-        // The Run panel offers no "Generate interactive visuals" (visuals R2):
-        // a visual is made by a workflow step, here through the same endpoint.
         await expect(
           page.getByRole('button', { name: 'Generate interactive visuals' }),
         ).toHaveCount(0);
-        await apiJson(
-          page,
-          'POST',
-          `/workflow-runs/${runId}/visualizations`,
-          {},
-        );
-        await page.reload();
-        await page
-          .getByRole('complementary', { name: 'Navigation rail' })
-          .getByRole('button', { name: 'Runs', exact: true })
-          .click();
-        await page
-          .getByTestId(`run-${runId}`)
-          .getByRole('button')
-          .first()
-          .click();
-        await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
-        // A reopened run shows its visual's artifact card; Open opens it
-        // in the side panel (visuals R19, R41).
+      },
+    );
+    await scenarioStep(
+      page,
+      "When I open the visual from its card in the run's thread",
+      async () => {
         await page
           .getByTestId('workflow-run-chat-log')
           .getByTestId('run-artifact-open')
@@ -376,7 +361,7 @@ test(
     );
     await scenarioStep(
       page,
-      'Then the visual opens in the side panel at version 1',
+      'Then the visual opens in the side panel at version 1, with Refresh and Download but no Tailor',
       async () => {
         await expect(
           runVisual.locator('iframe[title="Interactive visualization"]'),
@@ -385,6 +370,15 @@ test(
         await expect(runVisual).toHaveAttribute('data-sheet', 'true');
         await expect(runVisual).toBeInViewport();
         await expect(versionButton).toHaveText(/v1/);
+        await expect(
+          runVisual.getByRole('button', { name: 'Refresh data' }),
+        ).toBeVisible();
+        await expect(
+          runVisual.getByRole('button', { name: 'Download bundle' }),
+        ).toBeVisible();
+        await expect(
+          runVisual.getByRole('button', { name: 'Tailor' }),
+        ).toHaveCount(0);
         // Its artifact card in the thread (visuals R42).
         await expect(
           page
@@ -396,67 +390,7 @@ test(
     );
     await scenarioStep(
       page,
-      'When I tailor it with Sort ascending',
-      async () => {
-        await runVisual.getByRole('button', { name: 'Tailor' }).click();
-        await runVisual.getByLabel('Sort').selectOption('asc');
-        await runVisual.getByRole('button', { name: 'Apply' }).click();
-      },
-    );
-    await scenarioStep(page, 'Then it is version 2', async () => {
-      await expect(versionButton).toHaveText(/v2/);
-      // Its artifact card in the thread (visuals R42).
-      await expect(
-        page
-          .getByTestId('workflow-run-chat-log')
-          .getByTestId('run-artifact-card')
-          .filter({ hasText: 'Updated · Version' }),
-      ).toContainText(VISUAL_TITLE);
-    });
-    await scenarioStep(
-      page,
-      'When I make version 1 the current version',
-      async () => {
-        await versionButton.click();
-        await runVisual.getByRole('button', { name: /Version 1/ }).click();
-        await versionButton.click();
-        await runVisual
-          .getByRole('button', { name: /Make v1 the current version/ })
-          .click();
-      },
-    );
-    await scenarioStep(page, 'Then version 1 is current again', async () => {
-      await expect(versionButton).toHaveText(/v1/);
-      // Its artifact card in the thread (visuals R42).
-      await expect(
-        page
-          .getByTestId('workflow-run-chat-log')
-          .getByTestId('run-artifact-card')
-          .filter({ hasText: 'Reverted · Version' }),
-      ).toContainText(VISUAL_TITLE);
-    });
-    await scenarioStep(page, 'When I refresh its data', async () => {
-      const refreshed = page.waitForResponse(
-        (res) =>
-          res.url().includes(`/workflow-runs/${runId}/visualizations/`) &&
-          res.url().endsWith('/refresh'),
-      );
-      await runVisual.getByRole('button', { name: 'Refresh data' }).click();
-      expect((await refreshed).ok()).toBe(true);
-    });
-    await scenarioStep(
-      page,
-      'Then the visual stays at version 1 with no new version',
-      async () => {
-        await expect(versionButton).toHaveText(/v1/);
-        await expect(
-          runVisual.locator('iframe[title="Interactive visualization"]'),
-        ).toBeVisible();
-      },
-    );
-    await scenarioStep(
-      page,
-      'And reopening the run still shows the visual and its three cards',
+      'And reopening the run still shows the visual and its card',
       async () => {
         await page.reload();
         await page
@@ -468,8 +402,7 @@ test(
           .getByRole('button')
           .first()
           .click();
-        // Each visual event is an artifact card with Open (visuals R41).
-        await expect(page.getByTestId('run-artifact-card')).toHaveCount(3);
+        await expect(page.getByTestId('run-artifact-card')).toHaveCount(1);
         await page.getByTestId('run-artifact-open').first().click();
         await expect(
           runVisual.locator('iframe[title="Interactive visualization"]'),
@@ -480,9 +413,9 @@ test(
 );
 
 /**
- * "A visual can be a dashboard" (visuals, panels): the designer returns a spec
- * with KPI tiles and two panels, and the frame draws them from the answer's
- * stored result sets. No result set has a US state column, so the map form is
+ * "A visual can be a dashboard" (visuals, panels): a stored visual holds a spec
+ * with KPI tiles and two panels, and the frame draws them from its stored
+ * result sets. No result set has a US state column, so the map form is
  * not covered here (it has unit tests).
  */
 const DASHBOARD_QUESTION =
@@ -494,7 +427,39 @@ const BY_STAGE_SQL =
   'SELECT stage, COUNT(*)::int AS matches FROM world_cup.world_cup.matches GROUP BY stage';
 const BY_STAGE_DURATION_SQL =
   "SELECT stage, CASE WHEN went_to_extra_time THEN 'Extra time' ELSE 'Regular time' END AS duration, COUNT(*)::int AS matches FROM world_cup.world_cup.matches GROUP BY 1, 2";
-const DASHBOARD_SQL = [TOTALS_SQL, BY_STAGE_SQL, BY_STAGE_DURATION_SQL];
+/** The result sets the stored dashboard was drawn from. */
+const DASHBOARD_RESULTS = [
+  {
+    tool: 'run_readonly_sql',
+    input: TOTALS_SQL,
+    columns: ['matches', 'goals'],
+    rows: [{ matches: 64, goals: 172 }],
+    rowCount: 1,
+  },
+  {
+    tool: 'run_readonly_sql',
+    input: BY_STAGE_SQL,
+    columns: ['stage', 'matches'],
+    rows: [
+      { stage: 'Group stage', matches: 48 },
+      { stage: 'Round of 16', matches: 8 },
+      { stage: 'Final', matches: 1 },
+    ],
+    rowCount: 3,
+  },
+  {
+    tool: 'run_readonly_sql',
+    input: BY_STAGE_DURATION_SQL,
+    columns: ['stage', 'duration', 'matches'],
+    rows: [
+      { stage: 'Group stage', duration: 'Regular time', matches: 48 },
+      { stage: 'Round of 16', duration: 'Regular time', matches: 6 },
+      { stage: 'Round of 16', duration: 'Extra time', matches: 2 },
+      { stage: 'Final', duration: 'Extra time', matches: 1 },
+    ],
+    rowCount: 4,
+  },
+];
 const PIVOT_TITLE = 'Matches by stage and duration';
 const BAR_TITLE = 'Matches per stage';
 const DASHBOARD_REPLY = {
@@ -545,28 +510,9 @@ const DASHBOARD_REPLY = {
 test(
   'a dashboard visual shows its KPI tiles and two panels side by side',
   { tag: ['@story-visual-panels'] },
-  async ({ page }) => {
-    // One query per view, one per tool call; the designer returns the dashboard.
-    stub.reply = (request): StubReply => {
-      if (isDesignerCall(request))
-        return { text: JSON.stringify(DASHBOARD_REPLY) };
-      if (!request.stream) return { text: DASHBOARD_ANSWER };
-      const done = request.messages.filter(
-        (message) => message.role === 'tool',
-      ).length;
-      if (done < DASHBOARD_SQL.length) {
-        return {
-          toolCall: {
-            name: 'run_readonly_sql',
-            arguments: {
-              sql: DASHBOARD_SQL[done],
-              rationale: 'One query for each view of the dashboard.',
-            },
-          },
-        };
-      }
-      return { text: DASHBOARD_ANSWER };
-    };
+  async ({ appDataDir, page }) => {
+    // The run's answer is plain: the dashboard is the stored visual's.
+    stub.reply = () => ({ text: DASHBOARD_ANSWER });
     // Wide enough for the 12-column grid: a frame under 720px stacks the panels.
     await page.setViewportSize({ width: 1600, height: 1000 });
 
@@ -574,7 +520,7 @@ test(
     let runId = '';
     await scenarioStep(
       page,
-      'Given an answer whose queries returned three result sets',
+      'Given a run with a stored dashboard visual over three result sets',
       async () => {
         const run = await apiJson<{ id: string }>(
           page,
@@ -605,13 +551,17 @@ test(
     );
     await scenarioStep(
       page,
-      'When the designer returns a spec with KPIs and two panels',
+      'When I open its stored dashboard visual full screen',
       async () => {
-        await apiJson(
-          page,
-          'POST',
-          `/workflow-runs/${runId}/visualizations`,
-          {},
+        seedRunVisual(
+          appDataDir,
+          runId,
+          {
+            title: DASHBOARD_REPLY.title,
+            description: DASHBOARD_REPLY.description,
+            spec: DASHBOARD_REPLY.spec,
+          },
+          DASHBOARD_RESULTS,
         );
         await page.reload();
         await page

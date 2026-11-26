@@ -42,31 +42,17 @@ function skill(page: Page, name: string): Locator {
   return page.getByTestId(`agent-skill-${name}`);
 }
 
-test("shows the designer's built-in skill and the content of its files", async ({
+test('the visual designer is gone from the personas, and Elena lists her skills', async ({
   app: { page },
 }) => {
-  await openAgent(page, 'visualization');
-  const tab = await openSkillsTab(page);
-
-  await expect(tab).toHaveText('Skills (1)');
-  const visuals = skill(page, 'interactive-visuals');
-  await expect(visuals).toContainText('Loaded by the app');
-  await expect(page.getByText('Where skills come from')).toHaveCount(0);
-
-  await visuals.getByRole('button', { name: /interactive-visuals/ }).click();
-  for (const file of [
-    'SKILL.md',
-    'reference/freeform.md',
-    'reference/spec-mode.md',
-  ]) {
-    await expect(page.getByTestId(`skill-file-${file}`)).toBeVisible();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agent personas' })
+    .click();
+  await expect(page.getByTestId('agent-insights-lead')).toBeVisible();
+  for (const removed of ['visualization', 'assistant', 'sql-verifier']) {
+    await expect(page.getByTestId(`agent-${removed}`)).toHaveCount(0);
   }
-  const content = visuals.locator('pre');
-  await expect(content).toContainText('name: interactive-visuals');
-
-  await page.getByTestId('skill-file-reference/spec-mode.md').click();
-  await expect(content).toContainText('## The spec');
-  await expect(content).not.toContainText('name: interactive-visuals');
 });
 
 test('an agent without skills says so', async ({ app: { page } }) => {
@@ -77,7 +63,7 @@ test('an agent without skills says so', async ({ app: { page } }) => {
   await expect(page.getByText('This agent persona has no skills.')).toBeVisible();
 });
 
-test('the assistant gets only its built-in skills, and an old skills folder is ignored', async ({
+test('Elena gets only her built-in skills, and an old skills folder is ignored', async ({
   appDataDir,
   launchApp,
 }) => {
@@ -98,10 +84,10 @@ test('the assistant gets only its built-in skills, and an old skills folder is i
   );
 
   const { page } = await launchApp(appDataDir);
-  await openAgent(page, 'assistant');
+  await openAgent(page, 'insights-lead');
   const tab = await openSkillsTab(page);
 
-  await expect(tab).toHaveText('Skills (1)');
+  await expect(tab).toHaveText('Skills (6)');
   // On demand since ADR-0020: the model reads it from the catalog.
   await expect(skill(page, 'curated-knowledge')).toContainText('On demand');
   // Deep analysis is removed: its skill is gone.
