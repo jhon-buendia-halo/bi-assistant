@@ -12,7 +12,6 @@ import {
 } from '@angular/core';
 import {
   LucideAngularModule,
-  Check,
   FileText,
   Filter,
   Globe,
@@ -24,17 +23,8 @@ import {
   Sparkles,
   Tag,
   Trash2,
-  Wand2,
-  X,
 } from 'lucide-angular';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import {
-  OntologyApiService,
-  OntologyBootstrapProgress,
-  OntologyBootstrapRun,
-} from '../../services/ontology-api.service';
-import { BackgroundTasksService } from '../../../../core/background-tasks/background-tasks.service';
-import { DatasetTasksService } from '../../../datasets/services/dataset-tasks.service';
+import { OntologyApiService } from '../../services/ontology-api.service';
 import {
   ONTOLOGY_KINDS,
   OntologyItem,
@@ -71,7 +61,6 @@ type KindFilter = 'all' | OntologyKind | 'graph';
   templateUrl: './ontology-panel.html',
 })
 export class OntologyPanel implements OnInit {
-  readonly Check = Check;
   readonly Globe = Globe;
   readonly Loader2 = Loader2;
   readonly Network = Network;
@@ -79,8 +68,6 @@ export class OntologyPanel implements OnInit {
   readonly Plus = Plus;
   readonly Sparkles = Sparkles;
   readonly Trash2 = Trash2;
-  readonly Wand2 = Wand2;
-  readonly X = X;
 
   readonly kinds = ONTOLOGY_KINDS;
   readonly kindLabel = ontologyKindLabel;
@@ -90,8 +77,6 @@ export class OntologyPanel implements OnInit {
   private readonly api = inject(OntologyApiService);
   private readonly metricsApi = inject(MetricsApiService);
   private readonly toast = inject(ToastService);
-  private readonly tasks = inject(BackgroundTasksService);
-  private readonly datasetTasks = inject(DatasetTasksService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
 
@@ -108,19 +93,6 @@ export class OntologyPanel implements OnInit {
 
   readonly formOpen = signal(false);
   readonly editingItem = signal<OntologyItem | null>(null);
-
-  readonly generateOpen = signal(false);
-  /** The run for this dataset, read from the background task so it is live again when the tab is reopened. */
-  private readonly generateTask = computed(() =>
-    this.tasks.active('ontology-bootstrap', this.dataset().name),
-  );
-  readonly generating = computed(() => !!this.generateTask());
-  /** What the run is doing, oldest first — the last one is still in flight. */
-  readonly generateSteps = computed<OntologyBootstrapProgress[]>(
-    () =>
-      (this.generateTask()?.result as OntologyBootstrapRun | undefined)
-        ?.steps ?? [],
-  );
 
   readonly togglingId = signal<string | null>(null);
   readonly deletingId = signal<string | null>(null);
@@ -167,26 +139,7 @@ export class OntologyPanel implements OnInit {
       }));
   });
 
-  constructor() {
-    // When the run ends while this tab is shown, show what it made. The
-    // service toasts the outcome; a failed run leaves the panel open to retry.
-    this.tasks.finished$.pipe(takeUntilDestroyed()).subscribe((task) => {
-      if (
-        task.kind !== 'ontology-bootstrap' ||
-        task.key !== this.dataset().name ||
-        task.status !== 'done'
-      ) {
-        return;
-      }
-      this.generateOpen.set(false);
-      this.pendingOnly.set(true);
-      this.loadItems();
-    });
-  }
-
   ngOnInit(): void {
-    // Back on the tab while a run is going: show its live steps.
-    if (this.generating()) this.generateOpen.set(true);
     this.loadItems();
     this.metricsApi.list(this.dataset().tables ?? []).subscribe({
       next: (res) => this.metrics.set(res.metrics ?? []),
@@ -275,7 +228,6 @@ export class OntologyPanel implements OnInit {
   }
 
   openNew(): void {
-    this.generateOpen.set(false);
     this.editingItem.set(null);
     this.formOpen.set(true);
   }
@@ -286,7 +238,6 @@ export class OntologyPanel implements OnInit {
    * fully into view, since a row near the bottom would leave it cut off.
    */
   openEdit(item: OntologyItem): void {
-    this.generateOpen.set(false);
     this.editingItem.set(item);
     this.formOpen.set(true);
     afterNextRender(
@@ -373,64 +324,6 @@ export class OntologyPanel implements OnInit {
         this.deletingId.set(null);
         this.toast.error(err?.error?.message ?? 'Backend unreachable');
       },
-    });
-  }
-
-  openGenerate(): void {
-    this.formOpen.set(false);
-    this.generateOpen.set(true);
-  }
-
-  cancelGenerate(): void {
-    if (this.generating()) return;
-    this.generateOpen.set(false);
-  }
-
-  /**
-   * The step currently in flight — the last one reported. Falls back to a
-   * starting line so the panel never shows an empty box between the click
-   * and the backend's first progress event.
-   */
-  currentStep(): OntologyBootstrapProgress | null {
-    if (!this.generating()) return null;
-    const steps = this.generateSteps();
-    return steps.length
-      ? steps[steps.length - 1]
-      : { key: 'start', message: 'Starting' };
-  }
-
-  /** Steps already finished — everything before the one in flight. */
-  finishedSteps(): OntologyBootstrapProgress[] {
-    const steps = this.generateSteps();
-    return this.generating() ? steps.slice(0, -1) : steps;
-  }
-
-  generateSuggestions(): void {
-    if (this.generating()) return;
-    const dataset = this.dataset();
-    const name = dataset.name;
-    // A root task: leaving the tab neither stops the run nor loses its
-    // result, and the service toasts the end (app-shell R58–R63).
-    this.tasks.start<OntologyBootstrapRun>({
-      kind: 'ontology-bootstrap',
-      key: name,
-      title: `Suggesting ontology for "${name}"`,
-      work: () => this.api.bootstrap(name),
-      onValue: (run, task) => {
-        const current = run.steps[run.steps.length - 1];
-        if (current) task.update({ detail: current.message });
-      },
-      outcome: (run) => {
-        const count = run?.created?.length ?? 0;
-        return {
-          ok: true,
-          message:
-            count === 0
-              ? 'No new suggestions this time'
-              : `${count} suggestion${count === 1 ? '' : 's'} generated — review in Pending suggestions`,
-        };
-      },
-      open: () => this.datasetTasks.openDatasetTab(dataset, 'ontology'),
     });
   }
 }

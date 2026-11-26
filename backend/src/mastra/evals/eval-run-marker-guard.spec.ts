@@ -99,7 +99,7 @@ describe('every eval target is marked (ADR-0054)', () => {
   const targets = everyTarget();
 
   it('enumerates the targets of every set', () => {
-    expect(targets.length).toBeGreaterThanOrEqual(9);
+    expect(targets.length).toBeGreaterThanOrEqual(7);
   });
 
   for (const { targetId, agentKey } of targets) {

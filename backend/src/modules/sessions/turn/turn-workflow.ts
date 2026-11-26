@@ -90,7 +90,7 @@ export function analyseOutcomeOf(
 /**
  * The most result rows of one query an analysis attempt passes on: all a
  * data record keeps (`STORED_ROWS_CAP`), so the answer can list them
- * (plan 1.25.6); Write answer itself reads the first `ANSWER_ROWS_CAP`.
+ * (plan 1.25.6).
  */
 export const ATTEMPT_ROWS_CAP = 200;
 

@@ -19,7 +19,6 @@ export type BackgroundTaskKind =
   | 'dataset-save'
   | 'inventory-refresh'
   | 'testing-data-load'
-  | 'ontology-bootstrap'
   | 'synthetic-profile'
   | 'visual-tailor'
   | 'visual-refresh'

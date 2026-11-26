@@ -21,18 +21,10 @@ import {
   queryExplainerEvalTarget,
 } from './query-explainer.evals';
 import {
-  ANALYSIS_PLANNER_EVAL_TARGET,
-  ANSWER_WRITER_EVAL_TARGET,
-  analysisPlannerEvalTarget,
-  answerWriterEvalTarget,
-} from './isolated-call-targets';
-import {
   BI_ANALYST_EVAL_AGENT_KEY,
   BI_ANALYST_EVAL_SET,
 } from './bi-analyst.evals';
 import { biAnalystEvalTarget } from './bi-analyst-eval-target';
-import { ANALYSIS_PLANNER_EVAL_SET } from './analysis-planner.evals';
-import { ANSWER_WRITER_EVAL_SET } from './answer-writer.evals';
 import { INSIGHTS_ANALYST_EDGE_EVAL_SET } from './insights-analyst-edge.evals';
 import { INSIGHTS_ANALYST_RETAIL_EVAL_SET } from './insights-analyst-retail.evals';
 import { AVERY_EVAL_SET } from './avery-workflow.evals';
@@ -54,8 +46,6 @@ import {
  */
 export const EVAL_SETS: AssistantEvalSet[] = [
   ...ASSISTANT_EVAL_SETS,
-  ANALYSIS_PLANNER_EVAL_SET,
-  ANSWER_WRITER_EVAL_SET,
   INSIGHTS_ANALYST_EDGE_EVAL_SET,
   INSIGHTS_ANALYST_RETAIL_EVAL_SET,
   INSIGHTS_ANALYST_EVAL_SET,
@@ -93,8 +83,6 @@ const EVAL_TARGET_FACTORIES: Record<
   string,
   (sets: AssistantEvalSet[]) => EvalTarget
 > = {
-  [ANALYSIS_PLANNER_EVAL_TARGET]: (sets) => analysisPlannerEvalTarget(sets),
-  [ANSWER_WRITER_EVAL_TARGET]: (sets) => answerWriterEvalTarget(sets),
   [BI_ANALYST_EVAL_AGENT_KEY]: (sets) => biAnalystEvalTarget(sets),
   [AVERY_WORKFLOW_EVAL_TARGET]: (sets) => averyWorkflowEvalTarget(sets),
   [INSIGHTS_LEAD_EVAL_TARGET]: (sets) => insightsLeadEvalTarget(sets),

@@ -6,7 +6,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships seven built-in agents (the assistant, *Insights Analyst*, the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships built-in agents (the assistant, *Insights Analyst*, the visual designer, the SQL fixer, the SQL verifier and the eval judge, among others), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
 
 **Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant and *Insights Analyst*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
@@ -126,7 +126,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Metric.** A governed, named SQL aggregation expression over one entity (for example `denial_rate`), with a label, description and dimensions. The assistant reuses its expression verbatim instead of re-deriving it. Metrics are the app's lightweight semantic layer. A metric can be promoted from a *verified query*; the draft is a *metric candidate*.
 
-**Mined item.** An *ontology item* with source `mined`: drafted by the *ontology bootstrap*, saved disabled until a human accepts it.
+**Mined item.** An *ontology item* with source `mined`: drafted by the *ontology bootstrap* (removed 2026-11-26; items already stored stay), saved disabled until a human accepts it.
 
 **Official agent.** One of the app's own agents shown in the agent hub with the owner `Official` (the hub groups agents by domain, not by owner): the *assistant* and *Insights Analyst*.
 
@@ -134,9 +134,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Ontology.** What a dataset means, written down for the assistant: the *ontology items* (concepts, relations, constraints and instructions) that belong to the dataset, plus the *shared items*. Edited in the dataset's Ontology tab. Only enabled items reach the assistant, within a size budget per turn. Replaces the knowledge library, whose entries became ontology items (ADR-0036). See [dataset-ontology](../capabilities/dataset-ontology/spec.md).
 
-**Ontology bootstrap.** The action that has an agent (Ontology Bootstrap, registry key `knowledge-bootstrap`) draft up to 15 ontology items for a dataset from its schema, sample rows, column references and governed metrics. Drafts arrive as "Pending suggestions", disabled. Replaces the *knowledge bootstrap*.
+**Ontology bootstrap.** (Removed 2026-11-26.) The action that had an agent (Ontology Bootstrap, registry key `knowledge-bootstrap`) draft ontology items for a dataset; drafts arrived as "Pending suggestions", disabled. Items it created stay as *mined items*.
 
-**Ontology item.** One entry of an ontology: a *concept*, *relation*, *constraint* or *instruction*, with a name, a description, an enabled flag and a source (`user`, or `mined` when drafted by the bootstrap). It belongs to one dataset, or is a *shared item*. Code and the former UI called the same thing a *knowledge snippet*.
+**Ontology item.** One entry of an ontology: a *concept*, *relation*, *constraint* or *instruction*, with a name, a description, an enabled flag and a source (`user`, or `mined` when drafted by the removed bootstrap). It belongs to one dataset, or is a *shared item*. Code and the former UI called the same thing a *knowledge snippet*.
 
 **Panel item.** One thing an agent showed in the right panel with `show_in_panel`, saved on the *session* with the time it was shown: a workspace file, a Markdown document, a query result table or a *visual*. The latest one is what the panel opens on; every one is listed in the *session panel*'s shown-items menu. See [agent-panel](../capabilities/agent-panel/spec.md).
 
@@ -205,7 +205,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **SQL verifier.** The agent behind *careful mode*.
 
-**System agent.** One of the built-in helper agents (the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent, the eval judge, and Olivia and Jessica, who ran the Plan and Write answer steps of the removed Answer a Business Question and are called by no workflow step now). It is read-only, runs inside the app's own flows and cannot start a chat.
+**System agent.** One of the built-in helper agents (the visual designer, the SQL fixer, the SQL verifier and the eval judge). It is read-only, runs inside the app's own flows and cannot start a chat.
 
 **System logs.** The UI name for *diagnostics*.
 

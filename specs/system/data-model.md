@@ -515,7 +515,7 @@ A dataset's ontology: business concepts, how they relate, SQL constraints and st
 
 Fields that do not belong to the item's kind are dropped on create and update. `from` and `to` name concepts of the same dataset or shared concepts.
 
-Bootstrap-created items are always `{source: "mined", enabled: false, dataset: <dataset name>}`, capped at the agent's draft limit ([agents.md](agents.md) 2.5).
+Items the removed ontology bootstrap created (until 2026-11-26) are `{source: "mined", enabled: false, dataset: <dataset name>}`; they stay stored and reviewable, and nothing creates a new one ([agents.md](agents.md) 2.5).
 
 `KnowledgeUse` (embedded in messages, not a collection; the name is kept): `id`, `kind` (`term` for a concept, `default_filter` for a constraint, `instruction`, `relation`), `title` (the item's `name`), `body` (exactly as it appeared in the block: the description for a concept or instruction, the predicate for a constraint, `"<from name> <type> <to name or metric label>"` for a relation), `datasetId` (string, no; the item's `dataset`, absent for a shared item). Context assembly: enabled items whose `dataset` is `null` or among the session's datasets, ordered dataset items before shared then `updatedAt` desc, accumulated into a 2000-character block until the next line would not fit; only those that fit are recorded as `knowledge`. A relation whose endpoint no longer resolves is skipped.
 
@@ -591,7 +591,7 @@ One document per built-in agent whose system prompt was edited, (ADR-0026). Rule
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
-| `key` | string | yes | The built-in agent's registry key (`assistant`, `visualization`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`); the identity. An override of a key that is no longer built in is ignored. |
+| `key` | string | yes | The built-in agent's registry key (`assistant`, `visualization`, `sql-fixer`, `sql-verifier`, `assistant-eval-judge`); the identity. An override of a key that is no longer built in is ignored. |
 | `prompt` | string | yes | Not empty; at most 20,000 characters. For the `assistant` it is the editable text, without the generated `## Tools` section ([agents.md](agents.md) 2.1). A stored override for the removed key `rfp` is ignored. |
 | `baseHash` | string | yes | SHA-256 (hex) of the shipped editable text the override was saved against. A different hash for the shipped text means the built-in changed since. |
 | `updatedBy` | string | yes | Always `local` (the built-in super admin; kept for documents stored earlier). |

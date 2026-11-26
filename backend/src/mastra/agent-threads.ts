@@ -24,8 +24,8 @@ export function agentThreadId(hostId: string, agentKey: string): string {
 
 /**
  * The id a thread of host `from` gets when it is copied to host `to` (a
- * follow-up run): the same suffix, so `run-a:answer-writer` becomes
- * `run-b:answer-writer`. Undefined for a thread that is not `from`'s.
+ * follow-up run): the same suffix, so `run-a:insights-analyst` becomes
+ * `run-b:insights-analyst`. Undefined for a thread that is not `from`'s.
  */
 export function copiedThreadId(
   threadId: string,

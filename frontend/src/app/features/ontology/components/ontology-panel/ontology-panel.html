@@ -12,15 +12,6 @@
     <div class="flex shrink-0 items-center gap-2">
       <button
         type="button"
-        data-testid="open-generate-suggestions"
-        (click)="openGenerate()"
-        class="btn btn-outline"
-      >
-        <lucide-angular [img]="Wand2" [size]="14" />
-        <span>Generate suggestions</span>
-      </button>
-      <button
-        type="button"
         data-testid="new-ontology-item"
         (click)="openNew()"
         class="btn btn-primary"
@@ -109,86 +100,6 @@
     </div>
   }
 
-  @if (generateOpen()) {
-    <div
-      data-testid="generate-panel"
-      class="mt-5 flex flex-col gap-3 rounded-xl border border-border bg-surface-muted p-4"
-    >
-      <div class="flex items-center justify-between">
-        <p class="text-[13px] font-medium text-fg">
-          Generate suggestions for this dataset
-        </p>
-        <button
-          type="button"
-          title="Close"
-          aria-label="Close"
-          (click)="cancelGenerate()"
-          class="btn-icon"
-        >
-          <lucide-angular [img]="X" [size]="14" />
-        </button>
-      </div>
-      <p class="text-[12px] text-fg-muted">
-        The assistant reviews “{{ dataset().name }}” and drafts concepts,
-        relations, constraints and instructions as pending suggestions —
-        nothing is applied until you accept it. This can take up to a minute.
-      </p>
-      <div class="mt-1 flex items-center gap-2 text-[13px]">
-        <button
-          type="button"
-          (click)="cancelGenerate()"
-          [disabled]="generating()"
-          class="btn btn-outline flex-1"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          data-testid="run-generate-suggestions"
-          (click)="generateSuggestions()"
-          [disabled]="generating()"
-          class="btn btn-primary flex-1"
-        >
-          @if (generating()) {
-            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
-            <span>Generating…</span>
-          } @else {
-            <span>Generate</span>
-          }
-        </button>
-      </div>
-
-      @if (generating() || generateSteps().length > 0) {
-        <ol
-          data-testid="generate-progress"
-          aria-live="polite"
-          class="mt-1 flex flex-col gap-1.5 rounded-md border border-border bg-surface-muted px-3 py-2.5"
-        >
-          @for (step of finishedSteps(); track step.key) {
-            <li class="flex items-center gap-2 text-[12px] text-fg-muted">
-              <lucide-angular
-                [img]="Check"
-                [size]="12"
-                class="shrink-0 text-on-success-soft"
-              />
-              <span>{{ step.message }}</span>
-            </li>
-          }
-          @if (currentStep(); as step) {
-            <li class="flex items-center gap-2 text-[12px] text-fg">
-              <lucide-angular
-                [img]="Loader2"
-                [size]="12"
-                class="shrink-0 animate-spin text-fg-muted"
-              />
-              <span>{{ step.message }}…</span>
-            </li>
-          }
-        </ol>
-      }
-    </div>
-  }
-
   @if (loading()) {
     <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
@@ -216,7 +127,7 @@
   } @else if (pendingOnly()) {
     @if (pendingItems().length === 0) {
       <p class="mt-8 text-[13px] text-fg-muted">
-        No pending suggestions right now — generate some or check back later.
+        No pending suggestions right now.
       </p>
     } @else {
       <div class="mt-6 flex flex-col gap-1.5" data-testid="pending-list">
@@ -241,7 +152,7 @@
       <p class="max-w-md text-[12px] leading-relaxed text-fg-muted">
         Define the concepts behind this dataset, how they relate, the filters
         every query should apply and the rules the assistant follows. Write
-        them by hand, or generate suggestions and accept the ones worth keeping.
+        them by hand.
       </p>
     </div>
   } @else {

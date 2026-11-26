@@ -113,18 +113,6 @@ describe('the target a run uses', () => {
     });
   });
 
-  it.each(['analysis-planner', 'answer-writer'])(
-    'builds the isolated-call target of %s',
-    (agentKey) => {
-      const target = evalTargetFor(agentKey);
-      expect(target.agentKey).toBe(agentKey);
-      expect(target.sendsKnowledge).toBe(false);
-      expect(target.orientation({ datasets: [], snapshots: [] } as never)).toBe(
-        '',
-      );
-    },
-  );
-
   it('builds the whole-workflow target from its target id', () => {
     const workflow = evalTargetOf('avery-michael-workflow', 'chief-of-staff');
     expect(workflow.agentKey).toBe('chief-of-staff');

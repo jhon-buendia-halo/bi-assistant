@@ -8,7 +8,6 @@ const fakeMastra = {
 jest.mock('./index', () => ({ mastra: fakeMastra }));
 jest.mock('./agents/query-explainer.agent', () => ({}));
 jest.mock('./agents/result-explorer.agent', () => ({}));
-jest.mock('./workflows/step-agents', () => ({}));
 jest.mock('./session-workspaces', () => ({}));
 // Framework-free: the real thread ids and messages.
 jest.mock('./agent-threads', () =>

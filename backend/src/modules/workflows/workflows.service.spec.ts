@@ -122,19 +122,6 @@ function build(
       '',
       'You are Elena.',
     ),
-    // Olivia and Jessica, in the library (agents.md 5.11).
-    'analysis-planner': fakeAgent(
-      'Analysis Planner',
-      [],
-      '',
-      'You plan a data analysis.',
-    ),
-    'answer-writer': fakeAgent(
-      'Answer Writer',
-      [],
-      '',
-      'You write the final answer.',
-    ),
   };
   const mastra = { listAgents: () => registry } as unknown as MastraService;
   const llm = options.llmView
