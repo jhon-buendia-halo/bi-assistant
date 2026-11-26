@@ -47,12 +47,6 @@ jest.mock('@mastra/core/workflows', () =>
 jest.mock('../../../mastra/tools/dataset.tools', () => ({
   DATASETS_CONTEXT_KEY: 'datasets',
 }));
-jest.mock('../../../mastra/tools/visual.tools', () => ({
-  ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual-id',
-  SESSION_ID_CONTEXT_KEY: 'session-id',
-  TURN_QUESTION_CONTEXT_KEY: 'turn-question',
-  TURN_RECORDS_CONTEXT_KEY: 'turn-data-records',
-}));
 jest.mock('../../../mastra/session-workspaces', () => ({
   SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace-id',
 }));

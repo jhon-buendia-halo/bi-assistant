@@ -329,8 +329,4 @@ describe("Insights Analyst's skills (agents.md 7.4)", () => {
       expect(checks.instructions).toContain(heading);
     }
   });
-
-  it("leaves the assistant's skills unchanged: curated-knowledge only", () => {
-    expect(AGENT_SKILLS['assistant']).toEqual(['curated-knowledge']);
-  });
 });

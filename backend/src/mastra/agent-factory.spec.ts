@@ -78,8 +78,6 @@ describe('defineBuiltinAgent (agents.md 1.1)', () => {
     ['saved', { 'step-model': { model: 'opus' } }, 'model:saved'],
     ['step-model', {}, 'model:saved'],
     ['step-model', { 'step-model': { model: 'opus' } }, 'model:opus'],
-    ['user-override', { 'step-model': { model: 'opus' } }, 'model:saved'],
-    ['user-override', { 'agent-overrides': { model: 'mine' } }, 'model:mine'],
     ['override-or-step-model', {}, 'model:saved'],
     [
       'override-or-step-model',

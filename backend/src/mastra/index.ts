@@ -1,7 +1,6 @@
 import { Mastra } from '@mastra/core';
 import { PinoLogger } from '@mastra/loggers';
 import { MastraStorageExporter, Observability } from '@mastra/observability';
-import { assistantAgent } from './agents/assistant.agent';
 import { chiefOfStaffAgent } from './agents/chief-of-staff.agent';
 import { biAnalystAgent } from './agents/bi-analyst.agent';
 import { queryExplainerAgent } from './agents/query-explainer.agent';
@@ -30,7 +29,6 @@ appSkills();
 // wraps this instance for DI.
 export const mastra = new Mastra({
   agents: {
-    assistant: assistantAgent,
     'insights-analyst': insightsAnalystAgent,
     visualization: visualizationAgent,
     'sql-fixer': sqlFixerAgent,

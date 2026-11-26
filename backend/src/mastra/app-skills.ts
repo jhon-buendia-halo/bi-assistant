@@ -24,9 +24,6 @@ export type SkillLoading = 'on-demand' | 'harness';
 
 /** Built-in on-demand skills each agent's catalog lists, by registry key. */
 export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
-  // How to apply the curated-knowledge block: the model loads it with
-  // Mastra's skill tool when a call carries the block (ADR-0025).
-  assistant: ['curated-knowledge'],
   // Avery's router and playbooks: which playbook fits the request, each
   // with the steps for its case and how to close (agents.md 2.21, 7.4);
   // and the format rules of her conversation export, offered only while
@@ -445,16 +442,16 @@ export function builtInSkillNames(): string[] {
 }
 
 /**
- * The built-in on-demand skills a prompt may link as mentions (BA-224):
- * the assistant's, which every agent running on it gets, so a link names one
- * without gating anything. Another agent's skills (Insights Analyst's) are
- * not among them.
+ * The built-in on-demand skills a user agent's instructions may link as
+ * mentions (BA-224): Elena's, which every user agent running on her gets
+ * (ADR-0059), so a link names one without gating anything. Another agent's
+ * skills (Avery's) are not among them.
  */
 export function builtInOnDemandSkillNames(): string[] {
   return [...shippedSkills().values()]
     .filter(
       (skill) =>
-        skill.loading === 'on-demand' && skill.agents.includes('assistant'),
+        skill.loading === 'on-demand' && skill.agents.includes('insights-lead'),
     )
     .map((skill) => skill.name);
 }

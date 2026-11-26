@@ -43,7 +43,7 @@ function fakeAgent(name: string) {
 
 function build(pins: string[] = []) {
   const registry = {
-    assistant: fakeAgent('assistant'),
+    'insights-analyst': fakeAgent('insights-analyst'),
     'sql-fixer': fakeAgent('sql-fixer'),
   };
   const userAgents = {
@@ -70,19 +70,19 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
   it('does not list the removed RFP Builder, even with a pin saved for it', async () => {
     const service = build(['rfp']);
     const agents = await service.list();
-    // Alphabetical by persona name: David, Emily.
+    // Alphabetical by persona name: David, Michael.
     expect(agents.map((agent) => agent.key)).toEqual([
       'sql-fixer',
-      'assistant',
+      'insights-analyst',
     ]);
     expect(await service.get('rfp')).toBeNull();
-    const assistant = agents.find((agent) => agent.key === 'assistant');
-    expect(assistant).toMatchObject({
+    const michael = agents.find((agent) => agent.key === 'insights-analyst');
+    expect(michael).toMatchObject({
       kind: 'official',
       datasets: [],
       missingDatasets: [],
     });
-    expect(assistant).not.toHaveProperty('chatRequirement');
+    expect(michael).not.toHaveProperty('chatRequirement');
   });
 
   it("lists each agent's own eval sets by agentKey (api.md 2.6 #35)", () => {

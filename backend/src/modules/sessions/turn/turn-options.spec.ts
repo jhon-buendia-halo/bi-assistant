@@ -12,9 +12,6 @@ jest.mock('@mastra/core/request-context', () => ({
 jest.mock('../../../mastra/tools/dataset.tools', () => ({
   DATASETS_CONTEXT_KEY: 'datasets',
 }));
-jest.mock('../../../mastra/session-workspaces', () => ({
-  SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace-id',
-}));
 jest.mock('../../../mastra/model-resolver', () => ({
   AGENT_OVERRIDES_CONTEXT_KEY: 'agent-overrides',
   resolveAgentModelConfig: jest.fn((override?: string) =>
@@ -25,22 +22,15 @@ jest.mock('../../../mastra/model-resolver', () => ({
   ),
 }));
 
-import type { Logger } from '@nestjs/common';
 import type { SessionDoc } from '../entities/session.entity';
 import { TurnOptions, type TurnOptionsDeps } from './turn-options';
 
 /** The data dependencies of a turn, answering as one World Cup dataset. */
 function deps(overrides: Partial<TurnOptionsDeps> = {}): TurnOptionsDeps {
   return {
-    mastra: {
-      ensureSessionWorkspace: jest.fn(() => Promise.resolve({ id: 'ws-1' })),
-    } as unknown as TurnOptionsDeps['mastra'],
     llmService: {
       getView: jest.fn(() => Promise.resolve({ reasoningEffort: 'medium' })),
     } as unknown as TurnOptionsDeps['llmService'],
-    visuals: {
-      currentVersion: () => 1,
-    } as unknown as TurnOptionsDeps['visuals'],
     verifiedQueries: {
       referenceBlock: jest.fn(() =>
         Promise.resolve('Verified queries:\n- Who won? → SELECT 1'),
@@ -75,7 +65,6 @@ function deps(overrides: Partial<TurnOptionsDeps> = {}): TurnOptionsDeps {
         ]),
       ),
     } as unknown as TurnOptionsDeps['datasets'],
-    logger: { warn: jest.fn() } as unknown as Logger,
     existingDatasets: jest.fn((names: string[]) => Promise.resolve(names)),
     updateDoc: jest.fn(() => Promise.resolve(undefined)),
     ...overrides,

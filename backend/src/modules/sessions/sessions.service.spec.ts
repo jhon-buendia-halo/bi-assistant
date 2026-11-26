@@ -28,11 +28,6 @@ jest.mock('../../mastra/tool-services', () => ({
 jest.mock('../../mastra/tools/dataset.tools', () => ({
   DATASETS_CONTEXT_KEY: 'datasets',
 }));
-jest.mock('../../mastra/tools/visual.tools', () => ({
-  ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual',
-  SESSION_ID_CONTEXT_KEY: 'session-id',
-  TURN_RECORDS_CONTEXT_KEY: 'turn-records',
-}));
 jest.mock('../../mastra/session-workspaces', () => ({
   SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace',
 }));
@@ -94,7 +89,6 @@ const userAgentsStub = {
 };
 import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetToolServices } from '../../mastra/tool-services';
-import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
 import {
   QUERY_FACTS_CONTEXT_KEY,
   queryFactsKey,
@@ -110,7 +104,6 @@ import {
 import { streamStored } from './testing/stream-stored';
 import type { SessionDoc } from './entities/session.entity';
 import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
-import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
 
 describe('SessionsService streaming', () => {
   /** A service wired to one streamed turn, with everything else stubbed. */
@@ -130,33 +123,16 @@ describe('SessionsService streaming', () => {
         datasetId?: string;
       }[];
       tables?: string[];
-      /** The user agent the session was started from; `live: null` = deleted. */
-      userAgent?: {
-        id: string;
-        agentName?: string;
-        live: Record<string, unknown> | null;
-        /** The copies taken at the last publish (ADR-0022). */
-        liveSkills?: Record<string, unknown>[];
-        /** The current skill documents the draft names (a preview). */
-        currentSkills?: Record<string, unknown>[];
-      };
-      /** The session is an agent editor's preview (agents-evals R60). */
-      preview?: boolean;
     } = {},
   ) {
     const session: SessionDoc = {
       id: 'session-1',
       name: 'World Cup analysis',
       datasets: ['football'],
+      // Bound to Michael: every turn runs a registered agent (ADR-0059).
+      agentKey: 'insights-analyst',
       messages: [],
       visualizations: [],
-      ...(options.userAgent
-        ? {
-            agentId: options.userAgent.id,
-            agentName: options.userAgent.agentName ?? 'Cup historian',
-          }
-        : {}),
-      ...(options.preview ? { preview: true } : {}),
     };
     const repository = {
       get: jest.fn().mockResolvedValue(session),
@@ -165,25 +141,7 @@ describe('SessionsService streaming', () => {
         return Promise.resolve(session);
       }),
     };
-    const live = options.userAgent?.live;
-    const userAgents = {
-      ...userAgentsStub,
-      get: jest.fn().mockResolvedValue(
-        live
-          ? {
-              id: options.userAgent!.id,
-              draft: live,
-              live,
-              ...(options.userAgent!.liveSkills
-                ? { liveSkills: options.userAgent!.liveSkills }
-                : {}),
-            }
-          : null,
-      ),
-      skillsFor: jest
-        .fn()
-        .mockResolvedValue(options.userAgent?.currentSkills ?? []),
-    };
+    const userAgents = userAgentsStub;
     const agent = {
       getMemory: jest.fn().mockResolvedValue({
         getThreadById: jest.fn().mockResolvedValue({ id: session.id }),
@@ -225,6 +183,7 @@ describe('SessionsService streaming', () => {
       repository as never,
       {
         getAgent: jest.fn().mockReturnValue(agent),
+        listAgents: () => ({ 'insights-analyst': agent }),
         streamWorkflow: streamTurnWorkflow,
         ensureSessionWorkspace: jest
           .fn()
@@ -380,19 +339,9 @@ describe('SessionsService streaming', () => {
         content: 'Argentina won through superior chance creation.',
       }),
     );
-    expect(events.at(-1)).toEqual({
+    expect(events.at(-1)).toMatchObject({
       type: 'done',
-      session: {
-        ...session,
-        panelItems: [],
-        // A plain session runs the assistant's one-step workflow (api.md 2.1).
-        workflowRef: {
-          id: 'agent:assistant',
-          name: 'Assistant',
-          kind: 'agent',
-          deleted: false,
-        },
-      },
+      session: { id: 'session-1', messages: session.messages },
     });
   });
 
@@ -541,21 +490,6 @@ describe('SessionsService streaming', () => {
       expect(text).not.toContain('Curated dataset knowledge');
       expect(text).not.toContain('Curated knowledge:');
     });
-
-    it('sends the same block, without the skill, in the grounding pass', async () => {
-      const { service, agent } = buildStreaming(answerStream([]), {
-        knowledgeBlock: BLOCK,
-        answer: 'France won.',
-      });
-
-      await streamStored(service, 'session-1', 'Who won?', () => {});
-
-      const [, corrective] = (agent.generate.mock.calls as unknown[][])[0] as [
-        string,
-        { context: Context },
-      ];
-      expectBlockWithoutRules(corrective.context);
-    });
   });
 
   it('omits the knowledge record when no snippet applied', async () => {
@@ -624,384 +558,6 @@ describe('SessionsService streaming', () => {
         block.content.includes('Governed metric definitions'),
       ),
     ).toBe(true);
-  });
-
-  describe('sessions started from a user agent (R54, R59)', () => {
-    const historian = {
-      name: 'Cup historian',
-      description: 'Answers questions about World Cup history',
-      instructions: 'Always name the tournament year.',
-      datasets: ['football'],
-      starterQuestions: [],
-    };
-    type TurnOptions = {
-      context: { role: string; content: string }[];
-      providerOptions: Record<string, Record<string, unknown>>;
-      requestContext: { get(key: string): unknown };
-    };
-    const turnOptions = (agent: { stream: jest.Mock }) =>
-      (agent.stream.mock.calls as unknown[][])[0][1] as TurnOptions;
-
-    it("adds the agent's Live instructions last, labelled as user-supplied", async () => {
-      const { service, agent } = buildStreaming(answerStream([]), {
-        knowledgeBlock: 'Curated dataset knowledge (user-authored — …)',
-        userAgent: { id: 'agent-1', live: historian },
-      });
-
-      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
-
-      const { context } = turnOptions(agent);
-      const last = context[context.length - 1].content;
-      expect(last).toContain(
-        'Agent instructions (user-supplied by whoever built the agent "Cup historian")',
-      );
-      expect(last).toContain(
-        '<agent-instructions>\nAlways name the tournament year.\n</agent-instructions>',
-      );
-      // The knowledge block (agents.md 4.1) comes right before it.
-      expect(context[context.length - 2].content).toContain(
-        'Curated dataset knowledge',
-      );
-    });
-
-    it("passes the agent's model and effort overrides to the turn", async () => {
-      const { service, agent } = buildStreaming(answerStream([]), {
-        userAgent: {
-          id: 'agent-1',
-          live: {
-            ...historian,
-            model: 'historian-deployment',
-            reasoningEffort: 'low',
-          },
-        },
-      });
-
-      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
-
-      const options = turnOptions(agent);
-      expect(options.requestContext.get('agent-overrides')).toEqual({
-        model: 'historian-deployment',
-        reasoningEffort: 'low',
-      });
-      expect(options.providerOptions).toEqual({
-        openai: { reasoningEffort: 'low' },
-      });
-      expect(resolveAgentModelConfig).toHaveBeenCalledWith(
-        'historian-deployment',
-      );
-    });
-
-    it('runs as the plain assistant once the agent is deleted', async () => {
-      const { service, agent } = buildStreaming(answerStream([]), {
-        userAgent: { id: 'agent-1', live: null },
-      });
-
-      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
-
-      const options = turnOptions(agent);
-      expect(
-        options.context.some((block) =>
-          block.content.includes('Agent instructions'),
-        ),
-      ).toBe(false);
-      expect(options.requestContext.get('agent-overrides')).toBeUndefined();
-      expect(options.providerOptions).toEqual({
-        openai: { reasoningEffort: 'medium' },
-      });
-    });
-
-    it('adds no block for an agent without instructions', async () => {
-      const { service, agent } = buildStreaming(answerStream([]), {
-        userAgent: { id: 'agent-1', live: { ...historian, instructions: ' ' } },
-      });
-
-      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
-
-      expect(
-        turnOptions(agent).context.some((block) =>
-          block.content.includes('Agent instructions'),
-        ),
-      ).toBe(false);
-    });
-
-    it("puts the agent's tool selection on the turn and trims Block 1 (ADR-0022)", async () => {
-      const { service, agent } = buildStreaming(answerStream([]), {
-        userAgent: {
-          id: 'agent-1',
-          live: { ...historian, tools: ['ask_clarification'] },
-        },
-      });
-
-      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
-
-      const options = turnOptions(agent);
-      expect(options.requestContext.get('agent-tools')).toEqual([
-        'ask_clarification',
-      ]);
-      const block1 = options.context[0].content;
-      expect(block1).toContain(
-        'Use describe_entity / run_readonly_sql to inspect and query them.',
-      );
-      expect(block1).not.toContain('sample_rows');
-      expect(block1).not.toContain('Interactive visuals in this session');
-      expect(block1).not.toContain('right panel');
-    });
-
-    it('keeps the full Block 1 and no selection when the agent selects every tool', async () => {
-      for (const tools of [
-        undefined,
-        ['visuals', 'sample_rows', 'ask_clarification'],
-      ]) {
-        const { service, agent } = buildStreaming(answerStream([]), {
-          userAgent: {
-            id: 'agent-1',
-            live: { ...historian, ...(tools ? { tools } : {}) },
-          },
-        });
-
-        await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
-
-        const options = turnOptions(agent);
-        expect(options.requestContext.get('agent-tools')).toBeUndefined();
-        const block1 = options.context[0].content;
-        expect(block1).toContain(
-          'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
-        );
-        expect(block1).toContain(
-          'Interactive visuals in this session (id — title, current version):\n(none yet)\nNo visual is open in the right panel.',
-        );
-      }
-    });
-
-    it('keeps the visuals lines and drops only the sample_rows hint without sample_rows', async () => {
-      const { service, agent } = buildStreaming(answerStream([]), {
-        userAgent: {
-          id: 'agent-1',
-          live: { ...historian, tools: ['visuals'] },
-        },
-      });
-
-      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
-
-      const options = turnOptions(agent);
-      expect(options.requestContext.get('agent-tools')).toEqual(['visuals']);
-      const block1 = options.context[0].content;
-      expect(block1).toContain(
-        'Use describe_entity / run_readonly_sql to inspect and query them.',
-      );
-      expect(block1).toContain('Interactive visuals in this session');
-    });
-
-    it("puts the agent's skill copies on the turn, and none for a plain session (ADR-0022)", async () => {
-      const copy = {
-        id: 'skill-1',
-        name: 'fiscal-calendar',
-        description: 'Use when a question names a fiscal year.',
-        body: 'Our fiscal year starts on 1 July.',
-        files: [],
-      };
-      const { service, agent } = buildStreaming(answerStream([]), {
-        userAgent: {
-          id: 'agent-1',
-          live: { ...historian, skills: ['skill-1'] },
-          liveSkills: [copy],
-          // A later edit of the skill must not reach a Live agent.
-          currentSkills: [{ ...copy, body: 'Changed.' }],
-        },
-      });
-
-      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
-
-      expect(turnOptions(agent).requestContext.get('agent-skills')).toEqual([
-        copy,
-      ]);
-
-      const plain = buildStreaming(answerStream([]), {
-        userAgent: { id: 'agent-1', live: historian },
-      });
-      await streamStored(plain.service, 'session-1', 'Who?', () => {});
-      expect(
-        turnOptions(plain.agent).requestContext.get('agent-skills'),
-      ).toBeUndefined();
-    });
-
-    it('runs a preview on the current skills its draft names, skipping deleted ones', async () => {
-      const current = {
-        id: 'skill-1',
-        name: 'fiscal-calendar',
-        description: 'Use when a question names a fiscal year.',
-        body: 'Our fiscal year starts on 1 April.',
-        files: [],
-      };
-      const { service, agent } = buildStreaming(answerStream([]), {
-        preview: true,
-        userAgent: {
-          id: 'agent-1',
-          live: { ...historian, skills: ['skill-1', 'gone'] },
-          liveSkills: [{ ...current, body: 'Old.' }],
-          currentSkills: [{ ...current, ownerId: 'x' }],
-        },
-      });
-
-      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
-
-      const skills = turnOptions(agent).requestContext.get('agent-skills') as {
-        body: string;
-      }[];
-      expect(skills.map((skill) => skill.body)).toEqual([current.body]);
-    });
-
-    it('turns links in the instructions into plain mentions in Block 5 (ADR-0024)', async () => {
-      const { service, agent } = buildStreaming(answerStream([]), {
-        userAgent: {
-          id: 'agent-1',
-          live: {
-            ...historian,
-            instructions:
-              'Follow [[skill:fiscal-calendar]], use [[tool:sample_rows]].',
-          },
-        },
-      });
-
-      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
-
-      const { context } = turnOptions(agent);
-      const last = context[context.length - 1].content;
-      expect(last).toContain(
-        'Follow the "fiscal-calendar" skill, use the "sample_rows" tool.',
-      );
-      expect(last).not.toContain('[[');
-    });
-
-    it('offers the tools a linked skill links, from the Live copies, and the current skills in a preview', async () => {
-      const skill = (body: string) => ({
-        id: 'skill-1',
-        name: 'fiscal-calendar',
-        description: 'Use when a question names a fiscal year.',
-        body,
-        files: [],
-      });
-      const live = {
-        ...historian,
-        tools: ['ask_clarification'],
-        skills: ['skill-1'],
-      };
-      const published = buildStreaming(answerStream([]), {
-        userAgent: {
-          id: 'agent-1',
-          live,
-          liveSkills: [skill('Use [[tool:sample_rows]].')],
-          currentSkills: [skill('Use [[tool:create_visual]].')],
-        },
-      });
-      await streamStored(published.service, 'session-1', 'Who?', () => {});
-      expect(
-        turnOptions(published.agent).requestContext.get('agent-tools'),
-      ).toEqual(['sample_rows', 'ask_clarification']);
-
-      const preview = buildStreaming(answerStream([]), {
-        preview: true,
-        userAgent: {
-          id: 'agent-1',
-          live,
-          liveSkills: [skill('Use [[tool:sample_rows]].')],
-          currentSkills: [skill('Use [[tool:create_visual]].')],
-        },
-      });
-      await streamStored(preview.service, 'session-1', 'Who?', () => {});
-      expect(
-        turnOptions(preview.agent).requestContext.get('agent-tools'),
-      ).toEqual(['ask_clarification', 'visuals']);
-    });
-
-    it('re-stamps the agent name when the agent was renamed', async () => {
-      const { service, repository, session } = buildStreaming(
-        answerStream([]),
-        {
-          userAgent: { id: 'agent-1', agentName: 'Old name', live: historian },
-        },
-      );
-
-      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
-
-      expect(repository.update).toHaveBeenCalledWith('session-1', {
-        agentName: 'Cup historian',
-      });
-      expect(session.agentName).toBe('Cup historian');
-    });
-  });
-
-  it('omits the metrics block when no curated metric covers the session', async () => {
-    const { service, agent } = buildStreaming(answerStream([]));
-
-    await streamStored(service, 'session-1', 'Why?', () => {});
-
-    const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
-      context: { content: string }[];
-    };
-    expect(
-      options.context.some((block) =>
-        block.content.includes('Governed metric definitions'),
-      ),
-    ).toBe(false);
-  });
-
-  it('keeps the data collected before a clarification on the card', async () => {
-    (sourceEntities as jest.Mock).mockReturnValue(['main.football.matches']);
-    const { service, session } = buildStreaming(clarificationStream());
-
-    await streamStored(service, 'session-1', 'Which team?', () => {});
-
-    const message = session.messages.at(-1)!;
-    expect(message.clarification?.question).toBe('Which season?');
-    // Option strings are split into the stored label and description.
-    expect(message.clarification?.options).toEqual([
-      { label: '2022' },
-      { label: '2018', description: 'the earlier tournament' },
-    ]);
-    expect(message.data).toEqual([
-      expect.objectContaining({ tool: 'run_readonly_sql', input: 'select 1' }),
-    ]);
-    expect(message.entities).toEqual(['main.football.matches']);
-  });
-
-  it('shows no card for a malformed clarification, only the one the model asks again', async () => {
-    const { service, session } = buildStreaming(
-      streamOf(retriedClarificationChunks()),
-    );
-
-    await streamStored(service, 'session-1', 'Which team?', () => {});
-
-    const cards = session.messages.filter((m) => m.clarification);
-    expect(cards).toHaveLength(1);
-    expect(cards[0].clarification?.options).toEqual([
-      { label: 'Most titles' },
-      { label: 'Highest win rate', description: 'share of matches won' },
-    ]);
-  });
-
-  it('marks a record truncated when storage keeps fewer rows than returned', async () => {
-    const rows = Array.from({ length: 250 }, (_, n) => ({ n }));
-    const { service, session } = buildStreaming(
-      answerStream([{ sql: 'select *', rows }]),
-    );
-
-    await streamStored(service, 'session-1', 'Everything?', () => {});
-
-    const record = session.messages.at(-1)?.data?.[0];
-    expect(record?.truncated).toBe(true);
-    expect(record?.rowCount).toBe(250);
-    expect(record?.rows).toHaveLength(200);
-  });
-
-  it('carries the bridge truncation flag onto the stored record', async () => {
-    const { service, session } = buildStreaming(
-      answerStream([{ sql: 'select *', rows: [{ n: 1 }], truncated: true }]),
-    );
-
-    await streamStored(service, 'session-1', 'Everything?', () => {});
-
-    expect(session.messages.at(-1)?.data?.[0]?.truncated).toBe(true);
   });
 
   describe('reasoning trail', () => {
@@ -1127,129 +683,6 @@ describe('SessionsService streaming', () => {
       expect(JSON.parse(result!.content!)).toEqual(
         expect.objectContaining({ rationale: FIRST }),
       );
-    });
-  });
-
-  describe('turn records exposed to the visual tools', () => {
-    it('hands the visual tools a live reference to the records captured so far in the turn', async () => {
-      const { service, session, agent } = buildStreaming(
-        answerStream([{ sql: 'select stage_1', rows: [{ stage: 1, n: 10 }] }]),
-      );
-
-      await streamStored(
-        service,
-        'session-1',
-        'Drill into stage 1 and tailor the chart',
-        () => {},
-      );
-
-      // The same RequestContext instance handed to agent.stream() carries a
-      // key the tools read (see mastra/tools/visual.tools.ts) — its value is
-      // a live array, not a snapshot, so a create_visual/update_visual call
-      // made later in the same turn sees every record gathered up to then.
-      const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
-        requestContext: { set: jest.Mock };
-      };
-      const setCalls = options.requestContext.set.mock.calls as [
-        string,
-        unknown,
-      ][];
-      const call = setCalls.find(([key]) => key === TURN_RECORDS_CONTEXT_KEY);
-      expect(call).toBeDefined();
-      const turnRecords = call![1] as unknown[];
-
-      // Same object, not a copy: it is the very array the answer's `data`
-      // field ends up holding once the turn finishes.
-      expect(turnRecords).toBe(session.messages.at(-1)?.data);
-      expect(turnRecords).toEqual([
-        expect.objectContaining({
-          tool: 'run_readonly_sql',
-          input: 'select stage_1',
-        }),
-      ]);
-    });
-
-    it('gives every turn its own empty array up front, before any tool has run', async () => {
-      const { service, agent } = buildStreaming(answerStream([]));
-
-      await streamStored(service, 'session-1', 'Hello', () => {});
-
-      const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
-        requestContext: { set: jest.Mock };
-      };
-      const setCalls = options.requestContext.set.mock.calls as [
-        string,
-        unknown,
-      ][];
-      const call = setCalls.find(([key]) => key === TURN_RECORDS_CONTEXT_KEY);
-      // Set before agent.stream() is called, so it exists throughout the run
-      // even for a turn that never calls a data-gathering tool.
-      expect(call?.[1]).toEqual([]);
-    });
-  });
-
-  describe('zero-SQL-turn grounding guard', () => {
-    it('runs one corrective pass and persists its answer when the turn made zero tool calls', async () => {
-      const { service, session, agent } = buildStreaming(answerStream([]), {
-        answer: 'According to the data, France won the 2022 tournament.',
-      });
-
-      await streamStored(
-        service,
-        'session-1',
-        'Who won the 2022 World Cup?',
-        () => {},
-      );
-
-      expect(agent.generate).toHaveBeenCalledTimes(1);
-      const [correctiveInput, correctiveOptions] = (
-        agent.generate.mock.calls as unknown[][]
-      )[0] as [string, Record<string, unknown>];
-      // Original question, not the streamed (ungrounded) answer.
-      expect(correctiveInput).toBe('Who won the 2022 World Cup?');
-      // Memory-free — see the comment on `runGroundingGuard`.
-      expect(correctiveOptions).not.toHaveProperty('memory');
-      expect(
-        (correctiveOptions.context as { content: string }[]).some((block) =>
-          block.content.includes('Grounding check'),
-        ),
-      ).toBe(true);
-      expect(session.messages.at(-1)?.content).toBe(
-        'According to the data, France won the 2022 tournament.',
-      );
-    });
-
-    it('does not run the guard when the turn already called a tool', async () => {
-      const { service, agent } = buildStreaming(
-        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
-      );
-
-      await streamStored(service, 'session-1', 'Why?', () => {});
-
-      expect(agent.generate).not.toHaveBeenCalled();
-    });
-
-    it('keeps the original answer when the corrective pass fails', async () => {
-      const { service, session, agent } = buildStreaming(answerStream([]));
-      agent.generate.mockRejectedValueOnce(new Error('provider unavailable'));
-
-      await streamStored(
-        service,
-        'session-1',
-        'Who won the 2022 World Cup?',
-        () => {},
-      );
-
-      expect(agent.generate).toHaveBeenCalledTimes(1);
-      expect(session.messages.at(-1)?.content).toBe('Here is the answer.');
-    });
-
-    it('skips the guard on a clarification turn', async () => {
-      const { service, agent } = buildStreaming(clarificationStream());
-
-      await streamStored(service, 'session-1', 'Which team?', () => {});
-
-      expect(agent.generate).not.toHaveBeenCalled();
     });
   });
 
@@ -1620,126 +1053,6 @@ describe('SessionsService SQL self-correction', () => {
   });
 });
 
-describe('SessionsService visual tool bridge (turn records)', () => {
-  /** The `createVisual`/`updateVisual` bridge SessionsService installs for the tools. */
-  async function bridge() {
-    const session: SessionDoc = {
-      id: 'session-1',
-      name: 'Claims',
-      datasets: ['claims'],
-      messages: [],
-      visualizations: [],
-    };
-    const repository = {
-      listAll: jest.fn().mockResolvedValue([]),
-      get: jest.fn().mockResolvedValue(session),
-      update: jest.fn().mockImplementation((_id, patch) => {
-        Object.assign(session, patch);
-        return Promise.resolve(session);
-      }),
-    };
-    const meta = (currentVersion: number) => ({
-      id: 'visual-1',
-      title: 'Chart',
-      description: 'A chart.',
-      path: 'visuals/visual-1',
-      sourceMessageAt: '2024-01-01T00:00:00.000Z',
-      createdAt: '2024-01-01T00:00:00.000Z',
-      currentVersion,
-    });
-    const visuals = {
-      create: jest.fn().mockResolvedValue({ metadata: meta(1) }),
-      update: jest.fn().mockResolvedValue({ metadata: meta(2) }),
-      currentVersion: jest
-        .fn()
-        .mockImplementation(
-          (m: { currentVersion?: number }) => m.currentVersion ?? 1,
-        ),
-    };
-    const service = new SessionsService(
-      repository as never,
-      {
-        ensureSessionWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
-      } as never,
-      { getByNames: jest.fn().mockResolvedValue([]) } as never,
-      {} as never,
-      {} as never,
-      visuals as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      userAgentsStub as never,
-    );
-    await service.onModuleInit();
-    const calls = (setDatasetToolServices as jest.Mock).mock
-      .calls as unknown[][];
-    const installed = calls.at(-1)![0] as DatasetToolServices;
-    return { installed, visuals };
-  }
-
-  it("forwards the turn's records to VisualizationService.create", async () => {
-    const { installed, visuals } = await bridge();
-    const turnRecords = [
-      { tool: 'run_readonly_sql', input: 'select 1', rows: [{ n: 1 }] },
-    ];
-
-    await installed.createVisual(
-      'session-1',
-      undefined,
-      'chart it',
-      turnRecords,
-    );
-
-    expect(visuals.create).toHaveBeenCalledWith(
-      expect.anything(),
-      undefined,
-      'chart it',
-      turnRecords,
-    );
-  });
-
-  it("forwards the turn's records to VisualizationService.update", async () => {
-    const { installed, visuals } = await bridge();
-    const turnRecords = [
-      { tool: 'run_readonly_sql', input: 'select 2', rows: [{ n: 2 }] },
-    ];
-
-    await installed.updateVisual(
-      'session-1',
-      'visual-1',
-      'break it down further',
-      turnRecords,
-    );
-
-    expect(visuals.update).toHaveBeenCalledWith(
-      expect.anything(),
-      'visual-1',
-      'break it down further',
-      turnRecords,
-    );
-  });
-
-  it('passes nothing through for a tool call outside a turn (REST tailoring parity)', async () => {
-    const { installed, visuals } = await bridge();
-
-    await installed.createVisual('session-1', undefined, 'chart it');
-    await installed.updateVisual('session-1', 'visual-1', 'tweak it');
-
-    expect(visuals.create).toHaveBeenCalledWith(
-      expect.anything(),
-      undefined,
-      'chart it',
-      undefined,
-    );
-    expect(visuals.update).toHaveBeenCalledWith(
-      expect.anything(),
-      'visual-1',
-      'tweak it',
-      undefined,
-    );
-  });
-});
-
 describe('SessionsService answer feedback', () => {
   function build(session: SessionDoc) {
     const repository = {
@@ -1986,40 +1299,6 @@ function answerStream(...args: Parameters<typeof answerChunks>) {
 
 function clarificationStream() {
   return streamOf(clarificationChunks());
-}
-
-/** A malformed ask_clarification call, its validation error, then a valid one. */
-function* retriedClarificationChunks() {
-  yield {
-    type: 'tool-call',
-    payload: {
-      toolCallId: 'call-0',
-      toolName: 'ask_clarification',
-      args: {
-        question: 'Which measure?',
-        options: '\n<parameter name="label">Most titles',
-      },
-    },
-  };
-  yield {
-    type: 'tool-result',
-    payload: {
-      toolCallId: 'call-0',
-      toolName: 'ask_clarification',
-      result: { error: true, message: 'Tool input validation failed' },
-    },
-  };
-  yield {
-    type: 'tool-call',
-    payload: {
-      toolCallId: 'call-1',
-      toolName: 'ask_clarification',
-      args: {
-        question: 'Which measure?',
-        options: ['Most titles', 'Highest win rate — share of matches won'],
-      },
-    },
-  };
 }
 
 function toolOnlyStream(count: number) {
@@ -2387,227 +1666,8 @@ describe('SessionsService panel items (ADR-0029)', () => {
     return { service, session, installed };
   }
 
-  const records = [
+  it('derives a visual item for a session saved without panel items, and its stored workflow', async () => {
     {
-      tool: 'run_readonly_sql',
-      input: 'select 1',
-      columns: ['team', 'note'],
-      rows: [
-        { team: 'Argentina', note: 'said "hi", ok' },
-        { team: 'France', note: null },
-      ],
-      rowCount: 2,
-      rationale: 'Count the finalists. Then compare.',
-    },
-  ];
-
-  it('stores a composed document and downloads it as Markdown', async () => {
-    const { service, session, installed } = await build();
-
-    const shown = await installed.showPanelItem('session-1', {
-      kind: 'document',
-      title: 'Findings',
-      markdown: '# Findings',
-    });
-
-    expect(shown).toMatchObject({
-      shown: true,
-      kind: 'document',
-      title: 'Findings',
-    });
-    expect(session.panelItems).toEqual([
-      expect.objectContaining({ id: shown.id, markdown: '# Findings' }),
-    ]);
-    await expect(
-      service.downloadPanelItem('session-1', shown.id),
-    ).resolves.toMatchObject({
-      filename: 'findings.md',
-      contentType: 'text/markdown',
-      body: Buffer.from('# Findings'),
-    });
-  });
-
-  it("shows this turn's query result as a table and downloads it as CSV", async () => {
-    const { service, installed } = await build();
-
-    const shown = await installed.showPanelItem(
-      'session-1',
-      { kind: 'table' },
-      records,
-    );
-
-    expect(shown).toMatchObject({
-      kind: 'table',
-      title: 'Count the finalists',
-      rowCount: 2,
-    });
-    const { body, filename, contentType } = await service.downloadPanelItem(
-      'session-1',
-      shown.id,
-    );
-    expect(filename).toBe('count-the-finalists.csv');
-    expect(contentType).toBe('text/csv');
-    expect(body.toString()).toBe(
-      'team,note\r\nArgentina,"said ""hi"", ok"\r\nFrance,',
-    );
-  });
-
-  it('refuses what the tool contract refuses, with its messages', async () => {
-    const { installed } = await build();
-    const show = (input: Parameters<typeof installed.showPanelItem>[1]) =>
-      installed.showPanelItem('session-1', input, records);
-    await expect(show({ kind: 'table', record: 3 })).rejects.toThrow(
-      'record 3 does not exist: this turn has 1 query results',
-    );
-    await expect(
-      installed.showPanelItem('session-1', { kind: 'table' }, []),
-    ).rejects.toThrow(
-      'No query result in this turn to show: run the query first',
-    );
-    await expect(show({ kind: 'visual', visualId: 'nope' })).rejects.toThrow(
-      'Visual "nope" not found in this session',
-    );
-    await expect(show({ kind: 'file', path: '../etc/passwd' })).rejects.toThrow(
-      'Invalid file path "../etc/passwd"',
-    );
-  });
-
-  it('upserts the visual into the panel history when it is created, and re-stamps it on show', async () => {
-    const { session, installed } = await build();
-
-    await installed.createVisual('session-1', undefined, 'chart it');
-    expect(session.panelItems).toEqual([
-      expect.objectContaining({
-        id: 'visual:visual-1',
-        kind: 'visual',
-        visualId: 'visual-1',
-      }),
-    ]);
-
-    const before = session.panelItems![0].shownAt;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    await installed.showPanelItem('session-1', {
-      kind: 'visual',
-      visualId: 'visual-1',
-    });
-    expect(session.panelItems).toHaveLength(1);
-    expect(session.panelItems![0].shownAt > before).toBe(true);
-  });
-
-  it('lets an agent without a ## Workflow section define its steps and set their status (update_workflow)', async () => {
-    const { service, session, installed } = await build();
-
-    await expect(installed.updateWorkflow('session-1', {})).rejects.toThrow(
-      'There is no workflow yet: pass steps to create one',
-    );
-    await expect(
-      installed.updateWorkflow('session-1', { steps: 'Only one' }),
-    ).rejects.toThrow(
-      'steps takes 2 to 12 titles of at most 80 characters each',
-    );
-
-    expect(
-      await installed.updateWorkflow('session-1', {
-        steps: 'Scope | Analyse | Report',
-        note: 'Which period?',
-        waiting: true,
-      }),
-    ).toEqual({ updated: true, steps: 3, current: 1, done: [], skipped: [] });
-    expect(session.workflowState).toMatchObject({
-      steps: ['Scope', 'Analyse', 'Report'],
-      current: 1,
-      waiting: true,
-      note: 'Which period?',
-    });
-    // It sets status only: no panel item, the panel stays closed.
-    expect(session.panelItems).toBeUndefined();
-    let view = await service.toView(await service.get('session-1'));
-    expect(view.workflow).toEqual({
-      phases: [
-        { number: 1, title: 'Scope' },
-        { number: 2, title: 'Analyse' },
-        { number: 3, title: 'Report' },
-      ],
-      source: 'agent',
-      current: 1,
-      done: [],
-      skipped: [],
-      waiting: true,
-      note: 'Which period?',
-    });
-
-    // Same step: the card stays; a new step clears it.
-    await installed.updateWorkflow('session-1', { done: '1', skipped: '3' });
-    expect(session.workflowState).toMatchObject({
-      current: 1,
-      done: [1],
-      skipped: [3],
-      waiting: true,
-      note: 'Which period?',
-    });
-    await installed.updateWorkflow('session-1', { current: 2 });
-    expect(session.workflowState).toMatchObject({ current: 2, done: [1] });
-    expect(session.workflowState).not.toHaveProperty('waiting');
-    expect(session.workflowState).not.toHaveProperty('note');
-    await expect(
-      installed.updateWorkflow('session-1', { current: 4 }),
-    ).rejects.toThrow('current must be a step number from 1 to 3');
-
-    // The workflow never reaches the panel: still no panel item.
-    expect(session.panelItems).toBeUndefined();
-    view = await service.toView(await service.get('session-1'));
-    expect(view.workflow).toMatchObject({ source: 'agent', current: 2 });
-  });
-
-  it("refuses steps when the prompt's ## Workflow section defines them", async () => {
-    setAgentPromptOverrides([
-      {
-        key: 'assistant',
-        prompt: '## Workflow\n1. Ask\n2. Answer',
-        baseHash: 'x',
-      },
-    ]);
-    try {
-      const { session, installed } = await build({
-        workflowState: {
-          current: 1,
-          done: [],
-          steps: ['Stale', 'Steps'],
-          updatedAt: 'x',
-        },
-      });
-      await expect(
-        installed.updateWorkflow('session-1', { steps: 'A | B' }),
-      ).rejects.toThrow(
-        'Your ## Workflow section defines the steps; set their status instead',
-      );
-      await expect(
-        installed.updateWorkflow('session-1', { done: '3' }),
-      ).rejects.toThrow('done must list step numbers from 1 to 2');
-      expect(
-        await installed.updateWorkflow('session-1', { current: 2, done: '1' }),
-      ).toEqual({
-        updated: true,
-        steps: 2,
-        current: 2,
-        done: [1],
-        skipped: [],
-      });
-      expect(session.workflowState).toMatchObject({ current: 2, done: [1] });
-    } finally {
-      setAgentPromptOverrides([]);
-    }
-  });
-
-  it('derives a visual item for a session saved without panel items, and its workflow', async () => {
-    setAgentPromptOverrides([
-      {
-        key: 'assistant',
-        prompt: '## Workflow\n1. Ask\n2. Answer',
-        baseHash: 'x',
-      },
-    ]);
-    try {
       const { service } = await build({
         visualizations: [
           {
@@ -2619,7 +1679,13 @@ describe('SessionsService panel items (ADR-0029)', () => {
             createdAt: '2024-02-02T00:00:00.000Z',
           },
         ],
-        workflowState: { current: 2, done: [1], updatedAt: 'x' },
+        // The steps the removed assistant defined read as stored (ADR-0059).
+        workflowState: {
+          current: 2,
+          done: [1],
+          steps: ['Ask', 'Answer'],
+          updatedAt: 'x',
+        },
       });
       const view = await service.toView(await service.get('session-1'));
       expect(view.panelItems).toEqual([
@@ -2636,13 +1702,11 @@ describe('SessionsService panel items (ADR-0029)', () => {
           { number: 1, title: 'Ask' },
           { number: 2, title: 'Answer' },
         ],
-        source: 'prompt',
+        source: 'agent',
         current: 2,
         done: [1],
         skipped: [],
       });
-    } finally {
-      setAgentPromptOverrides([]);
     }
   });
 

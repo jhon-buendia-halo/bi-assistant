@@ -29,19 +29,13 @@ export type AgentClass = 'person' | 'data' | 'orchestrator' | 'single-step';
 /**
  * How an agent's model is picked on each call (agents.md 1.3): the saved
  * model; the step model on the call's context, else the saved one (a
- * workflow's routing); a user agent's model override, else the saved one
- * (only the assistant); or a user agent's model override, else the step
+ * workflow's routing); or a user agent's model override, else the step
  * model, else the saved one (Elena, who runs user agents, ADR-0059).
  */
 const MODEL_POLICIES = {
   saved: async () => resolveAgentModel(),
   'step-model': async ({ requestContext }: { requestContext?: ContextLike }) =>
     resolveAgentModel(stepModelFrom(requestContext)?.model),
-  'user-override': async ({
-    requestContext,
-  }: {
-    requestContext?: ContextLike;
-  }) => resolveAgentModel(modelOverrideFrom(requestContext)),
   'override-or-step-model': async ({
     requestContext,
   }: {

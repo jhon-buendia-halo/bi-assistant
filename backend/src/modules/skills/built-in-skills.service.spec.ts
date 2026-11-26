@@ -76,7 +76,7 @@ describe('BuiltInSkillsService', () => {
     });
     expect(named('curated-knowledge')).toMatchObject({
       loading: 'on-demand',
-      agents: ['assistant', 'insights-analyst', 'insights-lead'],
+      agents: ['insights-analyst', 'insights-lead'],
       modified: false,
       builtInChanged: false,
       updatedAt: null,
@@ -295,33 +295,39 @@ describe('BuiltInSkillsService', () => {
       agentSkillFile('visualization', 'interactive-visuals', first.path),
     ).toMatchObject({ content: first.content });
     expect(
-      agentSkillsView('assistant').skills.find(
+      agentSkillsView('insights-analyst').skills.find(
         (s) => s.name === 'curated-knowledge',
       ),
     ).not.toHaveProperty('modified');
   });
 
-  it("shows an on-demand override in the assistant's skills", async () => {
+  it("shows an on-demand override in Michael's skills", async () => {
     const { service } = build();
-    const original = catalogSkills('assistant')[0];
+    const curated = (agent: string) =>
+      catalogSkills(agent).find((skill) => skill.name === 'curated-knowledge');
+    const original = curated('insights-analyst')!;
     await service.save('curated-knowledge', {
       description: DESCRIPTION,
       body: 'Edited curated knowledge.',
       files: [],
     });
-    const [skill] = catalogSkills('assistant');
+    const skill = curated('insights-analyst');
     expect(skill).toMatchObject({
       name: 'curated-knowledge',
       description: DESCRIPTION,
       dir: original.dir,
     });
-    expect(skillSourcesFor('assistant')).toEqual([
+    expect(
+      skillSourcesFor('insights-analyst').find(
+        (source) => source.name === 'curated-knowledge',
+      ),
+    ).toEqual(
       expect.objectContaining({
         name: 'curated-knowledge',
         description: DESCRIPTION,
         body: 'Edited curated knowledge.',
       }),
-    ]);
+    );
   });
 
   it('restores the built-in on reset, also when there was no override', async () => {
@@ -334,7 +340,11 @@ describe('BuiltInSkillsService', () => {
     });
     await service.reset('curated-knowledge');
     expect(await store.find()).toEqual([]);
-    expect(catalogSkills('assistant')[0].description).toBe(shipped.description);
+    expect(
+      catalogSkills('insights-analyst').find(
+        (skill) => skill.name === 'curated-knowledge',
+      )?.description,
+    ).toBe(shipped.description);
     expect(appSkillBody('curated-knowledge')).toBe(shipped.body);
     await expect(service.reset('curated-knowledge')).resolves.toBeUndefined();
   });
@@ -367,8 +377,10 @@ describe('BuiltInSkillsService', () => {
         baseHash: 'h',
       },
     ]);
-    expect(catalogSkills('assistant').map((s) => s.name)).toEqual([
+    expect(catalogSkills('insights-analyst').map((s) => s.name)).toEqual([
       'curated-knowledge',
+      'result-validation',
+      'sql-analysis',
     ]);
   });
 

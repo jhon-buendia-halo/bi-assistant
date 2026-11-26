@@ -44,12 +44,6 @@ jest.mock('../../mastra/tool-services', () => ({
 jest.mock('../../mastra/tools/dataset.tools', () => ({
   DATASETS_CONTEXT_KEY: 'datasets',
 }));
-jest.mock('../../mastra/tools/visual.tools', () => ({
-  ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual-id',
-  SESSION_ID_CONTEXT_KEY: 'session-id',
-  TURN_QUESTION_CONTEXT_KEY: 'turn-question',
-  TURN_RECORDS_CONTEXT_KEY: 'turn-data-records',
-}));
 jest.mock('../../mastra/session-workspaces', () => ({
   SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace-id',
   listSessionWorkspaceIds: jest.fn(() => []),
@@ -575,34 +569,6 @@ async function resumeOf(
   return { events, run };
 }
 
-/**
- * One turn on a built-in agent's direct host, as the eval runner makes it
- * (`createEvalHost`): the host, the turn, then the host's view.
- */
-async function agentHostTurn(
-  ctx: Ctx,
-  agentKey: string,
-  question: string,
-  options: { datasets?: string[] } = {},
-) {
-  const events: StreamEvent[] = [];
-  const host = await ctx.sessions.createRunHost({
-    runId: `eval-${agentKey}`,
-    agentKey,
-    name: `${agentKey} eval`,
-    ...(options.datasets ? { datasets: options.datasets } : {}),
-  });
-  await ctx.sessions.streamRunTurn(
-    host.id,
-    question,
-    (e) => events.push(e),
-    undefined,
-    () => undefined,
-  );
-  const view = await ctx.sessions.finishRunHost(host.id);
-  return { host, events, view };
-}
-
 const HOST_ONLY_KEYS = ['session-id', 'session-workspace-id'];
 
 /**
@@ -679,37 +645,10 @@ describe('a run sends the same model request as a chat turn (plan 1.24.2; agents
     );
     expect(run.answer?.content).toBe('Brazil won.');
   });
-
-  // The eval runner's direct host (1.23.35): the assistant has no
-  // catalogue workflow, and still runs its turn.
-  it("the assistant's agent host: the same request as its chat turn, and the same answer", async () => {
-    const ctx = build();
-    const session = ctx.chat('assistant');
-    await chatTurn(ctx, session.id, 'Who won?');
-    const { host, view } = await agentHostTurn(ctx, 'assistant', 'Who won?', {
-      datasets: ['World Cup'],
-    });
-
-    const [chatCall, hostCall] = ctx.calls['assistant'];
-    expect(ctx.calls['assistant']).toHaveLength(2);
-    expect(request(hostCall)).toEqual(request(chatCall));
-    expect(hostCall.options.requestContext.values.get('session-id')).toBe(
-      host.id,
-    );
-    // Bound as its chat is, on the agent-turn engine, over the same data.
-    expect(host).toMatchObject({
-      datasets: ['World Cup'],
-      workflowId: 'agent:assistant',
-      run: true,
-    });
-    expect(withoutTime(view.messages.at(-1))).toEqual(
-      withoutTime(session.messages.at(-1)),
-    );
-  });
 });
 
 describe('the run host (agents.md 5.14)', () => {
-  it('refuses a workflow the catalogue does not hold, and an agent with no agent-turn binding', async () => {
+  it('refuses a workflow the catalogue does not hold', async () => {
     const ctx = build();
     for (const workflowId of [
       'agent:assistant',
@@ -721,19 +660,6 @@ describe('the run host (agents.md 5.14)', () => {
       await expect(
         ctx.sessions.createRunHost({ runId: 'r', workflowId, name: 'x' }),
       ).rejects.toThrow(`Workflow "${workflowId}" not found`);
-    }
-    // The assistant is the only built-in agent with a direct host; the
-    // removed Data Readiness Agent (`data-readiness`) has none either.
-    for (const agentKey of [
-      'sql-fixer',
-      'insights-analyst',
-      'data-readiness',
-      'rfp',
-      'agent-1',
-    ]) {
-      await expect(
-        ctx.sessions.createRunHost({ runId: 'r', agentKey, name: 'x' }),
-      ).rejects.toThrow(`Agent "${agentKey}" not found`);
     }
     expect(ctx.mastra.ensureSessionWorkspace).not.toHaveBeenCalled();
   });
@@ -783,12 +709,12 @@ describe('the run host (agents.md 5.14)', () => {
     write.mockReset();
   });
 
-  it("deletes an eval host's workspace with it (agents.md 8.3)", async () => {
+  it("deletes a host's workspace with it (agents.md 8.3)", async () => {
     const ctx = build();
     const host = await ctx.sessions.createRunHost({
       runId: 'eval-1',
-      agentKey: 'assistant',
-      name: 'assistant eval',
+      workflowId: ORCHESTRATED_WORKFLOW.id,
+      name: 'eval',
       datasets: ['World Cup'],
     });
     expect((await ctx.sessions.get(host.id)).datasets).toEqual(['World Cup']);

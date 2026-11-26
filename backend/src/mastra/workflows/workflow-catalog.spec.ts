@@ -20,7 +20,6 @@ import {
   sessionWorkflowId,
   stepAgentKey,
   workflowsUsingAgent,
-  WRAPPED_AGENT_KEYS,
 } from './workflow-catalog';
 import { inputFieldsWithUsage } from './workflow-input';
 
@@ -245,17 +244,22 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     });
   });
 
-  it("names the assistant's agent-turn binding as an old session's chip reads it", () => {
+  it("names the removed assistant's retired binding as an old session's chip reads it (ADR-0059)", () => {
     expect(ASSISTANT_WORKFLOW_ID).toBe('agent:assistant');
     expect(ASSISTANT_WORKFLOW_NAME).toBe('Assistant');
-    expect(WRAPPED_AGENT_KEYS).toEqual(['assistant']);
+    expect(sessionWorkflowId({ workflowId: 'agent:assistant' })).toBe(
+      'agent:assistant',
+    );
   });
 
   describe('drift (plan 4.2)', () => {
     it('reads the registered agents from mastra/index.ts', () => {
       const keys = registeredAgentKeys();
-      expect(keys).toContain('assistant');
       expect(keys).toContain('insights-analyst');
+      // Emily and Rachel were removed (ADR-0059).
+      for (const key of ['assistant', 'sql-verifier']) {
+        expect(keys).not.toContain(key);
+      }
       // The RFP Builder was removed.
       expect(keys).not.toContain('rfp');
     });
@@ -266,7 +270,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       );
     });
 
-    it("wraps every registered Official agent, runs it as a code workflow's primaryFor, or talks to it in its own conversation", () => {
+    it("runs every registered Official agent as a code workflow's primaryFor, or talks to it in its own conversation", () => {
       const primary = [
         ...CODE_WORKFLOWS.map((source) => source.primaryFor),
         // Elena, asked in her own conversation (plan Elena 1.2).
@@ -281,17 +285,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       for (const key of registered) {
         expect({
           key,
-          covered: WRAPPED_AGENT_KEYS.includes(key) || primary.includes(key),
+          covered: primary.includes(key),
         }).toEqual({ key, covered: true });
-      }
-    });
-
-    it('wraps no code workflow’s primaryFor agent, and no System agent', () => {
-      for (const source of CODE_WORKFLOWS) {
-        expect(WRAPPED_AGENT_KEYS).not.toContain(source.primaryFor);
-      }
-      for (const key of SYSTEM_AGENT_KEYS) {
-        expect(WRAPPED_AGENT_KEYS).not.toContain(key);
       }
     });
   });
@@ -309,11 +304,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       });
     });
 
-    it('parses agent:assistant as a wrapped built-in agent', () => {
-      expect(parseWorkflowId('agent:assistant')).toEqual({
-        kind: 'builtin-agent',
-        agentKey: 'assistant',
-      });
+    it('parses the retired agent:assistant as nothing: no workflow, no user agent (ADR-0059)', () => {
+      expect(parseWorkflowId('agent:assistant')).toBeUndefined();
     });
 
     it("parses Elena's agent:insights-lead as a conversational binding, before the user-agent fallback", () => {

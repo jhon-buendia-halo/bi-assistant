@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { assistantShippedPrompt } from './agents/assistant-prompt';
 import { QUERY_EXPLAINER_INSTRUCTIONS } from './agents/query-explainer.prompts';
 import { RESULT_EXPLORER_INSTRUCTIONS } from './agents/result-explorer.prompts';
 import { ORCHESTRATOR_MICHAEL_INSTRUCTIONS } from './workflows/orchestrated-answer-michael.prompts';
@@ -14,12 +13,11 @@ import {
 
 /**
  * The shipped, editable system prompt of each built-in agent, by registry
- * key (ADR-0026, data-model 3.10.3): the assistant's and Insights Analyst's
+ * key (ADR-0026, data-model 3.10.3): Insights Analyst's and Elena's
  * without their generated `## Tools` section, a System agent's whole static
  * instructions.
  */
 const SHIPPED: Readonly<Record<string, string>> = {
-  assistant: assistantShippedPrompt(),
   'insights-analyst': INSIGHTS_ANALYST_PROMPT,
   visualization: VISUALIZATION_PROMPT,
   'sql-fixer': SQL_FIXER_PROMPT,

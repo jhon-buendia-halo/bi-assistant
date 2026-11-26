@@ -263,10 +263,11 @@ async function runCase(
     ...result,
   });
 
-  // The turn runs on a throwaway agent host, as the eval runner's does.
+  // The turn runs on a throwaway run host of Elena's conversation.
   const session = await sessions.createRunHost({
     runId: `eval-${randomUUID()}`,
-    agentKey: 'assistant',
+    // Elena's conversation: the assistant is gone (ADR-0059).
+    workflowId: 'agent:insights-lead',
     name: `eval ${testCase.name}`.slice(0, 64),
     datasets: [testCase.dataset],
   });

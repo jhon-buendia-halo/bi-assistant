@@ -8,7 +8,7 @@ import {
   parseClarification,
 } from '../../../mastra/tools/clarification.tool';
 import type { MastraService } from '../../../mastra/mastra.service';
-import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
+import { NotFoundException } from '@nestjs/common';
 import {
   ModelTimeoutError,
   streamIdleWatch,
@@ -94,14 +94,11 @@ import {
 import type { LlmService } from '../../llm/llm.service';
 import { chatTurnError } from '../llm-error-message';
 import { sourceEntities } from '../visualization-document';
-import { withVisualItems } from '../panel-items';
 import { stepEventOf, workflowRunState } from '../workflow-run-state';
 import {
-  groundingNudge,
   statedRationale,
   synthesizeToolOnlyTurn,
   toolDataRecord,
-  toolRecords,
 } from '../turn-data';
 import { evidenceOf } from '../query-evidence/query-evidence';
 import {
@@ -121,7 +118,6 @@ import type {
   SessionDoc,
   SessionView,
   ToolDataRecord,
-  VisualEvent,
   WorkflowPhase,
   WorkflowView,
 } from '../entities/session.entity';
@@ -132,10 +128,6 @@ import {
   type TurnSuspension,
 } from './stream-events';
 import {
-  ASSISTANT_AGENT_KEY,
-  SHOW_IN_PANEL_TOOL,
-  UPDATE_WORKFLOW_TOOL,
-  VISUAL_TOOLS,
   appendUserMessage,
   interpretationLine,
   knowledgeUsed,
@@ -247,7 +239,6 @@ export class TurnEngine {
     trimmed: string,
     firstEmit: (event: StreamEvent) => void,
     firstAbortSignal: AbortSignal | undefined,
-    activeVisualId: string | undefined,
     firstOnStepEvent?: (event: RunStepEvent) => void,
     suspendable = false,
   ): Promise<TurnSuspension | undefined> {
@@ -261,14 +252,13 @@ export class TurnEngine {
     // provider is still connecting, and that turn should survive a reload.
     await this.deps.updateDoc(id, { messages: session.messages });
 
-    // The session's agent: the assistant, or the built-in agent it is bound
-    // to (agents.md 5.1, ADR-0028). A key no longer registered (a stored
-    // session of a removed agent) runs as the assistant, as it reads.
-    const agentKey =
-      session.agentKey && this.deps.mastra.listAgents()[session.agentKey]
-        ? session.agentKey
-        : ASSISTANT_AGENT_KEY;
-    const isAssistant = agentKey === ASSISTANT_AGENT_KEY;
+    // The built-in agent the session is bound to (agents.md 5.1, ADR-0028).
+    // A key no longer registered (a stored session of a removed agent, or
+    // one bound to none, once the assistant's) answers 404 (ADR-0059).
+    const agentKey = session.agentKey ?? 'assistant';
+    if (!this.deps.mastra.listAgents()[agentKey]) {
+      throw new NotFoundException(`Agent "${agentKey}" not found`);
+    }
     const agent = this.deps.mastra.getAgent(agentKey);
     const input = await this.deps.options.agentInput(agent, session);
     // Own controller so a clarification can end the model turn without the
@@ -283,7 +273,6 @@ export class TurnEngine {
       session,
       trimmed,
       turn.signal,
-      activeVisualId,
     );
     // A node chat's context block (agents.md 5.16), after the agent's own.
     if (session.contextBlock) {
@@ -292,14 +281,8 @@ export class TurnEngine {
         content: session.contextBlock,
       });
     }
-    // A live reference to this turn's captured records, handed to the visual
-    // tools via requestContext so create_visual/update_visual called later in
-    // the same turn can see SQL the turn already ran (drill-down queries a
-    // tailored visual needs but that never touched the source answer). Fresh
-    // RequestContext + array per call — no leakage across turns or sessions.
+    // This turn's captured records, fresh per call.
     const data: ToolDataRecord[] = [];
-    // The visual tools and `show_in_panel` read them, for every agent (agents.md 4.2).
-    options.requestContext.set(TURN_RECORDS_CONTEXT_KEY, data);
     // What the data tools knew about each call, written beside the result
     // (never into it) and matched to the records as they are captured; at
     // persist it becomes the answer's `evidence` (plan m1-25 1.25.1).
@@ -322,11 +305,7 @@ export class TurnEngine {
     let text = '';
     // Set inside `consume`, so typed without narrowing to the initial null.
     let clarification = null as ChatMessage['clarification'] | null;
-    let visualEvent: VisualEvent | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
-    // Every tool name the model actually invoked this turn — the zero-SQL-
-    // turn grounding guard below fires only when this stays empty.
-    const calledTools = new Set<string>();
     // The model call's own failure: Mastra reports it as a chunk, not a throw.
     let streamError: unknown;
     // While Michael's analysis or Clara's build streams: its text, kept out
@@ -482,7 +461,6 @@ export class TurnEngine {
               toolName?: string;
               args?: Record<string, unknown>;
             };
-            if (payload.toolName) calledTools.add(payload.toolName);
             // A valid clarification ends the turn — the card renders in the UI
             // and the user's pick arrives as the next message. Abort so the
             // model does not keep analysing (and spending) behind the card. A
@@ -533,78 +511,6 @@ export class TurnEngine {
                 ? pendingCalls.get(payload.toolCallId)
                 : {}) ??
               {};
-            if (VISUAL_TOOLS.has(toolName)) {
-              const result = (payload.result ?? {}) as {
-                visualId?: string;
-                version?: number;
-                title?: string;
-                error?: string;
-              };
-              if (result.visualId && result.version) {
-                visualEvent = {
-                  visualId: result.visualId,
-                  version: result.version,
-                  title: result.title ?? 'Interactive visual',
-                  action: toolName === 'create_visual' ? 'created' : 'updated',
-                };
-                emit({
-                  type: 'visual-updated',
-                  content: JSON.stringify(visualEvent),
-                });
-              }
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input:
-                    typeof args['instruction'] === 'string'
-                      ? args['instruction']
-                      : undefined,
-                  error: result.error,
-                }),
-              });
-              continue;
-            }
-            if (toolName === SHOW_IN_PANEL_TOOL) {
-              const result = (payload.result ?? {}) as {
-                id?: string;
-                kind?: string;
-                title?: string;
-                error?: string;
-              };
-              if (!result.error && result.id) {
-                await this.emitPanelItem(id, result.id, emit);
-              }
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input:
-                    result.title ??
-                    (typeof args['title'] === 'string'
-                      ? args['title']
-                      : undefined),
-                  error: result.error,
-                }),
-              });
-              continue;
-            }
-            if (toolName === UPDATE_WORKFLOW_TOOL) {
-              const error = resultError(payload.result);
-              if (!error) await this.emitWorkflow(id, emit);
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input:
-                    typeof args['note'] === 'string'
-                      ? args['note'].slice(0, 80)
-                      : undefined,
-                  error,
-                }),
-              });
-              continue;
-            }
             const record = toolDataRecord(toolName, args, payload.result);
             if (record) captureRecord(record, payload.toolCallId);
             else {
@@ -1110,8 +1016,7 @@ export class TurnEngine {
         !codeAnswer &&
         !turn.signal.aborted &&
         !clarification &&
-        !text.trim() &&
-        !visualEvent
+        !text.trim()
       ) {
         // A model can spend every allowed step on tools and finish without a
         // user-facing answer. Give it one tool-disabled pass to turn the data it
@@ -1129,36 +1034,7 @@ export class TurnEngine {
         if (text) emit({ type: 'text', content: text });
       }
 
-      // Zero-SQL-turn grounding guard: the system prompt already forbids
-      // answering data questions from parametric memory, but prompt-only
-      // enforcement missed cases in evals (e.g. "Who won the 2022 World Cup?"
-      // answered with no tool calls at all). This is the runtime backstop —
-      // one corrective pass, tools allowed, at most once per turn. Text is
-      // streamed to the client incrementally above, before this guard can
-      // even run, so there is nothing to "un-stream"; the client's source of
-      // truth is the persisted message delivered with `done` below (see
-      // `SessionChat` — it replaces its whole message list from that event,
-      // it does not keep the streamed deltas), so overwriting `text` here is
-      // enough to make the corrected answer the one the user ends up seeing.
-      if (
-        isAssistant &&
-        !turn.signal.aborted &&
-        !clarification &&
-        text.trim() &&
-        calledTools.size === 0
-      ) {
-        const corrected = await this.runGroundingGuard(
-          agent,
-          trimmed,
-          text,
-          options,
-          data,
-          turn.signal,
-        );
-        if (corrected) text = corrected;
-      }
-
-      // Visual tools persist metadata mid-turn; reload so this write keeps it.
+      // Reload, so this write keeps what the turn stored meanwhile.
       const fresh = await this.deps.get(id);
       const messages = fresh.messages;
       const entities = sourceEntities(data);
@@ -1191,17 +1067,15 @@ export class TurnEngine {
           ...(dashboard ? { dashboard } : {}),
           ...(exported ? { export: exported } : {}),
         });
-      } else if (text.trim() || visualEvent || dashboard || exported) {
+      } else if (text.trim() || dashboard || exported) {
         const interpretation = interpretationLine(data, entities);
         messages.push({
           role: 'assistant',
           content:
             text.trim() ||
-            (visualEvent
-              ? `${visualEvent.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent.title}" (v${visualEvent.version}).`
-              : dashboard
-                ? `${dashboard.action === 'created' ? 'Created' : 'Updated'} dashboard "${dashboard.title}" (version ${dashboard.version}).`
-                : `Exported "${exported!.title}".`),
+            (dashboard
+              ? `${dashboard.action === 'created' ? 'Created' : 'Updated'} dashboard "${dashboard.title}" (version ${dashboard.version}).`
+              : `Exported "${exported!.title}".`),
           at: new Date().toISOString(),
           ...(data.length ? { data } : {}),
           ...(evidence.length ? { evidence } : {}),
@@ -1212,7 +1086,6 @@ export class TurnEngine {
           ...((await this.deps.sql.matchesVerifiedQuery(session, data))
             ? { verified: true }
             : {}),
-          ...(visualEvent ? { visual: visualEvent } : {}),
           ...(dashboard ? { dashboard } : {}),
           ...(exported ? { export: exported } : {}),
           ...(checks ? { checks } : {}),
@@ -1622,66 +1495,6 @@ export class TurnEngine {
     );
   }
 
-  /**
-   * Runtime backstop for the grounding rule in the system prompt: a turn
-   * that produced a non-empty answer without calling a single tool gets one
-   * corrective pass, tools allowed, before it is accepted. Called at most
-   * once per turn by `streamTurn`.
-   *
-   * Deliberately memory-free. `agentInput` shows that once a session has a
-   * memory thread, the turn's `input` is just the latest user message —
-   * memory itself replays the rest of the history. Calling `agent.generate`
-   * again with that same question string and the same `{ thread, resource }`
-   * would hand memory a second "new" user turn with identical content,
-   * duplicating the question in the persisted conversation. So this pass
-   * gets its own compact, self-contained context instead: the same per-turn
-   * system blocks already built for the turn (dataset orientation, curated
-   * metrics, verified-query references) plus the nudge below, which carries
-   * the model's own ungrounded answer so it has something concrete to keep,
-   * correct or retract — never the full thread.
-   *
-   * Tool calls made during the corrective pass are extracted from the
-   * `generate()` result (there is no stream to read chunks off of) and
-   * pushed onto the same live `data` array the turn already collects into,
-   * so a corrected answer's SQL still ends up in the persisted `data`,
-   * `entities`, `interpretation` and verified-badge logic below.
-   */
-  private async runGroundingGuard(
-    agent: ReturnType<MastraService['getAgent']>,
-    question: string,
-    originalAnswer: string,
-    turnOptions: {
-      context?: { role: 'system'; content: string }[];
-      memory?: unknown;
-      [key: string]: unknown;
-    },
-    data: ToolDataRecord[],
-    abortSignal: AbortSignal,
-  ): Promise<string | undefined> {
-    const correctiveOptions: Record<string, unknown> = { ...turnOptions };
-    delete correctiveOptions['memory'];
-    correctiveOptions['context'] = [
-      ...(turnOptions.context ?? []),
-      {
-        role: 'system' as const,
-        content: groundingNudge(originalAnswer),
-      },
-    ];
-    try {
-      const result = await agent.generate(question, correctiveOptions);
-      const corrected = ((result as { text?: string }).text ?? '').trim();
-      if (!corrected) return undefined;
-      data.push(...toolRecords(result));
-      return corrected;
-    } catch (error) {
-      if (abortSignal.aborted) return undefined;
-      this.deps.logger.warn(
-        `Grounding guard corrective pass failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return undefined;
-    }
-  }
-
   /** Emit the `workflow` event: the session's current workflow view (api.md 3.1). */
   private async emitWorkflow(
     sessionId: string,
@@ -1691,17 +1504,5 @@ export class TurnEngine {
     if (workflow) {
       emit({ type: 'workflow', content: JSON.stringify(workflow) });
     }
-  }
-
-  /** Emit the `panel-item` event for a stored item (api.md 3.1). */
-  private async emitPanelItem(
-    sessionId: string,
-    itemId: string,
-    emit: (event: StreamEvent) => void,
-  ): Promise<void> {
-    const session = await this.deps.get(sessionId);
-    const item = withVisualItems(session).find((i) => i.id === itemId);
-    if (!item) return;
-    emit({ type: 'panel-item', content: JSON.stringify({ item }) });
   }
 }

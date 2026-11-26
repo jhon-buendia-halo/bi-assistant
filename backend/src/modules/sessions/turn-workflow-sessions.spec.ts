@@ -1,7 +1,8 @@
 // Every streamed turn runs the session's workflow (agents.md 5.1, 5.12;
-// ADR-0040; agent-answers R61): the assistant, Insights Analyst and a user
-// agent each run one `agent-turn` run, whose `answer` step is today's agent
-// turn, with today's error rules; a one-step workflow never writes the bar.
+// ADR-0040; agent-answers R61): an Insights Analyst turn runs one
+// `agent-turn` run, whose `answer` step is today's agent turn, with today's
+// error rules; a one-step workflow never writes the bar. A session no
+// registered agent runs (the removed assistant's) answers 404 (ADR-0059).
 jest.mock('@mastra/core/request-context', () => ({
   RequestContext: class {
     private readonly values = new Map<string, unknown>();
@@ -29,12 +30,6 @@ jest.mock('../../mastra/tool-services', () => ({
 }));
 jest.mock('../../mastra/tools/dataset.tools', () => ({
   DATASETS_CONTEXT_KEY: 'datasets',
-}));
-jest.mock('../../mastra/tools/visual.tools', () => ({
-  ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual-id',
-  SESSION_ID_CONTEXT_KEY: 'session-id',
-  TURN_QUESTION_CONTEXT_KEY: 'turn-question',
-  TURN_RECORDS_CONTEXT_KEY: 'turn-data-records',
 }));
 jest.mock('../../mastra/session-workspaces', () => ({
   SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace-id',
@@ -108,7 +103,7 @@ const HISTORIAN = {
 
 interface BuildOptions {
   /** Which session: a plain one, one bound to Insights Analyst, or a user agent's. */
-  kind: 'assistant' | 'analyst' | 'user-agent';
+  kind: 'plain' | 'analyst' | 'user-agent';
   chunks?: unknown[];
   /** `agent.stream()` itself throws this. */
   streamThrows?: Error;
@@ -161,10 +156,9 @@ function build(options: BuildOptions) {
     }),
     generate: jest.fn().mockResolvedValue({ text: 'Synthesized.' }),
   });
-  const assistant = agentFor('Questions to Insights Assistant');
   const analyst = agentFor('Insights Analyst');
+  // The assistant is gone (ADR-0059): only Michael is registered here.
   const registry: Record<string, unknown> = {
-    assistant,
     'insights-analyst': analyst,
   };
   const mastra = {
@@ -220,7 +214,7 @@ function build(options: BuildOptions) {
     } as never,
     userAgents as never,
   );
-  return { service, session, repository, mastra, assistant, analyst };
+  return { service, session, repository, mastra, analyst };
 }
 
 /** Run a streamed turn and collect its events. */
@@ -245,10 +239,21 @@ function workflowStateWrites(ctx: ReturnType<typeof build>): unknown[] {
 
 describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040)', () => {
   it.each([
-    ['an assistant', 'assistant', 'assistant'],
-    ['an Insights Analyst', 'analyst', 'insights-analyst'],
-    ['a user agent', 'user-agent', 'assistant'],
+    ['plain', 'Agent "assistant" not found'],
+    ['user-agent', 'Agent "assistant" not found'],
   ] as const)(
+    'a stored %s session answers 404 to a turn: no agent runs it (ADR-0059)',
+    async (kind, message) => {
+      const ctx = build({ kind });
+      await expect(turn(ctx, 'Who won?')).rejects.toMatchObject({
+        status: 404,
+        message,
+      });
+      expect(ctx.mastra.streamWorkflow).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([['an Insights Analyst', 'analyst', 'insights-analyst']] as const)(
     '%s turn starts one agent-turn run with the question and datasets',
     async (_label, kind, agentKey) => {
       const ctx = build({ kind });
@@ -262,9 +267,7 @@ describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040
       );
       // The step ran the session's agent, once.
       expect(ctx.mastra.getAgent).toHaveBeenCalledWith(agentKey);
-      const agent =
-        agentKey === 'insights-analyst' ? ctx.analyst : ctx.assistant;
-      expect(agent.stream).toHaveBeenCalledTimes(1);
+      expect(ctx.analyst.stream).toHaveBeenCalledTimes(1);
       // The same answer, events and stored message as before.
       expect(events.map((event) => event.type)).toEqual(
         expect.arrayContaining(['tool', 'text', 'done']),
@@ -288,7 +291,7 @@ describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040
 
   it('ends the turn with the card on a clarifying question', async () => {
     const ctx = build({
-      kind: 'assistant',
+      kind: 'analyst',
       chunks: [
         toolCall('c0', 'ask_clarification', {
           question: 'Which measure?',
@@ -310,7 +313,7 @@ describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040
 
   it('fails a custom endpoint turn with the R50 text (llm-settings R51)', async () => {
     const ctx = build({
-      kind: 'assistant',
+      kind: 'analyst',
       chunks: [{ type: 'error', payload: { error: apiCallError(401) } }],
       llmView: {
         provider: 'custom',
@@ -327,17 +330,18 @@ describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040
 
   it("keeps today's handling of an OpenAI-style stream error", async () => {
     const ctx = build({
-      kind: 'assistant',
+      kind: 'analyst',
       chunks: [{ type: 'error', payload: { error: apiCallError(401) } }],
     });
 
     const events = await turn(ctx, 'Why?');
 
-    // The turn goes on: tool-only synthesis answers it, and `done` follows.
+    // The turn goes on with the fallback answer, and `done` follows.
     expect(events.at(-1)?.type).toBe('done');
     expect(ctx.session.messages.at(-1)).toMatchObject({
       role: 'assistant',
-      content: 'Synthesized.',
+      content:
+        'I completed the data analysis but could not produce a final response. Please retry your question.',
     });
   });
 

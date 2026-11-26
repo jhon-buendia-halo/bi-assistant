@@ -6,10 +6,7 @@ import {
 } from '@nestjs/common';
 import { isLibraryTool, parseLinks } from '../../mastra/agent-links';
 import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
-import {
-  AGENT_SKILLS,
-  builtInOnDemandSkillNames,
-} from '../../mastra/app-skills';
+import { AGENT_SKILLS } from '../../mastra/app-skills';
 import {
   INSIGHTS_ANALYST_AGENT_KEY,
   INSIGHTS_ANALYST_IDENTITY_START,
@@ -35,11 +32,6 @@ import { AgentPromptOverridesRepository } from './repositories/agent-prompt-over
 
 /** The most characters a system prompt may have. */
 export const PROMPT_MAX_CHARS = 20000;
-
-/** Where the assistant's prompt must start (ADR-0008, kept by ADR-0026). */
-const ASSISTANT_IDENTITY_START = 'You are the Questions to Insights assistant';
-
-const ASSISTANT_KEY = 'assistant';
 
 /** Any `[[…]]` link. */
 const ANY_LINK = /\[\[.*?\]\]/;
@@ -131,9 +123,7 @@ export class AgentPromptsService implements OnModuleInit {
       builtInChanged:
         !!override && override.baseHash !== agentPromptHash(shipped),
       linksAllowed:
-        key === ASSISTANT_KEY ||
-        key === INSIGHTS_ANALYST_AGENT_KEY ||
-        key === INSIGHTS_LEAD_AGENT_KEY,
+        key === INSIGHTS_ANALYST_AGENT_KEY || key === INSIGHTS_LEAD_AGENT_KEY,
       updatedAt: override?.updatedAt ?? null,
     };
   }
@@ -146,22 +136,7 @@ function validatePrompt(key: string, value: unknown): string {
   if (prompt.length > PROMPT_MAX_CHARS) {
     throw new BadRequestException('The prompt is at most 20,000 characters');
   }
-  if (key === ASSISTANT_KEY) {
-    if (!prompt.startsWith(ASSISTANT_IDENTITY_START)) {
-      throw new BadRequestException(
-        `The assistant's prompt must start with "${ASSISTANT_IDENTITY_START}"`,
-      );
-    }
-    const links = parseLinks(prompt);
-    const builtIn = builtInOnDemandSkillNames();
-    if (links.skills.some((name) => !builtIn.includes(name))) {
-      throw new BadRequestException(
-        'Only built-in skills can be linked here: this prompt is shared by every user',
-      );
-    }
-    const unknown = links.tools.find((name) => !isLibraryTool(name));
-    if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
-  } else if (key === INSIGHTS_ANALYST_AGENT_KEY) {
+  if (key === INSIGHTS_ANALYST_AGENT_KEY) {
     if (!prompt.startsWith(INSIGHTS_ANALYST_IDENTITY_START)) {
       throw new BadRequestException(
         `The Insights Analyst prompt must start with "${INSIGHTS_ANALYST_IDENTITY_START}"`,

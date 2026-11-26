@@ -1,8 +1,5 @@
 // The real Mastra instance pulls in ESM-only packages Jest cannot require.
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
-jest.mock('../../mastra/evals/assistant.evals', () => ({
-  ASSISTANT_EVAL_SETS: [],
-}));
 jest.mock('../../mastra/evals/eval-sets', () => ({
   evalSetsFor: () => [],
 }));

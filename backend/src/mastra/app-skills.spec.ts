@@ -255,15 +255,13 @@ describe('the bundled skills', () => {
     expect(appSkillDocument('interactive-visuals')).toMatch(
       /^---\nname: interactive-visuals\ndescription: Use when /,
     );
-    // curated-knowledge is the only on-demand skill (ADR-0020).
-    expect(AGENT_SKILLS.assistant).toEqual(['curated-knowledge']);
-    expect(catalogSkills('assistant').map((skill) => skill.name)).toEqual([
-      'curated-knowledge',
-    ]);
+    // The removed assistant has no catalogue any more (ADR-0059).
+    expect(AGENT_SKILLS).not.toHaveProperty('assistant');
+    expect(catalogSkills('assistant')).toEqual([]);
     expect(catalogSkills('sql-fixer')).toEqual([]);
   });
 
-  it('serve the curated-knowledge rules as an on-demand skill of the assistant', () => {
+  it("serve the curated-knowledge rules as an on-demand skill of Michael's and Elena's", () => {
     const skill = loadAppSkills(skillsRoot()).get('curated-knowledge');
     expect(skill?.description).toMatch(/^Use when the turn carries a curated/);
     const body = appSkillBody('curated-knowledge');
@@ -276,8 +274,9 @@ describe('the bundled skills', () => {
     expect(body.replace(/\s+/g, ' ')).toContain(
       '- [relation] lines state how concepts connect (is-a, part-of, has-many, related-to, or measured-by a governed metric); use them to choose joins and the governed metric, never as rows of data.',
     );
-    // On demand: the assistant's catalog lists it, and no code sends it.
-    expect(AGENT_SKILLS.assistant).toContain('curated-knowledge');
+    // On demand: their catalogues list it, and no code sends it.
+    expect(AGENT_SKILLS['insights-analyst']).toContain('curated-knowledge');
+    expect(AGENT_SKILLS['insights-lead']).toContain('curated-knowledge');
     for (const names of Object.values(HARNESS_SKILLS)) {
       expect(names).not.toContain('curated-knowledge');
     }
@@ -403,10 +402,10 @@ describe('skill folders', () => {
 
   it('takes agents and loading mode from the two tables only', () => {
     const skills = loadAppSkills(skillsRoot());
-    // Shared by the assistant, Insights Analyst and Elena (agents.md 7.4).
+    // Shared by Insights Analyst and Elena (agents.md 7.4).
     expect(skills.get('curated-knowledge')).toMatchObject({
       loading: 'on-demand',
-      agents: ['assistant', 'insights-analyst', 'insights-lead'],
+      agents: ['insights-analyst', 'insights-lead'],
     });
     for (const name of ['sql-analysis', 'result-validation']) {
       expect(skills.get(name)).toMatchObject({
@@ -458,9 +457,6 @@ describe('skill folders', () => {
           'result-validation',
           'sql-analysis',
         ]);
-        expect(
-          fresh.catalogSkills('assistant').map((skill) => skill.name),
-        ).toEqual(['curated-knowledge']);
         expect(
           fresh.catalogSkills('insights-analyst').map((skill) => skill.name),
         ).toEqual(['curated-knowledge', 'result-validation', 'sql-analysis']);

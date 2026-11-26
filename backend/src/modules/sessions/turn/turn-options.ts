@@ -1,11 +1,7 @@
 // What reaches the model on a turn (agents.md 4.1, 4.2): each agent's system
 // context blocks, its requestContext keys, its memory thread and the input.
-import type { Logger } from '@nestjs/common';
 import { RequestContext } from '@mastra/core/request-context';
-import {
-  INSIGHTS_ANALYST_AGENT_KEY,
-  INSIGHTS_ANALYST_MAX_STEPS,
-} from '../../../mastra/agents/insights-analyst-catalog';
+import { INSIGHTS_ANALYST_MAX_STEPS } from '../../../mastra/agents/insights-analyst-catalog';
 import {
   INSIGHTS_LEAD_AGENT_KEY,
   INSIGHTS_LEAD_MAX_STEPS,
@@ -18,7 +14,6 @@ import {
 import {
   AGENT_TOOLS_CONTEXT_KEY,
   isFullSelection,
-  selects,
   toolSelectionFrom,
 } from '../../../mastra/agent-tools';
 import {
@@ -26,14 +21,11 @@ import {
   type AgentSkill,
 } from '../../../mastra/agent-skills';
 import { effectiveOptionalTools } from '../../../mastra/agent-links';
-import { ASSISTANT_MAX_STEPS } from '../../../mastra/agent-constants';
 import { DATASETS_CONTEXT_KEY } from '../../../mastra/tools/dataset.tools';
-import { ACTIVE_VISUAL_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
 import {
   SESSION_ID_CONTEXT_KEY,
   TURN_QUESTION_CONTEXT_KEY,
 } from '../../../mastra/tools/turn-context';
-import { SESSION_WORKSPACE_CONTEXT_KEY } from '../../../mastra/session-workspaces';
 import {
   entityOrientationLines,
   knowledgeContext,
@@ -45,7 +37,6 @@ import type { LlmService } from '../../llm/llm.service';
 import type { VerifiedQueriesService } from '../../verified-queries/verified-queries.service';
 import type { MetricsService } from '../../metrics/metrics.service';
 import type { OntologyService } from '../../ontology/ontology.service';
-import type { VisualizationService } from '../visualization.service';
 import type { SessionDoc } from '../entities/session.entity';
 import {
   KNOWLEDGE_USED_CONTEXT_KEY,
@@ -55,15 +46,12 @@ import { SessionDatasets, turnProviderOptions } from './session-datasets';
 
 /** What the turn options are built from: the session service's dependencies. */
 export interface TurnOptionsDeps {
-  mastra: MastraService;
   llmService: LlmService;
-  visuals: VisualizationService;
   verifiedQueries: VerifiedQueriesService;
   metrics: MetricsService;
   knowledge: OntologyService;
   userAgents: UserAgentsService;
   datasets: SessionDatasets;
-  logger: Logger;
   /** `names` without the datasets that no longer exist, in order. */
   existingDatasets(names: string[]): Promise<string[]>;
   /** Persist a patch on the session or in-memory host. */
@@ -72,133 +60,6 @@ export interface TurnOptionsDeps {
 
 export class TurnOptions {
   constructor(private readonly deps: TurnOptionsDeps) {}
-
-  /**
-   * Hybrid context: a cheap orientation block (dataset names + entity keys,
-   * the session's visuals and which one is open), the curated metric
-   * definitions covering those entities, the curated knowledge-store
-   * snippets covering this session's datasets, plus any user-approved
-   * question → SQL pairs resembling `question`, in the system context, and
-   * requestContext scoping the tools to this session.
-   *
-   * Memory-free on purpose — `agentOptions` adds the session's conversation
-   * thread.
-   */
-  async agentContext(
-    session: SessionDoc,
-    question?: string,
-    abortSignal?: AbortSignal,
-    activeVisualId?: string,
-  ) {
-    // A session started from a user agent runs with the agent's current Live
-    // version (agent-answers R54), a preview with its draft (agents-evals
-    // R60); once the agent is gone it is the plain assistant (R59).
-    const agent = await this.agentConfigFor(session);
-    const datasets = await this.deps.datasets.bound(session.datasets);
-    const visualLines = (session.visualizations ?? []).map(
-      (v) =>
-        `- ${v.id} — "${v.title}" v${this.deps.visuals.currentVersion(v)} (from the answer at ${v.sourceMessageAt})`,
-    );
-    const requestContext = new RequestContext();
-    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
-    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
-    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
-    if (activeVisualId) {
-      requestContext.set(ACTIVE_VISUAL_CONTEXT_KEY, activeVisualId);
-    }
-    const workspace = await this.deps.mastra.ensureSessionWorkspace(
-      session.id,
-      session.name,
-    );
-    requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
-    const { reasoningEffort } = await this.deps.llmService.getView();
-    const verified = question
-      ? await this.deps.verifiedQueries.referenceBlock(question)
-      : undefined;
-    // Curated semantics for the entities this session can see — the one
-    // definition of each business number, never re-derived per turn.
-    const metrics = await this.deps.metrics.definitionBlock(
-      datasets.flatMap((s) => s.tables ?? []),
-    );
-    // Curated, user-authored knowledge (glossary/instructions/default
-    // filters) for this session's datasets — authoritative over anything
-    // the model would otherwise infer from schema alone.
-    const knowledge = await this.deps.knowledge.contextFor(session.datasets);
-    // Threaded on requestContext rather than returned alongside the options,
-    // because the options object is spread straight into the agent call.
-    requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
-    const overrides: AgentOverrides = {
-      ...(agent?.model ? { model: agent.model } : {}),
-      ...(agent?.reasoningEffort
-        ? { reasoningEffort: agent.reasoningEffort }
-        : {}),
-    };
-    if (overrides.model || overrides.reasoningEffort) {
-      requestContext.set(AGENT_OVERRIDES_CONTEXT_KEY, overrides);
-    }
-    // The agent's tool selection (ADR-0022): only a list without all three
-    // optional tools goes on the context; otherwise every tool is offered.
-    // The agent's in-app skills join the assistant's catalog (ADR-0022): the
-    // copies its Live version runs on, or for a preview the current skills.
-    const agentSkills = agent ? await this.agentSkillsFor(session) : [];
-    // The tools offered are those the instructions link plus those its
-    // skills link (ADR-0024); a config without `tools` keeps every tool.
-    if (agent?.tools) {
-      const tools = effectiveOptionalTools(agent.tools, agentSkills);
-      if (!isFullSelection(tools)) {
-        requestContext.set(AGENT_TOOLS_CONTEXT_KEY, tools);
-      }
-    }
-    if (agentSkills.length) {
-      requestContext.set(AGENT_SKILLS_CONTEXT_KEY, agentSkills);
-    }
-    const selection = toolSelectionFrom(requestContext);
-    const visualsBlock = selects(selection, 'visuals')
-      ? [
-          '',
-          'Interactive visuals in this session (id — title, current version):',
-          ...(visualLines.length ? visualLines : ['(none yet)']),
-          activeVisualId
-            ? `Visual currently open in the right panel: ${activeVisualId}.`
-            : 'No visual is open in the right panel.',
-        ]
-      : [];
-    return {
-      // Analysis often chains several schema + SQL tool calls per turn.
-      maxSteps: ASSISTANT_MAX_STEPS,
-      // The user-configured reasoning effort (Low/Medium/High chip), unless
-      // the session's agent overrides it.
-      providerOptions: await turnProviderOptions(
-        { reasoningEffort: overrides.reasoningEffort ?? reasoningEffort },
-        overrides.model,
-      ),
-      context: [
-        {
-          role: 'system' as const,
-          content: [
-            ...entityOrientationLines(session.datasets, datasets, selection),
-            ...visualsBlock,
-          ].join('\n'),
-        },
-        ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
-        // The knowledge block; its rules are the on-demand curated-knowledge
-        // skill (ADR-0025).
-        ...knowledgeContext(knowledge.block),
-        ...(verified ? [{ role: 'system' as const, content: verified }] : []),
-        // Last, so the base prompt and every curated block come first.
-        ...(agent?.instructions.trim()
-          ? [
-              {
-                role: 'system' as const,
-                content: agentInstructionsBlock(agent),
-              },
-            ]
-          : []),
-      ],
-      requestContext,
-      abortSignal,
-    };
-  }
 
   /**
    * The configuration a session's turns apply: the Live version of the agent
@@ -244,21 +105,15 @@ export class TurnOptions {
     return doc.live ? (doc.liveSkills ?? []) : [];
   }
 
-  /** Chat turns: the shared grounding plus this session's memory thread. */
+  /**
+   * A turn's options: Elena's (below), else Michael's with the session's
+   * memory thread, for any other agent a host runs (a node chat's).
+   */
   async agentOptions(
     session: SessionDoc,
     question?: string,
     abortSignal?: AbortSignal,
-    activeVisualId?: string,
   ) {
-    if (session.agentKey === INSIGHTS_ANALYST_AGENT_KEY) {
-      return this.analystAgentOptions(
-        session,
-        question,
-        abortSignal,
-        INSIGHTS_ANALYST_MAX_STEPS,
-      );
-    }
     // Elena (plan Elena 2.3): Michael's context, her own budget, and no
     // memory thread (the run host sends the conversation as a transcript).
     // On a user agent's host she runs its definition (ADR-0059), read
@@ -277,16 +132,12 @@ export class TurnOptions {
       void _memory;
       return options;
     }
-    return {
-      ...(await this.agentContext(
-        session,
-        question,
-        abortSignal,
-        activeVisualId,
-      )),
-      // Each session is an isolated, persistent Mastra conversation.
-      memory: { thread: session.id, resource: session.id },
-    };
+    return this.analystAgentOptions(
+      session,
+      question,
+      abortSignal,
+      INSIGHTS_ANALYST_MAX_STEPS,
+    );
   }
 
   /**

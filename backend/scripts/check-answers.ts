@@ -348,7 +348,8 @@ async function ask(
   const sessions = app.get(SessionsService);
   const session = await sessions.createRunHost({
     runId: `eval-${randomUUID()}`,
-    agentKey: 'assistant',
+    // Elena's conversation: the assistant is gone (ADR-0059).
+    workflowId: 'agent:insights-lead',
     name: 'check-answers',
     datasets: [DATASET_NAME],
   });

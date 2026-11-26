@@ -19,7 +19,6 @@ export const ASSISTANT_MAX_STEPS = 15;
  * workflow catalogue and its drift tests can read them without Mastra.
  */
 export const OFFICIAL_AGENT_KEYS: readonly string[] = [
-  'assistant',
   'insights-analyst',
   // Elena, the Insights Lead: talked to directly in her own conversation
   // (plan Elena 2), not through a chat.

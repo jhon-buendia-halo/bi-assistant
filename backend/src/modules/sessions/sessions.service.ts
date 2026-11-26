@@ -8,19 +8,10 @@ import {
   Optional,
 } from '@nestjs/common';
 import { parseWorkflow } from '../../mastra/workflow-section';
-import { agentPromptOverrideFor } from '../../mastra/agent-prompt-overrides';
-import { assistantShippedPrompt } from '../../mastra/agents/assistant-prompt';
 import { MastraService } from '../../mastra/mastra.service';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import type { AgentConfig } from '../user-agents/entities/user-agent.entity';
 import { setDatasetToolServices } from '../../mastra/tool-services';
-import type {
-  PanelToolInput,
-  PanelToolResult,
-  DatasetToolTurnRecord,
-  WorkflowToolInput,
-  WorkflowToolResult,
-} from '../../mastra/tool-services';
 import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
@@ -37,21 +28,20 @@ import {
   type ConversationExporter,
 } from '../conversation-export/conversation-export.contract';
 import {
-  buildPanelItem,
   tableCsv,
   titleSlug,
   upsertPanelItem,
   visualItemId,
   withVisualItems,
 } from './panel-items';
-import { applyWorkflowUpdate, workflowViewOf } from './workflow-update';
+import { workflowViewOf } from './workflow-update';
 import {
+  ASSISTANT_WORKFLOW_ID,
   ASSISTANT_WORKFLOW_NAME,
   REMOVED_WORKFLOW_NAMES,
   isRemovedWorkflowId,
   parseWorkflowId,
   sessionWorkflowId,
-  WRAPPED_AGENT_KEYS,
 } from '../../mastra/workflows/workflow-catalog';
 import { renderPdf } from '../../common/markdown-pdf';
 import {
@@ -87,7 +77,7 @@ import type {
   StreamEvent,
   TurnSuspension,
 } from './turn/stream-events';
-import { ASSISTANT_AGENT_KEY, lastSuccessfulSql } from './turn/turn-records';
+import { lastSuccessfulSql } from './turn/turn-records';
 import { workflowSourceOf } from './turn/turn-workflow';
 
 export type {
@@ -132,12 +122,6 @@ export interface RunHostSpec {
    * host (`agentKey`) and a draft run (`draftAgentId`).
    */
   workflowId?: string;
-  /**
-   * An agent host (the eval runner): the built-in agent (`assistant`)
-   * whose turn the host runs on the agent-turn engine, with no catalogue
-   * workflow behind it.
-   */
-  agentKey?: string;
   /** The workflow's or the agent's name: the host's name. */
   name: string;
   /** The input's datasets. */
@@ -233,15 +217,12 @@ export class SessionsService implements OnModuleInit {
       logger: this.logger,
     });
     this.turnOptions = new TurnOptions({
-      mastra,
       llmService,
-      visuals,
       verifiedQueries,
       metrics,
       knowledge,
       userAgents,
       datasets: this.turnDatasets,
-      logger: this.logger,
       existingDatasets: (names) => this.existingDatasets(names),
       updateDoc: (id, patch) => this.updateDoc(id, patch),
     });
@@ -334,37 +315,6 @@ export class SessionsService implements OnModuleInit {
               abortSignal: options.abortSignal,
             })
           : this.mastra.interpretResult(input),
-      createVisual: async (
-        sessionId,
-        sourceMessageAt,
-        instruction,
-        turnRecords,
-      ) => {
-        const session = await this.get(sessionId);
-        const { metadata } = await this.visuals.create(
-          session,
-          sourceMessageAt,
-          instruction,
-          turnRecords,
-        );
-        await this.saveVisualMetadata(session, metadata);
-        return this.toolResult(metadata);
-      },
-      updateVisual: async (sessionId, visualId, instruction, turnRecords) => {
-        const session = await this.get(sessionId);
-        const { metadata } = await this.visuals.update(
-          session,
-          visualId,
-          instruction,
-          turnRecords,
-        );
-        await this.saveVisualMetadata(session, metadata);
-        return this.toolResult(metadata);
-      },
-      showPanelItem: (sessionId, input, turnRecords) =>
-        this.showPanelItem(sessionId, input, turnRecords),
-      updateWorkflow: (sessionId, input) =>
-        this.updateWorkflow(sessionId, input),
     });
 
     // A preview or a run host left when the app stopped has no session left
@@ -442,9 +392,8 @@ export class SessionsService implements OnModuleInit {
   /**
    * A run host (ADR-0041; agents.md 5.14): the in-memory session one run
    * executes its agent turn on, shaped as `POST /sessions` would shape a
-   * session of it: bound to the catalogue workflow's agent (`workflowId`)
-   * or, for the eval runner, to a built-in agent directly (`agentKey`: the
-   * assistant over the given datasets), with, as its transcript, the earlier
+   * session of it: bound to the catalogue workflow's agent (`workflowId`),
+   * with, as its transcript, the earlier
    * run's question and answer (plan 5.4). 404 for a workflow the catalogue
    * does not hold (an `agent:` id, `seq-text-demo`, `deep-analysis`) or an
    * agent that has no agent-turn binding. Its workspace is
@@ -452,41 +401,33 @@ export class SessionsService implements OnModuleInit {
    */
   async createRunHost(spec: RunHostSpec): Promise<SessionDoc> {
     if (spec.draftAgentId) return this.createDraftRunHost(spec);
-    let binding: Pick<SessionDoc, 'agentKey' | 'agentId' | 'agentName'> = {};
-    let codeWorkflowId: string | undefined;
     const datasets = spec.datasets ?? [];
-    if (spec.agentKey !== undefined) {
-      const key = spec.agentKey;
-      const agent = WRAPPED_AGENT_KEYS.includes(key)
-        ? this.mastra.listAgents()[key]
-        : undefined;
-      // The assistant's own turn: a plain host, bound to no agent.
-      if (!agent) throw new NotFoundException(`Agent "${key}" not found`);
-    } else {
-      const parsed = spec.workflowId
-        ? parseWorkflowId(spec.workflowId)
-        : undefined;
-      // A code workflow runs for its `primaryFor` agent; a built-in agent's
-      // conversation (plan Elena 1.3) on its binding's host agent.
-      const primary =
-        parsed?.kind === 'code'
-          ? parsed.source.primaryFor
-          : parsed?.kind === 'conversation'
-            ? parsed.binding.hostAgentKey
-            : undefined;
-      const agent = primary ? this.mastra.listAgents()[primary] : undefined;
-      if (!primary || !agent) {
-        throw new NotFoundException(`Workflow "${spec.workflowId}" not found`);
-      }
-      binding = { agentKey: primary, agentName: agent.name ?? primary };
-      // The run's own workflow: an agent can run more than one.
-      codeWorkflowId =
-        parsed?.kind === 'code'
-          ? parsed.source.id
-          : parsed?.kind === 'conversation'
-            ? parsed.binding.workflowId
-            : undefined;
+    const parsed = spec.workflowId
+      ? parseWorkflowId(spec.workflowId)
+      : undefined;
+    // A code workflow runs for its `primaryFor` agent; a built-in agent's
+    // conversation (plan Elena 1.3) on its binding's host agent.
+    const primary =
+      parsed?.kind === 'code'
+        ? parsed.source.primaryFor
+        : parsed?.kind === 'conversation'
+          ? parsed.binding.hostAgentKey
+          : undefined;
+    const agent = primary ? this.mastra.listAgents()[primary] : undefined;
+    if (!primary || !agent) {
+      throw new NotFoundException(`Workflow "${spec.workflowId}" not found`);
     }
+    const binding: Pick<SessionDoc, 'agentKey' | 'agentName'> = {
+      agentKey: primary,
+      agentName: agent.name ?? primary,
+    };
+    // The run's own workflow: an agent can run more than one.
+    const codeWorkflowId =
+      parsed?.kind === 'code'
+        ? parsed.source.id
+        : parsed?.kind === 'conversation'
+          ? parsed.binding.workflowId
+          : undefined;
     const id = `${RUN_HOST_ID_PREFIX}${spec.runId}`;
     const name = spec.name.slice(0, 64);
     const workspace = await this.mastra.ensureSessionWorkspace(id, name);
@@ -623,7 +564,6 @@ export class SessionsService implements OnModuleInit {
       trimmed,
       emit,
       abortSignal,
-      undefined,
       onStepEvent,
       true,
     );
@@ -897,14 +837,14 @@ export class SessionsService implements OnModuleInit {
         this.mastra.listAgents()[key]?.name ?? session.agentName ?? key;
       return { id, name, kind: 'agent', deleted: false };
     }
-    if (parsed?.kind === 'builtin-agent') {
-      const name =
-        parsed.agentKey === ASSISTANT_AGENT_KEY
-          ? ASSISTANT_WORKFLOW_NAME
-          : (this.mastra.listAgents()[parsed.agentKey]?.name ??
-            session.agentName ??
-            parsed.agentKey);
-      return { id, name, kind: 'agent', deleted: false };
+    // The removed assistant's retired id (ADR-0059): its chip still reads.
+    if (id === ASSISTANT_WORKFLOW_ID) {
+      return {
+        id,
+        name: ASSISTANT_WORKFLOW_NAME,
+        kind: 'agent',
+        deleted: false,
+      };
     }
     return config
       ? { id, name: config.name, kind: 'agent', deleted: false }
@@ -913,9 +853,9 @@ export class SessionsService implements OnModuleInit {
 
   /**
    * The phases of the `## Workflow` section of the prompt the session runs
-   * (ADR-0029): none for a built-in agent bound by key, a user
-   * agent's Live instructions when they have the section, else the
-   * assistant's prompt. `config` is the running agent version, when any.
+   * (ADR-0029): none for a built-in agent bound by key, else a user
+   * agent's Live instructions when they have the section. `config` is the
+   * running agent version, when any.
    */
   effectiveWorkflowFor(
     session: SessionDoc,
@@ -924,13 +864,7 @@ export class SessionsService implements OnModuleInit {
     // A built-in agent's steps are its workflow's run events, never a
     // prompt's: Michael's (Avery + Michael, or a past chat of a removed
     // workflow) included.
-    if (session.agentKey) return [];
-    const own = config ? parseWorkflow(config.instructions) : [];
-    if (own.length) return own;
-    return parseWorkflow(
-      agentPromptOverrideFor(ASSISTANT_AGENT_KEY)?.prompt ??
-        assistantShippedPrompt(),
-    );
+    return session.agentKey ? [] : parseWorkflow(config?.instructions ?? '');
   }
 
   /** The agent version a session's turns run (its Live version; a preview's draft). */
@@ -965,49 +899,6 @@ export class SessionsService implements OnModuleInit {
   }
 
   // --------------------------------------------------------- panel items
-
-  /**
-   * The `show_in_panel` bridge (agents.md 3.11): validate the call, store the
-   * item on the session and return the summary the model sees. Throws the
-   * message the tool answers with.
-   */
-  private async showPanelItem(
-    sessionId: string,
-    input: PanelToolInput,
-    turnRecords?: DatasetToolTurnRecord[],
-  ): Promise<PanelToolResult> {
-    const session = await this.get(sessionId);
-    const { item, summary } = await buildPanelItem(input, {
-      session,
-      turnRecords,
-    });
-    await this.updateDoc(session.id, {
-      panelItems: upsertPanelItem(session.panelItems ?? [], item),
-    });
-    return summary;
-  }
-
-  /**
-   * The `update_workflow` bridge (agents.md 3.11): validate the call against
-   * the session's steps, save the state and return the summary the model sees.
-   * Throws the message the tool answers with.
-   */
-  private async updateWorkflow(
-    sessionId: string,
-    input: WorkflowToolInput,
-  ): Promise<WorkflowToolResult> {
-    const session = await this.get(sessionId);
-    const promptSteps = this.effectiveWorkflowFor(
-      session,
-      await this.runningConfig(session),
-    ).length;
-    const { state, result } = applyWorkflowUpdate(input, {
-      promptSteps,
-      state: session.workflowState,
-    });
-    await this.updateDoc(session.id, { workflowState: state });
-    return result;
-  }
 
   /** The workflow view of a stored session, for the `workflow` event. */
   private async workflowOf(

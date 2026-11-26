@@ -73,7 +73,8 @@ describe('agent links (ADR-0024, agents.md 4.3)', () => {
     expect(optionalToolOf('show_in_panel')).toBeUndefined();
     expect(isLibraryTool('update_visual')).toBe(true);
     expect(isLibraryTool('read_file')).toBe(false);
-    expect(optionalToolOf('create_visual')).toBe('visuals');
+    // A retired tool stands for no optional tool (ADR-0059).
+    expect(optionalToolOf('create_visual')).toBeUndefined();
     expect(optionalToolOf('run_readonly_sql')).toBeUndefined();
     expect(
       optionalToolsOf([
@@ -82,7 +83,7 @@ describe('agent links (ADR-0024, agents.md 4.3)', () => {
         'create_visual',
         'list_entities',
       ]),
-    ).toEqual(['ask_clarification', 'visuals']);
+    ).toEqual(['ask_clarification']);
   });
 
   it('unions the direct tools with those the skills link; absent means every tool', () => {
@@ -94,12 +95,11 @@ describe('agent links (ADR-0024, agents.md 4.3)', () => {
     ).toEqual(['sample_rows', 'ask_clarification']);
     expect(
       effectiveOptionalTools([], [{ body: '[[tool:update_visual]]' }]),
-    ).toEqual(['visuals']);
+    ).toEqual([]);
     expect(effectiveOptionalTools([], undefined)).toEqual([]);
     expect(effectiveOptionalTools(undefined, [])).toEqual([
       'sample_rows',
       'ask_clarification',
-      'visuals',
     ]);
   });
 });

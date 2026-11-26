@@ -30,12 +30,6 @@ jest.mock('../../mastra/tool-services', () => ({
 jest.mock('../../mastra/tools/dataset.tools', () => ({
   DATASETS_CONTEXT_KEY: 'datasets',
 }));
-jest.mock('../../mastra/tools/visual.tools', () => ({
-  ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual-id',
-  SESSION_ID_CONTEXT_KEY: 'session-id',
-  TURN_QUESTION_CONTEXT_KEY: 'turn-question',
-  TURN_RECORDS_CONTEXT_KEY: 'turn-data-records',
-}));
 jest.mock('../../mastra/session-workspaces', () => ({
   SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace-id',
 }));
@@ -137,16 +131,9 @@ function build(options: BuildOptions = {}) {
     ),
     generate: jest.fn().mockResolvedValue({ text: 'Synthesized.' }),
   };
-  const assistant = {
-    name: 'assistant',
-    getDescription: () => 'assistant',
-    stream: jest.fn(),
-    generate: jest.fn(),
-  };
-  // The RFP Builder (`rfp`), the Site Reviewer and the Data Readiness Agent
-  // (`data-readiness`) are no longer registered.
+  // The assistant, the RFP Builder (`rfp`), the Site Reviewer and the Data
+  // Readiness Agent (`data-readiness`) are no longer registered.
   const registry: Record<string, unknown> = {
-    assistant,
     'insights-analyst': analyst,
   };
   const mastra = {
@@ -196,7 +183,7 @@ function build(options: BuildOptions = {}) {
     } as never,
     userAgents as never,
   );
-  return { service, session, repository, analyst, assistant };
+  return { service, session, repository, analyst };
 }
 
 /** Run a streamed turn and collect its events. */
@@ -256,49 +243,6 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       expect(silent.session.messages.at(-1)?.content).toBe(
         'I completed the data analysis but could not produce a final response. Please retry your question.',
       );
-    });
-
-    it('emits the panel-item event of a show_in_panel result', async () => {
-      const ctx = build({
-        chunks: [
-          toolCall('c0', 'show_in_panel', {
-            kind: 'document',
-            title: 'Notes',
-            markdown: '# Notes',
-          }),
-          toolResult('c0', 'show_in_panel', {
-            shown: true,
-            id: 'doc-1',
-            kind: 'document',
-            title: 'Notes',
-          }),
-          toolCall('c1', 'show_in_panel', { kind: 'file', path: '../x' }),
-          toolResult('c1', 'show_in_panel', {
-            error: 'Invalid file path "../x"',
-          }),
-          { type: 'text-delta', payload: { text: 'Done.' } },
-        ],
-      });
-      ctx.session.panelItems = [
-        {
-          id: 'doc-1',
-          kind: 'document',
-          title: 'Notes',
-          shownAt: '2026-10-14T10:00:00.000Z',
-          markdown: '# Notes',
-        },
-      ];
-      const events = await turn(ctx, 'Show it');
-      expect(events.filter((e) => e.type === 'panel-item')).toHaveLength(1);
-      const results = events
-        .filter((e) => e.type === 'tool-result')
-        .map((e) => JSON.parse(e.content!) as unknown);
-      expect(results).toEqual([
-        { tool: 'show_in_panel', input: 'Notes' },
-        { tool: 'show_in_panel', error: 'Invalid file path "../x"' },
-      ]);
-      // The removed RFP Builder's package event is never sent.
-      expect(events.map((e) => e.type)).not.toContain('rfp-package');
     });
 
     it('keeps clarification interception', async () => {
@@ -379,8 +323,8 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
 
     // The Site Reviewer (`site-reviewer`) went with Review a Website: a
     // past chat of hers reads as the Assistant's, its chip keeps the
-    // removed workflow's name, and a turn on it runs the assistant.
-    it('reads and runs a stored Site Reviewer session as the Assistant', async () => {
+    // removed workflow's name, and a turn on it answers 404 (ADR-0059).
+    it('reads a stored Site Reviewer session as the Assistant, and refuses a turn on it', async () => {
       const ctx = build({
         session: {
           agentKey: 'site-reviewer',
@@ -404,19 +348,10 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       });
       expect(view.messages).toHaveLength(2);
 
-      Object.assign(ctx.assistant, {
-        getMemory: jest.fn().mockResolvedValue({
-          getThreadById: jest.fn().mockResolvedValue({ id: ctx.session.id }),
-        }),
+      await expect(turn(ctx, 'And the checkout page?')).rejects.toMatchObject({
+        status: 404,
+        message: 'Agent "site-reviewer" not found',
       });
-      ctx.assistant.stream.mockResolvedValue({
-        fullStream: streamOf([
-          { type: 'text-delta', payload: { text: 'Hi.' } },
-        ]),
-        text: Promise.resolve(''),
-      });
-      await turn(ctx, 'And the checkout page?');
-      expect(ctx.assistant.stream).toHaveBeenCalledTimes(1);
       expect(ctx.analyst.stream).not.toHaveBeenCalled();
     });
 
@@ -498,22 +433,85 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       expect(ctx.repository.update).not.toHaveBeenCalled();
     });
 
-    it('runs a turn on it as the assistant', async () => {
+    it('answers 404 to a turn on it: no registered agent runs it (ADR-0059)', async () => {
       const ctx = build({ session: legacy });
-      Object.assign(ctx.assistant, {
-        getMemory: jest.fn().mockResolvedValue({
-          getThreadById: jest.fn().mockResolvedValue({ id: ctx.session.id }),
-        }),
+      await expect(turn(ctx, 'And the members table?')).rejects.toMatchObject({
+        status: 404,
+        message: 'Agent "data-readiness" not found',
       });
-      ctx.assistant.stream.mockResolvedValue({
-        fullStream: streamOf([
-          { type: 'text-delta', payload: { text: 'Hi.' } },
-        ]),
-        text: Promise.resolve(''),
-      });
-      await turn(ctx, 'And the members table?');
-      expect(ctx.assistant.stream).toHaveBeenCalledTimes(1);
       expect(ctx.analyst.stream).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('a past chat of the removed assistant (ADR-0059)', () => {
+  it('still opens: its Assistant chip, a cross-check, a visual and its panel items read as stored, and a turn answers 404', async () => {
+    const ctx = build({
+      session: {
+        agentKey: undefined,
+        workflowId: 'agent:assistant',
+        datasets: ['World Cup'],
+        messages: [
+          { role: 'user', content: 'Who won?', at: 't1' },
+          {
+            role: 'assistant',
+            content: 'Argentina won.',
+            at: 't2',
+            crossCheck: { status: 'agree', note: 'same results' },
+          },
+          {
+            role: 'assistant',
+            content: 'Created interactive visual "Wins" (v1).',
+            at: 't3',
+            visual: {
+              visualId: 'v1',
+              version: 1,
+              title: 'Wins',
+              action: 'created',
+            },
+          },
+        ],
+        visualizations: [
+          {
+            id: 'v1',
+            title: 'Wins',
+            description: '',
+            path: 'visuals/v1',
+            sourceMessageAt: 't2',
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        panelItems: [
+          {
+            id: 'doc-1',
+            kind: 'document',
+            title: 'Notes',
+            shownAt: '2026-01-01T00:00:00.000Z',
+            markdown: '# Notes',
+          },
+        ],
+      },
+    });
+    const view = await ctx.service.toView(ctx.session);
+    expect(view.workflowRef).toEqual({
+      id: 'agent:assistant',
+      name: 'Assistant',
+      kind: 'agent',
+      deleted: false,
+    });
+    expect(view).not.toHaveProperty('agent');
+    expect(view.messages[1].crossCheck).toEqual({
+      status: 'agree',
+      note: 'same results',
+    });
+    expect(view.messages[2].visual).toMatchObject({ visualId: 'v1' });
+    expect(view.panelItems.map((item) => item.id).sort()).toEqual([
+      'doc-1',
+      'visual:v1',
+    ]);
+    await expect(turn(ctx, 'And in 2014?')).rejects.toMatchObject({
+      status: 404,
+      message: 'Agent "assistant" not found',
     });
   });
 });
