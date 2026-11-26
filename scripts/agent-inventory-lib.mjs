@@ -83,6 +83,36 @@ export function agentHash({ instructions, tools, skills }) {
   return createHash('sha256').update(payload).digest('hex').slice(0, 12);
 }
 
+/**
+ * The request contexts the matrix hash reads every agent under, beyond the
+ * empty one: what a call can carry that changes an agent's instructions,
+ * tools, skills or model (agents.md 4.2). `overrides` also installs a prompt
+ * override for every agent. Keys are the app's requestContext keys.
+ */
+export const MATRIX_SCENARIOS = [
+  { name: 'tools:none', context: { 'agent-tools': [] } },
+  { name: 'tools:sample_rows', context: { 'agent-tools': ['sample_rows'] } },
+  { name: 'tools:visuals+clarify', context: { 'agent-tools': ['visuals', 'ask_clarification'] } },
+  { name: 'gates:closed', context: { 'conversation-gates': { dashboard: false, export: false } } },
+  { name: 'gates:dashboard', context: { 'conversation-gates': { dashboard: true, export: false } } },
+  { name: 'gates:export', context: { 'conversation-gates': { dashboard: false, export: true } } },
+  { name: 'team:closed', context: { 'orchestrator-tools-runtime': { buildsDashboard: false, exportsConversation: false } } },
+  { name: 'team:open', context: { 'orchestrator-tools-runtime': { buildsDashboard: true, exportsConversation: true } } },
+  { name: 'step-model', context: { 'step-model': { model: 'claude-opus-5-5' } } },
+  { name: 'user-override', context: { 'agent-overrides': { model: 'override-model' } } },
+  { name: 'overrides', context: {}, overrides: true },
+];
+
+/** The prompt override the `overrides` scenario installs for an agent. */
+export function matrixOverridePrompt(key) {
+  return `Overridden job description of ${key}.\n\n## Working rules\n\n- Answer from the data.`;
+}
+
+/** A short, stable hash of an agent's outputs across the matrix scenarios. */
+export function matrixHash(outputs) {
+  return createHash('sha256').update(JSON.stringify(outputs)).digest('hex').slice(0, 12);
+}
+
 /** What one agent misses for its classes, as sentences. */
 export function classGaps(record) {
   const names = new Set(record.tools.map((tool) => tool.name));
@@ -125,8 +155,13 @@ export function compareInventories(base, branch) {
   const changed = [];
   for (const [key, record] of after) {
     const old = before.get(key);
-    if (!old || old.hash === record.hash) continue;
+    const matrixChanged = Boolean(old?.matrixHash && record.matrixHash && old.matrixHash !== record.matrixHash);
+    if (!old || (old.hash === record.hash && !matrixChanged)) continue;
     const what = [];
+    if (old.hash === record.hash) {
+      changed.push({ key, what: ['what it receives under a request context (matrix)'] });
+      continue;
+    }
     if (old.instructions !== record.instructions) {
       what.push(`instructions ${old.instructions.length} → ${record.instructions.length} chars`);
     }

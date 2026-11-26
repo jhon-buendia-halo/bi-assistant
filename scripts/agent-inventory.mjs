@@ -26,6 +26,9 @@ import {
   compareInventories,
   formatComparison,
   formatInventory,
+  matrixHash,
+  matrixOverridePrompt,
+  MATRIX_SCENARIOS,
   modelPolicy,
   registryEntries,
 } from './agent-inventory-lib.mjs';
@@ -73,6 +76,66 @@ function inputSchema(tool) {
   }
 }
 
+/** What the model receives from an agent under one request context. */
+async function readAgent(agent, requestContext) {
+  const raw = await agent.getInstructions({ requestContext });
+  const instructions = typeof raw === 'string' ? raw : JSON.stringify(raw);
+  const tools = Object.entries(await agent.listTools({ requestContext })).map(([name, tool]) => ({
+    name,
+    description: tool.description ?? '',
+    input: inputSchema(tool),
+  }));
+  let skills = [];
+  try {
+    skills = (await agent.listSkills({ requestContext })).map(({ name, description }) => ({ name, description: description ?? '' }));
+  } catch {
+    // A skill source that needs a runtime bridge: none without a run.
+  }
+  return { instructions, tools, skills };
+}
+
+/** The model an agent's model function picks, through the echoing resolver. */
+async function readModel(agent, requestContext) {
+  try {
+    return typeof agent.model === 'function' ? await agent.model({ requestContext }) : agent.model;
+  } catch (error) {
+    return `ERR ${error.message}`;
+  }
+}
+
+/**
+ * Each agent's outputs across MATRIX_SCENARIOS, hashed. The compiled build's
+ * own bridges are used: an echoing model resolver (the model it is asked for
+ * comes back as plain data) and, for `overrides`, a prompt override per agent.
+ */
+async function matrixHashes(backend, load, RequestContext, found) {
+  const dist = (file) => load(path.join(backend, 'dist', 'mastra', file));
+  const { setAgentModelResolver } = dist('model-resolver.js');
+  const { setAgentPromptOverrides } = dist('agent-prompt-overrides.js');
+  setAgentModelResolver(async (override) => ({ id: `openai/${override ?? 'saved-model'}`, apiKey: 'matrix' }));
+  const outputs = new Map(found.map(({ key }) => [key, []]));
+  for (const scenario of [{ name: 'empty', context: {} }, ...MATRIX_SCENARIOS]) {
+    setAgentPromptOverrides(
+      scenario.overrides
+        ? found.map(({ key }) => ({ key, prompt: matrixOverridePrompt(key), baseHash: 'matrix' }))
+        : [],
+    );
+    for (const { key, agent } of found) {
+      const requestContext = new RequestContext();
+      for (const [name, value] of Object.entries(scenario.context)) requestContext.set(name, value);
+      let read;
+      try {
+        read = await readAgent(agent, requestContext);
+      } catch (error) {
+        read = `ERR ${error.message}`;
+      }
+      outputs.get(key).push({ scenario: scenario.name, read, model: await readModel(agent, requestContext) });
+    }
+  }
+  setAgentPromptOverrides([]);
+  return new Map([...outputs].map(([key, list]) => [key, matrixHash(list)]));
+}
+
 async function inventory(root) {
   const backend = path.join(root, 'backend');
   const load = createRequire(path.join(backend, 'package.json'));
@@ -80,24 +143,13 @@ async function inventory(root) {
   const entries = registryEntries(fs.readFileSync(path.join(backend, 'src', 'mastra', 'index.ts'), 'utf8'));
   const agents = compiledAgents(backend, load);
   const records = [];
-  for (const { key, ident } of entries) {
-    const found = agents.get(ident);
-    if (!found) throw new Error(`Registry entry ${key} (${ident}) is not exported by any dist/mastra/agents/*.agent.js`);
-    const { agent, source } = found;
-    const requestContext = new RequestContext();
-    const raw = await agent.getInstructions({ requestContext });
-    const instructions = typeof raw === 'string' ? raw : JSON.stringify(raw);
-    const tools = Object.entries(await agent.listTools({ requestContext })).map(([name, tool]) => ({
-      name,
-      description: tool.description ?? '',
-      input: inputSchema(tool),
-    }));
-    let skills = [];
-    try {
-      skills = (await agent.listSkills({ requestContext })).map(({ name, description }) => ({ name, description: description ?? '' }));
-    } catch {
-      // A skill source that needs a runtime bridge: none without a run.
-    }
+  const found = entries.map(({ key, ident }) => {
+    const hit = agents.get(ident);
+    if (!hit) throw new Error(`Registry entry ${key} (${ident}) is not exported by any dist/mastra/agents/*.agent.js`);
+    return { key, ...hit };
+  });
+  for (const { key, agent, source } of found) {
+    const { instructions, tools, skills } = await readAgent(agent, new RequestContext());
     const record = {
       key,
       id: agent.id,
@@ -110,7 +162,8 @@ async function inventory(root) {
     };
     records.push({ ...record, hash: agentHash(record) });
   }
-  return records;
+  const matrix = await matrixHashes(backend, load, RequestContext, found);
+  return records.map((record) => ({ ...record, matrixHash: matrix.get(record.key) }));
 }
 
 async function main() {

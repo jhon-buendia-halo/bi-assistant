@@ -83,6 +83,20 @@ test('the comparison names what changed and which agents need their evals', () =
   assert.match(formatComparison(diff), /Evals to run \(base against branch\): new, grows$/);
 });
 
+test('a change only under a request context still names the agent', () => {
+  const base = [{ ...record('lead', ['data'], DATA), matrixHash: 'aaa' }];
+  const branch = [{ ...record('lead', ['data'], DATA), matrixHash: 'bbb' }];
+  const diff = compareInventories(base, branch);
+  assert.deepEqual(diff.changed, [{ key: 'lead', what: ['what it receives under a request context (matrix)'] }]);
+  assert.match(formatComparison(diff), /Evals to run \(base against branch\): lead$/);
+});
+
+test('a base without matrix hashes compares on the plain hash only', () => {
+  const base = [record('lead', ['data'], DATA)];
+  const branch = [{ ...record('lead', ['data'], DATA), matrixHash: 'bbb' }];
+  assert.deepEqual(compareInventories(base, branch).changed, []);
+});
+
 test('equal inventories need no evals', () => {
   const records = [record('same', ['single-step'], [])];
   assert.match(formatComparison(compareInventories(records, records)), /the evals need not run/);
