@@ -10,7 +10,6 @@ jest.mock('@mastra/evals/checks', () => ({
   ),
 }));
 jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
-jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
 jest.mock('../agents/insights-analyst.agent', () => ({
   insightsAnalystAgent: { id: 'insights-analyst' },
 }));

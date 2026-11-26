@@ -12,9 +12,6 @@ jest.mock('@mastra/evals/checks', () => ({
   ),
 }));
 jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
-jest.mock('../../mastra/agents/assistant.agent', () => ({
-  assistantAgent: {},
-}));
 jest.mock('../../mastra/agents/insights-analyst.agent', () => ({
   insightsAnalystAgent: { id: 'insights-analyst' },
 }));
@@ -44,9 +41,11 @@ describe('buildAgentQualityCatalogue', () => {
   const catalogue = buildAgentQualityCatalogue();
 
   it('names every agent by its registry key, its Mastra agent id too', () => {
-    expect(catalogue.find((a) => a.key === 'assistant')!.agentId).toBe(
-      'assistant',
+    expect(catalogue.find((a) => a.key === 'insights-lead')!.agentId).toBe(
+      'insights-lead',
     );
+    // The removed assistant's data sets run on Elena now.
+    expect(catalogue.map((a) => a.key)).not.toContain('assistant');
     for (const agent of catalogue) expect(agent.agentId).toBe(agent.key);
     // The removed Data Readiness Agent has no evals left.
     expect(catalogue.map((a) => a.key)).not.toContain('data-readiness');

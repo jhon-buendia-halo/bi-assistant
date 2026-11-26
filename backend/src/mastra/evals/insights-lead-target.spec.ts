@@ -5,7 +5,6 @@ jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
 jest.mock('@mastra/evals/checks', () => ({
   checks: new Proxy({}, { get: () => () => ({ id: 'stub-check' }) }),
 }));
-jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
 jest.mock('../agents/insights-analyst.agent', () => ({
   insightsAnalystAgent: { id: 'insights-analyst' },
 }));
@@ -43,6 +42,7 @@ import {
 } from './avery-workflow-target';
 import { evalDetailsOf } from './eval-details';
 import { EVAL_SETS, evalTargetFor, setsOfTarget } from './eval-sets';
+import { INSIGHTS_LEAD_DATA_EVAL_SETS } from './insights-lead-data.evals';
 import {
   INSIGHTS_LEAD_EVAL_CASES,
   INSIGHTS_LEAD_EVAL_SET,
@@ -183,6 +183,29 @@ describe('insightsLeadTurnAgent', () => {
     expect(remove).toHaveBeenCalledWith(stored.id);
   });
 
+  it("hands the stored answer's query records to the checks, one per call", async () => {
+    const services: AveryEvalRuns = {
+      run: () => Promise.resolve(stored),
+      remove: () => Promise.resolve(),
+    };
+    const result = await insightsLeadTurnAgent(agent, () => services).generate(
+      'Which store had the highest sales?',
+      contextOf(['Retail Ops']) as never,
+    );
+    const records = evalDetailsOf(result).records ?? [];
+    expect(records.map((record) => record.tool)).toEqual([
+      'run_readonly_sql',
+      'run_readonly_sql',
+      'run_readonly_sql',
+    ]);
+    expect(records[1]).toMatchObject({
+      input: stored.answer?.data?.[1].input,
+      rowCount: 6,
+    });
+    expect(records[1].rows).toHaveLength(6);
+    expect(typeof records[1].rows?.[0]?.['store_name']).toBe('string');
+  });
+
   it('refuses a case without a dataset', async () => {
     const turn = insightsLeadTurnAgent(agent, () => {
       throw new Error('not reached');
@@ -194,15 +217,16 @@ describe('insightsLeadTurnAgent', () => {
 });
 
 describe('the insights-lead set', () => {
-  it('is registered on its own target, on her agent key', () => {
+  it('is registered on its own target, on her agent key, beside the ported data sets', () => {
     expect(EVAL_SETS).toContain(INSIGHTS_LEAD_EVAL_SET);
     expect(INSIGHTS_LEAD_EVAL_SET.target).toBe(INSIGHTS_LEAD_EVAL_TARGET);
-    expect(setsOfTarget(INSIGHTS_LEAD_EVAL_TARGET)).toEqual([
-      INSIGHTS_LEAD_EVAL_SET,
+    const onTarget = [...INSIGHTS_LEAD_DATA_EVAL_SETS, INSIGHTS_LEAD_EVAL_SET];
+    expect(setsOfTarget(INSIGHTS_LEAD_EVAL_TARGET)).toEqual(onTarget);
+    const target = evalTargetFor('insights-lead', [
+      INSIGHTS_LEAD_EVAL_SET.cases[0].id,
     ]);
-    const target = evalTargetFor('insights-lead');
     expect(target.agentKey).toBe('insights-lead');
-    expect(target.sets).toEqual([INSIGHTS_LEAD_EVAL_SET]);
+    expect(target.sets).toEqual(onTarget);
     expect(target.sendsKnowledge).toBe(false);
   });
 

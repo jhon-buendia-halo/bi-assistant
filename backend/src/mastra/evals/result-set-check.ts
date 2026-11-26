@@ -1,7 +1,7 @@
 // Result-set comparison scoring for eval cases that carry `expectedSql`.
 //
-// Deliberately isolated from `assistant.agent.ts`/`@mastra/core/agent`: this
-// module is imported by `assistant.evals.ts` (which does pull those in), but
+// Deliberately isolated from `@mastra/core`: this module is imported by
+// `assistant.evals.ts` (which pulls in the evals runner and the judge), but
 // nothing here does, so a spec file can exercise this logic directly without
 // the ESM-only transitive deps that break under CommonJS Jest (same reason
 // `agent-constants.ts` and `context-blocks.ts` stay dependency-free). The one
