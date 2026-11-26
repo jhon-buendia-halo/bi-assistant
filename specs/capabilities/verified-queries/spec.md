@@ -1,6 +1,6 @@
 # Verified queries
 
-When a user approves an answer with a thumbs-up, the system keeps that answer's question and the SQL that produced it as a **verified query**. Verified queries are the user-approved memory of "this question was answered correctly this way". They are shown back to the assistant (and to the independent SQL verifier) when a similar question comes up, they badge any later answer that reproduces the same SQL as "Verified", and they are the source from which a metric definition can be promoted. There is no screen for browsing them: the library is built and pruned only through the rating buttons on answers.
+When a user approves an answer with a thumbs-up, the system keeps that answer's question and the SQL that produced it as a **verified query**. Verified queries are the user-approved memory of "this question was answered correctly this way". They are shown back to the answering agent (Michael and Elena) when a similar question comes up, they badge any later answer that reproduces the same SQL as "Verified", and they are the source from which a metric definition can be promoted. There is no screen for browsing them: the library is built and pruned only through the rating buttons on answers.
 
 ## Concepts
 
@@ -21,7 +21,7 @@ Retrieval
 - R8. For every chat turn and SQL-verifier pass the system SHALL look up stored pairs similar to the user's question. Similarity SHALL be lexical: lowercase the text, split on non-alphanumeric characters, drop one-character tokens and common stopwords, and score the overlap of the two token sets (shared tokens divided by distinct tokens in either). Pairs with a zero score SHALL be ignored.
 - R9. The system SHALL return the top three pairs by score and render them as one block "Verified reference queries (user-approved earlier — reuse their tables, joins and filters when the question is similar)", each as `Q: <question>` and `SQL: <sql>`. The block SHALL be limited to 3,000 characters, stopping at the first pair that does not fit. When nothing matches, no block SHALL be added.
 - R10. The block SHALL be sent as a system message after the metric definitions and the knowledge block. Retrieval is across all sessions and datasources; it SHALL NOT be restricted to the current session's datasets.
-- R11. A failure to read the library while preparing the SQL verifier SHALL be treated as "no references", not as an error.
+- R11. A failure to read the library while preparing an agent's reference block SHALL be treated as "no references", not as an error.
 
 Verified badge
 - R12. After each assistant answer that ran SQL, the system SHALL compare the answer's final successful statement with the library. Two statements match when they are equal after lowercasing, collapsing whitespace to single spaces and dropping trailing semicolons; a paraphrase is not a match.
@@ -53,7 +53,7 @@ Ownership
 
 - Rating endpoint on a session's messages (feedback) and on a run's answer (api.md 128): see [../../system/api.md](../../system/api.md). There is no list/delete endpoint for verified queries; they are internal to the backend. The metrics candidates endpoint exposes them indirectly.
 - Collection `verified_queries` and the answer's `verified` / `feedback` fields: see [../../system/data-model.md](../../system/data-model.md).
-- Agents using the reference block: the assistant (chat turns) and the SQL verifier: see [../../system/agents.md](../../system/agents.md).
+- Agents using the reference block: Michael and Elena (the SQL verifier was removed on 2026-11-26): see [../../system/agents.md](../../system/agents.md).
 - Related capabilities: [../agent-answers/spec.md](../agent-answers/spec.md) (rating UI and verification), [../metrics/spec.md](../metrics/spec.md), [../dataset-ontology/spec.md](../dataset-ontology/spec.md).
 
 ## UI

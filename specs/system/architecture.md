@@ -337,7 +337,7 @@ flowchart LR
   assistant -.->|"model: async resolveAgentModel()"| resolver
 ```
 
-*Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init. Every streamed chat turn is one run of a registered turn workflow ([agents.md](agents.md) 5.1): `agent-turn` (one `answer` step) for every other session; the turn workflow of Answer a Business Question (`qti-v2-turn`, then `answer-business-question`) was removed on 2026-11-23, and Avery + Michael's own workflow `orchestrated-answer-michael` (agents.md 5.23) runs the turns of the run host. `SessionsService` starts the run through `MastraService.streamWorkflow` and hands it the turn's agent call on the run's `RequestContext`; the agent step calls back into it, so the agent, its context and its tools are chosen by the session code, never per registered workflow (ADR-0040).*
+*Since 2026-11-26 (ADR-0059) the `assistant`, `visualization` and `sql-verifier` nodes below are historical: user agents run on Elena (`insights-lead`).* *Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init. Every streamed chat turn is one run of a registered turn workflow ([agents.md](agents.md) 5.1): `agent-turn` (one `answer` step) for every other session; the turn workflow of Answer a Business Question (`qti-v2-turn`, then `answer-business-question`) was removed on 2026-11-23, and Avery + Michael's own workflow `orchestrated-answer-michael` (agents.md 5.23) runs the turns of the run host. `SessionsService` starts the run through `MastraService.streamWorkflow` and hands it the turn's agent call on the run's `RequestContext`; the agent step calls back into it, so the agent, its context and its tools are chosen by the session code, never per registered workflow (ADR-0040).*
 
 **Frontend**
 
@@ -415,7 +415,7 @@ flowchart LR
 - **Consequences:** The rest of the backend stays Mastra-agnostic; provider quirks are handled in `model-compat.ts`.
 
 #### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
-- **Status:** Accepted; amended by ADR-0041 (visuals are created by runs)
+- **Status:** Accepted; amended by ADR-0041 (visuals are created by runs); amended by ADR-0059 (2026-11-26: nothing creates or tailors a visual any more; stored visuals are viewed, reverted and refreshed)
 - **Date:** 2026-10-01
 - **Context:** Users tailor visuals iteratively from the chat.
 - **Decision:** `create_visual` / `update_visual` tools drive a designer sub-agent; each edit writes a new `v<N>` directory; revert moves a pointer; a fixed, transcript-derived frame provides readable context.
@@ -440,7 +440,7 @@ flowchart LR
   - The theme is per renderer origin, so the desktop app and the npm CLI's browser tab can hold different preferences.
 
 #### ADR-0008 — User-built agents are stored configurations of the assistant
-- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026; narrowed by ADR-0028 (sessions may bind to a built-in agent); amended by ADR-0040 (a user agent's sessions run its one-step workflow, removed by ADR-0042); amended by ADR-0041 (user agents run as one-step run workflows; the preview becomes a draft run)
+- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026; narrowed by ADR-0028 (sessions may bind to a built-in agent); amended by ADR-0040 (a user agent's sessions run its one-step workflow, removed by ADR-0042); amended by ADR-0041 (user agents run as one-step run workflows; the preview becomes a draft run); amended by ADR-0059 (2026-11-26): a user agent no longer runs on the `assistant` (removed) but on Elena's conversation engine; the stored configuration, the Live/draft split and the Try it draft are unchanged
 - **Date:** 2026-10-09
 - **Context:**
   - The Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) lets users build their own agents: a name, a description, instructions, datasets, starter questions and an optional model override. Each one is drafted, published and chatted with.
@@ -568,7 +568,7 @@ flowchart LR
   - Bringing user or project skills back later needs a new ADR.
 
 #### ADR-0022 — User agents choose their tools from the assistant's set and get skills written in the app, stored per user and copied into the Live version
-- **Status:** Accepted; how tools and skills are chosen (checkboxes) is superseded by ADR-0024 (links); ownership and the Platform-admin restriction removed by ADR-0030
+- **Status:** Accepted; how tools and skills are chosen (checkboxes) is superseded by ADR-0024 (links); ownership and the Platform-admin restriction removed by ADR-0030; amended by ADR-0059 (2026-11-26): the tool selection is chosen from Elena's optional tools (`sample_rows`, `ask_clarification`); `visuals` is retired and ignored
 - **Date:** 2026-10-14
 - **Context:**
   - ADR-0008 made a user agent a stored configuration of the `assistant`. It "can't add tools or relax the guard", and in practice it gets all of the assistant's tools and skills. Its only lever is a block of instructions.
@@ -629,7 +629,7 @@ flowchart LR
   - A new frontend dependency (Tiptap and ProseMirror, about 350 kB, lazy).
 
 #### ADR-0025 — On-demand skills reach the assistant through Mastra's agent skills, as in the agent-poc reference
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0059 (2026-11-26): the agent whose on-demand skills the framework carries is Elena; a user agent's in-app skills are appended after hers
 - **Date:** 2026-10-14
 - **Context:**
   - ADR-0020 replaced Mastra's skill catalog and tools with the app's own `## Skills` section, `read_file` and `run_skill_script`, so the app owned the wording.
@@ -682,7 +682,7 @@ flowchart LR
 - **Amendment, 2026-11-09 (BA-320):** a bound built-in agent may also take **user-picked datasets**. Questions to Insights v2 (`assistant-v2`, [agents.md](agents.md) 2.11) is bound like `rfp` and `data-readiness` (`agentKey`, every turn runs it, the assistant-only passes do not apply), but it declares no dataset of its own: Start chat opens the New conversation screen with it preselected, and `POST /sessions` with `agentId: "assistant-v2"` takes `name` and `datasets` from the body like a plain session ([api.md](api.md) 3). The decision above is otherwise unchanged. The rule "the assistant keeps the composer" now reads "an agent that declares no dataset keeps the composer". The session code's per-agent branches grow by one.
 
 #### ADR-0029 — One built-in panel tool for every agent; panel items persisted on the session; a `## Workflow` prompt convention; a workflow status bar with its own tool
-- **Status:** Accepted; amended by ADR-0040 (a one-step workflow never writes the bar); amended by ADR-0041 (the bar and the panel belong to a run)
+- **Status:** Accepted; amended by ADR-0040 (a one-step workflow never writes the bar); amended by ADR-0041 (the bar and the panel belong to a run); amended by ADR-0059 (2026-11-26): `show_in_panel` and `update_workflow` leave with the `assistant`, so no agent has them; stored panel items and workflow states stay readable, and a `## Workflow` section of a user agent's instructions is plain text
 - **Date:** 2026-10-14
 - **Context:**
   - Only `create_visual` and `update_visual` reach the right panel (the `visual-updated` event). The RFP Builder writes the RFP document into the session workspace, but the consultant has to download it to read it; no agent can put a document, a file, a table or its progress beside the chat.
@@ -987,7 +987,7 @@ flowchart LR
   - Consequences: the privacy rules of the capability gain the raw-export rule; the new endpoints are 112 (with `format`), 113 and 114 ([api.md](api.md) 2.18); the stack gains the two packages ([tech-stack.md](tech-stack.md)).
 
 #### ADR-0040 — Workflow-first: a session runs a workflow defined in code; agents are the steps' building blocks; an agent without a workflow gets a one-step workflow, never registered per agent
-- **Status:** Accepted (2026-11-11, with the widened M1-23 epic spec); partly superseded by ADR-0041 (sessions no longer bind to workflows; workflows run on an input) and by ADR-0042 (2026-11-12: agents are no longer workflows; the one-step workflow is gone and the catalogue is `qti-v2-turn` only). Plan: [docs/plans/m1-23-workflow-first.md](../../docs/plans/m1-23-workflow-first.md)
+- **Status:** Accepted (2026-11-11, with the widened M1-23 epic spec); partly superseded by ADR-0041 (sessions no longer bind to workflows; workflows run on an input) and by ADR-0042 (2026-11-12: agents are no longer workflows; the one-step workflow is gone and the catalogue is `qti-v2-turn` only). Plan: [docs/plans/m1-23-workflow-first.md](../../docs/plans/m1-23-workflow-first.md); amended by ADR-0059 (2026-11-26): the `agent-turn` workflow is the turn of node chats only; Try it runs on Elena's engine
 - **Date:** 2026-11-11
 - **Context:**
   - A session is bound to an agent. A user agent is bound by `agentId` and runs the `assistant` with its configuration (ADR-0008). A built-in agent is bound by `agentKey` and runs that agent (ADR-0028).
@@ -1041,7 +1041,7 @@ flowchart LR
   - **Stack-neutral:** a rebuild needs the same engine to run a workflow once, synchronously, on an input validated against fields declared in code, and to report each step's status, output and error.
 
 #### ADR-0041 — Chats retired: every workflow runs once on a typed input; runs are stored; existing sessions become read-only past chats
-- **Status:** Accepted (2026-11-11, with the M1-23 amendment that keeps every phase in this epic). Plan: [docs/plans/m1-23-retire-chats.md](../../docs/plans/m1-23-retire-chats.md)
+- **Status:** Accepted (2026-11-11, with the M1-23 amendment that keeps every phase in this epic). Plan: [docs/plans/m1-23-retire-chats.md](../../docs/plans/m1-23-retire-chats.md); amended by ADR-0059 (2026-11-26): a user agent's draft run (Try it) is a run of Elena's engine that can suspend and resume and is still never stored (its stored `workflow_runs` rule is unchanged); the `careful` flag and the visual endpoints 130, 131 and 134 are gone
 - **Date:** 2026-11-11
 - **Context:**
   - ADR-0040 bound every session to a workflow and started chats from workflows. Its amendment (1.23.9) added run workflows: a workflow with typed input fields defined in code runs once and shows each step's result.
@@ -1080,7 +1080,7 @@ flowchart LR
   - **Stack-neutral:** a rebuild needs typed inputs per workflow, a streamed run that reports step starts and ends and the agent's events, a stored run with its files, and a read-only view of the conversations stored before.
 
 #### ADR-0042 — Workflows and agents are separate; only Questions to Insights v2 is a workflow
-- **Status:** Accepted (2026-11-12). Partly supersedes ADR-0040 (the one-step workflow of every agent) and amends ADR-0041. Amended 2026-11-13: the catalogue gains a second code workflow, **Assess Data Readiness** (`data-readiness-assessment`, agents.md 5.13), with real steps (four code steps run the deterministic engine, one step runs the Data Readiness Agent); agents stay a library and no one-step workflow comes back. The Data Readiness Agent's sessions and evals keep its agent turn. Amended 2026-11-26: **Assess Data Readiness** and its agent Sarah were removed (workflows R50); the Data Readiness Agent's past chats read as plain Assistant sessions, and its evals went with her.
+- **Status:** Accepted (2026-11-12). Partly supersedes ADR-0040 (the one-step workflow of every agent) and amends ADR-0041. Amended 2026-11-13: the catalogue gains a second code workflow, **Assess Data Readiness** (`data-readiness-assessment`, agents.md 5.13), with real steps (four code steps run the deterministic engine, one step runs the Data Readiness Agent); agents stay a library and no one-step workflow comes back. The Data Readiness Agent's sessions and evals keep its agent turn. Amended 2026-11-26: **Assess Data Readiness** and its agent Sarah were removed (workflows R50); the Data Readiness Agent's past chats read as plain Assistant sessions, and its evals went with her.; amended by ADR-0059 (2026-11-26): the internal `agent-turn` workflow serves node chats only; a user agent's Try it and the eval runner use `insights-lead-conversation`; the turn engine answers `Agent "<key>" not found` for an unregistered key instead of falling back to the assistant
 - **Date:** 2026-11-12
 - **Context:**
   - ADR-0040 gave every agent without a workflow of its own an automatic one-step workflow (`agent:<key or id>`), so the Workflows area listed the assistant, the Data Readiness Agent and every Live user agent next to Questions to Insights v2. The agent page also ran that workflow (**Run**).
@@ -1102,7 +1102,7 @@ flowchart LR
   - **Stack-neutral:** a rebuild needs one stored, streamed run workflow, an agent library with a draft preview, and read-only legacy runs.
 
 #### ADR-0043 — Human in the loop: a run that needs the user is suspended with Mastra's suspend/resume and continued in place; its runtime stays in memory, with a snapshot only while it waits
-- **Status:** Accepted (2026-11-13); amended by ADR-0048 (a running run's runtime is held in memory too, detached from its connection).
+- **Status:** Accepted (2026-11-13); amended by ADR-0048 (a running run's runtime is held in memory too, detached from its connection).; amended by ADR-0059 (2026-11-26): a Try it draft run suspends and resumes too, held in server memory for 30 minutes, at most 20, and never stored (api.md 129, 169)
 - **Date:** 2026-11-13
 - **Context:**
   - Questions to Insights v2 asks the user in two places: Clarify (Plan decided the question is ambiguous) and Analyse (the agent called `ask_clarification` because the data was). Until now both **ended** the run with the question, and the user's pick started a **new** run with the old one as context: two runs, the steps run twice, and the run page lost the thread.
@@ -1465,7 +1465,7 @@ flowchart LR
   - **Mastra `restart()`:** rejected for now; it needs workflow snapshots the app disables, and the agent turns' state is not in them (ADR-0043 approach C, deferred).
 
 #### ADR-0058 — A conversation with a built-in agent outside any workflow
-- **Status:** Accepted. Amends ADR-0041 and ADR-0042 (for built-in conversational agents) and agents-evals R53/R90.
+- **Status:** Accepted. Amends ADR-0041 and ADR-0042 (for built-in conversational agents) and agents-evals R53/R90.; amended by ADR-0059 (2026-11-26): Elena's engine also hosts every user agent's Try it, on a preview-shaped run host; her page still has no Try it of its own
 - **Date:** 2026-11-25
 - **Context:**
   - The conversation of workflows R45/R46 is Avery's, in the workflow Answer a Business Question (Avery + Michael): a supervisor and a team. The product wants to compare it with **one** agent that covers the same scope alone (answers with the query inspector, the conversation's dashboard, the export, one clarifying question that waits, a conversation that never ends unless archived), and to let the user talk to her directly, **not tied to any workflow**.
@@ -1485,6 +1485,32 @@ flowchart LR
   - **A (chosen): a run of `agent:<key>` on the run host,** which reuses the stored conversation, the run chat and the run routes.
   - **B: revive chat sessions:** rejected; ADR-0041 retired them and a second conversation store would duplicate the run's.
   - **C: a catalogue workflow for Elena:** rejected; she is not tied to a workflow, and listing her would put a one-agent "workflow" beside Avery's.
+
+#### ADR-0059 — User agents run on Elena's conversation engine; Emily, Ryan and Rachel are removed
+- **Status:** Accepted. Amends ADR-0008, ADR-0022, ADR-0025, ADR-0029, ADR-0040, ADR-0041, ADR-0042, ADR-0043 and ADR-0058.
+- **Date:** 2026-11-26 (option B chosen by the user the same day). Plan: [docs/plans/elena-hosts-user-agents.md](../../docs/plans/elena-hosts-user-agents.md)
+- **Context:**
+  - ADR-0008 made every user agent a stored configuration of the `assistant` (Emily): her prompt, tools and turn, with the agent's instructions as context Block 5. Since then Elena (`insights-lead`, ADR-0058) covers the same scope with checks, one repair round, the query inspector, a conversation and a wait-and-resume path, so two agents answered from data.
+  - Around Emily the app also kept a visual designer (Ryan, `visualization`), careful mode with an independent cross-check (Rachel, `sql-verifier`), the visual and panel tools and the workflow bar tool. The user decided to remove Emily, Ryan and Rachel, and with Kevin, Olivia and Jessica gone (#165) to keep one answering agent next to Avery's team.
+  - Try it (agents-evals R60) is a draft that is never stored; a user agent that asks the user a question has to be able to wait for the answer inside the preview.
+- **Options:**
+  - **A: Elena on `agent-turn`.** Give her prompt to the single-step turn that Try it used. Smallest diff, but no engine for a wait: a question would end the preview, and her repair round and checks would have to be rebuilt in a second place.
+  - **B: Elena's conversation engine, with draft runs that suspend (chosen).** A draft runs as a run of `agent:<user agent id>` on `insights-lead-conversation`, on a preview-shaped run host, and can suspend and resume (api.md 129, 169) without ever being stored.
+  - **C: a user agent as a stored Elena conversation.** Store the draft run like a conversation. Rejected: Try it is a preview, not a record, and a stored draft would need its own clean-up when the agent is deleted or edited.
+- **Decision:**
+  - **User agents run on Elena** (agents.md 2.23, *User agents on Elena*). Her prompt and checks stay hers; the agent supplies context Block 5 (last in her `context`), its datasets, its optional tool selection (`sample_rows`, `ask_clarification`), its model and effort overrides (model policy `override-or-step-model`), and its in-app skills after hers. The dashboard and export gates stay closed in Try it.
+  - **Drafts suspend and resume.** `WorkflowRunsService` keeps a waiting draft in server memory for 30 minutes, at most 20 (the oldest expires first), and `POST /agents/:id/draft-runs/:runId/resume/stream` (api.md 169) continues it. The engine's framework snapshot is dropped on resume, expiry or restart.
+  - **Removed:** Emily (`assistant`) with her prompt, Ryan (`visualization`) with the designer pipeline and the `interactive-visuals` skill, Rachel (`sql-verifier`) with careful mode, the `create_visual`, `update_visual`, `show_in_panel` and `update_workflow` tools, the eval host, the `careful` flag and the endpoints 130, 131 and 134. `GET /agents/assistant`, `/agents/visualization` and `/agents/sql-verifier` answer `404`. **Kept:** the viewer of a stored visual, its revert, refresh and download, and the visual spec and chart runtime.
+  - **Retired ids are read, never run.** `agent:assistant` stays a stored workflow id whose chip still reads `Assistant`; a stored `crossCheck`, `visual`, panel items and workflow states still open. A stored `visuals` in a tool selection and an override saved for a removed agent are ignored.
+  - **Evals follow.** The `assistant` sets (`world-cup`, `world-cup-excel`, `world-cup-rest`, `formula-1`) are ported to Elena's target; the `evals` script replaces `evals:assistant` (agents-evals R75, R113).
+- **Consequences:**
+  - **Cost.** Try it moves from the saved model to Elena's routing (Opus 5.5 at effort `high` on a Claude provider), unless the user agent sets a model. Her repair round adds up to one more attempt.
+  - **Gates.** The dashboard and export gates are closed in Try it, so a user agent never builds a dashboard or an export.
+  - **Memory.** While a draft waits, the framework keeps a snapshot of its run; it is deleted on resume, expiry or restart (`discardSuspendedWorkflowRuns`). A waiting draft is lost on restart by design.
+  - **No fallback agent.** The turn engine answers `404 Agent "<key>" not found` for an unregistered key; no stored session runs a turn (ADR-0041).
+  - **Proof.** The agent inventory hashes per scenario: Elena's plain hash and every untagged scenario stay identical, only the user-agent scenarios differ, and every other agent is identical.
+  - **Stack-neutral:** a rebuild needs one answering agent whose engine can suspend, a preview host that is never stored, a held-run table with a time limit and a cap, and a way to read, but not run, the ids of removed agents.
+- **Alternatives considered:** A and C above.
 
 ## Level 4 — Code
 
@@ -1538,7 +1564,9 @@ flowchart TB
   iframe -.->|"postMessage visual-error (panel shows banner)"| panel
 ```
 
-*Visual tailoring loop: a chat turn's `create_visual`/`update_visual` tool call runs the designer agent through `VisualizationService`, writes a new `visuals/<id>/v<N>/` version in the session workspace, and the `visual-updated` SSE event makes the panel reload it into a sandboxed iframe that reports runtime errors back via `postMessage`.*
+*Historical since 2026-11-26 (ADR-0059): the designer, `create_visual`/`update_visual` and the `visual-updated` event are gone; a stored visual is still loaded, reverted and refreshed through `VisualizationService` and drawn in the sandboxed iframe, as the lower half of the diagram shows.*
+
+*Visual tailoring loop (as it was): a chat turn's `create_visual`/`update_visual` tool call runs the designer agent through `VisualizationService`, writes a new `visuals/<id>/v<N>/` version in the session workspace, and the `visual-updated` SSE event makes the panel reload it into a sandboxed iframe that reports runtime errors back via `postMessage`.*
 
 
 <!-- Code-level decisions (patterns, conventions with architectural weight) go here. -->
