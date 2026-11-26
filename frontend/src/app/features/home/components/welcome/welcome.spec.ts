@@ -69,6 +69,7 @@ describe('Welcome, the home page (app-shell R51; ui.md 4.1)', () => {
       datasets?: string[];
       configured?: boolean;
       runs?: WorkflowRunSummary[];
+      catalogue?: typeof CATALOGUE;
     } = {},
   ): Welcome {
     fixture = TestBed.createComponent(Welcome);
@@ -78,7 +79,7 @@ describe('Welcome, the home page (app-shell R51; ui.md 4.1)', () => {
       .flush({ runs: opts.runs ?? [] });
     http
       .expectOne((r) => r.url.endsWith('/workflows'))
-      .flush({ workflows: CATALOGUE });
+      .flush({ workflows: opts.catalogue ?? CATALOGUE });
     http
       .expectOne((r) => r.url.endsWith('/datasets'))
       .flush({
@@ -210,6 +211,21 @@ describe('Welcome, the home page (app-shell R51; ui.md 4.1)', () => {
     spyOn(nav, 'openWorkflow');
     byTestId<HTMLButtonElement>('welcome-workflow-crawl-site')!.click();
     expect(nav.openWorkflow).toHaveBeenCalledOnceWith('crawl-site');
+    expect(
+      el.querySelector('#welcome-workflows-title')!.textContent!.trim(),
+    ).toBe('Other workflows');
+  });
+
+  it('titles the section "Workflows" and keeps only All workflows when Avery + Michael is the only workflow', () => {
+    mount({ catalogue: [CATALOGUE[0]] });
+    expect(
+      el.querySelector('#welcome-workflows-title')!.textContent!.trim(),
+    ).toBe('Workflows');
+    const section = byTestId('welcome-workflows')!;
+    expect(
+      section.querySelectorAll('[data-testid^="welcome-workflow-"]').length,
+    ).toBe(0);
+    expect(byTestId('welcome-all-workflows')).not.toBeNull();
   });
 
   it('says so when there are no runs yet, and still links Runs, Workflows and Agents', () => {

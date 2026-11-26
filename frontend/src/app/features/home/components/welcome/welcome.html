@@ -234,7 +234,7 @@
           id="welcome-workflows-title"
           class="mb-2 text-[12px] font-semibold tracking-wide text-fg-muted uppercase"
         >
-          Other workflows
+          {{ otherWorkflows().length > 0 ? 'Other workflows' : 'Workflows' }}
         </h3>
         @if (workflows() === null) {
           <p class="m-0 text-[13px] text-fg-muted">Loading workflows…</p>
