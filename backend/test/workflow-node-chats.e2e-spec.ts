@@ -245,13 +245,7 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
     expect(
       types.filter(
         (type) =>
-          ![
-            'reasoning',
-            'text',
-            'tool',
-            'tool-result',
-            'done',
-          ].includes(type),
+          !['reasoning', 'text', 'tool', 'tool-result', 'done'].includes(type),
       ),
     ).toEqual([]);
     const done = frames.at(-1)!.message!;

@@ -257,13 +257,13 @@ test('a chat of a removed built-in agent reads as an Assistant chat', async ({
   appDataDir,
   page,
 }) => {
-  // Bound to the Data Readiness Agent, removed on 2026-11-26 (past-chats R57).
+  // Bound to the Data Readiness Agent, removed on 2026-11-26, and saved
+  // before workflows: no `workflowId`, so it is derived (past-chats R57, R65).
   const id = seedPastChat(appDataDir, {
     name: 'Saved readiness chat',
     datasets: [WORLD_CUP_DATASET],
     agentKey: 'data-readiness',
     agentName: 'Data Readiness Agent',
-    workflowId: 'agent:data-readiness',
   });
   await page.reload();
 

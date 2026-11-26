@@ -16,7 +16,6 @@ import {
   INSIGHTS_ANALYST_NAME,
   INSIGHTS_ANALYST_TOOL_NAMES,
 } from '../agents/insights-analyst-catalog';
-import {} from '../agent-constants';
 import { builtinAgentPersona } from '../agent-personas';
 import { CHIEF_OF_STAFF_AGENT_KEY } from '../agent-constants';
 import {

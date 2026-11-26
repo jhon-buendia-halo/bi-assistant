@@ -246,10 +246,7 @@ export interface VisualPanelItem extends PanelItemBase {
 }
 
 export type PanelItem =
-  | FilePanelItem
-  | DocumentPanelItem
-  | TablePanelItem
-  | VisualPanelItem;
+  FilePanelItem | DocumentPanelItem | TablePanelItem | VisualPanelItem;
 
 /** Where the agent is in its `## Workflow` section (1-based phase numbers). */
 export interface WorkflowState {

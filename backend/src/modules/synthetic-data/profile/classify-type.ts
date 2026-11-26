@@ -1,9 +1,5 @@
 import type { SemanticType } from '../types';
 
-/** Semantic types whose values have an order, so MIN/MAX is meaningful. */
-export const COMPARABLE_TYPES: ReadonlySet<SemanticType> =
-  new Set<SemanticType>(['numeric', 'temporal', 'text']);
-
 /** Map a Postgres `format_type` string to a semantic type (spec R8). */
 export function classifyType(type: string): SemanticType {
   const t = type.toLowerCase().trim();

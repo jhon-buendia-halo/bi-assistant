@@ -477,10 +477,8 @@ export class SessionsService implements OnModuleInit {
       const agent = WRAPPED_AGENT_KEYS.includes(key)
         ? this.mastra.listAgents()[key]
         : undefined;
+      // The assistant's own turn: a plain host, bound to no agent.
       if (!agent) throw new NotFoundException(`Agent "${key}" not found`);
-      if (key !== ASSISTANT_AGENT_KEY) {
-        binding = { agentKey: key, agentName: agent.name ?? key };
-      }
     } else {
       const parsed = spec.workflowId
         ? parseWorkflowId(spec.workflowId)

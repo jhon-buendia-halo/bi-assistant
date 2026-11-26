@@ -126,8 +126,7 @@ export class AgentPromptsService implements OnModuleInit {
       modified: !!override,
       builtInChanged:
         !!override && override.baseHash !== agentPromptHash(shipped),
-      linksAllowed:
-        key === ASSISTANT_KEY || key === INSIGHTS_ANALYST_AGENT_KEY,
+      linksAllowed: key === ASSISTANT_KEY || key === INSIGHTS_ANALYST_AGENT_KEY,
       updatedAt: override?.updatedAt ?? null,
     };
   }
