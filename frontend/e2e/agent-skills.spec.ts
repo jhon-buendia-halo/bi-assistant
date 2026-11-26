@@ -42,17 +42,26 @@ function skill(page: Page, name: string): Locator {
   return page.getByTestId(`agent-skill-${name}`);
 }
 
-test('the visual designer is gone from the personas, and Elena lists her skills', async ({
+test('Shows a built-in skill and the content of its files', async ({
   app: { page },
 }) => {
-  await page
-    .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agent personas' })
-    .click();
-  await expect(page.getByTestId('agent-insights-lead')).toBeVisible();
-  for (const removed of ['visualization', 'assistant', 'sql-verifier']) {
-    await expect(page.getByTestId(`agent-${removed}`)).toHaveCount(0);
+  await openAgent(page, 'insights-lead');
+  const tab = await openSkillsTab(page);
+
+  await expect(tab).toHaveText('Skills (6)');
+  const playbooks = skill(page, 'answer-playbooks');
+  await expect(playbooks).toContainText('On demand');
+  await expect(page.getByText('Where skills come from')).toHaveCount(0);
+
+  await playbooks.getByRole('button', { name: /answer-playbooks/ }).click();
+  for (const file of ['SKILL.md', 'reference/ranking.md']) {
+    await expect(page.getByTestId(`skill-file-${file}`)).toBeVisible();
   }
+  const content = playbooks.locator('pre');
+  await expect(content).toContainText('name: answer-playbooks');
+
+  await page.getByTestId('skill-file-reference/ranking.md').click();
+  await expect(content).not.toContainText('name: answer-playbooks');
 });
 
 test('an agent without skills says so', async ({ app: { page } }) => {

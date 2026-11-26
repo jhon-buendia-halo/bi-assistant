@@ -157,7 +157,7 @@ test("Elena's prompt is built-in and opens in a text area, with no link menu", a
   await expect(page.getByText('+ Link skill')).toHaveCount(0);
 });
 
-test("I edit Insights Analyst's prompt, its runs read it, and Reset restores it", async ({
+test("I edit Michael's prompt, and Reset restores it", async ({
   page,
 }) => {
   // Given the World Cup dataset and the stub model.
@@ -232,7 +232,7 @@ test("a System agent's prompt is edited in a text area, with no link menu", asyn
   expect((await promptView(page, 'sql-fixer')).modified).toBe(false);
 });
 
-test("a skill link in Insights Analyst's prompt is refused", async ({
+test("A skill link in Michael's prompt is refused", async ({
   page,
 }) => {
   await openAgent(page, V2_KEY, V2);
@@ -250,7 +250,7 @@ test("a skill link in Insights Analyst's prompt is refused", async ({
   expect((await promptView(page, V2_KEY)).modified).toBe(false);
 });
 
-test("Insights Analyst's shipped prompt shows its tools and skill as chips", async ({
+test("the shipped Michael prompt shows its tools and skill as chips", async ({
   page,
 }) => {
   await openAgent(page, V2_KEY, V2);
@@ -279,7 +279,7 @@ test("Insights Analyst's shipped prompt shows its tools and skill as chips", asy
   });
 });
 
-test("a built-in skill link in Insights Analyst's prompt is accepted", async ({
+test("A built-in skill link in Michael's prompt is accepted", async ({
   page,
 }) => {
   await openAgent(page, V2_KEY, V2);

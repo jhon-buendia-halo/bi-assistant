@@ -77,7 +77,7 @@ describe('InteractiveVisualPanel runtime errors', () => {
 
   afterEach(() => http.verify());
 
-  it('shows the banner and asks the server for nothing (the designer is gone)', () => {
+  it('A broken visual shows the error banner and is never repaired', () => {
     panel.onFrameMessage(errorMessage('x is not defined'));
     fixture.detectChanges();
 

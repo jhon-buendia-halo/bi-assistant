@@ -256,7 +256,7 @@ test('Try it stores nothing: the run leaves no workspace, and Reset clears the r
   expect(await storedRuns(page)).toEqual([]);
 });
 
-test('Try it waits when Elena asks, continues with my answer and stores nothing', async ({
+test("Try it waits for the agent's question and continues with my answer", async ({
   page,
   appDataDir,
 }) => {
