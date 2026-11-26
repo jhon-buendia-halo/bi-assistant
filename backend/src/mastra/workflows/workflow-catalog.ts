@@ -104,20 +104,13 @@ const DATASETS_FIELD: WorkflowInputField = {
   type: 'datasets',
   required: true,
 };
-const CAREFUL_FIELD: WorkflowInputField = {
-  name: 'careful',
-  label: 'Careful: cross-check the result with an independent query',
-  type: 'boolean',
-  required: false,
-  default: false,
-};
 
 /**
- * The input of a draft run (Try it, api.md R12): the question, and careful
- * mode; its datasets are the draft's.
+ * The input of a draft run (Try it, api.md R12): the question alone; its
+ * datasets are the draft's.
  */
 export function draftRunInput(): WorkflowInputField[] {
-  return [{ ...QUESTION_FIELD }, { ...CAREFUL_FIELD }];
+  return [{ ...QUESTION_FIELD }];
 }
 
 /** One workflow defined in code. */

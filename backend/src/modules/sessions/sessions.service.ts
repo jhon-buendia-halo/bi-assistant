@@ -83,6 +83,7 @@ import { SessionDatasets } from './turn/session-datasets';
 import { SqlChecks } from './turn/sql-checks';
 import { TurnEngine } from './turn/turn-engine';
 import { TurnOptions } from './turn/turn-options';
+import { INSIGHTS_LEAD_AGENT_KEY } from '../../mastra/agents/insights-lead-catalog';
 import type {
   RunStepEvent,
   StreamEvent,
@@ -582,9 +583,10 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * The run host of a draft run: a preview-shaped session (it runs the
-   * draft's instructions, model, tools and skills) that is also a run host,
-   * so the turn path and its clean-up are a run's. Never stored or listed.
+   * The run host of a draft run: a preview-shaped session over the draft
+   * that is also a run host, so the turn path and its clean-up are a run's.
+   * Elena runs it (ADR-0059): her prompt and checks, with the draft's
+   * instructions, model, tools and skills. Never stored or listed.
    */
   private async createDraftRunHost(spec: RunHostSpec): Promise<SessionDoc> {
     const agentId = spec.draftAgentId as string;
@@ -598,6 +600,7 @@ export class SessionsService implements OnModuleInit {
       name,
       workspaceId: workspace.id,
       datasets: target.datasets,
+      agentKey: INSIGHTS_LEAD_AGENT_KEY,
       agentId,
       agentName: target.name,
       workflowId: sessionWorkflowId({ agentId }),
@@ -801,7 +804,8 @@ export class SessionsService implements OnModuleInit {
    */
   async toView(stored: SessionDoc): Promise<SessionView> {
     const session = this.readable(stored);
-    if (session.agentKey) {
+    // A user agent first: a draft run's host is Elena's too (ADR-0059).
+    if (session.agentKey && !session.agentId) {
       return this.viewOf(session, this.builtinAgentRef(session));
     }
     if (!session.agentId) return this.viewOf(session);
@@ -818,7 +822,7 @@ export class SessionsService implements OnModuleInit {
       : new Map<string, AgentConfig | undefined>();
     return sessions.map((stored) => {
       const session = this.readable(stored);
-      if (session.agentKey) {
+      if (session.agentKey && !session.agentId) {
         return this.viewOf(session, this.builtinAgentRef(session));
       }
       if (!session.agentId) return this.viewOf(session);

@@ -11,13 +11,19 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { ASSISTANT_MAX_STEPS } from '../../mastra/agent-constants';
+import {
+  INSIGHTS_LEAD_MAX_STEPS,
+  INSIGHTS_LEAD_TOOL_NAMES,
+} from '../../mastra/agents/insights-lead-catalog';
+import {
+  INSIGHTS_LEAD_EDGES,
+  INSIGHTS_LEAD_STEPS,
+} from '../../mastra/workflows/conversation-turn.steps';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   agentRunTurn,
   agentWorkflowId,
   draftRunInput,
-  oneStepWorkflowSteps,
   workflowCategory,
   type AgentRunTurn,
   type WorkflowInputValues,
@@ -554,8 +560,9 @@ export class WorkflowRunsService
    * Check a draft run request before anything runs (api.md R12): 404 for an
    * unknown agent, 400 `Select at least one dataset to preview` when none of
    * the draft's datasets exists, and `Question is required` for a blank
-   * question. It runs the agent's draft on the agent-turn engine
-   * (`agent:<id>`, never a catalogue workflow), with the draft's name.
+   * question. It runs the agent's draft on Elena's conversation engine
+   * (ADR-0059): her one Answer step, the user agent as its agent, under
+   * `agent:<id>` (never a catalogue workflow), with the draft's name.
    */
   async prepareDraft(agentId: string, body: unknown): Promise<PreparedRun> {
     const target = await this.sessions.draftRunTarget(agentId);
@@ -569,12 +576,22 @@ export class WorkflowRunsService
         : undefined;
     const question = typeof raw === 'string' ? raw.trim() : '';
     if (!question) throw new BadRequestException('Question is required');
-    const steps = oneStepWorkflowSteps({
-      key: agentId,
-      name: target.name,
-      tools: [],
-      maxSteps: ASSISTANT_MAX_STEPS,
-    });
+    const steps = INSIGHTS_LEAD_STEPS.map((step) => ({
+      id: step.id,
+      title: step.title,
+      kind: step.kind,
+      summary: step.summary,
+      input: [...step.input],
+      output: [...step.output],
+      agent: {
+        key: agentId,
+        name: target.name,
+        role: target.role,
+        tools: [...INSIGHTS_LEAD_TOOL_NAMES],
+        maxSteps: INSIGHTS_LEAD_MAX_STEPS,
+      },
+      exits: step.exits.map((exit) => ({ ...exit })),
+    }));
     return {
       workflow: {
         id: agentWorkflowId(agentId),
@@ -585,14 +602,15 @@ export class WorkflowRunsService
         // A draft agent answers a question on data; it is never listed.
         category: workflowCategory('data-analytics'),
         agents: [{ key: agentId, name: target.name, role: target.role }],
-        stepCount: 1,
-        bar: 'agent',
+        stepCount: steps.length,
+        bar: 'steps',
         trigger: 'run',
         input: inputFieldsWithUsage({ input: draftRunInput(), steps }),
         datasets: target.datasets,
         missingDatasets: [],
         starterQuestions: [],
         steps,
+        edges: INSIGHTS_LEAD_EDGES.map((edge) => ({ ...edge })),
       },
       values: { question },
       turn: { question, careful: false },

@@ -2163,3 +2163,127 @@ describe("Elena's conversation on the run host (plan Elena 1.3, 2.4)", () => {
     ]);
   });
 });
+
+/** A user agent's saved draft, as Try it runs it (agents-evals R60). */
+const DRAFT_CONFIG = {
+  name: 'Sales helper',
+  role: 'Analyst',
+  description: 'Answers sales questions.',
+  instructions: 'Answer in euros.',
+  datasets: ['World Cup'],
+  starterQuestions: [],
+};
+
+/** `agent-1` answers with its draft (`patch` over `DRAFT_CONFIG`). */
+function withDraft(ctx: Ctx, patch: Record<string, unknown> = {}) {
+  ctx.userAgents.get.mockImplementation((id: string) =>
+    Promise.resolve(
+      id === 'agent-1'
+        ? { id, draft: { ...DRAFT_CONFIG, ...patch }, owner: 'demo' }
+        : null,
+    ),
+  );
+}
+
+/** One Try it run of `agent-1`'s draft (api.md 129). */
+async function draftRunOf(
+  ctx: Ctx,
+  question = 'Who won?',
+  signal?: AbortSignal,
+): Promise<{ events: RunStreamEvent[]; run: WorkflowRun }> {
+  const events: RunStreamEvent[] = [];
+  const prepared = await ctx.runs.prepareDraft('agent-1', {
+    input: { question },
+  });
+  const run = await ctx.runs.stream(prepared, (e) => events.push(e), signal);
+  return { events, run };
+}
+
+describe("Try it on Elena's conversation engine (api.md 129; ADR-0059)", () => {
+  it("runs the draft as Elena's one Answer step, with the draft's instructions in her context, and stores nothing", async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    withDraft(ctx);
+    const { events, run } = await draftRunOf(ctx);
+    expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
+      INSIGHTS_LEAD_ENGINE_ID,
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(events[0]).toEqual({
+      type: 'run',
+      runId: run.id,
+      workflowId: 'agent:agent-1',
+    });
+    expect(run.status).toBe('success');
+    expect(run.steps.map(stepLine)).toEqual(['answer:success']);
+    expect(run.answer?.content).toBe('Brazil won.');
+    expect(run).toMatchObject({
+      workflowId: 'agent:agent-1',
+      agentKey: 'insights-lead',
+      agentId: 'agent-1',
+      agentName: 'Sales helper',
+    });
+    // Elena alone, her budget, the draft's instructions as Block 5.
+    expect(ctx.calls['insights-lead']).toHaveLength(1);
+    expect(ctx.calls['assistant']).toHaveLength(0);
+    const call = ctx.calls['insights-lead'][0].options;
+    expect(call.maxSteps).toBe(24);
+    expect(call.memory).toBeUndefined();
+    const blocks = call.context.map((block) => block.content);
+    const own = blocks.findIndex((content) =>
+      content.includes('<agent-instructions>\nAnswer in euros.'),
+    );
+    expect(own).toBeGreaterThan(0);
+    expect(blocks[0]).toMatch(/^Datasets for this session: World Cup\./);
+    // Never stored, and its host and workspace go with it.
+    expect(await ctx.runsRepository.list()).toEqual([]);
+    expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledWith(
+      `run-${run.id}`,
+    );
+  });
+
+  it('keeps the dashboard and export gates closed: nothing is saved, even when asked for a dashboard', async () => {
+    const artifacts = dashboardArtifacts();
+    const ctx = build({
+      artifacts,
+      streams: { 'insights-lead': elenaAnswers() },
+    });
+    withDraft(ctx);
+    const { run } = await draftRunOf(ctx, 'Create a dashboard of goals');
+    expect(run.status).toBe('success');
+    const call = ctx.calls['insights-lead'][0].options;
+    expect(
+      call.requestContext.values.get(CONVERSATION_GATES_CONTEXT_KEY),
+    ).toEqual({ dashboard: false, export: false });
+    expect(call.requestContext.values.has(DASHBOARD_TOOLS_RUNTIME_KEY)).toBe(
+      false,
+    );
+    expect(artifacts.createDashboard).not.toHaveBeenCalled();
+    expect(run.answer?.dashboard).toBeUndefined();
+  });
+
+  it("routes the draft as Elena's runs: Opus 5.5 high on a Claude provider, an effort override keeping Opus, a model override replacing it", async () => {
+    const config = jest.mocked(resolveAgentModelConfig);
+    config.mockResolvedValue('anthropic/claude-sonnet-4-6');
+    const stepModelOf = async (patch: Record<string, unknown>) => {
+      const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+      withDraft(ctx, patch);
+      await draftRunOf(ctx);
+      const call = ctx.calls['insights-lead'][0].options;
+      return call.requestContext.values.get(STEP_MODEL_CONTEXT_KEY);
+    };
+    try {
+      expect(await stepModelOf({})).toEqual({
+        model: 'claude-opus-5-5',
+        reasoningEffort: 'high',
+      });
+      expect(await stepModelOf({ reasoningEffort: 'low' })).toEqual({
+        model: 'claude-opus-5-5',
+        reasoningEffort: 'low',
+      });
+      expect(await stepModelOf({ model: 'claude-own' })).toBeUndefined();
+    } finally {
+      config.mockResolvedValue('openai/gpt-4.1-mini');
+    }
+  });
+});

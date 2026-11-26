@@ -33,10 +33,7 @@ import {
 import { currentEvalRunId } from '../../../mastra/evals/eval-run-scope';
 import type { ExportAuthor } from '../../conversation-export/export-document';
 import { runSoloTurn, type SoloTurnState } from './solo-turn';
-import {
-  conversationalBindingOf,
-  type ConversationalBinding,
-} from '../../../mastra/conversational-agents';
+import type { ConversationalBinding } from '../../../mastra/conversational-agents';
 import {
   currentDashboardBlock,
   orchestratorState,
@@ -78,7 +75,11 @@ import type {
   DashboardVersionData,
 } from '../../artifacts/entities/artifact.entity';
 import type { NewDashboardVersion } from '../../artifacts/artifacts.service';
-import { resolveAgentModelConfig } from '../../../mastra/model-resolver';
+import {
+  AGENT_OVERRIDES_CONTEXT_KEY,
+  type AgentOverrides,
+  resolveAgentModelConfig,
+} from '../../../mastra/model-resolver';
 import {
   STEP_MODEL_CONTEXT_KEY,
   TEAM_STEP_MODEL,
@@ -230,14 +231,14 @@ interface AcceptedDashboard {
 
 /**
  * The conversational binding a turn runs on its engine (plan Elena 1.3):
- * Avery's or Elena's; undefined for any other turn, a node chat of the same
- * workflow included (it runs on `agent-turn`).
+ * Avery's or Elena's (a user agent's draft included, ADR-0059); undefined
+ * for any other turn, a node chat of the same workflow included (it runs
+ * on `agent-turn`).
  */
 function conversationOfTurn(
   workflow: TurnWorkflow,
 ): ConversationalBinding | undefined {
-  const binding = conversationalBindingOf(workflow.id);
-  return binding?.engineId === workflow.engineId ? binding : undefined;
+  return workflow.binding;
 }
 
 export class TurnEngine {
@@ -361,14 +362,26 @@ export class TurnEngine {
     // (plan Elena 2.5). Opus is for runs, never for evals: an eval runs
     // either on the saved model. Otherwise the saved model and effort, as
     // every agent.
+    // A user agent's model override (ADR-0059) replaces that routing; an
+    // effort-only override keeps Opus with the agent's effort.
     const conversation = conversationOfTurn(workflow);
     const orchestrated = conversation?.kind === 'team';
     const claude = servesClaude(await resolveAgentModelConfig());
     const opus = claude && currentEvalRunId() === undefined;
     const stepModel = orchestrated && claude ? TEAM_STEP_MODEL : undefined;
+    const agentOverrides: AgentOverrides | undefined =
+      options.requestContext.get(AGENT_OVERRIDES_CONTEXT_KEY);
     const soloModel =
-      conversation?.kind === 'solo' && session.run && opus
-        ? { ...ORCHESTRATOR_MODEL }
+      conversation?.kind === 'solo' &&
+      session.run &&
+      opus &&
+      !agentOverrides?.model
+        ? {
+            ...ORCHESTRATOR_MODEL,
+            ...(agentOverrides?.reasoningEffort
+              ? { reasoningEffort: agentOverrides.reasoningEffort }
+              : {}),
+          }
         : undefined;
     if (soloModel) {
       options.requestContext.set(STEP_MODEL_CONTEXT_KEY, soloModel);
@@ -906,7 +919,10 @@ export class TurnEngine {
               // the analysis consumer, one repair round, her dashboard.
               const currentDashboard = await this.currentDashboardOf(session);
               const exporting = await this.exportOf(session, trimmed, author);
-              const save = this.deps.saveDashboard;
+              // Try it saves no dashboard: its gate stays closed (ADR-0059).
+              const save = session.preview
+                ? undefined
+                : this.deps.saveDashboard;
               if (save && !soloSubmitter) {
                 soloSubmitter = this.dashboardSubmitter(
                   session,

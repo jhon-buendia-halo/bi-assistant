@@ -193,7 +193,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
   });
 
   describe('the input of a draft run (Try it, api.md R12)', () => {
-    it("takes a question and careful; its datasets are the draft's", () => {
+    it("takes the question alone; its datasets are the draft's", () => {
       expect(draftRunInput()).toEqual([
         {
           name: 'question',
@@ -201,13 +201,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
           type: 'textarea',
           required: true,
           placeholder: 'Ask a question about your data',
-        },
-        {
-          name: 'careful',
-          label: 'Careful: cross-check the result with an independent query',
-          type: 'boolean',
-          required: false,
-          default: false,
         },
       ]);
     });

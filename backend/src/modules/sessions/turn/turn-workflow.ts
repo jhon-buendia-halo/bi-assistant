@@ -13,6 +13,12 @@ import {
   AGENT_TURN_WORKFLOW_ID,
 } from '../../../mastra/workflows/agent-turn.steps';
 import {
+  conversationalBindingOf,
+  type ConversationalBinding,
+} from '../../../mastra/conversational-agents';
+import { INSIGHTS_LEAD_AGENT_KEY } from '../../../mastra/agents/insights-lead-catalog';
+import { INSIGHTS_LEAD_WORKFLOW_ID } from '../../../mastra/workflows/conversation-turn.steps';
+import {
   parseWorkflowId,
   sessionWorkflowId,
   type WorkflowBar,
@@ -28,24 +34,33 @@ export interface TurnWorkflow {
   /** What drives the bar: the run's step events, or the agent's own phases. */
   bar: WorkflowBar;
   stepIds: string[];
+  /**
+   * The conversation the turn runs on its binding's engine (plan Elena 1.3):
+   * Avery's or Elena's; a user agent's draft has Elena's under its own id
+   * (ADR-0059). Absent for any other turn.
+   */
+  binding?: ConversationalBinding;
 }
 
 /**
  * The workflow a session's turn runs: its code-defined workflow, a built-in
- * agent's conversation on its binding's engine (plan Elena 1.3), else its
- * one-step workflow on the `agent-turn` engine. A node chat's turn (a host
- * with a `contextBlock`, agents.md 5.16) is its step's agent alone, on the
- * `agent-turn` engine, never a run of the whole workflow.
+ * agent's conversation on its binding's engine (plan Elena 1.3), a user
+ * agent's turn on Elena's (ADR-0059), else its one-step workflow on the
+ * `agent-turn` engine. A node chat's turn (a host with a `contextBlock`,
+ * agents.md 5.16) is its step's agent alone, on the `agent-turn` engine,
+ * never a run of the whole workflow.
  */
 export function turnWorkflowOf(session: SessionDoc): TurnWorkflow {
   const id = sessionWorkflowId(session);
   const parsed = parseWorkflowId(id);
   if (parsed?.kind === 'code' && !session.contextBlock) {
+    const binding = conversationalBindingOf(id);
     return {
       id,
       engineId: parsed.source.id,
       bar: parsed.source.bar,
       stepIds: parsed.source.steps.map((step) => step.id),
+      ...(binding?.engineId === parsed.source.id ? { binding } : {}),
     };
   }
   if (parsed?.kind === 'conversation' && !session.contextBlock) {
@@ -54,6 +69,30 @@ export function turnWorkflowOf(session: SessionDoc): TurnWorkflow {
       engineId: parsed.binding.engineId,
       bar: 'steps',
       stepIds: [parsed.binding.stepId],
+      binding: parsed.binding,
+    };
+  }
+  // A user agent's host Elena runs (a draft's, ADR-0059): her conversation
+  // engine, as Elena with its definition, under its own id.
+  if (
+    parsed?.kind === 'user-agent' &&
+    session.agentKey === INSIGHTS_LEAD_AGENT_KEY &&
+    !session.contextBlock
+  ) {
+    const elena = conversationalBindingOf(INSIGHTS_LEAD_WORKFLOW_ID)!;
+    return {
+      id,
+      engineId: elena.engineId,
+      bar: 'steps',
+      stepIds: [elena.stepId],
+      binding: {
+        ...elena,
+        workflowId: id,
+        author: {
+          name: session.agentName ?? elena.author.name,
+          role: '',
+        },
+      },
     };
   }
   return {

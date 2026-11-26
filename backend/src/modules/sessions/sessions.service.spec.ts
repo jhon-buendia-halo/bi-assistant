@@ -2374,6 +2374,8 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
           Promise.resolve({ id: `session-${id}` }),
         ),
       deleteSessionResources: jest.fn().mockResolvedValue(undefined),
+      // Elena, who runs a draft's host (ADR-0059).
+      listAgents: () => ({ 'insights-lead': { name: 'Insights Lead' } }),
     };
     const userAgents = {
       get: jest.fn().mockResolvedValue(agent),
@@ -2443,10 +2445,13 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
         draftAgentId: 'agent-1',
       });
 
+      // Elena runs it, over the user agent's draft (ADR-0059).
       expect(host).toMatchObject({
         id: 'run-r1',
         datasets: ['World Cup Core'],
+        agentKey: 'insights-lead',
         agentId: 'agent-1',
+        workflowId: 'agent:agent-1',
         preview: true,
         run: true,
       });
