@@ -80,6 +80,22 @@ describe('defineBuiltinAgent (agents.md 1.1)', () => {
     ['step-model', { 'step-model': { model: 'opus' } }, 'model:opus'],
     ['user-override', { 'step-model': { model: 'opus' } }, 'model:saved'],
     ['user-override', { 'agent-overrides': { model: 'mine' } }, 'model:mine'],
+    ['override-or-step-model', {}, 'model:saved'],
+    [
+      'override-or-step-model',
+      { 'step-model': { model: 'opus' } },
+      'model:opus',
+    ],
+    [
+      'override-or-step-model',
+      { 'agent-overrides': { model: 'mine' }, 'step-model': { model: 'opus' } },
+      'model:mine',
+    ],
+    [
+      'override-or-step-model',
+      { 'agent-overrides': { reasoningEffort: 'low' } },
+      'model:saved',
+    ],
   ] as const)(
     'resolves the %s policy on the call (agents.md 1.3)',
     async (model, entries, expected) => {

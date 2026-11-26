@@ -261,12 +261,18 @@ export class TurnOptions {
     }
     // Elena (plan Elena 2.3): Michael's context, her own budget, and no
     // memory thread (the run host sends the conversation as a transcript).
+    // On a user agent's host she runs its definition (ADR-0059), read
+    // first: a preview's datasets follow its draft.
     if (session.agentKey === INSIGHTS_LEAD_AGENT_KEY) {
+      const agent = session.agentId
+        ? await this.agentConfigFor(session)
+        : undefined;
       const { memory: _memory, ...options } = await this.analystAgentOptions(
         session,
         question,
         abortSignal,
         INSIGHTS_LEAD_MAX_STEPS,
+        agent,
       );
       void _memory;
       return options;
@@ -290,13 +296,17 @@ export class TurnOptions {
    * governed metrics, curated knowledge and verified-query blocks, built by
    * the same services and in the same order as the assistant's (no
    * agent-instructions block), and the `datasets`, `session-id`,
-   * `turn-question` and `knowledge-used` keys.
+   * `turn-question` and `knowledge-used` keys. With a user agent (`agent`,
+   * Elena on its host; ADR-0059) also its overrides, tool selection and
+   * in-app skills on the context, its effort and model in the provider
+   * options, and its instructions as Block 5, last.
    */
   private async analystAgentOptions(
     session: SessionDoc,
     question: string | undefined,
     abortSignal: AbortSignal | undefined,
     maxSteps: number,
+    agent?: AgentConfig,
   ) {
     const requestContext = new RequestContext();
     requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
@@ -313,22 +323,58 @@ export class TurnOptions {
     const knowledge = await this.deps.knowledge.contextFor(session.datasets);
     // The answer records the knowledge the model saw (agents.md 4.1 Block 3).
     requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
+    const overrides: AgentOverrides = {
+      ...(agent?.model ? { model: agent.model } : {}),
+      ...(agent?.reasoningEffort
+        ? { reasoningEffort: agent.reasoningEffort }
+        : {}),
+    };
+    if (overrides.model || overrides.reasoningEffort) {
+      requestContext.set(AGENT_OVERRIDES_CONTEXT_KEY, overrides);
+    }
+    const agentSkills = agent ? await this.agentSkillsFor(session) : [];
+    // The tools offered are those the instructions link plus those its
+    // skills link (ADR-0024); a config without `tools` keeps every tool.
+    if (agent?.tools) {
+      const tools = effectiveOptionalTools(agent.tools, agentSkills);
+      if (!isFullSelection(tools)) {
+        requestContext.set(AGENT_TOOLS_CONTEXT_KEY, tools);
+      }
+    }
+    if (agentSkills.length) {
+      requestContext.set(AGENT_SKILLS_CONTEXT_KEY, agentSkills);
+    }
     return {
       maxSteps,
-      providerOptions: await turnProviderOptions({ reasoningEffort }),
+      providerOptions: await turnProviderOptions(
+        { reasoningEffort: overrides.reasoningEffort ?? reasoningEffort },
+        overrides.model,
+      ),
       context: [
         {
           role: 'system' as const,
-          // Its tools: `sample_rows`, but no visuals (agents.md 2.11).
-          content: entityOrientationLines(session.datasets, datasets, [
-            'sample_rows',
-            'ask_clarification',
-          ]).join('\n'),
+          // Its tools: `sample_rows` unless a user agent's selection leaves
+          // it out; no visuals (agents.md 2.11).
+          content: entityOrientationLines(
+            session.datasets,
+            datasets,
+            toolSelectionFrom(requestContext),
+          ).join('\n'),
         },
         ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
         // Its rules are the on-demand curated-knowledge skill (ADR-0025).
         ...knowledgeContext(knowledge.block),
         ...(verified ? [{ role: 'system' as const, content: verified }] : []),
+        // Last, so her prompt and every curated block come first; the
+        // engine's catalogue, plan and repair blocks go after it.
+        ...(agent?.instructions.trim()
+          ? [
+              {
+                role: 'system' as const,
+                content: agentInstructionsBlock(agent),
+              },
+            ]
+          : []),
       ],
       requestContext,
       abortSignal,

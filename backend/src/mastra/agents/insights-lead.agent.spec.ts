@@ -43,8 +43,10 @@ import {
 } from '../workflows/conversation-turn.steps';
 import {
   INSIGHTS_LEAD_INSTRUCTIONS,
+  INSIGHTS_LEAD_NO_CLARIFICATION_RULE,
   INSIGHTS_LEAD_REPAIR_RULE,
 } from '../workflows/insights-lead.prompts';
+import type { AgentSkill } from '../agent-skills';
 import {
   INSIGHTS_LEAD_AGENT_KEY,
   INSIGHTS_LEAD_DESCRIPTION,
@@ -286,5 +288,97 @@ describe("Elena's prompt (plan Elena 2.2)", () => {
       true,
     );
     expect(served.trimEnd().endsWith('- One rule.')).toBe(true);
+  });
+});
+
+/** A call of a user agent's run: its selection, skills and the turn's gates. */
+function userAgentCall(entries: {
+  tools?: string[];
+  skills?: AgentSkill[];
+  gates?: ConversationGates;
+}): RequestContext {
+  const requestContext = gated(
+    entries.gates ?? { dashboard: false, export: false },
+  );
+  if (entries.tools) requestContext.set('agent-tools', entries.tools);
+  if (entries.skills) requestContext.set('agent-skills', entries.skills);
+  return requestContext;
+}
+
+const inApp = (name: string, description = `Use for ${name}.`): AgentSkill => ({
+  id: `skill-${name}`,
+  name,
+  description,
+  body: `The ${name} body, with [[tool:run_readonly_sql]].`,
+  files: [],
+});
+
+describe("Elena runs a user agent's definition (ADR-0059)", () => {
+  it('offers sample_rows and ask_clarification only when the selection has them, in the same key order', async () => {
+    expect(
+      await toolNames(userAgentCall({ tools: ['ask_clarification'] })),
+    ).toEqual([
+      'list_entities',
+      'describe_entity',
+      'run_readonly_sql',
+      'explore_result',
+      'ask_clarification',
+    ]);
+    expect(await toolNames(userAgentCall({ tools: ['sample_rows'] }))).toEqual([
+      'list_entities',
+      'describe_entity',
+      'sample_rows',
+      'run_readonly_sql',
+      'explore_result',
+    ]);
+    expect(
+      await toolNames(
+        userAgentCall({ tools: ['sample_rows', 'ask_clarification'] }),
+      ),
+    ).toEqual(ALWAYS);
+  });
+
+  it('without ask_clarification: the no-clarification rule replaces the asking rule, and the repair cue stays last', () => {
+    const served = instructionsFor(userAgentCall({ tools: ['sample_rows'] }));
+    expect(served).not.toContain('Ask at most one question');
+    expect(served).toContain(INSIGHTS_LEAD_NO_CLARIFICATION_RULE);
+    expect(served).not.toContain('- ask_clarification(');
+    expect(served.trimEnd().split('\n').at(-1)).toBe(INSIGHTS_LEAD_REPAIR_RULE);
+    // With it, her shipped asking rule as always.
+    expect(instructionsFor(CLOSED)).toContain('- Ask at most one question');
+    expect(instructionsFor(CLOSED)).not.toContain(
+      INSIGHTS_LEAD_NO_CLARIFICATION_RULE,
+    );
+  });
+
+  it("puts the agent's in-app skills after her catalogue, one of the same name replacing hers", async () => {
+    const skills = await (
+      insightsLeadAgent as unknown as {
+        resolveSkills(args: {
+          requestContext: RequestContext;
+        }): Promise<InlineSkill[]>;
+      }
+    ).resolveSkills({
+      requestContext: userAgentCall({
+        skills: [inApp('zeta'), inApp('sql-analysis', 'Our own SQL rules.')],
+      }),
+    });
+    expect(skills.map((skill) => skill.name)).toEqual([
+      'answer-playbooks',
+      'curated-knowledge',
+      'result-validation',
+      'zeta',
+      'sql-analysis',
+    ]);
+    expect(skills.at(-1)?.description).toBe('Our own SQL rules.');
+    expect(skills.at(-2)?.instructions).toBe(
+      'The zeta body, with the "run_readonly_sql" tool.',
+    );
+  });
+
+  it('keeps her catalogue skills as they are when the call carries no in-app skills', async () => {
+    expect(await skillNames(CLOSED)).toEqual(
+      await skillNames(userAgentCall({ skills: [] })),
+    );
   });
 });

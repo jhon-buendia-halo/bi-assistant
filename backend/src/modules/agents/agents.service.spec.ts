@@ -654,30 +654,22 @@ describe('AgentsService (built-in and user agents)', () => {
             'Use [[skill:alpha]], [[skill:beta]] and [[tool:update_visual]] and [[tool:run_readonly_sql]].',
         });
         const detail = await ctx.service.get(created.id);
+        // Elena's library (ADR-0059): a retired tool's link is accepted
+        // but never listed.
         expect(detail?.toolLinks?.map((entry) => entry.name)).toEqual([
           'ask_clarification',
-          'create_visual',
           'describe_entity',
+          'explore_result',
           'list_entities',
           'run_readonly_sql',
           'sample_rows',
-          'show_in_panel',
-          'update_visual',
-          'update_workflow',
         ]);
         expect(link(detail, 'sample_rows')).toEqual({
           name: 'sample_rows',
           status: 'linked',
           linkedVia: { instructions: false, skills: ['alpha', 'beta'] },
         });
-        // The pair: linking one gives both.
-        expect(link(detail, 'update_visual')).toMatchObject({
-          status: 'linked',
-          linkedVia: { instructions: true, skills: [] },
-        });
-        expect(link(detail, 'create_visual')).toMatchObject({
-          status: 'linked',
-        });
+        expect(link(detail, 'explore_result')?.status).toBe('always-on');
         expect(link(detail, 'ask_clarification')).toEqual({
           name: 'ask_clarification',
           status: 'not-linked',
