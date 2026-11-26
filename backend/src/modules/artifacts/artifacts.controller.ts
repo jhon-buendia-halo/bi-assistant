@@ -23,8 +23,7 @@ import type {
 /**
  * The Artifacts area (api.md 2.6.4): the stored artifacts, read at a
  * version, saved to Artifacts, downloaded, renamed and deleted. No route
- * creates an artifact or a version: a run of Dashboard Image to Artifact
- * saves one (agents.md 5.17), and a turn that builds a dashboard on the
+ * creates an artifact or a version: a turn that builds a dashboard on the
  * user's data stores each version as a draft until the user saves it.
  */
 @Controller('artifacts')

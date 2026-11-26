@@ -202,12 +202,8 @@ export function readinessWorkflowTurnAgent(
           })),
         };
       },
-      // A case has no images, and the early work runs one step after the
-      // other here: the rows behind findings when their step takes them.
-      startImageNotes: () => undefined,
-      readsImages: () => false,
-      imageNotes: () =>
-        Promise.resolve({ imageNotes: '', imageCount: 0, stopped: false }),
+      // The early work runs one step after the other here: the rows behind
+      // findings when their step takes them.
       save: async () => {
         saved = await started().save();
         return { reportId: saved.report.id };

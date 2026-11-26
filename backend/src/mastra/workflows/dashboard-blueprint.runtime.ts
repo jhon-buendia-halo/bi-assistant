@@ -1,5 +1,5 @@
 /**
- * The fixed runtime that draws a recreated dashboard (agents.md 5.17): the
+ * The fixed runtime that draws a dashboard blueprint (data-model 3.18): the
  * script and style sheet every such dashboard ships, word for word. No
  * model writes them. The script reads one JSON document (the blueprint and
  * its data mapping), builds a seeded mock dataset from the blueprint's

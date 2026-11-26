@@ -127,7 +127,6 @@ function fixture(
     emit: (event) => events.push(event),
     signal: new AbortController().signal,
     datasets: ['World Cup'],
-    images: [],
     buildsDashboard: false,
     exportsConversation: false,
     ...options.deps,
@@ -161,7 +160,6 @@ describe('Avery runs her turn (agents.md 5.23)', () => {
       question: 'How many matches?',
       catalog: [expect.objectContaining({ dataset: 'World Cup' })],
       attempt: 1,
-      imageNotes: '',
     });
     expect(analyse.planBlock).toContain(
       'Brief from Avery, the Chief of Staff: Count every match.',
@@ -1230,7 +1228,6 @@ describe('Avery + Michael: what Michael and Avery receive is pinned', () => {
         system: analyseSystemBlocks({
           catalogBlock: call.catalogBlock,
           planBlock: call.planBlock,
-          imageNotes: call.imageNotes,
         }),
       })),
       replies,
@@ -1281,8 +1278,10 @@ describe('Avery + Michael: what Michael and Avery receive is pinned', () => {
     const digest = createHash('sha256')
       .update(JSON.stringify(cases))
       .digest('hex');
+    // Moved only by the analyse call losing its always-empty `imageNotes`
+    // (Read images removed): the system blocks and messages are the base's.
     expect(digest).toBe(
-      'a8641df1f40ea6bc9b309d0184afa3ebfa930298aa416863e41899b7b8a0d8ea',
+      'd5a3a23e7f0d193c654ead6fbad4d6584ba394cd8ef68e7ccd907e4316fccd79',
     );
   });
 });

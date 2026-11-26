@@ -9,13 +9,9 @@ import {
 } from '../../../mastra/tools/clarification.tool';
 import type { MastraService } from '../../../mastra/mastra.service';
 import {
-  DASHBOARD_READER_AGENT_KEY,
-  DATA_MAPPER_AGENT_KEY,
   GAP_ADVISOR_AGENT_KEY,
-  IMAGE_READER_AGENT_KEY,
   LAYER_MAPPER_AGENT_KEY,
   REQUIREMENTS_ANALYST_AGENT_KEY,
-  SITE_REVIEWER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
 import { getDatasetToolServices } from '../../../mastra/tool-services';
 import type { AgentExchange } from '../../../mastra/agent-threads';
@@ -37,33 +33,12 @@ import {
   type ConsumptionGapRuntime,
   type GapQuery,
 } from '../../../mastra/workflows/consumption-gap-analysis.steps';
-import {
-  MAP_DASHBOARD_DATA_RUNTIME_KEY,
-  MAP_DASHBOARD_DATA_WORKFLOW_ID,
-  type MapDashboardDataRuntime,
-} from '../../../mastra/workflows/map-dashboard-data.steps';
-import {
-  RECREATE_DASHBOARD_RUNTIME_KEY,
-  RECREATE_DASHBOARD_WORKFLOW_ID,
-  type DashboardBlueprint,
-  type MockBundle,
-  type RecreateDashboardRuntime,
-} from '../../../mastra/workflows/recreate-dashboard.steps';
-import {
-  REVIEW_WEBSITE_RUNTIME_KEY,
-  REVIEW_WEBSITE_WORKFLOW_ID,
-  reviewWebsiteInputOf,
-  type ReviewWebsiteRuntime,
-} from '../../../mastra/workflows/review-website.steps';
+import type { DashboardBlueprint } from '../../../mastra/workflows/dashboard-blueprint.schemas';
+import type { MockBundle } from '../../../mastra/workflows/live-dashboard';
 import {
   ModelTimeoutError,
   streamIdleWatch,
 } from '../../../mastra/workflows/model-call';
-import type { ReviewWebsiteInput } from '../../../mastra/workflows/review-website.schemas';
-import type {
-  SiteReviewRunIo,
-  SiteReviewWork,
-} from '../../site-review/site-review.service';
 import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
   ANALYSE_RETRY_MAX_STEPS,
@@ -136,13 +111,6 @@ import {
   servesClaude,
 } from '../../../mastra/step-model';
 import { turnProviderOptions } from './session-datasets';
-import {
-  READ_IMAGES_RUNTIME_KEY,
-  imageNotesBlock,
-  type ReadImagesRuntime,
-} from '../../../mastra/workflows/read-images.steps';
-import type { StepImage } from '../../../mastra/workflows/recreate-dashboard.agents';
-import { withImageNotes } from './image-notes';
 import {
   AGENT_TURN_RUNTIME_KEY,
   AGENT_TURN_WORKFLOW_ID,
@@ -270,21 +238,10 @@ export interface TurnEngineDeps {
   ): Promise<CrossCheck | undefined>;
   /** The readiness tools' bridge, once installed (agents.md 3.13). */
   readinessBridge(): ReadinessBridge | undefined;
-  /** A run's input image, from its host's workspace (agents.md 5.17). */
-  readImage(
-    sessionId: string,
-    path: string,
-  ): Promise<{ data: Buffer; mediaType: string }>;
-  /** A saved dashboard, by its artifact's id (agents.md 5.18). */
+  /** A saved dashboard, by its artifact's id (agents.md 5.20). */
   artifact(
     artifactId: string,
   ): Promise<{ name: string; blueprint: DashboardBlueprint }>;
-  /** Save a run's dashboard, with its image, as an artifact (5.17). */
-  saveArtifact(
-    sessionId: string,
-    blueprint: DashboardBlueprint,
-    image: { data: Buffer; mediaType: string } | undefined,
-  ): Promise<{ id: string; name: string }>;
   /**
    * A dashboard artifact's current version with its rows (agents.md 5.22,
    * the follow-up carry): what Clara changes. Throws when it is unknown.
@@ -303,16 +260,12 @@ export interface TurnEngineDeps {
     sessionId: string,
     input: Omit<NewDashboardVersion, 'source'> & { artifactId?: string },
   ) => Promise<DashboardRef>;
-  /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
+  /** Store a drawn report as a visual of the session (agents.md 5.20). */
   saveMock(
     sessionId: string,
     bundle: MockBundle,
     instruction: string,
   ): Promise<SessionVisualization>;
-  /** Review a Website's browser work for one run (agents.md 5.19). */
-  siteReview(io: SiteReviewRunIo): SiteReviewWork;
-  /** Write a file of the session's workspace (Review a Website's findings). */
-  writeFile(sessionId: string, path: string, data: string): Promise<void>;
 }
 
 /**
@@ -385,8 +338,12 @@ export class TurnEngine {
     await this.deps.updateDoc(id, { messages: session.messages });
 
     // The session's agent: the assistant, or the built-in agent it is bound
-    // to (agents.md 5.1, ADR-0028).
-    const agentKey = session.agentKey ?? ASSISTANT_AGENT_KEY;
+    // to (agents.md 5.1, ADR-0028). A key no longer registered (a stored
+    // session of a removed agent) runs as the assistant, as it reads.
+    const agentKey =
+      session.agentKey && this.deps.mastra.listAgents()[session.agentKey]
+        ? session.agentKey
+        : ASSISTANT_AGENT_KEY;
     const isAssistant = agentKey === ASSISTANT_AGENT_KEY;
     const agent = this.deps.mastra.getAgent(agentKey);
     const input = await this.deps.options.agentInput(agent, session);
@@ -779,13 +736,11 @@ export class TurnEngine {
         if (!turn.signal.aborted && !attemptStop?.signal.aborted) throw error;
       }
     };
-    // Work a step starts and a later step takes (agents.md 5.13, 5.20):
-    // Zoe's notes and the rows behind findings in Assess Data Readiness,
-    // the lineage checks in Consumption Gap Analysis. Settled when the run
-    // ends, fails or is stopped, before the answer is persisted.
+    // Work a step starts and a later step takes (agents.md 5.13, 5.20): the
+    // rows behind findings in Assess Data Readiness, the lineage checks in
+    // Consumption Gap Analysis. Settled when the run ends, fails or is
+    // stopped, before the answer is persisted.
     const early = earlyWork(turn.signal);
-    // Whether Resolve dataset started Zoe's notes (Read images' condition).
-    let readingImages = false;
     // Where the rows behind findings go: the answer's records and the
     // explorable queries as Save report left them, ahead of the agent's.
     let findingSlot: { data: number; explorable: number } | undefined;
@@ -803,14 +758,6 @@ export class TurnEngine {
       if (!assessment) throw new Error('No assessment has been started');
       return assessment;
     };
-    // Dashboard Image to Artifact's image, once Load image read it (agents.md 5.17).
-    let dashboardImage: { data: Buffer; mediaType: string } | undefined;
-    const loadedImage = async (path: string) => {
-      dashboardImage ??= await this.deps.readImage(id, path);
-      return dashboardImage;
-    };
-    // Review a Website's browser work, once a step asks for it (agents.md 5.19).
-    let siteWork: SiteReviewWork | undefined;
     // The answer carries a stored dashboard, as a turn's visual does.
     const showVisual = (metadata: SessionVisualization) => {
       visualEvent = {
@@ -827,7 +774,7 @@ export class TurnEngine {
       // 5.1, ADR-0040). Its agent step streams the agent through `consume`:
       // v2's Analyse step (5.11, ADR-0034) or a one-step workflow's Answer.
       // The model error a step reports, in the chat stream's words.
-      // A model timeout (Iris's included) is thrown as it is (workflows R43).
+      // A model timeout is thrown as it is (workflows R43).
       const stepError = async (error: unknown) =>
         error instanceof ModelTimeoutError
           ? error
@@ -860,29 +807,6 @@ export class TurnEngine {
           }
         },
       });
-      // Read images (agents.md 2.15): the run's stored images, loaded from
-      // its workspace in order, described by Zoe in one model call recorded
-      // in her thread, stopped with `signal` (the turn's, or an early job's
-      // own). A model error fails the step with its own message.
-      const readImagesOn = async (
-        { question, images }: { question: string; images: string[] },
-        signal: AbortSignal,
-      ) => {
-        const loaded: StepImage[] = [];
-        for (const path of images) {
-          const { data, mediaType } = await this.deps.readImage(id, path);
-          loaded.push({ data, mediaType });
-        }
-        try {
-          const read = await this.deps.mastra.readImages(
-            { question, images: loaded },
-            { ...stepModelOf(IMAGE_READER_AGENT_KEY), abortSignal: signal },
-          );
-          return { ...read, stopped: read.stopped || signal.aborted };
-        } catch (error) {
-          throw await stepError(error);
-        }
-      };
       // Resolve layers and Load layer catalogs both read the datasets'
       // layers: fetched once per run (agents.md 5.20).
       const datasetLayers = memoisedBy(
@@ -953,13 +877,7 @@ export class TurnEngine {
         {
           // Michael's analysis (agents.md 5.11, 5.23): one attempt of his
           // agent turn with its tools, for Avery's answer_from_data.
-          analyse: async ({
-            catalogBlock,
-            planBlock,
-            attempt,
-            answered,
-            imageNotes,
-          }) => {
+          analyse: async ({ catalogBlock, planBlock, attempt, answered }) => {
             // A resumed attempt keeps the records it made before it asked,
             // and is shown their queries in one block under one cap
             // (agents.md 5.11).
@@ -1006,16 +924,14 @@ export class TurnEngine {
                     {
                       ...attemptOptions,
                       abortSignal: idle.signal,
-                      // The catalog block and Avery's request, the
-                      // earlier-queries block on a resume, then Zoe's notes
-                      // only when the run has images (agents.md 5.11).
+                      // The catalog block and Avery's request, then the
+                      // earlier-queries block on a resume (agents.md 5.11).
                       context: [
                         ...options.context,
                         ...analyseSystemBlocks({
                           catalogBlock,
                           planBlock,
                           earlierBlock: earlier,
-                          imageNotes,
                         }).map((content) => ({
                           role: 'system' as const,
                           content,
@@ -1286,7 +1202,6 @@ export class TurnEngine {
                 emit: (event) => emit(event),
                 signal: turn.signal,
                 datasets: session.datasets,
-                images: [...(session.inputImages ?? [])],
                 // The dashboard gate (2.21): the message asks for one, or
                 // the conversation has one.
                 buildsDashboard:
@@ -1522,7 +1437,7 @@ export class TurnEngine {
               }
             }
           },
-          explain: async ({ dataset, reportId, imageNotes }) => {
+          explain: async ({ dataset, reportId }) => {
             // The run has assessed: the block carries the stored report's
             // summary and `assess_data_readiness` refuses (agents.md 3.13,
             // 5.13).
@@ -1530,9 +1445,6 @@ export class TurnEngine {
               throw new Error('The report has not been saved');
             }
             options.requestContext.set(ASSESSED_REPORT_CONTEXT_KEY, reportId);
-            // Zoe's notes follow the report block only when the run has
-            // images (agents.md 2.15, 5.13).
-            const notes = imageNotesBlock(imageNotes);
             // The idle deadline (workflows R43): a Stop is never a timeout.
             const idle = streamIdleWatch(turn.signal);
             try {
@@ -1551,9 +1463,6 @@ export class TurnEngine {
                           summary: savedSummary,
                         }),
                       },
-                      ...(notes
-                        ? [{ role: 'system' as const, content: notes }]
-                        : []),
                     ],
                   }),
                 ),
@@ -1577,171 +1486,9 @@ export class TurnEngine {
               stopped: turn.signal.aborted || clarification !== null,
             };
           },
-          // Dashboard Image to Artifact (agents.md 5.17): Read dashboard calls its
-          // agent's model with the image, which the run keeps meanwhile.
-          loadImage: async ({ image }) => {
-            const loaded = await loadedImage(image);
-            return {
-              mediaType: loaded.mediaType,
-              sizeBytes: loaded.data.byteLength,
-            };
-          },
-          readDashboard: async ({ question, image }) => {
-            try {
-              const read = await this.deps.mastra.readDashboard(
-                { question, image: await loadedImage(image) },
-                stepModelOf(DASHBOARD_READER_AGENT_KEY),
-              );
-              return {
-                blueprint: read.blueprint,
-                stopped: read.stopped || turn.signal.aborted,
-              };
-            } catch (error) {
-              throw await stepError(error);
-            }
-          },
-          saveDashboard: async ({ blueprint, bundle, answer }) => {
-            const metadata = await this.deps.saveMock(id, bundle, trimmed);
-            const artifact = await this.deps.saveArtifact(
-              id,
-              blueprint,
-              dashboardImage,
-            );
-            showVisual(metadata);
-            // The answer says where the dashboard was saved.
-            text = answer(artifact.name);
-            emit({ type: 'text', content: text });
-            return {
-              visualId: metadata.id,
-              artifactId: artifact.id,
-              artifactName: artifact.name,
-            };
-          },
-          // Map a Dashboard to Data (agents.md 5.18): Map data calls its
-          // agent's model with the saved dashboard and the catalog.
-          loadDashboard: ({ artifact }) => this.deps.artifact(artifact),
-          mapData: async (input) => {
-            try {
-              // Zoe's notes only when the run has images (agents.md 5.18).
-              const mapped = await this.deps.mastra.mapData(
-                withImageNotes(input),
-                stepModelOf(DATA_MAPPER_AGENT_KEY),
-              );
-              return {
-                mapping: mapped.mapping,
-                stopped: mapped.stopped || turn.signal.aborted,
-              };
-            } catch (error) {
-              throw await stepError(error);
-            }
-          },
-          // Read images (agents.md 2.15), the optional first step of Answer
-          // a Business Question, Assess Data Readiness and Map a Dashboard
-          // to Data: the run's stored images, loaded from its workspace in
-          // order, described by Zoe in one model call recorded in her
-          // thread. A model error fails the step with its own message.
-          readImages: (input) => readImagesOn(input, turn.signal),
-          // Assess Data Readiness: Zoe reads the images from Resolve
-          // dataset on, on her own stop; Read images takes her notes.
-          startImageNotes: (input) => {
-            readingImages = true;
-            early.start('image-notes', (signal) => readImagesOn(input, signal));
-          },
-          readsImages: () => readingImages,
-          imageNotes: () =>
-            early.take<Awaited<ReturnType<typeof readImagesOn>>>('image-notes'),
-          saveMappedDashboard: async ({ bundle, answer }) => {
-            const metadata = await this.deps.saveMock(id, bundle, trimmed);
-            showVisual(metadata);
-            // The mapping's explanation is the run's answer.
-            text = answer;
-            emit({ type: 'text', content: text });
-            return { visualId: metadata.id, title: metadata.title };
-          },
-          // Review a Website (agents.md 5.19): the browser work, its
-          // progress shown as the run's thinking, then the report.
-          ...this.siteReviewRuntime({
-            work: () =>
-              (siteWork ??= this.deps.siteReview({
-                sessionId: id,
-                signal: turn.signal,
-                progress: (line) =>
-                  emit({ type: 'reasoning', content: `${line}\n` }),
-              })),
-            saveReport: async ({ bundle, findings, answer }) => {
-              const metadata = await this.deps.saveMock(id, bundle, trimmed);
-              const reportFile = 'site-review/findings.json';
-              await this.deps.writeFile(id, reportFile, findings);
-              showVisual(metadata);
-              text = answer;
-              emit({ type: 'text', content: text });
-              return { visualId: metadata.id, reportFile };
-            },
-            showAnswer: (answer) => {
-              text = answer;
-              emit({ type: 'text', content: text });
-              return Promise.resolve();
-            },
-            // Review templates (agents.md 5.19): Iris over one template's
-            // shots, on the app's model, recorded as text only.
-            reviewTemplate: async ({ template, shots, measured }) => {
-              const work = (siteWork ??= this.deps.siteReview({
-                sessionId: id,
-                signal: turn.signal,
-                progress: (line) =>
-                  emit({ type: 'reasoning', content: `${line}\n` }),
-              }));
-              const images = await work.shotImages(shots);
-              try {
-                // Iris's call has its one deadline, two minutes per try, in
-                // her guarded call (agents.md 5.19; workflows R43).
-                const reviewed = await this.deps.mastra.reviewTemplate(
-                  {
-                    url: template.representative,
-                    template,
-                    shots: images,
-                    measured,
-                  },
-                  stepModelOf(SITE_REVIEWER_AGENT_KEY),
-                );
-                return {
-                  ...reviewed,
-                  stopped: reviewed.stopped || turn.signal.aborted,
-                };
-              } catch (error) {
-                throw await stepError(error);
-              }
-            },
-            progress: (line) =>
-              emit({ type: 'reasoning', content: `${line}\n` }),
-          }),
           // Consumption Gap Analysis (agents.md 5.20): its model steps on
           // their own agents, its read-only queries recorded as sources.
           consumptionGap: {
-            // Read dashboards: Grace over each stored image, one call each,
-            // all at the same time; `signal` ends one when another failed.
-            readDashboard: async ({ image, signal }) => {
-              try {
-                const read = await this.deps.mastra.readDashboard(
-                  {
-                    question: 'Read this reference dashboard',
-                    image: await this.deps.readImage(id, image),
-                  },
-                  {
-                    ...stepModelOf(DASHBOARD_READER_AGENT_KEY),
-                    abortSignal: signal
-                      ? AbortSignal.any([turn.signal, signal])
-                      : turn.signal,
-                  },
-                );
-                return {
-                  blueprint: read.blueprint,
-                  stopped: read.stopped || turn.signal.aborted,
-                };
-              } catch (error) {
-                throw await stepError(error);
-              }
-            },
             loadDashboard: ({ artifact }) => this.deps.artifact(artifact),
             // Resolve layers and Load layer catalogs: the dataset tools'
             // own services (names, types and schema notes; no rows).
@@ -2286,32 +2033,6 @@ export class TurnEngine {
     return { ref, saved };
   }
 
-  /**
-   * Review a Website's runtime (agents.md 5.19): the browser work of the
-   * run, taken when a step first asks for it, and the run's report and
-   * answer.
-   */
-  private siteReviewRuntime(parts: {
-    work: () => SiteReviewWork;
-    saveReport: ReviewWebsiteRuntime['saveReport'];
-    showAnswer: ReviewWebsiteRuntime['showAnswer'];
-    reviewTemplate: ReviewWebsiteRuntime['reviewTemplate'];
-    progress: ReviewWebsiteRuntime['progress'];
-  }): ReviewWebsiteRuntime {
-    return {
-      checkSignIn: (input) => parts.work().checkSignIn(input),
-      openSignIn: (input) => parts.work().openSignIn(input),
-      finishSignIn: (input) => parts.work().finishSignIn(input),
-      discoverPages: (input) => parts.work().discoverPages(input),
-      captureAndCheck: (input) => parts.work().captureAndCheck(input),
-      loadReportImages: (paths) => parts.work().loadReportImages(paths),
-      saveReport: parts.saveReport,
-      showAnswer: parts.showAnswer,
-      reviewTemplate: parts.reviewTemplate,
-      progress: parts.progress,
-    };
-  }
-
   private async runTurnWorkflow(
     session: SessionDoc,
     workflow: TurnWorkflow,
@@ -2319,12 +2040,8 @@ export class TurnEngine {
     emit: (event: StreamEvent) => void,
     runtime: AnalyseRuntime &
       AgentTurnRuntime &
-      DataReadinessAssessmentRuntime &
-      RecreateDashboardRuntime &
-      MapDashboardDataRuntime &
-      ReadImagesRuntime &
-      ReviewWebsiteRuntime & {
-        /** Its names overlap the others' (readDashboard, saveReport): kept apart. */
+      DataReadinessAssessmentRuntime & {
+        /** Kept apart from the others' names. */
         consumptionGap: ConsumptionGapRuntime;
         /** A conversation's turn: Avery's with her team (agents.md 5.23). */
         converse: (
@@ -2349,9 +2066,6 @@ export class TurnEngine {
     const requestContext = new RequestContext();
     const readiness =
       workflow.engineId === DATA_READINESS_ASSESSMENT_WORKFLOW_ID;
-    const recreate = workflow.engineId === RECREATE_DASHBOARD_WORKFLOW_ID;
-    const mapping = workflow.engineId === MAP_DASHBOARD_DATA_WORKFLOW_ID;
-    const review = workflow.engineId === REVIEW_WEBSITE_WORKFLOW_ID;
     const gap = workflow.engineId === CONSUMPTION_GAP_WORKFLOW_ID;
     if (conversationOfTurn(workflow)) {
       // A conversation's engine (plan Elena 1.3): its one step runs the
@@ -2383,82 +2097,16 @@ export class TurnEngine {
             throw error;
           }
         },
+        save: () => captured(() => runtime.save()),
         // Early work (agents.md 5.13): a start is no step's failure; the
         // step that takes the work reports its error.
-        startImageNotes: (input) => runtime.startImageNotes(input),
-        readsImages: () => runtime.readsImages(),
-        imageNotes: () => captured(() => runtime.imageNotes()),
-        save: () => captured(() => runtime.save()),
         startFindingRows: () => runtime.startFindingRows(),
         findingRows: () => captured(() => runtime.findingRows()),
         explain: (input) => captured(() => runtime.explain(input)),
       } satisfies DataReadinessAssessmentRuntime);
-    } else if (recreate) {
-      requestContext.set(RECREATE_DASHBOARD_RUNTIME_KEY, {
-        loadImage: (input) => captured(() => runtime.loadImage(input)),
-        readDashboard: (input) => captured(() => runtime.readDashboard(input)),
-        saveDashboard: (input) => captured(() => runtime.saveDashboard(input)),
-      } satisfies RecreateDashboardRuntime);
-    } else if (mapping) {
-      requestContext.set(MAP_DASHBOARD_DATA_RUNTIME_KEY, {
-        loadDashboard: (input) => captured(() => runtime.loadDashboard(input)),
-        mapData: (input) => captured(() => runtime.mapData(input)),
-        saveMappedDashboard: (input) =>
-          captured(() => runtime.saveMappedDashboard(input)),
-      } satisfies MapDashboardDataRuntime);
-    } else if (review) {
-      // Review templates handles each template's failure itself and fails,
-      // with the first, only when no template was reviewed (workflows R43;
-      // agents.md 5.19): the turn keeps that first one, and lets it go once
-      // a template is reviewed, so a handled failure is never the turn's.
-      let templateError: unknown;
-      let templateReviewed = false;
-      const reviewTemplate: ReviewWebsiteRuntime['reviewTemplate'] = async (
-        input,
-      ) => {
-        try {
-          const reviewed = await runtime.reviewTemplate(input);
-          templateReviewed = true;
-          if (templateError !== undefined && stepError === templateError) {
-            stepError = undefined;
-          }
-          return reviewed;
-        } catch (error) {
-          if (!templateReviewed && templateError === undefined) {
-            templateError = error;
-            stepError = error;
-          }
-          throw error;
-        }
-      };
-      requestContext.set(REVIEW_WEBSITE_RUNTIME_KEY, {
-        checkSignIn: (input) => captured(() => runtime.checkSignIn(input)),
-        openSignIn: (input) => captured(() => runtime.openSignIn(input)),
-        finishSignIn: (input) => captured(() => runtime.finishSignIn(input)),
-        discoverPages: (input) => captured(() => runtime.discoverPages(input)),
-        captureAndCheck: (input) =>
-          captured(() => runtime.captureAndCheck(input)),
-        loadReportImages: (paths) =>
-          captured(() => runtime.loadReportImages(paths)),
-        saveReport: (input) => captured(() => runtime.saveReport(input)),
-        showAnswer: (text) => captured(() => runtime.showAnswer(text)),
-        reviewTemplate,
-        // Synchronous and never throws: a progress line only.
-        progress: (line) => runtime.progress(line),
-      } satisfies ReviewWebsiteRuntime);
     } else if (gap) {
       const parts = runtime.consumptionGap;
       requestContext.set(CONSUMPTION_GAP_RUNTIME_KEY, {
-        // The reads run together: the first failure is the step's, not a
-        // read its abort then ended (its signal is aborted by then).
-        readDashboard: async (input) => {
-          try {
-            return await parts.readDashboard(input);
-          } catch (error) {
-            if (!input.signal?.aborted) stepError = error;
-            throw error;
-          }
-        },
         loadDashboard: (input) => captured(() => parts.loadDashboard(input)),
         datasetLayers: (input) => captured(() => parts.datasetLayers(input)),
         runQueries: (input) => captured(() => parts.runQueries(input)),
@@ -2475,63 +2123,24 @@ export class TurnEngine {
         saveReport: (input) => captured(() => parts.saveReport(input)),
       } satisfies ConsumptionGapRuntime);
     }
-    // Read images, the optional first step of every workflow but the
-    // agent turn, Dashboard Image to Artifact and Consumption Gap Analysis,
-    // whose Read dashboards hands its images to Grace (agents.md 2.15, 5.20).
-    const readsImages =
-      workflow.engineId !== AGENT_TURN_WORKFLOW_ID && !recreate && !gap;
-    if (readsImages) {
-      requestContext.set(READ_IMAGES_RUNTIME_KEY, {
-        readImages: (input) => captured(() => runtime.readImages(input)),
-      } satisfies ReadImagesRuntime);
-    }
-    // The run's reference images (their stored paths), only when it has
-    // some: without them the engine's input is what it was before.
-    const images =
-      readsImages && session.inputImages?.length
-        ? { images: [...session.inputImages] }
-        : {};
     // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).
-    // Dashboard Image to Artifact runs on the run's image (agents.md 5.17); Map a
-    // Dashboard to Data on a saved dashboard and the run's datasets (5.18).
-    // Consumption Gap Analysis on the run's questions and datasets, its
-    // saved dashboard ('' when none) and its reference dashboards (5.20).
+    // Consumption Gap Analysis on the run's questions and datasets and its
+    // saved dashboard ('' when none) (5.20).
     const turnInput:
       | QuestionInput
-      | { question: string; dataset: string; images?: string[] }
-      | { question: string; image: string }
-      | {
-          question: string;
-          artifact: string;
-          datasets: string[];
-          images?: string[];
+      | { question: string; dataset: string }
+      | { question: string; artifact: string; datasets: string[] } = gap
+      ? {
+          question,
+          datasets: session.datasets,
+          artifact: session.inputArtifact ?? '',
         }
-      | ReviewWebsiteInput = review
-      ? // Review a Website reads the whole form (agents.md 5.19).
-        reviewWebsiteInputOf(session.inputValues ?? { url: question })
-      : gap
-        ? {
-            question,
-            datasets: session.datasets,
-            artifact: session.inputArtifact ?? '',
-            images: [...(session.inputImages ?? [])],
-          }
-        : recreate
-          ? { question, image: session.inputImage ?? '' }
-          : mapping
-            ? {
-                question,
-                artifact: session.inputArtifact ?? '',
-                datasets: session.datasets,
-                ...images,
-              }
-            : readiness
-              ? { question, dataset: session.datasets[0] ?? '', ...images }
-              : { question, datasets: session.datasets, ...images };
+      : readiness
+        ? { question, dataset: session.datasets[0] ?? '' }
+        : { question, datasets: session.datasets };
     let state = session.workflowState;
-    // A new run starts the bar over at its first step event, whichever step
-    // that is: Read images, step 1, is optional, so a run without images
-    // starts at Receive question (agent-panel R8a). A resume goes on.
+    // A new run starts the bar over at its first step event (agent-panel
+    // R8a). A resume goes on.
     let startsOver = true;
     // Drive one stream of the run (its start, or a resume) to its outcome.
     const drive = async (

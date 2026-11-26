@@ -9,10 +9,6 @@ jest.mock('@mastra/core/workflows', () =>
 import { RequestContext } from '@mastra/core/request-context';
 import { dataReadinessAssessmentWorkflow } from './data-readiness-assessment.workflow';
 import {
-  READ_IMAGES_OUTCOME_ID,
-  READ_IMAGES_STEP_ID,
-} from './read-images.steps';
-import {
   DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
   DATA_READINESS_ASSESSMENT_STEPS,
   DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
@@ -49,20 +45,14 @@ const DIMENSIONS = [
   { dimension: 'accuracy', score: 100, assessed: false, findingCount: 0 },
 ];
 
-const NOTES = '## Reference images\nA scorecard screenshot.';
-
 /** Each phase of the runtime as a Jest mock, so a test reads its calls. */
 type MockedRuntime = {
   [K in keyof DataReadinessAssessmentRuntime]: jest.Mock;
 } & { calls: string[] };
 
-/**
- * A runtime whose every phase succeeds, with each call recorded. Zoe's
- * notes are started only when the step asks, as the turn starts them.
- */
+/** A runtime whose every phase succeeds, with each call recorded. */
 function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
   const calls: string[] = [];
-  let reading = false;
   return {
     calls,
     resolve: jest.fn(({ dataset }: { dataset: string }) => {
@@ -72,19 +62,6 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
         datasourceName: 'World Cup DB',
         datasourceKind: 'postgres' as const,
         tableCount: 3,
-      });
-    }),
-    startImageNotes: jest.fn(() => {
-      calls.push('start-image-notes');
-      reading = true;
-    }),
-    readsImages: jest.fn(() => reading),
-    imageNotes: jest.fn(() => {
-      calls.push('image-notes');
-      return Promise.resolve({
-        imageNotes: NOTES,
-        imageCount: 1,
-        stopped: false,
       });
     }),
     profile: jest.fn(() => {
@@ -131,19 +108,11 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
   };
 }
 
-async function run(
-  given: MockedRuntime | undefined,
-  question = '',
-  images?: string[],
-) {
+async function run(given: MockedRuntime | undefined, question = '') {
   const requestContext = new RequestContext();
   if (given) requestContext.set(DATA_READINESS_ASSESSMENT_RUNTIME_KEY, given);
   const output = (await workflow.createRun()).stream({
-    inputData: {
-      question,
-      dataset: 'World Cup',
-      ...(images ? { images } : {}),
-    },
+    inputData: { question, dataset: 'World Cup' },
     requestContext,
   });
   const events: string[] = [];
@@ -156,7 +125,7 @@ async function run(
 }
 
 describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
-  it('runs its seven steps in order (Read images is the optional branch) and never persists a snapshot', () => {
+  it('runs its seven steps in order and never persists a snapshot', () => {
     expect(workflow.id).toBe(DATA_READINESS_ASSESSMENT_WORKFLOW_ID);
     expect(workflow.steps.map((s) => [s.id, s.description])).toEqual([
       ['resolve-dataset', 'Resolve dataset'],
@@ -180,9 +149,7 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
         output: Object.keys(step.outputSchema.shape),
       })),
     ).toEqual(
-      DATA_READINESS_ASSESSMENT_STEPS.filter(
-        (step) => step.id !== READ_IMAGES_STEP_ID,
-      ).map((step) => ({
+      DATA_READINESS_ASSESSMENT_STEPS.map((step) => ({
         id: step.id,
         input: [...step.input],
         output: [...step.output],
@@ -202,19 +169,7 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
       'explain:r-1:Worst problems?',
       'finding-rows',
     ]);
-    // No images: Read images is skipped, Zoe never starts, the notes are ''.
-    expect(events.filter((e) => e.startsWith('read-images:'))).toEqual([]);
-    expect(given.startImageNotes).not.toHaveBeenCalled();
-    expect(given.imageNotes).not.toHaveBeenCalled();
-    expect(given.explain).toHaveBeenCalledWith(
-      expect.objectContaining({ imageNotes: '' }),
-    );
-    expect(
-      events.filter(
-        (e) =>
-          e.endsWith(':success') && !e.startsWith(`${READ_IMAGES_OUTCOME_ID}:`),
-      ),
-    ).toEqual([
+    expect(events.filter((e) => e.endsWith(':success'))).toEqual([
       'resolve-dataset:success',
       'profile-source:success',
       'score-readiness:success',
@@ -242,39 +197,10 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
       question: READINESS_DEFAULT_QUESTION,
       dataset: 'World Cup',
       reportId: 'r-1',
-      imageNotes: '',
     });
   });
 
-  it('starts Zoe at Resolve dataset, awaits her notes after Score readiness and hands them to Explain report', async () => {
-    const given = runtime();
-    const { events, result } = await run(given, '', ['inputs/images/1.png']);
-    // The run's own question, as Read images always had it.
-    expect(given.startImageNotes).toHaveBeenCalledWith({
-      question: '',
-      images: ['inputs/images/1.png'],
-    });
-    expect(given.calls.slice(0, 6)).toEqual([
-      'resolve:World Cup',
-      'start-image-notes',
-      'profile',
-      'score',
-      'image-notes',
-      'save',
-    ]);
-    expect(events.filter((e) => e.endsWith(':success')).slice(2, 6)).toEqual([
-      'score-readiness:success',
-      'read-images:success',
-      `${READ_IMAGES_OUTCOME_ID}:success`,
-      'save-report:success',
-    ]);
-    expect(given.explain).toHaveBeenCalledWith(
-      expect.objectContaining({ imageNotes: NOTES }),
-    );
-    expect(result.status).toBe('success');
-  });
-
-  it('refuses at Resolve dataset before Read images starts', async () => {
+  it('refuses at Resolve dataset before anything is profiled', async () => {
     const given = runtime({
       resolve: jest
         .fn()
@@ -284,42 +210,9 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
           ),
         ),
     });
-    const { result } = await run(given, '', ['inputs/images/1.png']);
+    const { result } = await run(given);
     expect(result.status).toBe('failed');
-    expect(given.startImageNotes).not.toHaveBeenCalled();
     expect(given.profile).not.toHaveBeenCalled();
-  });
-
-  it('fails at Read images before Save report stores anything when Zoe fails', async () => {
-    const given = runtime({
-      imageNotes: jest
-        .fn()
-        .mockRejectedValue(new Error('The Image Reader returned an error')),
-    });
-    const { result, events } = await run(given, '', ['inputs/images/1.png']);
-    expect(result.status).toBe('failed');
-    expect(String(result.error)).toContain(
-      'The Image Reader returned an error',
-    );
-    expect(events).toContain('read-images:failed');
-    expect(given.save).not.toHaveBeenCalled();
-    expect(given.startFindingRows).not.toHaveBeenCalled();
-    expect(given.explain).not.toHaveBeenCalled();
-  });
-
-  it('ends at Save report, storing nothing, when the run was stopped at Read images', async () => {
-    const given = runtime({
-      imageNotes: jest
-        .fn()
-        .mockResolvedValue({ imageNotes: '', imageCount: 0, stopped: true }),
-    });
-    const { result } = await run(given, '', ['inputs/images/1.png']);
-    expect(result).toMatchObject({
-      status: 'success',
-      result: { stopped: true },
-    });
-    expect(given.save).not.toHaveBeenCalled();
-    expect(given.explain).not.toHaveBeenCalled();
   });
 
   it('ends at Profile source when the run is stopped there: nothing is scored or stored', async () => {

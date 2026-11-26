@@ -44,11 +44,9 @@ export const EXTERNAL_PACKAGES = [
   // Required by name through createRequire at runtime, invisible to esbuild
   // (the AI SDK's and Mastra's safe fetch).
   'undici',
-  // Review a Website (ADR-0049): playwright-core loads its injected scripts
-  // and protocol files from its own folder; axe-core's axe.min.js is read
-  // from disk and injected into the reviewed page.
+  // The conversation export's browser (ADR-0049): playwright-core loads its
+  // injected scripts and protocol files from its own folder.
   'playwright-core',
-  'axe-core',
 ];
 
 /**

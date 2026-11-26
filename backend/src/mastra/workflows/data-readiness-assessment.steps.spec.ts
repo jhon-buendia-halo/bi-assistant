@@ -57,7 +57,6 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
       ['resolve-dataset', 'code'],
       ['profile-source', 'code'],
       ['score-readiness', 'code'],
-      ['read-images', 'agent'],
       ['save-report', 'code'],
       ['explain-report', 'agent'],
       ['finding-rows', 'code'],
@@ -65,7 +64,7 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
     ]);
   });
 
-  it('connects them from Start to End, with Read images as an optional detour before Save report', () => {
+  it('connects them from Start to End, one after the other', () => {
     expect(
       DATA_READINESS_ASSESSMENT_EDGES.map((e) => [e.from, e.to, e.kind]),
     ).toEqual([
@@ -73,8 +72,6 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
       ['resolve-dataset', 'profile-source', 'next'],
       ['profile-source', 'score-readiness', 'next'],
       ['score-readiness', 'save-report', 'next'],
-      ['score-readiness', 'read-images', 'branch'],
-      ['read-images', 'save-report', 'next'],
       ['save-report', 'explain-report', 'next'],
       ['explain-report', 'finding-rows', 'next'],
       ['finding-rows', 'wrap-up', 'next'],
@@ -90,7 +87,7 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
       ]),
     );
     expect(fields['resolve-dataset']).toEqual({
-      input: ['question', 'dataset', 'images'],
+      input: ['question', 'dataset'],
       output: [
         'question',
         'dataset',
@@ -99,12 +96,8 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
         'tableCount',
       ],
     });
-    expect(fields['read-images']).toEqual({
-      input: [],
-      output: ['imageNotes', 'imageCount', 'stopped'],
-    });
     expect(fields['save-report'].input).toEqual(
-      expect.arrayContaining(['imageNotes', 'stopped']),
+      expect.arrayContaining(['overallScore', 'dimensionScores']),
     );
     expect(fields['save-report'].output).toContain('reportId');
     expect(fields['wrap-up'].output).toEqual([

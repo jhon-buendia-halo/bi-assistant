@@ -59,7 +59,7 @@ const AVERY: IntakeWorkflow = {
 };
 
 const CODE_ONLY: IntakeWorkflow = {
-  name: 'Review a Website',
+  name: 'Crawl a Site',
   input: [
     { name: 'url', label: 'Entry URL', type: 'text', required: true },
     {
@@ -89,21 +89,21 @@ describe('run-intake.util (the run chat asks for missing inputs)', () => {
     it("is the workflow's only agent without an orchestrator", () => {
       const solo: IntakeWorkflow = {
         ...AVERY,
-        agents: [{ name: 'Grace', role: 'Dashboard reader' }],
-        steps: [{ id: 'read', agent: { name: 'Grace' } }],
+        agents: [{ name: 'Sam', role: 'Dashboard reader' }],
+        steps: [{ id: 'read', agent: { name: 'Sam' } }],
       };
-      expect(leadVoice(solo).name).toBe('Grace');
-      expect(composerPlaceholder(solo)).toBe('Message Grace');
+      expect(leadVoice(solo).name).toBe('Sam');
+      expect(composerPlaceholder(solo)).toBe('Message Sam');
     });
 
     it('is the workflow itself with no agent or several', () => {
       expect(leadVoice(CODE_ONLY)).toEqual({
-        name: 'Review a Website',
+        name: 'Crawl a Site',
         role: '',
-        initial: 'R',
+        initial: 'C',
         agent: false,
       });
-      expect(composerPlaceholder(CODE_ONLY)).toBe('Message Review a Website');
+      expect(composerPlaceholder(CODE_ONLY)).toBe('Message Crawl a Site');
     });
   });
 
@@ -118,11 +118,11 @@ describe('run-intake.util (the run chat asks for missing inputs)', () => {
       expect(
         emptyHint({
           ...CODE_ONLY,
-          agents: [{ name: 'Iris' }, { name: 'Sam' }, { name: 'Lee' }],
+          agents: [{ name: 'Ivy' }, { name: 'Sam' }, { name: 'Lee' }],
         }),
-      ).toBe('Tell Iris, Sam and Lee what you need.');
+      ).toBe('Tell Ivy, Sam and Lee what you need.');
       expect(emptyHint(CODE_ONLY)).toBe(
-        'Send a message to run Review a Website.',
+        'Send a message to run Crawl a Site.',
       );
     });
 

@@ -30,13 +30,6 @@ import {
   type DataReadinessAssessmentRuntime,
 } from './data-readiness-assessment.steps';
 import { dataReadinessAssessmentWorkflow } from './data-readiness-assessment.workflow';
-import { MAP_DASHBOARD_DATA_STEP_SCHEMAS } from './map-dashboard-data.schemas';
-import {
-  MAP_DASHBOARD_DATA_RUNTIME_KEY,
-  MAP_DASHBOARD_DATA_WORKFLOW_ID,
-  type MapDashboardDataRuntime,
-} from './map-dashboard-data.steps';
-import { mapDashboardDataWorkflow } from './map-dashboard-data.workflow';
 import { CONSUMPTION_GAP_STEP_SCHEMAS } from './consumption-gap-analysis.schemas';
 import {
   CONFIRM_REQUIREMENTS_OPTION,
@@ -45,27 +38,6 @@ import {
   type ConsumptionGapRuntime,
 } from './consumption-gap-analysis.steps';
 import { consumptionGapAnalysisWorkflow } from './consumption-gap-analysis.workflow';
-import { RECREATE_DASHBOARD_STEP_SCHEMAS } from './recreate-dashboard.schemas';
-import {
-  SAMPLE_BLUEPRINT_REPLY,
-  SAMPLE_MAPPING_REPLY,
-} from './recreate-dashboard.sample';
-import {
-  RECREATE_DASHBOARD_RUNTIME_KEY,
-  RECREATE_DASHBOARD_WORKFLOW_ID,
-  blueprintOf,
-  mappingOf,
-  type DashboardBlueprint,
-  type RecreateDashboardRuntime,
-} from './recreate-dashboard.steps';
-import { recreateDashboardWorkflow } from './recreate-dashboard.workflow';
-import { REVIEW_WEBSITE_STEP_SCHEMAS } from './review-website.schemas';
-import {
-  REVIEW_WEBSITE_RUNTIME_KEY,
-  REVIEW_WEBSITE_WORKFLOW_ID,
-  type ReviewWebsiteRuntime,
-} from './review-website.steps';
-import { reviewWebsiteWorkflow } from './review-website.workflow';
 import { ORCHESTRATED_MICHAEL_STEP_SCHEMAS } from './orchestrated-answer-michael.steps';
 import { ORCHESTRATED_MICHAEL_WORKFLOW_ID } from './orchestrated-answer-michael.steps';
 import {
@@ -190,10 +162,6 @@ const FIXTURES: Record<string, ContractFixture> = {
             },
           ],
         }),
-        // The sample input has no images: Zoe never starts.
-        startImageNotes: () => undefined,
-        readsImages: () => false,
-        imageNotes: () => Promise.reject(new Error('not used')),
         save: () => Promise.resolve({ reportId: 'r-1' }),
         startFindingRows: () => undefined,
         findingRows: () =>
@@ -205,68 +173,6 @@ const FIXTURES: Record<string, ContractFixture> = {
         explain: () =>
           Promise.resolve({ answer: 'Managed (84).', stopped: false }),
       } satisfies DataReadinessAssessmentRuntime);
-      return context;
-    },
-  },
-  [RECREATE_DASHBOARD_WORKFLOW_ID]: {
-    workflow:
-      recreateDashboardWorkflow as unknown as ContractFixture['workflow'],
-    schemas: RECREATE_DASHBOARD_STEP_SCHEMAS,
-    input: { question: '', image: 'inputs/image.png' },
-    requestContext: () => {
-      const context = new RequestContext();
-      // The stubbed run: a loaded image, the dashboard read from it and
-      // the stored visual and artifact.
-      context.set(RECREATE_DASHBOARD_RUNTIME_KEY, {
-        loadImage: () =>
-          Promise.resolve({ mediaType: 'image/png', sizeBytes: 1234 }),
-        readDashboard: () =>
-          Promise.resolve({
-            blueprint: blueprintOf(
-              SAMPLE_BLUEPRINT_REPLY,
-            ) as DashboardBlueprint,
-            stopped: false,
-          }),
-        saveDashboard: () =>
-          Promise.resolve({
-            visualId: 'v-1',
-            artifactId: 'a-1',
-            artifactName: 'Sales board',
-          }),
-      } satisfies RecreateDashboardRuntime);
-      return context;
-    },
-  },
-  [MAP_DASHBOARD_DATA_WORKFLOW_ID]: {
-    workflow:
-      mapDashboardDataWorkflow as unknown as ContractFixture['workflow'],
-    schemas: MAP_DASHBOARD_DATA_STEP_SCHEMAS,
-    input: { question: '', artifact: 'a-1', datasets: ['Shop'] },
-    requestContext: () => {
-      const context = new RequestContext();
-      // The stubbed run: the saved dashboard, its mapping to the catalog
-      // and the stored dashboard.
-      context.set(MAP_DASHBOARD_DATA_RUNTIME_KEY, {
-        loadDashboard: () =>
-          Promise.resolve({
-            name: 'Sales board',
-            blueprint: blueprintOf(
-              SAMPLE_BLUEPRINT_REPLY,
-            ) as DashboardBlueprint,
-          }),
-        mapData: ({ blueprint, catalog, columns }) =>
-          Promise.resolve({
-            mapping: mappingOf(
-              SAMPLE_MAPPING_REPLY,
-              blueprint,
-              catalog,
-              columns,
-            ),
-            stopped: false,
-          }),
-        saveMappedDashboard: ({ bundle }) =>
-          Promise.resolve({ visualId: 'v-1', title: bundle.title }),
-      } satisfies MapDashboardDataRuntime);
       return context;
     },
   },
@@ -299,7 +205,6 @@ const FIXTURES: Record<string, ContractFixture> = {
       // query is a result, never a failed run), one question requirement
       // mapped to a Consumption column, no fix, and the stored report.
       context.set(CONSUMPTION_GAP_RUNTIME_KEY, {
-        readDashboard: unused,
         loadDashboard: unused,
         datasetLayers: () => Promise.resolve([GAP_DATASET]),
         runQueries: ({ queries }) => Promise.resolve(failedAll(queries)),
@@ -355,146 +260,6 @@ const FIXTURES: Record<string, ContractFixture> = {
       return context;
     },
   },
-  [REVIEW_WEBSITE_WORKFLOW_ID]: {
-    workflow: reviewWebsiteWorkflow as unknown as ContractFixture['workflow'],
-    schemas: REVIEW_WEBSITE_STEP_SCHEMAS,
-    input: {
-      url: 'https://shop.example.com/',
-      maxPages: 10,
-      maxDepth: 2,
-      mobile: true,
-      tablet: false,
-      laptop: true,
-      desktop: false,
-      exclude: '',
-      needsSignIn: false,
-      loginUrl: '',
-      visualReview: true,
-    },
-    requestContext: () => {
-      const context = new RequestContext();
-      // The stubbed run: two pages found, one finding on one of them, and
-      // the stored report.
-      const unused = () => Promise.reject(new Error('not used'));
-      context.set(REVIEW_WEBSITE_RUNTIME_KEY, {
-        checkSignIn: unused,
-        openSignIn: unused,
-        finishSignIn: unused,
-        discoverPages: () =>
-          Promise.resolve({
-            pages: [
-              {
-                url: 'https://shop.example.com/',
-                finalUrl: 'https://shop.example.com/',
-                status: 200,
-                title: 'Shop',
-                depth: 0,
-                parent: null,
-                group: '/',
-                fingerprint: 'a1b2c3d4',
-                error: null,
-              },
-              {
-                url: 'https://shop.example.com/items/12',
-                finalUrl: 'https://shop.example.com/items/12',
-                status: 200,
-                title: 'Item 12',
-                depth: 1,
-                parent: 'https://shop.example.com/',
-                group: '/items/:id',
-                fingerprint: 'e5f6a7b8',
-                error: null,
-              },
-            ],
-            skippedLinks: ['https://shop.example.com/logout'],
-            capped: false,
-            sessionLost: null,
-          }),
-        captureAndCheck: () =>
-          Promise.resolve({
-            captures: [
-              {
-                url: 'https://shop.example.com/items/12',
-                screen: 'mobile',
-                group: '/items/:id',
-                screenshot: 'site-review/mobile/items-12.jpg',
-                thumbnail: null,
-                status: 200,
-                error: null,
-              },
-            ],
-            findings: [
-              {
-                id: 'f-00000001',
-                rule: 'overflow-x',
-                severity: 'major',
-                title: 'Page scrolls sideways',
-                screen: 'mobile',
-                group: '/items/:id',
-                selector: 'table.lines',
-                measured: 'Content is 512 px wide in a 390 px screen',
-                expected:
-                  'No sideways scrolling at 390 px (WCAG 1.4.10 Reflow)',
-                rect: { x: 0, y: 200, width: 512, height: 300 },
-                helpUrl: null,
-                pages: ['https://shop.example.com/items/12'],
-                crop: null,
-                source: 'measured',
-                context: null,
-              },
-            ],
-            // The item template's page, marked for Iris.
-            reviewShots: [
-              {
-                template: '/items/:id',
-                url: 'https://shop.example.com/items/12',
-                screen: 'mobile',
-                clean: 'site-review/review/mobile/items-12.clean.jpg',
-                marked: 'site-review/review/mobile/items-12.marked.jpg',
-                clip: { x: 0, y: 0, width: 390, height: 1688 },
-                marks: [
-                  {
-                    n: 1,
-                    selector: 'button.buy',
-                    tag: 'button',
-                    text: 'Buy',
-                    rect: { x: 16, y: 300, width: 80, height: 32 },
-                    crop: null,
-                  },
-                ],
-              },
-            ],
-          }),
-        reviewTemplate: () =>
-          Promise.resolve({
-            review: {
-              findings: [
-                {
-                  mark: 1,
-                  screen: 'mobile',
-                  severity: 'minor',
-                  category: 'consistency',
-                  title: 'Buy button differs from the home page buttons',
-                  observed: 'Square corners here, rounded elsewhere.',
-                  suggestion: 'Use the shared button style.',
-                },
-              ],
-              summary: 'Clean layout; one inconsistent button.',
-            },
-            stopped: false,
-          }),
-        progress: () => undefined,
-        loadReportImages: () => Promise.resolve({}),
-        saveReport: () =>
-          Promise.resolve({
-            visualId: 'v-1',
-            reportFile: 'site-review/findings.json',
-          }),
-        showAnswer: () => Promise.resolve(),
-      } satisfies ReviewWebsiteRuntime);
-      return context;
-    },
-  },
 };
 
 describe('every catalogued workflow keeps its data contract at run time (agents.md 5.12)', () => {
@@ -537,18 +302,10 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
         result = await drain();
       }
       expect(result.status).toBe('success');
-      // The clear path: every step but Clarify and Read images, whose
-      // branches are not taken (the sample input has no images), and the
-      // follow-up branch (a first run has no earlier result).
+      // The clear path: every step but Clarify, whose branch is not taken,
+      // and the follow-up branch (a first run has no earlier result).
       const ran = source.steps.filter(
-        (step) =>
-          ![
-            'clarify',
-            'read-images',
-            'page-result',
-            'page-answer',
-            'confirm-review',
-          ].includes(step.id),
+        (step) => !['clarify', 'page-result', 'page-answer'].includes(step.id),
       );
       expect([...outputs.keys()]).toEqual(ran.map((step) => step.id));
       for (const step of ran) {

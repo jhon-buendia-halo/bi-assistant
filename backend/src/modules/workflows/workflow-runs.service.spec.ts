@@ -158,9 +158,7 @@ function build(
         draftAgentId?: string;
         context?: { question: string; answer: string };
         transcript?: { role: string; content: string }[];
-        image?: unknown;
         inputFiles?: { path: string; data: Buffer }[];
-        inputImages?: string[];
       }) => {
         draftHost = !!spec.draftAgentId;
         hostMessages = spec.transcript
@@ -2994,12 +2992,7 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
           { path: 'inputs/images/1.png', data: PNG },
           { path: 'inputs/images/2.png', data: second },
         ],
-        inputImages: ['inputs/images/1.png', 'inputs/images/2.png'],
       }),
-    );
-    // Not the recreate-dashboard single image.
-    expect(ctx.sessions.createRunHost.mock.lastCall?.[0]).not.toHaveProperty(
-      'image',
     );
   });
 
@@ -3009,7 +3002,6 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
     await streamed(ctx, 'orchestrated-answer-michael', { input: ASK });
     const spec = ctx.sessions.createRunHost.mock.lastCall?.[0];
     expect(spec).not.toHaveProperty('inputFiles');
-    expect(spec).not.toHaveProperty('inputImages');
   });
 
   it('a follow-up turns earlier paths into their files and leaves new images alone', async () => {
@@ -3088,7 +3080,6 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
       expect(spec).toMatchObject({
         runId: id,
         inputFiles: [{ path: 'inputs/images/1.png', data: PNG }],
-        inputImages: ['inputs/images/1.png'],
       });
     }
   });

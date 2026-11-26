@@ -22,6 +22,8 @@ const V2_AGENT = 'Michael';
 const V2 = 'Answer a Business Question (Avery + Michael)';
 const V2_ID = 'orchestrated-answer-michael';
 const READINESS = 'Sarah';
+/** Elena, the Insights Lead: Official (agents-evals R1, R115). */
+const ELENA = 'Elena';
 const V2_KEY = 'insights-analyst';
 const V2_DESCRIPTION =
   'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.';
@@ -37,9 +39,10 @@ const V2_TOOLS = [
 const V2_SKILLS = ['curated-knowledge', 'result-validation', 'sql-analysis'];
 /**
  * The Official cards in hub order under the Official owner: Data Foundations
- * ("Sarah") before Analysis ("Emily", "Michael"; agents-evals R1, R107).
+ * ("Sarah") before Analysis ("Elena", "Emily", "Michael"; agents-evals R1,
+ * R107, R115).
  */
-const OFFICIAL_KEYS = ['data-readiness', 'assistant', V2_KEY];
+const OFFICIAL_KEYS = ['data-readiness', 'insights-lead', 'assistant', V2_KEY];
 /** The hub's sections under All, in domain order (agents-evals R1). */
 const DOMAIN_SECTIONS = [
   'data-foundations',
@@ -51,13 +54,15 @@ const DOMAIN_SECTIONS = [
 ];
 /** The Analysis section: Official by name, then System by name (R1). */
 const ANALYSIS_KEYS = [
+  'insights-lead',
   'assistant',
   V2_KEY,
+  'chief-of-staff',
   'result-explorer',
   'analysis-planner',
 ];
-/** Every card under All: 16 built-in agents and the Background's 2. */
-const ALL_CARDS = 18;
+/** Every card under All: 18 built-in agents and the Background's 2. */
+const ALL_CARDS = 20;
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -174,7 +179,13 @@ test('shows the built-in agents and mine in sections by domain', async ({
     [
       'data-foundations',
       'Data Foundations',
-      ['data-readiness', 'data-mapper', 'knowledge-bootstrap'],
+      [
+        'data-readiness',
+        'knowledge-bootstrap',
+        'layer-mapper',
+        'gap-advisor',
+        'requirements-analyst',
+      ],
     ],
     [
       'sql',
@@ -184,9 +195,9 @@ test('shows the built-in agents and mine in sections by domain', async ({
     [
       'storytelling',
       'Storytelling',
-      ['dashboard-reader', 'answer-writer', 'visualization', 'image-reader'],
+      ['bi-analyst', 'answer-writer', 'visualization'],
     ],
-    ['quality', 'Quality & Evals', ['site-reviewer', 'assistant-eval-judge']],
+    ['quality', 'Quality & Evals', ['assistant-eval-judge']],
   ] as const) {
     await expect(
       section(page, id).getByRole('heading', { name: heading, exact: true }),
@@ -299,8 +310,8 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
   expect(await sectionIds(page)).toEqual(['general']);
 
   await owner.selectOption({ label: 'Official' });
-  // The assistant, Insights Analyst and the Data Readiness Agent
-  // are Official, each in its domain (R1, R107).
+  // The assistant, Insights Analyst, Elena and the Data Readiness Agent
+  // are Official, each in its domain (R1, R107, R115).
   await expect(cards(page)).toHaveCount(OFFICIAL_KEYS.length);
   expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
   expect(await sectionIds(page)).toEqual(['data-foundations', 'analysis']);
@@ -311,7 +322,7 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
     'true',
   );
   expect(await sectionIds(page)).toEqual(['analysis']);
-  expect(await cardKeys(page)).toEqual(['assistant', V2_KEY]);
+  expect(await cardKeys(page)).toEqual(['insights-lead', 'assistant', V2_KEY]);
 
   await filter(page, 'SQL Engineering').click();
   await expect(page.getByText('No agent personas match these filters.')).toBeVisible();
@@ -553,11 +564,12 @@ test(
     );
     await scenarioStep(
       page,
-      'Then I see "Emily", "Michael" and "Sarah", and no other agent persona',
+      'Then I see "Elena", "Emily", "Michael" and "Sarah", and no other agent persona',
       async () => {
         await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
         expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
         for (const [key, name] of [
+          ['insights-lead', ELENA],
           ['assistant', ASSISTANT],
           [V2_KEY, V2_AGENT],
           ['data-readiness', READINESS],

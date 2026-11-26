@@ -15,13 +15,11 @@ import {
   Archive,
   Brain,
   ChevronDown,
-  CircleCheck,
   Database,
   Download,
   Image as ImageIcon,
   ImagePlus,
   LayoutDashboard,
-  Loader2,
   LucideAngularModule,
   MessageSquare,
   MessageSquareReply,
@@ -50,8 +48,6 @@ import {
 } from '../../../../shared/components/chat-history-nav/chat-history-nav';
 import { ArtifactSummary } from '../../../artifacts/models/artifact.model';
 import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.service';
-import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
-import { WorkflowsNavState } from '../../services/workflows-nav-state';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
 import {
   DatasourceKind,
@@ -128,15 +124,12 @@ import {
   runStatusLine,
 } from '../../services/workflows.util';
 
-/** The workflow a saved dashboard is mapped in, and its artifact field. */
-const MAP_WORKFLOW_ID = 'map-dashboard-data';
 /**
  * Avery, the Chief of Staff: a workflow she runs is a never-ending
  * conversation. TODO(ELENA-U1): drop this fallback once the workflow's
  * `conversational: true` (api.md 116/117) is served for Avery's workflow.
  */
 const AVERY_AGENT_KEY = 'chief-of-staff';
-const MAP_ARTIFACT_FIELD = 'artifact';
 
 /** One turn of the conversation before a run starts (the intake). */
 interface ChatEntry {
@@ -259,8 +252,6 @@ export class WorkflowRunChat {
   protected readonly Archive = Archive;
   protected readonly Download = Download;
   protected readonly Brain = Brain;
-  protected readonly CircleCheck = CircleCheck;
-  protected readonly Loader2 = Loader2;
   protected readonly MessageSquare = MessageSquare;
   protected readonly MessageSquareReply = MessageSquareReply;
   protected readonly RotateCcw = RotateCcw;
@@ -493,8 +484,6 @@ export class WorkflowRunChat {
   protected readonly visuals = inject(RunVisualsState);
   private readonly artifactsApi = inject(ArtifactsApiService);
   private readonly runsApi = inject(WorkflowRunsApiService);
-  private readonly artifactsNav = inject(ArtifactsNavState);
-  private readonly workflowsNav = inject(WorkflowsNavState);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly log = viewChild<ElementRef<HTMLElement>>('log');
   /** The chat follows the run's newest text while the user stays near its end. */
@@ -707,13 +696,6 @@ export class WorkflowRunChat {
     if (run !== null) this.visuals.view(run, event);
   }
 
-  /** The shown answer made a visual: its card carries Saved to Artifacts and Map to data. */
-  protected readonly hasArtifactCard = computed(
-    () =>
-      this.designer.run() !== null &&
-      this.designer.runResult()?.answer?.visual !== undefined,
-  );
-
   /**
    * The scorecard opened from the run's readiness card (data-readiness R5),
    * kept with the run it belongs to: a new run shows none.
@@ -796,31 +778,6 @@ export class WorkflowRunChat {
   }
 
   /**
-   * A code step running with progress of its own (Review a Website's pages,
-   * agents.md 5.19): its title, its latest progress line and the five
-   * before it, newest first.
-   * Its progress arrives as the run's reasoning; an agent step shows it as
-   * Thinking instead. Null when no code step reports progress.
-   */
-  protected readonly liveCodeProgress = computed(() => {
-    if (!this.designer.running() || this.liveAgentStep()) return null;
-    const step = this.designer
-      .runPanelSteps()
-      .find((s) => s.kind === 'code' && s.status === 'running');
-    const lines = this.designer
-      .reasoning()
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean);
-    if (!step || !lines.length) return null;
-    return {
-      title: step.title,
-      latest: lines[lines.length - 1],
-      recent: lines.slice(-6, -1).reverse(),
-    };
-  });
-
-  /**
    * The run's input shows only while no run is shown (2026-11-20: runs have
    * no follow-up any more). Under a run, running, waiting or ended, the
    * conversation takes the whole column; New question or Run again brings
@@ -888,31 +845,6 @@ export class WorkflowRunChat {
       `[id="${this.inputId(peer)}"]`,
     );
     if (control !== null && control.type === 'file') control.value = '';
-  }
-
-  /**
-   * The artifact the shown run saved (Dashboard Image to Artifact saves the
-   * dashboard it read); null for a run that saved none.
-   */
-  protected readonly savedArtifactId = computed(() => {
-    const result = this.designer.runResult();
-    const id = result?.output?.['artifactId'];
-    return result !== null &&
-      result.status === 'success' &&
-      typeof id === 'string' &&
-      id !== ''
-      ? id
-      : null;
-  });
-
-  protected openSavedArtifact(id: string): void {
-    this.artifactsNav.openArtifact(id);
-  }
-
-  /** Opens Map a Dashboard to Data with the saved dashboard picked. */
-  protected mapSavedArtifact(id: string): void {
-    this.designer.prefillOnLoad({ [MAP_ARTIFACT_FIELD]: id });
-    this.workflowsNav.openWorkflow(MAP_WORKFLOW_ID);
   }
 
   /** The line under the workflow's name before a run. */
@@ -1164,7 +1096,7 @@ export class WorkflowRunChat {
     return workflow === null ? null : leadVoice(workflow);
   });
 
-  /** The field the composer's message fills (the question, else Review a Website's URL). */
+  /** The field the composer's message fills (the question, else the workflow's single text field). */
   protected readonly prompt = computed(() => {
     const workflow = this.designer.workflow();
     return workflow === null
@@ -1655,7 +1587,7 @@ export class WorkflowRunChat {
         });
       }
     }
-    // A switch turned away from its default: `Visual review with Iris off`.
+    // A switch turned away from its default, as a chip (`<label> off`).
     for (const field of this.menuOptionFields()) {
       const on = this.designer.checked(field.name);
       if (on === (field.default === true)) continue;

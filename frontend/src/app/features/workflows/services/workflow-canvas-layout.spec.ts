@@ -1031,7 +1031,7 @@ const ORCHESTRATED: Source & Pick<WorkflowDetail, 'edges'> = {
         name: 'Avery',
         role: 'Chief of Staff',
         tools: [
-          'read_reference_images',
+          'check_plan',
           'plan_analysis',
           'analyse_data',
           'write_answer',
@@ -1041,10 +1041,10 @@ const ORCHESTRATED: Source & Pick<WorkflowDetail, 'edges'> = {
         maxSteps: 16,
         team: [
           {
-            tool: 'read_reference_images',
-            key: 'image-reader',
-            name: 'Zoe',
-            role: 'Image Analyst',
+            tool: 'check_plan',
+            key: 'plan-checker',
+            name: 'Nora',
+            role: 'Plan Checker',
           },
           {
             tool: 'plan_analysis',
@@ -1091,9 +1091,9 @@ describe("an orchestrator's team (Avery, api.md 117 team)", () => {
       ['model', 'orchestrate-model', 'claude-opus-5-5', 'model'],
       [
         'agent',
-        'orchestrate-agent-read_reference_images',
-        'Zoe',
-        'read_reference_images',
+        'orchestrate-agent-check_plan',
+        'Nora',
+        'check_plan',
       ],
       ['agent', 'orchestrate-agent-plan_analysis', 'Olivia', 'plan_analysis'],
       ['agent', 'orchestrate-agent-analyse_data', 'Michael', 'analyse_data'],

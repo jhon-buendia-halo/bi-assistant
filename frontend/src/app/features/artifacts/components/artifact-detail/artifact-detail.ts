@@ -14,12 +14,9 @@ import {
   Loader2,
   LucideAngularModule,
   Pencil,
-  Play,
   Trash2,
 } from 'lucide-angular';
 import { saveBlob } from '../../../../shared/query-evidence/rows-csv';
-import { WorkflowDesigner } from '../../../workflows/services/workflow-designer.service';
-import { WorkflowsNavState } from '../../../workflows/services/workflows-nav-state';
 import {
   Artifact,
   dashboardZipName,
@@ -42,10 +39,6 @@ function formatVersionDate(iso: string): string {
   });
 }
 
-/** The workflow an artifact is handed to, and the field that takes its id. */
-const USE_WORKFLOW_ID = 'map-dashboard-data';
-const USE_FIELD = 'artifact';
-
 /**
  * One artifact's page: its name (renamed in place), kind, counts, the original
  * image and the document in a sandboxed frame, and Delete, which asks first.
@@ -60,13 +53,10 @@ export class ArtifactDetail implements OnInit {
   protected readonly Download = Download;
   protected readonly Loader2 = Loader2;
   protected readonly Pencil = Pencil;
-  protected readonly Play = Play;
   protected readonly Trash2 = Trash2;
 
   private readonly api = inject(ArtifactsApiService);
   private readonly sanitizer = inject(DomSanitizer);
-  private readonly designer = inject(WorkflowDesigner);
-  private readonly workflowsNav = inject(WorkflowsNavState);
 
   readonly artifactId = input.required<string>();
   /** The version to open at; null is the current one. */
@@ -232,13 +222,5 @@ export class ArtifactDetail implements OnInit {
         this.deleting.set(false);
       },
     });
-  }
-
-  /** Opens Map a Dashboard to Data with this artifact picked. */
-  protected useInWorkflow(): void {
-    const artifact = this.artifact();
-    if (artifact === null) return;
-    this.designer.prefillOnLoad({ [USE_FIELD]: artifact.id });
-    this.workflowsNav.openWorkflow(USE_WORKFLOW_ID);
   }
 }

@@ -115,7 +115,6 @@ const PLAYBOOKS: Record<string, string> = {
 const ASKS: Record<string, string> = {
   plan_analysis: ' for a plan',
   write_answer: ' to write the answer',
-  read_reference_images: ' to read the images',
   build_visual: ' for a chart',
   build_dashboard: ' for a dashboard',
 };
@@ -125,7 +124,6 @@ const HANDED_BACK: Record<string, string> = {
   answer_from_data: 'Wrote the answer',
   plan_analysis: 'Made the plan',
   write_answer: 'Wrote the answer',
-  read_reference_images: 'Read the images',
   build_visual: 'Built the chart',
   build_dashboard: 'Built the dashboard',
 };

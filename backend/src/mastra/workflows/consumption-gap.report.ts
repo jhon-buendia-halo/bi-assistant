@@ -1,6 +1,6 @@
 /**
  * The report of Consumption Gap Analysis (agents.md 5.20): the interactive
- * visual (a fixed runtime, no model writes markup, as for 5.17) and the
+ * visual (a fixed runtime, no model writes markup, as for a dashboard) and the
  * run's answer, both built in code from the run's checked data. Pure code,
  * no framework import.
  */
@@ -19,7 +19,7 @@ import {
   GAP_REPORT_ROOT_ID,
   GAP_REPORT_RUNTIME,
 } from './consumption-gap.report-runtime';
-import type { MockBundle } from './recreate-dashboard.steps';
+import type { MockBundle } from './live-dashboard';
 
 /** Everything the report shows. */
 export interface GapReport {

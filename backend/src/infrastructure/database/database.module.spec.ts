@@ -694,10 +694,13 @@ describe('legacy datastore migrations', () => {
           .all() as { name: string }[]
       ).map((r) => r.name);
 
-    it('drops both tables and their seed markers, keeping other settings', () => {
-      ['user_personas', 'visual_charts', 'settings'].forEach(createTable);
+    it('drops their tables and seed markers, keeping other settings', () => {
+      ['user_personas', 'visual_charts', 'site_signins', 'settings'].forEach(
+        createTable,
+      );
       insert('user_personas', { id: 'p1', name: 'Demo Finance Analyst' });
       insert('visual_charts', { id: 'v1', name: 'Bar chart' });
+      insert('site_signins', { origin: 'https://shop.example.com' });
       insert('settings', { key: 'personas-seed', seededAt: 'x' });
       insert('settings', { key: 'visuals-seed', seededAt: 'x' });
       insert('settings', { key: 'llm', model: 'm' });
@@ -706,6 +709,7 @@ describe('legacy datastore migrations', () => {
 
       expect(tableNames()).not.toContain('user_personas');
       expect(tableNames()).not.toContain('visual_charts');
+      expect(tableNames()).not.toContain('site_signins');
       expect(docs('settings')).toEqual([{ key: 'llm', model: 'm' }]);
     });
 

@@ -12,15 +12,11 @@
 import {
   CHIEF_OF_STAFF_AGENT_KEY,
   ASSISTANT_MAX_STEPS,
-  DASHBOARD_READER_AGENT_KEY,
-  DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
   GAP_ADVISOR_AGENT_KEY,
-  IMAGE_READER_AGENT_KEY,
   LAYER_MAPPER_AGENT_KEY,
   REQUIREMENTS_ANALYST_AGENT_KEY,
-  SITE_REVIEWER_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import { INSIGHTS_ANALYST_AGENT_KEY } from '../agents/insights-analyst-catalog';
@@ -59,44 +55,16 @@ import {
 } from './data-readiness-assessment.steps';
 import type { AgentWorkflow } from './agent-workflows';
 import {
-  MAP_DASHBOARD_DATA_DEFAULT_QUESTION,
-  MAP_DASHBOARD_DATA_DESCRIPTION,
-  MAP_DASHBOARD_DATA_EDGES,
-  MAP_DASHBOARD_DATA_STEPS,
-  MAP_DASHBOARD_DATA_WORKFLOW_ID,
-  MAP_DASHBOARD_DATA_WORKFLOW_NAME,
-} from './map-dashboard-data.steps';
-import {
-  RECREATE_DASHBOARD_DEFAULT_QUESTION,
-  RECREATE_DASHBOARD_DESCRIPTION,
-  RECREATE_DASHBOARD_EDGES,
-  RECREATE_DASHBOARD_STEPS,
-  RECREATE_DASHBOARD_WORKFLOW_ID,
-  RECREATE_DASHBOARD_WORKFLOW_NAME,
-} from './recreate-dashboard.steps';
-import {
-  REVIEW_WEBSITE_DEFAULT_EXCLUDE,
-  REVIEW_WEBSITE_DEPTH,
-  REVIEW_WEBSITE_DESCRIPTION,
-  REVIEW_WEBSITE_EDGES,
-  REVIEW_WEBSITE_PAGES,
-  REVIEW_WEBSITE_STEPS,
-  REVIEW_WEBSITE_WORKFLOW_ID,
-  REVIEW_WEBSITE_WORKFLOW_NAME,
-} from './review-website.steps';
-import {
   assertWorkflowContracts,
   contractHash,
   type ContractStepEntry,
   type WorkflowEdge,
 } from './workflow-contract';
-import {
-  IMAGES_MAX_COUNT,
-  type WorkflowInputField,
-  type WorkflowInputValue,
-  type WorkflowInputValues,
+import type {
+  WorkflowInputField,
+  WorkflowInputValue,
+  WorkflowInputValues,
 } from './workflow-input';
-import { READ_IMAGES_STEP_ID } from './read-images.steps';
 
 export type {
   InputDatasourceKind,
@@ -161,20 +129,6 @@ const DATASETS_FIELD: WorkflowInputField = {
   label: 'Datasets',
   type: 'datasets',
   required: true,
-};
-/**
- * A run's reference images (workflows R35; api.md 116): up to
- * `IMAGES_MAX_COUNT` PNG, JPEG or WebP images that Read images describes
- * for the later steps (agents.md 2.15). Right after the question in every
- * workflow that has Read images; `max` is the most images.
- */
-const IMAGES_FIELD: WorkflowInputField = {
-  name: 'images',
-  label: 'Reference images',
-  type: 'images',
-  required: false,
-  max: IMAGES_MAX_COUNT,
-  help: `Paste, drop or attach up to ${IMAGES_MAX_COUNT} PNG, JPEG or WebP images, 5 MB each.`,
 };
 const CAREFUL_FIELD: WorkflowInputField = {
   name: 'careful',
@@ -277,184 +231,9 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
           default: READINESS_DEFAULT_QUESTION,
           maxLength: QUESTION_MAX_LENGTH,
         },
-        IMAGES_FIELD,
       ],
       steps: DATA_READINESS_ASSESSMENT_STEPS,
-      // Zoe reads the reference images when there are some.
-      stepAgents: { [READ_IMAGES_STEP_ID]: IMAGE_READER_AGENT_KEY },
       edges: DATA_READINESS_ASSESSMENT_EDGES,
-      bar: 'steps',
-    },
-    {
-      id: RECREATE_DASHBOARD_WORKFLOW_ID,
-      name: RECREATE_DASHBOARD_WORKFLOW_NAME,
-      category: 'dashboards',
-      description: RECREATE_DASHBOARD_DESCRIPTION,
-      // Grace reads the dashboard.
-      primaryFor: DASHBOARD_READER_AGENT_KEY,
-      trigger: 'run',
-      input: [
-        {
-          name: 'image',
-          label: 'Dashboard image',
-          type: 'image',
-          required: true,
-          help: 'A PNG, JPEG or WebP screenshot of the dashboard, up to 5 MB.',
-        },
-        {
-          name: 'question',
-          label: 'Instructions',
-          type: 'textarea',
-          required: false,
-          placeholder: RECREATE_DASHBOARD_DEFAULT_QUESTION,
-          default: RECREATE_DASHBOARD_DEFAULT_QUESTION,
-          maxLength: QUESTION_MAX_LENGTH,
-        },
-      ],
-      steps: RECREATE_DASHBOARD_STEPS,
-      edges: RECREATE_DASHBOARD_EDGES,
-      bar: 'steps',
-    },
-    {
-      id: MAP_DASHBOARD_DATA_WORKFLOW_ID,
-      name: MAP_DASHBOARD_DATA_WORKFLOW_NAME,
-      category: 'dashboards',
-      description: MAP_DASHBOARD_DATA_DESCRIPTION,
-      // Daniel maps the saved dashboard to the datasets.
-      primaryFor: DATA_MAPPER_AGENT_KEY,
-      trigger: 'run',
-      input: [
-        {
-          name: 'artifact',
-          label: 'Saved dashboard',
-          type: 'artifact',
-          required: true,
-          artifactKinds: ['dashboard'],
-          help: 'A dashboard saved in Artifacts by Dashboard Image to Artifact.',
-        },
-        { ...DATASETS_FIELD, help: 'The data the dashboard is mapped to.' },
-        {
-          name: 'question',
-          label: 'Instructions',
-          type: 'textarea',
-          required: false,
-          placeholder: MAP_DASHBOARD_DATA_DEFAULT_QUESTION,
-          default: MAP_DASHBOARD_DATA_DEFAULT_QUESTION,
-          maxLength: QUESTION_MAX_LENGTH,
-        },
-        IMAGES_FIELD,
-      ],
-      steps: MAP_DASHBOARD_DATA_STEPS,
-      // Zoe reads the reference images when there are some.
-      stepAgents: { [READ_IMAGES_STEP_ID]: IMAGE_READER_AGENT_KEY },
-      edges: MAP_DASHBOARD_DATA_EDGES,
-      bar: 'steps',
-    },
-    {
-      id: REVIEW_WEBSITE_WORKFLOW_ID,
-      name: REVIEW_WEBSITE_WORKFLOW_NAME,
-      category: 'software-development',
-      description: REVIEW_WEBSITE_DESCRIPTION,
-      // Iris answers what you ask about the report; no step calls her yet.
-      primaryFor: SITE_REVIEWER_AGENT_KEY,
-      trigger: 'run',
-      input: [
-        {
-          name: 'url',
-          label: 'Entry URL',
-          type: 'text',
-          required: true,
-          placeholder: 'https://www.example.com/',
-          help: 'Where the review starts. Only pages of the same site are followed.',
-          maxLength: 2000,
-        },
-        {
-          name: 'maxPages',
-          label: 'Max pages',
-          type: 'number',
-          required: false,
-          default: REVIEW_WEBSITE_PAGES.default,
-          min: REVIEW_WEBSITE_PAGES.min,
-          max: REVIEW_WEBSITE_PAGES.max,
-          help: 'Every page is opened and measured once per screen.',
-        },
-        {
-          name: 'maxDepth',
-          label: 'Max depth',
-          type: 'number',
-          required: false,
-          default: REVIEW_WEBSITE_DEPTH.default,
-          min: REVIEW_WEBSITE_DEPTH.min,
-          max: REVIEW_WEBSITE_DEPTH.max,
-          help: 'How many clicks away from the entry URL.',
-        },
-        {
-          name: 'mobile',
-          label: 'Mobile (390 px)',
-          type: 'boolean',
-          required: false,
-          default: true,
-        },
-        {
-          name: 'tablet',
-          label: 'Tablet (768 px)',
-          type: 'boolean',
-          required: false,
-          default: false,
-        },
-        {
-          name: 'laptop',
-          label: 'Laptop (1440 px)',
-          type: 'boolean',
-          required: false,
-          default: true,
-        },
-        {
-          name: 'desktop',
-          label: 'Desktop (1920 px)',
-          type: 'boolean',
-          required: false,
-          default: false,
-        },
-        {
-          name: 'exclude',
-          label: 'Never follow links matching',
-          type: 'text',
-          required: false,
-          default: REVIEW_WEBSITE_DEFAULT_EXCLUDE,
-          placeholder: REVIEW_WEBSITE_DEFAULT_EXCLUDE,
-          help: 'A regular expression over the link’s path. Keeps the review from signing out or deleting anything.',
-          maxLength: 500,
-        },
-        {
-          name: 'visualReview',
-          label: 'Visual review with Iris',
-          type: 'boolean',
-          required: false,
-          default: true,
-          help: 'Iris looks at one page per page template and reports what measuring cannot see. One AI call per template; with more than ten templates the run asks first.',
-        },
-        {
-          name: 'needsSignIn',
-          label: 'The site needs a sign-in',
-          type: 'boolean',
-          required: false,
-          default: false,
-          help: 'A browser window opens for you to sign in the first time; the sign-in is saved, encrypted, for the next reviews. Screenshots of signed-in pages stay on this computer.',
-        },
-        {
-          name: 'loginUrl',
-          label: 'Sign-in page',
-          type: 'text',
-          required: false,
-          placeholder: 'The entry URL',
-          default: '',
-          help: 'Where to sign in, when it is not the entry URL.',
-          maxLength: 2000,
-        },
-      ],
-      steps: REVIEW_WEBSITE_STEPS,
-      edges: REVIEW_WEBSITE_EDGES,
       bar: 'steps',
     },
     {
@@ -480,11 +259,6 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
           maxLength: QUESTION_MAX_LENGTH,
         },
         {
-          ...IMAGES_FIELD,
-          label: 'Reference dashboards',
-          help: 'Screenshots of the dashboards the model must support.',
-        },
-        {
           name: 'artifact',
           label: 'Saved dashboard',
           type: 'artifact',
@@ -493,11 +267,10 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         },
       ],
       steps: CONSUMPTION_GAP_STEPS,
-      // Grace reads the reference dashboards, the Requirements Analyst
-      // derives the requirements and the Layer Mapper maps them; the Gap
-      // Advisor (`primaryFor`) recommends the fixes.
+      // The Requirements Analyst derives the requirements and the Layer
+      // Mapper maps them; the Gap Advisor (`primaryFor`) recommends the
+      // fixes.
       stepAgents: {
-        'read-dashboards': DASHBOARD_READER_AGENT_KEY,
         'derive-requirements': REQUIREMENTS_ANALYST_AGENT_KEY,
         'map-requirements': LAYER_MAPPER_AGENT_KEY,
       },
@@ -539,17 +312,24 @@ export const CONVERSATION_WORKFLOWS: readonly CodeWorkflowSource[] =
  * The code workflows removed from the catalogue (data-model 3.16 M18): their
  * stored runs are deleted at startup, and a past chat that ran one keeps its
  * id, so its chip still names it (`REMOVED_WORKFLOW_NAMES`). Never listed,
- * never run: a past chat of one goes on as its agent's own turn.
+ * never run: a past chat of one goes on as its agent's own turn, or as the
+ * plain assistant's when its agent is gone too.
  */
 export const REMOVED_WORKFLOW_IDS: readonly string[] = [
   'answer-business-question',
   'orchestrated-answer',
+  'recreate-dashboard',
+  'map-dashboard-data',
+  'review-website',
 ];
 
 /** The name a removed workflow had, by id, for a past chat's chip. */
 export const REMOVED_WORKFLOW_NAMES: Readonly<Record<string, string>> = {
   'answer-business-question': 'Answer a Business Question',
   'orchestrated-answer': 'Answer a Business Question (orchestrated)',
+  'recreate-dashboard': 'Dashboard Image to Artifact',
+  'map-dashboard-data': 'Map a Dashboard to Data',
+  'review-website': 'Review a Website',
 };
 
 /** Whether an id names a removed code workflow (`REMOVED_WORKFLOW_IDS`). */
@@ -559,13 +339,13 @@ export function isRemovedWorkflowId(id: string | undefined): boolean {
 
 /** What one agent turn of a run takes from the run's input (plan 4.2, 5.1). */
 export interface AgentRunTurn {
-  /** The user message: `question`, else the entry `url`, trimmed. */
+  /** The user message: `question`, trimmed. */
   question: string;
   /** `datasets`, or the readiness run's one `dataset`; absent otherwise. */
   datasets?: string[];
   /** Careful mode (the Assistant and user agents). */
   careful: boolean;
-  /** Map a Dashboard to Data's `artifact`: the saved dashboard it maps. */
+  /** Consumption Gap Analysis's `artifact`: the saved dashboard it reads. */
   artifact?: string;
 }
 
@@ -579,8 +359,7 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
       ? [text(values['dataset'])]
       : undefined;
   return {
-    // A workflow with no question runs on its entry URL (Review a Website).
-    question: text(values['question']) || text(values['url']),
+    question: text(values['question']),
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
     ...(text(values['artifact']) ? { artifact: text(values['artifact']) } : {}),

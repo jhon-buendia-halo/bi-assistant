@@ -14,14 +14,17 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { DATA_DIR } from '../../infrastructure/database/database.module';
-import { SAMPLE_BLUEPRINT_REPLY } from '../../mastra/workflows/recreate-dashboard.sample';
-import {
-  blueprintOf,
-  type DashboardBlueprint,
-} from '../../mastra/workflows/recreate-dashboard.steps';
+import { SAMPLE_BLUEPRINT } from '../../mastra/workflows/dashboard-blueprint.sample';
+import type { DashboardBlueprint } from '../../mastra/workflows/dashboard-blueprint.schemas';
 import {
   ARTIFACT_IMAGES_DIR,
   ArtifactsService,
@@ -30,7 +33,7 @@ import {
 } from './artifacts.service';
 import type { ArtifactDoc } from './entities/artifact.entity';
 
-const BLUEPRINT = blueprintOf(SAMPLE_BLUEPRINT_REPLY);
+const BLUEPRINT = SAMPLE_BLUEPRINT;
 const PNG = Buffer.concat([
   Buffer.from('89504e470d0a1a0a', 'hex'),
   Buffer.from('file'),
@@ -68,22 +71,57 @@ function build() {
       return Promise.resolve(at >= 0 ? 1 : 0);
     },
   };
-  return { service: new ArtifactsService(repository as never), docs };
+  /**
+   * A dashboard artifact as an earlier version stored it: a blueprint
+   * without versions, with the image it was read from, if any.
+   */
+  async function stored(input: {
+    name?: string;
+    blueprint: DashboardBlueprint;
+    image?: { data: Buffer; mediaType: string };
+    source?: { runId: string; workflowId: string };
+  }): Promise<ArtifactDoc> {
+    const id = `legacy-${docs.length + 1}`;
+    let image: ArtifactDoc['image'];
+    if (input.image) {
+      image = { file: `${id}.png`, mediaType: input.image.mediaType };
+      mkdirSync(join(DATA_DIR, ARTIFACT_IMAGES_DIR), { recursive: true });
+      writeFileSync(
+        join(DATA_DIR, ARTIFACT_IMAGES_DIR, image.file),
+        input.image.data,
+      );
+    }
+    return repository.insert({
+      id,
+      kind: 'dashboard',
+      name: input.name ?? input.blueprint.title,
+      description: input.blueprint.summary,
+      blueprint: input.blueprint,
+      ...(image ? { image } : {}),
+      ...(input.source ? { source: input.source } : {}),
+    });
+  }
+  return { service: new ArtifactsService(repository as never), docs, stored };
 }
 
 afterAll(() => rmSync(DATA_DIR, { recursive: true, force: true }));
 
 describe('ArtifactsService', () => {
-  it('stores a dashboard with its image and lists it, newest first', async () => {
-    const { service } = build();
-    const first = await service.create({
+  it('lists a stored dashboard with its image, newest first', async () => {
+    const { service, stored } = build();
+    const first = await stored({
       blueprint: BLUEPRINT,
       image: { data: PNG, mediaType: 'image/png' },
       source: { runId: 'r-1', workflowId: 'recreate-dashboard' },
     });
-    expect(first).toMatchObject({
+    const second = await stored({ name: 'Q4 board', blueprint: BLUEPRINT });
+    const listed = await service.list();
+    expect(listed.map((artifact) => artifact.id)).toEqual([
+      second.id,
+      first.id,
+    ]);
+    expect(listed[1]).toMatchObject({
       kind: 'dashboard',
-      // The dashboard's title when no name is given.
       name: 'Sales Performance 2025',
       description: 'Tracks revenue and returns by month and region.',
       widgetCount: 4,
@@ -91,15 +129,7 @@ describe('ArtifactsService', () => {
       hasImage: true,
       source: { runId: 'r-1', workflowId: 'recreate-dashboard' },
     });
-    const second = await service.create({
-      name: '  Q4 board  ',
-      blueprint: BLUEPRINT,
-    });
-    expect(second).toMatchObject({ name: 'Q4 board', hasImage: false });
-    expect((await service.list()).map((artifact) => artifact.id)).toEqual([
-      second.id,
-      first.id,
-    ]);
+    expect(listed[0]).toMatchObject({ name: 'Q4 board', hasImage: false });
     expect(await service.image(first.id)).toEqual({
       data: PNG,
       mediaType: 'image/png',
@@ -110,29 +140,15 @@ describe('ArtifactsService', () => {
   });
 
   it('answers the artifact with its dashboard', async () => {
-    const { service } = build();
-    const { id } = await service.create({ blueprint: BLUEPRINT });
+    const { service, stored } = build();
+    const { id } = await stored({ blueprint: BLUEPRINT });
     const artifact = await service.get(id);
     expect(artifact.blueprint).toEqual(BLUEPRINT);
   });
 
-  it('refuses what is not a dashboard, and a bad name', async () => {
-    const { service, docs } = build();
-    await expect(service.create({ blueprint: { title: 'x' } })).rejects.toThrow(
-      'The dashboard to save is not valid',
-    );
-    await expect(
-      service.create({ blueprint: { ...BLUEPRINT, widgets: [] } }),
-    ).rejects.toThrow('The dashboard to save is not valid');
-    await expect(
-      service.create({ name: 'x'.repeat(81), blueprint: BLUEPRINT }),
-    ).rejects.toThrow('Name must be at most 80 characters');
-    expect(docs).toHaveLength(0);
-  });
-
   it('renames an artifact', async () => {
-    const { service } = build();
-    const { id } = await service.create({ blueprint: BLUEPRINT });
+    const { service, stored } = build();
+    const { id } = await stored({ blueprint: BLUEPRINT });
     expect(await service.rename(id, { name: ' Sales ' })).toMatchObject({
       id,
       name: 'Sales',
@@ -147,8 +163,8 @@ describe('ArtifactsService', () => {
   });
 
   it('deletes an artifact with its image', async () => {
-    const { service, docs } = build();
-    const { id } = await service.create({
+    const { service, docs, stored } = build();
+    const { id } = await stored({
       blueprint: BLUEPRINT,
       image: { data: PNG, mediaType: 'image/png' },
     });
@@ -164,7 +180,7 @@ describe('ArtifactsService', () => {
   });
 });
 
-const SAMPLE = BLUEPRINT as DashboardBlueprint;
+const SAMPLE = BLUEPRINT;
 
 /** A live version of the sample dashboard on three rows. */
 function liveVersion(
@@ -336,8 +352,8 @@ describe('ArtifactsService dashboard versions', () => {
   });
 
   it('reads a dashboard saved before versions as version 1 without data', async () => {
-    const { service, docs } = build();
-    const { id } = await service.create({ blueprint: SAMPLE });
+    const { service, docs, stored } = build();
+    const { id } = await stored({ blueprint: SAMPLE });
     expect(docs[0].versions).toBeUndefined();
     expect((await service.list())[0]).toMatchObject({
       currentVersion: 1,
@@ -564,9 +580,9 @@ describe('ArtifactsService drafts and Save to Artifacts', () => {
     expect(await service.list()).toEqual([]);
   });
 
-  it("keeps Grace's artifacts saved, and an earlier Clara dashboard a draft", async () => {
-    const { service, docs } = build();
-    const { id } = await service.create({ blueprint: SAMPLE });
+  it('keeps a dashboard saved before versions saved, and an earlier Clara dashboard a draft', async () => {
+    const { service, docs, stored } = build();
+    const { id } = await stored({ blueprint: SAMPLE });
     const { artifact } = await service.detail(id);
     expect(artifact).toMatchObject({
       status: 'saved',

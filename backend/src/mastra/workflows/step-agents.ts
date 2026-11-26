@@ -112,11 +112,6 @@ export async function planWithModel(
     catalogBlock: string;
     /** After Clarify: its question and the user's answer (ADR-0043). */
     answered?: AnsweredClarification;
-    /**
-     * Read images' notes (agents.md 2.15, 5.11): they end the request when
-     * not empty; absent or `''`, the request is what it was before.
-     */
-    imageNotes?: string;
   },
   options: StepModelOptions,
 ): Promise<{ plan: AnalysisPlan; stopped: boolean }> {
@@ -217,11 +212,6 @@ export async function writeAnswerWithModel(
     plan: AnalysisPlan;
     queries: readonly AnalyseQuery[];
     findings: readonly ValidationFinding[];
-    /**
-     * Read images' notes (agents.md 2.15, 5.11): they follow the plan when
-     * not empty; absent or `''`, the request is what it was before.
-     */
-    imageNotes?: string;
   },
   options: StepModelOptions & { onText?: (delta: string) => void },
 ): Promise<{ answer: BusinessAnswer; stopped: boolean }> {

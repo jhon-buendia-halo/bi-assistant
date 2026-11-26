@@ -13,17 +13,11 @@ import type { RequestContext } from '@mastra/core/request-context';
 import { explainQueryWithModel } from './agents/query-explainer.agent';
 import { interpretResultWithModel } from './agents/result-explorer.agent';
 import {
-  mapDataWithModel,
-  readDashboardWithModel,
-} from './workflows/recreate-dashboard.agents';
-import { readImagesWithModel } from './workflows/read-images.agents';
-import {
   deriveRequirementsWithModel,
   mapRequirementsWithModel,
   recommendFixesWithModel,
   reviseRequirementsWithModel,
 } from './workflows/consumption-gap-analysis.agents';
-import { reviewTemplateWithModel } from './workflows/review-website.agents';
 import {
   createSessionWorkspace,
   deleteSessionWorkspaceDirectory,
@@ -108,51 +102,6 @@ export class MastraService {
     ...args: Parameters<typeof interpretResultWithModel>
   ): ReturnType<typeof interpretResultWithModel> {
     return interpretResultWithModel(...args);
-  }
-
-  /**
-   * Dashboard Image to Artifact's Read dashboard step model call (agents.md
-   * 5.17): the Dashboard Reader over the image, the blueprint read from
-   * its reply.
-   */
-  readDashboard(
-    ...args: Parameters<typeof readDashboardWithModel>
-  ): ReturnType<typeof readDashboardWithModel> {
-    return readDashboardWithModel(...args);
-  }
-
-  /**
-   * The Read images step model call of Assess Data Readiness and Map a
-   * Dashboard to Data (agents.md 2.15; workflows
-   * R35): Zoe, the Image Reader, over every reference image of the run in
-   * one call, her notes rendered from the reply. A model error rejects.
-   */
-  readImages(
-    ...args: Parameters<typeof readImagesWithModel>
-  ): ReturnType<typeof readImagesWithModel> {
-    return readImagesWithModel(...args);
-  }
-
-  /**
-   * The Review templates step model call of Review a Website (agents.md
-   * 2.16, 5.19): Iris over one page template's screenshots, clean and
-   * marked, in one call. A model error rejects.
-   */
-  reviewTemplate(
-    ...args: Parameters<typeof reviewTemplateWithModel>
-  ): ReturnType<typeof reviewTemplateWithModel> {
-    return reviewTemplateWithModel(...args);
-  }
-
-  /**
-   * Dashboard Image to Artifact's Map data step model call (agents.md 5.17): the
-   * Data Mapper over the blueprint and the catalog, the mapping read from
-   * its reply and checked against the catalog.
-   */
-  mapData(
-    ...args: Parameters<typeof mapDataWithModel>
-  ): ReturnType<typeof mapDataWithModel> {
-    return mapDataWithModel(...args);
   }
 
   /**
@@ -447,7 +396,7 @@ export class MastraService {
    * host (`agentThreadId`): the request and the reply as two text messages.
    * The call itself is unchanged; the thread is created on first use.
    * Exchanges of one thread are written one after the other, in the order
-   * they finish (Grace's image reads run together, agents.md 5.20): two
+   * they finish (calls of one agent may run together): two
    * first exchanges never both create the thread. A failed write rejects
    * its own call only; the next one still goes.
    */

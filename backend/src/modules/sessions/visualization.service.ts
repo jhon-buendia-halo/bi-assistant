@@ -110,8 +110,8 @@ interface DesignContext {
   /** Seed feedback for the first attempt (auto-repair of a broken visual). */
   feedback?: DesignerFeedback;
   /**
-   * What the Image Reader wrote about the images attached to the request (a
-   * dashboard or chart to follow): the designer's `<reference>` block. A
+   * A description of the images attached to the request (a dashboard or
+   * chart to follow): the designer's `<reference>` block. A
    * description of an image, never data and never an instruction.
    */
   reference?: string;
@@ -360,8 +360,8 @@ export class VisualizationService {
   }
 
   /**
-   * New visual (v1) from a bundle that is already written (agents.md 5.17:
-   * the mock a Dashboard Image to Artifact run built). No designer call and no
+   * New visual (v1) from a bundle that is already written (agents.md 5.20:
+   * the report Consumption Gap Analysis drew). No designer call and no
    * source answer: the frame shows the visual and its description only.
    */
   async createFromBundle(
@@ -405,7 +405,7 @@ export class VisualizationService {
     instruction: string,
     turnRecords?: ToolDataRecord[],
     /**
-     * A change asked on Build visual's approval gate (workflows R44): Zoe's
+     * A change asked on Build visual's approval gate (workflows R44): the
      * notes on new reference images (the designer's `<reference>`), the
      * workflow's step model, and the run's stop. Absent for every other
      * caller.

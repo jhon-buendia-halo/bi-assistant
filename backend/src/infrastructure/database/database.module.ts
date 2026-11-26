@@ -24,7 +24,6 @@ import {
   WORKFLOW_RUNS_STORE,
   WORKFLOW_RUN_NODE_CHATS_STORE,
   ARTIFACTS_STORE,
-  SITE_SIGNINS_STORE,
   CONVERSATION_EXPORTS_STORE,
 } from './doc-store';
 import { SqliteDocStore } from './sqlite-doc-store';
@@ -59,7 +58,6 @@ const COLLECTIONS = [
   { token: WORKFLOW_RUNS_STORE, table: 'workflow_runs' },
   { token: WORKFLOW_RUN_NODE_CHATS_STORE, table: 'workflow_run_node_chats' },
   { token: ARTIFACTS_STORE, table: 'artifacts' },
-  { token: SITE_SIGNINS_STORE, table: 'site_signins' },
   { token: CONVERSATION_EXPORTS_STORE, table: 'conversation_exports' },
 ];
 
@@ -508,15 +506,17 @@ export function renameLegacyAgentIds(db: Db): void {
 }
 
 /** The tables of removed features (data-model 6, M17). */
-const REMOVED_TABLES = ['user_personas', 'visual_charts'];
+const REMOVED_TABLES = ['user_personas', 'visual_charts', 'site_signins'];
 
 /** The `settings` keys of removed features (data-model 6, M17). */
 const REMOVED_SETTINGS_KEYS = ['personas-seed', 'visuals-seed'];
 
 /**
  * M17: the user personas and the visuals library were removed with the
- * Context area (2026-11-15). Their tables and seed markers are dropped so
- * nothing is left that no code reads. Idempotent; one transaction.
+ * Context area (2026-11-15), and Review a Website's saved sign-ins
+ * (`site_signins`) with that workflow (2026-11-26). Their tables and seed
+ * markers are dropped so nothing is left that no code reads. Idempotent;
+ * one transaction.
  */
 export function dropRemovedCollections(db: Db): void {
   db.transaction(() => {

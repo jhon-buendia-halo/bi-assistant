@@ -90,7 +90,6 @@ jest.mock('./workspace-files', () => {
   return {
     ...actual,
     writeWorkspaceFile: jest.fn(actual.writeWorkspaceFile),
-    readWorkspaceImage: jest.fn(actual.readWorkspaceImage),
   };
 });
 jest.mock('./visualization.service', () => ({
@@ -137,7 +136,7 @@ import { BadGatewayException } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
-import { readWorkspaceImage, writeWorkspaceFile } from './workspace-files';
+import { writeWorkspaceFile } from './workspace-files';
 import { WorkflowNodeChatsRepository } from '../workflows/repositories/workflow-node-chats.repository';
 import { WorkflowRunsRepository } from '../workflows/repositories/workflow-runs.repository';
 import type { WorkflowRun } from '../workflows/workflow-run-steps';
@@ -518,23 +517,6 @@ function build(options: BuildOptions = {}) {
     copyMemoryResource: jest.fn().mockResolvedValue(0),
     copyMemoryThread: jest.fn().mockResolvedValue(false),
     recordAgentExchange: jest.fn().mockResolvedValue(undefined),
-    // Read images' model call (agents.md 2.15): no notes unless a test
-    // scripts them.
-    readImages: jest.fn(
-      (
-        input: { question: string; images: unknown[] },
-        opts: { onExchange?: (e: object) => Promise<void> },
-      ) => {
-        // The stand-in records nothing; a test may (`onExchange`).
-        void input;
-        void opts;
-        return Promise.resolve({
-          imageNotes: '',
-          imageCount: 0,
-          stopped: false,
-        });
-      },
-    ),
   };
   const userAgents = {
     get: jest.fn().mockResolvedValue(null),
@@ -581,7 +563,6 @@ function build(options: BuildOptions = {}) {
     options.readiness as never,
     undefined,
     options.artifacts as never,
-    undefined,
     options.exporter as never,
   );
   const workflows = {
@@ -895,37 +876,25 @@ describe('the run host (agents.md 5.14)', () => {
     );
   });
 
-  it("writes every reference image of the run's input to its workspace once and records their paths (workflows R35)", async () => {
+  it("writes every image file of the run's input to its workspace (workflows R35)", async () => {
     const ctx = build();
     const write = jest.mocked(writeWorkspaceFile);
     write.mockClear();
     write.mockResolvedValue(undefined);
     const one = Buffer.from('one');
     const two = Buffer.from('two');
-    const host = await ctx.sessions.createRunHost({
+    await ctx.sessions.createRunHost({
       runId: 'img-1',
       workflowId: READINESS_WORKFLOW.id,
       name: READINESS_WORKFLOW.name,
       datasets: ['World Cup'],
-      image: { path: 'inputs/image.png', data: one },
       inputFiles: [
-        { path: 'inputs/image.png', data: one },
-        { path: 'inputs/images/1.png', data: two },
+        { path: 'inputs/images/1.png', data: one },
+        { path: 'inputs/images/2.png', data: two },
       ],
-      inputImages: ['inputs/images/1.png'],
     });
-    expect(host.inputImages).toEqual(['inputs/images/1.png']);
-    expect(host.inputImage).toBe('inputs/image.png');
     expect(write).toHaveBeenCalledTimes(2);
-    expect(write).toHaveBeenCalledWith('run-img-1', 'inputs/images/1.png', two);
-    // A host with no images records none.
-    const plain = await ctx.sessions.createRunHost({
-      runId: 'img-2',
-      workflowId: READINESS_WORKFLOW.id,
-      name: READINESS_WORKFLOW.name,
-      datasets: ['World Cup'],
-    });
-    expect(plain).not.toHaveProperty('inputImages');
+    expect(write).toHaveBeenCalledWith('run-img-1', 'inputs/images/2.png', two);
     write.mockReset();
   });
 
@@ -1276,8 +1245,6 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       'resolve-dataset:success',
       'profile-source:success',
       'score-readiness:success',
-      // No reference images (workflows R35).
-      'read-images:skipped',
       'save-report:success',
       'explain-report:success',
       'finding-rows:success',
@@ -1525,36 +1492,6 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
     expect(explorable.map((query) => query.sql)).toEqual(sources);
   });
 
-  it('fails at Read images before Save report stores anything when Zoe fails', async () => {
-    const readiness = readinessService();
-    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
-    jest.mocked(writeWorkspaceFile).mockResolvedValue(undefined);
-    jest.mocked(readWorkspaceImage).mockResolvedValue({
-      path: 'inputs/images/1.png',
-      data: PNG_BYTES,
-      mediaType: 'image/png',
-    });
-    ctx.mastra.readImages.mockRejectedValue(
-      new Error('The Image Reader returned an error'),
-    );
-    try {
-      const { run } = await readinessRun(ctx, {
-        dataset: 'World Cup',
-        images: [PNG_URL],
-      });
-      expect(run.status).toBe('failed');
-      expect(run.error).toContain('The Image Reader returned an error');
-      expect(run.steps.find((step) => step.id === 'read-images')?.status).toBe(
-        'failed',
-      );
-      expect(readiness.saveReport).not.toHaveBeenCalled();
-      expect(ctx.calls['data-readiness'] ?? []).toEqual([]);
-    } finally {
-      jest.mocked(writeWorkspaceFile).mockReset();
-      jest.mocked(readWorkspaceImage).mockReset();
-    }
-  });
-
   // The no-progress watchdog (workflows spec), scaled down: a profile
   // that reports progress for four times the limit is not ended by it.
   it("reports the profile's progress while Profile source runs, so a long profile is not ended as stalled, and never after the step ended", async () => {
@@ -1698,45 +1635,6 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
     ).rejects.toThrow('is not a PostgreSQL or Databricks dataset');
   });
 
-  // Reference images (workflows R35; agents.md 2.15, 5.13).
-  it("adds Zoe's notes after the report block when the run has images, and leaves the context as it was without", async () => {
-    const readiness = readinessService();
-    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
-    jest.mocked(writeWorkspaceFile).mockResolvedValue(undefined);
-    jest.mocked(readWorkspaceImage).mockResolvedValue({
-      path: 'inputs/images/1.png',
-      data: PNG_BYTES,
-      mediaType: 'image/png',
-    });
-    ctx.mastra.readImages.mockResolvedValue({
-      imageNotes: IMAGE_NOTES,
-      imageCount: 1,
-      stopped: false,
-    });
-    const plain = await readinessRun(ctx, { dataset: 'World Cup' });
-    const noted = await readinessRun(ctx, {
-      dataset: 'World Cup',
-      images: [PNG_URL],
-    });
-    expect(plain.run.status).toBe('success');
-    expect(noted.run.status).toBe('success');
-    expect(
-      noted.run.steps.find((step) => step.id === 'read-images'),
-    ).toMatchObject({ id: 'read-images', status: 'success' });
-    const [before, after] = ctx.calls['data-readiness'].map((call) =>
-      call.options.context.map((block) => block.content),
-    );
-    // Without images: the report block is the last one, as before.
-    expect(before.at(-1)).toContain('stored readiness report');
-    // With images: the same blocks, then the notes.
-    expect(after.slice(0, -1)).toHaveLength(before.length);
-    expect(after.at(-2)).toContain('stored readiness report');
-    expect(after.at(-1)).toBe(IMAGE_NOTES);
-    expect(ctx.mastra.readImages).toHaveBeenCalledTimes(1);
-    jest.mocked(writeWorkspaceFile).mockReset();
-    jest.mocked(readWorkspaceImage).mockReset();
-  });
-
   // agents.md 5.13: Rows behind findings waits for queries Save report
   // started; each one done while it waits is a progress line, so a slow
   // warehouse never trips the run's no-progress watchdog (15 minutes).
@@ -1795,69 +1693,7 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       jest.useRealTimers();
     }
   });
-
-  /** A readiness run with one reference image, Zoe recording her exchange. */
-  async function zoeRecordsRun(ctx: Ctx) {
-    jest.mocked(writeWorkspaceFile).mockResolvedValue(undefined);
-    jest.mocked(readWorkspaceImage).mockResolvedValue({
-      path: 'inputs/images/1.png',
-      data: PNG_BYTES,
-      mediaType: 'image/png',
-    });
-    ctx.mastra.readImages.mockImplementationOnce(
-      async (
-        _input: unknown,
-        opts: { onExchange?: (e: object) => Promise<void> },
-      ) => {
-        await opts.onExchange?.({ request: 'images', reply: IMAGE_NOTES });
-        return { imageNotes: IMAGE_NOTES, imageCount: 1, stopped: false };
-      },
-    );
-    try {
-      return await readinessRun(ctx, {
-        dataset: 'World Cup',
-        images: [PNG_URL],
-      });
-    } finally {
-      jest.mocked(writeWorkspaceFile).mockReset();
-      jest.mocked(readWorkspaceImage).mockReset();
-    }
-  }
-
-  it("records Zoe's exchange in her thread on the run's host (agents.md 5.14)", async () => {
-    const ctx = build({
-      chunks: EXPLAIN_CHUNKS,
-      readiness: readinessService(),
-    });
-    const { run } = await zoeRecordsRun(ctx);
-    expect(run.status).toBe('success');
-    expect(ctx.mastra.recordAgentExchange).toHaveBeenCalledWith(
-      `run-${run.id}`,
-      'image-reader',
-      { request: 'images', reply: IMAGE_NOTES },
-    );
-  });
-
-  it('a failure to record an exchange never fails the run', async () => {
-    const ctx = build({
-      chunks: EXPLAIN_CHUNKS,
-      readiness: readinessService(),
-    });
-    ctx.mastra.recordAgentExchange.mockRejectedValue(new Error('disk full'));
-    const { run } = await zoeRecordsRun(ctx);
-    expect(ctx.mastra.recordAgentExchange).toHaveBeenCalled();
-    expect(run.status).toBe('success');
-  });
 });
-
-/** Read images' notes as a stand-in model returns them (agents.md 2.15). */
-const IMAGE_NOTES = '## Reference images\nA bar chart of goals per team.';
-/** Bytes with the PNG signature, as the input check requires. */
-const PNG_BYTES = Buffer.concat([
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  Buffer.from('chart'),
-]);
-const PNG_URL = `data:image/png;base64,${PNG_BYTES.toString('base64')}`;
 
 /** Avery asks the user first (`ask_clarification`, agents.md 5.23). */
 const AVERY_ASKS = [

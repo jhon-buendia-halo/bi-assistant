@@ -11,9 +11,10 @@ import { dirname, join } from 'node:path';
 import { createZip } from '../../common/zip-archive';
 import { DATA_DIR } from '../../infrastructure/database/database.module';
 import { dashboardArchive } from '../../mastra/workflows/live-dashboard';
-import { dashboardBlueprintSchema } from '../../mastra/workflows/recreate-dashboard.schemas';
-import type { DashboardBlueprint } from '../../mastra/workflows/recreate-dashboard.steps';
-import { IMAGE_EXTENSIONS } from '../../mastra/workflows/workflow-input';
+import {
+  dashboardBlueprintSchema,
+  type DashboardBlueprint,
+} from '../../mastra/workflows/dashboard-blueprint.schemas';
 import {
   ARTIFACT_NAME_MAX_LENGTH,
   type ArtifactDetail,
@@ -34,17 +35,6 @@ import { ArtifactsRepository } from './repositories/artifacts.repository';
  * `<id>.<ext>`, each live version's rows as `<id>/v<N>/rows.json`.
  */
 export const ARTIFACT_IMAGES_DIR = 'artifacts';
-
-/** What a new artifact is made from. */
-export interface NewArtifact {
-  /** Its name; the dashboard's title when empty. */
-  name?: string;
-  /** The dashboard as data: checked against the blueprint's schema. */
-  blueprint: unknown;
-  /** The image the dashboard was read from, when there is one. */
-  image?: { data: Buffer; mediaType: string };
-  source?: { runId: string; workflowId: string };
-}
 
 /** A version a turn makes of a dashboard built on the user's data. */
 export interface NewDashboardVersion {
@@ -87,9 +77,9 @@ export function versionParam(raw: unknown): number | undefined {
  * The artifacts (api.md 2.6.4; data-model 3.18): reusable context saved from
  * workflow runs, listed in the Artifacts area and taken by a later run in
  * place of what it would otherwise produce again. Today one kind,
- * `dashboard`: the blueprint of a recreated dashboard (agents.md 5.17), or a
- * dashboard a turn built on the user's data, with a version per change and
- * a row snapshot per version.
+ * `dashboard`: a dashboard a turn built on the user's data, with a version
+ * per change and a row snapshot per version, or a blueprint stored by an
+ * earlier version of the app, with no versions and maybe an image.
  */
 @Injectable()
 export class ArtifactsService {
@@ -268,43 +258,6 @@ export class ArtifactsService {
     } catch {
       throw missing();
     }
-  }
-
-  /**
-   * Store a new artifact (agents.md 5.17): 400 when the blueprint is not a
-   * dashboard's or the name is too long. Its image is written to the data
-   * dir first; a failure to write it stores the artifact without it.
-   */
-  async create(input: NewArtifact): Promise<ArtifactSummary> {
-    const blueprint = checkedBlueprint(input.blueprint);
-    const id = randomUUID();
-    const name = checkedName(input.name?.trim() || blueprint.title);
-    let image: ArtifactDoc['image'];
-    const extension = input.image
-      ? IMAGE_EXTENSIONS[input.image.mediaType]
-      : undefined;
-    if (input.image && extension) {
-      const file = `${id}.${extension}`;
-      try {
-        await mkdir(join(DATA_DIR, ARTIFACT_IMAGES_DIR), { recursive: true });
-        await writeFile(imagePath(file), input.image.data);
-        image = { file, mediaType: input.image.mediaType };
-      } catch (error) {
-        this.logger.warn(
-          `Could not store the image of artifact ${id}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
-    const stored = await this.repository.insert({
-      id,
-      kind: 'dashboard',
-      name,
-      description: blueprint.summary,
-      blueprint,
-      ...(image ? { image } : {}),
-      ...(input.source ? { source: input.source } : {}),
-    });
-    return summaryOf(stored);
   }
 
   /**

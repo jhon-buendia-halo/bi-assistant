@@ -8,7 +8,11 @@ import type { z } from 'zod';
 import { gapAdvisorAgent } from '../agents/gap-advisor.agent';
 import { layerMapperAgent } from '../agents/layer-mapper.agent';
 import { requirementsAnalystAgent } from '../agents/requirements-analyst.agent';
+import { modelCallTuning } from '../model-compat';
+import { resolveAgentModelConfig } from '../model-resolver';
+import { stepModelFrom } from '../step-model';
 import {
+  callOptions,
   noteExchange,
   replyText,
   stoppedBy,
@@ -39,17 +43,74 @@ import type {
 } from './consumption-gap-analysis.schemas';
 import { checkedFixes, checkedMappings } from './consumption-gap.gaps';
 import {
-  replyFailure,
-  throwIfCut,
-  tunedOptions,
-  type ModelReply,
-} from './recreate-dashboard.agents';
-import { deadlineFor, guardedCall } from './model-call';
+  cutReply,
+  deadlineFor,
+  guardedCall,
+  ReplyCutError,
+} from './model-call';
+import { runErrorMessage } from './workflow-run';
 
 /** The most tokens each call's reply takes. */
 const REQUIREMENTS_OUTPUT_TOKENS = 8000;
 const MAPPINGS_OUTPUT_TOKENS = 16000;
 const FIXES_OUTPUT_TOKENS = 8000;
+
+/**
+ * The call's options with its output cap filed the way the resolved model
+ * reads it; the turn's own provider options (its effort) are kept.
+ */
+async function tunedOptions(
+  options: StepModelOptions,
+  maxOutputTokens: number,
+) {
+  // Tuned for the model the call runs on: a workflow's step model, if any.
+  const tuning = modelCallTuning(
+    await resolveAgentModelConfig(stepModelFrom(options.requestContext)?.model),
+    { maxOutputTokens },
+  );
+  const base = callOptions(options);
+  const providerOptions = {
+    ...tuning.providerOptions,
+    ...(options.providerOptions ?? {}),
+  };
+  return {
+    ...base,
+    modelSettings: tuning.modelSettings,
+    ...(Object.keys(providerOptions).length
+      ? { providerOptions: providerOptions as never }
+      : {}),
+  };
+}
+
+/** The model's own failure as an error; undefined when it did not fail. */
+function replyFailure(error: unknown): Error | undefined {
+  if (error === undefined || error === null) return undefined;
+  return error instanceof Error ? error : new Error(runErrorMessage(error));
+}
+
+/** What a one-call step reads of `generate`'s reply. */
+interface ModelReply {
+  object?: unknown;
+  text?: string;
+  error?: unknown;
+  finishReason?: unknown;
+}
+
+/**
+ * Throws `ReplyCutError` when the reply was cut at the output cap (finish
+ * reason `length`; workflows R43): a JSON reply cut short is never read as
+ * an empty result. The guarded call tries once more; cut again, the step
+ * fails with it.
+ */
+function throwIfCut(
+  reply: ModelReply,
+  label: string,
+  maxOutputTokens: number,
+): void {
+  if (cutReply(reply.finishReason)) {
+    throw new ReplyCutError(label, maxOutputTokens);
+  }
+}
 
 interface CallableAgent {
   generate: (message: string, options: never) => Promise<unknown>;

@@ -50,17 +50,15 @@ import { engineInputSchema, withContract } from './workflow-contract';
 // (https://mastra.ai/docs/workflows/control-flow) and suspend/resume
 // (https://mastra.ai/docs/workflows/suspend-and-resume, ADR-0043):
 //
-//   resolve-layers → load-layer-catalogs → read-dashboards
-//   → derive-requirements → infer-lineage → confirm-requirements (waits)
-//   → map-requirements → trace-gaps → probe-evidence → recommend-fixes
-//   → render-report
+//   resolve-layers → load-layer-catalogs → derive-requirements
+//   → infer-lineage → confirm-requirements (waits) → map-requirements
+//   → trace-gaps → probe-evidence → recommend-fixes → render-report
 //
 // Resolve layers and Load layer catalogs read the datasets' schema notes and
 // entities (fetched once per run): a dataset with no Consumption schema is
 // refused before any model call. Load layer catalogs starts the lineage
 // checks (read-only queries over candidate column pairs, ADR-0051), which run
-// while Read dashboards reads every reference image with Grace at the same
-// time and loads the saved dashboard, and Derive requirements runs the
+// while Derive requirements loads the saved dashboard, runs the
 // Requirements Analyst over the questions and adds each dashboard widget and
 // filter in code; Infer lineage then takes the checks. The graph stays
 // linear and one step runs at a time; no held work crosses the wait. Confirm requirements waits for the user's confirmation or
@@ -192,77 +190,13 @@ const loadLayerCatalogsStep = createStep({
         datasets: params.inputData.datasets,
       });
       const tables = layerTables(datasets, params.inputData.layers);
-      // The lineage checks start now and run while the dashboards are read
-      // and the requirements derived; Infer lineage takes them (ADR-0051).
+      // The lineage checks start now and run while the requirements are
+      // derived; Infer lineage takes them (ADR-0051).
       const { queries } = lineageChecksOf(tables);
       if (queries.length) {
         runtime.startLineage({ queries: bareQueries(queries) });
       }
       return { ...params.inputData, tables };
-    },
-  ),
-});
-
-const readDashboardsStep = createStep({
-  id: STEP['read-dashboards'].id,
-  description: STEP['read-dashboards'].title,
-  inputSchema: engineInputSchema(SCHEMAS['read-dashboards'].input),
-  outputSchema: SCHEMAS['read-dashboards'].output,
-  execute: withContract(
-    STEP['read-dashboards'].title,
-    SCHEMAS['read-dashboards'],
-    async (params: StepParams<(typeof SCHEMAS)['read-dashboards']>) => {
-      const runtime = runtimeOf(params, STEP['read-dashboards'].title);
-      const { question, datasets, artifact, images, layers, tables } =
-        params.inputData;
-      const questions = parseQuestions(question);
-      const paths = images ?? [];
-      // Every reference image read by Grace at the same time (agents.md
-      // 2.13). The first failure aborts the other reads, which are awaited,
-      // and is the step's error: no read is left running or paid for.
-      const batch = new AbortController();
-      let failure: { error: unknown } | undefined;
-      const reads = await Promise.all(
-        paths.map((image) =>
-          runtime
-            .readDashboard({ image, signal: batch.signal })
-            .catch((error: unknown) => {
-              failure ??= { error };
-              batch.abort();
-              return undefined;
-            }),
-        ),
-      );
-      if (failure) throw failure.error;
-      // A dashboard's id is its image's place, whatever order they ended in.
-      const dashboards: ReferenceDashboard[] = [];
-      reads.forEach((read, index) => {
-        if (!read || read.stopped) return;
-        const id = `D${index + 1}`;
-        dashboards.push({
-          id,
-          source: 'image',
-          name: read.blueprint.title.trim() || `Dashboard ${id}`,
-          blueprint: read.blueprint,
-        });
-      });
-      const base = { questions, datasets, layers, tables };
-      if (reads.some((read) => read?.stopped)) {
-        return params.bail({ ...base, dashboards, stopped: true });
-      }
-      // The saved dashboard, last, from Artifacts, without a model call.
-      if (artifact.trim()) {
-        const loaded = await runtime.loadDashboard({
-          artifact: artifact.trim(),
-        });
-        dashboards.push({
-          id: `D${paths.length + 1}`,
-          source: 'artifact',
-          name: loaded.name,
-          blueprint: loaded.blueprint,
-        });
-      }
-      return { ...base, dashboards, stopped: false };
     },
   ),
 });
@@ -306,14 +240,31 @@ const deriveRequirementsStep = createStep({
     SCHEMAS['derive-requirements'],
     async (params: StepParams<(typeof SCHEMAS)['derive-requirements']>) => {
       const runtime = runtimeOf(params, STEP['derive-requirements'].title);
-      const { questions, dashboards } = params.inputData;
-      // The questions' requirements from the model, the dashboards' in code.
+      const { question, datasets, artifact, layers, tables } = params.inputData;
+      const questions = parseQuestions(question);
+      // The saved dashboard, from Artifacts, without a model call.
+      const dashboards: ReferenceDashboard[] = [];
+      if (artifact.trim()) {
+        const loaded = await runtime.loadDashboard({
+          artifact: artifact.trim(),
+        });
+        dashboards.push({
+          id: 'D1',
+          name: loaded.name,
+          blueprint: loaded.blueprint,
+        });
+      }
+      // The questions' requirements from the model, the dashboard's in code.
       const derived = await runtime.deriveRequirements({
         questions,
         dashboards,
       });
       const output = {
-        ...params.inputData,
+        questions,
+        datasets,
+        layers,
+        tables,
+        dashboards,
         requirements: [
           ...derived.requirements,
           ...dashboardRequirements(dashboards),
@@ -524,7 +475,6 @@ export const consumptionGapAnalysisWorkflow = createWorkflow({
 })
   .then(resolveLayersStep)
   .then(loadLayerCatalogsStep)
-  .then(readDashboardsStep)
   .then(deriveRequirementsStep)
   .then(inferLineageStep)
   .then(confirmRequirementsStep)

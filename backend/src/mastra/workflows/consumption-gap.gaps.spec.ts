@@ -197,7 +197,6 @@ describe('resolveLayers and layerTables', () => {
 describe('dashboardRequirements', () => {
   const dashboard: ReferenceDashboard = {
     id: 'D1',
-    source: 'image',
     name: 'Rendimiento Mundial',
     blueprint: {
       title: 'Rendimiento Mundial',

@@ -154,7 +154,6 @@ export interface OrchestratorTurnDeps {
   emit(event: StreamEvent): void;
   signal: AbortSignal;
   datasets: string[];
-  images: string[];
   /**
    * The dashboard gate (agents.md 2.21): the user asked for a dashboard or
    * the conversation has one. Closed, build_dashboard is hidden and the
@@ -263,9 +262,8 @@ export const ORCHESTRATOR_HISTORY_MESSAGES = 40;
 function runFacts(deps: OrchestratorTurnDeps): string {
   return [
     `Run facts: datasets ${deps.datasets.length ? deps.datasets.join(', ') : 'none'}.`,
-    deps.images.length
-      ? `The run has ${deps.images.length} reference image(s).`
-      : 'The run has no reference images.',
+    // Unchanged since runs took reference images: no run has one now.
+    'The run has no reference images.',
     // Unchanged since her whole team's workflow: no run builds a visual.
     'The run builds no visual.',
     ...conversationFacts(deps, 'build_dashboard'),
@@ -416,8 +414,6 @@ export function orchestratorTools(
         attempt: state.attempts,
         planBlock: michaelAloneRequest(brief, earlier),
         ...(answered ? { answered } : {}),
-        // No reference images reach Michael here: the run's input has none.
-        imageNotes: '',
       });
     } catch (error) {
       if (deps.signal.aborted) throw error;

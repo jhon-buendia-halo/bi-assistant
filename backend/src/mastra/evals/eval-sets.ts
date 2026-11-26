@@ -27,10 +27,8 @@ import {
 import {
   ANALYSIS_PLANNER_EVAL_TARGET,
   ANSWER_WRITER_EVAL_TARGET,
-  IMAGE_READER_EVAL_TARGET,
   analysisPlannerEvalTarget,
   answerWriterEvalTarget,
-  imageReaderEvalTarget,
 } from './isolated-call-targets';
 import {
   BI_ANALYST_EVAL_AGENT_KEY,
@@ -42,7 +40,6 @@ import { ANALYSIS_PLANNER_EVAL_SET } from './analysis-planner.evals';
 import { ANSWER_WRITER_EVAL_SET } from './answer-writer.evals';
 import { INSIGHTS_ANALYST_EDGE_EVAL_SET } from './insights-analyst-edge.evals';
 import { INSIGHTS_ANALYST_RETAIL_EVAL_SET } from './insights-analyst-retail.evals';
-import { IMAGE_READER_EVAL_SET } from './image-reader.evals';
 import {
   READINESS_WORKFLOW_EVAL_TARGET,
   readinessWorkflowEvalTarget,
@@ -57,16 +54,11 @@ import {
   AVERY_WORKFLOW_EVAL_TARGET,
   averyWorkflowEvalTarget,
 } from './avery-workflow-target';
-import {
-  SITE_REVIEWER_EVAL_AGENT_KEY,
-  SITE_REVIEWER_EVAL_SET,
-  siteReviewerEvalTarget,
-} from './site-reviewer.evals';
 
 /**
  * Every eval set, of every agent that has evals (agents.md 8.1): the
  * assistant's, the Data Readiness Agent's, Insights Analyst's, the Query
- * Explainer's, the Result Explorer's, the Site Reviewer's, Clara's, Avery's and Elena's. A set runs on the agent its
+ * Explainer's, the Result Explorer's, Clara's, Avery's and Elena's. A set runs on the agent its
  * `agentKey` names, the `assistant` when it names none.
  */
 export const EVAL_SETS: AssistantEvalSet[] = [
@@ -77,12 +69,10 @@ export const EVAL_SETS: AssistantEvalSet[] = [
   ANSWER_WRITER_EVAL_SET,
   INSIGHTS_ANALYST_EDGE_EVAL_SET,
   INSIGHTS_ANALYST_RETAIL_EVAL_SET,
-  IMAGE_READER_EVAL_SET,
   INSIGHTS_ANALYST_EVAL_SET,
   QUERY_EXPLAINER_EVAL_SET,
   RESULT_EXPLORER_EVAL_SET,
   RESULT_EXPLORER_EDGE_EVAL_SET,
-  SITE_REVIEWER_EVAL_SET,
   BI_ANALYST_EVAL_SET,
   AVERY_EVAL_SET,
   INSIGHTS_LEAD_EVAL_SET,
@@ -116,7 +106,6 @@ const EVAL_TARGET_FACTORIES: Record<
 > = {
   [ANALYSIS_PLANNER_EVAL_TARGET]: (sets) => analysisPlannerEvalTarget(sets),
   [ANSWER_WRITER_EVAL_TARGET]: (sets) => answerWriterEvalTarget(sets),
-  [IMAGE_READER_EVAL_TARGET]: (sets) => imageReaderEvalTarget(sets),
   [READINESS_WORKFLOW_EVAL_TARGET]: (sets) => readinessWorkflowEvalTarget(sets),
   [BI_ANALYST_EVAL_AGENT_KEY]: (sets) => biAnalystEvalTarget(sets),
   [AVERY_WORKFLOW_EVAL_TARGET]: (sets) => averyWorkflowEvalTarget(sets),
@@ -197,8 +186,6 @@ export function evalTargetOf(targetId: string, agentKey: string): EvalTarget {
     return queryExplainerEvalTarget();
   if (agentKey === RESULT_EXPLORER_EVAL_AGENT_KEY)
     return resultExplorerEvalTarget();
-  if (agentKey === SITE_REVIEWER_EVAL_AGENT_KEY)
-    return siteReviewerEvalTarget();
   throw new Error(`Agent "${agentKey}" has no evals to run`);
 }
 

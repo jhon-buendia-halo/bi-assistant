@@ -3,7 +3,7 @@
  * `submit_dashboard`, the checks that tie every field of it to a column of
  * her data query, and the pure code that turns the draft and the query's
  * rows into the blueprint the fixed dashboard runtime draws
- * (./recreate-dashboard.schemas.ts, unchanged). Zod and plain code only,
+ * (./dashboard-blueprint.schemas.ts, unchanged). Zod and plain code only,
  * no framework import.
  */
 import { z } from 'zod';
@@ -15,7 +15,7 @@ import {
   BLUEPRINT_WIDGET_KINDS,
   blueprintThemeSchema,
   type dashboardBlueprintSchema,
-} from './recreate-dashboard.schemas';
+} from './dashboard-blueprint.schemas';
 
 /** Clara's registry key (agents.md 1.2). */
 export { BI_ANALYST_AGENT_KEY } from '../agent-constants';
@@ -400,7 +400,7 @@ function distinct(rows: DashboardRow[], column: string, cap: number) {
 /**
  * The draft behind a blueprint: what Clara is given to change a dashboard.
  * The parts read from the rows are dropped; a blueprint's `other` kinds
- * (Grace's) read as a select and a table.
+ * (in a dashboard saved before versions) read as a select and a table.
  */
 export function draftOf(b: DashboardBlueprint): DashboardDraft {
   return {

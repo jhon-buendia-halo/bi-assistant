@@ -206,29 +206,6 @@ describe('agent step stories (ui.md 4.4b, Agents at work)', () => {
     expect(stories.get('analyse')!.concern).toBeFalse();
   });
 
-  it('tells how many reference images the Image Reader described', () => {
-    const emily = {
-      key: 'image-reader',
-      name: 'Zoe',
-      role: 'Image Analyst',
-    };
-    const reading = (imageCount: number): WorkflowRunStep => ({
-      id: 'read-images',
-      title: 'Read images',
-      status: 'success',
-      output: { imageNotes: '## Reference images', imageCount },
-    });
-    const sentence = (imageCount: number) =>
-      agentStepStories({
-        steps: [step('read-images', 'Read images', emily, ['imageNotes'])],
-        running: false,
-        runSteps: [reading(imageCount)],
-        liveToolCalls: [],
-      }).get('read-images')!.sentence;
-    expect(sentence(1)).toBe('I described 1 reference image for the team.');
-    expect(sentence(3)).toBe('I described 3 reference images for the team.');
-  });
-
   it('prefers the streamed tool calls of the running step', () => {
     const stories = agentStepStories({
       steps: STEPS,

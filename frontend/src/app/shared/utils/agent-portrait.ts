@@ -44,15 +44,11 @@ export const BUILTIN_PORTRAITS: Readonly<Record<string, PortraitLook>> = {
   'assistant-eval-judge': { hair: 'variant36' }, // Laura
   'analysis-planner': { hair: 'variant28' }, // Olivia
   'answer-writer': { hair: 'variant39' }, // Jessica
-  'dashboard-reader': { hair: 'variant02', glasses: 'variant03' }, // Grace
-  'data-mapper': { hair: 'variant54' }, // Daniel
   'query-explainer': { hair: 'variant58' }, // Hannah
   'result-explorer': { hair: 'variant12' }, // Nathan
-  'image-reader': { hair: 'variant31', glasses: 'variant11' }, // Zoe
   'requirements-analyst': { hair: 'variant19' }, // Rosa
   'layer-mapper': { hair: 'variant09' }, // Leo
   'gap-advisor': { hair: 'variant33' }, // Nora
-  'site-reviewer': { hair: 'variant12', glasses: 'variant11' }, // Iris
   'chief-of-staff': { hair: 'variant44', glasses: 'variant03' }, // Avery
 };
 

@@ -12,11 +12,9 @@ import {
 import { DomSanitizer } from '@angular/platform-browser';
 import {
   BarChart3,
-  CircleCheck,
   ExternalLink,
   FileText,
   LucideAngularModule,
-  Map as MapIcon,
 } from 'lucide-angular';
 import { ThemeService } from '../../../../core/theme/theme.service';
 import { withVisualTheme } from '../../../sessions/components/interactive-visual-panel/interactive-visual-panel';
@@ -26,22 +24,13 @@ import { WorkflowRunsApiService } from '../../../workflows/services/workflow-run
 
 /** What a run's visual is, as its card names it (visuals R42). */
 export interface ArtifactKind {
-  label: 'Dashboard' | 'Report' | 'Visual';
-  /** Its values are invented (Dashboard Image to Artifact). */
-  mock: boolean;
+  label: 'Report' | 'Visual';
 }
 
 /** A visual's kind from the workflow that made it. */
 export function artifactKind(workflowId: string): ArtifactKind {
-  if (workflowId === 'recreate-dashboard')
-    return { label: 'Dashboard', mock: true };
-  if (
-    workflowId === 'consumption-gap-analysis' ||
-    workflowId === 'review-website'
-  ) {
-    return { label: 'Report', mock: false };
-  }
-  return { label: 'Visual', mock: false };
+  if (workflowId === 'consumption-gap-analysis') return { label: 'Report' };
+  return { label: 'Visual' };
 }
 
 /** The live preview's frame, drawn at this size and scaled down to the card's thumbnail. */
@@ -50,9 +39,8 @@ const PREVIEW = { width: 1280, height: 800, scale: 0.1875 } as const;
 /**
  * A visual a run created, as a card in the thread where it was made
  * (visuals R42; ui.md 4.4b): a live, non-interactive preview of the visual
- * at that version, its kind, title and version, whether it was saved to
- * Artifacts, and its actions: Open (the visual in the side panel) and, for
- * a saved dashboard, Map to data.
+ * at that version, its kind, title and version, and its action: Open (the
+ * visual in the side panel).
  */
 @Component({
   selector: 'app-run-artifact-card',
@@ -100,9 +88,6 @@ const PREVIEW = { width: 1280, height: 800, scale: 0.1875 } as const;
             />
             {{ kind().label }}
           </span>
-          @if (kind().mock) {
-            <span class="chip chip-warning">Mock data</span>
-          }
           <span
             class="text-[12px] text-fg-muted"
             data-testid="run-artifact-version"
@@ -116,23 +101,6 @@ const PREVIEW = { width: 1280, height: 800, scale: 0.1875 } as const;
         >
           {{ visual().title }}
         </h3>
-        @if (savedArtifactId(); as artifactId) {
-          <p
-            class="m-0 flex items-center gap-1.5 text-[12px] text-fg-muted"
-            data-testid="run-artifact-saved"
-          >
-            <lucide-angular [img]="CircleCheck" [size]="13" />
-            <span>Saved to Artifacts</span>
-            <button
-              type="button"
-              class="rounded text-primary hover:underline"
-              data-testid="run-artifact-open-saved"
-              (click)="openArtifact.emit(artifactId)"
-            >
-              See it there
-            </button>
-          </p>
-        }
         <div class="mt-1 flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -144,18 +112,6 @@ const PREVIEW = { width: 1280, height: 800, scale: 0.1875 } as const;
             <lucide-angular [img]="ExternalLink" [size]="14" />
             <span>Open</span>
           </button>
-          @if (savedArtifactId(); as artifactId) {
-            <button
-              type="button"
-              class="btn btn-outline"
-              data-testid="run-artifact-map"
-              title="Map this dashboard to your datasets"
-              (click)="mapToData.emit(artifactId)"
-            >
-              <lucide-angular [img]="MapIcon" [size]="14" />
-              <span>Map to data</span>
-            </button>
-          }
         </div>
       </div>
     </article>
@@ -163,10 +119,8 @@ const PREVIEW = { width: 1280, height: 800, scale: 0.1875 } as const;
 })
 export class RunArtifactCard {
   protected readonly BarChart3 = BarChart3;
-  protected readonly CircleCheck = CircleCheck;
   protected readonly ExternalLink = ExternalLink;
   protected readonly FileText = FileText;
-  protected readonly MapIcon = MapIcon;
   protected readonly frame = PREVIEW;
 
   private readonly api = inject(WorkflowRunsApiService);
@@ -175,11 +129,7 @@ export class RunArtifactCard {
 
   readonly run = input.required<WorkflowRun>();
   readonly visual = input.required<VisualEvent>();
-  /** The Artifacts entry the run saved (Dashboard Image to Artifact); null when none. */
-  readonly savedArtifactId = input<string | null>(null);
   readonly open = output<VisualEvent>();
-  readonly mapToData = output<string>();
-  readonly openArtifact = output<string>();
 
   protected readonly kind = computed(() => artifactKind(this.run().workflowId));
   protected readonly actionLabel = computed(() => {

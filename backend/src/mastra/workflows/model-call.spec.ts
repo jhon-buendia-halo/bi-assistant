@@ -259,15 +259,15 @@ describe('guardedCall', () => {
       guardedCall(
         noRun,
         {
-          label: 'Review templates',
+          label: 'Map requirements',
           deadlineMs: 2 * MINUTE,
-          timeoutError: () => new Error('Iris did not answer'),
+          timeoutError: () => new Error('The model did not answer'),
         },
         (options) => untilAborted(options.abortSignal),
       ),
     );
     await jest.advanceTimersByTimeAsync(2 * MINUTE);
-    expect(((await pending) as Error).message).toBe('Iris did not answer');
+    expect(((await pending) as Error).message).toBe('The model did not answer');
   });
 
   it("passes the run's Stop through at once: never retried, never a timeout", async () => {

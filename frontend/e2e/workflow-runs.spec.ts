@@ -663,60 +663,27 @@ test.describe('Feature: Workflow runs', () => {
   test('Optional inputs live behind the plus button', async ({ page }) => {
     const plus = page.getByTestId('run-composer-plus');
     const menu = composerMenu(page);
-    const visual = menu.getByRole('switch', { name: 'Visual review with Iris', exact: true });
-    const pages = menu.getByTestId('workflow-input-maxPages');
-    const chip = page.getByTestId('run-composer-chip-visualReview');
-    await scenarioStep(page, 'Given I am on the Run tab of "Review a Website"', async () => {
-      await openWorkflowPage(page, 'review-website', 'Review a Website');
+    await scenarioStep(page, 'Given I am on the Run tab of "Consumption Gap Analysis"', async () => {
+      await openWorkflowPage(page, 'consumption-gap-analysis', 'Consumption Gap Analysis');
       await openRunTab(page);
-      // Its message is the entry URL: nothing to send yet.
-      await expect(sendButton(page)).toBeDisabled();
     });
     await scenarioStep(page, 'When I click the "+" button', async () => {
       await expect(plus).toHaveAccessibleName('Add inputs and options');
       await expect(plus).toHaveAttribute('aria-expanded', 'false');
       await plus.click();
     });
-    await scenarioStep(page, 
-      'Then the menu shows an ADD section and an OPTIONS section with "Visual review with Iris" as a switch',
+    await scenarioStep(
+      page,
+      'Then the menu shows an ADD section with "Saved dashboard" and no OPTIONS section',
       async () => {
         await expect(plus).toHaveAttribute('aria-expanded', 'true');
         await expect(menu).toHaveAttribute('role', 'dialog');
         await expect(menu).toHaveAccessibleName('Inputs and options');
         await expect(menu.getByText('Add', { exact: true })).toBeVisible();
-        await expect(menu.getByText('Options', { exact: true })).toBeVisible();
-        await expect(menu.getByTestId('run-composer-menu-item-maxPages')).toHaveAttribute(
-          'aria-expanded',
-          'false',
-        );
-        // The entry URL is the composer's own text, not a menu entry.
-        await expect(menu.getByTestId('run-composer-menu-item-url')).toHaveCount(0);
-        await expect(visual).toBeChecked();
+        await expect(menu.getByTestId('run-composer-menu-item-artifact')).toContainText('Saved dashboard');
+        await expect(menu.getByText('Options', { exact: true })).toHaveCount(0);
       },
     );
-    await scenarioStep(page, 'When I switch "Visual review with Iris" off', async () => {
-      await visual.setChecked(false);
-      await expect(visual).not.toBeChecked();
-      await closeComposerMenu(page);
-    });
-    await scenarioStep(page, 'Then a removable chip for it shows above the composer', async () => {
-      await expect(chip).toHaveText(/Visual review with Iris off/);
-    });
-    await scenarioStep(page, 'When I remove the chip', async () => {
-      await chip
-        .getByRole('button', { name: 'Remove Visual review with Iris off', exact: true })
-        .click();
-    });
-    await scenarioStep(page, 'Then the switch is back to its default', async () => {
-      await expect(chip).toHaveCount(0);
-      await openComposerMenu(page);
-      await expect(visual).toBeChecked();
-    });
-    await scenarioStep(page, 'And a text option set in the menu shows as a chip too', async () => {
-      await unfoldMenuItem(page, 'maxPages');
-      await pages.fill('20');
-      await expect(page.getByTestId('run-composer-chip-maxPages')).toHaveText(/Max pages: 20/);
-    });
     await scenarioStep(page, 'And a click outside the menu closes it', async () => {
       // The menu covers the middle of the chat: click its top right corner.
       const box = (await page.getByTestId('workflow-run-chat-log').boundingBox())!;

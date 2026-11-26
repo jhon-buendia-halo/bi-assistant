@@ -141,13 +141,6 @@ function build(
       '',
       'You write the final answer.',
     ),
-    // The agent of Read images (agents.md 2.15).
-    'image-reader': fakeAgent(
-      'Image Reader',
-      [],
-      '',
-      'You describe the reference images.',
-    ),
   };
   const mastra = { listAgents: () => registry } as unknown as MastraService;
   const llm = options.llmView
@@ -182,9 +175,8 @@ const READINESS_SUMMARY = expect.objectContaining({
   kind: 'code',
   owner: 'Official',
   category: { id: 'data-engineering', name: 'Data Engineering' },
-  // Read images first (workflows R35), then its seven steps (Rows behind
-  // findings since roadmap 1.28.11).
-  stepCount: 8,
+  // Its seven steps (Rows behind findings since roadmap 1.28.11).
+  stepCount: 7,
   bar: 'steps',
   trigger: 'run',
   starterQuestions: [
@@ -229,12 +221,10 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     const [, readiness] = await ctx.service.list();
     expect(readiness.agents.map((agent) => agent.key)).toEqual([
       'data-readiness',
-      'image-reader',
     ]);
     expect(readiness.input.map((field) => field.name)).toEqual([
       'dataset',
       'question',
-      'images',
     ]);
     expect(readiness.input[0]).toMatchObject({
       type: 'dataset',

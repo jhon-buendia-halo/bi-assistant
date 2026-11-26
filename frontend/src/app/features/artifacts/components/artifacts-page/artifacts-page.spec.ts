@@ -114,7 +114,7 @@ describe('ArtifactsPage', () => {
     items = [];
     const { el } = setup();
     expect(text(el, 'artifacts-empty')).toBe(
-      'No artifacts yet — run Dashboard Image to Artifact and save its dashboard.',
+      'No artifacts yet.',
     );
     expect(el.querySelector('[data-testid="artifacts-list"]')).toBeNull();
   });

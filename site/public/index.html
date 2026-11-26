@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <title>Halo Workbench — Halo Powered Labs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Halo Workbench is a desktop app where agent workflows answer business questions, assess data readiness and rebuild dashboards over your own Databricks and PostgreSQL data — and every figure links to the query that produced it.">
+  <meta name="description" content="Halo Workbench is a desktop app where agent workflows answer business questions, assess data readiness and find the gaps in your reporting layer over your own Databricks and PostgreSQL data — and every figure links to the query that produced it.">
   <meta property="og:title" content="Halo Workbench — Halo Powered Labs">
   <meta property="og:description" content="Agent workflows on your own data. Every figure links to the query behind it, explained step by step.">
   <meta property="og:type" content="website">
@@ -52,7 +52,7 @@
       <h1 class="hero-title">Halo Workbench<br><span class="grad-text">Agent workflows on your own data.</span></h1>
       <p class="hero-sub">
         A desktop workbench where teams of agents answer business questions, assess whether
-        your data is ready, and rebuild dashboards — as workflows you can see, run and inspect.
+        your data is ready, and trace the gaps in your reporting layer — as workflows you can see, run and inspect.
         Every figure links to the query that produced it.
       </p>
       <div class="hero-badges">
@@ -145,8 +145,8 @@
             <h3 class="walk-title">Pick a workflow and the data it may read.</h3>
             <p class="walk-body">
               A workflow is a job with a defined input: answer a business question, assess a
-              dataset's readiness, turn a dashboard screenshot into a working artifact, or map a
-              saved dashboard onto your columns. Point it at a dataset — the tables you chose
+              dataset's readiness, or check which business questions your reporting layer can
+              answer. Point it at a dataset — the tables you chose
               from a Databricks SQL warehouse or a PostgreSQL database — and it works over those,
               nothing wider.
             </p>
@@ -154,9 +154,9 @@
           <figure class="shot">
             <div class="shot-frame">
               <img src="shots/workflows.png" width="1800" height="1125" loading="lazy"
-                   alt="The Workflows catalogue: Answer a Business Question, Assess Data Readiness, Dashboard Image to Artifact and Map a Dashboard to Data, each with its step count, the agents it uses and a Run button.">
+                   alt="The Workflows catalogue: one card per workflow, each with its step count, the agents it uses and a Run button.">
             </div>
-            <figcaption>Four workflows ship with the app; each card names the agents it uses.</figcaption>
+            <figcaption>Each workflow card names the agents it uses.</figcaption>
           </figure>
         </article>
 
@@ -275,7 +275,7 @@
           <figure class="shot">
             <div class="shot-frame">
               <img src="shots/agents.png" width="1800" height="1125" loading="lazy"
-                   alt="The Agents library grouped by area — Data Foundations, Analysis, SQL Engineering — with cards for Sarah, Daniel, Kevin, Emily, Michael, Olivia, David, Hannah and Rachel, each with a role and a one-line description.">
+                   alt="The Agents library grouped by area — Data Foundations, Analysis, SQL Engineering — with one card per agent, each with a role and a one-line description.">
             </div>
             <figcaption>The agent library, grouped by what each agent is trusted to do.</figcaption>
           </figure>
@@ -285,10 +285,11 @@
 
       <div class="focus-grid">
         <article class="focus-card">
-          <h3 class="focus-title">Dashboards, rebuilt</h3>
+          <h3 class="focus-title">Reporting gaps, traced</h3>
           <p class="focus-body">
-            Drop in a dashboard screenshot and get an interactive artifact back. Then map its
-            widgets and filters onto the columns of your own datasets — and see what is missing.
+            List the business questions your reporting layer must answer. Each one is checked
+            against your Landing, Normalized and Consumption layers — and every gap is traced
+            to the layer where the data first appears.
           </p>
         </article>
         <article class="focus-card">

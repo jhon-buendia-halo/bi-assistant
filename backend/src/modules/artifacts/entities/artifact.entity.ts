@@ -2,7 +2,7 @@ import type {
   DashboardQuery,
   DashboardRow,
 } from '../../../mastra/workflows/live-dashboard';
-import type { DashboardBlueprint } from '../../../mastra/workflows/recreate-dashboard.steps';
+import type { DashboardBlueprint } from '../../../mastra/workflows/dashboard-blueprint.schemas';
 
 export type { DashboardQuery, DashboardRow };
 
@@ -15,9 +15,8 @@ export const ARTIFACT_NAME_MAX_LENGTH = 80;
 
 /**
  * A stored artifact (data-model 3.18): reusable context saved from a
- * workflow run. A `dashboard` artifact holds the blueprint a Recreate a
- * Dashboard run read from an image, so a later run can take it in place of
- * the image (agents.md 5.17).
+ * workflow run. A `dashboard` artifact holds a dashboard's blueprint, so a
+ * later run can take it (Consumption Gap Analysis's saved dashboard).
  */
 export interface ArtifactDoc {
   id: string;
@@ -43,7 +42,7 @@ export interface ArtifactDoc {
   /**
    * The versions the user saved to Artifacts. A dashboard a turn builds
    * starts with none: a draft, hidden from the list and not downloadable.
-   * A doc without `versions` (Grace's, or saved before versions) has every
+   * A doc without `versions` (saved before versions) has every
    * version saved; a doc with `versions` but no list has none saved.
    */
   savedVersions?: number[];
@@ -98,7 +97,7 @@ export interface CurrentDashboard {
 
 /**
  * A dashboard version with its rows (`null` when it has none, or its file
- * is gone). A version read from an image has no query.
+ * is gone). A version saved before versions has no query.
  */
 export type DashboardVersionData = Omit<CurrentDashboard, 'query'> & {
   query?: DashboardQuery;

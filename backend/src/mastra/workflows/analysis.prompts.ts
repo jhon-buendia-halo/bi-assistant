@@ -14,7 +14,6 @@ import type {
 } from './analysis.schemas';
 import { flaggedQueries } from './analysis.steps';
 import { coverageOf } from '../../modules/sessions/query-evidence/query-coverage';
-import { imageNotesBlock } from './read-images.steps';
 
 /** The Plan step's instructions' first line (the stub model routes by it). */
 export const PLAN_FIRST_LINE =
@@ -80,21 +79,10 @@ type Finding = z.output<typeof validationFindingSchema>;
 
 /**
  * The Plan step's request: the question and the catalog block with its
- * columns, then Read images' notes when the run has any (agents.md 5.11);
- * without them, the request is what it was before Read images existed.
+ * columns (agents.md 5.11).
  */
-export function planRequest(
-  question: string,
-  catalogBlock: string,
-  imageNotes?: string,
-): string {
-  const notes = imageNotesBlock(imageNotes);
-  return [
-    `Question: ${question}`,
-    '',
-    catalogBlock,
-    ...(notes ? ['', notes] : []),
-  ].join('\n');
+export function planRequest(question: string, catalogBlock: string): string {
+  return [`Question: ${question}`, '', catalogBlock].join('\n');
 }
 
 /** A message of the Plan step's request. */
@@ -110,16 +98,13 @@ export interface PlanMessage {
  * (`answered`), the question, the clarifying question Plan asked and the
  * user's answer with the catalog: Plan restates the question with the
  * answer. A bare question with no conversation is the request alone.
- * `fallback` is the question a reply with no restatement plans. Read
- * images' notes, when not empty, end the request either way.
+ * `fallback` is the question a reply with no restatement plans.
  */
 export function planMessages(input: {
   messages: unknown;
   question: string;
   catalogBlock: string;
   answered?: { question: string; options: readonly string[]; answer: string };
-  /** Read images' notes (agents.md 2.15); absent or `''` without images. */
-  imageNotes?: string;
 }): { messages: string | PlanMessage[]; fallback: string } {
   const before = Array.isArray(input.messages)
     ? (input.messages as PlanMessage[]).slice(0, -1)
@@ -139,21 +124,13 @@ export function planMessages(input: {
         },
         {
           role: 'user',
-          content: planRequest(
-            answered.answer,
-            input.catalogBlock,
-            input.imageNotes,
-          ),
+          content: planRequest(answered.answer, input.catalogBlock),
         },
       ],
       fallback: `${input.question} (${answered.answer})`,
     };
   }
-  const request = planRequest(
-    input.question,
-    input.catalogBlock,
-    input.imageNotes,
-  );
+  const request = planRequest(input.question, input.catalogBlock);
   return {
     messages: Array.isArray(input.messages)
       ? [...before, { role: 'user', content: request }]
@@ -185,8 +162,6 @@ function queryLines(query: AnalyseQuery, index: number): string {
  * The Write answer step's request (agents.md 5.11): the question, the plan,
  * each query's rationale, outcome and rows (at most `ANSWER_ROWS_CAP` each,
  * the whole at most `ANSWER_REQUEST_CAP` characters) and the findings.
- * Read images' notes, when not empty, follow the plan, set off by blank
- * lines; without them the request is what it was before Read images.
  */
 /**
  * How a Validate finding reads to the writer: a warning-only check that did
@@ -206,16 +181,12 @@ export function writeAnswerRequest(input: {
   plan: Plan;
   queries: readonly AnalyseQuery[];
   findings: readonly Finding[];
-  /** Read images' notes (agents.md 2.15); absent or `''` without images. */
-  imageNotes?: string;
 }): string {
-  const notes = imageNotesBlock(input.imageNotes);
   const head = [
     `Question: ${input.question}`,
     '',
     'Plan:',
     JSON.stringify(input.plan),
-    ...(notes ? ['', notes, ''] : []),
     '',
   ].join('\n');
   const findings = [
@@ -323,23 +294,17 @@ export function earlierQueriesBlock(
 /**
  * The system blocks the Analyse step adds after the agent's own context
  * (agents.md 5.11): the catalog block, the plan block, the earlier-queries
- * block only on a retry or a resumed attempt that has one, then Read
- * images' notes only when the run has images, and last the line saying a
- * visual follows only when one does; without them, the two blocks it has
- * always had.
+ * block only on a retry or a resumed attempt that has one.
  */
 export function analyseSystemBlocks(input: {
   catalogBlock: string;
   planBlock: string;
   earlierBlock?: string;
-  imageNotes?: string;
 }): string[] {
-  const notes = imageNotesBlock(input.imageNotes);
   return [
     input.catalogBlock,
     input.planBlock,
     ...(input.earlierBlock ? [input.earlierBlock] : []),
-    ...(notes ? [notes] : []),
   ];
 }
 

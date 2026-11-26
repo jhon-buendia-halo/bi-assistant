@@ -100,7 +100,7 @@ describe("RunVisual, a run's visual under its answer (visuals R12-R24; agents.md
   });
 
   it("opens as a side panel titled once by the visual, without the panel's own label and path; Escape closes it (R42)", () => {
-    const { fixture, state, section } = render('recreate-dashboard', true);
+    const { fixture, state, section } = render('answer-business-question', true);
     expect(section().getAttribute('data-sheet')).toBe('true');
     expect(section().getAttribute('role')).toBe('dialog');
     expect(section().getAttribute('aria-label')).toBe(
@@ -116,8 +116,7 @@ describe("RunVisual, a run's visual under its answer (visuals R12-R24; agents.md
       section()
         .querySelector('[data-testid="run-visual-kind"]')
         ?.textContent?.trim(),
-    ).toBe('Dashboard');
-    expect(section().textContent).toContain('Mock data');
+    ).toBe('Visual');
     expect(
       section()
         .querySelector('[data-testid="panel"]')
@@ -137,15 +136,6 @@ describe("RunVisual, a run's visual under its answer (visuals R12-R24; agents.md
       section()
         .querySelector('[data-testid="panel"]')
         ?.getAttribute('data-chrome'),
-    ).toBe('true');
-  });
-
-  it('is read-only (no Tailor, no Refresh) for a visual drawn by code: Review a Website', () => {
-    const review = render('review-website');
-    expect(
-      review.el
-        .querySelector('[data-testid="panel"]')
-        ?.getAttribute('data-read-only'),
     ).toBe('true');
   });
 
