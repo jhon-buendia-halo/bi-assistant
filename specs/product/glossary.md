@@ -4,11 +4,11 @@ Every domain term, defined once, in alphabetical order. Other specs link here in
 
 Names in `code font` are the identifiers used in persisted documents and the API. Plain names are what the UI shows.
 
-**Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
+**Active visual.** The visual currently open in the right-hand panel. It is the visual a stored session or run shows; nothing tailors it any more (the visual designer was removed on 2026-11-26). See *Visual*.
 
-**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships built-in agents (the assistant, *Insights Analyst*, the visual designer, the SQL fixer, the SQL verifier and the eval judge, among others), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships built-in agents (*Elena* and *Insights Analyst* among the Official agents, the SQL fixer and the eval judge among the helpers, and the others of the catalogue), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
 
-**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant and *Insights Analyst*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
+**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: *Insights Analyst* and Elena; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Angle.** One sub-question of a *deep analysis* (removed 2026-11-12).
 
@@ -20,9 +20,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **App secret.** The key material from which the key that encrypts stored LLM API keys is derived. On desktop it is generated once and kept in a file in the data directory. See [non-functional.md](non-functional.md).
 
-**Assistant.** The main agent. It answers business questions over a session's datasets, runs SQL, calls the visual tools and asks clarifying questions.
+**Assistant.** The name of the removed main agent (Emily, `assistant`; removed 2026-11-26), kept as a chip on old sessions whose workflow id is `agent:assistant`. Its work moved to *Elena*, the Insights Lead, who answers business questions over a conversation's datasets and is also the engine of every *user agent*. Where the specs say "the assistant" for an agent that answers, they mean the answering agent.
 
-**Careful mode.** An opt-in per-turn setting in the chat. After the assistant answers, a second agent (the *SQL verifier*) re-derives the SQL independently, runs it, and compares its result set with the answer's. The answer gets an agree, disagree or error badge. Slower per answer. See *Cross-check*.
+**Careful mode.** Removed on 2026-11-26. It was an opt-in per-turn setting that had a second agent (the *SQL verifier*) re-derive the SQL independently and compare its result set with the answer's. Only a stored `crossCheck` of an old answer remains. See *Cross-check*.
 
 **Carrier.** An insurer that writes one or more *lines of coverage*. A carrier is the *incumbent* on a client's line when it carries the client's live policy for that line.
 
@@ -40,7 +40,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Copilot runtime.** The local process that GitHub's official Copilot SDK starts and drives for the *LLM provider* `copilot`. It signs in with the GitHub login already on the machine (the GitHub CLI, the GitHub Copilot CLI or the GitHub Copilot app) and talks to GitHub Copilot; the app keeps its own tools and tool loop and never enables the runtime's built-in tools. See ADR-0037 in [../system/architecture.md](../system/architecture.md).
 
-**Cross-check.** The result of *careful mode* on one answer: status `agree` (same results), `disagree` (results differ) or `error` (the check could not finish), plus a short note.
+**Cross-check.** The result of the removed *careful mode* on one old answer: status `agree` (same results), `disagree` (results differ) or `error` (the check could not finish), plus a short note. Stored data only; nothing writes or shows it any more.
 
 **Context window box.** One of the seven parts the Monitoring call page sorts an LLM call's input into: System prompt, Skill injection and Tools injection (owner **US Health**, what the app ships), and Chat history, Dataset, User prompt and Tool calls and results (owner **Custom**, what comes from the user's data and conversation). Each box shows an estimated token count and its exact text. See [monitoring](../capabilities/monitoring/spec.md) R17–R22.
 
@@ -128,7 +128,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Mined item.** An *ontology item* with source `mined`: drafted by the *ontology bootstrap* (removed 2026-11-26; items already stored stay), saved disabled until a human accepts it.
 
-**Official agent.** One of the app's own agents shown in the agent hub with the owner `Official` (the hub groups agents by domain, not by owner): the *assistant* and *Insights Analyst*.
+**Official agent.** One of the app's own agents shown in the agent hub with the owner `Official` (the hub groups agents by domain, not by owner): *Insights Analyst* and Elena.
 
 **One-step workflow.** Retired (2026-11-12). It was the *workflow* the app made for every agent (id `agent:<agent key or id>`), one step that ran the agent. Agents are no longer workflows: the workflows are the six of the catalogue. Stored runs and sessions of one-step workflows stay readable as legacy runs and plain past chats. See [../system/architecture.md](../system/architecture.md) ADR-0040 (partly superseded) and ADR-0042.
 
@@ -144,7 +144,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Past chat.** A *session* saved before chats were retired. It stays on disk and opens read-only under Runs: its transcript, visuals and files, and Delete. No chat can continue (ADR-0041).
 
-**Persona (agent).** The human identity of an agent in the Agents catalogue: a first name and a job title (`name` and `role` in `GET /agents`). Every built-in agent has one (the assistant is Emily, Data Analyst; the table is in [../system/agents.md](../system/agents.md) 1.1); a user agent has the name it was given and an optional job title. Presentation only: traces, monitoring, workflow steps and chat sessions keep the agent's technical name, and the model never sees it. Not a *User persona*, which profiles a person who asks questions.
+**Persona (agent).** The human identity of an agent in the Agents catalogue: a first name and a job title (`name` and `role` in `GET /agents`). Every built-in agent has one (Elena is the Insights Lead, Michael the Insights Analyst; the table is in [../system/agents.md](../system/agents.md) 1.1); a user agent has the name it was given and an optional job title. Presentation only: traces, monitoring, workflow steps and chat sessions keep the agent's technical name, and the model never sees it. Not a *User persona*, which profiles a person who asks questions.
 
 **Pin.** A user's mark on an agent, built-in or user-built, so it can be found quickly. Pins are stored locally and survive a restart.
 
@@ -203,9 +203,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **SQL repair.** When a statement fails with an engine error, the *SQL fixer* agent rewrites it and it is re-run, up to 2 repair attempts. The corrected SQL is what gets cited. Guard rejections and transport or auth failures are not repaired.
 
-**SQL verifier.** The agent behind *careful mode*.
+**SQL verifier.** Removed on 2026-11-26 with *careful mode* (Rachel, `sql-verifier`).
 
-**System agent.** One of the built-in helper agents (the visual designer, the SQL fixer, the SQL verifier and the eval judge). It is read-only, runs inside the app's own flows and cannot start a chat.
+**System agent.** One of the built-in helper agents (the SQL fixer and the eval judge, among others of the catalogue). It is read-only, runs inside the app's own flows and cannot start a chat.
 
 **System logs.** The UI name for *diagnostics*.
 
@@ -215,13 +215,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Tailoring.** Changing an existing visual by describing the change in plain English, through the chat (`update_visual`) or the panel's instruction box. Produces a new *visual version*.
 
-**Tool call.** One invocation of a capability by the assistant during a turn. Data tools: `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`. Visual tools: `create_visual`, `update_visual`. UI tool: `ask_clarification`. Calls to the data tools are captured as *data records*.
+**Tool call.** One invocation of a capability by an agent during a turn. Data tools: `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `explore_result`. UI tool: `ask_clarification`. (The visual, panel and workflow tools were removed on 2026-11-26.) Calls to the data tools are captured as *data records*.
 
-**Tool selection.** The optional *tool calls* a *user agent* lets the assistant make: any of `sample_rows`, `ask_clarification` and the visual tools. The data tools that list, describe and query the datasets are always on. A tool left out is not offered to the model, and the working rules that name it are replaced. See [../system/agents.md](../system/agents.md) 2.1 and ADR-0022.
+**Tool selection.** The optional *tool calls* a *user agent* lets Elena make: `sample_rows` and `ask_clarification` (a stored `visuals` is ignored). The data tools that list, describe, query and explore the datasets are always on. A tool left out is not offered to the model, and the working rules that name it are replaced. See [../system/agents.md](../system/agents.md) 2.23 and ADR-0022.
 
 **Turn.** One user message and everything the assistant does in response, up to its final answer or a clarification. Includes streamed reasoning, tool calls and their results.
 
-**User agent.** An agent a user builds: a name, a description, instructions, the datasets it may query, starter questions and an optional model or reasoning-effort override. It runs on the *assistant* with the same guards and the tools its *tool selection* gives it, and it has a *draft* and, once published, a *Live* version.
+**User agent.** An agent a user builds: a name, a description, instructions, the datasets it may query, starter questions and an optional model or reasoning-effort override. It runs on *Elena* (ADR-0059) with the same guards and the tools its *tool selection* gives her, only as its draft preview (*Try it*), and it has a *draft* and, once published, a *Live* version.
 
 **Verified answer.** An answer whose final SQL matches a stored *verified query*, or that the user thumbed up. Shown with a "Verified" badge.
 

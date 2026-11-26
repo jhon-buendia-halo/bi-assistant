@@ -17,7 +17,7 @@ Part of the [`workflow-strict`](../workflow-strict/SKILL.md) workflow (the wave 
 
 ## Evals — when the change touches what an agent receives
 
-Its prompt, skills, tools, context blocks or model routing. Run the agent's eval set (`npm run evals:assistant` with `EVAL_SET` or `EVAL_CASES`, see [delivery.md](../../../specs/system/delivery.md) 2) on the **base commit and on the branch**, same model, same data:
+Its prompt, skills, tools, context blocks or model routing. Run the agent's eval set (`npm run evals` with `EVAL_SET` or `EVAL_CASES` (`evals:assistant` until 2026-11-26; Elena runs the former assistant sets), see [delivery.md](../../../specs/system/delivery.md) 2) on the **base commit and on the branch**, same model, same data:
 
 - **Run in parallel.** Three runs per build at once, each on its own copy of the data dir and its own `EVAL_RESULTS_FILE`, not one after another. Before starting, print the copy's saved provider and model, agree the model with the user and check its key and credit (about 3 × cases × 2 turns); use `EVAL_LLM_*` for any other target.
 - **Pass bar on the branch:**
@@ -26,7 +26,7 @@ Its prompt, skills, tools, context blocks or model routing. Run the agent's eval
 - A case below the bar is a regression the change caused: trace one failing run (its results file) before theorising, fix, and re-run only the failing cases, 3 runs.
 - A judged case that is flaky on **both** builds at the same rate is not chased: list it as known-flaky, with both pass rates, in the changelog entry and the PR. If the user wants it fixed, that's a separate story.
 - Stop a round as soon as a run fails a code check; there is no point finishing it.
-- After stopping a looping eval script, list leftover `run-assistant-evals` node processes and kill them by PID.
+- After stopping a looping eval script, list leftover `run-evals` node processes and kill them by PID.
 
 ## Check the running web app
 
