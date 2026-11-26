@@ -65,7 +65,9 @@ describe('SqlChecks passes the row clamp through (plan bi-dashboard 2.2)', () =>
     await checks(run).runSqlWithRepair('ds-pg', 'SELECT 1 AS n', 100, []);
     expect(run).toHaveBeenLastCalledWith('ds-pg', 'SELECT 1 AS n', 100);
     const signal = new AbortController().signal;
-    await checks(run).runBuiltSql('ds-pg', 'SELECT 1 AS n', 100, { signal });
+    await checks(run).runSqlWithRepair('ds-pg', 'SELECT 1 AS n', 100, [], {
+      signal,
+    });
     expect(run).toHaveBeenLastCalledWith(
       'ds-pg',
       'SELECT 1 AS n',

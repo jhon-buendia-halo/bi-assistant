@@ -40,9 +40,8 @@ interface ChatToolCall {
   input?: string;
   rowCount?: number;
   error?: string;
-  /** Live only: still waiting for its result, with its latest progress. */
+  /** Live only: still waiting for its result. */
   running?: boolean;
-  progress?: string;
 }
 
 function storedCall(call: WorkflowRunToolCall): ChatToolCall {
@@ -61,7 +60,6 @@ function liveCallView(call: LiveToolCall): ChatToolCall {
     ...(call.rowCount !== undefined ? { rowCount: call.rowCount } : {}),
     ...(call.error ? { error: call.error } : {}),
     ...(call.finished ? {} : { running: true }),
-    ...(call.progress ? { progress: call.progress } : {}),
   };
 }
 
@@ -201,7 +199,7 @@ export class WorkflowNodeChat {
   }
 
   callMeta(call: ChatToolCall): string {
-    if (call.running) return call.progress ?? 'Running…';
+    if (call.running) return 'Running…';
     return call.rowCount !== undefined ? `${call.rowCount} rows` : '';
   }
 
@@ -277,13 +275,6 @@ export class WorkflowNodeChat {
                 ? { rowCount: summary.rowCount }
                 : {}),
               ...(summary.error ? { error: summary.error } : {}),
-            }));
-          },
-          onToolProgress: (progress) => {
-            if (!live()) return;
-            this.updateOpenCall(progress.tool, (call) => ({
-              ...call,
-              progress: progress.message,
             }));
           },
           onDone: (message) => {

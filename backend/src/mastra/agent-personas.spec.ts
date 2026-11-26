@@ -46,13 +46,7 @@ describe('built-in agent personas (agents.md 1.1)', () => {
     }
     for (const list of Object.values(byDomain)) list.sort();
     expect(byDomain).toEqual({
-      'data-foundations': [
-        'data-readiness',
-        'gap-advisor',
-        'knowledge-bootstrap',
-        'layer-mapper',
-        'requirements-analyst',
-      ],
+      'data-foundations': ['knowledge-bootstrap'],
       analysis: [
         'analysis-planner',
         'assistant',

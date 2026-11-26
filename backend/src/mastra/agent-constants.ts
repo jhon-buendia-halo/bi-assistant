@@ -12,15 +12,6 @@
  */
 export const ASSISTANT_MAX_STEPS = 15;
 
-/** The Data Readiness Agent's tool-loop budget per turn (agents.md 2.10). */
-export const DATA_READINESS_MAX_STEPS = 10;
-
-/** The Data Readiness Agent's registry key (agents.md 2.10, ADR-0031). */
-export const DATA_READINESS_AGENT_KEY = 'data-readiness';
-
-/** Its name: the Explain report step's agent (agents.md 5.13). */
-export const DATA_READINESS_AGENT_NAME = 'Data Readiness Agent';
-
 /**
  * The registry keys of the built-in agents shown as Official (api.md 33):
  * the agents a chat can run. Every other registered agent is a System agent
@@ -30,7 +21,6 @@ export const DATA_READINESS_AGENT_NAME = 'Data Readiness Agent';
 export const OFFICIAL_AGENT_KEYS: readonly string[] = [
   'assistant',
   'insights-analyst',
-  'data-readiness',
   // Elena, the Insights Lead: talked to directly in her own conversation
   // (plan Elena 2), not through a chat.
   'insights-lead',
@@ -50,21 +40,6 @@ export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
  * a stored query's result (agents.md 2.17).
  */
 export const RESULT_EXPLORER_AGENT_KEY = 'result-explorer';
-
-/**
- * The agents of the three model steps of `consumption-gap-analysis`
- * (agents.md 2.18 to 2.20, 5.20): Derive (and Confirm) requirements, Map
- * requirements and Recommend fixes. System agents: the workflow calls them.
- */
-export const REQUIREMENTS_ANALYST_AGENT_KEY = 'requirements-analyst';
-/** Its name: the Derive requirements step's agent. */
-export const REQUIREMENTS_ANALYST_AGENT_NAME = 'Requirements Analyst';
-export const LAYER_MAPPER_AGENT_KEY = 'layer-mapper';
-/** Its name: the Map requirements step's agent. */
-export const LAYER_MAPPER_AGENT_NAME = 'Layer Mapper';
-export const GAP_ADVISOR_AGENT_KEY = 'gap-advisor';
-/** Its name: the Recommend fixes step's agent. */
-export const GAP_ADVISOR_AGENT_NAME = 'Gap Advisor';
 
 /**
  * Avery, the Chief of Staff: the orchestrator of Answer a Business Question
@@ -91,9 +66,6 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   ANSWER_WRITER_AGENT_KEY,
   QUERY_EXPLAINER_AGENT_KEY,
   RESULT_EXPLORER_AGENT_KEY,
-  REQUIREMENTS_ANALYST_AGENT_KEY,
-  LAYER_MAPPER_AGENT_KEY,
-  GAP_ADVISOR_AGENT_KEY,
   VISUALIZATION_AGENT_KEY,
   CHIEF_OF_STAFF_AGENT_KEY,
   BI_ANALYST_AGENT_KEY,

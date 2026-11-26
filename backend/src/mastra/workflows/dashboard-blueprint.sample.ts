@@ -1,7 +1,7 @@
 /**
- * A small dashboard blueprint for the tests of the dashboard artifacts and
- * Consumption Gap Analysis: two KPI tiles, a bar chart and a table, with
- * two filters. Test data only; nothing at run time reads it.
+ * A small dashboard blueprint for the tests of the dashboard artifacts:
+ * two KPI tiles, a bar chart and a table, with two filters. Test data
+ * only; nothing at run time reads it.
  */
 import type { DashboardBlueprint } from './dashboard-blueprint.schemas';
 

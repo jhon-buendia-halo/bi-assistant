@@ -350,7 +350,6 @@ function activityOfLive(call: LiveToolCall): ActivityCall {
     ...(call.rationale ? { rationale: call.rationale } : {}),
     ...(call.rowCount !== undefined ? { rowCount: call.rowCount } : {}),
     ...(call.error !== undefined ? { error: call.error } : {}),
-    ...(call.progress ? { progress: call.progress } : {}),
     ...(call.agent ? { agent: call.agent } : {}),
     ...(call.teammate ? { teammate: call.teammate } : {}),
     finished: call.finished,

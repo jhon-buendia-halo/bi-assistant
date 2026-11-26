@@ -115,7 +115,7 @@ export function pickedDataset(
 
 /**
  * Fills a text or number input of the `+` menu (`maxPages`, a prompt with a
- * default such as readiness's `question`…), then closes the menu.
+ * default…), then closes the menu.
  */
 export async function setRunField(
   page: Page,

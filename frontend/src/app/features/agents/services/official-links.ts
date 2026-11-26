@@ -47,7 +47,7 @@ export function officialLinkSkills<
 
 /**
  * How the copy of the built-in prompt editor names the agent: by its
- * persona's human name, with no article (`Emily`, `Sarah`; agents-evals R107).
+ * persona's human name, with no article (`Emily`, `Michael`; agents-evals R107).
  */
 function agentPhrase(agent: { key: string; name: string }): string {
   return agent.name;

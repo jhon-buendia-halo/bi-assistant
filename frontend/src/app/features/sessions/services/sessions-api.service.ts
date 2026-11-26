@@ -21,10 +21,6 @@ import {
   ToolDataRecord,
   VisualEvent,
 } from '../models/session.model';
-import {
-  ReadinessReport,
-  ReadinessReportEvent,
-} from '../models/readiness.model';
 
 /** A tool call announced mid-stream, with the assistant's reason for it. */
 export interface ToolCallEvent {
@@ -76,46 +72,6 @@ export function parseToolEvent(content: string): ToolCallEvent {
 }
 
 /**
- * The `readiness-report` frame's content (api.md 3.1), parsed. Null when it
- * is not a report with a `readiness` panel item.
- */
-export function parseReadinessReportEvent(
-  content: string,
-): ReadinessReportEvent | null {
-  try {
-    const parsed: unknown = JSON.parse(content);
-    if (!parsed || typeof parsed !== 'object') return null;
-    const { report, panelItem } = parsed as Partial<ReadinessReportEvent>;
-    if (
-      !report ||
-      typeof report.id !== 'string' ||
-      typeof report.datasourceName !== 'string' ||
-      typeof report.overallScore !== 'number' ||
-      typeof report.maturity !== 'string' ||
-      typeof report.generatedAt !== 'string' ||
-      !panelItem ||
-      panelItem.kind !== 'readiness' ||
-      typeof panelItem.reportId !== 'string'
-    ) {
-      return null;
-    }
-    return { report, panelItem };
-  } catch {
-    return null;
-  }
-}
-
-/** Live progress of a running tool (api.md 3.1 `tool-progress`). */
-export interface ToolProgressEvent {
-  tool: string;
-  phase: string;
-  message: string;
-  done?: number;
-  total?: number;
-  entity?: string;
-}
-
-/**
  * The agent turn's events (api.md 3.1), shared by the chat stream and the
  * workflow run stream (api.md 3.6), which forwards them unchanged.
  */
@@ -125,15 +81,11 @@ export interface AgentStreamHandlers {
   onTool?: (call: ToolCallEvent) => void;
   /** Summary of one finished call, including why it was run. */
   onToolResult?: (summary: ToolDataRecord) => void;
-  /** A long-running tool reports where it is, between its call and result. */
-  onToolProgress?: (p: ToolProgressEvent) => void;
   onVisualUpdated?: (event: VisualEvent) => void;
   /** `show_in_panel` put an item in the panel. */
   onPanelItem?: (event: PanelItemEvent) => void;
   /** The workflow status bar changed (`update_workflow`, phases). */
   onWorkflow?: (workflow: WorkflowView) => void;
-  /** `assess_data_readiness` or `get_readiness_report` returned a report. */
-  onReadinessReport?: (event: ReadinessReportEvent) => void;
 }
 
 /** One parsed `data:` frame of an SSE stream. */
@@ -181,13 +133,6 @@ export function dispatchAgentEvent(
         handlers.onToolResult?.(v),
       );
       return true;
-    case 'tool-progress':
-      parseContent<ToolProgressEvent | null>(event.content, (p) => {
-        if (p && typeof p.tool === 'string' && typeof p.message === 'string') {
-          handlers.onToolProgress?.(p);
-        }
-      });
-      return true;
     case 'visual-updated':
       parseContent<VisualEvent>(event.content, (v) =>
         handlers.onVisualUpdated?.(v),
@@ -203,11 +148,6 @@ export function dispatchAgentEvent(
         handlers.onWorkflow?.(v),
       );
       return true;
-    case 'readiness-report': {
-      const parsed = parseReadinessReportEvent(event.content ?? '');
-      if (parsed) handlers.onReadinessReport?.(parsed);
-      return true;
-    }
     default:
       return false;
   }
@@ -421,13 +361,6 @@ export class SessionsApiService {
         responseType: 'blob',
         ...(format ? { params: { format } } : {}),
       },
-    );
-  }
-
-  /** One stored data-readiness report (api.md 110). */
-  getReadinessReport(reportId: string): Observable<ReadinessReport> {
-    return this.http.get<ReadinessReport>(
-      `${API_BASE_URL}/data-readiness/assessments/${encodeURIComponent(reportId)}`,
     );
   }
 }

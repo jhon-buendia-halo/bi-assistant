@@ -146,7 +146,6 @@ Who runs them: `MastraService.streamWorkflow` (`backend/src/mastra/mastra.servic
 | `insights-analyst` | `insights-analyst.agent.ts` (data: `insights-analyst-catalog.ts`) | Michael's analysis in Avery's `answer_from_data`, with tools | 2.11 |
 | `analysis-planner` | `analysis-planner.agent.ts` | the Plan step: one model call, no tools | 2.11, 5.11 |
 | `answer-writer` | `answer-writer.agent.ts` | the Write answer step: one model call, no tools | 2.11, 5.11 |
-| `data-readiness` | `data-readiness.agent.ts` | Data Readiness Agent; runs on `agent-turn` | 2.10 |
 | `visualization` | `visualization.agent.ts` | Interactive Visual Designer | 2.2, 6 |
 | `sql-fixer` | `sql-fixer.agent.ts` | repairs a failed query | 2.3, 5.3 |
 | `sql-verifier` | `sql-verifier.agent.ts` | careful mode's cross-check | 2.4, 5.8 |
@@ -162,8 +161,6 @@ Who runs them: `MastraService.streamWorkflow` (`backend/src/mastra/mastra.servic
 | `visual.tools.ts` | `create_visual`, `update_visual` |
 | `panel.tool.ts` | `show_in_panel` |
 | `workflow.tool.ts` | `update_workflow` |
-| `readiness.tools.ts` | `assess_data_readiness`, `get_readiness_report`, `list_readiness_reports` |
-| `synthetic-data.tools.ts` | `profile_data_sample`, `generate_synthetic_data` |
 
 Which agent has which tool: the `tools:` of each agent file, and agents.md 2 and 3.
 

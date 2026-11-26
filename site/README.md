@@ -128,12 +128,10 @@ node backend/dist/cli.js --port 3210 --data-dir "$PWD/.context/shots-data" --no-
 # 2. the local LLM and every Testing Data fixture, including the "World Cup" dataset
 node scripts/setup-local.mjs http://127.0.0.1:3210
 
-# 3. two real runs for the shots to show (each takes under a minute)
-curl -sX POST http://127.0.0.1:3210/workflows/answer-business-question/runs \
+# 3. a real run for the shots to show (it takes under a minute)
+curl -sX POST http://127.0.0.1:3210/workflows/orchestrated-answer-michael/runs \
   -H 'content-type: application/json' \
   -d '{"input":{"question":"Which teams finished their chances best across the 2018 and 2022 World Cups? Compare goals scored with expected goals.","datasets":["World Cup"]}}'
-curl -sX POST http://127.0.0.1:3210/workflows/data-readiness-assessment/runs \
-  -H 'content-type: application/json' -d '{"input":{"dataset":"World Cup"}}'
 
 # 4. drive the running app and capture (2x, into .context/shots/)
 APP_URL=http://127.0.0.1:3210/ node site/scripts/screenshots/capture.mjs
@@ -141,17 +139,16 @@ APP_URL=http://127.0.0.1:3210/ node site/scripts/screenshots/capture.mjs hero in
 
 # 5. downscale into the page — the hero at 2360px, the rest at 1800px
 sips -s format png --resampleWidth 2360 .context/shots/hero.png --out site/public/shots/app.png
-for n in inspector evidence workflows agents readiness; do
+for n in inspector evidence workflows agents; do
   sips --resampleWidth 1800 .context/shots/$n.png --out site/public/shots/$n.png
 done
 ```
 
 `capture.mjs` takes an optional list of shot names (`hero`, `inspector`,
-`evidence`, `workflows`, `agents`, `readiness`); with none it captures all of
-them. It opens the two runs from **Runs** by their titles, so keep the
-question above (or change `QUESTION_START` in the script). The answers are the
-model's own, so the copy that quotes them (the hero and readiness captions) may
-need a touch after a re-shoot.
+`evidence`, `workflows`, `agents`); with none it captures all of them. It opens
+the run from **Runs** by its title, so keep the question above (or change
+`QUESTION_START` in the script). The answer is the model's own, so the copy
+that quotes it (the hero caption) may need a touch after a re-shoot.
 
 ## Filename note
 

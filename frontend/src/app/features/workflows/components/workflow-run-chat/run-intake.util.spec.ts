@@ -224,25 +224,6 @@ describe('run-intake.util (the run chat asks for missing inputs)', () => {
       );
     });
 
-    it('says "should I" when the field is for the agent that asks', () => {
-      const solo: IntakeWorkflow = {
-        name: 'Assess Data Readiness',
-        input: [],
-        agents: [{ name: 'Dana' }],
-        steps: [{ id: 'assess', agent: { name: 'Dana' } }],
-      };
-      const dataset: WorkflowInputField = {
-        name: 'dataset',
-        label: 'Dataset',
-        type: 'dataset',
-        required: true,
-        usedBy: ['assess'],
-      };
-      expect(askText(dataset, solo, { first: true, typed: false })).toBe(
-        'First, which dataset should I look at? Pick one.',
-      );
-    });
-
     it('phrases each kind, later ones with "Thanks. Next,"', () => {
       const next = { first: false, typed: true };
       const ask = (field: WorkflowInputField) =>
@@ -280,7 +261,6 @@ describe('run-intake.util (the run chat asks for missing inputs)', () => {
 
     it('maps each type to how it is answered', () => {
       expect(intakeKind(DATASETS)).toBe('pick-many');
-      expect(intakeKind({ ...DATASETS, type: 'dataset' })).toBe('pick-one');
       expect(intakeKind({ ...DATASETS, type: 'artifact' })).toBe('pick-one');
       expect(intakeKind({ ...DATASETS, type: 'image' })).toBe('image');
       expect(intakeKind({ ...DATASETS, type: 'images' })).toBe('image');

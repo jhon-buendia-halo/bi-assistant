@@ -15,10 +15,6 @@ import {
   RunStreamHandlers,
   WorkflowRunsApiService,
 } from '../../services/workflow-runs-api.service';
-import {
-  sampleReadinessPanelItem,
-  sampleReadinessReport,
-} from '../../../sessions/models/readiness.testing';
 import { WorkflowRunChat } from './workflow-run-chat';
 
 const STEP = (id: string, title: string, input: string[], output: string[]) => ({
@@ -444,7 +440,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
 
     function openAssistant(workflow: WorkflowDetail = ASSISTANT): void {
       open(workflow, () => {
-        if (workflow.input.some((f) => f.type === 'datasets' || f.type === 'dataset')) {
+        if (workflow.input.some((f) => f.type === 'datasets')) {
           http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: DATASETS });
         }
       });
@@ -640,134 +636,6 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       openMenu('datasets');
       expect(q('run-composer-option-datasets-World Cup Core')).not.toBeNull();
       expect(q('run-composer-option-datasets-Sales')).toBeNull();
-    });
-
-    it('a dataset field is asked as a single pick of its kinds, which continues at once and sends a string', () => {
-      openAssistant({
-        ...ASSISTANT,
-        input: [
-          {
-            name: 'question',
-            label: 'Question',
-            type: 'textarea',
-            required: false,
-            default: 'Assess it.',
-          },
-          {
-            name: 'dataset',
-            label: 'Dataset',
-            type: 'dataset',
-            required: true,
-            datasourceKinds: ['postgres', 'databricks'],
-          },
-        ],
-      });
-      // The question has a default: Send runs with it, nothing typed.
-      expect((q('run-composer-send') as HTMLButtonElement).disabled).toBeFalse();
-      send();
-      expect(runs.calls.length).toBe(0);
-      expect(q('run-intake-dataset')!.textContent).toContain(
-        'First, which dataset should I look at? Pick one.',
-      );
-      expect(q('run-intake-option-dataset-Sales')).toBeNull();
-      expect(q('run-intake-continue')).toBeNull();
-      click('run-intake-option-dataset-World Cup Core');
-      expect(runs.last.body).toEqual({
-        input: { question: 'Assess it.', dataset: 'World Cup Core' },
-      });
-    });
-
-    describe('a Data Readiness run (data-readiness R5)', () => {
-      const REPORT = sampleReadinessReport({ id: 'r1', datasourceName: 'World Cup DB' });
-      const READINESS: WorkflowDetail = {
-        ...ASSISTANT,
-        id: 'data-readiness-assessment',
-        name: 'Assess Data Readiness',
-        input: [
-          {
-            name: 'dataset',
-            label: 'Dataset',
-            type: 'dataset',
-            required: true,
-            datasourceKinds: ['postgres', 'databricks'],
-          },
-        ],
-      };
-
-      function readinessRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
-        return assistantRun({
-          workflowId: 'data-readiness-assessment',
-          workflowName: 'Assess Data Readiness',
-          input: { dataset: 'World Cup Core' },
-          answer: {
-            role: 'assistant',
-            content: 'The dataset scored 82.',
-            at: 'x',
-            readinessReport: {
-              reportId: 'r1',
-              datasourceName: 'World Cup DB',
-              overallScore: 82,
-              maturity: 'Managed',
-              generatedAt: REPORT.generatedAt,
-            },
-          },
-          panelItems: [sampleReadinessPanelItem('r1')],
-          ...overrides,
-        });
-      }
-
-      function finishRun(run: WorkflowRun): void {
-        pickInMenu('dataset', 'World Cup Core');
-        send();
-        const h = runs.last.handlers;
-        h.onRun!({ runId: run.id, workflowId: run.workflowId });
-        h.onDone!(run);
-        fixture.detectChanges();
-      }
-
-      it('Run again on a run opened from Runs shows its dataset picked (R19)', () => {
-        designer.showRunOnLoad(readinessRun());
-        openAssistant(READINESS);
-        click('workflow-run-again');
-        expect(text('run-composer-chip-dataset')).toContain('World Cup Core');
-        openMenu('dataset');
-        expect(
-          q('run-composer-option-dataset-World Cup Core')!.getAttribute('aria-pressed'),
-        ).toBe('true');
-      });
-
-      it('Open scorecard on the readiness card shows the scorecard under the answer, and Close hides it', () => {
-        openAssistant(READINESS);
-        finishRun(readinessRun());
-        expect(q('workflow-run-scorecard')).toBeNull();
-        click('readiness-open-scorecard');
-        http
-          .expectOne((r) => r.url.endsWith('/data-readiness/assessments/r1'))
-          .flush(REPORT);
-        fixture.detectChanges();
-        const scorecard = q('workflow-run-scorecard')!;
-        expect(scorecard.getAttribute('aria-label')).toBe('Readiness scorecard');
-        expect(
-          scorecard.querySelector('[data-testid="readiness-scorecard"]')?.textContent,
-        ).toContain('World Cup DB');
-        expect(scorecard.textContent).toContain('Past assessments');
-        click('workflow-run-scorecard-close');
-        expect(q('workflow-run-scorecard')).toBeNull();
-      });
-
-      it('a new run closes the scorecard of the earlier one', () => {
-        openAssistant(READINESS);
-        finishRun(readinessRun());
-        click('readiness-open-scorecard');
-        http
-          .expectOne((r) => r.url.endsWith('/data-readiness/assessments/r1'))
-          .flush(REPORT);
-        fixture.detectChanges();
-        expect(q('workflow-run-scorecard')).not.toBeNull();
-        designer.runId.set('run-2');
-        fixture.detectChanges();
-        expect(q('workflow-run-scorecard')).toBeNull();
-      });
     });
 
     it('example chips fill the message box and do not run', () => {
@@ -1018,7 +886,6 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(q('run-rfp-document')).toBeNull();
       expect(q('workflow-run-continue')).toBeNull();
       expect(q('workflow-run-files')).toBeNull();
-      expect(q('workflow-run-scorecard')).toBeNull();
       expect(q('workflow-run-phases')).toBeNull();
       expect(el.querySelector('[aria-label="Download report"]')).toBeNull();
     });

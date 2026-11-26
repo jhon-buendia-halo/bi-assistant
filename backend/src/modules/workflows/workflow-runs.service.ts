@@ -11,6 +11,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { ASSISTANT_MAX_STEPS } from '../../mastra/agent-constants';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   agentRunTurn,
@@ -18,7 +19,6 @@ import {
   draftRunInput,
   oneStepWorkflowSteps,
   workflowCategory,
-  wrappedAgentMaxSteps,
   type AgentRunTurn,
   type WorkflowInputValues,
   REMOVED_WORKFLOW_IDS,
@@ -507,7 +507,7 @@ export class WorkflowRunsService
         ? (body as { input?: unknown; context?: unknown })
         : {};
     const needsDatasets = workflow.input.some(
-      (field) => field.type === 'dataset' || field.type === 'datasets',
+      (field) => field.type === 'datasets',
     );
     const checked = validateWorkflowInput(
       workflow,
@@ -573,7 +573,7 @@ export class WorkflowRunsService
       key: agentId,
       name: target.name,
       tools: [],
-      maxSteps: wrappedAgentMaxSteps(agentId),
+      maxSteps: ASSISTANT_MAX_STEPS,
     });
     return {
       workflow: {
@@ -960,7 +960,6 @@ export class WorkflowRunsService
               })),
             }
           : {}),
-        ...(prepared.turn.artifact ? { artifact: prepared.turn.artifact } : {}),
         // Avery's run reads its conversation for an export (agents.md 3.18).
         ...(base.conversationId ? { conversationId: base.conversationId } : {}),
         ...(prepared.context

@@ -165,7 +165,7 @@ export class EvalRunsService {
     }
 
     // One run is one target: a set that runs on another agent's call (an
-    // isolated call, the readiness workflow) is not mixed with the chat set.
+    // isolated call, a workflow) is not mixed with the chat set.
     const picked = evalTargetIdFor(agentKey, caseIds);
     if ('error' in picked) return { error: picked.error };
 
@@ -222,11 +222,7 @@ export class EvalRunsService {
     // degraded to "No session in context".
     let evalSession: EvalHost | undefined;
     try {
-      evalSession = await createEvalHost(
-        this.sessions,
-        view.datasets,
-        target.sessionAgentKey,
-      );
+      evalSession = await createEvalHost(this.sessions, view.datasets);
     } catch (err) {
       this.logger.warn(
         `Could not create a throwaway run host for eval run ${view.jobId}: ${

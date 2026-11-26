@@ -1,5 +1,4 @@
 import { ConversationExportRef } from '../../runs/models/conversation-export.model';
-import type { ReadinessMaturity } from './readiness.model';
 import type { QueryEvidence } from '../../../shared/query-evidence/query-evidence.model';
 
 export interface ClarificationOption {
@@ -117,11 +116,6 @@ export interface ChatMessage {
   /** Curated knowledge snippets this answer's context carried. */
   knowledge?: KnowledgeUse[];
   /**
-   * The last readiness report this turn produced (Data Readiness Agent
-   * sessions; data-model 3.4.1). Drives the readiness card.
-   */
-  readinessReport?: ReadinessReportRef;
-  /**
    * Set on a client-only bubble rendered when a turn's stream failed
    * (provider error, dropped connection, backend crash mid-turn). Never
    * persisted server-side — the backend transcript still ends with the
@@ -129,15 +123,6 @@ export interface ChatMessage {
    * instead of duplicating it (see `SessionsService.appendUserMessage`).
    */
   error?: boolean;
-}
-
-/** `ChatMessage.readinessReport` (data-model 3.4.1): a reference, not the report. */
-export interface ReadinessReportRef {
-  reportId: string;
-  datasourceName: string;
-  overallScore: number;
-  maturity: ReadinessMaturity;
-  generatedAt: string;
 }
 
 export type MessageFeedback = 'up' | 'down';
@@ -155,8 +140,7 @@ export interface VisualEvent {
   action: 'created' | 'updated' | 'reverted';
 }
 
-export type PanelItemKind =
-  'file' | 'document' | 'table' | 'visual' | 'readiness';
+export type PanelItemKind = 'file' | 'document' | 'table' | 'visual';
 
 interface PanelItemBase {
   id: string;
@@ -192,19 +176,28 @@ export interface VisualPanelItem extends PanelItemBase {
   visualId: string;
 }
 
-/** A data-readiness report; id `readiness:<reportId>` (data-model 3.4.4). */
-export interface ReadinessPanelItem extends PanelItemBase {
-  kind: 'readiness';
-  reportId: string;
-}
-
 /** Something an agent showed in the right panel (data-model 3.4.4). */
 export type PanelItem =
   | FilePanelItem
   | DocumentPanelItem
   | TablePanelItem
-  | VisualPanelItem
-  | ReadinessPanelItem;
+  | VisualPanelItem;
+
+const PANEL_ITEM_KINDS: readonly string[] = [
+  'file',
+  'document',
+  'table',
+  'visual',
+];
+
+/**
+ * The panel items this app can show. A stored session may carry a kind that
+ * no longer exists (the `readiness` items of old Data Readiness chats): the
+ * UI skips those instead of rendering a blank entry.
+ */
+export function shownPanelItems(items: PanelItem[] | undefined): PanelItem[] {
+  return (items ?? []).filter((item) => PANEL_ITEM_KINDS.includes(item.kind));
+}
 
 export interface WorkflowPhase {
   number: number;

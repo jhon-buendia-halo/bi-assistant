@@ -1251,15 +1251,15 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     });
 
     it('turns the inspector on, and prepares evidence, for a run of any workflow whose answer holds data', () => {
-      const readiness = { ...ASSISTANT, id: 'assess-data-readiness' };
+      const other = { ...ASSISTANT, id: 'another-workflow' };
       designer.showRunOnLoad({
         ...withData(),
-        workflowId: 'assess-data-readiness',
+        workflowId: 'another-workflow',
       });
-      designer.load(readiness.id);
+      designer.load(other.id);
       http
-        .expectOne((r) => r.url.endsWith('/workflows/assess-data-readiness'))
-        .flush(readiness);
+        .expectOne((r) => r.url.endsWith('/workflows/another-workflow'))
+        .flush(other);
       http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
       expect(designer.inspectsQueries()).toBeTrue();
       expect(runs.prepareEvidence).toHaveBeenCalledOnceWith('run-1');

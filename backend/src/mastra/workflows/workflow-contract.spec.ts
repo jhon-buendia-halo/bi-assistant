@@ -363,7 +363,7 @@ describe('checkWorkflowContract: checked when the catalogue loads (workflows R26
     ]);
   });
 
-  it('maps input field types: text, textarea and dataset to string, number, boolean, datasets to string[]; a default or a boolean is always given', () => {
+  it('maps input field types: text and textarea to string, number, boolean, datasets to string[]; a default or a boolean is always given', () => {
     const fine = workflow(
       [
         {
@@ -371,7 +371,6 @@ describe('checkWorkflowContract: checked when the catalogue loads (workflows R26
           input: z.object({
             t: z.string(),
             ta: z.string(),
-            d: z.string(),
             n: z.number(),
             b: z.boolean(),
             ds: z.array(z.string()),
@@ -383,7 +382,6 @@ describe('checkWorkflowContract: checked when the catalogue loads (workflows R26
       [
         { name: 't', label: 'T', type: 'text', required: true },
         { name: 'ta', label: 'TA', type: 'textarea', required: true },
-        { name: 'd', label: 'D', type: 'dataset', required: true },
         { name: 'n', label: 'N', type: 'number', required: true },
         { name: 'b', label: 'B', type: 'boolean', required: false },
         { name: 'ds', label: 'DS', type: 'datasets', required: true },

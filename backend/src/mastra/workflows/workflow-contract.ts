@@ -155,7 +155,6 @@ export interface ContractProblem {
 const FIELD_SCHEMAS: Record<WorkflowInputFieldType, JsonSchema> = {
   text: { type: 'string' },
   textarea: { type: 'string' },
-  dataset: { type: 'string' },
   // The path the run stores the image at.
   image: { type: 'string' },
   // The paths the run stores the reference images at (workflows R35).
@@ -580,11 +579,6 @@ export interface WorkflowStepEntry {
   input: readonly string[];
   output: readonly string[];
   exits: readonly WorkflowStepExit[];
-  /**
-   * An agent step that calls its agent's model without its tools (Plan,
-   * Write answer): its own tools (none) and its one model call.
-   */
-  modelOnly?: true;
   /** The step's declared input, as JSON Schema (catalogued workflows). */
   inputSchema?: JsonSchema;
   /** The step's declared output, as JSON Schema (catalogued workflows). */

@@ -137,8 +137,7 @@ export interface EvalCustomCheckInput {
   vars: Record<string, string>;
   /**
    * Structured facts of the run (agents.md 8.1, "Run details"): an
-   * isolated call's whole `output`, a workflow's step outputs (`steps`),
-   * the readiness report and Rows behind findings' sources. The runner
+   * isolated call's whole `output` and a workflow's step outputs (`steps`). The runner
    * always sets it (`{}` when the target sets none); optional only so a
    * spec can call a check without it.
    */
@@ -198,7 +197,7 @@ export interface AssistantEvalSet {
   agentKey?: string;
   /**
    * The eval target its cases run on, when its agent has more than one
-   * (`eval-sets.ts` `EVAL_TARGET_FACTORIES`): `data-readiness:assessment-workflow`. Absent means the agent's own
+   * (`eval-sets.ts` `EVAL_TARGET_FACTORIES`). Absent means the agent's own
    * target (its `agentKey`).
    */
   target?: string;
@@ -984,8 +983,7 @@ export interface EvalOrientationInput {
 
 /**
  * The agent a set's cases run on and what each case sends it (agents.md
- * 8.1, `agentKey`): the assistant by default, the Data Readiness Agent for
- * the `data-readiness` set (`data-readiness.evals.ts`).
+ * 8.1, `agentKey`): the assistant by default.
  */
 export interface EvalTarget {
   /** Registry key of the agent. */
@@ -1015,25 +1013,11 @@ export interface EvalTarget {
   /** Clean-up once a run's cases are done (or it failed). Never throws. */
   finish?(datasets: string[]): Promise<void>;
   /**
-   * The registry key of the agent the run's throwaway session is bound to,
-   * so session-scoped tools resolve as in a real chat with this agent
-   * (`update_workflow` reads the bound agent's `## Workflow`); none for the
-   * assistant.
-   */
-  sessionAgentKey?: string;
-  /**
    * How much of each tool input and output the LLM judge reads; the
    * report's 2,000 characters when unset. An agent whose tools answer
-   * whole reports (Data Readiness) has its judge read more of them.
+   * long results has its judge read more of them.
    */
   judgeTraceChars?: number;
-  /**
-   * What the LLM judge reads of a successful tool output, when the model
-   * is handed a projection of it (`toModelOutput`): the Data Readiness
-   * Agent's report tools hand the model only the summary. Unset, the judge
-   * reads the output as the tool returned it.
-   */
-  judgeOutput?: (output: unknown) => unknown;
 }
 
 /** The assistant's sets, run as they always have been. */
@@ -1408,25 +1392,16 @@ const EVAL_HOST_PLACEHOLDER = {
 export async function createEvalHost(
   sessions: SessionsService,
   datasets: string[],
-  /** Bind the host to this built-in agent (`EvalTarget.sessionAgentKey`). */
-  agentKey?: string,
 ): Promise<EvalHost> {
-  // An agent that declares its own datasets (Data Readiness)
-  // takes them; the assistant runs over the run's.
-  // An agent host: the agent's turn on the agent-turn engine, with no
-  // catalogue workflow behind it (agents are a library since 1.23.35).
+  // The assistant's turn on the agent-turn engine over the run's datasets,
+  // with no catalogue workflow behind it (agents are a library since 1.23.35).
   const host = await sessions.createRunHost({
     runId: `eval-${randomUUID()}`,
-    agentKey: agentKey ?? 'assistant',
-    name: `${agentKey ?? 'assistant'} eval`,
-    ...(agentKey ? {} : { datasets }),
+    agentKey: 'assistant',
+    name: 'assistant eval',
+    datasets,
     context: EVAL_HOST_PLACEHOLDER,
   });
-  // An agent that binds every qualifying dataset (Data Readiness) is narrowed
-  // to the run's datasets, matching the orientation the case is given.
-  if (agentKey && datasets.length > 0) {
-    sessions.narrowRunHost(host.id, datasets);
-  }
   return { id: host.id };
 }
 
@@ -1810,12 +1785,7 @@ async function runCaseInScope(
             input: encode(call.input, target.judgeTraceChars),
             output: call.failed
               ? undefined
-              : encode(
-                  target.judgeOutput
-                    ? target.judgeOutput(call.output)
-                    : call.output,
-                  target.judgeTraceChars,
-                ),
+              : encode(call.output, target.judgeTraceChars),
             error: call.failed
               ? (encode(call.output, target.judgeTraceChars) ??
                 'Tool call failed')
@@ -1906,7 +1876,7 @@ export async function runAssistantEvals(
   );
   if (datasetError) throw new Error(datasetError);
   const evalSession = sessions
-    ? await createEvalHost(sessions, datasets, target.sessionAgentKey)
+    ? await createEvalHost(sessions, datasets)
     : undefined;
   try {
     const results: AssistantEvalCaseResult[] = [];

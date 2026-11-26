@@ -9,7 +9,6 @@ jest.mock('./index', () => ({ mastra: fakeMastra }));
 jest.mock('./agents/query-explainer.agent', () => ({}));
 jest.mock('./agents/result-explorer.agent', () => ({}));
 jest.mock('./workflows/step-agents', () => ({}));
-jest.mock('./workflows/consumption-gap-analysis.agents', () => ({}));
 jest.mock('./session-workspaces', () => ({}));
 // Framework-free: the real thread ids and messages.
 jest.mock('./agent-threads', () =>
@@ -107,7 +106,7 @@ describe('MastraService.discardSuspendedWorkflowRuns (ADR-0043; workflows R20)',
       row('r1', 'answer-business-question'),
       row('r1', 'question-path'),
       row('r1', 'plan-round'),
-      row('r2', 'consumption-gap-analysis'),
+      row('r2', 'orchestrated-answer-michael'),
       row('r3', 'answer-business-question', 'success'),
     ]);
     useStore(store);
@@ -275,29 +274,29 @@ describe('MastraService.recordAgentExchange (agents.md 5.14)', () => {
     const memory = fakeMemory();
     const service = serviceWith(memory);
     await Promise.all([
-      service.recordAgentExchange('run-1', 'gap-advisor', {
+      service.recordAgentExchange('run-1', 'query-explainer', {
         request: 'first',
         reply: 'one',
       }),
-      service.recordAgentExchange('run-1', 'gap-advisor', {
+      service.recordAgentExchange('run-1', 'query-explainer', {
         request: 'second',
         reply: 'two',
       }),
     ]);
     expect(memory.createThread).toHaveBeenCalledTimes(1);
     expect(memory.saveMessages).toHaveBeenCalledTimes(2);
-    expect([...memory.threads]).toEqual(['run-1:gap-advisor']);
+    expect([...memory.threads]).toEqual(['run-1:query-explainer']);
   });
 
   it('rejects only the failed write (the caller logs it); the next one on the thread still goes', async () => {
     const memory = fakeMemory('first');
     const service = serviceWith(memory);
     const [first, second] = await Promise.allSettled([
-      service.recordAgentExchange('run-1', 'layer-mapper', {
+      service.recordAgentExchange('run-1', 'result-explorer', {
         request: 'first',
         reply: 'one',
       }),
-      service.recordAgentExchange('run-1', 'layer-mapper', {
+      service.recordAgentExchange('run-1', 'result-explorer', {
         request: 'second',
         reply: 'two',
       }),

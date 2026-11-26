@@ -371,13 +371,6 @@ describe('WorkflowRunsApiService, a step chat (api.md 136, 137)', () => {
           }),
         },
         {
-          type: 'tool-progress',
-          content: JSON.stringify({
-            tool: 'run_readonly_sql',
-            message: 'Querying',
-          }),
-        },
-        {
           type: 'tool-result',
           content: JSON.stringify({ tool: 'run_readonly_sql', rowCount: 6 }),
         },
@@ -391,7 +384,6 @@ describe('WorkflowRunsApiService, a step chat (api.md 136, 137)', () => {
     const handlers: NodeChatStreamHandlers = {
       onReasoning: (d) => seen.push(`reasoning:${d}`),
       onTool: (c) => seen.push(`tool:${c.name}:${c.input}`),
-      onToolProgress: (p) => seen.push(`progress:${p.message}`),
       onToolResult: (r) => seen.push(`result:${r.rowCount}`),
       onText: (d) => seen.push(`text:${d}`),
       onDone: (m) => seen.push(`done:${m.id}`),
@@ -417,7 +409,6 @@ describe('WorkflowRunsApiService, a step chat (api.md 136, 137)', () => {
     expect(seen).toEqual([
       'reasoning:Looking',
       'tool:run_readonly_sql:SELECT 1',
-      'progress:Querying',
       'result:6',
       'text:Six ',
       'text:stages.',

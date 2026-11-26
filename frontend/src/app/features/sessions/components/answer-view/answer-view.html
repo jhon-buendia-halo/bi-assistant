@@ -257,13 +257,6 @@
       } @else {
         <div class="prose-dark" [innerHTML]="msg.content | markdown"></div>
       }
-      @if (msg.readinessReport; as readiness) {
-        <!-- Data readiness report: score, band, Open scorecard -->
-        <app-readiness-card
-          [report]="readiness"
-          (openScorecard)="openScorecard.emit(readiness)"
-        />
-      }
       @if (queryInspector()) {
         <app-query-evidence-summary
           [message]="msg"

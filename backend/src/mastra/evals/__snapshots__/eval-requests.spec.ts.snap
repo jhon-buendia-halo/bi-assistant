@@ -25,28 +25,3 @@ Use describe_entity / sample_rows / run_readonly_sql to inspect and query them."
   ],
 }
 `;
-
-exports[`the requests an eval case sends each agent data-readiness: the first case 1`] = `
-{
-  "agent": "data-readiness",
-  "context": [
-    {
-      "content": "Datasets for this session (data readiness):
-- World Cup Core — PostgreSQL datasource "World Cup PostgreSQL", 0 entities
-Today is 2026-11-12.",
-      "role": "system",
-    },
-  ],
-  "datasets": [
-    "World Cup Core",
-  ],
-  "input": "Run a fresh readiness assessment of this data. How ready is it for analysis?",
-  "maxSteps": 15,
-  "requestContextKeys": [
-    "datasets",
-    "eval-case",
-    "turn-data-records",
-    "turn-question",
-  ],
-}
-`;

@@ -1,8 +1,8 @@
 /**
  * The dashboard as data (the blueprint): what a stored dashboard artifact
  * holds (data-model 3.18), what the fixed runtime
- * (./dashboard-blueprint.runtime.ts) draws, and what Consumption Gap
- * Analysis and the BI Analyst's dashboards build on. Zod only, no framework
+ * (./dashboard-blueprint.runtime.ts) draws, and what the BI Analyst's
+ * dashboards build on. Zod only, no framework
  * import, so Jest and the catalogue can load it without Mastra.
  */
 import { z } from 'zod';

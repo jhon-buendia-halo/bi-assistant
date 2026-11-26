@@ -1,4 +1,9 @@
-import type { FormatRule, SemanticType } from '../data-readiness/engine/types';
+/** How a column's declared type reads: what its values can be compared and generated as. */
+export type SemanticType =
+  'numeric' | 'temporal' | 'text' | 'boolean' | 'uuid' | 'json' | 'other';
+
+/** A format a text column's name implies (email, phone, ...). */
+export type FormatRule = 'email' | 'phone' | 'url' | 'uuid' | 'date-string';
 
 export type SyntheticDialect = 'postgres' | 'databricks';
 export type SampleMethod = 'full' | 'tablesample' | 'limit';

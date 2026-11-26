@@ -20,25 +20,11 @@ interface SqlRecord {
   rationale?: string;
 }
 
-/**
- * `ChatMessage.readinessReport` (data-model 3.4.1): a reference to a stored
- * readiness report, which the answer's readiness card opens as a scorecard.
- */
-export interface PastChatReadinessRef {
-  reportId: string;
-  datasourceName: string;
-  overallScore: number;
-  maturity: string;
-  generatedAt: string;
-}
-
 export interface PastChatTurn {
   question: string;
   answer: string;
   /** The SQL results the answer ran, kept as the answer's data. */
   data?: SqlRecord[];
-  /** An older Data Readiness answer: the report it produced. */
-  readinessReport?: PastChatReadinessRef;
 }
 
 export interface PastChatVisual {
@@ -51,7 +37,7 @@ export interface PastChatVisual {
 export interface PastChatSeed {
   name: string;
   datasets?: string[];
-  /** A built-in agent the chat was bound to, as an older readiness chat. */
+  /** A built-in agent the chat was bound to. */
   agentKey?: string;
   agentName?: string;
   /** A user agent the chat was started from. */
@@ -84,7 +70,6 @@ export function seedPastChat(appDataDir: string, seed: PastChatSeed): string {
       content: turn.answer,
       at: lastAnswerAt,
       ...(turn.data ? { data: turn.data } : {}),
-      ...(turn.readinessReport ? { readinessReport: turn.readinessReport } : {}),
     });
   }
 

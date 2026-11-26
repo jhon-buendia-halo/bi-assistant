@@ -131,7 +131,6 @@ function build(
       'ask_clarification',
     ]),
     'insights-analyst': fakeAgent('Insights Analyst', ['run_readonly_sql']),
-    'data-readiness': fakeAgent('Data Readiness Agent', ['assess_readiness']),
   };
   const deleteMemoryThread = jest.fn().mockResolvedValue(undefined);
   const deleteMemoryResource = jest.fn().mockResolvedValue(undefined);
@@ -541,6 +540,7 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
       // Removed with M18: a past chat keeps the id, nothing runs it.
       'answer-business-question',
       'orchestrated-answer',
+      'data-readiness-assessment',
       'agent:rfp',
       'nope',
       'agent:sql-fixer',
@@ -571,7 +571,6 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
   it.each([
     ['orchestrated-answer-michael', { askStep: 'write-answer' }],
     ['orchestrated-answer-michael', { fromRunId: 'gone', askStep: 'analyse' }],
-    ['data-readiness-assessment', { askStep: 'explain-report' }],
   ])(
     "refuses to ask one agent alone on %s (%p): no workflow takes it since Answer a Business Question's removal",
     async (id, context) => {
@@ -582,7 +581,6 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
           input: {
             question: 'Why?',
             datasets: ['Claims'],
-            dataset: 'Claims',
           },
           context,
         },
@@ -1219,14 +1217,14 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     ctx.sessions.finishRunHost.mockImplementationOnce(() =>
       Promise.resolve({
         id: 'host',
-        name: 'Data Readiness Agent',
+        name: 'Assistant',
         datasets: ['Claims'],
         messages: [
           { role: 'user', content: 'Assess Claims', at: 't1' },
           { role: 'assistant', content: 'Which client?', at: 't2' },
         ],
-        agentKey: 'data-readiness',
-        agentName: 'Data Readiness Agent',
+        agentKey: 'assistant',
+        agentName: 'Assistant',
         // A host shaped by an earlier version: its RFP id is not stored.
         rfpId: 'rfp-1',
         visualizations: [{ id: 'v1', title: 'Goals' }],
@@ -1242,13 +1240,13 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         workflowState: { phases: [], updatedAt: 't' },
         workflow: { phases: [], source: 'agent' },
         agent: {
-          id: 'data-readiness',
-          name: 'Data Readiness Agent',
+          id: 'assistant',
+          name: 'Assistant',
           deleted: false,
         },
         workflowRef: {
-          id: 'agent:data-readiness',
-          name: 'Data Readiness Agent',
+          id: 'agent:assistant',
+          name: 'Assistant',
           kind: 'agent',
           deleted: false,
         },
@@ -1265,8 +1263,8 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       question: 'Who won in 2002?',
       answer: { role: 'assistant', content: 'Which client?', at: 't2' },
       datasets: ['Claims'],
-      agentKey: 'data-readiness',
-      agentName: 'Data Readiness Agent',
+      agentKey: 'assistant',
+      agentName: 'Assistant',
       visualizations: [{ id: 'v1', title: 'Goals' }],
       panelItems: [{ id: 'p1', kind: 'document' }],
       workflowState: { phases: [], updatedAt: 't' },
@@ -2095,11 +2093,12 @@ describe('WorkflowRunsService: conversations with Avery (workflows R45; api.md 1
     ctx = build();
     const { run } = await streamed(ctx, ORCHESTRATED, { input: FIRST });
     expect(run.conversationId).toBe(run.id);
-    // Another workflow's run belongs to no conversation.
-    const other = await streamed(ctx, 'data-readiness-assessment', {
-      input: { dataset: 'Claims' },
+    // Another workflow's run (a draft's Try it) belongs to no conversation.
+    const draft = await ctx.service.prepareDraft('agent-1', {
+      input: { question: 'Who won?' },
     });
-    expect(other.run.conversationId).toBeUndefined();
+    const other = await ctx.service.stream(draft, () => undefined);
+    expect(other.conversationId).toBeUndefined();
   });
 
   it("joins the earlier run's conversation on a follow-up, and Avery reads its turns", async () => {
@@ -3155,22 +3154,41 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
       await ctx.service.prepare('orchestrated-answer-michael', { input: ASK }),
     );
 
-  /** An Assess Data Readiness run: several steps before its agent step. */
-  const launchReadiness = async () =>
-    ctx.service.launch(
-      await ctx.service.prepare('data-readiness-assessment', {
-        input: { dataset: 'Claims' },
-      }),
+  /**
+   * A run of a longer workflow: Avery's, its one step replaced by three code
+   * steps before an agent step (Explain) and a last code step (Wrap up).
+   */
+  const launchStaged = async () => {
+    const real = await ctx.workflows.definition('orchestrated-answer-michael');
+    const step = (id: string, kind: 'code' | 'agent') => ({
+      ...real.steps[0],
+      id,
+      title: id,
+      kind,
+    });
+    jest.spyOn(ctx.workflows, 'definition').mockResolvedValue({
+      ...real,
+      steps: [
+        step('resolve', 'code'),
+        step('profile', 'code'),
+        step('score', 'code'),
+        step('explain', 'agent'),
+        step('wrap-up', 'code'),
+      ],
+    });
+    return ctx.service.launch(
+      await ctx.service.prepare('orchestrated-answer-michael', { input: ASK }),
     );
-  /** The steps it reports before Explain report, which it starts. */
-  const READINESS_BEFORE: StepEvent[] = [
-    stepStart('resolve-dataset', { dataset: 'Claims' }),
-    stepResult('resolve-dataset', { dataset: 'Claims' }),
-    stepStart('profile-source', { dataset: 'Claims' }),
-    stepResult('profile-source', { entityCount: 1 }),
-    stepStart('score-readiness', { entityCount: 1 }),
-    stepResult('score-readiness', { overallScore: 84 }),
-    stepStart('explain-report', { overallScore: 84 }),
+  };
+  /** The steps it reports before Explain, which it starts. */
+  const STAGED_BEFORE: StepEvent[] = [
+    stepStart('resolve', ASK),
+    stepResult('resolve', ASK),
+    stepStart('profile', ASK),
+    stepResult('profile', { entityCount: 1 }),
+    stepStart('score', { entityCount: 1 }),
+    stepResult('score', { overallScore: 84 }),
+    stepStart('explain', { overallScore: 84 }),
   ];
 
   /** The stored run's steps as `<id>:<status>`. */
@@ -3195,9 +3213,9 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     );
 
   /**
-   * The next turn (an Assess Data Readiness run's) reports the steps before
-   * Explain report and a tool call, waits for `next`, ends Explain report
-   * and starts Rows behind findings, then waits for `end`.
+   * The next turn (a staged run's) reports the steps before Explain and a
+   * tool call, waits for `next`, ends Explain and starts Wrap up, then waits
+   * for `end`.
    */
   function stagedTurn() {
     let next!: () => void;
@@ -3206,11 +3224,11 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     const endGate = new Promise<void>((resolve) => (end = resolve));
     ctx.sessions.streamRunTurn.mockImplementationOnce(
       async (_hostId, _question, emit, _signal, _careful, onStep) => {
-        for (const step of READINESS_BEFORE) onStep(step);
+        for (const step of STAGED_BEFORE) onStep(step);
         emit(TOOL_FRAME);
         await nextGate;
-        onStep(stepResult('explain-report', ANALYSE_OUTPUT));
-        onStep(stepStart('finding-rows', ANALYSE_OUTPUT));
+        onStep(stepResult('explain', ANALYSE_OUTPUT));
+        onStep(stepStart('wrap-up', ANALYSE_OUTPUT));
         await endGate;
       },
     );
@@ -3221,13 +3239,13 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     ctx = build();
     const update = jest.spyOn(ctx.repository, 'update');
     const turn = stagedTurn();
-    const id = await launchReadiness();
+    const id = await launchStaged();
     await settled();
     expect(await storedTrail(id)).toEqual([
-      'resolve-dataset:success',
-      'profile-source:success',
-      'score-readiness:success',
-      'explain-report:running',
+      'resolve:success',
+      'profile:success',
+      'score:success',
+      'explain:running',
     ]);
     // Seven step changes, coalesced: one write in flight, one queued.
     expect(checkpoints(update)).toHaveLength(2);
@@ -3241,11 +3259,11 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     const steps = (await ctx.repository.get(id))?.steps ?? [];
     expect(steps.slice(-2)).toEqual([
       expect.objectContaining({
-        id: 'explain-report',
+        id: 'explain',
         status: 'success',
         toolCalls: [{ tool: 'run_readonly_sql', input: 'select 1' }],
       }),
-      expect.objectContaining({ id: 'finding-rows', status: 'running' }),
+      expect.objectContaining({ id: 'wrap-up', status: 'running' }),
     ]);
     turn.end();
     await ctx.service.live.whenEnded(id);
@@ -3304,7 +3322,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
   it('after a restart a run cut off mid-way is queued again from scratch: its stored steps are dropped', async () => {
     ctx = build();
     stagedTurn();
-    const id = await launchReadiness();
+    const id = await launchStaged();
     await until(async () => (await storedTrail(id)).length === 4);
     const fresh = ctx.restarted();
     await fresh.onModuleInit();

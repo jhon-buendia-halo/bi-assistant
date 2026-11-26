@@ -88,14 +88,14 @@ describe('runHostDoc (plan 5.2: a run-backed host)', () => {
     };
     const host = runHostDoc({
       ...base,
-      workflowId: 'agent:data-readiness',
-      workflowName: 'Data Readiness Agent',
+      workflowId: 'agent:assistant',
+      workflowName: 'Assistant',
       status: 'success',
       question: 'Who won?',
       answer,
       datasets: ['World Cup Core'],
-      agentKey: 'data-readiness',
-      agentName: 'Data Readiness Agent',
+      agentKey: 'assistant',
+      agentName: 'Assistant',
       panelItems: [
         {
           id: 'p1',
@@ -119,13 +119,13 @@ describe('runHostDoc (plan 5.2: a run-backed host)', () => {
     });
     expect(host).toEqual({
       id: 'run-r-1',
-      name: 'Data Readiness Agent',
+      name: 'Assistant',
       workspaceId: 'session-run-r-1',
       run: true,
       datasets: ['World Cup Core'],
-      agentKey: 'data-readiness',
-      agentName: 'Data Readiness Agent',
-      workflowId: 'agent:data-readiness',
+      agentKey: 'assistant',
+      agentName: 'Assistant',
+      workflowId: 'agent:assistant',
       messages: [
         { role: 'user', content: 'Who won?', at: '2026-11-11T10:00:00.000Z' },
         answer,
@@ -391,11 +391,11 @@ describe('RunStepTracker: tool calls of an agent step (agents.md 5.14)', () => {
   it("keeps the call's own input when its result has none, and a result without a call as a call", () => {
     const tracker = new RunStepTracker(STEPS, fakeClock().now);
     tracker.apply(start('answer', {}));
-    tracker.noteTool('assess_data_readiness', 'Acme');
-    tracker.noteToolResult({ tool: 'assess_data_readiness' });
+    tracker.noteTool('describe_entity', 'Acme');
+    tracker.noteToolResult({ tool: 'describe_entity' });
     tracker.noteToolResult({ tool: 'show_in_panel', input: 'Draft' });
     expect(tracker.finish('success').steps[1].toolCalls).toEqual([
-      { tool: 'assess_data_readiness', input: 'Acme', durationMs: 0 },
+      { tool: 'describe_entity', input: 'Acme', durationMs: 0 },
       { tool: 'show_in_panel', input: 'Draft' },
     ]);
   });

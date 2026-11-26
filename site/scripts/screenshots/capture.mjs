@@ -1,11 +1,11 @@
 // Captures the product-page screenshots from a running Halo Workbench (web
-// mode) that has the World Cup fixture loaded and two stored runs: one of
-// Answer a Business Question and one of Assess Data Readiness on "World Cup".
+// mode) that has the World Cup fixture loaded and a stored run of Answer a
+// Business Question (Avery + Michael) on "World Cup".
 // See site/README.md, "Screenshots", for how to get there.
 //
 //   APP_URL=http://127.0.0.1:3210/ node site/scripts/screenshots/capture.mjs [shot ...]
 //
-// Shots: hero, inspector, evidence, workflows, agents, readiness (all by default).
+// Shots: hero, inspector, evidence, workflows, agents (all by default).
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -26,7 +26,6 @@ const want = (n) => only.length === 0 || only.includes(n);
 // The question the Answer a Business Question run was started with; its run
 // row in Runs starts with these words.
 const QUESTION_START = 'Which teams finished their chances best';
-const READINESS_TITLE = 'Assess the readiness of this dataset';
 
 const browser = await chromium.launch();
 
@@ -108,14 +107,6 @@ if (want('agents')) {
   await rail(page, 'Agents').click();
   await page.waitForTimeout(1500);
   await shot(page, 'agents');
-  await page.close();
-}
-
-// A data readiness assessment.
-if (want('readiness')) {
-  const page = await open();
-  await openRun(page, READINESS_TITLE);
-  await shot(page, 'readiness');
   await page.close();
 }
 

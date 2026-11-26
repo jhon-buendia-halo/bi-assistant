@@ -11,12 +11,6 @@
  */
 import {
   CHIEF_OF_STAFF_AGENT_KEY,
-  ASSISTANT_MAX_STEPS,
-  DATA_READINESS_AGENT_KEY,
-  DATA_READINESS_MAX_STEPS,
-  GAP_ADVISOR_AGENT_KEY,
-  LAYER_MAPPER_AGENT_KEY,
-  REQUIREMENTS_ANALYST_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import { INSIGHTS_ANALYST_AGENT_KEY } from '../agents/insights-analyst-catalog';
@@ -37,22 +31,6 @@ import {
   ORCHESTRATED_MICHAEL_WORKFLOW_ID,
   ORCHESTRATED_MICHAEL_WORKFLOW_NAME,
 } from './orchestrated-answer-michael.steps';
-import {
-  CONSUMPTION_GAP_DESCRIPTION,
-  CONSUMPTION_GAP_EDGES,
-  CONSUMPTION_GAP_STEPS,
-  CONSUMPTION_GAP_WORKFLOW_ID,
-  CONSUMPTION_GAP_WORKFLOW_NAME,
-  GAP_MAX_QUESTIONS,
-} from './consumption-gap-analysis.steps';
-import {
-  DATA_READINESS_ASSESSMENT_DESCRIPTION,
-  DATA_READINESS_ASSESSMENT_EDGES,
-  DATA_READINESS_ASSESSMENT_STEPS,
-  DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
-  DATA_READINESS_ASSESSMENT_WORKFLOW_NAME,
-  READINESS_DEFAULT_QUESTION,
-} from './data-readiness-assessment.steps';
 import type { AgentWorkflow } from './agent-workflows';
 import {
   assertWorkflowContracts,
@@ -112,10 +90,6 @@ export function workflowCategory(id: WorkflowCategoryId): WorkflowCategory {
 
 /** The placeholder of a run's question. */
 const QUESTION_PLACEHOLDER = 'Ask a question about your data';
-
-/** Consumption Gap Analysis's placeholder: two questions, one per line. */
-const CONSUMPTION_GAP_PLACEHOLDER =
-  'Which team won the most matches in each World Cup?\nWhat share of the goals were penalties?';
 
 const QUESTION_FIELD: WorkflowInputField = {
   name: 'question',
@@ -206,77 +180,6 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       edges: ORCHESTRATED_MICHAEL_EDGES,
       bar: 'steps',
     },
-    {
-      id: DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
-      name: DATA_READINESS_ASSESSMENT_WORKFLOW_NAME,
-      category: 'data-engineering',
-      description: DATA_READINESS_ASSESSMENT_DESCRIPTION,
-      // Its Explain report step runs the Data Readiness Agent.
-      primaryFor: DATA_READINESS_AGENT_KEY,
-      trigger: 'run',
-      input: [
-        {
-          name: 'dataset',
-          label: 'Dataset',
-          type: 'dataset',
-          required: true,
-          datasourceKinds: ['postgres', 'databricks'],
-        },
-        {
-          name: 'question',
-          label: 'Question',
-          type: 'textarea',
-          required: false,
-          placeholder: READINESS_DEFAULT_QUESTION,
-          default: READINESS_DEFAULT_QUESTION,
-          maxLength: QUESTION_MAX_LENGTH,
-        },
-      ],
-      steps: DATA_READINESS_ASSESSMENT_STEPS,
-      edges: DATA_READINESS_ASSESSMENT_EDGES,
-      bar: 'steps',
-    },
-    {
-      id: CONSUMPTION_GAP_WORKFLOW_ID,
-      name: CONSUMPTION_GAP_WORKFLOW_NAME,
-      category: 'data-engineering',
-      description: CONSUMPTION_GAP_DESCRIPTION,
-      // The Gap Advisor recommends the fixes (agents.md 2.20, 5.20).
-      primaryFor: GAP_ADVISOR_AGENT_KEY,
-      trigger: 'run',
-      input: [
-        {
-          ...DATASETS_FIELD,
-          help: 'Datasets whose schemas are tagged Landing, Normalized and Consumption.',
-        },
-        {
-          name: 'question',
-          label: 'Business questions',
-          type: 'textarea',
-          required: true,
-          placeholder: CONSUMPTION_GAP_PLACEHOLDER,
-          help: `One question per line, up to ${GAP_MAX_QUESTIONS}.`,
-          maxLength: QUESTION_MAX_LENGTH,
-        },
-        {
-          name: 'artifact',
-          label: 'Saved dashboard',
-          type: 'artifact',
-          required: false,
-          artifactKinds: ['dashboard'],
-        },
-      ],
-      steps: CONSUMPTION_GAP_STEPS,
-      // The Requirements Analyst derives the requirements and the Layer
-      // Mapper maps them; the Gap Advisor (`primaryFor`) recommends the
-      // fixes.
-      stepAgents: {
-        'derive-requirements': REQUIREMENTS_ANALYST_AGENT_KEY,
-        'map-requirements': LAYER_MAPPER_AGENT_KEY,
-      },
-      edges: CONSUMPTION_GAP_EDGES,
-      bar: 'steps',
-    },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
 
 /** The name of Elena's conversation as a run shows it (api.md 117, 120). */
@@ -321,6 +224,8 @@ export const REMOVED_WORKFLOW_IDS: readonly string[] = [
   'recreate-dashboard',
   'map-dashboard-data',
   'review-website',
+  'consumption-gap-analysis',
+  'data-readiness-assessment',
 ];
 
 /** The name a removed workflow had, by id, for a past chat's chip. */
@@ -330,6 +235,8 @@ export const REMOVED_WORKFLOW_NAMES: Readonly<Record<string, string>> = {
   'recreate-dashboard': 'Dashboard Image to Artifact',
   'map-dashboard-data': 'Map a Dashboard to Data',
   'review-website': 'Review a Website',
+  'consumption-gap-analysis': 'Consumption Gap Analysis',
+  'data-readiness-assessment': 'Assess Data Readiness',
 };
 
 /** Whether an id names a removed code workflow (`REMOVED_WORKFLOW_IDS`). */
@@ -341,12 +248,10 @@ export function isRemovedWorkflowId(id: string | undefined): boolean {
 export interface AgentRunTurn {
   /** The user message: `question`, trimmed. */
   question: string;
-  /** `datasets`, or the readiness run's one `dataset`; absent otherwise. */
+  /** `datasets`; absent otherwise. */
   datasets?: string[];
   /** Careful mode (the Assistant and user agents). */
   careful: boolean;
-  /** Consumption Gap Analysis's `artifact`: the saved dashboard it reads. */
-  artifact?: string;
 }
 
 /** The agent turn a run's checked input asks for (plan 4.2). */
@@ -355,14 +260,11 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     typeof value === 'string' ? value.trim() : '';
   const datasets = Array.isArray(values['datasets'])
     ? values['datasets']
-    : text(values['dataset'])
-      ? [text(values['dataset'])]
-      : undefined;
+    : undefined;
   return {
     question: text(values['question']),
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
-    ...(text(values['artifact']) ? { artifact: text(values['artifact']) } : {}),
   };
 }
 
@@ -371,10 +273,7 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
  * session of theirs, and the eval runner's direct host (agents.md 5.14).
  * They have no catalogue workflow since 1.23.35.
  */
-export const WRAPPED_AGENT_KEYS: readonly string[] = [
-  'assistant',
-  'data-readiness',
-];
+export const WRAPPED_AGENT_KEYS: readonly string[] = ['assistant'];
 
 /** The prefix of an agent-turn binding's id. */
 export const AGENT_WORKFLOW_PREFIX = 'agent:';
@@ -491,9 +390,8 @@ export function sessionWorkflowId(session: SessionWorkflowFields): string {
     return session.workflowId;
   }
   if (session.agentKey) {
-    // A wrapped agent's own turn first: the Data Readiness Agent also runs
-    // a code workflow's step, but its sessions and the eval runner's host
-    // stay on its agent turn (a run host names its workflow itself).
+    // A wrapped agent's own turn first: its sessions and the eval runner's
+    // host stay on its agent turn (a run host names its workflow itself).
     if (WRAPPED_AGENT_KEYS.includes(session.agentKey)) {
       return agentWorkflowId(session.agentKey);
     }
@@ -509,15 +407,6 @@ export function sessionWorkflowId(session: SessionWorkflowFields): string {
   }
   if (session.agentId) return agentWorkflowId(session.agentId);
   return ASSISTANT_WORKFLOW_ID;
-}
-
-/**
- * The tool-loop budget of an agent-turn binding's agent: 10 for the Data
- * Readiness Agent, 15 for the assistant and user agents.
- */
-export function wrappedAgentMaxSteps(agentKeyOrId: string): number {
-  if (agentKeyOrId === 'data-readiness') return DATA_READINESS_MAX_STEPS;
-  return ASSISTANT_MAX_STEPS;
 }
 
 /** The tool that ends a turn with a clarifying question (agents.md 3.6). */

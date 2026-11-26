@@ -23,21 +23,6 @@ jest.mock('../tool-services', () => ({
 
 import { RequestContext } from '@mastra/core/request-context';
 import type { z } from 'zod';
-import { DATA_READINESS_ASSESSMENT_STEP_SCHEMAS } from './data-readiness-assessment.schemas';
-import {
-  DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
-  DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
-  type DataReadinessAssessmentRuntime,
-} from './data-readiness-assessment.steps';
-import { dataReadinessAssessmentWorkflow } from './data-readiness-assessment.workflow';
-import { CONSUMPTION_GAP_STEP_SCHEMAS } from './consumption-gap-analysis.schemas';
-import {
-  CONFIRM_REQUIREMENTS_OPTION,
-  CONSUMPTION_GAP_RUNTIME_KEY,
-  CONSUMPTION_GAP_WORKFLOW_ID,
-  type ConsumptionGapRuntime,
-} from './consumption-gap-analysis.steps';
-import { consumptionGapAnalysisWorkflow } from './consumption-gap-analysis.workflow';
 import { ORCHESTRATED_MICHAEL_STEP_SCHEMAS } from './orchestrated-answer-michael.steps';
 import { ORCHESTRATED_MICHAEL_WORKFLOW_ID } from './orchestrated-answer-michael.steps';
 import {
@@ -75,38 +60,9 @@ interface ContractFixture {
   schemas: Record<string, { input: z.ZodType; output: z.ZodType }>;
   input: Record<string, unknown>;
   requestContext(): RequestContext;
-  /** The user's answer when the run waits on its clear path (Confirm requirements). */
+  /** The user's answer when the run waits on its clear path. */
   answer?: string;
 }
-
-/** The World Cup sample's Normalized and Consumption entities (plan m1-30). */
-const GAP_DATASET = {
-  dataset: 'World Cup',
-  datasourceId: 'ds-pg',
-  datasourceKind: 'postgres',
-  schemas: [
-    { key: 'world_cup.wc_normalized', layer: 'normalized' },
-    { key: 'world_cup.wc_consumption', layer: 'consumption' },
-  ],
-  entities: [
-    {
-      key: 'world_cup.wc_normalized.goals',
-      columns: [
-        { name: 'match_id', type: 'integer' },
-        { name: 'player_name', type: 'text' },
-        { name: 'is_penalty', type: 'boolean' },
-      ],
-    },
-    {
-      key: 'world_cup.wc_consumption.agg_player_goals',
-      columns: [
-        { name: 'tournament_year', type: 'integer' },
-        { name: 'player', type: 'text' },
-        { name: 'goals', type: 'integer' },
-      ],
-    },
-  ],
-};
 
 const ORCHESTRATED_FIXTURE: ContractFixture = {
   workflow:
@@ -125,141 +81,6 @@ const ORCHESTRATED_FIXTURE: ContractFixture = {
 
 const FIXTURES: Record<string, ContractFixture> = {
   [ORCHESTRATED_MICHAEL_WORKFLOW_ID]: ORCHESTRATED_FIXTURE,
-  [DATA_READINESS_ASSESSMENT_WORKFLOW_ID]: {
-    workflow:
-      dataReadinessAssessmentWorkflow as unknown as ContractFixture['workflow'],
-    schemas: DATA_READINESS_ASSESSMENT_STEP_SCHEMAS,
-    input: { question: '', dataset: 'World Cup' },
-    requestContext: () => {
-      const context = new RequestContext();
-      // The stubbed assessment: a profiled, scored and stored report, and
-      // the agent's explanation.
-      context.set(DATA_READINESS_ASSESSMENT_RUNTIME_KEY, {
-        resolve: ({ dataset }) =>
-          Promise.resolve({
-            dataset,
-            datasourceName: 'World Cup DB',
-            datasourceKind: 'postgres',
-            tableCount: 2,
-          }),
-        profile: () =>
-          Promise.resolve({
-            entityCount: 2,
-            relationshipCount: 1,
-            notProfiledCount: 0,
-            stopped: false,
-          }),
-        score: () => ({
-          overallScore: 84,
-          maturity: 'Managed',
-          findingCount: 1,
-          dimensionScores: [
-            {
-              dimension: 'completeness',
-              score: 90,
-              assessed: true,
-              findingCount: 1,
-            },
-          ],
-        }),
-        save: () => Promise.resolve({ reportId: 'r-1' }),
-        startFindingRows: () => undefined,
-        findingRows: () =>
-          Promise.resolve({
-            sourceCount: 1,
-            failedSourceCount: 0,
-            stopped: false,
-          }),
-        explain: () =>
-          Promise.resolve({ answer: 'Managed (84).', stopped: false }),
-      } satisfies DataReadinessAssessmentRuntime);
-      return context;
-    },
-  },
-  [CONSUMPTION_GAP_WORKFLOW_ID]: {
-    workflow:
-      consumptionGapAnalysisWorkflow as unknown as ContractFixture['workflow'],
-    schemas: CONSUMPTION_GAP_STEP_SCHEMAS,
-    input: {
-      question: 'Who scored the most goals in each World Cup?',
-      datasets: ['World Cup'],
-      artifact: '',
-    },
-    // The requirements are confirmed as they are.
-    answer: CONFIRM_REQUIREMENTS_OPTION,
-    requestContext: () => {
-      const context = new RequestContext();
-      const unused = () => Promise.reject(new Error('not used'));
-      const failedAll = (queries: { id: string }[]) => ({
-        results: queries.map((query) => ({
-          id: query.id,
-          columns: [],
-          rows: [],
-          error: 'not run in this test',
-        })),
-        stopped: false,
-      });
-      // The lineage checks Load layer catalogs started, for Infer lineage.
-      let lineage: { id: string }[] = [];
-      // The stubbed run: two tagged schemas, every query failed (a failed
-      // query is a result, never a failed run), one question requirement
-      // mapped to a Consumption column, no fix, and the stored report.
-      context.set(CONSUMPTION_GAP_RUNTIME_KEY, {
-        loadDashboard: unused,
-        datasetLayers: () => Promise.resolve([GAP_DATASET]),
-        runQueries: ({ queries }) => Promise.resolve(failedAll(queries)),
-        startLineage: ({ queries }) => {
-          lineage = queries;
-        },
-        takeLineage: () => Promise.resolve(failedAll(lineage)),
-        deriveRequirements: ({ questions }) =>
-          Promise.resolve({
-            requirements: questions.map((title, index) => ({
-              id: `Q${index + 1}`,
-              kind: 'question' as const,
-              title,
-              source: `Question ${index + 1}`,
-              dashboardId: '',
-              ref: '',
-              fields: [
-                {
-                  name: 'goals',
-                  role: 'measure' as const,
-                  aggregation: 'sum',
-                  description: 'Goals scored.',
-                },
-              ],
-              grain: 'player × tournament',
-              periodValues: [],
-            })),
-            stopped: false,
-          }),
-        reviseRequirements: unused,
-        mapRequirements: ({ requirements }) =>
-          Promise.resolve({
-            mappings: requirements.flatMap((requirement) =>
-              requirement.fields.map((field) => ({
-                requirementId: requirement.id,
-                field: field.name,
-                sources: [
-                  {
-                    layer: 'consumption' as const,
-                    entity: 'world_cup.wc_consumption.agg_player_goals',
-                    column: 'goals',
-                    expression: '',
-                  },
-                ],
-                note: '',
-              })),
-            ),
-            stopped: false,
-          }),
-        recommendFixes: () => Promise.resolve({ fixes: [], stopped: false }),
-        saveReport: ({ title }) => Promise.resolve({ visualId: 'v-1', title }),
-      } satisfies ConsumptionGapRuntime);
-      return context;
-    },
-  },
 };
 
 describe('every catalogued workflow keeps its data contract at run time (agents.md 5.12)', () => {

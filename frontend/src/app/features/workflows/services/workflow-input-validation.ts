@@ -132,9 +132,6 @@ function fieldError(
       ? `${field.label} must be at most ${IMAGE_MAX_BYTES / (1024 * 1024)} MB`
       : null;
   }
-  if (field.type === 'dataset') {
-    return datasets === null ? null : datasetError(field, text, datasets);
-  }
   if (field.type === 'number') {
     const number = Number(text);
     if (!Number.isFinite(number)) return `${field.label} must be a number`;

@@ -109,39 +109,6 @@ describe('validateRunForm (the run form checks its input before Execute)', () =>
   });
 });
 
-describe('validateRunForm, a single dataset field', () => {
-  const dataset: WorkflowInputField = {
-    name: 'dataset',
-    label: 'Dataset',
-    type: 'dataset',
-    required: true,
-    datasourceKinds: ['postgres', 'databricks'],
-  };
-
-  it('requires a pick: "<Label> is required"', () => {
-    expect(validateRunForm([dataset], {}, store)).toEqual([
-      { field: 'dataset', message: 'Dataset is required' },
-    ]);
-  });
-
-  it('checks the pick exists and is of the field kinds', () => {
-    expect(validateRunForm([dataset], { dataset: 'Sales' }, store)).toEqual([]);
-    expect(validateRunForm([dataset], { dataset: 'Gone' }, store)).toEqual([
-      { field: 'dataset', message: 'Dataset "Gone" not found' },
-    ]);
-    expect(validateRunForm([dataset], { dataset: 'Weather' }, store)).toEqual([
-      {
-        field: 'dataset',
-        message: 'Dataset "Weather" is not a PostgreSQL or Databricks dataset',
-      },
-    ]);
-  });
-
-  it('does not check existence while the datasets list is unknown', () => {
-    expect(validateRunForm([dataset], { dataset: 'Gone' }, null)).toEqual([]);
-  });
-});
-
 describe('inputErrorsByField', () => {
   it('keeps the first message per field and leaves out non-field errors', () => {
     expect(

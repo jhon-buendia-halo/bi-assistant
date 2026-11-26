@@ -294,7 +294,6 @@ describe('createEvalHost (agents.md 8.3)', () => {
   function fakeSessions() {
     return {
       createRunHost: jest.fn().mockResolvedValue({ id: 'run-eval-1' }),
-      narrowRunHost: jest.fn(),
       deleteRunHostResources: jest.fn().mockResolvedValue(undefined),
     };
   }
@@ -315,36 +314,15 @@ describe('createEvalHost (agents.md 8.3)', () => {
         },
       }),
     );
-    expect(sessions.narrowRunHost).not.toHaveBeenCalled();
-  });
-
-  it("binds an agent's host to the agent and narrows it to the run's datasets", async () => {
-    const sessions = fakeSessions();
-    await createEvalHost(
-      sessions as unknown as SessionsService,
-      ['World Cup'],
-      'data-readiness',
-    );
+    // A direct agent host: no catalogue workflow behind it (1.23.35).
     const [spec] = sessions.createRunHost.mock.calls[0] as [
       Record<string, unknown>,
     ];
-    // A direct agent host: no catalogue workflow behind it (1.23.35).
-    expect(spec['agentKey']).toBe('data-readiness');
     expect(spec).not.toHaveProperty('workflowId');
-    expect(spec).not.toHaveProperty('datasets');
-    expect(sessions.narrowRunHost).toHaveBeenCalledWith('run-eval-1', [
-      'World Cup',
-    ]);
   });
 
-  it('leaves an agent host with no named datasets alone, and cleans up by host id', async () => {
+  it('cleans up by host id', async () => {
     const sessions = fakeSessions();
-    await createEvalHost(
-      sessions as unknown as SessionsService,
-      [],
-      'data-readiness',
-    );
-    expect(sessions.narrowRunHost).not.toHaveBeenCalled();
     await cleanupEvalHost(sessions as unknown as SessionsService, {
       id: 'run-eval-1',
     });

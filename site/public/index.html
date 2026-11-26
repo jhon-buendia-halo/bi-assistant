@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <title>Halo Workbench — Halo Powered Labs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Halo Workbench is a desktop app where agent workflows answer business questions, assess data readiness and find the gaps in your reporting layer over your own Databricks and PostgreSQL data — and every figure links to the query that produced it.">
+  <meta name="description" content="Halo Workbench is a desktop app where a team of agents answers business questions over your own Databricks and PostgreSQL data — and every figure links to the query that produced it.">
   <meta property="og:title" content="Halo Workbench — Halo Powered Labs">
   <meta property="og:description" content="Agent workflows on your own data. Every figure links to the query behind it, explained step by step.">
   <meta property="og:type" content="website">
@@ -51,8 +51,8 @@
       <img class="app-mark" src="app-icon.png" alt="Halo Workbench icon">
       <h1 class="hero-title">Halo Workbench<br><span class="grad-text">Agent workflows on your own data.</span></h1>
       <p class="hero-sub">
-        A desktop workbench where teams of agents answer business questions, assess whether
-        your data is ready, and trace the gaps in your reporting layer — as workflows you can see, run and inspect.
+        A desktop workbench where a team of agents answers business questions — as a workflow
+        you can see, run and inspect.
         Every figure links to the query that produced it.
       </p>
       <div class="hero-badges">
@@ -144,9 +144,8 @@
             <span class="walk-num grad-text">Step 01</span>
             <h3 class="walk-title">Pick a workflow and the data it may read.</h3>
             <p class="walk-body">
-              A workflow is a job with a defined input: answer a business question, assess a
-              dataset's readiness, or check which business questions your reporting layer can
-              answer. Point it at a dataset — the tables you chose
+              A workflow is a job with a defined input: answer a business question. Point it
+              at a dataset — the tables you chose
               from a Databricks SQL warehouse or a PostgreSQL database — and it works over those,
               nothing wider.
             </p>
@@ -214,30 +213,6 @@
           </figure>
         </article>
 
-        <article class="walk-step">
-          <div class="walk-head">
-            <span class="walk-num grad-text">Step 04</span>
-            <h3 class="walk-title">Know whether the data deserves your trust before you ask.</h3>
-            <p class="walk-body">
-              Assess Data Readiness profiles a dataset and scores it on the DMBOK data-quality
-              dimensions — completeness, timeliness, consistency, uniqueness and more — then
-              names the weakest dimensions and the most severe findings, table by table and
-              column by column.
-            </p>
-            <p class="walk-body">
-              Run it once on a new source and you know which answers to lean on and which
-              tables to fix first.
-            </p>
-          </div>
-          <figure class="shot">
-            <div class="shot-frame">
-              <img src="shots/readiness.png" width="1800" height="1125" loading="lazy"
-                   alt="A data readiness run: the six-step workflow graph, and the report — the World Cup dataset scored 93 overall, the Managed band, with timeliness and completeness as the weakest dimensions and a table of the most severe findings.">
-            </div>
-            <figcaption>A readiness score, the weakest dimensions, and the findings behind them.</figcaption>
-          </figure>
-        </article>
-
       </div>
     </div>
   </section>
@@ -262,8 +237,8 @@
             <span class="walk-num grad-text">The library</span>
             <h3 class="walk-title">Not one prompt. A team, each with one job.</h3>
             <p class="walk-body">
-              Olivia plans the analysis. Michael writes and runs the SQL. Sarah assesses data
-              quality. Jessica writes the answer. Hannah explains each query in business words.
+              Olivia plans the analysis. Michael writes and runs the SQL. Jessica writes the
+              answer. Hannah explains each query in business words.
               David repairs a statement the engine rejected; Rachel re-derives the SQL to
               corroborate a careful answer.
             </p>
@@ -285,11 +260,10 @@
 
       <div class="focus-grid">
         <article class="focus-card">
-          <h3 class="focus-title">Reporting gaps, traced</h3>
+          <h3 class="focus-title">Synthetic data on demand</h3>
           <p class="focus-body">
-            List the business questions your reporting layer must answer. Each one is checked
-            against your Landing, Normalized and Consumption layers — and every gap is traced
-            to the layer where the data first appears.
+            Sample a dataset to see how its data looks, then generate a synthetic copy as a SQL
+            script — nothing is stored and nothing is written to the source.
           </p>
         </article>
         <article class="focus-card">

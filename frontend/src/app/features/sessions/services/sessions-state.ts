@@ -8,9 +8,9 @@ import { DatasetsApiService } from '../../datasets/services/datasets-api.service
 import {
   InteractiveVisualization,
   PanelItem,
-  PanelItemEvent,
   Session,
   SessionVisualization,
+  shownPanelItems,
   VisualEvent,
 } from '../models/session.model';
 import { SessionsApiService } from './sessions-api.service';
@@ -142,7 +142,7 @@ export class SessionsState {
   /** The item shown latest (largest `shownAt`), if the agent showed anything. */
   private latestPanelItem(session: Session): PanelItem | null {
     let latest: PanelItem | null = null;
-    for (const item of session.panelItems ?? []) {
+    for (const item of shownPanelItems(session.panelItems)) {
       if (!latest || item.shownAt >= latest.shownAt) latest = item;
     }
     return latest;
@@ -207,45 +207,6 @@ export class SessionsState {
         }
       },
     });
-  }
-
-  /** Re-read the active session so visuals metadata (versions) is fresh. */
-  private refreshActiveSession(then?: (session: Session) => void): void {
-    const current = this.activeSession();
-    if (!current) return;
-    this.sessionsApi.get(current.id).subscribe({
-      next: (session) => {
-        this.sessions.update((sessions) =>
-          sessions.map((item) => (item.id === session.id ? session : item)),
-        );
-        if (this.activeSession()?.id === session.id) {
-          this.activeSession.set(session);
-          then?.(session);
-        }
-      },
-      error: () => {
-        // Keep the stale copy; the next turn will refresh it.
-      },
-    });
-  }
-
-  /** The agent called `show_in_panel`: show it live. */
-  onPanelItem(event: PanelItemEvent): void {
-    const { item } = event;
-    if (!item) return;
-    this.shell.rightPanelOpen.set(true);
-    if (item.kind === 'visual') {
-      this.activePanelItem.set(item);
-      this.refreshActiveSession((session) => {
-        const meta = session.visualizations?.find(
-          (v) => v.id === item.visualId,
-        );
-        if (meta) this.showVisualization(meta);
-      });
-      return;
-    }
-    this.activePanelItem.set(item);
-    this.refreshActiveSession();
   }
 
   /** The user picked an entry of the panel's "Shown in this session" menu. */

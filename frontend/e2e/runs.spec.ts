@@ -253,11 +253,12 @@ test("a deleted agent's chat names its workflow as deleted", async ({
   await expect(headerWorkflow(page)).toHaveText(deleted);
 });
 
-test('a chat saved before workflows names the workflow of its agent', async ({
+test('a chat of a removed built-in agent reads as an Assistant chat', async ({
   appDataDir,
   page,
 }) => {
-  // Saved with an agent binding and no `workflowId` (past-chats R65).
+  // Bound to the Data Readiness Agent, removed on 2026-11-26, and saved
+  // before workflows: no `workflowId`, so it is derived (past-chats R57, R65).
   const id = seedPastChat(appDataDir, {
     name: 'Saved readiness chat',
     datasets: [WORLD_CUP_DATASET],
@@ -269,7 +270,7 @@ test('a chat saved before workflows names the workflow of its agent', async ({
   await openSessions(page);
   const row = sessionRow(page, 'Saved readiness chat');
   await expect(row.getByTestId('row-session-workflow')).toHaveText(
-    'Data Readiness Agent',
+    'Assistant',
   );
   await row.getByRole('button', { name: /^Saved readiness chat/ }).click();
   await expect(page.locator('header').getByTestId('session-id')).toHaveText(
@@ -278,7 +279,7 @@ test('a chat saved before workflows names the workflow of its agent', async ({
   await expect(
     page.locator('header').getByText('Workflow', { exact: true }),
   ).toBeVisible();
-  await expect(headerWorkflow(page)).toHaveText('Data Readiness Agent');
+  await expect(headerWorkflow(page)).toHaveText('Assistant');
 });
 
 // ------------------------------------------------------------------ Runs

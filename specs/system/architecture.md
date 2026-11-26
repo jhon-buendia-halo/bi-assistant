@@ -283,7 +283,7 @@ flowchart LR
 
   subgraph mastra["mastra/"]
     mastrasvc["MastraService<br/>(getAgent, streamWorkflow, ensureSessionWorkspace)"]
-    turnwf["workflows/<br/>(qti-v2-turn, data-readiness-assessment; ADR-0034, ADR-0040, ADR-0042)"]
+    turnwf["workflows/<br/>(qti-v2-turn; ADR-0034, ADR-0040, ADR-0042)"]
     toolsvc["tool-services<br/>(setDatasetToolServices bridge)"]
     resolver["model-resolver<br/>(setAgentModelResolver)"]
     assistant["assistant agent"]
@@ -729,7 +729,7 @@ flowchart LR
   - Re-introducing multi-user access later needs a new ADR; ADR-0010 to ADR-0012 stay as the record of the design that was removed.
 
 #### ADR-0031 — A deterministic DMBOK readiness engine owns every score; the Data Readiness Agent only presents stored reports; profiling is a connector capability
-- **Status:** Accepted; "the agent has no SQL" amended by ADR-0035 (2026-11-09): it may run read-only SQL to drill into findings, and scores stay engine-only. Note (ADR-0039, 2026-11-11): "profiling reads no row values" holds for readiness profiling; row samples are read only by the separate sampler of ADR-0039, and no sampled statistic feeds a score.
+- **Status:** Superseded (2026-11-26): the user removed the Data Readiness Agent (Sarah), Assess Data Readiness, the readiness engine, saved reports and the `data-readiness` module (workflows R50). The text below is kept as history. Earlier amendment: "the agent has no SQL" amended by ADR-0035 (2026-11-09): it may run read-only SQL to drill into findings, and scores stay engine-only. Note (ADR-0039, 2026-11-11): "profiling reads no row values" holds for readiness profiling; row samples are read only by the separate sampler of ADR-0039, and no sampled statistic feeds a score.
 - **Date:** 2026-11-03
 - **Context:**
   - The user asked on 2026-11-03 for a Data Readiness Agent that uses only the deterministic DMBOK metrics of the separate `data-readiness-agent` project ([BA-251](https://halo-powered.atlassian.net/browse/BA-251)).
@@ -797,7 +797,7 @@ flowchart LR
   - Stack-neutral: any rebuild needs a resolver that yields plain data for tuning, plus a way to build an Anthropic-protocol model at an arbitrary base URL.
 
 #### ADR-0033 — Long tools stream progress through Mastra's tool writer as `tool-progress` events; readiness profiling uses one session per assessment, a row-count gate and the turn's abort signal
-- **Status:** Accepted
+- **Status:** Partly superseded (2026-11-26): the `tool-progress` event and readiness profiling went with the Data Readiness Agent (workflows R50); no tool emits progress now. The text below is kept as history.
 - **Date:** 2026-11-09
 - **Context:**
   - A Data Readiness assessment of the 125-table Databricks `samples` catalog took 296 s, of which the model was about 13 s ([BA-323](https://halo-powered.atlassian.net/browse/BA-323), measured 2026-11-09). The chat showed only a spinner for the whole tool call, and the session stream sends nothing during a tool call (no keepalive).
@@ -841,7 +841,7 @@ flowchart LR
   - Stack-neutral: any rebuild needs an engine that runs typed steps in a fixed order and reports each step's start and end.
 
 #### ADR-0035 — The Data Readiness Agent may run read-only SQL to drill into findings; scores stay engine-only
-- **Status:** Accepted
+- **Status:** Superseded (2026-11-26) with ADR-0031: the Data Readiness Agent and its `readiness-drilldown` skill were removed (workflows R50). Kept as history.
 - **Date:** 2026-11-09
 - **Context:**
   - ADR-0031 gave the Data Readiness Agent three tools and no SQL: it only presented stored reports. A finding says "12 % of `driver.second_nationality_country_id` is null", and the user's next question is which rows. The agent could not answer it.
@@ -944,7 +944,7 @@ flowchart LR
   - Token counts per box are estimates ("≈" in the UI). Only the total is real.
   - Stack-neutral: a rebuild needs a trace store that records, per model call, its usage, its tool definitions, its input messages and its tool calls, a read path inside the process that owns the store, and a price table.
 #### ADR-0039 — Sampled profiling and synthetic data: a separate, approximate profile read from row samples, and a deterministic generator that writes a SQL script; the app stays read-only on datasources
-- **Status:** Accepted (2026-11-11, with the M1-22 epic spec)
+- **Status:** Accepted (2026-11-11, with the M1-22 epic spec). Amended 2026-11-26: the Data Readiness Agent and its two chat tools were removed (workflows R50); the dataset editor's Profile & synthesize tab, the sampler and the generator stay, and the shared profiling helpers live in `backend/src/modules/synthetic-data/profile/`.
 - **Date:** 2026-11-11
 - **Context:**
   - The user asked on 2026-11-11 to profile data by sampling and to generate synthetic data exported in the datasource's dialect.
@@ -1084,7 +1084,7 @@ flowchart LR
   - **Stack-neutral:** a rebuild needs typed inputs per workflow, a streamed run that reports step starts and ends and the agent's events, a stored run with its files, and a read-only view of the conversations stored before.
 
 #### ADR-0042 — Workflows and agents are separate; only Questions to Insights v2 is a workflow
-- **Status:** Accepted (2026-11-12). Partly supersedes ADR-0040 (the one-step workflow of every agent) and amends ADR-0041. Amended 2026-11-13: the catalogue gains a second code workflow, **Assess Data Readiness** (`data-readiness-assessment`, agents.md 5.13), with real steps (four code steps run the deterministic engine, one step runs the Data Readiness Agent); agents stay a library and no one-step workflow comes back. The Data Readiness Agent's sessions and evals keep its agent turn.
+- **Status:** Accepted (2026-11-12). Partly supersedes ADR-0040 (the one-step workflow of every agent) and amends ADR-0041. Amended 2026-11-13: the catalogue gains a second code workflow, **Assess Data Readiness** (`data-readiness-assessment`, agents.md 5.13), with real steps (four code steps run the deterministic engine, one step runs the Data Readiness Agent); agents stay a library and no one-step workflow comes back. The Data Readiness Agent's sessions and evals keep its agent turn. Amended 2026-11-26: **Assess Data Readiness** and its agent Sarah were removed (workflows R50); the Data Readiness Agent's past chats read as plain Assistant sessions, and its evals went with her.
 - **Date:** 2026-11-12
 - **Context:**
   - ADR-0040 gave every agent without a workflow of its own an automatic one-step workflow (`agent:<key or id>`), so the Workflows area listed the assistant, the Data Readiness Agent and every Live user agent next to Questions to Insights v2. The agent page also ran that workflow (**Run**).
@@ -1287,7 +1287,7 @@ flowchart LR
   - **Page only on the client:** rejected; limited to the 200 stored rows.
 
 #### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
-- **Status:** Accepted; amended 2026-11-17 (the value checks run four at a time, committed in query order, and a stop cancels the running ones; [agents.md](agents.md) 5.20)
+- **Status:** Superseded (2026-11-26): the user removed Consumption Gap Analysis with its agents Rosa, Leo and Nora (workflows R50, [agents.md](agents.md) 5.20), and with it the inferred lineage. The text below is kept as history (amended 2026-11-17: the value checks ran four at a time, committed in query order, and a stop cancelled the running ones).
 - **Date:** 2026-11-16
 - **Context:**
   - Consumption Gap Analysis ([agents.md](agents.md) 5.20; workflows R37) must say, for every gap of the Consumption layer, whether the data sits in Normalized or Landing, so the fix starts in the right layer (roadmap 1.30).
@@ -1325,7 +1325,7 @@ flowchart LR
   - **A sandboxed, read-only engine:** after the attach the connection sets `enable_external_access = false` (DuckDB refuses to turn it back on while running) and `lock_configuration = true`, and extension autoinstall and autoload are off. A statement can read only the attached tables; a write is refused by the read-only attach. The R33 guard still runs first.
   - **The `excel` extension ships with the app:** the build fetches the extension for the exact DuckDB version in the lockfile and platform (`windows_amd64` for the installer, the host's for development and the CLI), places it under the backend's resources, and the importer `LOAD`s it from that path. A build check fails when the two versions differ. No request to `extensions.duckdb.org` at runtime.
   - **A new SQL dialect, `duckdb`,** for the paged reader, the dialect named to the agents, the SQL fixer and verifier, and the `sql-analysis` skill.
-  - **Out of the first version:** Data Readiness, synthetic data and the Consumption Gap Analysis refuse the kind with a clear message, as they refuse REST today; `.xls`, password-protected workbooks, live links to the original file and writing back to a workbook.
+  - **Out of the first version:** Data Readiness and synthetic data refuse the kind with a clear message, as they refuse REST today; `.xls`, password-protected workbooks, live links to the original file and writing back to a workbook.
 - **Consequences:**
   - Queries read a columnar database instead of parsing a file: an aggregate over 200,000 rows answers in milliseconds, and the query inspector's pages (ADR-0050) cost one query each.
   - The data dir grows by the files and their DuckDB copy; deleting the datasource deletes both. A change to the original file reaches the app only through Replace file.

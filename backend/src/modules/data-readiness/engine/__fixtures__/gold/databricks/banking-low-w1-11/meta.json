@@ -1,7 +1,0 @@
-{
-  "industry": "banking",
-  "complexity": "low",
-  "wave": "W1",
-  "authoring": "generated",
-  "defectPlan": "plans/databricks/banking-low-w1-11.plan.json"
-}

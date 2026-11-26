@@ -17,8 +17,6 @@ export type WorkflowInputFieldType =
   | 'boolean'
   /** One or more dataset names. */
   | 'datasets'
-  /** Exactly one dataset name. */
-  | 'dataset'
   /**
    * One image (PNG, JPEG or WebP, at most 5 MB), sent as a `data:` URL; a
    * stored run holds the path of the file instead.
@@ -43,7 +41,7 @@ export interface WorkflowInputField {
   help?: string;
   /** The value of a field that is missing or empty. */
   default?: string | number | boolean;
-  /** 'dataset' / 'datasets': only datasets bound to these kinds. */
+  /** 'datasets': only datasets bound to these kinds. */
   datasourceKinds?: ('postgres' | 'databricks' | 'rest' | 'file')[];
   /** 'artifact': only artifacts of these kinds are offered. */
   artifactKinds?: ArtifactKind[];
@@ -97,7 +95,7 @@ export type WorkflowInputValue = string | number | boolean | string[];
  */
 export interface WorkflowSummary {
   /**
-   * The workflow id (`orchestrated-answer-michael`, `assess-data-readiness`, …). Agents are a
+   * The workflow id (`answer-business-question`, …). Agents are a
    * library and have no workflow of their own.
    */
   id: string;
@@ -445,8 +443,6 @@ export interface LiveToolCall {
   input?: string;
   rowCount?: number;
   error?: string;
-  /** The latest `tool-progress` message of a long-running tool. */
-  progress?: string;
   /** Its `tool-result` arrived. */
   finished: boolean;
   /** Who made it, when the step's agent delegates: Avery signs her own calls. */

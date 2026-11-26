@@ -77,14 +77,6 @@ describe('AgentPromptsService (ADR-0026)', () => {
         updatedAt: null,
       });
     }
-    // The Data Readiness Agent, another Official agent, links too (agents.md 2.10).
-    expect(await service.view('data-readiness')).toMatchObject({
-      editable: shippedAgentPrompt('data-readiness'),
-      linksAllowed: true,
-    });
-    expect((await service.view('data-readiness'))?.editable).toContain(
-      '[[skill:data-readiness]]',
-    );
     expect(await service.view('user-1')).toBeUndefined();
   });
 
@@ -105,21 +97,25 @@ describe('AgentPromptsService (ADR-0026)', () => {
     expect(await service.view('sql-fixer')).toMatchObject({ modified: false });
   });
 
-  it('ignores a prompt override saved for the removed RFP Builder', async () => {
+  it.each([
+    ['the removed RFP Builder', 'rfp', 'You are the RFP Builder. Old text.'],
+    [
+      'the removed Data Readiness Agent',
+      'data-readiness',
+      'You are the Data Readiness Agent. Old text.',
+    ],
+  ])('ignores a prompt override saved for %s', async (_label, key, prompt) => {
     const { service, store } = build();
-    await store.insert({
-      key: 'rfp',
-      prompt: 'You are the RFP Builder. Old text.',
-      baseHash: 'x',
-      updatedBy: 'u',
-    });
+    await store.insert({ key, prompt, baseHash: 'x', updatedBy: 'u' });
     await expect(service.onModuleInit()).resolves.toBeUndefined();
-    expect(shippedAgentPrompt('rfp')).toBeUndefined();
-    expect(await service.view('rfp')).toBeUndefined();
-    await expect(service.save('rfp', { prompt: 'x' })).rejects.toThrow(
-      'Agent "rfp" not found',
+    expect(shippedAgentPrompt(key)).toBeUndefined();
+    expect(await service.view(key)).toBeUndefined();
+    await expect(service.save(key, { prompt: 'x' })).rejects.toThrow(
+      `Agent "${key}" not found`,
     );
-    await expect(service.reset('rfp')).rejects.toThrow('Agent "rfp" not found');
+    await expect(service.reset(key)).rejects.toThrow(
+      `Agent "${key}" not found`,
+    );
     expect(await service.view('sql-fixer')).toMatchObject({ modified: false });
   });
 
@@ -205,50 +201,6 @@ describe('AgentPromptsService (ADR-0026)', () => {
       );
     });
 
-    it("the Data Readiness Agent's identity, then skill links, then tools not its own", async () => {
-      const identity = 'You are the Data Readiness Agent';
-      expect(await refusal('data-readiness', 'Be brief.')).toBe(
-        `The Data Readiness Agent's prompt must start with "${identity}"`,
-      );
-      const skillRefusal =
-        "Only the Data Readiness Agent's own skills can be linked here: this prompt is shared by every user";
-      expect(
-        await refusal('data-readiness', `${identity}. [[skill:x]] [[tool:x]]`),
-      ).toBe(skillRefusal);
-      // Another agent's skills are not its own.
-      for (const skill of ['curated-knowledge', 'rfp-carriers']) {
-        expect(
-          await refusal('data-readiness', `${identity}. [[skill:${skill}]]`),
-        ).toBe(skillRefusal);
-      }
-      // Neither an assistant-only tool, a removed RFP tool nor update_workflow.
-      for (const tool of ['x', 'sample_rows', 'get_rfp', 'update_workflow']) {
-        expect(
-          await refusal(
-            'data-readiness',
-            `${identity}. [[skill:data-readiness]] [[tool:${tool}]]`,
-          ),
-        ).toBe(`Unknown tool "${tool}"`);
-      }
-    });
-
-    it("accepts the Data Readiness Agent's own tools and skills in its prompt", async () => {
-      const { service } = build();
-      await service.save('data-readiness', {
-        prompt:
-          'You are the Data Readiness Agent. Load [[skill:data-readiness]], then call [[tool:assess_data_readiness]], [[tool:get_readiness_report]], [[tool:list_readiness_reports]], [[tool:show_in_panel]] and [[tool:ask_clarification]]. To drill in, load [[skill:readiness-drilldown]] and call [[tool:describe_entity]] and [[tool:run_readonly_sql]] (ADR-0035).',
-      });
-      expect(agentPromptOverrideFor('data-readiness')?.prompt).toContain(
-        '[[skill:readiness-drilldown]]',
-      );
-      // Its shipped prompt, links and all, saves as an override.
-      await expect(
-        service.save('data-readiness', {
-          prompt: shippedAgentPrompt('data-readiness'),
-        }),
-      ).resolves.toBe('Sarah');
-    });
-
     it("Insights Analyst's identity, then skills not its own, then tools not its own (BA-320)", async () => {
       const identity = 'You are Questions to Insights';
       expect(await refusal('insights-analyst', 'Be brief.')).toBe(
@@ -260,7 +212,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       );
       const skillRefusal =
         "Only Insights Analyst's own skills can be linked here: this prompt is shared by every user";
-      for (const skill of ['x', 'data-readiness', 'readiness-drilldown']) {
+      for (const skill of ['x', 'avery-playbooks', 'dashboard-building']) {
         expect(
           await refusal(
             'insights-analyst',
@@ -275,7 +227,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
         'update_visual',
         'show_in_panel',
         'update_workflow',
-        'assess_data_readiness',
+        'answer_from_data',
         'get_rfp',
       ]) {
         expect(
@@ -311,9 +263,9 @@ describe('AgentPromptsService (ADR-0026)', () => {
       ).resolves.toBe('Michael');
     });
 
-    it("refuses the Data Readiness Agent's tools and skill in other agents' prompts", async () => {
+    it("refuses another agent's skill in the assistant prompt", async () => {
       expect(
-        await refusal('assistant', `${IDENTITY}. [[skill:data-readiness]]`),
+        await refusal('assistant', `${IDENTITY}. [[skill:avery-playbooks]]`),
       ).toBe(
         'Only built-in skills can be linked here: this prompt is shared by every user',
       );

@@ -80,8 +80,8 @@ describe('official-links (agents-evals R99, R105)', () => {
       generatedToolsNote: '## Tools — generated from the tools Emily gets',
     });
     expect(
-      officialPromptCopy({ key: 'data-readiness', name: 'Sarah' })
+      officialPromptCopy({ key: 'insights-analyst', name: 'Michael' })
         .generatedToolsNote,
-    ).toBe('## Tools — generated from the tools Sarah gets');
+    ).toBe('## Tools — generated from the tools Michael gets');
   });
 });

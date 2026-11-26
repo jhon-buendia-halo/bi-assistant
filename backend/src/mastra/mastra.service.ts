@@ -13,12 +13,6 @@ import type { RequestContext } from '@mastra/core/request-context';
 import { explainQueryWithModel } from './agents/query-explainer.agent';
 import { interpretResultWithModel } from './agents/result-explorer.agent';
 import {
-  deriveRequirementsWithModel,
-  mapRequirementsWithModel,
-  recommendFixesWithModel,
-  reviseRequirementsWithModel,
-} from './workflows/consumption-gap-analysis.agents';
-import {
   createSessionWorkspace,
   deleteSessionWorkspaceDirectory,
   initializeSessionWorkspace,
@@ -102,36 +96,6 @@ export class MastraService {
     ...args: Parameters<typeof interpretResultWithModel>
   ): ReturnType<typeof interpretResultWithModel> {
     return interpretResultWithModel(...args);
-  }
-
-  /**
-   * Consumption Gap Analysis's model calls (agents.md 2.18 to 2.20, 5.20):
-   * the Requirements Analyst (Derive and Confirm requirements), the Layer
-   * Mapper (Map requirements) and the Gap Advisor (Recommend fixes), each
-   * reply read leniently and checked in code.
-   */
-  deriveRequirements(
-    ...args: Parameters<typeof deriveRequirementsWithModel>
-  ): ReturnType<typeof deriveRequirementsWithModel> {
-    return deriveRequirementsWithModel(...args);
-  }
-
-  reviseRequirements(
-    ...args: Parameters<typeof reviseRequirementsWithModel>
-  ): ReturnType<typeof reviseRequirementsWithModel> {
-    return reviseRequirementsWithModel(...args);
-  }
-
-  mapRequirements(
-    ...args: Parameters<typeof mapRequirementsWithModel>
-  ): ReturnType<typeof mapRequirementsWithModel> {
-    return mapRequirementsWithModel(...args);
-  }
-
-  recommendFixes(
-    ...args: Parameters<typeof recommendFixesWithModel>
-  ): ReturnType<typeof recommendFixesWithModel> {
-    return recommendFixesWithModel(...args);
   }
 
   /** Every registered agent, keyed by its registry name. */

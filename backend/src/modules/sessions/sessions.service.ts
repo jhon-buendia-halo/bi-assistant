@@ -10,21 +10,6 @@ import {
 import { parseWorkflow } from '../../mastra/workflow-section';
 import { agentPromptOverrideFor } from '../../mastra/agent-prompt-overrides';
 import { assistantShippedPrompt } from '../../mastra/agents/assistant-prompt';
-import {
-  builtinAgentSession,
-  builtinSessionDatasets,
-  canStartBuiltinSession,
-  existingDatasetsFor,
-} from '../agents/builtin-sessions';
-import { DataReadinessService } from '../data-readiness/data-readiness.service';
-import { setReadinessToolServices } from '../../mastra/readiness-tool-services';
-import { ReadinessBridge } from './readiness-bridge';
-import { setSyntheticDataToolServices } from '../../mastra/synthetic-data-tool-services';
-import {
-  SyntheticDataBridge,
-  type SyntheticDataBridgeDeps,
-} from './synthetic-data-bridge';
-import { SYNTHETIC_DATA_SERVICE } from '../synthetic-data/synthetic-data.token';
 import { MastraService } from '../../mastra/mastra.service';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import type { AgentConfig } from '../user-agents/entities/user-agent.entity';
@@ -149,14 +134,14 @@ export interface RunHostSpec {
    */
   workflowId?: string;
   /**
-   * An agent host (the eval runner): the built-in agent (`assistant` or
-   * `data-readiness`) whose turn the host runs on the agent-turn engine,
-   * with no catalogue workflow behind it.
+   * An agent host (the eval runner): the built-in agent (`assistant`)
+   * whose turn the host runs on the agent-turn engine, with no catalogue
+   * workflow behind it.
    */
   agentKey?: string;
   /** The workflow's or the agent's name: the host's name. */
   name: string;
-  /** The input's datasets; absent for an agent with its own datasets. */
+  /** The input's datasets. */
   datasets?: string[];
   /** The earlier run's question and answer, put before this run's question. */
   context?: { question: string; answer: string };
@@ -178,8 +163,6 @@ export interface RunHostSpec {
    * workspace at `path` before the turn.
    */
   inputFiles?: { path: string; data: Buffer }[];
-  /** Consumption Gap Analysis's saved dashboard: the artifact's id. */
-  artifact?: string;
   /**
    * A message to Avery in a conversation that holds a dashboard (agents.md
    * 5.22): the artifact's id, whose current version Clara changes.
@@ -225,12 +208,6 @@ export class SessionsService implements OnModuleInit {
     // The dataset ontology, rendered as the curated-knowledge block.
     private readonly knowledge: OntologyService,
     private readonly userAgents: UserAgentsService,
-    // The Data Readiness Agent's assessments (agents.md 3.13).
-    @Optional() private readonly readiness?: DataReadinessService,
-    // Sampled profiles and synthetic scripts for the same agent (agents.md 3.14).
-    @Optional()
-    @Inject(SYNTHETIC_DATA_SERVICE)
-    private readonly syntheticData?: SyntheticDataBridgeDeps['synthetic'],
     // The saved dashboards a run takes and Clara's dashboards (agents.md
     // 5.20, 5.22).
     @Optional() private readonly artifacts?: ArtifactsService,
@@ -283,12 +260,6 @@ export class SessionsService implements OnModuleInit {
       effectiveWorkflowFor: (session) => this.effectiveWorkflowFor(session),
       crossCheckAnswer: (session, question, data, signal) =>
         this.crossCheckAnswer(session, question, data, signal),
-      readinessBridge: () => this.readinessBridge,
-      artifact: async (artifactId) => {
-        if (!this.artifacts) throw new Error('Artifacts are not available');
-        const { name, blueprint } = await this.artifacts.get(artifactId);
-        return { name, blueprint };
-      },
       dashboardVersion: (artifactId) => {
         if (!this.artifacts) throw new Error('Artifacts are not available');
         return this.artifacts.dashboardVersion(artifactId);
@@ -315,16 +286,6 @@ export class SessionsService implements OnModuleInit {
           ? this.artifacts.addDashboardVersion(artifactId, input)
           : this.artifacts.createDashboard(input);
       },
-      saveMock: async (sessionId, bundle, instruction) => {
-        const session = await this.get(sessionId);
-        const { metadata } = await this.visuals.createFromBundle(
-          session,
-          bundle,
-          instruction,
-        );
-        await this.saveVisualMetadata(session, metadata);
-        return metadata;
-      },
     });
   }
 
@@ -338,9 +299,6 @@ export class SessionsService implements OnModuleInit {
   private readonly turnOptions: TurnOptions;
   /** The streamed and non-streamed turn. */
   private readonly turns: TurnEngine;
-
-  /** The readiness tools' bridge, once installed (agents.md 3.13). */
-  private readinessBridge?: ReadinessBridge;
 
   async onModuleInit(): Promise<void> {
     // Install the DI bridge the Mastra tools use (they load with no Nest DI).
@@ -412,33 +370,6 @@ export class SessionsService implements OnModuleInit {
       updateWorkflow: (sessionId, input) =>
         this.updateWorkflow(sessionId, input),
     });
-
-    if (this.readiness) {
-      this.readinessBridge = new ReadinessBridge({
-        sessionDatasetNames: async (sessionId) =>
-          (await this.get(sessionId)).datasets,
-        datasets: (names) => this.turnDatasets.bound(names),
-        datasourceName: (datasourceId) =>
-          this.turnDatasets.datasourceName(datasourceId),
-        readiness: this.readiness,
-      });
-      setReadinessToolServices(this.readinessBridge);
-    }
-
-    if (this.syntheticData) {
-      setSyntheticDataToolServices(
-        new SyntheticDataBridge({
-          sessionDatasetNames: async (sessionId) =>
-            (await this.get(sessionId)).datasets,
-          datasets: (names) => this.turnDatasets.bound(names),
-          synthetic: this.syntheticData,
-          writeFile: (sessionId, path, text) =>
-            writeWorkspaceFile(sessionId, path, text),
-          showFile: async (sessionId, path, title) =>
-            this.showPanelItem(sessionId, { kind: 'file', path, title }),
-        }),
-      );
-    }
 
     // A preview or a run host left when the app stopped has no session left
     // to own its memory and workspace (agents-evals R61; agents.md 5.14).
@@ -530,8 +461,7 @@ export class SessionsService implements OnModuleInit {
    * executes its agent turn on, shaped as `POST /sessions` would shape a
    * session of it: bound to the catalogue workflow's agent (`workflowId`)
    * or, for the eval runner, to a built-in agent directly (`agentKey`: the
-   * assistant over the given datasets, the Data Readiness Agent over its
-   * declared ones when none are given), with, as its transcript, the earlier
+   * assistant over the given datasets), with, as its transcript, the earlier
    * run's question and answer (plan 5.4). 404 for a workflow the catalogue
    * does not hold (an `agent:` id, `seq-text-demo`, `deep-analysis`) or an
    * agent that has no agent-turn binding. Its workspace is
@@ -541,27 +471,14 @@ export class SessionsService implements OnModuleInit {
     if (spec.draftAgentId) return this.createDraftRunHost(spec);
     let binding: Pick<SessionDoc, 'agentKey' | 'agentId' | 'agentName'> = {};
     let codeWorkflowId: string | undefined;
-    let datasets = spec.datasets ?? [];
+    const datasets = spec.datasets ?? [];
     if (spec.agentKey !== undefined) {
       const key = spec.agentKey;
       const agent = WRAPPED_AGENT_KEYS.includes(key)
         ? this.mastra.listAgents()[key]
         : undefined;
+      // The assistant's own turn: a plain host, bound to no agent.
       if (!agent) throw new NotFoundException(`Agent "${key}" not found`);
-      if (key !== ASSISTANT_AGENT_KEY) {
-        binding = { agentKey: key, agentName: agent.name ?? key };
-        const builtin = this.builtinSessionAgent(key);
-        if (!spec.datasets && builtin) {
-          const declared = builtinSessionDatasets(
-            builtin.session,
-            await existingDatasetsFor(builtin.session, this.userAgents),
-          );
-          if (!canStartBuiltinSession(declared)) {
-            throw new BadRequestException(builtin.session.requirement);
-          }
-          datasets = declared.datasets;
-        }
-      }
     } else {
       const parsed = spec.workflowId
         ? parseWorkflowId(spec.workflowId)
@@ -579,8 +496,7 @@ export class SessionsService implements OnModuleInit {
         throw new NotFoundException(`Workflow "${spec.workflowId}" not found`);
       }
       binding = { agentKey: primary, agentName: agent.name ?? primary };
-      // The run's own workflow: an agent can run more than one (the Data
-      // Readiness Agent's sessions stay on its agent turn).
+      // The run's own workflow: an agent can run more than one.
       codeWorkflowId =
         parsed?.kind === 'code'
           ? parsed.source.id
@@ -612,7 +528,6 @@ export class SessionsService implements OnModuleInit {
       ...(spec.contextQueries?.length
         ? { contextQueries: spec.contextQueries }
         : {}),
-      ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
       ...(spec.contextDashboard
         ? { contextDashboard: spec.contextDashboard }
         : {}),
@@ -821,21 +736,6 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Keep only `datasets` among a run host's datasets (agents.md 8.3): an eval
-   * run bound to a built-in agent that takes every qualifying dataset (the
-   * Data Readiness Agent) is narrowed to the datasets the run names. Datasets
-   * the host does not have are ignored; an empty result keeps the host as it
-   * was.
-   */
-  narrowRunHost(hostId: string, datasets: string[]): void {
-    const host = this.memoryHosts.get(hostId);
-    if (!host?.run) return;
-    const keep = host.datasets.filter((name) => datasets.includes(name));
-    if (keep.length === 0 || keep.length === host.datasets.length) return;
-    this.memoryHosts.set(hostId, { ...host, datasets: keep });
-  }
-
-  /**
    * The run host ids (`run-<run id>`) that have a workspace on disk, for
    * the runs' start-up recovery (agents.md 5.14). Throws when the
    * workspaces directory can't be read.
@@ -931,16 +831,29 @@ export class SessionsService implements OnModuleInit {
    * A stored session as this version reads it: a built-in agent key that is
    * no longer registered (the removed RFP Builder, `rfp`) is ignored with its
    * name and its one-step workflow id, and a legacy `rfpId` is dropped, so the
-   * session reads as a plain Assistant session. Nothing is rewritten in the
-   * store.
+   * session reads as a plain Assistant session. The readiness report an
+   * answer of the removed Data Readiness Agent carried (`readinessReport`)
+   * is dropped too. Nothing is rewritten in the store.
    */
   private readable(session: SessionDoc): SessionDoc {
     const legacy = session as SessionDoc & { rfpId?: unknown };
     const key = session.agentKey;
     const orphan = !!key && !this.mastra.listAgents()[key];
-    if (!orphan && legacy.rfpId === undefined) return session;
+    const hasReport = (message: ChatMessage) => 'readinessReport' in message;
+    const reports = session.messages.some(hasReport);
+    if (!orphan && legacy.rfpId === undefined && !reports) return session;
     const copy: SessionDoc & { rfpId?: unknown } = { ...session };
     delete copy.rfpId;
+    if (reports) {
+      copy.messages = session.messages.map((message) => {
+        if (!hasReport(message)) return message;
+        const rest: ChatMessage & { readinessReport?: unknown } = {
+          ...message,
+        };
+        delete rest.readinessReport;
+        return rest;
+      });
+    }
     if (orphan) {
       delete copy.agentKey;
       delete copy.agentName;
@@ -1046,20 +959,8 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * A registered built-in agent that declares a dataset for its sessions
-   * (ADR-0028), with its name; undefined for any other key.
-   */
-  private builtinSessionAgent(key: string) {
-    const session = builtinAgentSession(key);
-    const agent = session ? this.mastra.listAgents()[key] : undefined;
-    if (!session || !agent) return undefined;
-    return { agent, session, name: agent.name ?? key };
-  }
-
-  /**
    * The `agent` of a session bound to a built-in agent (api.md 2.1): the
-   * registered agent's name and description and its built-in starters;
-   * never deleted.
+   * registered agent's name and description; never deleted.
    */
   private builtinAgentRef(session: SessionDoc): SessionAgentRef {
     const key = session.agentKey ?? '';
@@ -1075,7 +976,7 @@ export class SessionsService implements OnModuleInit {
       name: agent?.name ?? session.agentName ?? key,
       deleted: false,
       description,
-      starterQuestions: [...(builtinAgentSession(key)?.starterQuestions ?? [])],
+      starterQuestions: [],
     };
   }
 
