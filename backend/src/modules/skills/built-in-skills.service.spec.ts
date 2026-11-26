@@ -10,7 +10,7 @@ import {
   shippedBuiltIn,
 } from '../../mastra/app-skills';
 import { setSkillOverrides } from '../../mastra/skill-overrides';
-import { assistantSkillSources } from '../../mastra/assistant-skills';
+import { skillSourcesFor } from '../../mastra/agent-skill-sources';
 import { validateOverride } from './built-in-skill-rules';
 import { BuiltInSkillsService } from './built-in-skills.service';
 import type { SkillOverrideDoc } from './entities/skill-override.entity';
@@ -315,7 +315,7 @@ describe('BuiltInSkillsService', () => {
       description: DESCRIPTION,
       dir: original.dir,
     });
-    expect(assistantSkillSources()).toEqual([
+    expect(skillSourcesFor('assistant')).toEqual([
       expect.objectContaining({
         name: 'curated-knowledge',
         description: DESCRIPTION,

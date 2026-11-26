@@ -26,6 +26,14 @@ export const OFFICIAL_AGENT_KEYS: readonly string[] = [
   'insights-lead',
 ];
 
+/**
+ * The agent whose memory handle `MastraService` reads and deletes threads
+ * through: every agent shares the app's one memory store, so any agent with
+ * a memory reaches every thread. Insights Analyst has `sessionMemory()`
+ * (its spec fails if it loses it).
+ */
+export const MEMORY_HANDLE_AGENT_KEY = 'insights-analyst';
+
 /** The agent that explains a stored query step by step (agents.md 2.12). */
 export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
 /**

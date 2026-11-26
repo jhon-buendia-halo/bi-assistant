@@ -2,10 +2,8 @@ import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { getDatasetToolServices } from '../tool-services';
 import type { DatasetToolTurnRecord } from '../tool-services';
-import {
-  SESSION_ID_CONTEXT_KEY,
-  TURN_RECORDS_CONTEXT_KEY,
-} from './visual.tools';
+import { SESSION_ID_CONTEXT_KEY } from './turn-context';
+import { TURN_RECORDS_CONTEXT_KEY } from './visual.tools';
 
 /**
  * One tool puts what an agent wants to show beside the chat in the right

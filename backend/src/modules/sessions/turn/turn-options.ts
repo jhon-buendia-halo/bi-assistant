@@ -28,11 +28,11 @@ import {
 import { effectiveOptionalTools } from '../../../mastra/agent-links';
 import { ASSISTANT_MAX_STEPS } from '../../../mastra/agent-constants';
 import { DATASETS_CONTEXT_KEY } from '../../../mastra/tools/dataset.tools';
+import { ACTIVE_VISUAL_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
 import {
-  ACTIVE_VISUAL_CONTEXT_KEY,
   SESSION_ID_CONTEXT_KEY,
   TURN_QUESTION_CONTEXT_KEY,
-} from '../../../mastra/tools/visual.tools';
+} from '../../../mastra/tools/turn-context';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../../../mastra/session-workspaces';
 import {
   entityOrientationLines,

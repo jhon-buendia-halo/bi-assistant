@@ -3,8 +3,14 @@ import { z } from 'zod';
 import { getDatasetToolServices } from '../tool-services';
 import type { DatasetToolTurnRecord } from '../tool-services';
 
+import {
+  SESSION_ID_CONTEXT_KEY,
+  TURN_QUESTION_CONTEXT_KEY,
+} from './turn-context';
+
+export { SESSION_ID_CONTEXT_KEY, TURN_QUESTION_CONTEXT_KEY };
+
 /** requestContext keys for the visual tools. */
-export const SESSION_ID_CONTEXT_KEY = 'session-id';
 export const ACTIVE_VISUAL_CONTEXT_KEY = 'active-visual-id';
 /**
  * Holds a live reference to the current chat turn's captured SQL/rows
@@ -15,12 +21,6 @@ export const ACTIVE_VISUAL_CONTEXT_KEY = 'active-visual-id';
  * leakage between turns or between sessions.
  */
 export const TURN_RECORDS_CONTEXT_KEY = 'turn-data-records';
-/**
- * The user's message for this turn. `create_visual` uses it as the
- * instruction when the model passes none, so the designer charts what was
- * asked instead of guessing from the turn's data (agents.md 3.6, BA-210).
- */
-export const TURN_QUESTION_CONTEXT_KEY = 'turn-question';
 
 function contextString(
   requestContext: { get: (key: string) => unknown },

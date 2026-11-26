@@ -5,9 +5,8 @@ import {
   ASSISTANT_WORKING_RULES,
   assistantWorkingRules,
   buildAssistantInstructions,
-  firstSentence,
-  toolLines,
 } from './assistant-prompt';
+import { toolLines } from '../tool-section';
 
 const TOOLS = {
   list_entities: {
@@ -19,23 +18,6 @@ const TOOLS = {
     inputSchema: z.object({ sql: z.string(), limit: z.number().optional() }),
   },
 };
-
-describe('the Tools section', () => {
-  it('gives one line per tool, in order, with its inputs and first sentence', () => {
-    expect(toolLines(TOOLS)).toEqual([
-      '- list_entities(): List the entities.',
-      '- run_readonly_sql(sql, limit): Run one statement (live) against one datasource.',
-    ]);
-  });
-
-  it('keeps a description with no sentence break whole', () => {
-    expect(firstSentence('Tailor a visual, etc. Produces a new version.')).toBe(
-      'Tailor a visual, etc.',
-    );
-    expect(firstSentence('No full stop here')).toBe('No full stop here');
-    expect(firstSentence(undefined)).toBe('');
-  });
-});
 
 describe('buildAssistantInstructions', () => {
   it('orders identity, Tools and Working rules, with no Skills section', () => {

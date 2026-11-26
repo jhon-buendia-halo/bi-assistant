@@ -1,7 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { getDatasetToolServices } from '../tool-services';
-import { SESSION_ID_CONTEXT_KEY } from './visual.tools';
+import { SESSION_ID_CONTEXT_KEY } from './turn-context';
 
 /**
  * The workflow status bar above the chat (ADR-0029 addendum, agents.md 3.11):

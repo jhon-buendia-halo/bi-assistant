@@ -7,6 +7,7 @@ import {
   exchangeMessages,
   type AgentExchange,
 } from './agent-threads';
+import { MEMORY_HANDLE_AGENT_KEY } from './agent-constants';
 import { mastra } from './index';
 import type { Workspace } from '@mastra/core/workspace';
 import type { RequestContext } from '@mastra/core/request-context';
@@ -279,18 +280,23 @@ export class MastraService {
   }
 
   /**
-   * Delete one agent memory thread (a run host's, agents.md 5.14). Every
-   * agent shares the app's one memory store, so the assistant's handle
-   * reaches any agent's thread.
+   * The app's one memory store, through the agent `MEMORY_HANDLE_AGENT_KEY`:
+   * every agent shares it, so that agent's handle reaches any agent's
+   * thread.
    */
+  private memoryHandle() {
+    return this.getAgent(MEMORY_HANDLE_AGENT_KEY).getMemory();
+  }
+
+  /** Delete one agent memory thread (a run host's, agents.md 5.14). */
   async deleteMemoryThread(threadId: string): Promise<void> {
-    const memory = await this.getAgent('assistant').getMemory();
+    const memory = await this.memoryHandle();
     await memory?.deleteThread(threadId);
   }
 
   /** The ids of every memory thread whose resource is `resourceId`. */
   private async threadIdsOf(resourceId: string): Promise<string[]> {
-    const memory = await this.getAgent('assistant').getMemory();
+    const memory = await this.memoryHandle();
     if (!memory) return [];
     const listed = await memory.listThreads({
       filter: { resourceId },
@@ -305,7 +311,7 @@ export class MastraService {
    * their resource.
    */
   async deleteMemoryResource(resourceId: string): Promise<void> {
-    const memory = await this.getAgent('assistant').getMemory();
+    const memory = await this.memoryHandle();
     if (!memory) return;
     const ids = new Set([resourceId, ...(await this.threadIdsOf(resourceId))]);
     for (const id of ids) await memory.deleteThread(id);
@@ -318,7 +324,7 @@ export class MastraService {
    * Returns how many threads were copied.
    */
   async copyMemoryResource(from: string, to: string): Promise<number> {
-    const memory = await this.getAgent('assistant').getMemory();
+    const memory = await this.memoryHandle();
     if (!memory) return 0;
     let copied = 0;
     for (const sourceThreadId of await this.threadIdsOf(from)) {
@@ -340,7 +346,7 @@ export class MastraService {
     sourceThreadId: string,
     newThreadId: string,
   ): Promise<boolean> {
-    const memory = await this.getAgent('assistant').getMemory();
+    const memory = await this.memoryHandle();
     if (!memory) return false;
     if (!(await memory.getThreadById({ threadId: sourceThreadId }))) {
       return false;
@@ -394,7 +400,7 @@ export class MastraService {
     threadId: string,
     exchange: AgentExchange,
   ): Promise<void> {
-    const memory = await this.getAgent('assistant').getMemory();
+    const memory = await this.memoryHandle();
     if (!memory) return;
     if (!(await memory.getThreadById({ threadId }))) {
       await memory.createThread({

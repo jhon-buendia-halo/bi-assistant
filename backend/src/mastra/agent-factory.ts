@@ -3,8 +3,7 @@ import { resolveLinks } from './agent-links';
 import { agentInstructions } from './agent-prompt-overrides';
 import { modelOverrideFrom, resolveAgentModel } from './model-resolver';
 import { stepModelFrom } from './step-model';
-import { type PromptTool } from './agents/assistant-prompt';
-import { withToolSection } from './tool-section';
+import { type PromptTool, withToolSection } from './tool-section';
 
 /**
  * The one way a built-in agent is built (agents.md 1.1). A spec says what

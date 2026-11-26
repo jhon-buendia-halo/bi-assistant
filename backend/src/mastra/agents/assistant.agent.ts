@@ -6,7 +6,8 @@ import { visualTools } from '../tools/visual.tools';
 import { showInPanelTool } from '../tools/panel.tool';
 import { updateWorkflowTool } from '../tools/workflow.tool';
 import { sessionWorkspaceOf } from '../session-workspaces';
-import { assistantSkills } from '../assistant-skills';
+import { frameworkSkills, skillSourcesFor } from '../agent-skill-sources';
+import { agentSkillsFrom } from '../agent-skills';
 import {
   OPTIONAL_AGENT_TOOLS,
   OPTIONAL_TOOL_NAMES,
@@ -107,7 +108,12 @@ export const assistantAgent = defineBuiltinAgent({
   // The on-demand skills of the call, given to the model through Mastra's
   // skill tool (ADR-0025): built-in (with overrides), user and project skills
   // and the agent's own copies.
-  skills: ({ requestContext }) => assistantSkills(requestContext),
+  skills: ({ requestContext }) =>
+    frameworkSkills(
+      skillSourcesFor('assistant', agentSkillsFrom(requestContext)).sort(
+        (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+      ),
+    ),
   // A session bound to a user agent may override the model name for this
   // agent only.
   model: 'user-override',
