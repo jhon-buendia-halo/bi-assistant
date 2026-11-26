@@ -100,7 +100,10 @@ describe("RunVisual, a run's visual under its answer (visuals R12-R24; agents.md
   });
 
   it("opens as a side panel titled once by the visual, without the panel's own label and path; Escape closes it (R42)", () => {
-    const { fixture, state, section } = render('answer-business-question', true);
+    const { fixture, state, section } = render(
+      'answer-business-question',
+      true,
+    );
     expect(section().getAttribute('data-sheet')).toBe('true');
     expect(section().getAttribute('role')).toBe('dialog');
     expect(section().getAttribute('aria-label')).toBe(
@@ -139,16 +142,7 @@ describe("RunVisual, a run's visual under its answer (visuals R12-R24; agents.md
     ).toBe('true');
   });
 
-  it('is read-only for the report of Consumption Gap Analysis, drawn by code', () => {
-    const gap = render('consumption-gap-analysis');
-    expect(
-      gap.el
-        .querySelector('[data-testid="panel"]')
-        ?.getAttribute('data-read-only'),
-    ).toBe('true');
-  });
-
-  it("keeps Tailor and Refresh for any other workflow's visual", () => {
+  it('keeps Tailor and Refresh on the visual', () => {
     const other = render('answer-business-question');
     expect(
       other.el

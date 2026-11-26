@@ -18,15 +18,6 @@ import { RunVisualsState } from '../../services/run-visuals-state';
 import { artifactKind } from '../run-artifact-card/run-artifact-card';
 
 /**
- * The workflows whose visual is drawn by code from the run's own data, not
- * from a query: Tailor, Refresh and revert have nothing to act on, so the
- * panel is read-only (agents.md 5.20).
- */
-const CODE_BUILT_VISUAL_WORKFLOWS: readonly string[] = [
-  'consumption-gap-analysis',
-];
-
-/**
  * A run's visual, open under its answer (visuals R12-R24 on a run): the
  * interactive panel with Tailor, versions, Refresh and Download over the
  * run's routes, and Full screen. Shown by the Run tab and the run page
@@ -88,11 +79,6 @@ export class RunVisual {
     if (this.fullScreen()) this.fullScreen.set(false);
     else if (this.sheet()) this.state.close();
   }
-
-  /** A visual drawn by code from the run's data: no Tailor, no Refresh. */
-  protected readonly codeBuilt = computed(() =>
-    CODE_BUILT_VISUAL_WORKFLOWS.includes(this.run().workflowId),
-  );
 
   constructor() {
     // A closed or replaced visual leaves full screen.
