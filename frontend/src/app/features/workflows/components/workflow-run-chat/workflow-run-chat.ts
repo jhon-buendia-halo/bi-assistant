@@ -1414,7 +1414,6 @@ export class WorkflowRunChat {
   protected fieldIcon(field: WorkflowInputField) {
     switch (field.type) {
       case 'datasets':
-      case 'dataset':
         return Database;
       case 'artifact':
         return LayoutDashboard;
@@ -1437,7 +1436,6 @@ export class WorkflowRunChat {
         if (n > 0) return `${n} picked`;
         return field.type === 'images' ? `up to ${field.max ?? 4}` : '';
       }
-      case 'dataset':
       case 'artifact':
         return this.selectedFor(field).length > 0 ? '1 picked' : '';
       case 'image':
@@ -1509,7 +1507,7 @@ export class WorkflowRunChat {
           const label = this.imageName(field.name) || field.label;
           chips.push({ field, key: label, label, index: 0 });
         }
-      } else if (field.type === 'dataset' || field.type === 'artifact') {
+      } else if (field.type === 'artifact') {
         const id = this.designer.inputValue(field.name);
         if (id === '') continue;
         const name =
