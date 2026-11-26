@@ -345,11 +345,6 @@ export interface SessionDoc {
    */
   continuesThreads?: boolean;
   /**
-   * A run host of Consumption Gap Analysis on a saved dashboard (agents.md
-   * 5.20): the artifact's id. In memory only, like the host.
-   */
-  inputArtifact?: string;
-  /**
    * A message to Avery in a conversation that holds a dashboard (agents.md
    * 5.22, the follow-up carry): the artifact's id, whose current version
    * Clara changes. In memory only, like the host.

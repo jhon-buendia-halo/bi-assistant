@@ -37,7 +37,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds two code workflows: Avery + Michael (5.23) and Consumption Gap Analysis (5.20)', () => {
+  it('holds one code workflow: Avery + Michael (5.23)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -51,13 +51,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         id: 'orchestrated-answer-michael',
         name: 'Answer a Business Question (Avery + Michael)',
         primaryFor: 'insights-analyst',
-        bar: 'steps',
-        trigger: 'run',
-      },
-      {
-        id: 'consumption-gap-analysis',
-        name: 'Consumption Gap Analysis',
-        primaryFor: 'gap-advisor',
         bar: 'steps',
         trigger: 'run',
       },
@@ -91,6 +84,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'recreate-dashboard',
       'map-dashboard-data',
       'review-website',
+      'consumption-gap-analysis',
       'data-readiness-assessment',
     ]);
     for (const id of REMOVED_WORKFLOW_IDS) {
@@ -103,6 +97,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'recreate-dashboard': 'Dashboard Image to Artifact',
       'map-dashboard-data': 'Map a Dashboard to Data',
       'review-website': 'Review a Website',
+      'consumption-gap-analysis': 'Consumption Gap Analysis',
       'data-readiness-assessment': 'Assess Data Readiness',
     });
   });
@@ -110,7 +105,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
   it('files every workflow under one category, the Workflows sections (workflows R5)', () => {
     expect(CODE_WORKFLOWS.map(({ id, category }) => [id, category])).toEqual([
       ['orchestrated-answer-michael', 'data-analytics'],
-      ['consumption-gap-analysis', 'data-engineering'],
     ]);
   });
 
@@ -159,78 +153,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       expect(usedBy('orchestrated-answer-michael')).toEqual({
         question: ['orchestrate'],
         datasets: ['orchestrate'],
-      });
-    });
-  });
-
-  // Consumption Gap Analysis (agents.md 5.20; workflows R37; api.md 116).
-  describe('consumption gap analysis', () => {
-    const gap = () =>
-      CODE_WORKFLOWS.find(
-        (workflow) => workflow.id === 'consumption-gap-analysis',
-      )!;
-
-    it('takes the datasets, the questions and an optional saved dashboard', () => {
-      expect(gap().input).toEqual([
-        {
-          name: 'datasets',
-          label: 'Datasets',
-          type: 'datasets',
-          required: true,
-          help: 'Datasets whose schemas are tagged Landing, Normalized and Consumption.',
-        },
-        {
-          name: 'question',
-          label: 'Business questions',
-          type: 'textarea',
-          required: true,
-          placeholder:
-            'Which team won the most matches in each World Cup?\nWhat share of the goals were penalties?',
-          help: 'One question per line, up to 20.',
-          maxLength: 4000,
-        },
-        {
-          name: 'artifact',
-          label: 'Saved dashboard',
-          type: 'artifact',
-          required: false,
-          artifactKinds: ['dashboard'],
-        },
-      ]);
-      expect(gap().steps.map((step) => step.id)).not.toContain(
-        'read-dashboards',
-      );
-    });
-
-    it('runs the Requirements Analyst, the Layer Mapper and the Gap Advisor', () => {
-      expect(
-        gap()
-          .steps.filter((step) => step.kind === 'agent')
-          .map((step) => [step.id, stepAgentKey(gap(), step.id)]),
-      ).toEqual([
-        ['derive-requirements', 'requirements-analyst'],
-        ['map-requirements', 'layer-mapper'],
-        ['recommend-fixes', 'gap-advisor'],
-      ]);
-      expect(workflowsUsingAgent('requirements-analyst')).toEqual([
-        { id: 'consumption-gap-analysis', name: 'Consumption Gap Analysis' },
-      ]);
-    });
-
-    it('says which steps read each field as api.md 116 lists them', () => {
-      expect(
-        Object.fromEntries(
-          inputFieldsWithUsage(gap()).map((field) => [
-            field.name,
-            field.usedBy,
-          ]),
-        ),
-      ).toEqual({
-        // Resolve layers runs first and passes the run's input on
-        // (agents.md 5.20).
-        datasets: ['resolve-layers'],
-        question: ['resolve-layers'],
-        artifact: ['resolve-layers'],
       });
     });
   });

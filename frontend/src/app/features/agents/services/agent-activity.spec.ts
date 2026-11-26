@@ -61,7 +61,7 @@ describe('agentActivity (ui.md 4.4)', () => {
   });
 
   it("ignores another workflow's runs and agents no workflow calls", () => {
-    const runs = [run('r1', 'running', 'data-readiness-assessment')];
+    const runs = [run('r1', 'running', 'another-workflow')];
     expect(agentActivity(michael, runs).state).toBe('available');
     expect(agentActivity({}, [run('r2', 'running')]).state).toBe('available');
   });

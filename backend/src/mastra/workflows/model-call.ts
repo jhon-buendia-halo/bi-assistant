@@ -14,21 +14,10 @@
 
 /** How long one try of a single model call may take. */
 export const MODEL_CALL_DEADLINE_MS = 5 * 60_000;
-/** How long a call whose output cap is `LONG_OUTPUT_TOKENS` or more may take. */
-export const LONG_MODEL_CALL_DEADLINE_MS = 10 * 60_000;
-/** The output cap from which a call gets the long deadline. */
-export const LONG_OUTPUT_TOKENS = 16_000;
 /** How long a streamed agent turn may send nothing while no tool executes. */
 export const STREAM_IDLE_DEADLINE_MS = 5 * 60_000;
 /** The wait before the one retry; a Stop ends it at once. */
 export const MODEL_RETRY_DELAY_MS = 2_000;
-
-/** The deadline of a call with this output cap. */
-export function deadlineFor(maxOutputTokens: number | undefined): number {
-  return (maxOutputTokens ?? 0) >= LONG_OUTPUT_TOKENS
-    ? LONG_MODEL_CALL_DEADLINE_MS
-    : MODEL_CALL_DEADLINE_MS;
-}
 
 /** A span in words: whole minutes, else seconds. */
 function spanOf(ms: number): string {

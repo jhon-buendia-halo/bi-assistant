@@ -53,17 +53,7 @@ import {
   DatasourceKind,
   kindLabel,
 } from '../../../datasources/models/datasource.model';
-import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
-import {
-  ReadinessPanelItem,
-  ReadinessReportRef,
-  VisualEvent,
-} from '../../../sessions/models/session.model';
-import { PanelReadinessView } from '../../../sessions/components/panel-readiness-view/panel-readiness-view';
-import {
-  readinessPanelItemId,
-  readinessPanelTitle,
-} from '../../../sessions/models/readiness.model';
+import { VisualEvent } from '../../../sessions/models/session.model';
 import { RunVisual } from '../../../runs/components/run-visual/run-visual';
 import { RunVisualsState } from '../../../runs/services/run-visuals-state';
 import { AnswerView } from '../../../sessions/components/answer-view/answer-view';
@@ -188,8 +178,6 @@ export function conversationIsSpanish(questions: readonly string[]): boolean {
     ExecutionId,
     LucideAngularModule,
     MarkdownPipe,
-    PanelReadinessView,
-    ReadinessHistory,
     RunVisual,
     WorkflowRunAttachments,
     WorkflowRunInputRequired,
@@ -694,52 +682,6 @@ export class WorkflowRunChat {
   protected viewVisual(event: VisualEvent): void {
     const run = this.designer.run();
     if (run !== null) this.visuals.view(run, event);
-  }
-
-  /**
-   * The scorecard opened from the run's readiness card (data-readiness R5),
-   * kept with the run it belongs to: a new run shows none.
-   */
-  private readonly scorecard = signal<{
-    runId: string | null;
-    item: ReadinessPanelItem;
-  } | null>(null);
-  protected readonly shownScorecard = computed(() => {
-    const open = this.scorecard();
-    return open !== null && open.runId === this.designer.runId()
-      ? open.item
-      : null;
-  });
-
-  /**
-   * Open scorecard: the run's saved panel item for the report, else the same
-   * item the orchestrator writes; always a fresh object, so a scorecard
-   * showing a past assessment comes back to this one.
-   */
-  protected openScorecard(ref: ReadinessReportRef): void {
-    const id = readinessPanelItemId(ref.reportId);
-    const saved = this.designer
-      .run()
-      ?.panelItems?.find(
-        (item): item is ReadinessPanelItem =>
-          item.kind === 'readiness' && item.id === id,
-      );
-    this.scorecard.set({
-      runId: this.designer.runId(),
-      item: saved
-        ? { ...saved }
-        : {
-            id,
-            kind: 'readiness',
-            title: readinessPanelTitle(ref.datasourceName),
-            shownAt: ref.generatedAt,
-            reportId: ref.reportId,
-          },
-    });
-  }
-
-  protected closeScorecard(): void {
-    this.scorecard.set(null);
   }
 
   /** The agent step running now, while the run streams: its live block shows. */

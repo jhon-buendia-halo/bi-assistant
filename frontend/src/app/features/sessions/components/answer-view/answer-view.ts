@@ -32,7 +32,6 @@ import {
   ChatMessage,
   CrossCheck,
   MessageFeedback,
-  ReadinessReportRef,
   ReasoningStep,
   ToolDataRecord,
   VisualEvent,
@@ -61,7 +60,6 @@ import {
   MarkdownPipe,
   renderMarkdown,
 } from '../../../../shared/pipes/markdown.pipe';
-import { ReadinessCard } from '../session-chat/readiness-card';
 
 /** What the clarification card's **Skip** answers. */
 export const SKIP_CLARIFICATION_ANSWER =
@@ -70,8 +68,8 @@ export const SKIP_CLARIFICATION_ANSWER =
 /**
  * One assistant answer and its provenance (ui.md 4.12; 1.23.13): the
  * Markdown body, the reasoning, ontology and data blocks, the badges and
- * rating, the clarification card and the readiness and visual event
- * cards. It holds no session: everything that reaches the
+ * rating, the clarification card and the visual event
+ * card. It holds no session: everything that reaches the
  * backend is an output, so the chat, a run result and a past chat can host
  * it alike.
  */
@@ -95,7 +93,6 @@ export interface SourceCard {
     MarkdownPipe,
     NgTemplateOutlet,
     QueryEvidenceSummary,
-    ReadinessCard,
   ],
   templateUrl: './answer-view.html',
   styleUrl: './answer-view.scss',
@@ -205,7 +202,6 @@ export class AnswerView {
   readonly rate = output<MessageFeedback>();
   readonly generateVisual = output<void>();
   readonly viewVisual = output<VisualEvent>();
-  readonly openScorecard = output<ReadinessReportRef>();
   /** A figure chip or a query row was picked: the index into the message's `data`. */
   readonly inspectQuery = output<number>();
 

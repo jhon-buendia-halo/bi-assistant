@@ -11,7 +11,6 @@ import {
   ChevronDown,
   Download,
   FileText,
-  Gauge,
   Layers,
   LucideAngularModule,
   Sparkles,
@@ -23,6 +22,7 @@ import {
   InteractiveVisualization,
   PanelItem,
   PanelItemKind,
+  shownPanelItems,
   Session,
 } from '../../models/session.model';
 import { SessionsApiService } from '../../services/sessions-api.service';
@@ -30,8 +30,6 @@ import { InteractiveVisualPanel } from '../interactive-visual-panel/interactive-
 import { PanelDocumentView } from '../panel-document-view/panel-document-view';
 import { PanelFileView } from '../panel-file-view/panel-file-view';
 import { PanelTableView } from '../panel-table-view/panel-table-view';
-import { PanelReadinessView } from '../panel-readiness-view/panel-readiness-view';
-import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
 import { slug } from '../../services/slug';
 
 export type PanelDownloadFormat = 'pdf' | 'md';
@@ -82,7 +80,7 @@ export function panelDownloadTitle(item: PanelItem | null): string | null {
 
 /**
  * The right panel of a session: shows what the agent chose to show (a file,
- * a document, a query result, a visual, a readiness scorecard) with a menu
+ * a document, a query result, a visual) with a menu
  * of everything shown so far. A visual renders the interactive visual panel.
  */
 @Component({
@@ -94,8 +92,6 @@ export function panelDownloadTitle(item: PanelItem | null): string | null {
     PanelDocumentView,
     PanelFileView,
     PanelTableView,
-    PanelReadinessView,
-    ReadinessHistory,
   ],
   templateUrl: './session-panel.html',
 })
@@ -109,7 +105,6 @@ export class SessionPanel {
     document: FileText,
     table: Table2,
     visual: BarChart3,
-    readiness: Gauge,
   } satisfies Record<PanelItemKind, unknown>;
 
   private readonly api = inject(SessionsApiService);
@@ -133,7 +128,7 @@ export class SessionPanel {
 
   /** Everything shown in this session, newest first. */
   readonly history = computed(() =>
-    [...(this.session().panelItems ?? [])].sort((a, b) =>
+    [...shownPanelItems(this.session().panelItems)].sort((a, b) =>
       b.shownAt.localeCompare(a.shownAt),
     ),
   );

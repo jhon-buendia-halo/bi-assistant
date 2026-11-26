@@ -37,8 +37,6 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
         },
       ],
     });
-    // The catalogue's own flag stays out of the API's step.
-    expect(step).not.toHaveProperty('modelOnly');
   });
 
   it('carries the step’s fields and exits', () => {

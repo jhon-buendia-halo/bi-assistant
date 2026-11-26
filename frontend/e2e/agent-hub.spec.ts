@@ -21,7 +21,6 @@ const V2_AGENT = 'Michael';
 /** The workflow it runs (workflows R1). */
 const V2 = 'Answer a Business Question (Avery + Michael)';
 const V2_ID = 'orchestrated-answer-michael';
-const READINESS = 'Sarah';
 /** Elena, the Insights Lead: Official (agents-evals R1, R115). */
 const ELENA = 'Elena';
 const V2_KEY = 'insights-analyst';
@@ -38,11 +37,10 @@ const V2_TOOLS = [
 /** Its built-in skills, on demand (agents.md 7.4), sorted by name. */
 const V2_SKILLS = ['curated-knowledge', 'result-validation', 'sql-analysis'];
 /**
- * The Official cards in hub order under the Official owner: Data Foundations
- * ("Sarah") before Analysis ("Elena", "Emily", "Michael"; agents-evals R1,
- * R107, R115).
+ * The Official cards in hub order under the Official owner, all in Analysis
+ * ("Elena", "Emily", "Michael"; agents-evals R1, R107, R115).
  */
-const OFFICIAL_KEYS = ['data-readiness', 'insights-lead', 'assistant', V2_KEY];
+const OFFICIAL_KEYS = ['insights-lead', 'assistant', V2_KEY];
 /** The hub's sections under All, in domain order (agents-evals R1). */
 const DOMAIN_SECTIONS = [
   'data-foundations',
@@ -61,8 +59,8 @@ const ANALYSIS_KEYS = [
   'result-explorer',
   'analysis-planner',
 ];
-/** Every card under All: 18 built-in agents and the Background's 2. */
-const ALL_CARDS = 20;
+/** Every card under All: 15 built-in agents and the Background's 2. */
+const ALL_CARDS = 16;
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -176,17 +174,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
   );
 
   for (const [id, heading, keys] of [
-    [
-      'data-foundations',
-      'Data Foundations',
-      [
-        'data-readiness',
-        'knowledge-bootstrap',
-        'layer-mapper',
-        'gap-advisor',
-        'requirements-analyst',
-      ],
-    ],
+    ['data-foundations', 'Data Foundations', ['knowledge-bootstrap']],
     [
       'sql',
       'SQL Engineering',
@@ -310,11 +298,11 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
   expect(await sectionIds(page)).toEqual(['general']);
 
   await owner.selectOption({ label: 'Official' });
-  // The assistant, Insights Analyst, Elena and the Data Readiness Agent
-  // are Official, each in its domain (R1, R107, R115).
+  // The assistant, Insights Analyst and Elena are Official, all in
+  // Analysis (R1, R107, R115).
   await expect(cards(page)).toHaveCount(OFFICIAL_KEYS.length);
   expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
-  expect(await sectionIds(page)).toEqual(['data-foundations', 'analysis']);
+  expect(await sectionIds(page)).toEqual(['analysis']);
 
   await filter(page, 'Analysis').click();
   await expect(filter(page, 'Analysis')).toHaveAttribute(
@@ -564,7 +552,7 @@ test(
     );
     await scenarioStep(
       page,
-      'Then I see "Elena", "Emily", "Michael" and "Sarah", and no other agent persona',
+      'Then I see "Elena", "Emily" and "Michael", and no other agent persona',
       async () => {
         await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
         expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
@@ -572,7 +560,6 @@ test(
           ['insights-lead', ELENA],
           ['assistant', ASSISTANT],
           [V2_KEY, V2_AGENT],
-          ['data-readiness', READINESS],
         ]) {
           const card = page.getByTestId(`agent-card-${key}`);
           await expect(card).toContainText(name);
@@ -745,38 +732,19 @@ test(
     );
     await scenarioStep(
       page,
-      `When I open the "${READINESS}" agent persona`,
+      `When I open the "${V2_AGENT}" agent`,
       async () => {
         await openHub(page);
-        await openAgent(page, 'data-readiness', READINESS);
+        await openAgent(page, V2_KEY, V2_AGENT);
       },
     );
     await scenarioStep(
       page,
-      'Then I see no "Chat Box" tab, "Job Description" is open, and it is used in Assess Data Readiness only',
+      'Then I see no "Try it" tab, and "Job Description" is open',
       async () => {
         await expect(page.getByTestId('agent-tab-prompt')).toBeVisible();
+        // The Try it tab is a user agent's only (agents-evals R61).
         await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
-        await expect(page.getByText('Chat Box', { exact: true })).toHaveCount(
-          0,
-        );
-        await expect(page.getByTestId('agent-prompt-view')).toContainText(
-          'You are the Data Readiness Agent',
-        );
-        // Her step: Explain report in Assess Data Readiness only (Answer a
-        // Business Question (Avery + Michael) never runs her).
-        const usedIn = page.getByTestId('agent-used-in');
-        await expect(usedIn).toContainText('Used in');
-        await expect(usedIn).not.toContainText(NOT_USED);
-        await expect(
-          usedIn.getByTestId(`agent-used-in-${V2_ID}`),
-        ).toHaveCount(0);
-        await expect(
-          usedIn.getByTestId('agent-used-in-data-readiness-assessment'),
-        ).toHaveText('Assess Data Readiness');
-        await expect(
-          page.getByTestId('agent-used-in-agent:data-readiness'),
-        ).toHaveCount(0);
       },
     );
   },

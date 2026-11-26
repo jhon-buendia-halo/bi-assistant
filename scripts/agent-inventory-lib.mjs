@@ -17,7 +17,6 @@ export const AGENT_CLASSES = {
   assistant: ['person', 'data'],
   'insights-analyst': ['person', 'data'],
   'insights-lead': ['person', 'data'],
-  'data-readiness': ['person', 'data'],
   'chief-of-staff': ['person', 'orchestrator'],
   'bi-analyst': ['data'],
   visualization: ['single-step'],
@@ -27,9 +26,6 @@ export const AGENT_CLASSES = {
   'knowledge-bootstrap': ['single-step'],
   'analysis-planner': ['single-step'],
   'answer-writer': ['single-step'],
-  'requirements-analyst': ['single-step'],
-  'layer-mapper': ['single-step'],
-  'gap-advisor': ['single-step'],
   'query-explainer': ['single-step'],
   'result-explorer': ['single-step'],
 };

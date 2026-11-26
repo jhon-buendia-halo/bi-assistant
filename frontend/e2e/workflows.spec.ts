@@ -40,22 +40,12 @@ const ASK_STEPS = ['Orchestrate'];
 const ASK_STEP_COUNT = '1 step';
 /** The Orchestrate dialog's title once the step ran: Avery's lead view. */
 const AVERY_RAN = 'Avery · Chief of Staff';
-const READINESS_ID = 'data-readiness-assessment';
-const READINESS = 'Assess Data Readiness';
 /** The Workflows sections, each with its workflows in catalogue order (workflows R1, R5). */
 const SECTIONS = [
   {
     id: 'data-analytics',
     heading: 'Data Analytics',
     workflows: [[ASK_ID, ASK]],
-  },
-  {
-    id: 'data-engineering',
-    heading: 'Data Engineering',
-    workflows: [
-      [READINESS_ID, READINESS],
-      ['consumption-gap-analysis', 'Consumption Gap Analysis'],
-    ],
   },
 ] as const;
 const WORKFLOW_COUNT = SECTIONS.reduce((n, s) => n + s.workflows.length, 0);
@@ -317,7 +307,7 @@ test.describe('Feature: Workflows', () => {
       );
       await scenarioStep(
         page,
-        'Then I see the workflows grouped by category: "Answer a Business Question (Avery + Michael)" under Data Analytics, "Assess Data Readiness" and "Consumption Gap Analysis" under Data Engineering',
+        'Then I see the workflows grouped by category: "Answer a Business Question (Avery + Michael)" under Data Analytics, and no other section',
         async () => {
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
@@ -341,9 +331,6 @@ test.describe('Feature: Workflows', () => {
           await expect(page.getByTestId(`workflow-kind-${ASK_ID}`)).toHaveText(
             ASK_STEP_COUNT,
           );
-          await expect(
-            page.getByTestId(`workflow-kind-${READINESS_ID}`),
-          ).toHaveText('7 steps');
           await expect(
             page.locator('[data-testid^="workflow-card-"]'),
           ).toHaveCount(WORKFLOW_COUNT);
@@ -492,7 +479,7 @@ test.describe('Feature: Workflows', () => {
     });
     await scenarioStep(
       page,
-      'Then I see the pills All, Data Analytics and Data Engineering, with All pressed',
+      'Then I see the pills All and Data Analytics, with All pressed',
       async () => {
         await expect(pills.getByRole('button')).toHaveText([
           'All',
@@ -504,22 +491,21 @@ test.describe('Feature: Workflows', () => {
         );
       },
     );
-    await scenarioStep(page, 'When I click "Data Engineering"', async () => {
-      await pills.getByRole('button', { name: 'Data Engineering' }).click();
+    await scenarioStep(page, 'When I click "Data Analytics"', async () => {
+      await pills.getByRole('button', { name: 'Data Analytics' }).click();
     });
     await scenarioStep(
       page,
-      'Then only the Data Engineering section shows, with "Assess Data Readiness" and "Consumption Gap Analysis"',
+      `Then only the Data Analytics section shows, with "${ASK}"`,
       async () => {
         await expect(
-          page.getByTestId('workflow-filter-data-engineering'),
+          page.getByTestId('workflow-filter-data-analytics'),
         ).toHaveAttribute('aria-pressed', 'true');
         await expect(
           page.locator('[data-testid^="workflow-section-"]'),
         ).toHaveCount(1);
-        expect(await cardIds(section(page, 'data-engineering'))).toEqual([
-          READINESS_ID,
-          'consumption-gap-analysis',
+        expect(await cardIds(section(page, 'data-analytics'))).toEqual([
+          ASK_ID,
         ]);
       },
     );

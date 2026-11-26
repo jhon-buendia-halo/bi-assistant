@@ -16,14 +16,7 @@ import {
   INSIGHTS_ANALYST_NAME,
   INSIGHTS_ANALYST_TOOL_NAMES,
 } from '../agents/insights-analyst-catalog';
-import {
-  GAP_ADVISOR_AGENT_KEY,
-  GAP_ADVISOR_AGENT_NAME,
-  LAYER_MAPPER_AGENT_KEY,
-  LAYER_MAPPER_AGENT_NAME,
-  REQUIREMENTS_ANALYST_AGENT_KEY,
-  REQUIREMENTS_ANALYST_AGENT_NAME,
-} from '../agent-constants';
+import {} from '../agent-constants';
 import { builtinAgentPersona } from '../agent-personas';
 import { CHIEF_OF_STAFF_AGENT_KEY } from '../agent-constants';
 import {
@@ -102,23 +95,6 @@ const STEP_AGENTS: Record<
     tools: INSIGHTS_ANALYST_TOOL_NAMES,
     maxSteps: INSIGHTS_ANALYST_MAX_STEPS,
   },
-  // Consumption Gap Analysis (agents.md 5.20): the agent steps are one model
-  // call each without tools.
-  [REQUIREMENTS_ANALYST_AGENT_KEY]: {
-    name: REQUIREMENTS_ANALYST_AGENT_NAME,
-    tools: [],
-    maxSteps: 1,
-  },
-  [LAYER_MAPPER_AGENT_KEY]: {
-    name: LAYER_MAPPER_AGENT_NAME,
-    tools: [],
-    maxSteps: 1,
-  },
-  [GAP_ADVISOR_AGENT_KEY]: {
-    name: GAP_ADVISOR_AGENT_NAME,
-    tools: [],
-    maxSteps: 1,
-  },
 };
 
 /**
@@ -151,15 +127,9 @@ export function codeWorkflowView(
       summary: step.summary,
       input: [...step.input],
       output: [...step.output],
-      // A model-only step (Plan, Write answer) runs its own agent (Olivia,
-      // Jessica) in one model call without tools (agents.md 5.11).
       ...(step.kind === 'agent'
         ? {
-            agent: stepAgent(
-              stepAgentKey(workflow, step.id),
-              step,
-              source.agent,
-            ),
+            agent: stepAgent(stepAgentKey(workflow, step.id), source.agent),
           }
         : {}),
       exits: step.exits.map((exit) => ({ ...exit })),
@@ -174,7 +144,6 @@ export function codeWorkflowView(
  */
 function stepAgent(
   key: string,
-  step: { modelOnly?: true },
   primary: { name: string; tools: readonly string[]; maxSteps: number },
 ): NonNullable<AgentWorkflowStep['agent']> {
   const persona = builtinAgentPersona(key);
@@ -185,9 +154,9 @@ function stepAgent(
     key,
     name: persona?.name ?? own.name,
     role: persona?.role ?? '',
-    tools: step.modelOnly ? [] : [...own.tools],
-    maxSteps: step.modelOnly ? 1 : own.maxSteps,
-    ...(!step.modelOnly && own.team
+    tools: [...own.tools],
+    maxSteps: own.maxSteps,
+    ...(own.team
       ? {
           team: own.team.map((member) => {
             const teammate = builtinAgentPersona(member.agent);

@@ -360,7 +360,7 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     it('gives a run of another workflow whose answer ran queries the inspector too', () => {
       const other: WorkflowRun = {
         ...WITH_QUERIES,
-        workflowId: 'assess-data-readiness',
+        workflowId: 'another-workflow',
       };
       const { http, el } = mountWithHttp(other);
       http.expectOne(evidence).flush({ ok: true, run: other });

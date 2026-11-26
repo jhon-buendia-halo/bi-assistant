@@ -8,22 +8,7 @@ import {
   parseClarification,
 } from '../../../mastra/tools/clarification.tool';
 import type { MastraService } from '../../../mastra/mastra.service';
-import {
-  GAP_ADVISOR_AGENT_KEY,
-  LAYER_MAPPER_AGENT_KEY,
-  REQUIREMENTS_ANALYST_AGENT_KEY,
-} from '../../../mastra/agent-constants';
-import { getDatasetToolServices } from '../../../mastra/tool-services';
-import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
-import {
-  CONSUMPTION_GAP_RUNTIME_KEY,
-  CONSUMPTION_GAP_WORKFLOW_ID,
-  type ConsumptionGapRuntime,
-  type GapQuery,
-} from '../../../mastra/workflows/consumption-gap-analysis.steps';
-import type { DashboardBlueprint } from '../../../mastra/workflows/dashboard-blueprint.schemas';
-import type { MockBundle } from '../../../mastra/workflows/live-dashboard';
 import {
   ModelTimeoutError,
   streamIdleWatch,
@@ -108,9 +93,8 @@ import {
 import type { LlmService } from '../../llm/llm.service';
 import { chatTurnError } from '../llm-error-message';
 import { sourceEntities } from '../visualization-document';
-import { upsertPanelItem, withVisualItems } from '../panel-items';
+import { withVisualItems } from '../panel-items';
 import { stepEventOf, workflowRunState } from '../workflow-run-state';
-import { runGapQueries } from '../gap-queries';
 import {
   groundingNudge,
   statedRationale,
@@ -123,10 +107,8 @@ import {
   EXPLORABLE_QUERIES_CONTEXT_KEY,
   explorableQueryOf,
   sessionExplorableQueries,
-  withRefs,
   type ExplorableQuery,
 } from '../query-evidence/explorable-queries';
-import { earlyWork, memoisedBy } from './early-work';
 import {
   QUERY_FACTS_CONTEXT_KEY,
   queryFactsKey,
@@ -138,7 +120,6 @@ import type {
   CrossCheck,
   SessionDoc,
   SessionView,
-  SessionVisualization,
   ToolDataRecord,
   VisualEvent,
   WorkflowPhase,
@@ -202,10 +183,6 @@ export interface TurnEngineDeps {
     data: ToolDataRecord[],
     signal?: AbortSignal,
   ): Promise<CrossCheck | undefined>;
-  /** A saved dashboard, by its artifact's id (agents.md 5.20). */
-  artifact(
-    artifactId: string,
-  ): Promise<{ name: string; blueprint: DashboardBlueprint }>;
   /**
    * A dashboard artifact's current version with its rows (agents.md 5.22,
    * the follow-up carry): what Clara changes. Throws when it is unknown.
@@ -224,12 +201,6 @@ export interface TurnEngineDeps {
     sessionId: string,
     input: Omit<NewDashboardVersion, 'source'> & { artifactId?: string },
   ) => Promise<DashboardRef>;
-  /** Store a drawn report as a visual of the session (agents.md 5.20). */
-  saveMock(
-    sessionId: string,
-    bundle: MockBundle,
-    instruction: string,
-  ): Promise<SessionVisualization>;
 }
 
 /**
@@ -655,23 +626,6 @@ export class TurnEngine {
         if (!turn.signal.aborted && !attemptStop?.signal.aborted) throw error;
       }
     };
-    // Work a step starts and a later step takes (agents.md 5.20): the
-    // lineage checks in Consumption Gap Analysis. Settled when the run
-    // ends, fails or is stopped, before the answer is persisted.
-    const early = earlyWork(turn.signal);
-    // How many lineage checks Load layer catalogs started (Infer lineage's
-    // progress lines).
-    let lineageCount = 0;
-    // The answer carries a stored dashboard, as a turn's visual does.
-    const showVisual = (metadata: SessionVisualization) => {
-      visualEvent = {
-        visualId: metadata.id,
-        version: 1,
-        title: metadata.title,
-        action: 'created',
-      };
-      emit({ type: 'visual-updated', content: JSON.stringify(visualEvent) });
-    };
     let ran: TurnRunOutcome;
     try {
       // Every streamed turn is one run of the session's workflow (agents.md
@@ -683,95 +637,6 @@ export class TurnEngine {
         error instanceof ModelTimeoutError
           ? error
           : chatTurnError(error, () => this.deps.llmService.getView());
-      const stepModelBase = {
-        abortSignal: turn.signal,
-        providerOptions: options.providerOptions as
-          Record<string, unknown> | undefined,
-        requestContext: options.requestContext,
-      };
-      // A step agent of its own runs without memory; its exchange is
-      // recorded in its thread on this host (agents.md 5.14), and a
-      // failure to record never fails the step.
-      // A retry of its call (workflows R43) is a reasoning line of the step.
-      const stepModelOf = (stepAgentKey: string) => ({
-        ...stepModelBase,
-        onRetry: (line: string) =>
-          emit({ type: 'reasoning', content: `${line}\n` }),
-        onExchange: async (exchange: AgentExchange) => {
-          try {
-            await this.deps.mastra.recordAgentExchange(
-              session.id,
-              stepAgentKey,
-              exchange,
-            );
-          } catch (error) {
-            this.deps.logger.warn(
-              `Could not record the ${stepAgentKey} exchange of ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
-            );
-          }
-        },
-      });
-      // Resolve layers and Load layer catalogs both read the datasets'
-      // layers: fetched once per run (agents.md 5.20).
-      const datasetLayers = memoisedBy(
-        async ({ datasets }: { datasets: string[] }) =>
-          (await getDatasetToolServices().getDatasets(datasets)).map(
-            (dataset) => ({
-              dataset: dataset.name,
-              datasourceId: dataset.datasourceId ?? null,
-              datasourceKind: dataset.datasourceKind ?? null,
-              schemas: (dataset.schemas ?? []).map((note) => ({
-                ...note,
-              })),
-              entities: dataset.tables.map((key) => {
-                const known = dataset.entities?.find(
-                  (entity) => entity.key === key,
-                )?.columns;
-                return {
-                  key,
-                  columns: known
-                    ? known.map((column) => ({
-                        name: column.name,
-                        type: column.type ?? '',
-                      }))
-                    : null,
-                };
-              }),
-            }),
-          ),
-        ({ datasets }) => JSON.stringify(datasets),
-      );
-      // Infer lineage and Probe evidence (ADR-0051): each statement on the
-      // guarded read-only path with `signal`, four at a time, recorded in
-      // query order through `hold` (at once, or held for the step that
-      // takes them) as a `run_readonly_sql` source, as Rows behind findings
-      // does (agent-answers R67-R78). A failed one is a result.
-      const gapQueriesOn = (
-        queries: GapQuery[],
-        signal: AbortSignal,
-        hold: (replay: () => void) => void,
-      ) =>
-        runGapQueries({
-          queries,
-          run: (datasourceId, sql, limit, sqlOptions) =>
-            this.deps.sql.runBuiltSql(datasourceId, sql, limit, sqlOptions),
-          signal,
-          record: (args, result, facts) =>
-            hold(() => {
-              emit({
-                type: 'tool',
-                content: JSON.stringify({
-                  name: 'run_readonly_sql',
-                  rationale: args.rationale,
-                  input: toolCallInput('run_readonly_sql', args),
-                }),
-              });
-              const callId = `gap-query-${randomUUID()}`;
-              queryFacts.set(callId, facts);
-              const record = toolDataRecord('run_readonly_sql', args, result);
-              if (record) captureRecord(record, callId);
-            }),
-        });
       ran = await this.runTurnWorkflow(
         session,
         workflow,
@@ -1175,113 +1040,10 @@ export class TurnEngine {
             }
             return analyseOutcomeOf(data, turn.signal.aborted);
           },
-          // Consumption Gap Analysis (agents.md 5.20): its model steps on
-          // their own agents, its read-only queries recorded as sources.
-          consumptionGap: {
-            loadDashboard: ({ artifact }) => this.deps.artifact(artifact),
-            // Resolve layers and Load layer catalogs: the dataset tools'
-            // own services (names, types and schema notes; no rows).
-            datasetLayers,
-            // Probe evidence: recorded at once.
-            runQueries: ({ queries }) =>
-              gapQueriesOn(queries, turn.signal, (replay) => replay()),
-            // Infer lineage: started at Load layer catalogs, on its own
-            // stop, its sources held until Infer lineage takes them; while
-            // it waits, each statement done is a reasoning line of the step
-            // (agents.md 5.20), so a slow warehouse is never a silent run.
-            startLineage: ({ queries }) => {
-              lineageCount = queries.length;
-              early.start('lineage', (signal, hold) =>
-                gapQueriesOn(queries, signal, hold),
-              );
-            },
-            takeLineage: () =>
-              early.take<Awaited<ReturnType<typeof gapQueriesOn>>>(
-                'lineage',
-                (done) =>
-                  emit({
-                    type: 'reasoning',
-                    content: `Checked ${done} of ${lineageCount} lineage queries\n`,
-                  }),
-              ),
-            deriveRequirements: async (input) => {
-              try {
-                const derived = await this.deps.mastra.deriveRequirements(
-                  input,
-                  stepModelOf(REQUIREMENTS_ANALYST_AGENT_KEY),
-                );
-                return {
-                  ...derived,
-                  stopped: derived.stopped || turn.signal.aborted,
-                };
-              } catch (error) {
-                throw await stepError(error);
-              }
-            },
-            // Confirm requirements: the same agent applies the user's edits.
-            reviseRequirements: async (input) => {
-              try {
-                const revised = await this.deps.mastra.reviseRequirements(
-                  input,
-                  stepModelOf(REQUIREMENTS_ANALYST_AGENT_KEY),
-                );
-                return {
-                  ...revised,
-                  stopped: revised.stopped || turn.signal.aborted,
-                };
-              } catch (error) {
-                throw await stepError(error);
-              }
-            },
-            mapRequirements: async (input) => {
-              try {
-                const mapped = await this.deps.mastra.mapRequirements(
-                  input,
-                  stepModelOf(LAYER_MAPPER_AGENT_KEY),
-                );
-                return {
-                  ...mapped,
-                  stopped: mapped.stopped || turn.signal.aborted,
-                };
-              } catch (error) {
-                throw await stepError(error);
-              }
-            },
-            recommendFixes: async (input) => {
-              try {
-                const advised = await this.deps.mastra.recommendFixes(
-                  input,
-                  stepModelOf(GAP_ADVISOR_AGENT_KEY),
-                );
-                return {
-                  ...advised,
-                  stopped: advised.stopped || turn.signal.aborted,
-                };
-              } catch (error) {
-                throw await stepError(error);
-              }
-            },
-            // Render report: the drawn report is the run's visual, and the
-            // answer built in code is its answer.
-            saveReport: async ({ bundle, answer, title }) => {
-              const metadata = await this.deps.saveMock(
-                id,
-                { ...bundle, title },
-                trimmed,
-              );
-              showVisual(metadata);
-              text = answer;
-              emit({ type: 'text', content: text });
-              return { visualId: metadata.id, title: metadata.title };
-            },
-          },
         },
         (event) => onStepEvent?.(event),
       );
     } finally {
-      // The run ended, failed, was stopped or waits: work no step took is
-      // aborted and awaited, its records dropped, before anything persists.
-      await early.settle();
       abortSignal?.removeEventListener('abort', forwardAbort);
     }
     // The workflow run waits for the user (ADR-0043). A run host's turn
@@ -1312,7 +1074,6 @@ export class TurnEngine {
               try {
                 next = await resumeRun(answer);
               } finally {
-                await early.settle();
                 abortSignal?.removeEventListener('abort', forwardAbort);
               }
               return settle(next);
@@ -1718,8 +1479,6 @@ export class TurnEngine {
     emit: (event: StreamEvent) => void,
     runtime: AnalyseRuntime &
       AgentTurnRuntime & {
-        /** Kept apart from the others' names. */
-        consumptionGap: ConsumptionGapRuntime;
         /** A conversation's turn: Avery's with her team (agents.md 5.23). */
         converse: (
           input: Parameters<ConversationTurnRuntime['turn']>[0],
@@ -1741,7 +1500,6 @@ export class TurnEngine {
       }
     };
     const requestContext = new RequestContext();
-    const gap = workflow.engineId === CONSUMPTION_GAP_WORKFLOW_ID;
     if (conversationOfTurn(workflow)) {
       // A conversation's engine (plan Elena 1.3): its one step runs the
       // agent's turn. Avery (agents.md 5.23) calls Michael's analysis and
@@ -1759,36 +1517,11 @@ export class TurnEngine {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
       } satisfies AgentTurnRuntime);
-    } else if (gap) {
-      const parts = runtime.consumptionGap;
-      requestContext.set(CONSUMPTION_GAP_RUNTIME_KEY, {
-        loadDashboard: (input) => captured(() => parts.loadDashboard(input)),
-        datasetLayers: (input) => captured(() => parts.datasetLayers(input)),
-        runQueries: (input) => captured(() => parts.runQueries(input)),
-        // Early work (agents.md 5.20): Infer lineage reports its error.
-        startLineage: (input) => parts.startLineage(input),
-        takeLineage: () => captured(() => parts.takeLineage()),
-        deriveRequirements: (input) =>
-          captured(() => parts.deriveRequirements(input)),
-        reviseRequirements: (input) =>
-          captured(() => parts.reviseRequirements(input)),
-        mapRequirements: (input) =>
-          captured(() => parts.mapRequirements(input)),
-        recommendFixes: (input) => captured(() => parts.recommendFixes(input)),
-        saveReport: (input) => captured(() => parts.saveReport(input)),
-      } satisfies ConsumptionGapRuntime);
     }
-    // Consumption Gap Analysis runs on the run's questions and datasets and
-    // its saved dashboard ('' when none) (agents.md 5.20).
-    const turnInput:
-      | QuestionInput
-      | { question: string; artifact: string; datasets: string[] } = gap
-      ? {
-          question,
-          datasets: session.datasets,
-          artifact: session.inputArtifact ?? '',
-        }
-      : { question, datasets: session.datasets };
+    const turnInput: QuestionInput = {
+      question,
+      datasets: session.datasets,
+    };
     let state = session.workflowState;
     // A new run starts the bar over at its first step event (agent-panel
     // R8a). A resume goes on.

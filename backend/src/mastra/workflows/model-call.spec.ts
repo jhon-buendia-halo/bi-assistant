@@ -5,14 +5,12 @@
  * no test waits for real.
  */
 import {
-  LONG_MODEL_CALL_DEADLINE_MS,
   MODEL_CALL_DEADLINE_MS,
   MODEL_RETRY_DELAY_MS,
   ModelTimeoutError,
   ReplyCutError,
   STREAM_IDLE_DEADLINE_MS,
   cutReply,
-  deadlineFor,
   guardedCall,
   isTransientModelError,
   streamIdleWatch,
@@ -53,14 +51,10 @@ function settled<T>(promise: Promise<T>): Promise<T | Error> {
 }
 
 describe('the model call deadlines (workflows R43)', () => {
-  it('gives a call five minutes, and ten when its output cap is 16,000 tokens or more', () => {
+  it('gives a call five minutes', () => {
     expect(MODEL_CALL_DEADLINE_MS).toBe(5 * MINUTE);
-    expect(LONG_MODEL_CALL_DEADLINE_MS).toBe(10 * MINUTE);
     expect(STREAM_IDLE_DEADLINE_MS).toBe(5 * MINUTE);
     expect(MODEL_RETRY_DELAY_MS).toBe(2_000);
-    expect(deadlineFor(undefined)).toBe(MODEL_CALL_DEADLINE_MS);
-    expect(deadlineFor(8000)).toBe(MODEL_CALL_DEADLINE_MS);
-    expect(deadlineFor(16000)).toBe(LONG_MODEL_CALL_DEADLINE_MS);
   });
 
   it('reads only the finish reason "length" as a cut reply', () => {

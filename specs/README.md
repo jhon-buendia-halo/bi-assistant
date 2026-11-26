@@ -44,7 +44,7 @@ specs/
 | [verified-queries](capabilities/verified-queries/spec.md) | Saved, trusted question → SQL pairs | — |
 | [metrics](capabilities/metrics/spec.md) | Metric definitions and the metrics panel | — |
 | [agents-evals](capabilities/agents-evals/spec.md) | Agent Hub, agent catalogue and user agents, eval sets, eval runs and reports | Agents (`agents.spec.ts`), Agent Hub (`agent-hub.spec.ts`) |
-| [workflows](capabilities/workflows/spec.md) | The workflow catalogue (six workflows, Answer a Business Question (Avery + Michael) first), the Workflows pages, runs and legacy runs | Workflows (`workflows.spec.ts`) |
+| [workflows](capabilities/workflows/spec.md) | The workflow catalogue (one workflow, Answer a Business Question (Avery + Michael)), the Workflows pages, runs and legacy runs | Workflows (`workflows.spec.ts`) |
 | [agent-panel](capabilities/agent-panel/spec.md) | `show_in_panel`: what an agent shows in the right panel (file, document, table, visual), the workflow bar and its Details, its history and download | Agent panel (E2E: none yet) |
 | [synthetic-data](capabilities/synthetic-data/spec.md) | Sampled profile of a dataset's tables (native sampling, up to 1,000 rows per table, approximate) in the dataset editor's Profile & synthesize tab; synthetic data scripts follow in later stories | Synthetic data (`synthetic-data.spec.ts`) |
 | [data-readiness](capabilities/data-readiness/spec.md) | Removed 2026-11-26: the Data Readiness Agent, the Assess Data Readiness workflow, the readiness engine, saved reports and the scorecard (kept as a pointer) | none |

@@ -34,7 +34,7 @@ function agent(
 
 const emily = agent('assistant', 'Emily', 'official', 'analysis');
 const michael = agent('insights-analyst', 'Michael', 'official', 'analysis');
-const sarah = agent('data-readiness', 'Sarah', 'official', 'data-foundations');
+const ryan = agent('visualization', 'Ryan', 'official', 'data-foundations');
 const olivia = agent('analysis-planner', 'Olivia', 'system', 'analysis');
 const kevin = agent(
   'knowledge-bootstrap',
@@ -53,7 +53,7 @@ const claims = agent('u-claims', 'Claims triage', 'user', undefined, {
   description: 'Sorts incoming claims by urgency',
 });
 
-const builtins = [laura, rachel, olivia, emily, david, kevin, sarah, michael];
+const builtins = [laura, rachel, olivia, emily, david, kevin, ryan, michael];
 const all = [health, ...builtins, claims];
 
 function keys(agents: Agent[]): string[] {
@@ -142,7 +142,7 @@ describe('buildHubSections', () => {
       [
         { ...rachel, pinned: true },
         { ...claims, pinned: true },
-        { ...sarah, pinned: true },
+        { ...ryan, pinned: true },
         emily,
       ],
       'pinned',
@@ -151,7 +151,7 @@ describe('buildHubSections', () => {
     );
     expect(ids(sections)).toEqual(['pinned']);
     expect(keys(sections[0].agents)).toEqual([
-      'data-readiness',
+      'visualization',
       'u-claims',
       'sql-verifier',
     ]);
@@ -167,7 +167,7 @@ describe('buildHubSections', () => {
     const official = buildHubSections(all, 'all', 'official', '');
     expect(ids(official)).toEqual(['data-foundations', 'analysis']);
     expect(official.flatMap((s) => keys(s.agents))).toEqual([
-      'data-readiness',
+      'visualization',
       'assistant',
       'insights-analyst',
     ]);

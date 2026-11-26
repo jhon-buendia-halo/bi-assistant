@@ -15,8 +15,7 @@ export const ARTIFACT_NAME_MAX_LENGTH = 80;
 
 /**
  * A stored artifact (data-model 3.18): reusable context saved from a
- * workflow run. A `dashboard` artifact holds a dashboard's blueprint, so a
- * later run can take it (Consumption Gap Analysis's saved dashboard).
+ * workflow run. A `dashboard` artifact holds a dashboard's blueprint.
  */
 export interface ArtifactDoc {
   id: string;

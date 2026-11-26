@@ -424,7 +424,6 @@
                 (rate)="designer.rateAnswer($event)"
                 (optionPicked)="designer.followUp($event)"
                 (viewVisual)="viewVisual($event)"
-                (openScorecard)="openScorecard($event)"
               />
               @if (answer.dashboard; as dashboard) {
                 <app-run-dashboard-card
@@ -455,42 +454,6 @@
                 }
               }
             </div>
-            @if (shownScorecard(); as readiness) {
-              <!-- Data Readiness: the report's scorecard, with Past assessments -->
-              <section
-                class="mt-4 rounded-lg border border-border"
-                data-testid="workflow-run-scorecard"
-                aria-label="Readiness scorecard"
-              >
-                <div
-                  class="flex items-center justify-between gap-2 border-b border-border px-4 py-2"
-                >
-                  <h3 class="m-0 text-[12px] font-medium text-fg-muted">
-                    Scorecard
-                  </h3>
-                  <button
-                    type="button"
-                    data-testid="workflow-run-scorecard-close"
-                    class="btn btn-ghost btn-icon"
-                    aria-label="Close scorecard"
-                    title="Close scorecard"
-                    (click)="closeScorecard()"
-                  >
-                    <lucide-angular [img]="X" [size]="14" />
-                  </button>
-                </div>
-                <app-panel-readiness-view #scorecard [item]="readiness">
-                  @if (scorecard.report(); as shown) {
-                    <app-readiness-history
-                      readinessHistory
-                      [datasourceId]="shown.datasourceId"
-                      [currentReportId]="scorecard.shownReportId()"
-                      (openReport)="scorecard.showReport($event.id)"
-                    />
-                  }
-                </app-panel-readiness-view>
-              </section>
-            }
           }
 
           @if (answerFirst()) {
