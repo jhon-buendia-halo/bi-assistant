@@ -1,14 +1,12 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
-import { SessionsService } from '../../modules/sessions/sessions.service';
 import { OntologyService } from '../../modules/ontology/ontology.service';
 import { DatasetsRepository } from '../../modules/datasets/repositories/datasets.repository';
 import { EvalRunsRepository } from '../../modules/agents/repositories/eval-runs.repository';
 import { LlmService } from '../../modules/llm/llm.service';
 import { writeFileSync } from 'fs';
 import { cliRun, savedLlmLabel } from './eval-cli-run';
-import { selectEvalSets } from './assistant.evals';
-import { runAssistantEvals } from './assistant.evals';
+import { runAssistantEvals, selectEvalSets } from './assistant.evals';
 import { selectCliEvalCases } from './eval-cli-selection';
 import { EVAL_SETS, agentForCases, evalTargetFor } from './eval-sets';
 import {
@@ -19,15 +17,19 @@ import {
 import { setAgentModelResolver } from '../model-resolver';
 
 /**
- * CLI entry point for the same suite the Agents → Evals tab runs.
+ * CLI entry point for the same suites the Agents → Evals tab runs
+ * (`npm run evals`, agents.md 8.5): one agent's set, picked by `EVAL_SET`
+ * or `EVAL_CASES`.
  *
  * The Mastra tools load without Nest DI: `SessionsService.onModuleInit`
- * installs their real implementations and `LlmService` installs the model
- * resolver. Booting an application context gives the eval run the same wiring
- * the app has, without opening an HTTP port.
+ * installs their real implementations, `LlmService` installs the model
+ * resolver and the workflow run service is installed for the whole-run
+ * targets. Booting an application context gives the eval run the same
+ * wiring the app has, without opening an HTTP port.
  *
  * Outside a request nobody is signed in (ADR-0012), so the run is explicitly
- * Demo User's: its throwaway run hosts and knowledge are Demo User's own.
+ * Demo User's: the runs it stores (and deletes) and its knowledge are Demo
+ * User's own.
  */
 async function main(): Promise<void> {
   const datasets = (process.env['EVAL_DATASETS'] ?? '')
@@ -38,7 +40,7 @@ async function main(): Promise<void> {
   if (datasets.length === 0) {
     console.error(
       'Set EVAL_DATASETS to a comma-separated list of saved dataset names, ' +
-        'e.g. EVAL_DATASETS="World Cup Core" EVAL_SET=world-cup npm run evals:assistant',
+        'e.g. EVAL_DATASETS="World Cup Core" EVAL_SET=world-cup npm run evals',
     );
     process.exitCode = 1;
     return;
@@ -51,8 +53,8 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  // The agent the questions run on: the assistant, or the agent of the set,
-  // e.g. the Query Explainer for EVAL_SET=query-explainer (agents.md 8.1).
+  // The agent the questions run on: the agent of the set, e.g. the Query
+  // Explainer for EVAL_SET=query-explainer (agents.md 8.1).
   const agent = agentForCases(selection.caseIds);
   if ('error' in agent) {
     console.error(agent.error);
@@ -102,10 +104,6 @@ async function runEvals(
   /** The EVAL_LLM_* endpoint's label; the saved settings when omitted. */
   customLabel?: { provider: string; model: string },
 ): Promise<void> {
-  // Same Nest app the eval-runs.service in-app runner uses, so a throwaway
-  // run host for create_visual/update_visual works here too — no CLI-only
-  // degrade needed.
-  const sessions = app.get(SessionsService);
   // Same curated-knowledge block a real chat turn gets from
   // TurnOptions.agentContext.
   const knowledgeBlock = await app
@@ -139,9 +137,11 @@ async function runEvals(
   });
   let results: Awaited<ReturnType<typeof runAssistantEvals>>;
   try {
-    results = await runAssistantEvals(
-      datasets,
-      (result) => {
+    results = await runAssistantEvals(target, datasets, {
+      caseIds,
+      knowledgeBlock,
+      evalRunId: run.jobId,
+      onCaseComplete: (result) => {
         const mark = result.passed ? 'PASS' : 'FAIL';
         console.log(`${mark}  ${result.id}  (${result.durationMs}ms)`);
         if (result.error) console.log(`      error: ${result.error}`);
@@ -155,12 +155,7 @@ async function runEvals(
           );
         }
       },
-      caseIds,
-      sessions,
-      knowledgeBlock,
-      target,
-      run.jobId,
-    );
+    });
   } catch (err) {
     await remember(() =>
       run.finish(err instanceof Error ? err.message : String(err)),

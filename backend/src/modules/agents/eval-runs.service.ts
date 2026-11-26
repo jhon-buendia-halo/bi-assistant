@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
-import { SessionsService } from '../sessions/sessions.service';
 import { OntologyService } from '../ontology/ontology.service';
 import { LlmService } from '../llm/llm.service';
 import { EvalRunsRepository } from './repositories/eval-runs.repository';
@@ -14,9 +13,6 @@ import { assistantEvalDatasetError } from '../../mastra/evals/assistant-eval-dat
 import {
   AssistantEvalCase,
   AssistantEvalCaseResult,
-  EvalHost,
-  cleanupEvalHost,
-  createEvalHost,
   fixtureForCases,
   runAssistantEvalCase,
   selectEvalCases,
@@ -92,7 +88,6 @@ export class EvalRunsService {
     private readonly datasets: DatasetsRepository,
     private readonly repository: EvalRunsRepository,
     private readonly datasources: DatasourcesService,
-    private readonly sessions: SessionsService,
     private readonly knowledge: OntologyService,
     private readonly llm: LlmService,
   ) {}
@@ -130,7 +125,7 @@ export class EvalRunsService {
     datasourceId: string,
     caseIds?: string[],
   ): Promise<{ jobId: string } | { conflictWith: string } | { error: string }> {
-    // The agent's own sets: those whose `agentKey` (default `assistant`) is it.
+    // The agent's own sets: those whose `agentKey` is it.
     const sets = evalSetsFor(agentKey);
     if (sets.length === 0) {
       return { error: `Agent "${agentKey}" has no evals to run` };
@@ -216,23 +211,8 @@ export class EvalRunsService {
     // The agent the cases run on, with its context and clean-up (agents.md
     // 8.1).
     const target = evalTargetFor(view.agentKey, view.caseIds);
-    // A throwaway run host so create_visual/update_visual behave the way they
-    // do in a real chat turn (see assistant.evals.ts). Best-effort: a run
-    // still measures the agent without one, just with visual-tool support
-    // degraded to "No session in context".
-    let evalSession: EvalHost | undefined;
-    try {
-      evalSession = await createEvalHost(this.sessions, view.datasets);
-    } catch (err) {
-      this.logger.warn(
-        `Could not create a throwaway run host for eval run ${view.jobId}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-    }
-    // Same curated-knowledge block a real chat turn gets from
-    // TurnOptions.agentContext, computed once per run — every case in
-    // the run shares the same datasets.
+    // The curated-knowledge block, for a target that sends it, computed once
+    // per run — every case in the run shares the same datasets.
     const knowledgeBlock = await this.knowledge.definitionBlock(view.datasets);
     try {
       for (const [index, evalCase] of cases.entries()) {
@@ -240,9 +220,8 @@ export class EvalRunsService {
         const result = await runAssistantEvalCase(
           evalCase,
           view.datasets,
-          evalSession?.id,
-          knowledgeBlock,
           target,
+          knowledgeBlock,
           view.jobId,
         );
         view.results.push(result);
@@ -265,7 +244,6 @@ export class EvalRunsService {
       // The agent's own clean-up of what this run created, if any, inside
       // the run's scope so any model call it makes is marked (ADR-0054).
       await inEvalRun(view.jobId, async () => target.finish?.(view.datasets));
-      await cleanupEvalHost(this.sessions, evalSession);
     }
   }
 

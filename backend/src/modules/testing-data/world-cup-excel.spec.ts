@@ -16,9 +16,6 @@ jest.mock('@mastra/evals/checks', () => ({
 jest.mock('../datasets/datasets.service', () => ({
   DatasetsService: class {},
 }));
-jest.mock('../../mastra/agents/assistant.agent', () => ({
-  assistantAgent: {},
-}));
 jest.mock('../../mastra/agents/eval-judge.agent', () => ({
   evalJudgeAgent: {},
   evalJudgeOutputSchema: {},
@@ -38,7 +35,7 @@ import { DuckDBInstance } from '@duckdb/node-api';
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { ASSISTANT_EVAL_SETS } from '../../mastra/evals/assistant.evals';
+import { INSIGHTS_LEAD_DATA_EVAL_SETS } from '../../mastra/evals/insights-lead-data.evals';
 import { assistantEvalDatasetError } from '../../mastra/evals/assistant-eval-datasets';
 import { FileConnector } from '../datasources/connectors/file.connector';
 import { FILE_UPLOAD_MAX_BYTES } from '../datasources/connectors/file-storage';
@@ -204,7 +201,9 @@ describe('the world-cup-excel sample (roadmap 1.31.7)', () => {
   it('answers the reference SQL of every eval case', async () => {
     await testingData.load('world-cup-excel', {});
     const [datasource] = [...docs.values()];
-    const set = ASSISTANT_EVAL_SETS.find((s) => s.id === 'world-cup-excel');
+    const set = INSIGHTS_LEAD_DATA_EVAL_SETS.find(
+      (s) => s.id === 'world-cup-excel',
+    );
     expect(set?.fixtureId).toBe('world-cup-excel');
     expect(set?.cases.length).toBeGreaterThanOrEqual(6);
     expect(set?.cases.length).toBeLessThanOrEqual(8);

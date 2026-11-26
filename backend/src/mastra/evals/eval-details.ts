@@ -32,6 +32,25 @@ export interface EvalRunDetails {
    * calls, so it can see the schema the agent worked from (agents.md 8.1).
    */
   judgeContext?: string;
+  /**
+   * Whole-run targets: the run's tool records as the stored answer keeps
+   * them (`ChatMessage.data`), in call order. The result-set check compares
+   * them with a case's `expectedSql` when the runner captured no records
+   * of its own (a whole run streams no agent steps to the runner).
+   */
+  records?: EvalRunRecord[];
+}
+
+/** One tool record of a stored run (a `ToolDataRecord`'s compared part). */
+export interface EvalRunRecord {
+  tool: string;
+  input?: string;
+  rows?: Record<string, unknown>[];
+  /** Rows the tool returned before storage clipped them. */
+  rowCount?: number;
+  /** The rows were clipped (the query's limit, or storage). */
+  truncated?: boolean;
+  error?: string;
 }
 
 /** The key of a target result's details (`runAssistantEvalCase` reads it). */

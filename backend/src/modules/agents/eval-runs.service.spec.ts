@@ -1,17 +1,18 @@
 jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
 }));
-jest.mock('../sessions/sessions.service', () => ({
-  SessionsService: class {},
-}));
 jest.mock('../ontology/ontology.service', () => ({
   OntologyService: class {},
 }));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
-// One set per agent: a set's agent is its `agentKey`, `assistant` by default.
+// One set per agent: a set's agent is its `agentKey`.
 jest.mock('../../mastra/evals/eval-sets', () => {
   const sets = [
-    { id: 'world-cup', cases: [{ id: 'champion-2022' }] },
+    {
+      id: 'world-cup',
+      agentKey: 'insights-lead',
+      cases: [{ id: 'champion-2022' }],
+    },
     {
       id: 'explain-sql',
       agentKey: 'query-explainer',
@@ -19,15 +20,14 @@ jest.mock('../../mastra/evals/eval-sets', () => {
     },
   ];
   const targets: Record<string, unknown> = {
-    assistant: { agentKey: 'assistant' },
+    'insights-lead': { agentKey: 'insights-lead' },
     'query-explainer': {
       agentKey: 'query-explainer',
       finish: jest.fn().mockResolvedValue(undefined),
     },
   };
   return {
-    evalSetsFor: (key: string) =>
-      sets.filter((set) => (set.agentKey ?? 'assistant') === key),
+    evalSetsFor: (key: string) => sets.filter((set) => set.agentKey === key),
     evalTargetIdFor: (key: string) => ({ targetId: key }),
     evalTargetFor: (key: string) => targets[key],
   };
@@ -37,8 +37,6 @@ jest.mock('../../mastra/evals/assistant.evals', () => ({
   selectEvalCases: jest.fn(() => [
     { id: 'champion-2022', question: 'Who won the 2022 World Cup?' },
   ]),
-  createEvalHost: jest.fn().mockResolvedValue({ id: 'session' }),
-  cleanupEvalHost: jest.fn().mockResolvedValue(undefined),
   runAssistantEvalCase: jest
     .fn()
     .mockResolvedValue({ id: 'champion-2022', passed: true }),
@@ -55,7 +53,6 @@ jest.mock('../../mastra/evals/assistant.evals', () => ({
 
 import { EvalRunsService } from './eval-runs.service';
 import {
-  createEvalHost,
   fixtureForCases,
   runAssistantEvalCase,
   selectEvalCases,
@@ -87,7 +84,6 @@ describe('EvalRunsService dataset validation', () => {
       datasets as never,
       repository as never,
       {} as never,
-      {} as never,
       knowledge as never,
       llm as never,
     );
@@ -111,12 +107,11 @@ describe('EvalRunsService dataset validation', () => {
           tables: ['formula1.formula1.driver'],
         },
       ]);
-      const result = await service().start('assistant', 'f1');
+      const result = await service().start('insights-lead', 'f1');
       expect(result).toEqual({
         error: expect.stringContaining('bundled World Cup sample') as string,
       });
       expect(repository.insert).not.toHaveBeenCalled();
-      expect(createEvalHost).not.toHaveBeenCalled();
       expect(runAssistantEvalCase).not.toHaveBeenCalled();
     }),
   );
@@ -143,16 +138,15 @@ describe('EvalRunsService dataset validation', () => {
         },
       ]);
       const runner = service();
-      const result = await runner.start('assistant', 'wc');
+      const result = await runner.start('insights-lead', 'wc');
       expect(result).toEqual({ jobId: expect.any(String) as string });
       await new Promise((resolve) => setImmediate(resolve));
       if (!('jobId' in result)) throw new Error('Run did not start');
       expect(runAssistantEvalCase).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'champion-2022' }),
         ['Sample'],
-        'session',
+        { agentKey: 'insights-lead' },
         '',
-        { agentKey: 'assistant' },
         result.jobId,
       );
       expect(repository.insert).toHaveBeenCalledWith(
@@ -165,7 +159,7 @@ describe('EvalRunsService dataset validation', () => {
       );
       expect((await runner.status(result.jobId))?.status).toBe('completed');
       expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
-        'assistant',
+        'insights-lead',
         result.jobId,
         'wc',
         ['Sample'],
@@ -206,7 +200,6 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
       { list: jest.fn().mockResolvedValue(sample) } as never,
       repository as never,
       {} as never,
-      {} as never,
       { definitionBlock: jest.fn().mockResolvedValue('') } as never,
       llm as never,
     );
@@ -217,15 +210,15 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
     jest
       .mocked(selectEvalSets)
       .mockReturnValueOnce([{ id: 'a' }, { id: 'b' }] as never);
-    await service().start('assistant', 'wc');
+    await service().start('insights-lead', 'wc');
     expect(repository.insert).toHaveBeenCalledWith(
       expect.objectContaining({ setId: null }),
     );
   });
 
-  it('refuses an agent with no eval set', async () => {
-    await expect(service().start('visualization', 'wc')).resolves.toEqual({
-      error: 'Agent "visualization" has no evals to run',
+  it('refuses an agent with no eval set, the removed assistant included', async () => {
+    await expect(service().start('assistant', 'wc')).resolves.toEqual({
+      error: 'Agent "assistant" has no evals to run',
     });
     expect(repository.insert).not.toHaveBeenCalled();
   });
@@ -282,9 +275,8 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
     expect(runAssistantEvalCase).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'qe-first' }),
       ['Sample'],
-      'session',
-      '',
       target,
+      '',
       (started as { jobId: string }).jobId,
     );
     expect(target.finish).toHaveBeenCalledWith(['Sample']);
@@ -335,18 +327,17 @@ describe('EvalRunsService one running run per agent', () => {
       { list: jest.fn().mockResolvedValue(sample) } as never,
       repository as never,
       {} as never,
-      {} as never,
       { definitionBlock: jest.fn().mockResolvedValue('') } as never,
       llm as never,
     );
 
-    const started = await service.start('assistant', 'wc');
+    const started = await service.start('insights-lead', 'wc');
     if (!('jobId' in started)) throw new Error('Run did not start');
 
     await expect(service.status(started.jobId)).resolves.toMatchObject({
       status: 'running',
     });
-    await expect(service.start('assistant', 'wc')).resolves.toEqual({
+    await expect(service.start('insights-lead', 'wc')).resolves.toEqual({
       conflictWith: started.jobId,
     });
     await expect(service.remove(started.jobId)).resolves.toBe(false);
