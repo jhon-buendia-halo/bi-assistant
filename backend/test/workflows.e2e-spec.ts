@@ -1,11 +1,9 @@
 /**
  * API-level proof of the workflow catalogue (specs/capabilities/workflows
  * R1-R4; api.md 116, 117, 118 and 34; ADR-0040, ADR-0042): `GET
- * /workflows` lists the code workflows, Answer a Business Question
- * (Avery + Michael) (`orchestrated-answer-michael`, the only
- * question-answering one: `answer-business-question` and
- * `orchestrated-answer` were removed) and Assess Data Readiness
- * (`data-readiness-assessment`) first; agents are a library, so
+ * /workflows` lists the one code workflow, Answer a Business Question
+ * (Avery + Michael) (`orchestrated-answer-michael`; the others were
+ * removed); agents are a library, so
  * no agent gets a workflow (`agent:*` answers 404, as do the removed
  * `seq-text-demo` and `deep-analysis`), and an agent's detail says which
  * workflows its steps run in. Runs that reach the model
@@ -50,6 +48,7 @@ const NOT_WORKFLOWS = [
   'recreate-dashboard',
   'map-dashboard-data',
   'review-website',
+  'data-readiness-assessment',
   'agent:assistant',
   'agent:data-readiness',
   'seq-text-demo',
@@ -141,13 +140,9 @@ describe('The workflow catalogue (API)', () => {
     ]);
   });
 
-  it('lists the two code workflows, Answer a Business Question (Avery + Michael) and Assess Data Readiness, on a fresh data dir (R1)', async () => {
+  it('lists the one code workflow, Answer a Business Question (Avery + Michael), on a fresh data dir (R1)', async () => {
     const listed = await workflows();
-    expect(listed.map((w) => w.id)).toEqual([
-      'orchestrated-answer-michael',
-      'data-readiness-assessment',
-    ]);
-    expect([listed[0], listed[1]]).toEqual([
+    expect(listed).toEqual([
       {
         id: 'orchestrated-answer-michael',
         name: 'Answer a Business Question (Avery + Michael)',
@@ -190,53 +185,6 @@ describe('The workflow catalogue (API)', () => {
         datasets: [],
         missingDatasets: [],
         starterQuestions: [],
-      },
-      {
-        id: 'data-readiness-assessment',
-        name: 'Assess Data Readiness',
-        description: expect.any(String) as string,
-        kind: 'code',
-        owner: 'Official',
-        category: { id: 'data-engineering', name: 'Data Engineering' },
-        agents: [
-          {
-            key: 'data-readiness',
-            name: 'Sarah',
-            role: 'Data Quality Analyst',
-          },
-        ],
-        stepCount: 7,
-        bar: 'steps',
-        trigger: 'run',
-        input: [
-          {
-            name: 'dataset',
-            label: 'Dataset',
-            type: 'dataset',
-            required: true,
-            datasourceKinds: ['postgres', 'databricks'],
-            usedBy: ['resolve-dataset'],
-          },
-          {
-            name: 'question',
-            label: 'Question',
-            type: 'textarea',
-            required: false,
-            placeholder: 'Assess the readiness of this dataset',
-            default: 'Assess the readiness of this dataset',
-            maxLength: 4000,
-            // Resolve dataset runs first (agents.md 5.13), so it is the
-            // step that takes the run's input.
-            usedBy: ['resolve-dataset'],
-          },
-        ],
-        datasets: [],
-        missingDatasets: [],
-        starterQuestions: [
-          'Assess the readiness of this dataset',
-          'What are the worst data-quality problems?',
-          'Show my past assessments',
-        ],
       },
     ]);
   });
@@ -334,7 +282,6 @@ describe('The workflow catalogue (API)', () => {
     it('a published user agent adds no workflow: agents are a library', async () => {
       expect((await workflows()).map((w) => w.id)).toEqual([
         'orchestrated-answer-michael',
-        'data-readiness-assessment',
       ]);
       await notFound(`agent:${liveId}`);
       await notFound(`agent:${draftId}`);
@@ -479,7 +426,7 @@ describe('The workflow catalogue (API)', () => {
       expect(again.contractHash).toBe(detail.contractHash);
     });
 
-    it("an agent's detail says which workflows use it: Michael and Avery in one, Sarah in the other, the removed pipeline's agents in none", async () => {
+    it("an agent's detail says which workflows use it: Michael and Avery in one, the removed pipeline's agents in none, Sarah is gone", async () => {
       const used = async (key: string) =>
         (
           (await http().get(`/agents/${key}`).expect(200)).body as {
@@ -497,10 +444,8 @@ describe('The workflow catalogue (API)', () => {
           ],
         });
       }
-      // Sarah runs every agent step of Assess Data Readiness only.
-      expect(await used('data-readiness')).toEqual([
-        { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
-      ]);
+      // Sarah was removed with Assess Data Readiness (workflows R50).
+      await http().get('/agents/data-readiness').expect(404);
       // Olivia, Jessica and Ryan ran in the removed workflow only.
       for (const key of [
         'analysis-planner',

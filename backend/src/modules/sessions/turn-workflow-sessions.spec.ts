@@ -1,11 +1,5 @@
-// The data-readiness service loads the Databricks driver (ESM-only deps)
-// at import time; the session specs never call it for real.
-jest.mock('../data-readiness/data-readiness.service', () => ({
-  DataReadinessService: class {},
-}));
-
 // Every streamed turn runs the session's workflow (agents.md 5.1, 5.12;
-// ADR-0040; agent-answers R61): the assistant, the Data Readiness Agent and a user
+// ADR-0040; agent-answers R61): the assistant, Insights Analyst and a user
 // agent each run one `agent-turn` run, whose `answer` step is today's agent
 // turn, with today's error rules; a one-step workflow never writes the bar.
 jest.mock('@mastra/core/request-context', () => ({
@@ -118,8 +112,8 @@ const HISTORIAN = {
 };
 
 interface BuildOptions {
-  /** Which session: a plain one, one bound to the Data Readiness Agent, or a user agent's. */
-  kind: 'assistant' | 'readiness' | 'user-agent';
+  /** Which session: a plain one, one bound to Insights Analyst, or a user agent's. */
+  kind: 'assistant' | 'analyst' | 'user-agent';
   chunks?: unknown[];
   /** `agent.stream()` itself throws this. */
   streamThrows?: Error;
@@ -134,8 +128,8 @@ function build(options: BuildOptions) {
     datasets: ['World Cup'],
     messages: [],
     visualizations: [],
-    ...(options.kind === 'readiness'
-      ? { agentKey: 'data-readiness', agentName: 'Data Readiness Agent' }
+    ...(options.kind === 'analyst'
+      ? { agentKey: 'insights-analyst', agentName: 'Insights Analyst' }
       : {}),
     ...(options.kind === 'user-agent'
       ? { agentId: 'agent-1', agentName: HISTORIAN.name }
@@ -173,10 +167,10 @@ function build(options: BuildOptions) {
     generate: jest.fn().mockResolvedValue({ text: 'Synthesized.' }),
   });
   const assistant = agentFor('Questions to Insights Assistant');
-  const readiness = agentFor('Data Readiness Agent');
+  const analyst = agentFor('Insights Analyst');
   const registry: Record<string, unknown> = {
     assistant,
-    'data-readiness': readiness,
+    'insights-analyst': analyst,
   };
   const mastra = {
     getAgent: jest.fn((key: string) => registry[key]),
@@ -231,7 +225,7 @@ function build(options: BuildOptions) {
     } as never,
     userAgents as never,
   );
-  return { service, session, repository, mastra, assistant, readiness };
+  return { service, session, repository, mastra, assistant, analyst };
 }
 
 /** Run a streamed turn and collect its events. */
@@ -257,7 +251,7 @@ function workflowStateWrites(ctx: ReturnType<typeof build>): unknown[] {
 describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040)', () => {
   it.each([
     ['an assistant', 'assistant', 'assistant'],
-    ['a Data Readiness', 'readiness', 'data-readiness'],
+    ['an Insights Analyst', 'analyst', 'insights-analyst'],
     ['a user agent', 'user-agent', 'assistant'],
   ] as const)(
     '%s turn starts one agent-turn run with the question and datasets',
@@ -274,7 +268,7 @@ describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040
       // The step ran the session's agent, once.
       expect(ctx.mastra.getAgent).toHaveBeenCalledWith(agentKey);
       const agent =
-        agentKey === 'data-readiness' ? ctx.readiness : ctx.assistant;
+        agentKey === 'insights-analyst' ? ctx.analyst : ctx.assistant;
       expect(agent.stream).toHaveBeenCalledTimes(1);
       // The same answer, events and stored message as before.
       expect(events.map((event) => event.type)).toEqual(
@@ -354,9 +348,9 @@ describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040
 
   it('reports an exception from agent.stream() with its own message', async () => {
     const failure = new Error('No API key configured for provider "openai"');
-    const ctx = build({ kind: 'readiness', streamThrows: failure });
+    const ctx = build({ kind: 'analyst', streamThrows: failure });
 
-    await expect(turn(ctx, 'Assess it')).rejects.toBe(failure);
+    await expect(turn(ctx, 'Why did sales drop?')).rejects.toBe(failure);
     expect(ctx.mastra.streamWorkflow).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,7 +1,0 @@
-{
-  "industry": "retail",
-  "complexity": "high",
-  "wave": "W6",
-  "authoring": "generated",
-  "defectPlan": "plans/postgres/retail-high-w6-06.plan.json"
-}

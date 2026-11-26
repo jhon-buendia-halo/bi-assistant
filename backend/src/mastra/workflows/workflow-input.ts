@@ -16,8 +16,6 @@ export type WorkflowInputFieldType =
   | 'boolean'
   /** One or more dataset names. */
   | 'datasets'
-  /** Exactly one dataset name. */
-  | 'dataset'
   /**
    * One image, sent as a `data:` URL (PNG, JPEG or WebP, at most
    * `IMAGE_MAX_BYTES`). A run stores it as a file of its workspace and
@@ -82,7 +80,7 @@ export function imageOfDataUrl(
     : undefined;
 }
 
-/** The datasource kinds a `dataset` or `datasets` field can be limited to. */
+/** The datasource kinds a `datasets` field can be limited to. */
 export type InputDatasourceKind = 'postgres' | 'databricks' | 'rest' | 'file';
 
 /** One field of a workflow's input, defined in code (api.md 116). */
@@ -96,7 +94,7 @@ export interface WorkflowInputField {
   help?: string;
   /** The value of a field that is missing or empty. */
   default?: string | number | boolean;
-  /** `dataset` / `datasets`: only datasets bound to these kinds. */
+  /** `datasets`: only datasets bound to these kinds. */
   datasourceKinds?: InputDatasourceKind[];
   /** `artifact`: only artifacts of these kinds. */
   artifactKinds?: string[];
@@ -174,7 +172,7 @@ export type WorkflowInputValue = string | number | boolean | string[];
 /** A run's input values, by field name. */
 export type WorkflowInputValues = Record<string, WorkflowInputValue>;
 
-/** A dataset a `dataset` or `datasets` field is checked against. */
+/** A dataset a `datasets` field is checked against. */
 export interface InputDataset {
   name: string;
   datasourceKind?: string;
@@ -366,11 +364,6 @@ function checkField(
     return Number.isFinite(number)
       ? numberCheck(field, number)
       : { ok: false, error: `${field.label} must be a number` };
-  }
-  if (field.type === 'dataset') {
-    const name = String(value).trim();
-    const error = datasetError(field, name, datasets);
-    return error ? { ok: false, error } : { ok: true, value: name };
   }
   const text = String(value);
   if (field.maxLength !== undefined && text.trim().length > field.maxLength) {

@@ -5,15 +5,12 @@ import type IOperation from '@databricks/sql/dist/contracts/IOperation';
 import type { DatabricksConfig } from '../entities/datasource.entity';
 import { normalizeDatabricksHost } from './databricks-host';
 import type {
-  ColumnStats,
-  ColumnStatsExtras,
   FkEdge,
   KeyConstraint,
   ProfiledTable,
   ProfilingConnector,
   ProfilingReach,
   ScopedProfiler,
-  TablePrivilege,
 } from './profiling';
 import {
   isAbort,
@@ -32,15 +29,10 @@ import {
 
 /** Per-statement (and connection) budget. */
 const STATEMENT_TIMEOUT_MS = 15_000;
-const UC_API_TIMEOUT_MS = 20_000;
 const SYSTEM_CATALOGS = new Set(['system', '__databricks_internal']);
 
 type Row = Record<string, unknown>;
 type Run = (sql: string) => Promise<Row[]>;
-interface UcObject {
-  name?: string;
-  browse_only?: boolean;
-}
 
 /** The pooled-session scope of one `withSessions` call (BA-323, ADR-0033). */
 interface Scope {
@@ -70,7 +62,10 @@ const MAX_SKIPPED_NAMED = 10;
 /** Each skipped catalog's reason is cut to this many characters. */
 const MAX_SKIP_REASON = 160;
 
-/** Databricks profiling queries (unit 6, BA-257). Spark SQL, aggregate-only. */
+/**
+ * Databricks profiling queries (unit 6, BA-257). Spark SQL: catalogue reads
+ * and row samples for the Synthetic data profile.
+ */
 @Injectable()
 export class DatabricksProfiler
   implements ProfilingConnector<DatabricksConfig>, RowSampler<DatabricksConfig>
@@ -105,18 +100,6 @@ export class DatabricksProfiler
     } finally {
       await pool.close();
     }
-  }
-
-  async rowCount(
-    config: DatabricksConfig,
-    schema: string,
-    table: string,
-  ): Promise<number> {
-    const rows = await this.query(
-      config,
-      `SELECT COUNT(*) AS n FROM ${qualify(schema, table)}`,
-    );
-    return num(rows[0]?.n);
   }
 
   /**
@@ -301,86 +284,6 @@ export class DatabricksProfiler
     this.logger.warn(skippedCatalogsMessage(what, skipped, total));
   }
 
-  async columnStats(
-    config: DatabricksConfig,
-    schema: string,
-    table: string,
-    nullableColumns: string[],
-    allColumns: string[],
-    comparableColumns: string[],
-    extras?: ColumnStatsExtras,
-  ): Promise<ColumnStats> {
-    const parts: string[] = ['COUNT(*) AS total'];
-    nullableColumns.forEach((c, i) =>
-      parts.push(`COUNT_IF(${qIdent(c)} IS NULL) AS n${i}`),
-    );
-    allColumns.forEach((c, i) =>
-      parts.push(`COUNT(DISTINCT ${qIdent(c)}) AS d${i}`),
-    );
-    comparableColumns.forEach((c, i) => {
-      parts.push(`CAST(MIN(${qIdent(c)}) AS STRING) AS mn${i}`);
-      parts.push(`CAST(MAX(${qIdent(c)}) AS STRING) AS mx${i}`);
-    });
-    const normalized = extras?.normalizedDistinct ?? [];
-    const formats = extras?.formats ?? [];
-    normalized.forEach((c, i) =>
-      parts.push(`COUNT(DISTINCT ${normalizedExpr(c)}) AS nd${i}`),
-    );
-    formats.forEach((f, i) =>
-      parts.push(
-        `COUNT_IF(${qIdent(f.column)} IS NOT NULL AND ${invalidPredicate(f.column, f.pattern)}) AS f${i}`,
-      ),
-    );
-    const rows = await this.query(
-      config,
-      `SELECT ${parts.join(', ')} FROM ${qualify(schema, table)}`,
-    );
-    const row = rows[0] ?? {};
-    const total = Number(row.total ?? 0);
-    const nullCounts: Record<string, number> = {};
-    const distinctCounts: Record<string, number> = {};
-    const minValues: Record<string, string> = {};
-    const maxValues: Record<string, string> = {};
-    nullableColumns.forEach((c, i) => {
-      const v = row[`n${i}`];
-      if (v !== undefined && v !== null) nullCounts[c] = Number(v);
-    });
-    allColumns.forEach((c, i) => {
-      const v = row[`d${i}`];
-      if (v !== undefined && v !== null) distinctCounts[c] = Number(v);
-    });
-    comparableColumns.forEach((c, i) => {
-      const mn = row[`mn${i}`];
-      const mx = row[`mx${i}`];
-      if (mn !== undefined && mn !== null) minValues[c] = scalar(mn);
-      if (mx !== undefined && mx !== null) maxValues[c] = scalar(mx);
-    });
-    const stats: ColumnStats = {
-      totalRows: Number.isFinite(total) ? total : 0,
-      nullCounts,
-      distinctCounts,
-      minValues,
-      maxValues,
-    };
-    if (normalized.length > 0) {
-      const counts: Record<string, number> = {};
-      normalized.forEach((c, i) => {
-        const v = row[`nd${i}`];
-        if (v !== undefined && v !== null) counts[c] = Number(v);
-      });
-      stats.normalizedDistinctCounts = counts;
-    }
-    if (formats.length > 0) {
-      const counts: Record<string, number> = {};
-      formats.forEach((f, i) => {
-        const v = row[`f${i}`];
-        if (v !== undefined && v !== null) counts[f.column] = Number(v);
-      });
-      stats.invalidFormatCounts = counts;
-    }
-    return stats;
-  }
-
   async keys(config: DatabricksConfig): Promise<KeyConstraint[]> {
     return this.withSession(config, async (run) => {
       const keys: KeyConstraint[] = [];
@@ -490,140 +393,6 @@ export class DatabricksProfiler
       );
       return [];
     }
-  }
-
-  async duplicateCount(
-    config: DatabricksConfig,
-    schema: string,
-    table: string,
-    fields: string[],
-  ): Promise<number> {
-    if (fields.length === 0) return 0;
-    const cols = fields.map(qIdent).join(', ');
-    const rows = await this.query(
-      config,
-      `SELECT COALESCE(SUM(c - 1), 0) AS dup_excess
-       FROM (SELECT ${cols}, COUNT(*) c FROM ${qualify(schema, table)} GROUP BY ${cols} HAVING COUNT(*) > 1)`,
-    );
-    return num(rows[0]?.dup_excess);
-  }
-
-  async orphanCount(config: DatabricksConfig, edge: FkEdge): Promise<number> {
-    const rows = await this.query(
-      config,
-      `SELECT COUNT(*) AS orphan_count
-       FROM ${qualify(edge.schema, edge.table)} c
-       LEFT JOIN ${qualify(edge.refSchema, edge.refTable)} p
-         ON c.${qIdent(edge.column)} = p.${qIdent(edge.refColumn)}
-       WHERE c.${qIdent(edge.column)} IS NOT NULL AND p.${qIdent(edge.refColumn)} IS NULL`,
-    );
-    return num(rows[0]?.orphan_count);
-  }
-
-  async invalidFormatCount(
-    config: DatabricksConfig,
-    schema: string,
-    table: string,
-    column: string,
-    pattern: string,
-  ): Promise<number> {
-    const rows = await this.query(
-      config,
-      `SELECT COUNT(*) AS invalid FROM ${qualify(schema, table)}
-       WHERE ${qIdent(column)} IS NOT NULL
-         AND ${invalidPredicate(column, pattern)}`,
-    );
-    return num(rows[0]?.invalid);
-  }
-
-  async normalizedDistinctCount(
-    config: DatabricksConfig,
-    schema: string,
-    table: string,
-    column: string,
-  ): Promise<number> {
-    const rows = await this.query(
-      config,
-      `SELECT COUNT(DISTINCT ${normalizedExpr(column)}) AS d
-       FROM ${qualify(schema, table)}`,
-    );
-    return num(rows[0]?.d);
-  }
-
-  /**
-   * Accessible = the schema is listed by the Unity Catalog REST API without
-   * `browse_only` (SQL probes cannot tell BROWSE from SELECT access).
-   */
-  async tablePrivileges(config: DatabricksConfig): Promise<TablePrivilege[]> {
-    const inventory = await this.tables(config);
-    const catalogs = new Set(inventory.map((t) => splitSchema(t.schema)[0]));
-    const accessibleCatalogs = new Set<string>();
-    for (const c of await this.ucList(config, 'catalogs')) {
-      if (c.browse_only !== true && c.name) accessibleCatalogs.add(c.name);
-    }
-    const accessibleSchemas = new Set<string>();
-    for (const catalog of catalogs) {
-      if (!accessibleCatalogs.has(catalog)) continue;
-      for (const s of await this.ucList(config, 'schemas', catalog)) {
-        if (s.browse_only !== true && s.name) {
-          accessibleSchemas.add(`${catalog}.${s.name}`);
-        }
-      }
-    }
-    return inventory.map((t) => ({
-      schema: t.schema,
-      table: t.table,
-      selectable: accessibleSchemas.has(t.schema),
-    }));
-  }
-
-  private async ucList(
-    config: DatabricksConfig,
-    kind: 'catalogs' | 'schemas',
-    catalog?: string,
-  ): Promise<UcObject[]> {
-    const items: UcObject[] = [];
-    let pageToken: string | undefined;
-    do {
-      const url = new URL(
-        `https://${normalizeDatabricksHost(config.host)}/api/2.1/unity-catalog/${kind}`,
-      );
-      url.searchParams.set('include_browse', 'true');
-      if (catalog) url.searchParams.set('catalog_name', catalog);
-      if (pageToken) url.searchParams.set('page_token', pageToken);
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), UC_API_TIMEOUT_MS);
-      try {
-        const res = await fetch(url.toString(), {
-          headers: { Authorization: `Bearer ${config.token}` },
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          throw new Error(
-            `Unity Catalog API ${res.status} ${res.statusText}`.trim(),
-          );
-        }
-        const body = (await res.json()) as {
-          catalogs?: UcObject[];
-          schemas?: UcObject[];
-          next_page_token?: string;
-        };
-        items.push(
-          ...((kind === 'catalogs' ? body.catalogs : body.schemas) ?? []),
-        );
-        pageToken = body.next_page_token;
-      } catch (err) {
-        throw this.scrub(err, config);
-      } finally {
-        clearTimeout(timer);
-      }
-    } while (pageToken);
-    return items;
-  }
-
-  /** One statement in its own session. */
-  private query(config: DatabricksConfig, sql: string): Promise<Row[]> {
-    return this.withSession(config, (run) => run(sql));
   }
 
   private async withSession<T>(
@@ -848,20 +617,6 @@ function timeoutError(what: 'connection' | 'query'): Error {
   return err;
 }
 
-/** `lower(trim(col))` as text: the normalized-distinct expression. */
-function normalizedExpr(column: string): string {
-  return `lower(trim(CAST(${qIdent(column)} AS STRING)))`;
-}
-
-/**
- * True when the value does NOT match the pattern. `(?i)` makes the match
- * case-insensitive, as Postgres `!~*` does (R7); executeStatement does no
- * parameter binding, so the pattern is inlined as a raw literal.
- */
-function invalidPredicate(column: string, pattern: string): string {
-  return `NOT regexp_like(CAST(${qIdent(column)} AS STRING), ${qRawStr(`(?i)${pattern}`)})`;
-}
-
 /**
  * One catalog's tables and columns from its `information_schema`, narrowed by
  * `filter` (an ` AND …` clause over `table_schema` / `table_name`).
@@ -1028,23 +783,6 @@ function qualify(schema: string, table: string): string {
 /** Spark string literal (backslashes first, then single quotes). */
 function qStr(value: string): string {
   return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
-}
-
-/**
- * Spark raw string literal `r'...'`: the pattern reaches Spark verbatim, so it
- * does not depend on `spark.sql.parser.escapedStringLiterals`. A raw literal
- * cannot hold its closing quote, and patterns come from a fixed internal
- * table (spec R7) that has none, so a single quote is rejected, never escaped.
- */
-function qRawStr(value: string): string {
-  if (value.includes("'")) {
-    throw new Error('A raw Spark regex literal cannot contain a single quote');
-  }
-  return `r'${value}'`;
-}
-
-function num(v: unknown): number {
-  return Number(v ?? 0) || 0;
 }
 
 function text(v: unknown): string {

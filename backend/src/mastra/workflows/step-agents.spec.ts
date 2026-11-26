@@ -14,7 +14,6 @@ jest.mock('../agents/analysis-planner.agent', () => ({
     generate: (...args: unknown[]) => generate(...args),
   },
 }));
-jest.mock('../agents/data-readiness.agent', () => ({}));
 
 import {
   ANSWER_CUT_NOTE,

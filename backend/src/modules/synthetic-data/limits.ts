@@ -4,6 +4,11 @@ export const SAMPLE_SIZE_MAX = 1000;
 export const DATABRICKS_TABLESAMPLE_MAX_BYTES = 50 * 1024 ** 3;
 /** Chat (agent) limit: 20. */
 export const PROFILE_TABLES_MAX = 50;
+/** Tables sampled at once, per dialect (BA-323). */
+export const PROFILE_CONCURRENCY_BY_DIALECT = {
+  databricks: 8,
+  postgres: 4,
+} as const;
 export const ROWS_PER_TABLE_DEFAULT = 100;
 /** Chat (agent) limit: 1000. */
 export const ROWS_PER_TABLE_MAX = 10000;

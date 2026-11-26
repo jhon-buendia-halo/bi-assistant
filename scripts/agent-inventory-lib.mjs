@@ -17,7 +17,6 @@ export const AGENT_CLASSES = {
   assistant: ['person', 'data'],
   'insights-analyst': ['person', 'data'],
   'insights-lead': ['person', 'data'],
-  'data-readiness': ['person', 'data'],
   'chief-of-staff': ['person', 'orchestrator'],
   'bi-analyst': ['data'],
   visualization: ['single-step'],

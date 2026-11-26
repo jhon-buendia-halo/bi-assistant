@@ -9,17 +9,6 @@ import {
 } from '../../../mastra/tools/clarification.tool';
 import type { MastraService } from '../../../mastra/mastra.service';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
-import { readinessModelOutput } from '../../../mastra/tools/readiness.tools';
-import {
-  ASSESSED_REPORT_CONTEXT_KEY,
-  READINESS_REPORT_EVENT,
-} from '../../../mastra/readiness-tool-services';
-import {
-  DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
-  DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
-  explainReportBlock,
-  type DataReadinessAssessmentRuntime,
-} from '../../../mastra/workflows/data-readiness-assessment.steps';
 import {
   ModelTimeoutError,
   streamIdleWatch,
@@ -104,23 +93,8 @@ import {
 import type { LlmService } from '../../llm/llm.service';
 import { chatTurnError } from '../llm-error-message';
 import { sourceEntities } from '../visualization-document';
-import { upsertPanelItem, withVisualItems } from '../panel-items';
+import { withVisualItems } from '../panel-items';
 import { stepEventOf, workflowRunState } from '../workflow-run-state';
-import {
-  READINESS_REPORT_TOOLS,
-  READINESS_TOOLS,
-  type ReadinessAssessment,
-  type ReadinessBridge,
-  readinessPanelItem,
-  readinessAnswerFallback,
-  readinessReportIdOf,
-  readinessReportOf,
-  readinessReportRef,
-} from '../readiness-bridge';
-import {
-  SYNTHETIC_DATA_TOOLS,
-  syntheticPanelItemId,
-} from '../synthetic-data-bridge';
 import {
   groundingNudge,
   statedRationale,
@@ -129,16 +103,12 @@ import {
   toolRecords,
 } from '../turn-data';
 import { evidenceOf } from '../query-evidence/query-evidence';
-import { recordFindingSources } from '../finding-sources';
-import type { ReadinessReport } from '../../data-readiness/engine/types';
 import {
   EXPLORABLE_QUERIES_CONTEXT_KEY,
   explorableQueryOf,
   sessionExplorableQueries,
-  withRefs,
   type ExplorableQuery,
 } from '../query-evidence/explorable-queries';
-import { earlyWork } from './early-work';
 import {
   QUERY_FACTS_CONTEXT_KEY,
   queryFactsKey,
@@ -148,7 +118,6 @@ import type { QueryFacts } from '../query-evidence/query-evidence.types';
 import type {
   ChatMessage,
   CrossCheck,
-  ReadinessReportRef,
   SessionDoc,
   SessionView,
   ToolDataRecord,
@@ -157,7 +126,6 @@ import type {
   WorkflowView,
 } from '../entities/session.entity';
 import {
-  readinessProgressEvent,
   type RunStepEvent,
   type StreamEvent,
   type TurnResumeIo,
@@ -169,7 +137,6 @@ import {
   UPDATE_WORKFLOW_TOOL,
   VISUAL_TOOLS,
   appendUserMessage,
-  firstStringArgument,
   interpretationLine,
   knowledgeUsed,
   reasoningTrail,
@@ -188,9 +155,6 @@ import {
 } from './turn-workflow';
 import type { TurnOptions } from './turn-options';
 import type { SqlChecks } from './sql-checks';
-
-/** The count columns of the rows behind a readiness finding (1.28.11). */
-const FINDING_COUNT_COLUMNS = new Set(['matching_rows', 'occurrences']);
 
 /**
  * What a turn runs on: the session service's dependencies and the session
@@ -219,8 +183,6 @@ export interface TurnEngineDeps {
     data: ToolDataRecord[],
     signal?: AbortSignal,
   ): Promise<CrossCheck | undefined>;
-  /** The readiness tools' bridge, once installed (agents.md 3.13). */
-  readinessBridge(): ReadinessBridge | undefined;
   /**
    * A dashboard artifact's current version with its rows (agents.md 5.22,
    * the follow-up carry): what Clara changes. Throws when it is unknown.
@@ -372,8 +334,6 @@ export class TurnEngine {
     // Set inside `consume`, so typed without narrowing to the initial null.
     let clarification = null as ChatMessage['clarification'] | null;
     let visualEvent: VisualEvent | undefined;
-    // The last report a readiness tool returned this turn (Data Readiness Agent).
-    let readinessReport: ReadinessReportRef | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
     // Every tool name the model actually invoked this turn — the zero-SQL-
     // turn grounding guard below fires only when this stays empty.
@@ -501,11 +461,6 @@ export class TurnEngine {
       stream = agentStream;
       try {
         for await (const chunk of agentStream.fullStream) {
-          const progress = readinessProgressEvent(chunk);
-          if (progress) {
-            emit(progress);
-            continue;
-          }
           if (chunk.type === 'error') {
             streamError ??= (chunk.payload as { error?: unknown }).error;
           } else if (chunk.type === 'reasoning-delta') {
@@ -649,44 +604,6 @@ export class TurnEngine {
               });
               continue;
             }
-            if (!isAssistant && READINESS_TOOLS.has(toolName)) {
-              // Each readiness tool shows its step; a report shows the
-              // scorecard first (api.md 3.1, data-readiness R5).
-              const error = resultError(payload.result);
-              if (!error && READINESS_REPORT_TOOLS.has(toolName)) {
-                const shown = await this.showReadinessReport(
-                  id,
-                  payload.result,
-                  emit,
-                );
-                if (shown) readinessReport = shown;
-              }
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input: firstStringArgument(args),
-                  error,
-                }),
-              });
-              continue;
-            }
-            if (!isAssistant && SYNTHETIC_DATA_TOOLS.has(toolName)) {
-              // Each synthetic-data tool shows its step; a script opens in
-              // the panel as `show_in_panel` does (agents.md 3.14).
-              const error = resultError(payload.result);
-              const itemId = syntheticPanelItemId(payload.result);
-              if (!error && itemId) await this.emitPanelItem(id, itemId, emit);
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input: firstStringArgument(args),
-                  error,
-                }),
-              });
-              continue;
-            }
             const record = toolDataRecord(toolName, args, payload.result);
             if (record) captureRecord(record, payload.toolCallId);
             else {
@@ -708,24 +625,6 @@ export class TurnEngine {
       } catch (error) {
         if (!turn.signal.aborted && !attemptStop?.signal.aborted) throw error;
       }
-    };
-    // Work a step starts and a later step takes (agents.md 5.13): the rows
-    // behind findings in Assess Data Readiness. Settled when the run ends,
-    // fails or is stopped, before the answer is persisted.
-    const early = earlyWork(turn.signal);
-    // Where the rows behind findings go: the answer's records and the
-    // explorable queries as Save report left them, ahead of the agent's.
-    let findingSlot: { data: number; explorable: number } | undefined;
-    // Assess Data Readiness's assessment, once Resolve dataset started it.
-    let assessment: ReadinessAssessment | undefined;
-    // Its stored report, once Save report stored it (roadmap 1.28.11).
-    let savedReport: ReadinessReport | undefined;
-    // What get_readiness_report hands the model for it: Explain report's
-    // block carries it (data-readiness R4, agents.md 5.13).
-    let savedSummary: unknown;
-    const startedAssessment = (): ReadinessAssessment => {
-      if (!assessment) throw new Error('No assessment has been started');
-      return assessment;
     };
     let ran: TurnRunOutcome;
     try {
@@ -1141,228 +1040,10 @@ export class TurnEngine {
             }
             return analyseOutcomeOf(data, turn.signal.aborted);
           },
-          // Assess Data Readiness (agents.md 5.13): the code steps run one
-          // assessment of the run's dataset phase by phase; Explain report
-          // streams the agent over the stored report.
-          resolve: async ({ dataset }) => {
-            const bridge = this.deps.readinessBridge();
-            if (!bridge) throw new Error('Data readiness is not available');
-            assessment = await bridge.startAssessment({
-              sessionId: id,
-              datasetName: dataset,
-            });
-            return {
-              dataset: assessment.dataset,
-              datasourceName: assessment.datasourceName,
-              datasourceKind: assessment.datasourceKind,
-              tableCount: assessment.tableCount,
-            };
-          },
-          // Its progress goes out as the readiness tool's does, a
-          // `tool-progress` event (never to the model, never stored), so
-          // a long profile is not taken for a stalled run (workflows spec).
-          profile: async () => {
-            const started = startedAssessment();
-            let profiling = true;
-            try {
-              return {
-                ...(await started.profile({
-                  signal: turn.signal,
-                  onProgress: (progress) => {
-                    if (!profiling || turn.signal.aborted) return;
-                    const event = readinessProgressEvent({
-                      type: 'data-readiness-progress',
-                      data: progress,
-                    });
-                    if (event) emit(event);
-                  },
-                })),
-                stopped: false,
-              };
-            } catch (error) {
-              if (!turn.signal.aborted) throw error;
-              return {
-                entityCount: 0,
-                relationshipCount: 0,
-                notProfiledCount: 0,
-                stopped: true,
-              };
-            } finally {
-              // Nothing is reported once the step ended.
-              profiling = false;
-            }
-          },
-          score: () => {
-            const summary = startedAssessment().score();
-            return {
-              overallScore: summary.overallScore,
-              maturity: summary.maturity,
-              findingCount: summary.findingCount,
-              dimensionScores: summary.dimensionScores.map((d) => ({
-                dimension: d.dimension,
-                score: d.score,
-                assessed: d.assessed,
-                findingCount: d.findingCount,
-              })),
-            };
-          },
-          save: async () => {
-            const saved = await startedAssessment().save();
-            savedReport = saved.report;
-            savedSummary = readinessModelOutput(saved);
-            // The answer carries the report: its card, and the scorecard
-            // (data-readiness R5).
-            const shown = await this.showReadinessReport(id, saved, emit);
-            if (shown) readinessReport = shown;
-            return { reportId: saved.report.id };
-          },
-          // Rows behind findings (roadmap 1.28.11; data-readiness R34): the
-          // rows behind each top finding become the answer's first sources,
-          // each shown as a SQL call and its result. Nothing reaches the
-          // agent's prompt: the records only add sources to the answer.
-          // Save report starts the queries, which run while the agent
-          // explains the report; their records are held until Rows behind
-          // findings takes them (agents.md 5.13).
-          startFindingRows: () => {
-            if (!savedReport) throw new Error('The report has not been saved');
-            const report = savedReport;
-            findingSlot = { data: data.length, explorable: explorable.length };
-            early.start('finding-rows', (signal, hold) =>
-              recordFindingSources({
-                report,
-                // Each statement gets the turn's stop (datasources R38).
-                run: (datasourceId, sql, limit, sqlOptions) =>
-                  this.deps.sql.runBuiltSql(
-                    datasourceId,
-                    sql,
-                    limit,
-                    sqlOptions,
-                  ),
-                signal,
-                record: (args, result, facts) =>
-                  hold(() => {
-                    emit({
-                      type: 'tool',
-                      content: JSON.stringify({
-                        name: 'run_readonly_sql',
-                        rationale: args.rationale,
-                        input: toolCallInput('run_readonly_sql', args),
-                      }),
-                    });
-                    const callId = `finding-rows-${randomUUID()}`;
-                    queryFacts.set(callId, facts);
-                    const record = toolDataRecord(
-                      'run_readonly_sql',
-                      args,
-                      result,
-                    );
-                    if (record) {
-                      // Only its count links a figure (agent-answers R69):
-                      // the raw cells would match the report's numbers by
-                      // chance.
-                      const counts = (record.columns ?? []).filter((c) =>
-                        FINDING_COUNT_COLUMNS.has(c),
-                      );
-                      captureRecord(
-                        record.error
-                          ? record
-                          : { ...record, figureColumns: counts },
-                        callId,
-                      );
-                    }
-                  }),
-              }),
-            );
-          },
-          // The rows Save report started: replayed, then placed first
-          // among the answer's records and explorable queries (where Save
-          // report left them, ahead of the agent's), refs numbered again.
-          // While the step waits, each query done is a reasoning line of
-          // the step (agents.md 5.13), so the run is never silent.
-          findingRows: async () => {
-            const slot = findingSlot;
-            const before = { data: data.length, explorable: explorable.length };
-            try {
-              return await early.take<
-                Awaited<ReturnType<typeof recordFindingSources>>
-              >('finding-rows', (done) =>
-                emit({
-                  type: 'reasoning',
-                  content: `Read the rows behind ${done} finding${done === 1 ? '' : 's'}\n`,
-                }),
-              );
-            } finally {
-              if (slot) {
-                data.splice(slot.data, 0, ...data.splice(before.data));
-                explorable.splice(
-                  slot.explorable,
-                  0,
-                  ...explorable.splice(before.explorable),
-                );
-                explorable.splice(
-                  0,
-                  explorable.length,
-                  ...withRefs(explorable),
-                );
-              }
-            }
-          },
-          explain: async ({ dataset, reportId }) => {
-            // The run has assessed: the block carries the stored report's
-            // summary and `assess_data_readiness` refuses (agents.md 3.13,
-            // 5.13).
-            if (savedSummary === undefined) {
-              throw new Error('The report has not been saved');
-            }
-            options.requestContext.set(ASSESSED_REPORT_CONTEXT_KEY, reportId);
-            // The idle deadline (workflows R43): a Stop is never a timeout.
-            const idle = streamIdleWatch(turn.signal);
-            try {
-              await consume(
-                idle.watch(
-                  await agent.stream(input, {
-                    ...options,
-                    abortSignal: idle.signal,
-                    context: [
-                      ...options.context,
-                      {
-                        role: 'system' as const,
-                        content: explainReportBlock({
-                          dataset,
-                          reportId,
-                          summary: savedSummary,
-                        }),
-                      },
-                    ],
-                  }),
-                ),
-              );
-            } catch (error) {
-              if (!idle.timedOut()) throw error;
-            } finally {
-              idle.dispose();
-            }
-            idle.check('Explain report');
-            if (streamError !== undefined && !turn.signal.aborted) {
-              throw await chatTurnError(streamError, () =>
-                this.deps.llmService.getView(),
-              );
-            }
-            if (!turn.signal.aborted && !clarification && !text && stream) {
-              text = ((await stream.text) ?? '').trim();
-            }
-            return {
-              answer: text.trim(),
-              stopped: turn.signal.aborted || clarification !== null,
-            };
-          },
         },
         (event) => onStepEvent?.(event),
       );
     } finally {
-      // The run ended, failed, was stopped or waits: work no step took is
-      // aborted and awaited, its records dropped, before anything persists.
-      await early.settle();
       abortSignal?.removeEventListener('abort', forwardAbort);
     }
     // The workflow run waits for the user (ADR-0043). A run host's turn
@@ -1393,7 +1074,6 @@ export class TurnEngine {
               try {
                 next = await resumeRun(answer);
               } finally {
-                await early.settle();
                 abortSignal?.removeEventListener('abort', forwardAbort);
               }
               return settle(next);
@@ -1427,8 +1107,7 @@ export class TurnEngine {
         !turn.signal.aborted &&
         !clarification &&
         !text.trim() &&
-        !visualEvent &&
-        !readinessReport
+        !visualEvent
       ) {
         // A model can spend every allowed step on tools and finish without a
         // user-facing answer. Give it one tool-disabled pass to turn the data it
@@ -1505,17 +1184,10 @@ export class TurnEngine {
           ...(entities.length ? { entities } : {}),
           ...(reasoning ? { reasoning } : {}),
           ...(knowledge ? { knowledge } : {}),
-          ...(readinessReport ? { readinessReport } : {}),
           ...(dashboard ? { dashboard } : {}),
           ...(exported ? { export: exported } : {}),
         });
-      } else if (
-        text.trim() ||
-        visualEvent ||
-        readinessReport ||
-        dashboard ||
-        exported
-      ) {
+      } else if (text.trim() || visualEvent || dashboard || exported) {
         const interpretation = interpretationLine(data, entities);
         // Careful mode only, and only when there is a result set to corroborate.
         // The assistant's only: another agent runs no SQL to cross-check.
@@ -1536,9 +1208,7 @@ export class TurnEngine {
               ? `${visualEvent.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent.title}" (v${visualEvent.version}).`
               : dashboard
                 ? `${dashboard.action === 'created' ? 'Created' : 'Updated'} dashboard "${dashboard.title}" (version ${dashboard.version}).`
-                : exported
-                  ? `Exported "${exported.title}".`
-                  : readinessAnswerFallback(readinessReport!)),
+                : `Exported "${exported!.title}".`),
           at: new Date().toISOString(),
           ...(data.length ? { data } : {}),
           ...(evidence.length ? { evidence } : {}),
@@ -1554,7 +1224,6 @@ export class TurnEngine {
           ...(exported ? { export: exported } : {}),
           ...(checks ? { checks } : {}),
           ...(crossChecked ? { crossCheck: crossChecked } : {}),
-          ...(readinessReport ? { readinessReport } : {}),
         });
       }
       const updated = await this.deps.updateDoc(id, { messages });
@@ -1809,8 +1478,7 @@ export class TurnEngine {
     question: string,
     emit: (event: StreamEvent) => void,
     runtime: AnalyseRuntime &
-      AgentTurnRuntime &
-      DataReadinessAssessmentRuntime & {
+      AgentTurnRuntime & {
         /** A conversation's turn: Avery's with her team (agents.md 5.23). */
         converse: (
           input: Parameters<ConversationTurnRuntime['turn']>[0],
@@ -1832,8 +1500,6 @@ export class TurnEngine {
       }
     };
     const requestContext = new RequestContext();
-    const readiness =
-      workflow.engineId === DATA_READINESS_ASSESSMENT_WORKFLOW_ID;
     if (conversationOfTurn(workflow)) {
       // A conversation's engine (plan Elena 1.3): its one step runs the
       // agent's turn. Avery (agents.md 5.23) calls Michael's analysis and
@@ -1851,32 +1517,11 @@ export class TurnEngine {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
       } satisfies AgentTurnRuntime);
-    } else if (readiness) {
-      requestContext.set(DATA_READINESS_ASSESSMENT_RUNTIME_KEY, {
-        resolve: (input) => captured(() => runtime.resolve(input)),
-        profile: () => captured(() => runtime.profile()),
-        // Synchronous: a throw is the step's own, kept as the turn's error.
-        score: () => {
-          try {
-            return runtime.score();
-          } catch (error) {
-            stepError = error;
-            throw error;
-          }
-        },
-        save: () => captured(() => runtime.save()),
-        // Early work (agents.md 5.13): a start is no step's failure; the
-        // step that takes the work reports its error.
-        startFindingRows: () => runtime.startFindingRows(),
-        findingRows: () => captured(() => runtime.findingRows()),
-        explain: (input) => captured(() => runtime.explain(input)),
-      } satisfies DataReadinessAssessmentRuntime);
     }
-    // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).
-    const turnInput: QuestionInput | { question: string; dataset: string } =
-      readiness
-        ? { question, dataset: session.datasets[0] ?? '' }
-        : { question, datasets: session.datasets };
+    const turnInput: QuestionInput = {
+      question,
+      datasets: session.datasets,
+    };
     let state = session.workflowState;
     // A new run starts the bar over at its first step event (agent-panel
     // R8a). A resume goes on.
@@ -2054,38 +1699,6 @@ export class TurnEngine {
     if (workflow) {
       emit({ type: 'workflow', content: JSON.stringify(workflow) });
     }
-  }
-
-  /**
-   * A readiness tool's report reaches the client (agents.md 2.10, api.md
-   * 3.1): its `readiness` panel item is stored on the session (upserted) and
-   * the `readiness-report` event carries the full report with that item. The
-   * model only saw the summary; the full report is the one the bridge
-   * resolved for the same id. Returns the answer's reference.
-   */
-  private async showReadinessReport(
-    sessionId: string,
-    result: unknown,
-    emit: (event: StreamEvent) => void,
-  ): Promise<ReadinessReportRef | undefined> {
-    // The tool's raw result carries the full report (only its summary
-    // reaches the model); the bridge's copy covers any other shape.
-    const reportId = readinessReportIdOf(result);
-    const bridge = this.deps.readinessBridge();
-    const report =
-      readinessReportOf(result) ??
-      (reportId && bridge ? await bridge.reportFor(reportId) : undefined);
-    if (!report) return undefined;
-    const panelItem = readinessPanelItem(report);
-    const session = await this.deps.get(sessionId);
-    await this.deps.updateDoc(sessionId, {
-      panelItems: upsertPanelItem(session.panelItems ?? [], panelItem),
-    });
-    emit({
-      type: READINESS_REPORT_EVENT,
-      content: JSON.stringify({ report, panelItem }),
-    });
-    return readinessReportRef(report);
   }
 
   /** Emit the `panel-item` event for a stored item (api.md 3.1). */
