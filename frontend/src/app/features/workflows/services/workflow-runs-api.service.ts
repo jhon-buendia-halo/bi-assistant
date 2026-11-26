@@ -209,17 +209,6 @@ export class WorkflowRunsApiService {
       : base;
   }
 
-  /** Generate a visual from the run's answer (api.md 130). */
-  generateVisualization(
-    runId: string,
-    sourceMessageAt?: string,
-  ): Observable<RunVisualResult> {
-    return this.http.post<RunVisualResult>(
-      this.visualUrl(runId),
-      sourceMessageAt ? { sourceMessageAt } : {},
-    );
-  }
-
   /** A run's visual, at a version or its current one (api.md 123). */
   getVisualization(
     runId: string,
@@ -229,18 +218,6 @@ export class WorkflowRunsApiService {
     return this.http.get<InteractiveVisualization>(
       this.visualUrl(runId, visualId),
       version ? { params: { version: String(version) } } : {},
-    );
-  }
-
-  /** Tailor a run's visual from an instruction (api.md 131). */
-  tailorVisualization(
-    runId: string,
-    visualId: string,
-    instruction: string,
-  ): Observable<RunVisualResult> {
-    return this.http.post<RunVisualResult>(
-      this.visualUrl(runId, visualId, 'tailor'),
-      { instruction },
     );
   }
 
@@ -264,19 +241,6 @@ export class WorkflowRunsApiService {
     return this.http.post<RunVisualResult>(
       this.visualUrl(runId, visualId, 'refresh'),
       {},
-    );
-  }
-
-  /** Repair a run's failing visual once (api.md 134). */
-  repairVisualization(
-    runId: string,
-    visualId: string,
-    error: string,
-    version: number,
-  ): Observable<RunVisualResult> {
-    return this.http.post<RunVisualResult>(
-      this.visualUrl(runId, visualId, 'repair'),
-      { error, version },
     );
   }
 
@@ -463,6 +427,29 @@ export class WorkflowRunsApiService {
       { input: { question } },
       handlers,
       signal,
+    );
+  }
+
+  /**
+   * Continue a draft run that waits for the user (api.md 169): the same
+   * draft, streamed as `streamDraftRun` (same events, no `seq`), ending in
+   * `done` (possibly `suspended` again). A refusal before the stream (404, 400,
+   * 410) reports `onRefused(status)` then `onError(message)`.
+   */
+  async resumeDraftRun(
+    agentId: string,
+    runId: string,
+    stepId: string,
+    answer: string,
+    handlers: RunStreamHandlers,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.postStream(
+      `${API_BASE_URL}/agents/${encodeURIComponent(agentId)}/draft-runs/${encodeURIComponent(runId)}/resume/stream`,
+      { stepId, answer },
+      handlers,
+      signal,
+      this.runFrames(`agent:${agentId}`, handlers),
     );
   }
 

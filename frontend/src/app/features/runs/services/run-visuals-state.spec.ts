@@ -40,7 +40,7 @@ function visual(version: number): InteractiveVisualization {
   };
 }
 
-describe('RunVisualsState (visuals R2, R12-R24 on a run; api.md 130-134)', () => {
+describe('RunVisualsState (visuals R2, R12-R24 on a run; api.md 123, 132, 133)', () => {
   let state: RunVisualsState;
   let http: HttpTestingController;
   const base = `${API_BASE_URL}/workflow-runs/r1/visualizations`;
@@ -55,29 +55,7 @@ describe('RunVisualsState (visuals R2, R12-R24 on a run; api.md 130-134)', () =>
 
   afterEach(() => http.verify());
 
-  it('generates from the answer, opens the visual and hands the stored run back', () => {
-    const applied: WorkflowRun[] = [];
-    const stored = { ...RUN, events: [RUN.answer!] };
-    state.generate(RUN, (run) => applied.push(run));
-    expect(state.generating()).toBe('r1');
-
-    const req = http.expectOne(base);
-    expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ sourceMessageAt: RUN.answer!.at });
-    req.flush({
-      ok: true,
-      message: 'Interactive visual generated',
-      run: stored,
-      visualization: visual(1),
-    });
-
-    expect(state.generating()).toBeNull();
-    expect(state.shown()?.runId).toBe('r1');
-    expect(state.shown()?.visualization.version).toBe(1);
-    expect(applied).toEqual([stored]);
-  });
-
-  it('tailors, reverts and refreshes the open visual over the run routes', () => {
+  it('reverts the open visual and views a version over the run routes', () => {
     state.shown.set({ runId: 'r1', visualization: visual(2) });
     const applied: WorkflowRun[] = [];
 

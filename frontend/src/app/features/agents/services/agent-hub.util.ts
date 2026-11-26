@@ -49,7 +49,7 @@ export function hubFilters(
 /** The agent's kind, falling back for a catalogue entry that predates kinds. */
 export function agentKind(agent: Agent): AgentKind {
   if (agent.kind) return agent.kind;
-  return agent.key === 'assistant' ? 'official' : 'system';
+  return agent.key === 'insights-lead' ? 'official' : 'system';
 }
 
 /**

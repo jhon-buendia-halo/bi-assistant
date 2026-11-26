@@ -19,7 +19,7 @@ import { artifactKind } from '../run-artifact-card/run-artifact-card';
 
 /**
  * A run's visual, open under its answer (visuals R12-R24 on a run): the
- * interactive panel with Tailor, versions, Refresh and Download over the
+ * interactive panel with versions, revert, Refresh and Download over the
  * run's routes, and Full screen. Shown by the Run tab and the run page
  * alike.
  */

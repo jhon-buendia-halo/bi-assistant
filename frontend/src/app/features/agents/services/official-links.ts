@@ -1,17 +1,14 @@
 import {
-  LINKABLE_TOOLS,
   LinkOption,
   linkableBuiltInSkills,
 } from './prompt-links';
 
 /**
  * The links of an Official agent's shared prompt (agents-evals R99, R105;
- * agents.md 2.1, 2.8): the assistant links the library tools and its
- * built-in skills, other Official agents their own tools and skills. Links
+ * agents.md 2.1, 2.8): an Official agent links its own tools and
+ * skills (Elena's are the library tools a user agent builds on). Links
  * are mentions: every tool of the agent stays on.
  */
-
-const ASSISTANT_KEY = 'assistant';
 
 /** The first sentence of a tool's description, for the `/` menu. */
 function firstSentence(text: string): string {
@@ -19,12 +16,11 @@ function firstSentence(text: string): string {
   return match ? match[0] : text.trim();
 }
 
-/** The tools an Official agent's prompt can link: the assistant's library, else its own tools. */
+/** The tools an Official agent's prompt can link: the ones it gets. */
 export function officialLinkTools(agent: {
   key: string;
   toolDetails?: { name: string; description: string }[];
 }): LinkOption[] {
-  if (agent.key === ASSISTANT_KEY) return LINKABLE_TOOLS;
   return (agent.toolDetails ?? []).map((tool) => ({
     kind: 'tool' as const,
     name: tool.name,
@@ -47,7 +43,7 @@ export function officialLinkSkills<
 
 /**
  * How the copy of the built-in prompt editor names the agent: by its
- * persona's human name, with no article (`Emily`, `Michael`; agents-evals R107).
+ * persona's human name, with no article (`Elena`, `Michael`; agents-evals R107).
  */
 function agentPhrase(agent: { key: string; name: string }): string {
   return agent.name;

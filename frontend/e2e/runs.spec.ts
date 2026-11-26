@@ -23,7 +23,6 @@ import {
   StubReply,
   StubRequest,
   startLlmStub,
-  systemTexts,
 } from './helpers/llm-stub';
 import { scenarioStep } from './support/demo-captions';
 import { composer, pickedDataset } from './helpers/run-ui';
@@ -295,7 +294,6 @@ const OLD_ANSWER = 'The group stage holds most of the matches.';
 const OLD_CHAT = 'Stage counts chat';
 const OLD_SQL = `SELECT stage, COUNT(*) AS matches FROM ${worldCupKey('matches')} GROUP BY stage`;
 const VISUAL_TITLE = 'Matches by stage';
-const SKILL_TAG = '<interactive-visuals-skill>';
 const SPEC_REPLY = {
   title: VISUAL_TITLE,
   description: 'The group stage is played far more often than any knockout round.',
@@ -315,9 +313,6 @@ test.describe('Runs and Past chats', () => {
   let stub: LlmStub;
 
   function reply(request: StubRequest): StubReply {
-    if (systemTexts(request).some((text) => text.includes(SKILL_TAG))) {
-      return { text: JSON.stringify(SPEC_REPLY) };
-    }
     const lastUser = [...request.messages].reverse().find((m) => m.role === 'user');
     const text = typeof lastUser?.content === 'string' ? lastUser.content : '';
     const old = text.includes(OLD_QUESTION);

@@ -125,7 +125,7 @@ test('has no automatically detectable accessibility violations on any screen in 
       'Agent detail',
       async () => {
         await rail('Agent personas').click();
-        await page.getByTestId('agent-assistant').click();
+        await page.getByTestId('agent-insights-lead').click();
         await expect(page.getByText('All agent personas')).toBeVisible();
       },
     ],

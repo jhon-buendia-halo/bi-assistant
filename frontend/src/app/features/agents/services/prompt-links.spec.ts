@@ -32,17 +32,22 @@ describe('prompt links', () => {
     expect(promptSegments('')).toEqual([]);
   });
 
-  it('lists the eight library tools without read_file', () => {
+  it("lists Elena's six library tools without read_file or the retired visual tools", () => {
     expect(LINKABLE_TOOLS.map((t) => t.name).sort()).toEqual([
       'ask_clarification',
-      'create_visual',
       'describe_entity',
+      'explore_result',
       'list_entities',
       'run_readonly_sql',
       'sample_rows',
-      'show_in_panel',
-      'update_visual',
     ]);
+  });
+
+  it('keeps a retired link known, so its chip is not red', () => {
+    const known = knownLinks([]);
+    expect(chipClass('tool', 'create_visual', known)).toBe('chip chip-neutral');
+    expect(chipClass('tool', 'show_in_panel', known)).toBe('chip chip-neutral');
+    expect(chipClass('tool', 'made_up', known)).toBe('chip chip-danger');
   });
 
   it('colours a chip by kind, and danger when it does not exist', () => {

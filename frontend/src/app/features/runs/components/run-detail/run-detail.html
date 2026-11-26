@@ -165,9 +165,6 @@
               [queryInspector]="inspectsQueries()"
               [question]="run.question ?? null"
               (inspectQuery)="inspectQuery($event)"
-              [showGenerateVisual]="!isLive(run.status)"
-              [visualGenerating]="visuals.generating() === run.id"
-              (generateVisual)="visuals.generate(run, applyRun)"
               (viewVisual)="visuals.view(run, $event)"
             />
             @if (answer.dashboard; as dashboard) {

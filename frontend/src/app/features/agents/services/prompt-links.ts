@@ -19,7 +19,12 @@ export interface LinkOption {
   builtIn?: boolean;
 }
 
-/** Every assistant tool an author can link (`read_file` is not one). */
+/**
+ * Every library tool an author can link: Elena's, a user agent's engine
+ * (`read_file` is not one). Retired links (`create_visual`, `update_visual`,
+ * `show_in_panel`, `update_workflow`) are not offered; a stored one reads as a
+ * plain mention (`RETIRED_LINK_TOOLS`).
+ */
 export const LINKABLE_TOOLS: LinkOption[] = [
   {
     kind: 'tool',
@@ -43,25 +48,22 @@ export const LINKABLE_TOOLS: LinkOption[] = [
   },
   {
     kind: 'tool',
-    name: 'create_visual',
-    description: 'Creates an interactive visual from an answer.',
-  },
-  {
-    kind: 'tool',
-    name: 'update_visual',
-    description: 'Changes an existing visual.',
-  },
-  {
-    kind: 'tool',
-    name: 'show_in_panel',
-    description:
-      'Shows a file, document, table, visual or workflow progress in the right panel.',
+    name: 'explore_result',
+    description: "Looks further into a query's result.",
   },
   {
     kind: 'tool',
     name: 'ask_clarification',
     description: 'Asks the user a clarifying question with options.',
   },
+];
+
+/** Tools a stored prompt may still link: accepted, never offered. */
+export const RETIRED_LINK_TOOLS: readonly string[] = [
+  'create_visual',
+  'update_visual',
+  'show_in_panel',
+  'update_workflow',
 ];
 
 export function promptLink(kind: LinkKind, name: string): string {
@@ -113,6 +115,7 @@ export function knownLinks(
     ...skills.map((skill) => `skill:${skill.name}`),
     ...builtInSkills.map((skill) => `skill:${skill.name}`),
     ...tools.map((tool) => `tool:${tool.name}`),
+    ...RETIRED_LINK_TOOLS.map((name) => `tool:${name}`),
   ]);
 }
 

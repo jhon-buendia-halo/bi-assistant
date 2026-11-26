@@ -13,135 +13,8 @@ import {
 import { ThemeService } from '../../../../core/theme/theme.service';
 import {
   InteractiveVisualPanel,
-  TAILOR_CHART_TYPES,
-  buildTailorInstruction,
   withVisualTheme,
 } from './interactive-visual-panel';
-
-describe('buildTailorInstruction', () => {
-  it('accepts free text alone as the instruction', () => {
-    expect(
-      buildTailorInstruction({
-        chartType: 'auto',
-        sort: 'none',
-        topN: null,
-        freeText: '  Highlight France  ',
-      }),
-    ).toBe('Highlight France');
-  });
-
-  it('puts the free text after the field sentences', () => {
-    expect(
-      buildTailorInstruction({
-        chartType: 'bar',
-        sort: 'asc',
-        topN: 5,
-        freeText: 'Highlight France.',
-      }),
-    ).toBe(
-      'Change the visual to a bar chart. Sort ascending by the main measure. ' +
-        'Show only the top 5 items and group the rest as "Other". Highlight France.',
-    );
-  });
-
-  it('treats whitespace-only free text as empty', () => {
-    expect(
-      buildTailorInstruction({
-        chartType: 'auto',
-        sort: 'none',
-        topN: null,
-        freeText: ' \n\t ',
-      }),
-    ).toBe('');
-  });
-
-  it('is empty when every control is Auto/None/empty', () => {
-    expect(
-      buildTailorInstruction({ chartType: 'auto', sort: 'none', topN: null }),
-    ).toBe('');
-  });
-
-  it('combines chart type, sort and top-N into one instruction', () => {
-    expect(
-      buildTailorInstruction({ chartType: 'line', sort: 'desc', topN: 10 }),
-    ).toBe(
-      'Change the visual to a line chart. Sort descending by the main measure. ' +
-        'Show only the top 10 items and group the rest as "Other".',
-    );
-  });
-
-  it('skips the parts left at their default', () => {
-    expect(
-      buildTailorInstruction({ chartType: 'auto', sort: 'asc', topN: null }),
-    ).toBe('Sort ascending by the main measure.');
-    expect(
-      buildTailorInstruction({
-        chartType: 'metric-cards',
-        sort: 'none',
-        topN: null,
-      }),
-    ).toBe('Change the visual to metric cards.');
-  });
-
-  it('offers the pivot table and the US state map after Donut', () => {
-    const values = TAILOR_CHART_TYPES.map((o) => o.value);
-    expect(values.slice(-3)).toEqual(['donut', 'pivot', 'us-map']);
-    expect(TAILOR_CHART_TYPES.slice(-2).map((o) => o.label)).toEqual([
-      'Pivot table',
-      'US state map',
-    ]);
-  });
-
-  it('writes one sentence for each of the two newer chart types', () => {
-    expect(
-      buildTailorInstruction({ chartType: 'pivot', sort: 'none', topN: null }),
-    ).toBe('Change the visual to a pivot table.');
-    expect(
-      buildTailorInstruction({
-        chartType: 'us-map',
-        sort: 'none',
-        topN: null,
-      }),
-    ).toBe('Change the visual to a US state map.');
-  });
-
-  it('combines the newer chart types with a sort and a free-text change', () => {
-    expect(
-      buildTailorInstruction({
-        chartType: 'pivot',
-        sort: 'desc',
-        topN: null,
-        freeText: 'Hide the total column',
-      }),
-    ).toBe(
-      'Change the visual to a pivot table. Sort descending by the main measure. ' +
-        'Hide the total column',
-    );
-    expect(
-      buildTailorInstruction({
-        chartType: 'us-map',
-        sort: 'asc',
-        topN: null,
-        freeText: 'Highlight Florida',
-      }),
-    ).toBe(
-      'Change the visual to a US state map. Sort ascending by the main measure. ' +
-        'Highlight Florida',
-    );
-  });
-
-  it('ignores a top-N outside the offered range', () => {
-    expect(
-      buildTailorInstruction({ chartType: 'auto', sort: 'none', topN: 2 }),
-    ).toBe('');
-    expect(
-      buildTailorInstruction({ chartType: 'auto', sort: 'none', topN: 51 }),
-    ).toBe('');
-    expect(
-      buildTailorInstruction({ chartType: 'auto', sort: 'none', topN: 3 }),
-    ).toBe('Show only the top 3 items and group the rest as "Other".');
-  });
-});
 
 const session: Session = {
   id: 'session-1',
@@ -184,9 +57,7 @@ function errorMessage(message: string): MessageEvent {
   return { data: { type: 'visual-error', message } } as MessageEvent;
 }
 
-const repairUrl = `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/repair`;
-
-describe('InteractiveVisualPanel auto-repair', () => {
+describe('InteractiveVisualPanel runtime errors', () => {
   let fixture: ComponentFixture<InteractiveVisualPanel>;
   let panel: InteractiveVisualPanel;
   let http: HttpTestingController;
@@ -206,81 +77,26 @@ describe('InteractiveVisualPanel auto-repair', () => {
 
   afterEach(() => http.verify());
 
-  it('repairs the current version once and emits the refreshed payload', () => {
-    const refreshed: SessionActionResult[] = [];
-    panel.visualRefreshed.subscribe((result) => refreshed.push(result));
-
+  it('A broken visual shows the error banner and is never repaired', () => {
     panel.onFrameMessage(errorMessage('x is not defined'));
-    expect(panel.repairing()).toBeTrue();
-    expect(panel.runtimeError()).toBeNull();
+    fixture.detectChanges();
 
-    const req = http.expectOne(repairUrl);
-    expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({
-      error: 'x is not defined',
-      version: 2,
-    });
-    const result: SessionActionResult = {
-      ok: true,
-      message: 'Visual repaired',
-      session,
-      visualization: visual({ version: 3, currentVersion: 3 }),
-    };
-    req.flush(result);
-
-    expect(panel.repairing()).toBeFalse();
-    expect(refreshed).toEqual([result]);
-
-    // A second failure of the same generation only shows the banner.
-    panel.onFrameMessage(errorMessage('still broken'));
-    http.expectNone(repairUrl);
-    expect(panel.runtimeError()).toBe('still broken');
-    expect(panel.repairing()).toBeFalse();
+    http.expectNone(() => true);
+    expect(panel.runtimeError()).toBe('x is not defined');
+    expect(fixture.nativeElement.textContent).toContain(
+      'This visual hit a runtime error.',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain('Fixing the visual');
   });
 
-  it('falls back to the banner when the repair is rejected', () => {
-    panel.onFrameMessage(errorMessage('visual rendered blank'));
-    http
-      .expectOne(repairUrl)
-      .flush({ ok: false, message: 'Already repaired once' });
-
-    expect(panel.repairing()).toBeFalse();
-    expect(panel.runtimeError()).toBe('visual rendered blank');
-  });
-
-  it('never auto-repairs while an older version is on screen', () => {
+  it('clears the banner when another document opens', () => {
+    panel.onFrameMessage(errorMessage('boom'));
     fixture.componentRef.setInput(
       'visualization',
       visual({ version: 1, currentVersion: 2 }),
     );
     fixture.detectChanges();
-
-    panel.onFrameMessage(errorMessage('boom'));
-
-    http.expectNone(repairUrl);
-    expect(panel.runtimeError()).toBe('boom');
-  });
-
-  it('never repairs a version that is itself an auto-repair', () => {
-    fixture.componentRef.setInput(
-      'visualization',
-      visual({
-        versions: [
-          {
-            version: 2,
-            createdAt: '2026-01-02T00:00:00.000Z',
-            sourceMessageAt: '2026-01-01T00:00:00.000Z',
-            instruction: 'auto-repair: x is not defined',
-          },
-        ],
-      }),
-    );
-    fixture.detectChanges();
-
-    panel.onFrameMessage(errorMessage('x is still not defined'));
-
-    http.expectNone(repairUrl);
-    expect(panel.runtimeError()).toBe('x is still not defined');
+    expect(panel.runtimeError()).toBeNull();
   });
 
   it('emits clicked data marks as selections', () => {
@@ -304,157 +120,6 @@ describe('InteractiveVisualPanel auto-repair', () => {
       { value: 'Cardiology', label: 'Cardiology (312)' },
       { value: 'Oncology', label: undefined },
     ]);
-  });
-});
-
-describe('InteractiveVisualPanel tailoring', () => {
-  let fixture: ComponentFixture<InteractiveVisualPanel>;
-  let panel: InteractiveVisualPanel;
-  let http: HttpTestingController;
-
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [InteractiveVisualPanel],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
-    }).compileComponents();
-    fixture = TestBed.createComponent(InteractiveVisualPanel);
-    panel = fixture.componentInstance;
-    http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('runId', session.id);
-    fixture.componentRef.setInput('visualization', visual());
-    fixture.detectChanges();
-  });
-
-  afterEach(() => http.verify());
-
-  it('posts the built instruction and resets the form on success', () => {
-    const refreshed: SessionActionResult[] = [];
-    panel.visualRefreshed.subscribe((result) => refreshed.push(result));
-    panel.tailorChartType.set('bar');
-    panel.tailorSort.set('desc');
-    panel.setTopN('10');
-
-    panel.applyTailoring();
-
-    const req = http.expectOne(
-      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
-    );
-    expect(req.request.body).toEqual({
-      instruction:
-        'Change the visual to a bar chart. Sort descending by the main measure. ' +
-        'Show only the top 10 items and group the rest as "Other".',
-    });
-    const result: SessionActionResult = {
-      ok: true,
-      message: 'Visual updated',
-      session,
-      visualization: visual({ version: 3, currentVersion: 3 }),
-    };
-    req.flush(result);
-
-    expect(refreshed).toEqual([result]);
-    expect(panel.tailorChartType()).toBe('auto');
-    expect(panel.tailorTopN()).toBeNull();
-    expect(panel.tailorMenuOpen()).toBeFalse();
-  });
-
-  it('applies free text alone and resets it on success', () => {
-    panel.setTailorFreeText('  Stack it by year  ');
-    expect(panel.tailorInstruction()).toBe('Stack it by year');
-    panel.applyTailoring();
-    const req = http.expectOne(
-      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
-    );
-    expect(req.request.body).toEqual({ instruction: 'Stack it by year' });
-    req.flush({
-      ok: true,
-      message: 'Visual updated',
-      session,
-      visualization: visual({ version: 3, currentVersion: 3 }),
-    } satisfies SessionActionResult);
-    expect(panel.tailorFreeText()).toBe('');
-    expect(panel.tailorMenuOpen()).toBeFalse();
-  });
-
-  it('keeps the free text when the tailoring fails', () => {
-    panel.setTailorFreeText('Make it pop');
-    panel.applyTailoring();
-    http
-      .expectOne(
-        `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
-      )
-      .flush({ ok: false, message: 'Nope' });
-    expect(panel.tailorFreeText()).toBe('Make it pop');
-  });
-
-  it('applies on Cmd/Ctrl+Enter in the field, and not on plain Enter', () => {
-    panel.toggleTailorMenu();
-    fixture.detectChanges();
-    const field: HTMLTextAreaElement = fixture.nativeElement.querySelector(
-      'textarea[aria-label="Describe the change"]',
-    );
-    expect(field).toBeTruthy();
-    field.value = 'Highlight France';
-    field.dispatchEvent(new Event('input'));
-    field.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-    );
-    http.expectNone(
-      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
-    );
-    field.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'Enter',
-        metaKey: true,
-        bubbles: true,
-      }),
-    );
-    const req = http.expectOne(
-      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
-    );
-    expect(req.request.body).toEqual({ instruction: 'Highlight France' });
-    req.flush({ ok: false, message: 'x' });
-  });
-
-  it('does not apply on Ctrl+Enter when the instruction is empty', () => {
-    panel.toggleTailorMenu();
-    fixture.detectChanges();
-    const field: HTMLTextAreaElement = fixture.nativeElement.querySelector(
-      'textarea[aria-label="Describe the change"]',
-    );
-    field.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'Enter',
-        ctrlKey: true,
-        bubbles: true,
-      }),
-    );
-    http.expectNone(
-      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
-    );
-    expect(panel.tailoring()).toBeFalse();
-  });
-
-  it('does nothing when no control was changed', () => {
-    expect(panel.tailorInstruction()).toBe('');
-    panel.applyTailoring();
-    http.expectNone(
-      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
-    );
-    expect(panel.tailoring()).toBeFalse();
-  });
-
-  it('surfaces a rejected tailoring as the panel error', () => {
-    panel.tailorSort.set('asc');
-    panel.applyTailoring();
-    http
-      .expectOne(
-        `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
-      )
-      .flush({ ok: false, message: 'Instruction required' });
-
-    expect(panel.tailoring()).toBeFalse();
-    expect(panel.tailorError()).toBe('Instruction required');
   });
 });
 
@@ -645,7 +310,7 @@ describe('InteractiveVisualPanel theme', () => {
   });
 });
 
-describe('InteractiveVisualPanel on a run (visuals R12-R24; api.md 131, 133, 134)', () => {
+describe('InteractiveVisualPanel on a run (visuals R12-R24; api.md 132, 133)', () => {
   let fixture: ComponentFixture<InteractiveVisualPanel>;
   let panel: InteractiveVisualPanel;
   let http: HttpTestingController;
@@ -666,27 +331,6 @@ describe('InteractiveVisualPanel on a run (visuals R12-R24; api.md 131, 133, 134
 
   afterEach(() => http.verify());
 
-  it('tailors through the run route and emits the stored run with the new version', () => {
-    const results: unknown[] = [];
-    panel.visualRefreshed.subscribe((result) => results.push(result));
-    panel.tailorChartType.set('bar');
-    panel.applyTailoring();
-
-    const req = http.expectOne(`${base}/tailor`);
-    expect(req.request.body).toEqual({
-      instruction: 'Change the visual to a bar chart.',
-    });
-    const result = {
-      ok: true,
-      message: 'Updated to version 3',
-      run: { id: 'r1' },
-      visualization: visual({ version: 3, currentVersion: 3 }),
-    };
-    req.flush(result);
-    expect(results).toEqual([result]);
-    expect(panel.tailorMenuOpen()).toBeFalse();
-  });
-
   it('refreshes through the run route', () => {
     panel.refreshData();
     const req = http.expectOne(`${base}/refresh`);
@@ -698,13 +342,6 @@ describe('InteractiveVisualPanel on a run (visuals R12-R24; api.md 131, 133, 134
       visualization: visual(),
     });
     expect(panel.refreshingData()).toBeFalse();
-  });
-
-  it('repairs through the run route', () => {
-    panel.onFrameMessage(errorMessage('x is not defined'));
-    const req = http.expectOne(`${base}/repair`);
-    expect(req.request.body).toEqual({ error: 'x is not defined', version: 2 });
-    req.flush({ ok: false, message: 'no' });
   });
 });
 
@@ -736,20 +373,6 @@ describe('InteractiveVisualPanel as a background task (ADR-0047)', () => {
 
   afterEach(() => http.verify());
 
-  it('keeps Tailor busy after the panel is destroyed and shown again', () => {
-    const first = open();
-    first.componentInstance.tailorChartType.set('bar');
-    first.componentInstance.applyTailoring();
-    const req = http.expectOne(`${base}/tailor`);
-    first.destroy();
-    expect(req.cancelled).toBeFalse();
-
-    const second = open();
-    expect(second.componentInstance.tailoring()).toBeTrue();
-    expect(second.componentInstance.refreshingData()).toBeFalse();
-    req.flush({ ok: false, message: 'Instruction required' });
-  });
-
   it('applies the result in a panel created after the task ended', () => {
     const first = open();
     const gone: unknown[] = [];
@@ -778,18 +401,4 @@ describe('InteractiveVisualPanel as a background task (ADR-0047)', () => {
     expect(again).toEqual([]);
   });
 
-  it('shows the tailor error from the failed task in a new panel', () => {
-    const first = open();
-    first.componentInstance.tailorSort.set('asc');
-    first.componentInstance.applyTailoring();
-    http
-      .expectOne(`${base}/tailor`)
-      .flush({ ok: false, message: 'Instruction required' });
-    first.destroy();
-
-    const second = open();
-    expect(second.componentInstance.tailorError()).toBe('Instruction required');
-    second.componentInstance.toggleTailorMenu();
-    expect(second.componentInstance.tailorError()).toBeNull();
-  });
 });
