@@ -3,7 +3,7 @@
  * Keep the two in step.
  */
 
-/** Mirrors backend data-readiness/engine/types.ts. */
+/** Mirrors backend synthetic-data/types.ts. */
 export type SemanticType =
   'numeric' | 'temporal' | 'text' | 'boolean' | 'uuid' | 'json' | 'other';
 export type FormatRule = 'email' | 'phone' | 'url' | 'uuid' | 'date-string';

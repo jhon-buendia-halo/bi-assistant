@@ -153,6 +153,9 @@ test('the start page asks a question first and links runs, workflows and agents'
   // the catalogue holds no other workflow, so none is listed; the link to
   // all workflows stays.
   const workflows = page.getByTestId('welcome-workflows');
+  await expect(
+    workflows.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
   await expect(page.getByTestId('welcome-all-workflows')).toBeVisible();
   await expect(
     workflows.locator('[data-testid^="welcome-workflow-"]'),
