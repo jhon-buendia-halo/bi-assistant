@@ -3,7 +3,6 @@ import { ToastService } from '../../../../core/toast/toast.service';
 import {
   ChatMessage,
   MessageFeedback,
-  ReadinessReportRef,
   VisualEvent,
 } from '../../models/session.model';
 import { AnswerView } from './answer-view';
@@ -525,25 +524,21 @@ describe('AnswerView', () => {
       );
     });
 
-    it('renders the readiness card and emits Open scorecard', () => {
-      const readiness: ReadinessReportRef = {
-        reportId: 'r1',
-        datasourceName: 'Claims warehouse',
-        overallScore: 72,
-        maturity: 'Managed',
-        generatedAt: '2026-01-01T00:00:02.000Z',
-      };
+    it('ignores the readinessReport an old Data Readiness chat stored', () => {
       const el = render({
         role: 'assistant',
         content: 'Assessed.',
         at: 'x',
-        readinessReport: readiness,
-      });
-      const opened: ReadinessReportRef[] = [];
-      fixture.componentInstance.openScorecard.subscribe((r) => opened.push(r));
-      expect(el.querySelector('[data-testid="readiness-card"]')).toBeTruthy();
-      button(el, '[data-testid="readiness-open-scorecard"]').click();
-      expect(opened).toEqual([readiness]);
+        readinessReport: {
+          reportId: 'r1',
+          datasourceName: 'Claims warehouse',
+          overallScore: 72,
+        },
+      } as ChatMessage);
+      expect(el.querySelector('.prose-dark')?.textContent).toContain(
+        'Assessed.',
+      );
+      expect(el.querySelector('[data-testid="readiness-card"]')).toBeNull();
     });
   });
 });

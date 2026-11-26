@@ -97,7 +97,7 @@ export type WorkflowInputValue = string | number | boolean | string[];
  */
 export interface WorkflowSummary {
   /**
-   * The workflow id (`orchestrated-answer-michael`, `assess-data-readiness`, …). Agents are a
+   * The workflow id (`answer-business-question`, …). Agents are a
    * library and have no workflow of their own.
    */
   id: string;
