@@ -6,7 +6,6 @@ import type {
 } from '../../mastra/tool-services';
 import type {
   PanelItem,
-  ReadinessPanelItem,
   SessionDoc,
   TablePanelItem,
 } from './entities/session.entity';
@@ -20,7 +19,13 @@ export const DOCUMENT_MAX_CHARS = 50_000;
 
 /** The id of a visual's item: one per visual, upserted. */
 export const visualItemId = (visualId: string) => `visual:${visualId}`;
-const UPSERTED_KINDS = new Set<PanelItem['kind']>(['visual', 'readiness']);
+const UPSERTED_KINDS = new Set<PanelItem['kind']>(['visual']);
+/**
+ * Kinds a stored session may still hold that this version no longer shows:
+ * `phases` (the workflow now lives in the workflow bar) and `readiness` (the
+ * Data Readiness Agent's reports, removed with her).
+ */
+const RETIRED_KINDS = new Set(['phases', 'readiness']);
 
 /** What the panel-item builder needs besides the tool's input. */
 export interface PanelItemContext {
@@ -40,12 +45,12 @@ export interface BuiltPanelItem {
  * Every item the session shows, oldest first: the stored ones plus a
  * synthesized `visual:<id>` for each visual without one, stamped with the
  * visual's creation time, so sessions saved before panel items need no
- * migration. Stored items of the retired kind `phases` (the workflow now lives
- * in the workflow bar) are dropped here, at read time.
+ * migration. Stored items of a retired kind (`RETIRED_KINDS`) are dropped
+ * here, at read time.
  */
 export function withVisualItems(session: SessionDoc): PanelItem[] {
   const stored = (session.panelItems ?? []).filter(
-    (item) => (item.kind as string) !== 'phases',
+    (item) => !RETIRED_KINDS.has(item.kind as string),
   );
   const known = new Set(stored.map((item) => item.id));
   const synthesized = (session.visualizations ?? [])
@@ -61,7 +66,7 @@ export function withVisualItems(session: SessionDoc): PanelItem[] {
 }
 
 /**
- * `items` with `item` added: a visual or readiness item replaces the one with
+ * `items` with `item` added: a visual item replaces the one with
  * its id (re-stamping `shownAt`), any other is appended. Past
  * `MAX_PANEL_ITEMS`, the oldest file, document and table items are dropped.
  */
@@ -204,7 +209,7 @@ export async function buildPanelItem(
 }
 
 function summaryOf(
-  item: Exclude<PanelItem, ReadinessPanelItem>,
+  item: PanelItem,
   extra: { bytes?: number; rowCount?: number } = {},
 ): PanelToolResult {
   return {

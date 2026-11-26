@@ -619,7 +619,7 @@ describe('legacy datastore migrations', () => {
         workflowId: 'qti-v2-turn',
         updatedAt,
       });
-      insert('sessions', { id: 's2', agentKey: 'data-readiness', updatedAt });
+      insert('sessions', { id: 's2', agentKey: 'chief-of-staff', updatedAt });
       insert('workflow_runs', {
         id: 'r1',
         workflowId: 'qti-v2-turn',
@@ -633,7 +633,7 @@ describe('legacy datastore migrations', () => {
       insert('agent_prompt_overrides', { key: 'sql-fixer', prompt: 'q' });
       insert('settings', {
         key: 'builtin-agent-pins',
-        pinned: ['data-readiness', 'assistant-v2', 'sql-fixer'],
+        pinned: ['chief-of-staff', 'assistant-v2', 'sql-fixer'],
       });
       insert('settings', { key: 'llm', model: 'assistant-v2' });
 
@@ -647,7 +647,7 @@ describe('legacy datastore migrations', () => {
           workflowId: 'answer-business-question',
           updatedAt,
         },
-        { id: 's2', agentKey: 'data-readiness', updatedAt },
+        { id: 's2', agentKey: 'chief-of-staff', updatedAt },
       ]);
       expect(docs('workflow_runs')).toEqual([
         {
@@ -669,7 +669,7 @@ describe('legacy datastore migrations', () => {
       expect(docs('settings')).toEqual([
         {
           key: 'builtin-agent-pins',
-          pinned: ['data-readiness', 'insights-analyst', 'sql-fixer'],
+          pinned: ['chief-of-staff', 'insights-analyst', 'sql-fixer'],
         },
         { key: 'llm', model: 'assistant-v2' },
       ]);
@@ -695,12 +695,17 @@ describe('legacy datastore migrations', () => {
       ).map((r) => r.name);
 
     it('drops their tables and seed markers, keeping other settings', () => {
-      ['user_personas', 'visual_charts', 'site_signins', 'settings'].forEach(
-        createTable,
-      );
+      [
+        'user_personas',
+        'visual_charts',
+        'site_signins',
+        'readiness_reports',
+        'settings',
+      ].forEach(createTable);
       insert('user_personas', { id: 'p1', name: 'Demo Finance Analyst' });
       insert('visual_charts', { id: 'v1', name: 'Bar chart' });
       insert('site_signins', { origin: 'https://shop.example.com' });
+      insert('readiness_reports', { id: 'rr1', datasetName: 'Claims' });
       insert('settings', { key: 'personas-seed', seededAt: 'x' });
       insert('settings', { key: 'visuals-seed', seededAt: 'x' });
       insert('settings', { key: 'llm', model: 'm' });
@@ -710,6 +715,7 @@ describe('legacy datastore migrations', () => {
       expect(tableNames()).not.toContain('user_personas');
       expect(tableNames()).not.toContain('visual_charts');
       expect(tableNames()).not.toContain('site_signins');
+      expect(tableNames()).not.toContain('readiness_reports');
       expect(docs('settings')).toEqual([{ key: 'llm', model: 'm' }]);
     });
 

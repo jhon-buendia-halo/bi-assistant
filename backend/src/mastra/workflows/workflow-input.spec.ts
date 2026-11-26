@@ -49,15 +49,15 @@ describe('usedBy: the steps that read a field from the input (api.md 116)', () =
 
   it('keeps every field property and returns copies', () => {
     const field: WorkflowInputField = {
-      name: 'dataset',
-      label: 'Dataset',
-      type: 'dataset',
+      name: 'datasets',
+      label: 'Datasets',
+      type: 'datasets',
       required: true,
       datasourceKinds: ['postgres'],
     };
     const workflow = {
       input: [field],
-      steps: [{ id: 'x', input: ['dataset'], output: [] }],
+      steps: [{ id: 'x', input: ['datasets'], output: [] }],
     };
     const [detail] = inputFieldsWithUsage(workflow);
     expect(detail).toEqual({ ...field, usedBy: ['x'] });
@@ -208,7 +208,7 @@ describe('validateWorkflowInput (api.md 118, 119)', () => {
     });
   });
 
-  describe('boolean, datasets and dataset (plan 4.1)', () => {
+  describe('boolean and datasets (plan 4.1)', () => {
     const datasets = [
       { name: 'World Cup Core', datasourceKind: 'postgres' },
       { name: 'Claims', datasourceKind: 'databricks' },
@@ -226,11 +226,11 @@ describe('validateWorkflowInput (api.md 118, 119)', () => {
         default: false,
       },
     ];
-    const readiness: WorkflowInputField[] = [
+    const kinded: WorkflowInputField[] = [
       {
-        name: 'dataset',
-        label: 'Dataset',
-        type: 'dataset',
+        name: 'datasets',
+        label: 'Datasets',
+        type: 'datasets',
         required: true,
         datasourceKinds: ['postgres', 'databricks'],
       },
@@ -239,7 +239,7 @@ describe('validateWorkflowInput (api.md 118, 119)', () => {
         label: 'Question',
         type: 'textarea',
         required: false,
-        default: 'Assess the readiness of this dataset',
+        default: 'Describe these datasets',
       },
     ];
 
@@ -273,12 +273,12 @@ describe('validateWorkflowInput (api.md 118, 119)', () => {
       });
       for (const question of ['', '  ']) {
         expect(
-          check({ dataset: 'Claims', question }, readiness, datasets),
+          check({ datasets: ['Claims'], question }, kinded, datasets),
         ).toEqual({
           ok: true,
           input: {
-            dataset: 'Claims',
-            question: 'Assess the readiness of this dataset',
+            datasets: ['Claims'],
+            question: 'Describe these datasets',
           },
         });
       }
@@ -335,34 +335,44 @@ describe('validateWorkflowInput (api.md 118, 119)', () => {
     });
 
     it.each([
-      [{}, 'Dataset is required'],
-      [{ dataset: '' }, 'Dataset is required'],
-      [{ dataset: '  ' }, 'Dataset is required'],
-      [{ dataset: 'Nope' }, 'Dataset "Nope" not found'],
+      [{}, 'Select at least one dataset'],
+      [{ datasets: ['Nope'] }, 'Dataset "Nope" not found'],
       [
-        { dataset: 'Orders API' },
+        { datasets: ['Orders API'] },
         'Dataset "Orders API" is not a PostgreSQL or Databricks dataset',
       ],
       [
-        { dataset: 'Unbound' },
+        { datasets: ['Claims', 'Unbound'] },
         'Dataset "Unbound" is not a PostgreSQL or Databricks dataset',
       ],
-    ])('refuses the readiness input %p with %p', (input, message) => {
-      expect(check(input, readiness, datasets)).toEqual({
+    ])('refuses the kind-limited input %p with %p', (input, message) => {
+      expect(check(input, kinded, datasets)).toEqual({
         ok: false,
-        errors: [{ field: 'dataset', message }],
+        errors: [{ field: 'datasets', message }],
+      });
+    });
+
+    it('accepts datasets of the kinds a field is limited to', () => {
+      expect(
+        check({ datasets: ['World Cup Core', 'Claims'] }, kinded, datasets),
+      ).toEqual({
+        ok: true,
+        input: {
+          datasets: ['World Cup Core', 'Claims'],
+          question: 'Describe these datasets',
+        },
       });
     });
 
     it('names one, two or three kinds in the kind refusal', () => {
       const of = (kinds: ('postgres' | 'databricks' | 'rest')[]) =>
         first(
-          { dataset: 'Unbound' },
+          { datasets: ['Unbound'] },
           [
             {
-              name: 'dataset',
-              label: 'Dataset',
-              type: 'dataset',
+              name: 'datasets',
+              label: 'Datasets',
+              type: 'datasets',
               required: true,
               datasourceKinds: kinds,
             },

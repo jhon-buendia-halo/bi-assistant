@@ -11,7 +11,6 @@ import { BI_ANALYST_INSTRUCTIONS } from './workflows/bi-analyst.prompts';
 import { INSIGHTS_LEAD_INSTRUCTIONS } from './workflows/insights-lead.prompts';
 import {
   INSIGHTS_ANALYST_PROMPT,
-  DATA_READINESS_PROMPT,
   EVAL_JUDGE_PROMPT,
   KNOWLEDGE_BOOTSTRAP_PROMPT,
   SQL_FIXER_PROMPT,
@@ -21,8 +20,8 @@ import {
 
 /**
  * The shipped, editable system prompt of each built-in agent, by registry
- * key (ADR-0026, data-model 3.10.3): the assistant's, Insights Analyst's,
- * and the Data Readiness Agent's without their generated `## Tools` section, a System agent's whole static
+ * key (ADR-0026, data-model 3.10.3): the assistant's and Insights Analyst's
+ * without their generated `## Tools` section, a System agent's whole static
  * instructions.
  */
 const SHIPPED: Readonly<Record<string, string>> = {
@@ -33,7 +32,6 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'sql-verifier': SQL_VERIFIER_PROMPT,
   'knowledge-bootstrap': KNOWLEDGE_BOOTSTRAP_PROMPT,
   'assistant-eval-judge': EVAL_JUDGE_PROMPT,
-  'data-readiness': DATA_READINESS_PROMPT,
   'analysis-planner': PLAN_INSTRUCTIONS,
   'answer-writer': WRITE_ANSWER_INSTRUCTIONS,
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,

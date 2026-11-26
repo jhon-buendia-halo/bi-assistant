@@ -10,8 +10,7 @@ import {
 import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { entityRefFromKey } from '../data-readiness/data-readiness.service';
-import { PROFILE_CONCURRENCY_BY_DIALECT } from '../data-readiness/progress';
+import { entityRefFromKey } from './profile/entity-ref';
 import { DatasetsService } from '../datasets/datasets.service';
 import type { DatasetDoc } from '../datasets/repositories/datasets.repository';
 import { DatabricksProfiler } from '../datasources/connectors/databricks-profiling';
@@ -30,6 +29,7 @@ import type {
 import { DatasourcesService } from '../datasources/datasources.service';
 import {
   CHAT_SCRIPT_BYTES_MAX,
+  PROFILE_CONCURRENCY_BY_DIALECT,
   PROFILE_TABLES_MAX,
   SAMPLE_SIZE_MAX,
 } from './limits';

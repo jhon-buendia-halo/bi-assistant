@@ -74,7 +74,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 ### The Edge Cases sample
 
-- R24. The Edge Cases sample SHALL hold every edge case below, at the place and with the count given, so paging, filters, sources, result exploration and readiness can be tried on border cases. The counts are exact (the seed is deterministic) and are pinned by `backend/test/edge-cases-fixture.e2e-spec.ts`, an opt-in live test (`EDGE_CASES_SMOKE=1 npx jest --config ./test/jest-e2e.json edge-cases-fixture` in `backend/`) that seeds the sample through the loader's splitter and batches into database `edge_cases` and counts each one. Changing the seed means changing that test and this table together.
+- R24. The Edge Cases sample SHALL hold every edge case below, at the place and with the count given, so paging, filters, sources, result exploration and profiling can be tried on border cases. The counts are exact (the seed is deterministic) and are pinned by `backend/test/edge-cases-fixture.e2e-spec.ts`, an opt-in live test (`EDGE_CASES_SMOKE=1 npx jest --config ./test/jest-e2e.json edge-cases-fixture` in `backend/`) that seeds the sample through the loader's splitter and batches into database `edge_cases` and counts each one. Changing the seed means changing that test and this table together.
 
   Rows: `order_lines` 1,000,000 (the largest), `orders` 300,000, `payments` 262,500, `shipments` 250,000, `inventory_snapshots` 60,000, `customers` 50,000, `reviews` 40,000, `customer_profile_wide` 20,000, `returns` 15,000, `LegacyOrders` 5,250, `products` 5,000, `mv_daily_sales` 2,129, `categories` 70, `promotions` 40, `store_settings` 1, `gift_cards` 0.
 
@@ -123,12 +123,12 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
   | Duplicate values in an id-like column, no key declared | `LegacyOrders.legacy_order_id` | 250 extra rows |
   | Orphans behind a declared foreign key (`NOT VALID`) | `order_lines.order_id` → `orders.id` | 20 rows |
   | Orphans behind an inferred join (no foreign key) | `order_lines.product_id` → `products.id`; `LegacyOrders.customer_id` → `customers.id` | 25; 52 rows |
-  | Invalid emails (readiness validity rule) | `customers.email`; `payments.payer_email` | 1,000; 750 rows |
-  | Invalid phones (readiness validity rule) | `customers.phone` | 500 rows |
-  | Invalid URLs (readiness validity rule) | `shipments.tracking_url` | 800 rows |
-  | Invalid UUIDs in a text column (readiness validity rule) | `LegacyOrders.legacy_uuid` | 20 rows |
-  | Invalid date strings (readiness validity rule) | `customers.signup_date` | 67 rows |
-  | Postal codes that are not five digits (no readiness rule) | `shipments.postal_code` | 800 rows |
+  | Invalid emails (invalid-format case) | `customers.email`; `payments.payer_email` | 1,000; 750 rows |
+  | Invalid phones (invalid-format case) | `customers.phone` | 500 rows |
+  | Invalid URLs (invalid-format case) | `shipments.tracking_url` | 800 rows |
+  | Invalid UUIDs in a text column (invalid-format case) | `LegacyOrders.legacy_uuid` | 20 rows |
+  | Invalid date strings (invalid-format case) | `customers.signup_date` | 67 rows |
+  | Postal codes that are not five digits (no format check) | `shipments.postal_code` | 800 rows |
   | Same value with other case or spaces ("Brazil", "brazil", " BRAZIL ") | `customers.country`; `shipments.country`; `products.color`; `payments.method` | 6; 3; 5; 3 values collapse |
   | Price outlier and negative price | `products.unit_price` (1,000,000,000.00 and -19.99) | 1 and 1 rows |
   | Percentage above 100 | `products.margin_pct` | 5 rows |

@@ -1,9 +1,3 @@
-// The data-readiness service loads the Databricks driver (ESM-only deps)
-// at import time; the session specs never call it for real.
-jest.mock('../data-readiness/data-readiness.service', () => ({
-  DataReadinessService: class {},
-}));
-
 jest.mock('@mastra/core/request-context', () => ({
   // Map-backed: the turn writes the knowledge record onto the context and
   // reads it back at persist time, so `get` has to return what `set` stored.
@@ -2921,15 +2915,15 @@ describe('SessionsService panel items (ADR-0029)', () => {
 
 describe('toolCallInput (api.md 3.1)', () => {
   it('names the skill a skill tool loads', () => {
-    expect(toolCallInput('skill', { name: 'data-readiness' })).toBe(
-      'data-readiness',
+    expect(toolCallInput('skill', { name: 'sql-analysis' })).toBe(
+      'sql-analysis',
     );
     expect(
       toolCallInput('skill_read', {
-        skillName: 'readiness-drilldown',
-        path: 'references/carriers.md',
+        skillName: 'result-validation',
+        path: 'references/checks.md',
       }),
-    ).toBe('readiness-drilldown/references/carriers.md');
+    ).toBe('result-validation/references/checks.md');
     expect(toolCallInput('skill_search', { query: 'stop-loss' })).toBe(
       'stop-loss',
     );

@@ -102,12 +102,6 @@ function build(
       '',
       options.v2Prompt ?? 'You answer with the core data tools.',
     ),
-    'data-readiness': fakeAgent(
-      'Data Readiness Agent',
-      ['assess_readiness', 'get_readiness_report'],
-      '',
-      'You assess readiness.',
-    ),
     visualization: fakeAgent(
       'Visualization Designer',
       ['b'],
@@ -165,27 +159,6 @@ const agentConfig = (name: string, datasets: string[]) => ({
   starterQuestions: [`Ask ${name}`],
 });
 
-/**
- * Assess Data Readiness as `GET /workflows` lists it (agents.md 5.13): its
- * datasets are the qualifying ones of the fixture, so only the fixed fields.
- */
-const READINESS_SUMMARY = expect.objectContaining({
-  id: 'data-readiness-assessment',
-  name: 'Assess Data Readiness',
-  kind: 'code',
-  owner: 'Official',
-  category: { id: 'data-engineering', name: 'Data Engineering' },
-  // Its seven steps (Rows behind findings since roadmap 1.28.11).
-  stepCount: 7,
-  bar: 'steps',
-  trigger: 'run',
-  starterQuestions: [
-    'Assess the readiness of this dataset',
-    'What are the worst data-quality problems?',
-    'Show my past assessments',
-  ],
-}) as unknown;
-
 /** Answer a Business Question (Avery + Michael), as `GET /workflows` lists it (agents.md 5.23). */
 const AVERY_MICHAEL_SUMMARY = expect.objectContaining({
   id: 'orchestrated-answer-michael',
@@ -210,38 +183,13 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     await ctx.userAgents.publish(zeta.id);
     await ctx.userAgents.create(agentConfig('Sketch', ['World Cup Core']));
 
-    expect(await ctx.service.list()).toEqual([
-      AVERY_MICHAEL_SUMMARY,
-      READINESS_SUMMARY,
-    ]);
+    expect(await ctx.service.list()).toEqual([AVERY_MICHAEL_SUMMARY]);
   });
 
-  it('lists Assess Data Readiness on one PostgreSQL or Databricks dataset, its Explain report run by the Data Readiness Agent (agents.md 5.13)', async () => {
-    ctx = build();
-    const [, readiness] = await ctx.service.list();
-    expect(readiness.agents.map((agent) => agent.key)).toEqual([
-      'data-readiness',
-    ]);
-    expect(readiness.input.map((field) => field.name)).toEqual([
-      'dataset',
-      'question',
-    ]);
-    expect(readiness.input[0]).toMatchObject({
-      type: 'dataset',
-      required: true,
-      datasourceKinds: ['postgres', 'databricks'],
-    });
-    expect(readiness.input[1]).toMatchObject({
-      type: 'textarea',
-      required: false,
-      default: 'Assess the readiness of this dataset',
-    });
-  });
-
-  it('lists the same workflows while no dataset qualifies for the Data Readiness Agent', async () => {
+  it('lists the same workflows whatever kind of dataset exists', async () => {
     ctx = build([{ name: 'Orders API', datasourceKind: 'rest' }]);
     const workflows = await ctx.service.list();
-    expect(workflows).toEqual([AVERY_MICHAEL_SUMMARY, READINESS_SUMMARY]);
+    expect(workflows).toEqual([AVERY_MICHAEL_SUMMARY]);
     expect(workflows[0]).not.toHaveProperty('runRequirement');
     expect(workflows[0]).not.toHaveProperty('chatRequirement');
   });
@@ -257,7 +205,11 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         id: 'orchestrated-answer-michael',
         conversational: true,
       });
-      expect(listed[1]).not.toHaveProperty('conversational');
+      expect(
+        listed
+          .filter((workflow) => workflow.conversational)
+          .map((workflow) => workflow.id),
+      ).toEqual(['orchestrated-answer-michael']);
     });
 
     it("details Elena's agent:insights-lead (117): one Answer step, Elena its agent, conversational, a question and datasets", async () => {
@@ -458,6 +410,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       'deep-analysis',
       'answer-business-question',
       'orchestrated-answer',
+      'data-readiness-assessment',
       'agent:sql-fixer',
       'agent:insights-analyst',
       'agent:rfp',
@@ -506,10 +459,6 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
       ],
     ],
     ['assistant', []],
-    [
-      'data-readiness',
-      [{ id: 'data-readiness-assessment', name: 'Assess Data Readiness' }],
-    ],
     // Ryan stays in the library, in no workflow.
     ['visualization', []],
     ['sql-fixer', []],
@@ -533,9 +482,6 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
     for (const agent of await ctx.agents.list()) {
       expect(agent).not.toHaveProperty('chatRequirement');
     }
-    expect(await ctx.agents.get('data-readiness')).not.toHaveProperty(
-      'chatRequirement',
-    );
   });
 });
 

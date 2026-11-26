@@ -364,7 +364,8 @@ const US_HEALTH: SampleFixture = {
 
 /**
  * A retail store built to break things: a million-row table, awkward names,
- * awkward values and every data-quality problem the readiness engine scores.
+ * awkward values and the usual data-quality problems (nulls, duplicates,
+ * bad formats, orphans).
  * Each edge case and where it lives is listed in the testing-data spec.
  */
 const EDGE_CASES: SampleFixture = {

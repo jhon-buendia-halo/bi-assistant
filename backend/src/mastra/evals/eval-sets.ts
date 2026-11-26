@@ -10,10 +10,6 @@ import {
   insightsAnalystEvalTarget,
 } from './insights-analyst.evals';
 import {
-  DATA_READINESS_EVAL_SET,
-  dataReadinessEvalTarget,
-} from './data-readiness.evals';
-import {
   RESULT_EXPLORER_EVAL_AGENT_KEY,
   RESULT_EXPLORER_EDGE_EVAL_SET,
   RESULT_EXPLORER_EVAL_SET,
@@ -35,15 +31,10 @@ import {
   BI_ANALYST_EVAL_SET,
 } from './bi-analyst.evals';
 import { biAnalystEvalTarget } from './bi-analyst-eval-target';
-import { READINESS_WORKFLOW_EVAL_SET } from './readiness-workflow.evals';
 import { ANALYSIS_PLANNER_EVAL_SET } from './analysis-planner.evals';
 import { ANSWER_WRITER_EVAL_SET } from './answer-writer.evals';
 import { INSIGHTS_ANALYST_EDGE_EVAL_SET } from './insights-analyst-edge.evals';
 import { INSIGHTS_ANALYST_RETAIL_EVAL_SET } from './insights-analyst-retail.evals';
-import {
-  READINESS_WORKFLOW_EVAL_TARGET,
-  readinessWorkflowEvalTarget,
-} from './readiness-workflow-target';
 import { AVERY_EVAL_SET } from './avery-workflow.evals';
 import { INSIGHTS_LEAD_EVAL_SET } from './insights-lead.evals';
 import {
@@ -57,14 +48,12 @@ import {
 
 /**
  * Every eval set, of every agent that has evals (agents.md 8.1): the
- * assistant's, the Data Readiness Agent's, Insights Analyst's, the Query
+ * assistant's, Insights Analyst's, the Query
  * Explainer's, the Result Explorer's, Clara's, Avery's and Elena's. A set runs on the agent its
  * `agentKey` names, the `assistant` when it names none.
  */
 export const EVAL_SETS: AssistantEvalSet[] = [
   ...ASSISTANT_EVAL_SETS,
-  DATA_READINESS_EVAL_SET,
-  READINESS_WORKFLOW_EVAL_SET,
   ANALYSIS_PLANNER_EVAL_SET,
   ANSWER_WRITER_EVAL_SET,
   INSIGHTS_ANALYST_EDGE_EVAL_SET,
@@ -106,7 +95,6 @@ const EVAL_TARGET_FACTORIES: Record<
 > = {
   [ANALYSIS_PLANNER_EVAL_TARGET]: (sets) => analysisPlannerEvalTarget(sets),
   [ANSWER_WRITER_EVAL_TARGET]: (sets) => answerWriterEvalTarget(sets),
-  [READINESS_WORKFLOW_EVAL_TARGET]: (sets) => readinessWorkflowEvalTarget(sets),
   [BI_ANALYST_EVAL_AGENT_KEY]: (sets) => biAnalystEvalTarget(sets),
   [AVERY_WORKFLOW_EVAL_TARGET]: (sets) => averyWorkflowEvalTarget(sets),
   [INSIGHTS_LEAD_EVAL_TARGET]: (sets) => insightsLeadEvalTarget(sets),
@@ -179,7 +167,6 @@ export function evalTargetOf(targetId: string, agentKey: string): EvalTarget {
   const factory = EVAL_TARGET_FACTORIES[targetId];
   if (factory) return factory(setsOfTarget(targetId));
   if (agentKey === 'assistant') return ASSISTANT_EVAL_TARGET;
-  if (agentKey === 'data-readiness') return dataReadinessEvalTarget();
   if (agentKey === INSIGHTS_ANALYST_EVAL_AGENT_KEY)
     return insightsAnalystEvalTarget();
   if (agentKey === QUERY_EXPLAINER_EVAL_AGENT_KEY)

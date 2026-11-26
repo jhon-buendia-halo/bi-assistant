@@ -77,7 +77,6 @@ export const AGENTS_STORE = 'DOC_STORE_agents';
 export const SKILLS_STORE = 'DOC_STORE_skills';
 export const SKILL_OVERRIDES_STORE = 'DOC_STORE_skill_overrides';
 export const AGENT_PROMPT_OVERRIDES_STORE = 'DOC_STORE_agent_prompt_overrides';
-export const READINESS_REPORTS_STORE = 'DOC_STORE_readiness_reports';
 export const WORKFLOW_RUNS_STORE = 'DOC_STORE_workflow_runs';
 export const WORKFLOW_RUN_NODE_CHATS_STORE =
   'DOC_STORE_workflow_run_node_chats';

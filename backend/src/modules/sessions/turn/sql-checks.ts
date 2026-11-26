@@ -65,27 +65,6 @@ export class SqlChecks {
   constructor(private readonly deps: SqlChecksDeps) {}
 
   /**
-   * A statement the app built itself (the rows behind a readiness finding,
-   * roadmap 1.28.11), on the guarded read-only path with no repair: it
-   * never calls a model, and its failure is the caller's to record.
-   * `truncated` as `runSqlWithRepair` sets it; `totalRows` stays on the
-   * result for the caller's query facts.
-   */
-  async runBuiltSql(
-    datasourceId: string,
-    sql: string,
-    limit: number,
-    options?: SqlCallOptions,
-  ): Promise<SqlRunResult> {
-    const result = await this.runReadOnly(datasourceId, sql, limit, options);
-    const truncated =
-      typeof result.totalRows === 'number'
-        ? result.totalRows > result.rows.length
-        : result.rows.length >= limit;
-    return { ...result, ...(truncated ? { truncated: true } : {}) };
-  }
-
-  /**
    * `DatasourcesService.runReadOnlySql` with the turn's stop signal when
    * there is one (datasources R38): an abort cancels the statement at the
    * source and rejects with the signal's reason. `options.maxRows` lifts

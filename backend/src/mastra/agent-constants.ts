@@ -12,15 +12,6 @@
  */
 export const ASSISTANT_MAX_STEPS = 15;
 
-/** The Data Readiness Agent's tool-loop budget per turn (agents.md 2.10). */
-export const DATA_READINESS_MAX_STEPS = 10;
-
-/** The Data Readiness Agent's registry key (agents.md 2.10, ADR-0031). */
-export const DATA_READINESS_AGENT_KEY = 'data-readiness';
-
-/** Its name: the Explain report step's agent (agents.md 5.13). */
-export const DATA_READINESS_AGENT_NAME = 'Data Readiness Agent';
-
 /**
  * The registry keys of the built-in agents shown as Official (api.md 33):
  * the agents a chat can run. Every other registered agent is a System agent
@@ -30,7 +21,6 @@ export const DATA_READINESS_AGENT_NAME = 'Data Readiness Agent';
 export const OFFICIAL_AGENT_KEYS: readonly string[] = [
   'assistant',
   'insights-analyst',
-  'data-readiness',
   // Elena, the Insights Lead: talked to directly in her own conversation
   // (plan Elena 2), not through a chat.
   'insights-lead',

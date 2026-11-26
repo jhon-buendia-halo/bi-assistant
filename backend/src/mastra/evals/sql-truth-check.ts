@@ -23,7 +23,7 @@ export interface SqlTruthCompareInput {
   answer: string;
   /** The answer parsed as JSON (isolated-call targets), else undefined. */
   parsed: unknown;
-  /** The run's details (`details.steps`, `details.report`, …). */
+  /** The run's details (`details.steps`, `details.output`, …). */
   details: EvalRunDetails;
 }
 

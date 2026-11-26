@@ -46,12 +46,6 @@ import type { VerifiedQueriesService } from '../../verified-queries/verified-que
 import type { MetricsService } from '../../metrics/metrics.service';
 import type { OntologyService } from '../../ontology/ontology.service';
 import type { VisualizationService } from '../visualization.service';
-import {
-  DATA_READINESS_AGENT_KEY,
-  READINESS_MAX_STEPS,
-  isoToday,
-  readinessOrientationBlock,
-} from '../readiness-bridge';
 import type { SessionDoc } from '../entities/session.entity';
 import {
   KNOWLEDGE_USED_CONTEXT_KEY,
@@ -257,9 +251,6 @@ export class TurnOptions {
     abortSignal?: AbortSignal,
     activeVisualId?: string,
   ) {
-    if (session.agentKey === DATA_READINESS_AGENT_KEY) {
-      return this.readinessAgentOptions(session, question, abortSignal);
-    }
     if (session.agentKey === INSIGHTS_ANALYST_AGENT_KEY) {
       return this.analystAgentOptions(
         session,
@@ -343,61 +334,6 @@ export class TurnOptions {
       abortSignal,
       memory: { thread: session.id, resource: session.id },
     };
-  }
-
-  /**
-   * A turn of the Data Readiness Agent (agents.md 2.10, 4.1, 4.2): Block D1
-   * only, its requestContext keys and no workflow (ADR-0031).
-   */
-  private async readinessAgentOptions(
-    session: SessionDoc,
-    question?: string,
-    abortSignal?: AbortSignal,
-  ) {
-    const requestContext = new RequestContext();
-    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
-    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
-    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
-    const workspace = await this.deps.mastra.ensureSessionWorkspace(
-      session.id,
-      session.name,
-    );
-    requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
-    const { reasoningEffort } = await this.deps.llmService.getView();
-    return {
-      maxSteps: READINESS_MAX_STEPS,
-      providerOptions: await turnProviderOptions({ reasoningEffort }),
-      context: [
-        {
-          role: 'system' as const,
-          content: await this.readinessOrientation(session),
-        },
-      ],
-      requestContext,
-      abortSignal,
-      memory: { thread: session.id, resource: session.id },
-    };
-  }
-
-  /** Block D1 (agents.md 4.1): each session dataset, its datasource and size. */
-  private async readinessOrientation(session: SessionDoc): Promise<string> {
-    const datasets = await this.deps.datasets.bound(session.datasets);
-    const rows = await Promise.all(
-      session.datasets
-        .map((name) => datasets.find((dataset) => dataset.name === name))
-        .filter((dataset) => dataset !== undefined)
-        .map(async (dataset) => ({
-          name: dataset.name,
-          datasourceKind: dataset.datasourceKind,
-          datasourceName: dataset.datasourceId
-            ? await this.deps.datasets.datasourceName(dataset.datasourceId)
-            : 'none',
-          datasourceId: dataset.datasourceId,
-          entityCount: dataset.tables.length,
-          exampleEntity: dataset.tables[0],
-        })),
-    );
-    return readinessOrientationBlock(rows, isoToday());
   }
 
   /**

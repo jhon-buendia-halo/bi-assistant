@@ -35,11 +35,6 @@ import { AgentPromptsService } from './agent-prompts.service';
 import type { AgentPromptView } from './entities/agent-prompt-override.entity';
 import { evalSetsFor } from '../../mastra/evals/eval-sets';
 import {
-  builtinAgentSession,
-  builtinSessionDatasets,
-  existingDatasetsFor,
-} from './builtin-sessions';
-import {
   effectiveConfig,
   hasUnpublishedChanges,
   missingDatasets,
@@ -541,15 +536,6 @@ export class AgentsService {
   ): Promise<AgentSummary> {
     const official = OFFICIAL_AGENT_KEYS.includes(key);
     const persona = builtinAgentPersona(key);
-    // A built-in agent with datasets of its own (a named one, or the Data
-    // Readiness Agent's kind) shows them (api.md 2.6 #33).
-    const builtinSession = builtinAgentSession(key);
-    const declared = builtinSession
-      ? builtinSessionDatasets(
-          builtinSession,
-          await existingDatasetsFor(builtinSession, this.userAgents),
-        )
-      : undefined;
     return {
       key,
       id: agent.id ?? key,
@@ -564,13 +550,9 @@ export class AgentsService {
       pinned: pins.includes(key),
       owner: official ? 'Official' : 'System',
       hasUnpublishedChanges: false,
-      missingDatasets: declared?.missing ?? [],
-      datasets: declared?.datasets ?? [],
-      // A kind-declaring agent lists its starters (api.md 2.6 #33).
-      starterQuestions:
-        builtinSession && 'datasourceKinds' in builtinSession
-          ? [...builtinSession.starterQuestions]
-          : [],
+      missingDatasets: [],
+      datasets: [],
+      starterQuestions: [],
       usedInWorkflows: workflowsUsingAgent(key),
     };
   }
