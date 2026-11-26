@@ -960,7 +960,6 @@ export class WorkflowRunsService
               })),
             }
           : {}),
-        ...(prepared.turn.artifact ? { artifact: prepared.turn.artifact } : {}),
         // Avery's run reads its conversation for an export (agents.md 3.18).
         ...(base.conversationId ? { conversationId: base.conversationId } : {}),
         ...(prepared.context

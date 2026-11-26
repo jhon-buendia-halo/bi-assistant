@@ -52,10 +52,7 @@ const SECTIONS = [
   {
     id: 'data-engineering',
     heading: 'Data Engineering',
-    workflows: [
-      [READINESS_ID, READINESS],
-      ['consumption-gap-analysis', 'Consumption Gap Analysis'],
-    ],
+    workflows: [[READINESS_ID, READINESS]],
   },
 ] as const;
 const WORKFLOW_COUNT = SECTIONS.reduce((n, s) => n + s.workflows.length, 0);
@@ -317,7 +314,7 @@ test.describe('Feature: Workflows', () => {
       );
       await scenarioStep(
         page,
-        'Then I see the workflows grouped by category: "Answer a Business Question (Avery + Michael)" under Data Analytics, "Assess Data Readiness" and "Consumption Gap Analysis" under Data Engineering',
+        'Then I see the workflows grouped by category: "Answer a Business Question (Avery + Michael)" under Data Analytics, "Assess Data Readiness" under Data Engineering',
         async () => {
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
@@ -509,7 +506,7 @@ test.describe('Feature: Workflows', () => {
     });
     await scenarioStep(
       page,
-      'Then only the Data Engineering section shows, with "Assess Data Readiness" and "Consumption Gap Analysis"',
+      'Then only the Data Engineering section shows, with "Assess Data Readiness"',
       async () => {
         await expect(
           page.getByTestId('workflow-filter-data-engineering'),
@@ -519,7 +516,6 @@ test.describe('Feature: Workflows', () => {
         ).toHaveCount(1);
         expect(await cardIds(section(page, 'data-engineering'))).toEqual([
           READINESS_ID,
-          'consumption-gap-analysis',
         ]);
       },
     );

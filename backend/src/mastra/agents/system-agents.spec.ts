@@ -20,11 +20,6 @@ import { join } from 'path';
 import { setAgentPromptOverrides } from '../agent-prompt-overrides';
 import { shippedAgentPrompt } from '../shipped-agent-prompts';
 import { SYSTEM_AGENT_KEYS } from '../agent-constants';
-import {
-  GAP_ADVISOR_INSTRUCTIONS,
-  LAYER_MAPPER_INSTRUCTIONS,
-  REQUIREMENTS_ANALYST_INSTRUCTIONS,
-} from '../workflows/consumption-gap-analysis.prompts';
 import { BI_ANALYST_INSTRUCTIONS } from '../workflows/bi-analyst.prompts';
 import { BUILTIN_AGENT_PERSONAS } from '../agent-personas';
 import { biAnalystAgent } from './bi-analyst.agent';
@@ -33,9 +28,6 @@ import {
   BI_ANALYST_TOOL_NAMES,
 } from './bi-analyst-catalog';
 import { evalJudgeAgent } from './eval-judge.agent';
-import { gapAdvisorAgent } from './gap-advisor.agent';
-import { layerMapperAgent } from './layer-mapper.agent';
-import { requirementsAnalystAgent } from './requirements-analyst.agent';
 import { knowledgeBootstrapAgent } from './knowledge-bootstrap.agent';
 import { sqlFixerAgent } from './sql-fixer.agent';
 import { sqlVerifierAgent } from './sql-verifier.agent';
@@ -89,62 +81,6 @@ describe.each(Object.keys(AGENTS) as (keyof typeof AGENTS)[])(
     });
   },
 );
-
-describe.each([
-  [
-    'requirements-analyst',
-    'Requirements Analyst',
-    requirementsAnalystAgent,
-    REQUIREMENTS_ANALYST_INSTRUCTIONS,
-  ],
-  ['layer-mapper', 'Layer Mapper', layerMapperAgent, LAYER_MAPPER_INSTRUCTIONS],
-  ['gap-advisor', 'Gap Advisor', gapAdvisorAgent, GAP_ADVISOR_INSTRUCTIONS],
-])(
-  'System agent %s (agents.md 2.18 to 2.20; ADR-0026)',
-  (key, name, agent, instructions) => {
-    const served = agent as unknown as {
-      getInstructions(): unknown;
-      config: { id: string; name: string };
-    };
-
-    it('is a System agent registered under its key', () => {
-      expect(SYSTEM_AGENT_KEYS).toContain(key);
-      expect(served.config).toMatchObject({ id: key, name });
-    });
-
-    it('serves the shipped instructions, or their override', () => {
-      expect(shippedAgentPrompt(key)).toBe(instructions);
-      expect(served.getInstructions()).toBe(instructions);
-      setAgentPromptOverrides([{ key, prompt: 'Edited.', baseHash: 'h' }]);
-      expect(served.getInstructions()).toBe('Edited.');
-      setAgentPromptOverrides([]);
-      expect(served.getInstructions()).toBe(instructions);
-    });
-  },
-);
-
-describe('Consumption Gap Analysis instructions (agents.md 2.18 to 2.20)', () => {
-  it('tell the Layer Mapper that a missing source is a correct answer', () => {
-    expect(LAYER_MAPPER_INSTRUCTIONS).toContain(
-      'a missing source is a correct answer',
-    );
-    expect(LAYER_MAPPER_INSTRUCTIONS).toContain('in EACH layer');
-  });
-
-  it('tell the Gap Advisor its fixes are proposals, never run', () => {
-    expect(GAP_ADVISOR_INSTRUCTIONS).toContain('It is never run');
-    expect(GAP_ADVISOR_INSTRUCTIONS).toContain('lowest layer');
-  });
-
-  it('tell the Requirements Analyst to use business names and name periods only when asked', () => {
-    expect(REQUIREMENTS_ANALYST_INSTRUCTIONS).toContain(
-      'never guessed column names',
-    );
-    expect(REQUIREMENTS_ANALYST_INSTRUCTIONS).toContain(
-      'only periods the question names explicitly',
-    );
-  });
-});
 
 describe('System agent bi-analyst (plan bi-dashboard; ADR-0026)', () => {
   const agent = biAnalystAgent as unknown as {

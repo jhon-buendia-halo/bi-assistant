@@ -1,9 +1,8 @@
 /**
  * Work one step of a turn's workflow starts and a later step takes
- * (agents.md 5.13, 5.20): the graph stays linear, one catalogue step runs at
- * a time, and independent work runs meanwhile. Assess Data Readiness starts
- * the rows behind findings at Save report; Consumption Gap Analysis starts
- * the lineage checks at Load layer catalogs.
+ * (agents.md 5.13): the graph stays linear, one catalogue step runs at a
+ * time, and independent work runs meanwhile. Assess Data Readiness starts
+ * the rows behind findings at Save report.
  *
  * - `start` gives each job its own signal, aborted with the turn's, and
  *   catches its outcome at once, so a job that fails before it is taken is
@@ -124,28 +123,5 @@ export function earlyWork(turnSignal: AbortSignal): EarlyWork {
       // The outcome never rejects: a job's own error is caught at start.
       await Promise.all(untaken.map(([, entry]) => entry.outcome));
     },
-  };
-}
-
-/**
- * `fetch` called once per key for as long as the memo lives (one run): a
- * second call with the same key gets the first call's promise. A failed
- * call is forgotten, so the next caller tries again.
- */
-export function memoisedBy<I, O>(
-  fetch: (input: I) => Promise<O>,
-  keyOf: (input: I) => string,
-): (input: I) => Promise<O> {
-  const calls = new Map<string, Promise<O>>();
-  return (input: I) => {
-    const key = keyOf(input);
-    const known = calls.get(key);
-    if (known) return known;
-    const call = fetch(input);
-    calls.set(key, call);
-    call.catch(() => {
-      if (calls.get(key) === call) calls.delete(key);
-    });
-    return call;
   };
 }

@@ -1,4 +1,4 @@
-import { earlyWork, memoisedBy } from './early-work';
+import { earlyWork } from './early-work';
 
 /** A promise and the functions that settle it. */
 function deferred<T>() {
@@ -14,7 +14,7 @@ function deferred<T>() {
 /** Let every queued microtask and timer callback run. */
 const flush = () => new Promise((done) => setImmediate(done));
 
-describe('earlyWork: work a step starts and a later step takes (agents.md 5.13, 5.20)', () => {
+describe('earlyWork: work a step starts and a later step takes (agents.md 5.13)', () => {
   it('buffers the records a job makes and replays them in order when a step takes it', async () => {
     const turn = new AbortController();
     const work = earlyWork(turn.signal);
@@ -258,29 +258,5 @@ describe('earlyWork: work a step starts and a later step takes (agents.md 5.13, 
     expect(() => work.start('twice', () => Promise.resolve())).toThrow(
       'The early work "twice" has already started',
     );
-  });
-});
-
-describe('memoisedBy: one call per key for a run (agents.md 5.20)', () => {
-  it('calls once per key and hands every caller the same result', async () => {
-    const fetch = jest.fn((input: { datasets: string[] }) =>
-      Promise.resolve(input.datasets.length),
-    );
-    const once = memoisedBy(fetch, (input) => input.datasets.join('\n'));
-    await expect(once({ datasets: ['World Cup'] })).resolves.toBe(1);
-    await expect(once({ datasets: ['World Cup'] })).resolves.toBe(1);
-    await expect(once({ datasets: ['A', 'B'] })).resolves.toBe(2);
-    expect(fetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('calls again after a failure', async () => {
-    const fetch = jest
-      .fn<Promise<number>, [string]>()
-      .mockRejectedValueOnce(new Error('down'))
-      .mockResolvedValueOnce(3);
-    const once = memoisedBy(fetch, (key) => key);
-    await expect(once('k')).rejects.toThrow('down');
-    await expect(once('k')).resolves.toBe(3);
-    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
