@@ -127,8 +127,7 @@ function conversationAgents(workflow: IntakeWorkflow): string[] {
 export function emptyHint(workflow: IntakeWorkflow): string {
   const names = conversationAgents(workflow);
   const data = workflow.input.some(
-    (field) =>
-      !field.hidden && (field.type === 'datasets' || field.type === 'dataset'),
+    (field) => !field.hidden && field.type === 'datasets',
   );
   if (names.length === 0) return `Send a message to run ${workflow.name}.`;
   return data
@@ -173,7 +172,6 @@ export function intakeKind(field: WorkflowInputField): IntakeKind {
   switch (field.type) {
     case 'datasets':
       return 'pick-many';
-    case 'dataset':
     case 'artifact':
       return 'pick-one';
     case 'image':
@@ -250,8 +248,6 @@ function askCore(field: WorkflowInputField, who: string): string {
   switch (field.type) {
     case 'datasets':
       return `which data should ${who} look at? Pick one or more datasets.`;
-    case 'dataset':
-      return `which dataset should ${who} look at? Pick one.`;
     case 'artifact':
       return `which ${label} should ${who} use? Pick one.`;
     case 'image':

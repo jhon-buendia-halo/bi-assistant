@@ -440,7 +440,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
 
     function openAssistant(workflow: WorkflowDetail = ASSISTANT): void {
       open(workflow, () => {
-        if (workflow.input.some((f) => f.type === 'datasets' || f.type === 'dataset')) {
+        if (workflow.input.some((f) => f.type === 'datasets')) {
           http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: DATASETS });
         }
       });
@@ -636,69 +636,6 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       openMenu('datasets');
       expect(q('run-composer-option-datasets-World Cup Core')).not.toBeNull();
       expect(q('run-composer-option-datasets-Sales')).toBeNull();
-    });
-
-    it('a dataset field is asked as a single pick of its kinds, which continues at once and sends a string', () => {
-      openAssistant({
-        ...ASSISTANT,
-        input: [
-          {
-            name: 'question',
-            label: 'Question',
-            type: 'textarea',
-            required: false,
-            default: 'Assess it.',
-          },
-          {
-            name: 'dataset',
-            label: 'Dataset',
-            type: 'dataset',
-            required: true,
-            datasourceKinds: ['postgres', 'databricks'],
-          },
-        ],
-      });
-      // The question has a default: Send runs with it, nothing typed.
-      expect((q('run-composer-send') as HTMLButtonElement).disabled).toBeFalse();
-      send();
-      expect(runs.calls.length).toBe(0);
-      expect(q('run-intake-dataset')!.textContent).toContain(
-        'First, which dataset should I look at? Pick one.',
-      );
-      expect(q('run-intake-option-dataset-Sales')).toBeNull();
-      expect(q('run-intake-continue')).toBeNull();
-      click('run-intake-option-dataset-World Cup Core');
-      expect(runs.last.body).toEqual({
-        input: { question: 'Assess it.', dataset: 'World Cup Core' },
-      });
-    });
-
-    describe('a run with a dataset input', () => {
-      const WITH_DATASET: WorkflowDetail = {
-        ...ASSISTANT,
-        input: [
-          {
-            name: 'dataset',
-            label: 'Dataset',
-            type: 'dataset',
-            required: true,
-            datasourceKinds: ['postgres', 'databricks'],
-          },
-        ],
-      };
-
-      it('Run again on a run opened from Runs shows its dataset picked (R19)', () => {
-        designer.showRunOnLoad(
-          assistantRun({ input: { dataset: 'World Cup Core' } }),
-        );
-        openAssistant(WITH_DATASET);
-        click('workflow-run-again');
-        expect(text('run-composer-chip-dataset')).toContain('World Cup Core');
-        openMenu('dataset');
-        expect(
-          q('run-composer-option-dataset-World Cup Core')!.getAttribute('aria-pressed'),
-        ).toBe('true');
-      });
     });
 
     it('example chips fill the message box and do not run', () => {

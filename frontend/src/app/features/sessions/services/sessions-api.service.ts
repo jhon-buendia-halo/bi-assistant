@@ -71,16 +71,6 @@ export function parseToolEvent(content: string): ToolCallEvent {
   return { name: raw };
 }
 
-/** Live progress of a running tool (api.md 3.1 `tool-progress`). */
-export interface ToolProgressEvent {
-  tool: string;
-  phase: string;
-  message: string;
-  done?: number;
-  total?: number;
-  entity?: string;
-}
-
 /**
  * The agent turn's events (api.md 3.1), shared by the chat stream and the
  * workflow run stream (api.md 3.6), which forwards them unchanged.
@@ -91,8 +81,6 @@ export interface AgentStreamHandlers {
   onTool?: (call: ToolCallEvent) => void;
   /** Summary of one finished call, including why it was run. */
   onToolResult?: (summary: ToolDataRecord) => void;
-  /** A long-running tool reports where it is, between its call and result. */
-  onToolProgress?: (p: ToolProgressEvent) => void;
   onVisualUpdated?: (event: VisualEvent) => void;
   /** `show_in_panel` put an item in the panel. */
   onPanelItem?: (event: PanelItemEvent) => void;
@@ -144,13 +132,6 @@ export function dispatchAgentEvent(
       parseContent<ToolDataRecord>(event.content, (v) =>
         handlers.onToolResult?.(v),
       );
-      return true;
-    case 'tool-progress':
-      parseContent<ToolProgressEvent | null>(event.content, (p) => {
-        if (p && typeof p.tool === 'string' && typeof p.message === 'string') {
-          handlers.onToolProgress?.(p);
-        }
-      });
       return true;
     case 'visual-updated':
       parseContent<VisualEvent>(event.content, (v) =>

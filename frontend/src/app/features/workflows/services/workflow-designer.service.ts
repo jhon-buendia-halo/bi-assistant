@@ -565,9 +565,7 @@ export class WorkflowDesigner {
         }
         if (
           workflow.input.some(
-            (field) =>
-              !field.hidden &&
-              (field.type === 'datasets' || field.type === 'dataset'),
+            (field) => !field.hidden && field.type === 'datasets',
           )
         ) {
           this.loadDatasets(runNow);
@@ -1288,13 +1286,6 @@ export class WorkflowDesigner {
             ? { rowCount: summary.rowCount }
             : {}),
           ...(summary.error ? { error: summary.error } : {}),
-        }));
-      },
-      onToolProgress: (progress) => {
-        if (!live()) return;
-        this.updateOpenCall(progress.tool, (call) => ({
-          ...call,
-          progress: progress.message,
         }));
       },
       onDone: (run) => {
