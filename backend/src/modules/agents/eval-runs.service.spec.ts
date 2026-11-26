@@ -13,15 +13,15 @@ jest.mock('../../mastra/evals/eval-sets', () => {
   const sets = [
     { id: 'world-cup', cases: [{ id: 'champion-2022' }] },
     {
-      id: 'data-readiness',
-      agentKey: 'data-readiness',
-      cases: [{ id: 'dr-first' }],
+      id: 'explain-sql',
+      agentKey: 'query-explainer',
+      cases: [{ id: 'qe-first' }],
     },
   ];
   const targets: Record<string, unknown> = {
     assistant: { agentKey: 'assistant' },
-    'data-readiness': {
-      agentKey: 'data-readiness',
+    'query-explainer': {
+      agentKey: 'query-explainer',
       finish: jest.fn().mockResolvedValue(undefined),
     },
   };
@@ -234,38 +234,40 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
     jest
       .mocked(selectEvalCases)
       .mockReturnValueOnce([
-        { id: 'dr-first', question: 'Assess Claims' },
+        { id: 'qe-first', question: 'Explain this query' },
       ] as never);
     jest
       .mocked(runAssistantEvalCase)
-      .mockResolvedValueOnce({ id: 'dr-first', passed: true } as never);
+      .mockResolvedValueOnce({ id: 'qe-first', passed: true } as never);
     // The clean-up runs in the run's scope, so its model calls are marked.
     const finishScopes: (string | undefined)[] = [];
     (
-      evalTargetFor('data-readiness') as unknown as { finish: jest.Mock }
+      evalTargetFor('query-explainer') as unknown as { finish: jest.Mock }
     ).finish.mockImplementationOnce(() => {
       finishScopes.push(currentEvalRunId());
       return Promise.resolve();
     });
 
-    const started = await service().start('data-readiness', 'wc', ['dr-first']);
+    const started = await service().start('query-explainer', 'wc', [
+      'qe-first',
+    ]);
 
     expect(started).toEqual({ jobId: expect.any(String) as string });
     const agentSets = [
       {
-        id: 'data-readiness',
-        agentKey: 'data-readiness',
-        cases: [{ id: 'dr-first' }],
+        id: 'explain-sql',
+        agentKey: 'query-explainer',
+        cases: [{ id: 'qe-first' }],
       },
     ];
-    expect(selectEvalCases).toHaveBeenCalledWith(['dr-first'], agentSets);
-    expect(fixtureForCases).toHaveBeenCalledWith(['dr-first'], agentSets);
+    expect(selectEvalCases).toHaveBeenCalledWith(['qe-first'], agentSets);
+    expect(fixtureForCases).toHaveBeenCalledWith(['qe-first'], agentSets);
     expect(repository.insert).toHaveBeenCalledWith(
       expect.objectContaining({
-        agentKey: 'data-readiness',
-        caseIds: ['dr-first'],
+        agentKey: 'query-explainer',
+        caseIds: ['qe-first'],
         totalCases: 1,
-        setId: 'data-readiness',
+        setId: 'explain-sql',
         provider: 'openai',
         model: 'gpt-4o-mini',
         source: 'app',
@@ -274,11 +276,11 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
     for (let i = 0; i < 5; i++) {
       await new Promise((resolve) => setImmediate(resolve));
     }
-    const target = evalTargetFor('data-readiness') as unknown as {
+    const target = evalTargetFor('query-explainer') as unknown as {
       finish: jest.Mock;
     };
     expect(runAssistantEvalCase).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'dr-first' }),
+      expect.objectContaining({ id: 'qe-first' }),
       ['Sample'],
       'session',
       '',

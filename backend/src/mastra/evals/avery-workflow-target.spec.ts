@@ -6,9 +6,6 @@ jest.mock('@mastra/evals/checks', () => ({
   checks: new Proxy({}, { get: () => () => ({ id: 'stub-check' }) }),
 }));
 jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
-jest.mock('../agents/data-readiness.agent', () => ({
-  dataReadinessAgent: { id: 'data-readiness' },
-}));
 jest.mock('../agents/insights-analyst.agent', () => ({
   insightsAnalystAgent: { id: 'insights-analyst' },
 }));

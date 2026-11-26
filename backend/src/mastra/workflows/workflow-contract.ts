@@ -155,7 +155,6 @@ export interface ContractProblem {
 const FIELD_SCHEMAS: Record<WorkflowInputFieldType, JsonSchema> = {
   text: { type: 'string' },
   textarea: { type: 'string' },
-  dataset: { type: 'string' },
   // The path the run stores the image at.
   image: { type: 'string' },
   // The paths the run stores the reference images at (workflows R35).

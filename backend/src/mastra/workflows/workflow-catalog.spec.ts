@@ -37,7 +37,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds three code workflows: Avery + Michael (5.23), Assess Data Readiness (agents.md 5.13) and Consumption Gap Analysis (5.20)', () => {
+  it('holds two code workflows: Avery + Michael (5.23) and Consumption Gap Analysis (5.20)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -51,13 +51,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         id: 'orchestrated-answer-michael',
         name: 'Answer a Business Question (Avery + Michael)',
         primaryFor: 'insights-analyst',
-        bar: 'steps',
-        trigger: 'run',
-      },
-      {
-        id: 'data-readiness-assessment',
-        name: 'Assess Data Readiness',
-        primaryFor: 'data-readiness',
         bar: 'steps',
         trigger: 'run',
       },
@@ -98,6 +91,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'recreate-dashboard',
       'map-dashboard-data',
       'review-website',
+      'data-readiness-assessment',
     ]);
     for (const id of REMOVED_WORKFLOW_IDS) {
       expect(CODE_WORKFLOWS.some((workflow) => workflow.id === id)).toBe(false);
@@ -109,13 +103,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'recreate-dashboard': 'Dashboard Image to Artifact',
       'map-dashboard-data': 'Map a Dashboard to Data',
       'review-website': 'Review a Website',
+      'data-readiness-assessment': 'Assess Data Readiness',
     });
   });
 
   it('files every workflow under one category, the Workflows sections (workflows R5)', () => {
     expect(CODE_WORKFLOWS.map(({ id, category }) => [id, category])).toEqual([
       ['orchestrated-answer-michael', 'data-analytics'],
-      ['data-readiness-assessment', 'data-engineering'],
       ['consumption-gap-analysis', 'data-engineering'],
     ]);
   });
@@ -165,10 +159,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       expect(usedBy('orchestrated-answer-michael')).toEqual({
         question: ['orchestrate'],
         datasets: ['orchestrate'],
-      });
-      expect(usedBy('data-readiness-assessment')).toEqual({
-        dataset: ['resolve-dataset'],
-        question: ['resolve-dataset'],
       });
     });
   });
@@ -269,6 +259,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ['recreate-dashboard', 'dashboard-reader'],
       ['map-dashboard-data', 'data-mapper'],
       ['review-website', 'site-reviewer'],
+      ['data-readiness-assessment', 'data-readiness'],
     ])(
       'keeps %s on a past chat of its removed agent %s; without it, the chat is the Assistant',
       (id, agentKey) => {
@@ -322,7 +313,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       });
     });
 
-    it("the readiness run's dataset is its only dataset", () => {
+    it("ignores the removed Assess Data Readiness's dataset", () => {
       expect(
         agentRunTurn({
           dataset: 'Claims',
@@ -330,7 +321,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         }),
       ).toEqual({
         question: 'Assess the readiness of this dataset',
-        datasets: ['Claims'],
         careful: false,
       });
     });
@@ -345,7 +335,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
   it("names the assistant's agent-turn binding as an old session's chip reads it", () => {
     expect(ASSISTANT_WORKFLOW_ID).toBe('agent:assistant');
     expect(ASSISTANT_WORKFLOW_NAME).toBe('Assistant');
-    expect(WRAPPED_AGENT_KEYS).toEqual(['assistant', 'data-readiness']);
+    expect(WRAPPED_AGENT_KEYS).toEqual(['assistant']);
   });
 
   describe('drift (plan 4.2)', () => {
@@ -383,17 +373,9 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       }
     });
 
-    it('wraps no code workflow’s primaryFor agent but the Data Readiness Agent, and no System agent', () => {
-      // The Data Readiness Agent runs Assess Data Readiness's Explain report
-      // step and keeps its own agent turn for its sessions and its evals.
+    it('wraps no code workflow’s primaryFor agent, and no System agent', () => {
       for (const source of CODE_WORKFLOWS) {
-        expect({
-          key: source.primaryFor,
-          wrapped: WRAPPED_AGENT_KEYS.includes(source.primaryFor),
-        }).toEqual({
-          key: source.primaryFor,
-          wrapped: source.primaryFor === 'data-readiness',
-        });
+        expect(WRAPPED_AGENT_KEYS).not.toContain(source.primaryFor);
       }
       for (const key of SYSTEM_AGENT_KEYS) {
         expect(WRAPPED_AGENT_KEYS).not.toContain(key);
@@ -403,7 +385,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
 
   describe('agentWorkflowId and parseWorkflowId (R2)', () => {
     it('prefixes a key or an id with agent:', () => {
-      expect(agentWorkflowId('data-readiness')).toBe('agent:data-readiness');
+      expect(agentWorkflowId('assistant')).toBe('agent:assistant');
       expect(agentWorkflowId('9b1c')).toBe('agent:9b1c');
     });
 
@@ -414,15 +396,12 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       });
     });
 
-    it.each(['assistant', 'data-readiness'])(
-      'parses agent:%s as a wrapped built-in agent',
-      (key) => {
-        expect(parseWorkflowId(`agent:${key}`)).toEqual({
-          kind: 'builtin-agent',
-          agentKey: key,
-        });
-      },
-    );
+    it('parses agent:assistant as a wrapped built-in agent', () => {
+      expect(parseWorkflowId('agent:assistant')).toEqual({
+        kind: 'builtin-agent',
+        agentKey: 'assistant',
+      });
+    });
 
     it("parses Elena's agent:insights-lead as a conversational binding, before the user-agent fallback", () => {
       expect(parseWorkflowId('agent:insights-lead')).toEqual({
@@ -451,6 +430,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       });
     });
 
+    it('no longer wraps the removed Data Readiness Agent: agent:data-readiness is a user agent id the caller will not find', () => {
+      expect(parseWorkflowId('agent:data-readiness')).toEqual({
+        kind: 'user-agent',
+        agentId: 'data-readiness',
+      });
+    });
+
     it('parses any other agent: id as a user agent, for the caller to check', () => {
       expect(parseWorkflowId('agent:0b5e-4f')).toEqual({
         kind: 'user-agent',
@@ -463,7 +449,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ['another System key', 'agent:visualization'],
       ["a code workflow's primaryFor key", 'agent:insights-analyst'],
       ['an unknown id', 'nope'],
-      ['an unprefixed agent key', 'data-readiness'],
+      ['an unprefixed agent key', 'assistant'],
       ['an empty agent id', 'agent:'],
       ['the engine id', AGENT_TURN_WORKFLOW_ID],
       ['an empty id', ''],
@@ -515,11 +501,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         'agent:assistant',
       ],
       [
-        'agentKey data-readiness',
-        { agentKey: 'data-readiness' },
-        'agent:data-readiness',
-      ],
-      [
         'an agentId (the agent exists or was deleted)',
         { agentId: 'u-1' },
         'agent:u-1',
@@ -527,8 +508,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ['neither', {}, 'agent:assistant'],
       [
         'an unresolvable stored id, falling back to agentKey',
-        { workflowId: 'old-removed-workflow', agentKey: 'data-readiness' },
-        'agent:data-readiness',
+        { workflowId: 'old-removed-workflow', agentKey: 'insights-analyst' },
+        'answer-business-question',
       ],
       [
         'an unresolvable stored id, falling back to agentId',
@@ -541,16 +522,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         'agent:assistant',
       ],
       ['an unknown agentKey', { agentKey: 'benchmarking' }, 'agent:assistant'],
-      [
-        "the Data Readiness Agent's agentKey: its agent turn, not Assess Data Readiness",
-        { agentKey: 'data-readiness' },
-        'agent:data-readiness',
-      ],
-      [
-        'a stored Assess Data Readiness id',
-        { workflowId: 'data-readiness-assessment', agentKey: 'data-readiness' },
-        'data-readiness-assessment',
-      ],
     ])('derives from %s', (_label, session, expected) => {
       expect(sessionWorkflowId(session)).toBe(expected);
     });
@@ -569,15 +540,10 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       },
     );
 
-    it('data-readiness is used in Assess Data Readiness only', () => {
-      expect(workflowsUsingAgent('data-readiness')).toEqual([
-        { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
-      ]);
-    });
-
     it.each([
       'assistant',
       'rfp',
+      'data-readiness',
       'sql-fixer',
       'u-1',
       // Olivia, Jessica and Ryan stay in the library, in no workflow.
@@ -611,10 +577,10 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it('gives the step its agent', () => {
       expect(
         oneStepWorkflowSteps({
-          key: 'data-readiness',
-          name: 'Sarah',
-          role: 'Data Quality Analyst',
-          tools: ['assess_data_readiness'],
+          key: 'u-1',
+          name: 'Sketch',
+          role: 'Sales Analyst',
+          tools: ['run_readonly_sql'],
           maxSteps: 10,
         }),
       ).toEqual([
@@ -626,10 +592,10 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
           input: ['question', 'datasets'],
           output: ['calls', 'stopped'],
           agent: {
-            key: 'data-readiness',
-            name: 'Sarah',
-            role: 'Data Quality Analyst',
-            tools: ['assess_data_readiness'],
+            key: 'u-1',
+            name: 'Sketch',
+            role: 'Sales Analyst',
+            tools: ['run_readonly_sql'],
             maxSteps: 10,
           },
           exits: [

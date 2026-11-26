@@ -2,14 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Client, type QueryConfig } from 'pg';
 import type { PostgresConfig } from '../entities/datasource.entity';
 import type {
-  ColumnStats,
-  ColumnStatsExtras,
   FkEdge,
   KeyConstraint,
   ProfiledTable,
   ProfilingConnector,
   ScopedProfiler,
-  TablePrivilege,
 } from './profiling';
 import {
   isAbort,
@@ -129,7 +126,6 @@ class SessionScope {
   closed = false;
   readonly abortPromise: Promise<never>;
   private rejectAbort!: (e: Error) => void;
-  privileges?: Promise<TablePrivilege[]>;
 
   constructor(
     private readonly config: PostgresConfig,
@@ -255,8 +251,8 @@ class SessionScope {
 }
 
 /**
- * Postgres profiling queries (unit 5, BA-256). Aggregate statistics only,
- * outside the user read-only SQL path; every statement still runs inside a
+ * Postgres profiling queries (unit 5, BA-256): catalogue reads and row
+ * samples for the Synthetic data profile, outside the user read-only SQL path; every statement still runs inside a
  * READ ONLY transaction. Ported from data-readiness-agent's PostgresService.
  */
 @Injectable()
@@ -286,18 +282,6 @@ export class PostgresProfiler
       signal?.removeEventListener('abort', onAbort);
       await scope.close();
     }
-  }
-
-  async rowCount(
-    config: PostgresConfig,
-    schema: string,
-    table: string,
-  ): Promise<number> {
-    const rows = await this.run<{ n: string }>(
-      config,
-      `SELECT COUNT(*)::bigint AS n FROM ${q(schema)}.${q(table)}`,
-    );
-    return Number(rows[0]?.n ?? 0);
   }
 
   /**
@@ -392,8 +376,7 @@ export class PostgresProfiler
   /**
    * Every table-like relation the inventory lists (TABLE_RELKINDS) and its
    * columns, from pg_catalog. Unlike information_schema, pg_catalog also lists
-   * relations the role cannot read, so accessibility (R17) can count them.
-   * A relation with no column is still listed, as in the inventory. Types come
+   * relations the role cannot read. A relation with no column is still listed, as in the inventory. Types come
    * from format_type (e.g. `integer[]`).
    */
   async tables(
@@ -443,85 +426,6 @@ export class PostgresProfiler
       });
     }
     return Array.from(byKey.values());
-  }
-
-  async columnStats(
-    config: PostgresConfig,
-    schema: string,
-    table: string,
-    nullableColumns: string[],
-    allColumns: string[],
-    comparableColumns: string[],
-    extras?: ColumnStatsExtras,
-  ): Promise<ColumnStats> {
-    const aggregates: string[] = ['COUNT(*)::bigint AS total'];
-    nullableColumns.forEach((c, i) =>
-      aggregates.push(
-        `COUNT(*) FILTER (WHERE ${q(c)} IS NULL)::bigint AS "n${i}"`,
-      ),
-    );
-    allColumns.forEach((c, i) =>
-      aggregates.push(`COUNT(DISTINCT ${q(c)})::bigint AS "d${i}"`),
-    );
-    comparableColumns.forEach((c, i) => {
-      aggregates.push(`MIN(${q(c)})::text AS "mn${i}"`);
-      aggregates.push(`MAX(${q(c)})::text AS "mx${i}"`);
-    });
-    // BA-323: same expressions as normalizedDistinctCount / invalidFormatCount.
-    const normalized = extras?.normalizedDistinct ?? [];
-    normalized.forEach((c, i) =>
-      aggregates.push(
-        `COUNT(DISTINCT lower(btrim(${q(c)}::text)))::bigint AS "nd${i}"`,
-      ),
-    );
-    const formats = extras?.formats ?? [];
-    const params: unknown[] = [];
-    formats.forEach((f, i) => {
-      params.push(f.pattern);
-      aggregates.push(
-        `COUNT(*) FILTER (WHERE ${q(f.column)} IS NOT NULL AND ${q(f.column)}::text !~* $${params.length})::bigint AS "f${i}"`,
-      );
-    });
-    const rows = await this.run<Record<string, string | null>>(
-      config,
-      `SELECT ${aggregates.join(', ')} FROM ${q(schema)}.${q(table)}`,
-      params,
-    );
-    const row = rows[0] ?? {};
-    const nullCounts: Record<string, number> = {};
-    nullableColumns.forEach(
-      (c, i) => (nullCounts[c] = Number(row[`n${i}`] ?? 0)),
-    );
-    const distinctCounts: Record<string, number> = {};
-    allColumns.forEach(
-      (c, i) => (distinctCounts[c] = Number(row[`d${i}`] ?? 0)),
-    );
-    const minValues: Record<string, string> = {};
-    const maxValues: Record<string, string> = {};
-    comparableColumns.forEach((c, i) => {
-      const mn = row[`mn${i}`];
-      const mx = row[`mx${i}`];
-      if (mn !== null && mn !== undefined) minValues[c] = String(mn);
-      if (mx !== null && mx !== undefined) maxValues[c] = String(mx);
-    });
-    const stats: ColumnStats = {
-      totalRows: Number(row.total ?? 0),
-      nullCounts,
-      distinctCounts,
-      minValues,
-      maxValues,
-    };
-    if (extras?.normalizedDistinct) {
-      const counts: Record<string, number> = {};
-      normalized.forEach((c, i) => (counts[c] = Number(row[`nd${i}`] ?? 0)));
-      stats.normalizedDistinctCounts = counts;
-    }
-    if (extras?.formats) {
-      const counts: Record<string, number> = {};
-      formats.forEach((f, i) => (counts[f.column] = Number(row[`f${i}`] ?? 0)));
-      stats.invalidFormatCounts = counts;
-    }
-    return stats;
   }
 
   async keys(config: PostgresConfig): Promise<KeyConstraint[]> {
@@ -586,103 +490,6 @@ export class PostgresProfiler
     }));
   }
 
-  /** Excess duplicate rows for a (possibly composite) key: SUM(groupSize - 1). */
-  async duplicateCount(
-    config: PostgresConfig,
-    schema: string,
-    table: string,
-    fields: string[],
-  ): Promise<number> {
-    if (fields.length === 0) return 0;
-    const cols = fields.map(q).join(', ');
-    const rows = await this.run<{ dup_rows: string }>(
-      config,
-      `SELECT COALESCE(SUM(c - 1), 0)::bigint AS dup_rows FROM (
-         SELECT COUNT(*) AS c FROM ${q(schema)}.${q(table)}
-         GROUP BY ${cols} HAVING COUNT(*) > 1
-       ) g`,
-    );
-    return Number(rows[0]?.dup_rows ?? 0);
-  }
-
-  async orphanCount(config: PostgresConfig, edge: FkEdge): Promise<number> {
-    const rows = await this.run<{ orphans: string }>(
-      config,
-      `SELECT COUNT(*)::bigint AS orphans
-       FROM ${q(edge.schema)}.${q(edge.table)} c
-       LEFT JOIN ${q(edge.refSchema)}.${q(edge.refTable)} p
-         ON c.${q(edge.column)} = p.${q(edge.refColumn)}
-       WHERE c.${q(edge.column)} IS NOT NULL AND p.${q(edge.refColumn)} IS NULL`,
-    );
-    return Number(rows[0]?.orphans ?? 0);
-  }
-
-  async invalidFormatCount(
-    config: PostgresConfig,
-    schema: string,
-    table: string,
-    column: string,
-    pattern: string,
-  ): Promise<number> {
-    const rows = await this.run<{ bad: string }>(
-      config,
-      `SELECT COUNT(*)::bigint AS bad FROM ${q(schema)}.${q(table)}
-       WHERE ${q(column)} IS NOT NULL AND ${q(column)}::text !~* $1`,
-      [pattern],
-    );
-    return Number(rows[0]?.bad ?? 0);
-  }
-
-  async normalizedDistinctCount(
-    config: PostgresConfig,
-    schema: string,
-    table: string,
-    column: string,
-  ): Promise<number> {
-    const rows = await this.run<{ n: string }>(
-      config,
-      `SELECT COUNT(DISTINCT lower(btrim(${q(column)}::text)))::bigint AS n
-       FROM ${q(schema)}.${q(table)}`,
-    );
-    return Number(rows[0]?.n ?? 0);
-  }
-
-  /** Cached per scope: the privilege inventory does not change mid-assessment. */
-  async tablePrivileges(config: PostgresConfig): Promise<TablePrivilege[]> {
-    const scope = this.scope;
-    if (!scope) return this.readPrivileges(config);
-    scope.privileges ??= this.readPrivileges(config);
-    try {
-      return await scope.privileges;
-    } catch (err) {
-      scope.privileges = undefined;
-      throw err;
-    }
-  }
-
-  private async readPrivileges(
-    config: PostgresConfig,
-  ): Promise<TablePrivilege[]> {
-    const rows = await this.run<{
-      schema: string;
-      table: string;
-      selectable: boolean;
-    }>(
-      config,
-      `SELECT n.nspname AS schema, c.relname AS "table",
-              has_table_privilege(c.oid, 'SELECT') AS selectable
-       FROM pg_class c
-       JOIN pg_namespace n ON n.oid = c.relnamespace
-       WHERE c.relkind IN ${TABLE_RELKINDS}
-         AND ${NON_SYSTEM_SCHEMA}`,
-    );
-    return rows.map((r) => ({
-      schema: r.schema,
-      table: r.table,
-      selectable: r.selectable,
-    }));
-  }
-
   /**
    * One statement, inside a READ ONLY transaction: on a pooled session when
    * scoped, otherwise in its own client.
@@ -698,7 +505,7 @@ export class PostgresProfiler
   /**
    * `raw` reads every value as the server's text (a per-query type parser, so
    * `timestamp` never becomes a host-time-zone `Date`); the client config and
-   * the readiness statements are untouched.
+   * the catalogue statements are untouched.
    */
   private async exec<R>(
     config: PostgresConfig,

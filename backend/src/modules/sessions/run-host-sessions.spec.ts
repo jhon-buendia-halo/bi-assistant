@@ -2,9 +2,6 @@
 // today's turn path (ADR-0041; agents.md 5.14; plan 5.1): these specs run the
 // real SessionsService and WorkflowRunsService against stubbed agents, and
 // check the run's model request equals a chat turn's for the same input.
-jest.mock('../data-readiness/data-readiness.service', () => ({
-  DataReadinessService: class {},
-}));
 jest.mock('@mastra/core/request-context', () => ({
   RequestContext: class {
     readonly values = new Map<string, unknown>();
@@ -111,13 +108,6 @@ import {
 } from '../../mastra/testing/turn-workflow.stub';
 import { orchestratedMichaelWorkflow } from '../../mastra/workflows/orchestrated-answer-michael.workflow';
 import {
-  DATA_READINESS_ASSESSMENT_STEPS,
-  explainReportBlock,
-} from '../../mastra/workflows/data-readiness-assessment.steps';
-import { readinessModelOutput } from '../../mastra/tools/readiness.tools';
-import { readinessSummary } from './readiness-bridge';
-import { dataReadinessAssessmentWorkflow } from '../../mastra/workflows/data-readiness-assessment.workflow';
-import {
   CODE_WORKFLOWS,
   CONVERSATION_WORKFLOWS,
 } from '../../mastra/workflows/workflow-catalog';
@@ -130,9 +120,6 @@ import {
   INSIGHTS_LEAD_ENGINE_ID,
   INSIGHTS_LEAD_WORKFLOW_ID,
 } from '../../mastra/workflows/conversation-turn.steps';
-import type { ReadinessReport } from '../data-readiness/engine/types';
-import type { ReadinessProgressListener } from '../data-readiness/progress';
-import { BadGatewayException } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
@@ -190,24 +177,10 @@ const DATASETS = [
 
 /**
  * What a turn runs on: Answer a Business Question (Avery + Michael) (`avery`,
- * a run), or a built-in agent's direct host (`assistant`, `readiness`: the
- * eval runner's, 1.23.35).
+ * a run), or the assistant's direct host (`assistant`: the eval runner's,
+ * 1.23.35).
  */
-type Workflow = 'assistant' | 'avery' | 'readiness';
-
-const READINESS_SOURCE = CODE_WORKFLOWS.find(
-  (w) => w.id === 'data-readiness-assessment',
-)!;
-
-/** The workflow detail the fake catalogue answers for Assess Data Readiness. */
-const READINESS_WORKFLOW = {
-  id: 'data-readiness-assessment',
-  name: 'Assess Data Readiness',
-  input: READINESS_SOURCE.input,
-  agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
-  steps: DATA_READINESS_ASSESSMENT_STEPS,
-  edges: READINESS_SOURCE.edges,
-};
+type Workflow = 'assistant' | 'avery';
 
 const ORCHESTRATED_SOURCE = CODE_WORKFLOWS.find(
   (w) => w.id === ORCHESTRATED_MICHAEL_WORKFLOW_ID,
@@ -240,48 +213,6 @@ const ELENA_WORKFLOW = {
   conversational: true,
 };
 
-/** The report the fake engine scores for World Cup. */
-const READINESS_REPORT: ReadinessReport = {
-  id: 'r-wc',
-  datasourceId: 'ds-pg',
-  datasourceName: 'World Cup DB',
-  datasourceKind: 'postgres',
-  generatedAt: '2026-11-13T10:00:00.000Z',
-  entityCount: 1,
-  overallScore: 84,
-  maturity: 'Managed',
-  dimensionScores: [
-    {
-      dimension: 'completeness',
-      score: 90,
-      findingCount: 1,
-      maxSeverity: 'low',
-      assessed: true,
-      totalChecks: 4,
-    },
-  ],
-  findings: [
-    {
-      dimension: 'completeness',
-      level: 'entity',
-      namespace: 'public',
-      entity: 'matches',
-      field: 'winner',
-      severity: 'low',
-      measured: 0.02,
-      description: '2% of winner is null',
-      recommendation: 'Fill it',
-    },
-  ],
-};
-
-/** The registry key of the agent each turn calls. */
-const AGENT_KEYS: Record<Workflow, string> = {
-  assistant: 'assistant',
-  avery: 'insights-analyst',
-  readiness: 'data-readiness',
-};
-
 /** The chat session that takes the same input as each turn. */
 const SESSIONS: Record<Workflow, Partial<SessionDoc>> = {
   assistant: { datasets: ['World Cup'] },
@@ -291,11 +222,6 @@ const SESSIONS: Record<Workflow, Partial<SessionDoc>> = {
     agentKey: 'insights-analyst',
     agentName: 'Insights Analyst',
     workflowId: ORCHESTRATED_MICHAEL_WORKFLOW_ID,
-  },
-  readiness: {
-    datasets: ['World Cup'],
-    agentKey: 'data-readiness',
-    agentName: 'Data Readiness Agent',
   },
 };
 
@@ -320,8 +246,6 @@ interface BuildOptions {
   holdUntilAbort?: boolean;
   /** The chat session's earlier transcript and stored fields. */
   session?: Partial<SessionDoc>;
-  /** The data-readiness service, for Assess Data Readiness runs. */
-  readiness?: object;
   /** The datasources service's guarded read-only SQL (roadmap 1.28.11). */
   runReadOnlySql?: jest.Mock;
   /**
@@ -470,7 +394,6 @@ function build(options: BuildOptions = {}) {
   const registry: Record<string, ReturnType<typeof agentFor>> = {
     assistant: agentFor('assistant', 'Questions to Insights Assistant'),
     'insights-analyst': agentFor('insights-analyst', 'Insights Analyst'),
-    'data-readiness': agentFor('data-readiness', 'Data Readiness Agent'),
     'chief-of-staff': agentFor('chief-of-staff', 'Avery'),
     'bi-analyst': agentFor('bi-analyst', 'Business Intelligence Analyst'),
     // A stand-in for Elena (her own agent is registered in mastra/index.ts).
@@ -498,13 +421,7 @@ function build(options: BuildOptions = {}) {
                 requestContext,
                 discards,
               )
-            : key === 'data-readiness-assessment'
-              ? streamStubWorkflow(
-                  dataReadinessAssessmentWorkflow,
-                  inputData,
-                  requestContext,
-                )
-              : streamTurnWorkflow(key, inputData, requestContext),
+            : streamTurnWorkflow(key, inputData, requestContext),
     ),
     discardSuspendedWorkflowRuns: jest.fn().mockResolvedValue(0),
     ensureSessionWorkspace: jest.fn((id: string) =>
@@ -525,11 +442,6 @@ function build(options: BuildOptions = {}) {
     datasetNames: jest
       .fn()
       .mockResolvedValue(new Set(DATASETS.map((d) => d.name))),
-    datasetKinds: jest
-      .fn()
-      .mockResolvedValue(
-        DATASETS.map(({ name, datasourceKind }) => ({ name, datasourceKind })),
-      ),
   };
   const datasetsRepository = {
     getByNames: jest.fn((names: string[]) =>
@@ -560,20 +472,16 @@ function build(options: BuildOptions = {}) {
       contextFor: jest.fn().mockResolvedValue({ block: '', used: [] }),
     } as never,
     userAgents as never,
-    options.readiness as never,
-    undefined,
     options.artifacts as never,
     options.exporter as never,
   );
   const workflows = {
     definition: jest.fn((id: string) =>
-      id === READINESS_WORKFLOW.id
-        ? Promise.resolve(READINESS_WORKFLOW)
-        : id === ORCHESTRATED_WORKFLOW.id
-          ? Promise.resolve(ORCHESTRATED_WORKFLOW)
-          : id === ELENA_WORKFLOW.id
-            ? Promise.resolve(ELENA_WORKFLOW)
-            : Promise.reject(new Error(`Workflow "${id}" not found`)),
+      id === ORCHESTRATED_WORKFLOW.id
+        ? Promise.resolve(ORCHESTRATED_WORKFLOW)
+        : id === ELENA_WORKFLOW.id
+          ? Promise.resolve(ELENA_WORKFLOW)
+          : Promise.reject(new Error(`Workflow "${id}" not found`)),
     ),
   };
   const runsRepository = new WorkflowRunsRepository(
@@ -780,36 +688,32 @@ describe('a run sends the same model request as a chat turn (plan 1.24.2; agents
     expect(run.answer?.content).toBe('Brazil won.');
   });
 
-  // The eval runner's direct host (1.23.35): the assistant and the Data
-  // Readiness Agent have no catalogue workflow, and still run their turn.
-  it.each(['assistant', 'readiness'] as const)(
-    "%s's agent host: the same request as its chat turn, and the same answer",
-    async (workflow) => {
-      const ctx = build();
-      const agentKey = AGENT_KEYS[workflow];
-      const session = ctx.chat(workflow);
-      await chatTurn(ctx, session.id, 'Who won?');
-      const { host, view } = await agentHostTurn(ctx, agentKey, 'Who won?', {
-        ...(workflow === 'assistant' ? { datasets: ['World Cup'] } : {}),
-      });
+  // The eval runner's direct host (1.23.35): the assistant has no
+  // catalogue workflow, and still runs its turn.
+  it("the assistant's agent host: the same request as its chat turn, and the same answer", async () => {
+    const ctx = build();
+    const session = ctx.chat('assistant');
+    await chatTurn(ctx, session.id, 'Who won?');
+    const { host, view } = await agentHostTurn(ctx, 'assistant', 'Who won?', {
+      datasets: ['World Cup'],
+    });
 
-      const [chatCall, hostCall] = ctx.calls[agentKey];
-      expect(ctx.calls[agentKey]).toHaveLength(2);
-      expect(request(hostCall)).toEqual(request(chatCall));
-      expect(hostCall.options.requestContext.values.get('session-id')).toBe(
-        host.id,
-      );
-      // Bound as its chat is, on the agent-turn engine, over the same data.
-      expect(host).toMatchObject({
-        datasets: ['World Cup'],
-        workflowId: `agent:${agentKey}`,
-        run: true,
-      });
-      expect(withoutTime(view.messages.at(-1))).toEqual(
-        withoutTime(session.messages.at(-1)),
-      );
-    },
-  );
+    const [chatCall, hostCall] = ctx.calls['assistant'];
+    expect(ctx.calls['assistant']).toHaveLength(2);
+    expect(request(hostCall)).toEqual(request(chatCall));
+    expect(hostCall.options.requestContext.values.get('session-id')).toBe(
+      host.id,
+    );
+    // Bound as its chat is, on the agent-turn engine, over the same data.
+    expect(host).toMatchObject({
+      datasets: ['World Cup'],
+      workflowId: 'agent:assistant',
+      run: true,
+    });
+    expect(withoutTime(view.messages.at(-1))).toEqual(
+      withoutTime(session.messages.at(-1)),
+    );
+  });
 });
 
 describe('the run host (agents.md 5.14)', () => {
@@ -826,9 +730,12 @@ describe('the run host (agents.md 5.14)', () => {
         ctx.sessions.createRunHost({ runId: 'r', workflowId, name: 'x' }),
       ).rejects.toThrow(`Workflow "${workflowId}" not found`);
     }
+    // The assistant is the only built-in agent with a direct host; the
+    // removed Data Readiness Agent (`data-readiness`) has none either.
     for (const agentKey of [
       'sql-fixer',
       'insights-analyst',
+      'data-readiness',
       'rfp',
       'agent-1',
     ]) {
@@ -837,20 +744,6 @@ describe('the run host (agents.md 5.14)', () => {
       ).rejects.toThrow(`Agent "${agentKey}" not found`);
     }
     expect(ctx.mastra.ensureSessionWorkspace).not.toHaveBeenCalled();
-  });
-
-  it("refuses a Data Readiness host while no dataset qualifies, with the agent's requirement", async () => {
-    const ctx = build();
-    ctx.userAgents.datasetKinds.mockResolvedValue([
-      { name: 'Orders API', datasourceKind: 'rest' },
-    ]);
-    await expect(
-      ctx.sessions.createRunHost({
-        runId: 'r',
-        agentKey: 'data-readiness',
-        name: 'x',
-      }),
-    ).rejects.toThrow('Add a PostgreSQL or Databricks dataset first');
   });
 
   it('is created per run and discarded after it: never listed, its memory threads and workspace kept', async () => {
@@ -885,8 +778,8 @@ describe('the run host (agents.md 5.14)', () => {
     const two = Buffer.from('two');
     await ctx.sessions.createRunHost({
       runId: 'img-1',
-      workflowId: READINESS_WORKFLOW.id,
-      name: READINESS_WORKFLOW.name,
+      workflowId: ORCHESTRATED_WORKFLOW.id,
+      name: ORCHESTRATED_WORKFLOW.name,
       datasets: ['World Cup'],
       inputFiles: [
         { path: 'inputs/images/1.png', data: one },
@@ -898,18 +791,14 @@ describe('the run host (agents.md 5.14)', () => {
     write.mockReset();
   });
 
-  it('narrows a host to the datasets an eval run names, and deletes its workspace with it (agents.md 8.3)', async () => {
+  it("deletes an eval host's workspace with it (agents.md 8.3)", async () => {
     const ctx = build();
     const host = await ctx.sessions.createRunHost({
       runId: 'eval-1',
       agentKey: 'assistant',
       name: 'assistant eval',
-      datasets: ['World Cup', 'Formula 1'],
+      datasets: ['World Cup'],
     });
-    ctx.sessions.narrowRunHost(host.id, ['World Cup', 'Unknown']);
-    expect((await ctx.sessions.get(host.id)).datasets).toEqual(['World Cup']);
-    // Nothing to keep leaves the host as it was.
-    ctx.sessions.narrowRunHost(host.id, ['Unknown']);
     expect((await ctx.sessions.get(host.id)).datasets).toEqual(['World Cup']);
     await ctx.sessions.deleteRunHostResources(host.id);
     expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledWith(host.id);
@@ -1125,573 +1014,6 @@ describe('the run host (agents.md 5.14)', () => {
     expect(run.answer?.content).toBe('Brazil won.');
     // A built-in agent's steps are its run's events, never a prompt's bar.
     expect(events.some((e) => e.type === 'workflow')).toBe(false);
-  });
-
-  it("a Data Readiness agent host forwards tool-progress and runs over its kind's datasets", async () => {
-    const ctx = build({
-      chunks: [
-        {
-          type: 'tool-call',
-          payload: {
-            toolCallId: 'c1',
-            toolName: 'assess_data_readiness',
-            args: { dataset: 'World Cup' },
-          },
-        },
-        {
-          type: 'data-readiness-progress',
-          data: {
-            phase: 'profiling',
-            message: 'Profiling 1 of 2',
-            done: 1,
-            total: 2,
-          },
-        },
-        { type: 'text-delta', payload: { text: 'Assessed.' } },
-      ],
-    });
-    const { events, view } = await agentHostTurn(
-      ctx,
-      'data-readiness',
-      'Assess the readiness of this dataset',
-    );
-    const progress = events.find((e) => e.type === 'tool-progress');
-    expect(JSON.parse(progress?.content ?? '{}')).toEqual({
-      tool: 'assess_data_readiness',
-      phase: 'profiling',
-      message: 'Profiling 1 of 2',
-      done: 1,
-      total: 2,
-    });
-    // Its PostgreSQL and Databricks datasets; never the REST one.
-    expect(view.datasets).toEqual(['World Cup']);
-    expect(ctx.calls['data-readiness'][0].input).toEqual([
-      { role: 'user', content: 'Assess the readiness of this dataset' },
-    ]);
-  });
-});
-
-/** The message of a `tool-progress` event. */
-function progressMessage(event: unknown): string {
-  const { content } = event as { content?: string };
-  return (JSON.parse(content ?? '{}') as { message: string }).message;
-}
-
-/** The data-readiness service: its phases, and the calls the tools make. */
-function readinessService() {
-  return {
-    prepare: jest.fn((input: { runId?: string }) =>
-      Promise.resolve({
-        datasource: { id: 'ds-pg', name: 'World Cup DB' },
-        kind: 'postgres',
-        ...(input.runId ? { runId: input.runId } : {}),
-      }),
-    ),
-    profileSource: jest.fn().mockResolvedValue({
-      sourceId: 'ds-pg',
-      sourceType: 'postgres',
-      entities: [{ namespace: 'public', name: 'matches' }],
-      relationships: [],
-    }),
-    scoreProfile: jest.fn(() => ({ ...READINESS_REPORT })),
-    saveReport: jest.fn((report: ReadinessReport) => Promise.resolve(report)),
-    get: jest.fn().mockResolvedValue(READINESS_REPORT),
-    list: jest.fn().mockResolvedValue({ reports: [] }),
-    assess: jest.fn(),
-  };
-}
-
-describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () => {
-  /** The agent reads the stored report, then explains it. */
-  const EXPLAIN_CHUNKS = [
-    {
-      type: 'tool-call',
-      payload: {
-        toolCallId: 'g0',
-        toolName: 'get_readiness_report',
-        args: { reportId: 'r-wc' },
-      },
-    },
-    {
-      type: 'tool-result',
-      payload: {
-        toolCallId: 'g0',
-        toolName: 'get_readiness_report',
-        result: { report: READINESS_REPORT, summary: { reportId: 'r-wc' } },
-      },
-    },
-    { type: 'text-delta', payload: { text: 'World Cup is Managed (84).' } },
-  ];
-
-  async function readinessRun(
-    ctx: Ctx,
-    input: Record<string, unknown>,
-    signal?: AbortSignal,
-  ) {
-    await ctx.sessions.onModuleInit();
-    const events: RunStreamEvent[] = [];
-    const prepared = await ctx.runs.prepare(READINESS_WORKFLOW.id, { input });
-    const run = await ctx.runs.stream(prepared, (e) => events.push(e), signal);
-    return { events, run };
-  }
-
-  it('profiles, scores and stores in code, then the agent explains the stored report once', async () => {
-    const readiness = readinessService();
-    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
-    const { events, run } = await readinessRun(ctx, { dataset: 'World Cup' });
-
-    expect(run.status).toBe('success');
-    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
-      'resolve-dataset:success',
-      'profile-source:success',
-      'score-readiness:success',
-      'save-report:success',
-      'explain-report:success',
-      'finding-rows:success',
-      'wrap-up:success',
-    ]);
-    // One assessment of the run's dataset, recorded with the run; the
-    // agent never runs a second one.
-    expect(readiness.prepare).toHaveBeenCalledWith({
-      datasourceId: 'ds-pg',
-      entities: ['wc.public.matches'],
-      runId: run.id,
-    });
-    expect(readiness.saveReport).toHaveBeenCalledTimes(1);
-    expect(readiness.assess).not.toHaveBeenCalled();
-    // The agent answers the default question, told to read the stored
-    // report, with assess_data_readiness refusing (agents.md 3.13).
-    expect(ctx.calls['data-readiness']).toHaveLength(1);
-    const [call] = ctx.calls['data-readiness'];
-    expect(call.input).toEqual([
-      { role: 'user', content: 'Assess the readiness of this dataset' },
-    ]);
-    expect(call.options.context.at(-1)?.content).toContain(
-      'stored readiness report r-wc',
-    );
-    // The block carries the stored report's summary, as get_readiness_report
-    // hands it to the model (data-readiness R4): no call needed to read it.
-    expect(call.options.context.at(-1)?.content).toBe(
-      explainReportBlock({
-        dataset: 'World Cup',
-        reportId: 'r-wc',
-        summary: readinessModelOutput({
-          report: READINESS_REPORT,
-          summary: readinessSummary(READINESS_REPORT),
-        }),
-      }),
-    );
-    expect(
-      call.options.requestContext.values.get('readiness-assessed-report'),
-    ).toBe('r-wc');
-    // The answer carries the report: its card and scorecard (R5).
-    expect(events.filter((e) => e.type === 'readiness-report')).not.toEqual([]);
-    expect(run.answer).toMatchObject({
-      content: 'World Cup is Managed (84).',
-      readinessReport: { reportId: 'r-wc' },
-    });
-    expect(run.output).toMatchObject({
-      reportId: 'r-wc',
-      overallScore: 84,
-      maturity: 'Managed',
-      findingCount: 1,
-      answer: 'World Cup is Managed (84).',
-    });
-  });
-
-  // Roadmap 1.28.11; data-readiness R34: the rows behind each top finding
-  // are a source of the answer, ahead of the agent's own records.
-  it("records the rows behind each top finding as the answer's sources, a failed query as a failed one, and leaves the agent's input as it was", async () => {
-    const readiness = readinessService();
-    const report: ReadinessReport = {
-      ...READINESS_REPORT,
-      findings: [
-        ...READINESS_REPORT.findings,
-        {
-          dimension: 'uniqueness',
-          level: 'entity',
-          namespace: 'public',
-          entity: 'matches',
-          field: 'match_id',
-          severity: 'high',
-          measured: '2 duplicate row(s)',
-          description: 'The primary key (match_id) has 2 duplicate row(s).',
-          recommendation: 'De-duplicate.',
-        },
-        {
-          dimension: 'accessibility',
-          level: 'source',
-          severity: 'medium',
-          measured: '1 of 2 table(s) not readable',
-          description: 'One table cannot be read.',
-          recommendation: 'Grant access.',
-        },
-      ],
-    };
-    readiness.scoreProfile.mockReturnValue({ ...report });
-    const runReadOnlySql = jest.fn((datasourceId: string, sql: string) =>
-      sql.includes('IS NULL')
-        ? Promise.resolve({
-            columns: ['winner', 'matching_rows'],
-            rows: [{ winner: null, matching_rows: 1 }],
-            totalRows: 1,
-          })
-        : Promise.reject(new Error('relation "public.matches" is locked')),
-    );
-    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness, runReadOnlySql });
-    const { events, run } = await readinessRun(ctx, { dataset: 'World Cup' });
-
-    expect(run.status).toBe('success');
-    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toContain(
-      'finding-rows:success',
-    );
-    // Most severe first (the summary's order), at most 20; nothing for
-    // accessibility. Each on the report's datasource, capped at 200 rows.
-    expect(runReadOnlySql.mock.calls.map((call) => call[0])).toEqual([
-      'ds-pg',
-      'ds-pg',
-    ]);
-    expect((runReadOnlySql.mock.calls as unknown[][]).map((c) => c[2])).toEqual(
-      [200, 200],
-    );
-    expect(run.answer?.data?.slice(0, 2)).toEqual([
-      {
-        tool: 'run_readonly_sql',
-        input:
-          'SELECT "match_id", COUNT(*) AS occurrences FROM "public"."matches" GROUP BY "match_id" HAVING COUNT(*) > 1 ORDER BY occurrences DESC, "match_id"',
-        error: 'relation "public.matches" is locked',
-        rationale: 'Values of match_id that repeat in public.matches',
-      },
-      {
-        tool: 'run_readonly_sql',
-        input:
-          'SELECT *, CAST(COUNT(*) OVER () AS INTEGER) AS matching_rows FROM "public"."matches" WHERE "winner" IS NULL',
-        columns: ['winner', 'matching_rows'],
-        rows: [{ winner: null, matching_rows: 1 }],
-        rowCount: 1,
-        rationale: 'Rows where winner is empty in public.matches',
-        // Only its count links a figure (agent-answers R69).
-        figureColumns: ['matching_rows'],
-      },
-    ]);
-    expect(run.answer?.evidence?.slice(0, 2)).toEqual([
-      { index: 0, datasourceId: 'ds-pg', rowLimit: 200 },
-      expect.objectContaining({
-        index: 1,
-        datasourceId: 'ds-pg',
-        totalRows: 1,
-        rowLimit: 200,
-        coverage: expect.any(String) as unknown,
-      }),
-    ]);
-    // Each source shows in the run's stream as a SQL call and its result.
-    const shown = events
-      .filter((e) => e.type === 'tool-result')
-      .map((e) => JSON.parse((e as { content: string }).content) as object);
-    expect(shown).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          tool: 'run_readonly_sql',
-          rationale: 'Rows where winner is empty in public.matches',
-          rowCount: 1,
-        }),
-      ]),
-    );
-    // The agent's input is unchanged: the same question and no block that
-    // carries the finding queries (out of scope of 1.28.11).
-    const [call] = ctx.calls['data-readiness'];
-    expect(call.input).toEqual([
-      { role: 'user', content: 'Assess the readiness of this dataset' },
-    ]);
-    expect(
-      call.options.context.some((block) => block.content.includes('SELECT')),
-    ).toBe(false);
-    expect(run.answer?.content).toBe('World Cup is Managed (84).');
-  });
-
-  // agents.md 5.13: the rows behind findings run while the agent explains
-  // the report; their sources still come first, in their own order.
-  it("keeps the finding rows the answer's first sources, and the Q refs in that order, when the agent ran a query during Explain report", async () => {
-    const readiness = readinessService();
-    readiness.scoreProfile.mockReturnValue({
-      ...READINESS_REPORT,
-      findings: [
-        ...READINESS_REPORT.findings,
-        {
-          dimension: 'uniqueness',
-          level: 'entity',
-          namespace: 'public',
-          entity: 'matches',
-          field: 'match_id',
-          severity: 'high',
-          measured: '2 duplicate row(s)',
-          description: 'The primary key (match_id) has 2 duplicate row(s).',
-          recommendation: 'De-duplicate.',
-        },
-      ],
-    });
-    // The finding queries end only once the agent has answered.
-    let explained!: () => void;
-    const agentDone = new Promise<void>((done) => (explained = done));
-    const runReadOnlySql = jest.fn(async (_id: string, sql: string) => {
-      await agentDone;
-      return {
-        columns: sql.includes('IS NULL')
-          ? ['winner', 'matching_rows']
-          : ['match_id', 'occurrences'],
-        rows: sql.includes('IS NULL')
-          ? [{ winner: null, matching_rows: 1 }]
-          : [{ match_id: 7, occurrences: 2 }],
-        totalRows: 1,
-      };
-    });
-    const AGENT_SQL = 'SELECT winner FROM matches';
-    const chunks = [
-      ...EXPLAIN_CHUNKS.slice(0, 2),
-      {
-        type: 'tool-call',
-        payload: {
-          toolCallId: 'q0',
-          toolName: 'run_readonly_sql',
-          args: { sql: AGENT_SQL, rationale: 'Who won.' },
-        },
-      },
-      {
-        type: 'tool-result',
-        payload: {
-          toolCallId: 'q0',
-          toolName: 'run_readonly_sql',
-          result: { columns: ['winner'], rows: [{ winner: 'Brazil' }] },
-        },
-      },
-      EXPLAIN_CHUNKS[2],
-    ];
-    const ctx = build({ chunks, readiness, runReadOnlySql });
-    const events: RunStreamEvent[] = [];
-    await ctx.sessions.onModuleInit();
-    const prepared = await ctx.runs.prepare(READINESS_WORKFLOW.id, {
-      input: { dataset: 'World Cup' },
-    });
-    const running = ctx.runs.stream(prepared, (e) => {
-      events.push(e);
-      if (e.type === 'text') explained();
-    });
-    const run = await running;
-
-    expect(run.status).toBe('success');
-    const sources = (run.answer?.data ?? []).map((record) => record.input);
-    expect(sources).toHaveLength(3);
-    expect(sources.at(-1)).toBe(AGENT_SQL);
-    expect(sources.slice(0, 2).every((sql) => sql !== AGENT_SQL)).toBe(true);
-    // The queries `explore_result` pages are numbered in that same order.
-    const [call] = ctx.calls['data-readiness'];
-    const explorable = call.options.requestContext.values.get(
-      'explorable-queries',
-    ) as { ref: string; sql: string }[];
-    expect(explorable.map((query) => query.ref)).toEqual(['Q1', 'Q2', 'Q3']);
-    expect(explorable.map((query) => query.sql)).toEqual(sources);
-  });
-
-  // The no-progress watchdog (workflows spec), scaled down: a profile
-  // that reports progress for four times the limit is not ended by it.
-  it("reports the profile's progress while Profile source runs, so a long profile is not ended as stalled, and never after the step ended", async () => {
-    const PROFILE = {
-      sourceId: 'ds-pg',
-      sourceType: 'postgres',
-      entities: [{ namespace: 'public', name: 'matches' }],
-      relationships: [],
-    };
-    const longProfile = (reports: boolean) =>
-      jest.fn(
-        async (
-          _prepared: unknown,
-          options: { onProgress?: ReadinessProgressListener } = {},
-        ) => {
-          for (let done = 1; done <= 8; done += 1) {
-            await new Promise((resolve) => setTimeout(resolve, 50));
-            if (reports) {
-              options.onProgress?.({
-                phase: 'profiling',
-                message: `Profiling ${done} of 8`,
-                done,
-                total: 8,
-              });
-            }
-          }
-          // A late update, after the step ended, is not reported.
-          setTimeout(
-            () => options.onProgress?.({ phase: 'profiling', message: 'Late' }),
-            0,
-          );
-          return PROFILE;
-        },
-      );
-    const plainCtx = build({
-      chunks: EXPLAIN_CHUNKS,
-      readiness: readinessService(),
-    });
-    const plain = await readinessRun(plainCtx, { dataset: 'World Cup' });
-
-    const readiness = readinessService();
-    readiness.profileSource = longProfile(true);
-    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
-    ctx.runs.idleLimitMs = 100;
-    const { events, run } = await readinessRun(ctx, { dataset: 'World Cup' });
-    expect(run.status).toBe('success');
-    const progress = events
-      .map((event, index) => ({ event, index }))
-      .filter(({ event }) => event.type === 'tool-progress');
-    expect(progress.map(({ event }) => progressMessage(event))).toEqual(
-      [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `Profiling ${n} of 8`),
-    );
-    const stepAt = (status: string) =>
-      events.findIndex(
-        (e) =>
-          e.type === 'step' && e.id === 'profile-source' && e.status === status,
-      );
-    expect(progress[0].index).toBeGreaterThan(stepAt('running'));
-    expect(progress.at(-1)!.index).toBeLessThan(stepAt('success'));
-    // The progress changes nothing stored: the steps' outputs, the answer.
-    const outputs = (r: WorkflowRun) =>
-      r.steps.map((s) => ({ id: s.id, status: s.status, output: s.output }));
-    expect(outputs(run)).toEqual(outputs(plain.run));
-    expect(run.answer?.content).toBe(plain.run.answer?.content);
-    expect(run.output).toEqual(plain.run.output);
-    expect(ctx.calls['data-readiness'][0].options.context).toEqual(
-      plainCtx.calls['data-readiness'][0].options.context,
-    );
-
-    // The same profile reporting nothing is ended by the watchdog.
-    const silent = readinessService();
-    silent.profileSource = longProfile(false);
-    const silentCtx = build({ chunks: EXPLAIN_CHUNKS, readiness: silent });
-    silentCtx.runs.idleLimitMs = 100;
-    const stalled = await readinessRun(silentCtx, { dataset: 'World Cup' });
-    expect(stalled.run.status).toBe('failed');
-  });
-
-  it('reports no profile progress after a Stop', async () => {
-    const readiness = readinessService();
-    const abort = new AbortController();
-    readiness.profileSource = jest.fn(
-      async (
-        _prepared: unknown,
-        options: { onProgress?: ReadinessProgressListener } = {},
-      ) => {
-        options.onProgress?.({ phase: 'profiling', message: 'Before' });
-        abort.abort();
-        options.onProgress?.({ phase: 'profiling', message: 'After' });
-        await Promise.resolve();
-        throw new Error('aborted');
-      },
-    ) as never;
-    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
-    await ctx.sessions.onModuleInit();
-    // The turn itself, so nothing between it and the test drops an event.
-    const events: StreamEvent[] = [];
-    const host = await ctx.sessions.createRunHost({
-      runId: 'stop-profile',
-      workflowId: READINESS_WORKFLOW.id,
-      name: 'Assess Data Readiness',
-      datasets: ['World Cup'],
-    });
-    await ctx.sessions.streamRunTurn(
-      host.id,
-      'Assess the readiness of this dataset',
-      (e) => events.push(e),
-      abort.signal,
-      false,
-      () => undefined,
-    );
-    expect(readiness.profileSource).toHaveBeenCalledTimes(1);
-    const messages = events
-      .filter((e) => e.type === 'tool-progress')
-      .map(progressMessage);
-    expect(messages).toEqual(['Before']);
-  });
-
-  it('fails at Profile source with the datasource named when it cannot be reached, storing nothing', async () => {
-    const readiness = readinessService();
-    readiness.profileSource.mockRejectedValue(
-      new BadGatewayException('connect ECONNREFUSED'),
-    );
-    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
-    const { run } = await readinessRun(ctx, { dataset: 'World Cup' });
-    expect(run.status).toBe('failed');
-    expect(run.error).toContain(
-      'Could not reach "World Cup DB": connect ECONNREFUSED',
-    );
-    expect(readiness.saveReport).not.toHaveBeenCalled();
-    expect(ctx.calls['data-readiness']).toEqual([]);
-  });
-
-  it('refuses a dataset that is not PostgreSQL or Databricks before the run', async () => {
-    const ctx = build({ readiness: readinessService() });
-    await ctx.sessions.onModuleInit();
-    await expect(
-      ctx.runs.prepare(READINESS_WORKFLOW.id, {
-        input: { dataset: 'Orders API' },
-      }),
-    ).rejects.toThrow('is not a PostgreSQL or Databricks dataset');
-  });
-
-  // agents.md 5.13: Rows behind findings waits for queries Save report
-  // started; each one done while it waits is a progress line, so a slow
-  // warehouse never trips the run's no-progress watchdog (15 minutes).
-  it('reports each finding query done while Rows behind findings waits, so a slow warehouse never ends the run as stalled', async () => {
-    jest.useFakeTimers({
-      doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
-    });
-    try {
-      const readiness = readinessService();
-      const fields = Array.from({ length: 20 }, (_v, at) => `field_${at}`);
-      readiness.scoreProfile.mockReturnValue({
-        ...READINESS_REPORT,
-        findings: fields.map((field) => ({
-          ...READINESS_REPORT.findings[0],
-          field,
-          severity: 'high' as const,
-          description: `${field} is null`,
-        })),
-      });
-      // Each statement takes four minutes; four run at a time, so the
-      // twenty take twenty minutes in all.
-      const runReadOnlySql = jest.fn(
-        () =>
-          new Promise((done) =>
-            setTimeout(
-              () =>
-                done({
-                  columns: ['matching_rows'],
-                  rows: [{ matching_rows: 1 }],
-                  totalRows: 1,
-                }),
-              4 * 60_000,
-            ),
-          ),
-      );
-      const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness, runReadOnlySql });
-      const ran = readinessRun(ctx, { dataset: 'World Cup' });
-      for (let minute = 0; minute < 24; minute++) {
-        await jest.advanceTimersByTimeAsync(60_000);
-      }
-      const { events, run } = await ran;
-      expect(run.status).toBe('success');
-      expect(runReadOnlySql).toHaveBeenCalledTimes(20);
-      const lines = events
-        .filter((e) => e.type === 'reasoning')
-        .map((e) => (e as { content: string }).content);
-      expect(lines).toContain('Read the rows behind 4 findings\n');
-      expect(lines.at(-1)).toBe('Read the rows behind 20 findings\n');
-      // The sources are the answer's first records, in query order.
-      expect(
-        run.answer?.data?.slice(0, 20).map((record) => record.rationale),
-      ).toEqual(
-        fields.map((field) => expect.stringContaining(field) as unknown),
-      );
-    } finally {
-      jest.useRealTimers();
-    }
   });
 });
 
