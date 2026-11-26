@@ -297,17 +297,6 @@
             Verified
           </span>
         }
-        @if (msg.crossCheck; as check) {
-          <!-- Careful mode: an independent query re-ran the question -->
-          <span
-            [title]="crossCheckTitle(check)"
-            class="mr-1 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
-            [class]="crossCheckClass(check)"
-          >
-            <lucide-angular [img]="crossCheckIcon(check)" [size]="12" />
-            {{ crossCheckLabel(check) }}
-          </span>
-        }
         <button
           (click)="copyMessage(msg.content)"
           title="Copy message"
@@ -357,28 +346,6 @@
           </button>
         }
       </div>
-      @if (showGenerateVisual() && msg.content.trim()) {
-        <div class="mt-2 flex flex-wrap items-start gap-2">
-          <button
-            type="button"
-            (click)="requestVisualization()"
-            [disabled]="busy() || visualGenerating()"
-            class="flex items-center gap-2 rounded-lg border border-border bg-surface-muted px-3 py-2 text-[12px] text-fg hover:border-border-strong hover:bg-surface-selected disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            @if (visualGenerating()) {
-              <lucide-angular
-                [img]="Loader2"
-                [size]="14"
-                class="animate-spin"
-              />
-              <span>Generating interactive visuals…</span>
-            } @else {
-              <lucide-angular [img]="Sparkles" [size]="14" />
-              <span>Generate interactive visuals</span>
-            }
-          </button>
-        </div>
-      }
     </div>
   </div>
 }

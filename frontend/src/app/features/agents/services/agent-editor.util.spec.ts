@@ -218,9 +218,9 @@ describe('agent editor: legacy drafts', () => {
     { id: 'id-2', name: 'other' },
   ];
 
-  it('a draft without tools gets a last line with sample_rows, ask_clarification and create_visual', () => {
+  it('a draft without tools gets a last line with sample_rows and ask_clarification', () => {
     expect(legacyInstructions(base, library)).toBe(
-      'Answer briefly.\nTools and skills: [[tool:sample_rows]] [[tool:ask_clarification]] [[tool:create_visual]]',
+      'Answer briefly.\nTools and skills: [[tool:sample_rows]] [[tool:ask_clarification]]',
     );
   });
 
@@ -246,7 +246,7 @@ describe('agent editor: legacy drafts', () => {
         {
           ...base,
           instructions: '[[skill:planner]] [[tool:update_visual]]',
-          tools: ['visuals'],
+          tools: [],
           skills: ['id-1'],
         },
         library,

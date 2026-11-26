@@ -18,10 +18,6 @@ import {
   Database,
   FileArchive,
   Info,
-  Loader2,
-  ShieldAlert,
-  ShieldCheck,
-  ShieldOff,
   Sparkles,
   ThumbsDown,
   ThumbsUp,
@@ -30,7 +26,6 @@ import {
 } from 'lucide-angular';
 import {
   ChatMessage,
-  CrossCheck,
   MessageFeedback,
   ReasoningStep,
   ToolDataRecord,
@@ -112,10 +107,6 @@ export class AnswerView {
   readonly Database = Database;
   readonly FileArchive = FileArchive;
   readonly Info = Info;
-  readonly Loader2 = Loader2;
-  readonly ShieldAlert = ShieldAlert;
-  readonly ShieldCheck = ShieldCheck;
-  readonly ShieldOff = ShieldOff;
   readonly Sparkles = Sparkles;
   readonly ThumbsDown = ThumbsDown;
   readonly ThumbsUp = ThumbsUp;
@@ -136,9 +127,6 @@ export class AnswerView {
   readonly showRating = input(false);
   /** The host is persisting this answer's rating. */
   readonly ratingPending = input(false);
-  /** Shows **Generate interactive visuals** under an answer with text. */
-  readonly showGenerateVisual = input(false);
-  readonly visualGenerating = input(false);
   /**
    * The host shows the query inspector (1.25): figures carry a query chip and
    * the coverage line and query rows replace "How I worked this out" and
@@ -200,7 +188,6 @@ export class AnswerView {
   /** A clarification answer: an option label, a custom answer or Skip. */
   readonly optionPicked = output<string>();
   readonly rate = output<MessageFeedback>();
-  readonly generateVisual = output<void>();
   readonly viewVisual = output<VisualEvent>();
   /** A figure chip or a query row was picked: the index into the message's `data`. */
   readonly inspectQuery = output<number>();
@@ -317,11 +304,6 @@ export class AnswerView {
 
   // --------------------------------------------------- answer actions
 
-  requestVisualization(): void {
-    if (this.busy() || this.visualGenerating()) return;
-    this.generateVisual.emit();
-  }
-
   copyMessage(content: string): void {
     this.copyToClipboard(content, 'Copied to clipboard');
   }
@@ -338,36 +320,6 @@ export class AnswerView {
       () => this.toast.success(success),
       () => this.toast.error('Copy failed'),
     );
-  }
-
-  // --------------------------------------------------- cross-check chip
-
-  /** What the independent re-derivation concluded, in one word. */
-  crossCheckLabel(check: CrossCheck): string {
-    if (check.status === 'agree') return 'Cross-checked';
-    return check.status === 'disagree'
-      ? 'Cross-check differs'
-      : 'Cross-check failed';
-  }
-
-  crossCheckIcon(check: CrossCheck): typeof ShieldCheck {
-    if (check.status === 'agree') return this.ShieldCheck;
-    return check.status === 'disagree' ? this.ShieldAlert : this.ShieldOff;
-  }
-
-  /** Emerald when corroborated, amber when it differs, muted when it failed. */
-  crossCheckClass(check: CrossCheck): string {
-    if (check.status === 'agree') {
-      return 'border-on-success-soft/30 bg-success-soft text-on-success-soft';
-    }
-    return check.status === 'disagree'
-      ? 'border-on-warning-soft/30 bg-warning-soft text-on-warning-soft'
-      : 'border-border bg-surface-muted text-fg-muted';
-  }
-
-  /** Tooltip: the backend's note, or the verdict when it sent none. */
-  crossCheckTitle(check: CrossCheck): string {
-    return check.note?.trim() || this.crossCheckLabel(check);
   }
 
   /**

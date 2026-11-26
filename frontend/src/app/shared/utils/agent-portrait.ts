@@ -34,11 +34,8 @@ export const SEEDED_HAIR: readonly string[] = Array.from(
  * missing here, gets a look drawn from its key.
  */
 export const BUILTIN_PORTRAITS: Readonly<Record<string, PortraitLook>> = {
-  assistant: { hair: 'variant08' }, // Emily
   'insights-analyst': { hair: 'variant01' }, // Michael
-  visualization: { hair: 'variant17' }, // Ryan
   'sql-fixer': { hair: 'variant06', glasses: 'variant08' }, // David
-  'sql-verifier': { hair: 'variant47', glasses: 'variant11' }, // Rachel
   'assistant-eval-judge': { hair: 'variant36' }, // Laura
   'query-explainer': { hair: 'variant58' }, // Hannah
   'result-explorer': { hair: 'variant12' }, // Nathan
