@@ -262,6 +262,42 @@ describe('AgentPromptsService (ADR-0026)', () => {
       ).resolves.toBe('Michael');
     });
 
+    it("Elena's prompt with its shipped tool links saves, and Reset restores it", async () => {
+      const { service } = build();
+      expect(await service.view('insights-lead')).toMatchObject({
+        shipped: shippedAgentPrompt('insights-lead'),
+        linksAllowed: true,
+      });
+      const shipped = shippedAgentPrompt('insights-lead');
+      const edited = `${shipped}\n- Also see [[tool:create_visual]] (retired).`;
+      await expect(
+        service.save('insights-lead', { prompt: edited }),
+      ).resolves.toBe('Elena');
+      expect(agentPromptOverrideFor('insights-lead')?.prompt).toBe(edited);
+      await expect(service.reset('insights-lead')).resolves.toBe('Elena');
+      expect(agentPromptOverrideFor('insights-lead')).toBeUndefined();
+      expect(await service.view('insights-lead')).toMatchObject({
+        editable: shipped,
+        modified: false,
+      });
+    });
+
+    it("refuses a tool or skill in Elena's prompt that is not hers", async () => {
+      const { service } = build();
+      await expect(
+        service.save('insights-lead', {
+          prompt: 'You are Elena. Load [[skill:avery-playbooks]].',
+        }),
+      ).rejects.toThrow(
+        "Only Elena's own skills can be linked here: this prompt is shared by every user",
+      );
+      await expect(
+        service.save('insights-lead', {
+          prompt: 'You are Elena. Call [[tool:answer_from_data]].',
+        }),
+      ).rejects.toThrow('Unknown tool "answer_from_data"');
+    });
+
     it("refuses another agent's skill in the assistant prompt", async () => {
       expect(
         await refusal('assistant', `${IDENTITY}. [[skill:avery-playbooks]]`),
