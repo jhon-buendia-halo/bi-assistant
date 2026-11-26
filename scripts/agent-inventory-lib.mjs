@@ -27,9 +27,6 @@ export const AGENT_CLASSES = {
   'knowledge-bootstrap': ['single-step'],
   'analysis-planner': ['single-step'],
   'answer-writer': ['single-step'],
-  'requirements-analyst': ['single-step'],
-  'layer-mapper': ['single-step'],
-  'gap-advisor': ['single-step'],
   'query-explainer': ['single-step'],
   'result-explorer': ['single-step'],
 };

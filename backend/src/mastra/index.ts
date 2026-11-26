@@ -10,9 +10,6 @@ import { queryExplainerAgent } from './agents/query-explainer.agent';
 import { resultExplorerAgent } from './agents/result-explorer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
 import { insightsLeadAgent } from './agents/insights-lead.agent';
-import { gapAdvisorAgent } from './agents/gap-advisor.agent';
-import { layerMapperAgent } from './agents/layer-mapper.agent';
-import { requirementsAnalystAgent } from './agents/requirements-analyst.agent';
 import { dataReadinessAgent } from './agents/data-readiness.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
@@ -28,7 +25,6 @@ import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { orchestratedMichaelWorkflow } from './workflows/orchestrated-answer-michael.workflow';
 import { insightsLeadConversationWorkflow } from './workflows/conversation-turn.workflow';
-import { consumptionGapAnalysisWorkflow } from './workflows/consumption-gap-analysis.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 
 // Validate every bundled skill before anything is served: a broken skill
@@ -58,10 +54,6 @@ export const mastra = new Mastra({
     'bi-analyst': biAnalystAgent,
     // Elena, the Insights Lead, alone in her own conversation (plan Elena 2).
     'insights-lead': insightsLeadAgent,
-    // The agents of Consumption Gap Analysis's model steps (agents.md 5.20).
-    'requirements-analyst': requirementsAnalystAgent,
-    'layer-mapper': layerMapperAgent,
-    'gap-advisor': gapAdvisorAgent,
     // The query inspector's explainer (agents.md 2.12).
     'query-explainer': queryExplainerAgent,
     // The query inspector's filter in words (agents.md 2.17).
@@ -77,7 +69,6 @@ export const mastra = new Mastra({
     'orchestrated-answer-michael': orchestratedMichaelWorkflow,
     'insights-lead-conversation': insightsLeadConversationWorkflow,
     'data-readiness-assessment': dataReadinessAssessmentWorkflow,
-    'consumption-gap-analysis': consumptionGapAnalysisWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

@@ -6,11 +6,6 @@ import {
 } from './workflows/analysis.prompts';
 import { QUERY_EXPLAINER_INSTRUCTIONS } from './agents/query-explainer.prompts';
 import { RESULT_EXPLORER_INSTRUCTIONS } from './agents/result-explorer.prompts';
-import {
-  GAP_ADVISOR_INSTRUCTIONS,
-  LAYER_MAPPER_INSTRUCTIONS,
-  REQUIREMENTS_ANALYST_INSTRUCTIONS,
-} from './workflows/consumption-gap-analysis.prompts';
 import { ORCHESTRATOR_MICHAEL_INSTRUCTIONS } from './workflows/orchestrated-answer-michael.prompts';
 import { BI_ANALYST_INSTRUCTIONS } from './workflows/bi-analyst.prompts';
 import { INSIGHTS_LEAD_INSTRUCTIONS } from './workflows/insights-lead.prompts';
@@ -41,9 +36,6 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'data-readiness': DATA_READINESS_PROMPT,
   'analysis-planner': PLAN_INSTRUCTIONS,
   'answer-writer': WRITE_ANSWER_INSTRUCTIONS,
-  'requirements-analyst': REQUIREMENTS_ANALYST_INSTRUCTIONS,
-  'layer-mapper': LAYER_MAPPER_INSTRUCTIONS,
-  'gap-advisor': GAP_ADVISOR_INSTRUCTIONS,
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
   'result-explorer': RESULT_EXPLORER_INSTRUCTIONS,
   'chief-of-staff': ORCHESTRATOR_MICHAEL_INSTRUCTIONS,

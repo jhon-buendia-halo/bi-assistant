@@ -178,8 +178,6 @@ export interface RunHostSpec {
    * workspace at `path` before the turn.
    */
   inputFiles?: { path: string; data: Buffer }[];
-  /** Consumption Gap Analysis's saved dashboard: the artifact's id. */
-  artifact?: string;
   /**
    * A message to Avery in a conversation that holds a dashboard (agents.md
    * 5.22): the artifact's id, whose current version Clara changes.
@@ -284,11 +282,6 @@ export class SessionsService implements OnModuleInit {
       crossCheckAnswer: (session, question, data, signal) =>
         this.crossCheckAnswer(session, question, data, signal),
       readinessBridge: () => this.readinessBridge,
-      artifact: async (artifactId) => {
-        if (!this.artifacts) throw new Error('Artifacts are not available');
-        const { name, blueprint } = await this.artifacts.get(artifactId);
-        return { name, blueprint };
-      },
       dashboardVersion: (artifactId) => {
         if (!this.artifacts) throw new Error('Artifacts are not available');
         return this.artifacts.dashboardVersion(artifactId);
@@ -314,16 +307,6 @@ export class SessionsService implements OnModuleInit {
         return artifactId
           ? this.artifacts.addDashboardVersion(artifactId, input)
           : this.artifacts.createDashboard(input);
-      },
-      saveMock: async (sessionId, bundle, instruction) => {
-        const session = await this.get(sessionId);
-        const { metadata } = await this.visuals.createFromBundle(
-          session,
-          bundle,
-          instruction,
-        );
-        await this.saveVisualMetadata(session, metadata);
-        return metadata;
       },
     });
   }
@@ -612,7 +595,6 @@ export class SessionsService implements OnModuleInit {
       ...(spec.contextQueries?.length
         ? { contextQueries: spec.contextQueries }
         : {}),
-      ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
       ...(spec.contextDashboard
         ? { contextDashboard: spec.contextDashboard }
         : {}),

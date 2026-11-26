@@ -660,11 +660,11 @@ test.describe('Feature: Workflow runs', () => {
     });
   });
 
-  test('Optional inputs live behind the plus button', async ({ page }) => {
+  test('Inputs live behind the plus button', async ({ page }) => {
     const plus = page.getByTestId('run-composer-plus');
     const menu = composerMenu(page);
-    await scenarioStep(page, 'Given I am on the Run tab of "Consumption Gap Analysis"', async () => {
-      await openWorkflowPage(page, 'consumption-gap-analysis', 'Consumption Gap Analysis');
+    await scenarioStep(page, `Given I am on the Run tab of "${ASK}"`, async () => {
+      await openWorkflowPage(page, ASK_ID, ASK);
       await openRunTab(page);
     });
     await scenarioStep(page, 'When I click the "+" button', async () => {
@@ -674,13 +674,13 @@ test.describe('Feature: Workflow runs', () => {
     });
     await scenarioStep(
       page,
-      'Then the menu shows an ADD section with "Saved dashboard" and no OPTIONS section',
+      'Then the menu shows an ADD section with "Datasets" and no OPTIONS section',
       async () => {
         await expect(plus).toHaveAttribute('aria-expanded', 'true');
         await expect(menu).toHaveAttribute('role', 'dialog');
         await expect(menu).toHaveAccessibleName('Inputs and options');
         await expect(menu.getByText('Add', { exact: true })).toBeVisible();
-        await expect(menu.getByTestId('run-composer-menu-item-artifact')).toContainText('Saved dashboard');
+        await expect(menu.getByTestId('run-composer-menu-item-datasets')).toContainText('Datasets');
         await expect(menu.getByText('Options', { exact: true })).toHaveCount(0);
       },
     );

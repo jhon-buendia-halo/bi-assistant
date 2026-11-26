@@ -156,7 +156,7 @@ test('the start page asks a question first and links runs, workflows and agents'
     workflows.getByRole('heading', { name: 'Other workflows' }),
   ).toBeVisible();
   await expect(
-    workflows.getByTestId('welcome-workflow-consumption-gap-analysis'),
+    workflows.getByTestId('welcome-workflow-data-readiness-assessment'),
   ).toBeVisible();
   await expect(
     workflows.getByTestId('welcome-workflow-orchestrated-answer-michael'),

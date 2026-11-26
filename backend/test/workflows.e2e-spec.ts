@@ -141,12 +141,11 @@ describe('The workflow catalogue (API)', () => {
     ]);
   });
 
-  it('lists the three code workflows, Answer a Business Question (Avery + Michael) and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
+  it('lists the two code workflows, Answer a Business Question (Avery + Michael) and Assess Data Readiness, on a fresh data dir (R1)', async () => {
     const listed = await workflows();
     expect(listed.map((w) => w.id)).toEqual([
       'orchestrated-answer-michael',
       'data-readiness-assessment',
-      'consumption-gap-analysis',
     ]);
     expect([listed[0], listed[1]]).toEqual([
       {
@@ -336,7 +335,6 @@ describe('The workflow catalogue (API)', () => {
       expect((await workflows()).map((w) => w.id)).toEqual([
         'orchestrated-answer-michael',
         'data-readiness-assessment',
-        'consumption-gap-analysis',
       ]);
       await notFound(`agent:${liveId}`);
       await notFound(`agent:${draftId}`);
