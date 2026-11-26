@@ -2287,3 +2287,236 @@ describe("Try it on Elena's conversation engine (api.md 129; ADR-0059)", () => {
     }
   });
 });
+
+/** Elena's next stream asks the user (as Avery asks); the ones after answer. */
+function elenaAsksOnce(ctx: Ctx): void {
+  ctx.registry['insights-lead'].stream.mockImplementationOnce(
+    (input: unknown, opts: StreamCall['options']) => {
+      ctx.calls['insights-lead'].push({ input, options: opts });
+      return Promise.resolve({
+        fullStream: streamOf(AVERY_ASKS),
+        text: Promise.resolve(''),
+      });
+    },
+  );
+}
+
+/** Resume a waiting draft run of `agentId` (api.md 169). */
+async function draftResumeOf(
+  ctx: Ctx,
+  runId: string,
+  body: Record<string, unknown>,
+  agentId = 'agent-1',
+  signal?: AbortSignal,
+): Promise<{ events: RunStreamEvent[]; run: WorkflowRun }> {
+  const events: RunStreamEvent[] = [];
+  const prepared = await ctx.runs.prepareDraftResume(agentId, runId, body);
+  const run = await ctx.runs.resume(prepared, (e) => events.push(e), signal);
+  return { events, run };
+}
+
+const MEASURE = { stepId: 'answer', answer: 'Matches won' };
+
+describe('a draft run that waits for the user (api.md 129, 169; ADR-0059)', () => {
+  it('suspends at Answer and resumes the same run with the answer, never stored, its host and snapshot gone at the end', async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    withDraft(ctx);
+    elenaAsksOnce(ctx);
+    const { events, run } = await draftRunOf(ctx, 'Which team was best?');
+    const tail = events.slice(-3);
+    expect(tail[0]).toMatchObject({
+      type: 'step',
+      id: 'answer',
+      status: 'suspended',
+    });
+    expect(tail[1]).toEqual({
+      type: 'input-required',
+      runId: run.id,
+      stepId: 'answer',
+      title: 'Answer',
+      question: 'Dominant by what measure?',
+      options: ['Matches won', 'Goals scored'],
+      expiresAt: expect.any(String) as unknown,
+    });
+    expect(tail[2]).toMatchObject({ type: 'done', run: { id: run.id } });
+    expect(run).toMatchObject({
+      status: 'suspended',
+      agentKey: 'insights-lead',
+      agentId: 'agent-1',
+      waitingFor: { stepId: 'answer', title: 'Answer' },
+    });
+    expect(
+      Date.parse(run.waitingFor!.expiresAt) - Date.parse(run.waitingFor!.since),
+    ).toBeGreaterThanOrEqual(30 * 60 * 1000 - 1000);
+    // Held in memory only: nothing stored, the host kept for the resume.
+    expect(await ctx.runsRepository.list()).toEqual([]);
+    expect(ctx.mastra.deleteSessionResources).not.toHaveBeenCalled();
+
+    const resumed = await draftResumeOf(ctx, run.id, {
+      stepId: 'answer',
+      answer: '  Matches won ',
+    });
+    expect(resumed.events[0]).toEqual({
+      type: 'run',
+      runId: run.id,
+      workflowId: 'agent:agent-1',
+    });
+    expect(resumed.run.id).toBe(run.id);
+    expect(resumed.run.status).toBe('success');
+    expect(resumed.run.answer?.content).toBe('Brazil won.');
+    expect(resumed.run.waitingFor).toBeUndefined();
+    expect(ctx.calls['insights-lead']).toHaveLength(2);
+    expect(ctx.calls['insights-lead'][1].input).toEqual([
+      { role: 'user', content: 'Which team was best?' },
+      {
+        role: 'assistant',
+        content: 'Dominant by what measure?\n- Matches won\n- Goals scored',
+      },
+      { role: 'user', content: 'Matches won' },
+    ]);
+    expect(await ctx.runsRepository.list()).toEqual([]);
+    expect(ctx.discards.count).toBe(1);
+    expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledWith(
+      `run-${run.id}`,
+    );
+    // Resumed once.
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', run.id, MEASURE),
+    ).rejects.toMatchObject({
+      status: 404,
+      message: `Run "${run.id}" not found`,
+    });
+  });
+
+  it('refuses before any frame: 404 agent, 404 run (unknown, another agent), 400 blank answer, 400 step, 400 no dataset; and still resumes', async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    withDraft(ctx);
+    elenaAsksOnce(ctx);
+    const { run } = await draftRunOf(ctx);
+    await expect(
+      ctx.runs.prepareDraftResume('nope', run.id, MEASURE),
+    ).rejects.toMatchObject({ status: 404, message: 'Agent "nope" not found' });
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', 'r-unknown', MEASURE),
+    ).rejects.toMatchObject({
+      status: 404,
+      message: 'Run "r-unknown" not found',
+    });
+    ctx.userAgents.get.mockImplementation((id: string) =>
+      Promise.resolve(
+        id === 'agent-1' || id === 'agent-2'
+          ? { id, draft: DRAFT_CONFIG, owner: 'demo' }
+          : null,
+      ),
+    );
+    await expect(
+      ctx.runs.prepareDraftResume('agent-2', run.id, MEASURE),
+    ).rejects.toMatchObject({
+      status: 404,
+      message: `Run "${run.id}" not found`,
+    });
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', run.id, {
+        stepId: 'answer',
+        answer: ' ',
+      }),
+    ).rejects.toMatchObject({ status: 400, message: 'Answer is required' });
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', run.id, {
+        stepId: 'orchestrate',
+        answer: 'a',
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: 'Step "orchestrate" is not waiting for an answer',
+    });
+    withDraft(ctx, { datasets: ['Gone'] });
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', run.id, MEASURE),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: 'Select at least one dataset to preview',
+    });
+    // The refusals took nothing: the run still waits.
+    withDraft(ctx);
+    const { run: resumed } = await draftResumeOf(ctx, run.id, MEASURE);
+    expect(resumed.status).toBe('success');
+  });
+
+  it('answers 410 once its 30 minutes passed: its host, workspace and snapshot are gone', async () => {
+    jest.useFakeTimers({
+      doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
+    });
+    try {
+      const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+      withDraft(ctx);
+      elenaAsksOnce(ctx);
+      const { run } = await draftRunOf(ctx);
+      jest.advanceTimersByTime(30 * 60 * 1000);
+      await jest.runAllTimersAsync();
+      expect(ctx.discards.count).toBe(1);
+      expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledWith(
+        `run-${run.id}`,
+      );
+      await expect(
+        ctx.runs.prepareDraftResume('agent-1', run.id, MEASURE),
+      ).rejects.toMatchObject({
+        status: 410,
+        message:
+          'This run can no longer continue — run it again with your answer',
+      });
+      expect(await ctx.runsRepository.list()).toEqual([]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('holds 20 waiting drafts at most: a 21st expires the oldest', async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    withDraft(ctx);
+    const ids: string[] = [];
+    for (let i = 0; i < 21; i += 1) {
+      elenaAsksOnce(ctx);
+      ids.push((await draftRunOf(ctx)).run.id);
+    }
+    expect(ctx.discards.count).toBe(1);
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', ids[0], MEASURE),
+    ).rejects.toMatchObject({ status: 410 });
+    const { run } = await draftResumeOf(ctx, ids[1], MEASURE);
+    expect(run.status).toBe('success');
+  });
+
+  it('a Stop during the resume (its connection closed) ends it stopped and deletes its host', async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    withDraft(ctx);
+    elenaAsksOnce(ctx);
+    const { run } = await draftRunOf(ctx);
+    ctx.registry['insights-lead'].stream.mockImplementationOnce(
+      (input: unknown, opts: StreamCall['options']) => {
+        ctx.calls['insights-lead'].push({ input, options: opts });
+        return Promise.resolve({
+          fullStream: (async function* () {
+            await new Promise<void>((resolve) => {
+              if (opts.abortSignal?.aborted) resolve();
+              opts.abortSignal?.addEventListener('abort', () => resolve());
+            });
+            yield* [];
+            throw new Error('aborted');
+          })(),
+          text: Promise.resolve(''),
+        });
+      },
+    );
+    const stop = new AbortController();
+    const resumed = draftResumeOf(ctx, run.id, MEASURE, 'agent-1', stop.signal);
+    await new Promise((resolve) => setImmediate(resolve));
+    stop.abort();
+    const { run: stopped } = await resumed;
+    expect(stopped.status).toBe('stopped');
+    expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledWith(
+      `run-${run.id}`,
+    );
+    expect(await ctx.runsRepository.list()).toEqual([]);
+  });
+});
