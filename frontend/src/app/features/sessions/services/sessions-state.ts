@@ -11,6 +11,7 @@ import {
   PanelItemEvent,
   Session,
   SessionVisualization,
+  shownPanelItems,
   VisualEvent,
 } from '../models/session.model';
 import { SessionsApiService } from './sessions-api.service';
@@ -142,7 +143,7 @@ export class SessionsState {
   /** The item shown latest (largest `shownAt`), if the agent showed anything. */
   private latestPanelItem(session: Session): PanelItem | null {
     let latest: PanelItem | null = null;
-    for (const item of session.panelItems ?? []) {
+    for (const item of shownPanelItems(session.panelItems)) {
       if (!latest || item.shownAt >= latest.shownAt) latest = item;
     }
     return latest;

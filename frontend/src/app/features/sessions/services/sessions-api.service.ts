@@ -21,10 +21,6 @@ import {
   ToolDataRecord,
   VisualEvent,
 } from '../models/session.model';
-import {
-  ReadinessReport,
-  ReadinessReportEvent,
-} from '../models/readiness.model';
 
 /** A tool call announced mid-stream, with the assistant's reason for it. */
 export interface ToolCallEvent {
@@ -75,36 +71,6 @@ export function parseToolEvent(content: string): ToolCallEvent {
   return { name: raw };
 }
 
-/**
- * The `readiness-report` frame's content (api.md 3.1), parsed. Null when it
- * is not a report with a `readiness` panel item.
- */
-export function parseReadinessReportEvent(
-  content: string,
-): ReadinessReportEvent | null {
-  try {
-    const parsed: unknown = JSON.parse(content);
-    if (!parsed || typeof parsed !== 'object') return null;
-    const { report, panelItem } = parsed as Partial<ReadinessReportEvent>;
-    if (
-      !report ||
-      typeof report.id !== 'string' ||
-      typeof report.datasourceName !== 'string' ||
-      typeof report.overallScore !== 'number' ||
-      typeof report.maturity !== 'string' ||
-      typeof report.generatedAt !== 'string' ||
-      !panelItem ||
-      panelItem.kind !== 'readiness' ||
-      typeof panelItem.reportId !== 'string'
-    ) {
-      return null;
-    }
-    return { report, panelItem };
-  } catch {
-    return null;
-  }
-}
-
 /** Live progress of a running tool (api.md 3.1 `tool-progress`). */
 export interface ToolProgressEvent {
   tool: string;
@@ -132,8 +98,6 @@ export interface AgentStreamHandlers {
   onPanelItem?: (event: PanelItemEvent) => void;
   /** The workflow status bar changed (`update_workflow`, phases). */
   onWorkflow?: (workflow: WorkflowView) => void;
-  /** `assess_data_readiness` or `get_readiness_report` returned a report. */
-  onReadinessReport?: (event: ReadinessReportEvent) => void;
 }
 
 /** One parsed `data:` frame of an SSE stream. */
@@ -203,11 +167,6 @@ export function dispatchAgentEvent(
         handlers.onWorkflow?.(v),
       );
       return true;
-    case 'readiness-report': {
-      const parsed = parseReadinessReportEvent(event.content ?? '');
-      if (parsed) handlers.onReadinessReport?.(parsed);
-      return true;
-    }
     default:
       return false;
   }
@@ -421,13 +380,6 @@ export class SessionsApiService {
         responseType: 'blob',
         ...(format ? { params: { format } } : {}),
       },
-    );
-  }
-
-  /** One stored data-readiness report (api.md 110). */
-  getReadinessReport(reportId: string): Observable<ReadinessReport> {
-    return this.http.get<ReadinessReport>(
-      `${API_BASE_URL}/data-readiness/assessments/${encodeURIComponent(reportId)}`,
     );
   }
 }

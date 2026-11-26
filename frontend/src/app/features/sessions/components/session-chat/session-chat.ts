@@ -14,16 +14,9 @@ import { LucideAngularModule, Copy } from 'lucide-angular';
 import {
   ChatMessage,
   Session,
-  PanelItemEvent,
-  ReadinessPanelItem,
-  ReadinessReportRef,
   VisualEvent,
 } from '../../models/session.model';
 import { ToastService } from '../../../../core/toast/toast.service';
-import {
-  readinessPanelItemId,
-  readinessPanelTitle,
-} from '../../models/readiness.model';
 import {
   ChatHistoryItem,
   ChatHistoryNav,
@@ -45,8 +38,8 @@ import { SessionsApiService } from '../../services/sessions-api.service';
 /**
  * A past chat (past-chats R66): its transcript, read-only. Since 1.23.22
  * nothing starts or continues a chat, so there is no composer, no rating and
- * no clarification answer; the reader can still open a visual or a
- * scorecard, and copy a question.
+ * no clarification answer; the reader can still open a visual
+ * and copy a question.
  */
 @Component({
   selector: 'app-session-chat',
@@ -67,8 +60,6 @@ export class SessionChat {
 
   readonly session = input.required<Session>();
   readonly viewVisual = output<VisualEvent>();
-  /** The reader opened a scorecard in the right panel (`panel-item`). */
-  readonly panelItem = output<PanelItemEvent>();
 
   /**
    * Messages a query-evidence call answered, by index, for the session they
@@ -213,30 +204,6 @@ export class SessionChat {
     this.sessions.prepareEvidence(ref.sessionId, index).subscribe({
       next: (response) => this.showMessage(ref, response.message),
       error: () => undefined,
-    });
-  }
-
-  /**
-   * Open scorecard: show the report's panel item (the saved one, else the
-   * same item the orchestrator writes) and open the panel. Always a fresh
-   * object, so a scorecard showing a past assessment comes back to this one.
-   */
-  openScorecard(ref: ReadinessReportRef): void {
-    const id = readinessPanelItemId(ref.reportId);
-    const saved = this.session().panelItems?.find(
-      (item): item is ReadinessPanelItem =>
-        item.kind === 'readiness' && item.id === id,
-    );
-    this.panelItem.emit({
-      item: saved
-        ? { ...saved }
-        : {
-            id,
-            kind: 'readiness',
-            title: readinessPanelTitle(ref.datasourceName),
-            shownAt: ref.generatedAt,
-            reportId: ref.reportId,
-          },
     });
   }
 
