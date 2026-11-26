@@ -10,12 +10,7 @@ import {
   untracked,
 } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
-import {
-  BarChart3,
-  ExternalLink,
-  FileText,
-  LucideAngularModule,
-} from 'lucide-angular';
+import { BarChart3, ExternalLink, LucideAngularModule } from 'lucide-angular';
 import { ThemeService } from '../../../../core/theme/theme.service';
 import { withVisualTheme } from '../../../sessions/components/interactive-visual-panel/interactive-visual-panel';
 import { VisualEvent } from '../../../sessions/models/session.model';
@@ -24,12 +19,11 @@ import { WorkflowRunsApiService } from '../../../workflows/services/workflow-run
 
 /** What a run's visual is, as its card names it (visuals R42). */
 export interface ArtifactKind {
-  label: 'Report' | 'Visual';
+  label: 'Visual';
 }
 
 /** A visual's kind from the workflow that made it. */
-export function artifactKind(workflowId: string): ArtifactKind {
-  if (workflowId === 'consumption-gap-analysis') return { label: 'Report' };
+export function artifactKind(_workflowId: string): ArtifactKind {
   return { label: 'Visual' };
 }
 
@@ -72,20 +66,14 @@ const PREVIEW = { width: 1280, height: 800, scale: 0.1875 } as const;
           ></iframe>
         } @else {
           <span class="flex h-full items-center justify-center text-fg-muted">
-            <lucide-angular
-              [img]="kind().label === 'Report' ? FileText : BarChart3"
-              [size]="22"
-            />
+            <lucide-angular [img]="BarChart3" [size]="22" />
           </span>
         }
       </div>
       <div class="flex min-w-0 flex-1 flex-col gap-1.5">
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="chip chip-info" data-testid="run-artifact-kind">
-            <lucide-angular
-              [img]="kind().label === 'Report' ? FileText : BarChart3"
-              [size]="12"
-            />
+            <lucide-angular [img]="BarChart3" [size]="12" />
             {{ kind().label }}
           </span>
           <span
@@ -120,7 +108,6 @@ const PREVIEW = { width: 1280, height: 800, scale: 0.1875 } as const;
 export class RunArtifactCard {
   protected readonly BarChart3 = BarChart3;
   protected readonly ExternalLink = ExternalLink;
-  protected readonly FileText = FileText;
   protected readonly frame = PREVIEW;
 
   private readonly api = inject(WorkflowRunsApiService);
