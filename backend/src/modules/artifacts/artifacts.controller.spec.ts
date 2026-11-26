@@ -10,12 +10,11 @@ jest.mock('sanitize-html', () => ({
 
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { Response } from 'express';
-import { SAMPLE_BLUEPRINT_REPLY } from '../../mastra/workflows/recreate-dashboard.sample';
-import { blueprintOf } from '../../mastra/workflows/recreate-dashboard.steps';
+import { SAMPLE_BLUEPRINT } from '../../mastra/workflows/dashboard-blueprint.sample';
 import { ArtifactsController } from './artifacts.controller';
 import type { ArtifactsService } from './artifacts.service';
 
-const BLUEPRINT = blueprintOf(SAMPLE_BLUEPRINT_REPLY)!;
+const BLUEPRINT = SAMPLE_BLUEPRINT;
 
 function build(rows: Record<string, unknown>[] | null) {
   const calls: {

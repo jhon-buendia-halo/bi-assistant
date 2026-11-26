@@ -205,10 +205,12 @@ function build(options: BuildOptions = {}) {
       isVerifiedSql: jest.fn().mockResolvedValue(false),
     } as never,
     { definitionBlock: jest.fn() } as never,
-    { contextFor: jest.fn() } as never,
+    {
+      contextFor: jest.fn().mockResolvedValue({ block: '', used: [] }),
+    } as never,
     userAgents as never,
   );
-  return { service, session, repository, readinessAgent };
+  return { service, session, repository, readinessAgent, assistant };
 }
 
 /** Run a streamed turn and collect its events. */
@@ -390,6 +392,49 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       expect(listed).toEqual(view);
       expect(ctx.session).toMatchObject({ agentKey: 'rfp', rfpId: 'rfp-1' });
       expect(ctx.repository.update).not.toHaveBeenCalled();
+    });
+
+    // The Site Reviewer (`site-reviewer`) went with Review a Website: a
+    // past chat of hers reads as the Assistant's, its chip keeps the
+    // removed workflow's name, and a turn on it runs the assistant.
+    it('reads and runs a stored Site Reviewer session as the Assistant', async () => {
+      const ctx = build({
+        session: {
+          agentKey: 'site-reviewer',
+          agentName: 'Site Reviewer',
+          workflowId: 'review-website',
+          datasets: [],
+          messages: [
+            { role: 'user', content: 'https://shop.example.com/', at: 't1' },
+            { role: 'assistant', content: 'Reviewed 2 pages.', at: 't2' },
+          ],
+        },
+      });
+      const view = await ctx.service.toView(ctx.session);
+      expect(view).not.toHaveProperty('agent');
+      expect(view).not.toHaveProperty('agentKey');
+      expect(view.workflowRef).toEqual({
+        id: 'review-website',
+        name: 'Review a Website',
+        kind: 'code',
+        deleted: false,
+      });
+      expect(view.messages).toHaveLength(2);
+
+      Object.assign(ctx.assistant, {
+        getMemory: jest.fn().mockResolvedValue({
+          getThreadById: jest.fn().mockResolvedValue({ id: ctx.session.id }),
+        }),
+      });
+      ctx.assistant.stream.mockResolvedValue({
+        fullStream: streamOf([
+          { type: 'text-delta', payload: { text: 'Hi.' } },
+        ]),
+        text: Promise.resolve(''),
+      });
+      await turn(ctx, 'And the checkout page?');
+      expect(ctx.assistant.stream).toHaveBeenCalledTimes(1);
+      expect(ctx.readinessAgent.stream).not.toHaveBeenCalled();
     });
 
     it('reads as plain when it never stored a workflowId', async () => {

@@ -511,7 +511,7 @@ export class WorkflowDesigner {
 
   /**
    * The next workflow opened starts with these form values over its initial
-   * ones (an artifact opened in Dashboard Image to Artifact). A name the workflow
+   * ones (the home's Ask). A name the workflow
    * has no field for is ignored. With `execute`, the workflow then runs on
    * them as Execute would (the home's Ask, app-shell R51), once its datasets
    * have loaded; not when the page shows a stored or still-running run.

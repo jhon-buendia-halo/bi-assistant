@@ -152,8 +152,7 @@ function valueOf(
 
 /**
  * The field the composer's message fills: the workflow's question (its first
- * visible text area), else its first required visible text field (Review a
- * Website's URL); null when it has neither.
+ * visible text area), else its first required visible text field; null when it has neither.
  */
 export function promptField(
   fields: readonly WorkflowInputField[],

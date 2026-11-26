@@ -17,10 +17,6 @@ import {
   INSIGHTS_ANALYST_TOOL_NAMES,
 } from '../agents/insights-analyst-catalog';
 import {
-  DASHBOARD_READER_AGENT_KEY,
-  DASHBOARD_READER_AGENT_NAME,
-  DATA_MAPPER_AGENT_KEY,
-  DATA_MAPPER_AGENT_NAME,
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_AGENT_NAME,
   DATA_READINESS_MAX_STEPS,
@@ -30,8 +26,6 @@ import {
   LAYER_MAPPER_AGENT_NAME,
   REQUIREMENTS_ANALYST_AGENT_KEY,
   REQUIREMENTS_ANALYST_AGENT_NAME,
-  SITE_REVIEWER_AGENT_KEY,
-  SITE_REVIEWER_AGENT_NAME,
 } from '../agent-constants';
 import { builtinAgentPersona } from '../agent-personas';
 import { CHIEF_OF_STAFF_AGENT_KEY } from '../agent-constants';
@@ -130,18 +124,6 @@ const STEP_AGENTS: Record<
     ],
     maxSteps: DATA_READINESS_MAX_STEPS,
   },
-  // Dashboard Image to Artifact (agents.md 5.17) and Map a Dashboard to Data
-  // (5.18): the agent step of each is one model call without tools.
-  [DASHBOARD_READER_AGENT_KEY]: {
-    name: DASHBOARD_READER_AGENT_NAME,
-    tools: [],
-    maxSteps: 1,
-  },
-  [DATA_MAPPER_AGENT_KEY]: {
-    name: DATA_MAPPER_AGENT_NAME,
-    tools: [],
-    maxSteps: 1,
-  },
   // Consumption Gap Analysis (agents.md 5.20): the agent steps are one model
   // call each without tools.
   [REQUIREMENTS_ANALYST_AGENT_KEY]: {
@@ -156,12 +138,6 @@ const STEP_AGENTS: Record<
   },
   [GAP_ADVISOR_AGENT_KEY]: {
     name: GAP_ADVISOR_AGENT_NAME,
-    tools: [],
-    maxSteps: 1,
-  },
-  // Review a Website (agents.md 5.19): no step calls the agent in phase 1.
-  [SITE_REVIEWER_AGENT_KEY]: {
-    name: SITE_REVIEWER_AGENT_NAME,
     tools: [],
     maxSteps: 1,
   },

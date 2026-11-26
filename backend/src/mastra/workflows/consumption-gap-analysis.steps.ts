@@ -24,10 +24,8 @@ import type {
   RequirementAssessment,
   ReferenceDashboard,
 } from './consumption-gap-analysis.schemas';
-import type {
-  DashboardBlueprint,
-  MockBundle,
-} from './recreate-dashboard.steps';
+import type { DashboardBlueprint } from './dashboard-blueprint.schemas';
+import type { MockBundle } from './live-dashboard';
 
 /** The workflow's registry key and id. */
 export const CONSUMPTION_GAP_WORKFLOW_ID = 'consumption-gap-analysis';
@@ -59,7 +57,7 @@ const MODEL_EXITS: readonly WorkflowStepExit[] = [
  * The steps, in catalogue order: the order they run in. Resolve layers
  * comes first, so a dataset with no Consumption schema is refused before
  * any model call; the lineage checks start at Load layer catalogs and run
- * while the dashboards are read and the requirements derived, and Infer
+ * while the requirements are derived, and Infer
  * lineage takes them (agents.md 5.20).
  */
 export const CONSUMPTION_GAP_STEPS: readonly ContractStepEntry[] = [
@@ -87,27 +85,15 @@ export const CONSUMPTION_GAP_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
-      id: 'read-dashboards',
-      title: 'Read dashboards',
-      kind: 'agent',
-      summary:
-        'Grace reads every reference image as a dashboard blueprint, all at the same time; a saved dashboard is loaded from Artifacts without a model call. Skipped work when the run has no dashboard.',
-      exits: [
-        ...MODEL_EXITS,
-        { label: 'the saved dashboard no longer exists', outcome: 'fails' },
-      ],
-      modelOnly: true,
-    },
-    SCHEMAS['read-dashboards'],
-  ),
-  contractStepEntry(
-    {
       id: 'derive-requirements',
       title: 'Derive requirements',
       kind: 'agent',
       summary:
-        'The Requirements Analyst turns each business question into the measures, dimensions, filters, grain and periods it needs; each dashboard widget and filter becomes a requirement in code, from its blueprint.',
-      exits: [...MODEL_EXITS],
+        'The Requirements Analyst turns each business question into the measures, dimensions, filters, grain and periods it needs; the saved dashboard, when the run has one, is loaded from Artifacts and each of its widgets and filters becomes a requirement in code, from its blueprint.',
+      exits: [
+        ...MODEL_EXITS,
+        { label: 'the saved dashboard no longer exists', outcome: 'fails' },
+      ],
       modelOnly: true,
     },
     SCHEMAS['derive-requirements'],
@@ -197,8 +183,7 @@ export const CONSUMPTION_GAP_STEPS: readonly ContractStepEntry[] = [
 export const CONSUMPTION_GAP_EDGES: readonly WorkflowEdge[] = [
   { from: 'start', to: 'resolve-layers', kind: 'next' },
   { from: 'resolve-layers', to: 'load-layer-catalogs', kind: 'next' },
-  { from: 'load-layer-catalogs', to: 'read-dashboards', kind: 'next' },
-  { from: 'read-dashboards', to: 'derive-requirements', kind: 'next' },
+  { from: 'load-layer-catalogs', to: 'derive-requirements', kind: 'next' },
   { from: 'derive-requirements', to: 'infer-lineage', kind: 'next' },
   { from: 'infer-lineage', to: 'confirm-requirements', kind: 'next' },
   { from: 'confirm-requirements', to: 'map-requirements', kind: 'next' },
@@ -233,16 +218,7 @@ export interface GapQueryResult {
  * modules/sessions/turn/turn-engine.ts). A step throws when it is missing.
  */
 export interface ConsumptionGapRuntime {
-  /**
-   * Read dashboards: Grace over one stored image (agents.md 2.13). The
-   * step reads every image at the same time; `signal` ends this read when
-   * another one failed.
-   */
-  readDashboard(input: {
-    image: string;
-    signal?: AbortSignal;
-  }): Promise<{ blueprint: DashboardBlueprint; stopped: boolean }>;
-  /** Read dashboards: a saved dashboard; throws when it is gone. */
+  /** Derive requirements: the saved dashboard; throws when it is gone. */
   loadDashboard(input: {
     artifact: string;
   }): Promise<{ name: string; blueprint: DashboardBlueprint }>;

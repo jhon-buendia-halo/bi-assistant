@@ -69,7 +69,7 @@ const CATALOGUE: WorkflowSummary[] = [
     description: 'Answers about the health plan',
     category: { id: 'data-engineering', name: 'Data Engineering' },
   }),
-  workflow('review-website', 'Review a Website', {
+  workflow('crawl-site', 'Crawl a Site', {
     category: { id: 'software-development', name: 'Software Development' },
   }),
   workflow('second-analytics', 'Second analytics', {}),
@@ -94,7 +94,7 @@ describe('workflows.util', () => {
           ['answer-business-question', 'second-analytics'],
         ],
         ['data-engineering', 'Data Engineering', ['report-steps']],
-        ['software-development', 'Software Development', ['review-website']],
+        ['software-development', 'Software Development', ['crawl-site']],
       ]);
     });
 
@@ -203,8 +203,8 @@ describe('workflows.util', () => {
       );
       expect(personaLabel({ name: 'Michael', role: '  ' })).toBe('Michael');
       expect(personaLabel({ name: 'Michael' })).toBe('Michael');
-      expect(personaInList({ name: 'Zoe', role: 'Image Analyst' })).toBe(
-        'Zoe (Image Analyst)',
+      expect(personaInList({ name: 'Nora', role: 'Plan Checker' })).toBe(
+        'Nora (Plan Checker)',
       );
     });
   });
@@ -287,7 +287,7 @@ describe('workflows.util', () => {
         'three-steps',
         'answer-business-question',
         'report-steps',
-        'review-website',
+        'crawl-site',
         'second-analytics',
       ]);
       expect(canRunFromPage(workflow('no-input', 'No input'))).toBe(false);

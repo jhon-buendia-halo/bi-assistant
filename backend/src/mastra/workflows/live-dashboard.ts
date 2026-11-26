@@ -1,9 +1,8 @@
 /**
  * A live dashboard: an artifact version drawn by the fixed runtime
- * (./recreate-dashboard.runtime.ts) on the row snapshot of the user's data
+ * (./dashboard-blueprint.runtime.ts) on the row snapshot of the user's data
  * that version keeps, in the app and as a download of plain HTML, JS and
- * CSS. A version without rows (a dashboard read from an image) is drawn on
- * the mock rows, as before.
+ * CSS. A version without rows is drawn on the mock rows.
  *
  * Plain strings, no framework import. No model output is markup or code
  * here: the titles and values reach the page as text or as escaped JSON.
@@ -14,12 +13,17 @@ import {
   DASHBOARD_MOCK_CSS,
   DASHBOARD_MOCK_ROOT_ID,
   DASHBOARD_MOCK_RUNTIME,
-} from './recreate-dashboard.runtime';
-import {
-  renderDashboardBundle,
-  type DashboardBlueprint,
-  type MockBundle,
-} from './recreate-dashboard.steps';
+} from './dashboard-blueprint.runtime';
+import type { DashboardBlueprint } from './dashboard-blueprint.schemas';
+
+/** A drawn dashboard: an interactive visual's freeform bundle. */
+export interface MockBundle {
+  title: string;
+  description: string;
+  html: string;
+  css: string;
+  javascript: string;
+}
 
 /** One row of a dashboard's data: numbers already numbers, dates ISO. */
 export type DashboardRow = Record<string, string | number | boolean | null>;
@@ -95,26 +99,27 @@ export function dashboardSlug(name: string): string {
 /**
  * A dashboard drawn on its rows (api.md 145): the fixed runtime and style
  * sheet with the blueprint and the rows embedded as data. Null rows draw
- * today's mock on invented values.
+ * the mock on invented values (a dashboard saved without rows).
  */
 export function renderLiveDashboardBundle(
   blueprint: DashboardBlueprint,
   rows: DashboardRow[] | null,
 ): MockBundle {
-  if (!rows) return renderDashboardBundle(blueprint, null);
   return {
     title: blueprint.title,
-    description: [
-      blueprint.summary,
-      `Drawn from ${rowsText(rows.length)} of your data. The filters recompute the widgets they filter.`,
-    ]
-      .filter(Boolean)
-      .join(' '),
+    description: rows
+      ? [
+          blueprint.summary,
+          `Drawn from ${rowsText(rows.length)} of your data. The filters recompute the widgets they filter.`,
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : `${blueprint.summary || 'An interactive mock of the dashboard, on invented data.'} Every value shown is invented. The filters recompute the widgets they filter.`,
     html: `<div id="${DASHBOARD_MOCK_ROOT_ID}" class="dmk"></div>`,
     css: DASHBOARD_MOCK_CSS,
     javascript: [
       DASHBOARD_MOCK_RUNTIME,
-      `window.dashMock.mount(document.getElementById(${JSON.stringify(DASHBOARD_MOCK_ROOT_ID)}), ${scriptJson({ blueprint, mapping: null, rows, live: true })});`,
+      `window.dashMock.mount(document.getElementById(${JSON.stringify(DASHBOARD_MOCK_ROOT_ID)}), ${scriptJson(rows ? { blueprint, mapping: null, rows, live: true } : { blueprint, mapping: null })});`,
     ].join('\n'),
   };
 }

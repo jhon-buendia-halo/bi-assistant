@@ -1110,7 +1110,6 @@ export const SAMPLE_GAP_REPORT: GapReport = {
   dashboards: [
     {
       id: DASHBOARD_ID,
-      source: 'image',
       name: 'Rendimiento Mundial',
       blueprint: BLUEPRINT,
     },

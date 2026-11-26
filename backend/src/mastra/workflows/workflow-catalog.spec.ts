@@ -25,16 +25,6 @@ import {
 } from './workflow-catalog';
 import { inputFieldsWithUsage } from './workflow-input';
 
-/** The reference images field (api.md 116; plan D5). */
-const IMAGES_FIELD = {
-  name: 'images',
-  label: 'Reference images',
-  type: 'images',
-  required: false,
-  max: 4,
-  help: 'Paste, drop or attach up to 4 PNG, JPEG or WebP images, 5 MB each.',
-};
-
 /**
  * The keys `src/mastra/index.ts` registers under `agents: { … }`, read from
  * its source so the test never loads Mastra (Jest cannot load its ESM).
@@ -48,7 +38,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds six code workflows: Avery + Michael (5.23), Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18), Review a Website (5.19) and Consumption Gap Analysis (5.20)', () => {
+  it('holds three code workflows: Avery + Michael (5.23), Assess Data Readiness (agents.md 5.13) and Consumption Gap Analysis (5.20)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -69,27 +59,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         id: 'data-readiness-assessment',
         name: 'Assess Data Readiness',
         primaryFor: 'data-readiness',
-        bar: 'steps',
-        trigger: 'run',
-      },
-      {
-        id: 'recreate-dashboard',
-        name: 'Dashboard Image to Artifact',
-        primaryFor: 'dashboard-reader',
-        bar: 'steps',
-        trigger: 'run',
-      },
-      {
-        id: 'map-dashboard-data',
-        name: 'Map a Dashboard to Data',
-        primaryFor: 'data-mapper',
-        bar: 'steps',
-        trigger: 'run',
-      },
-      {
-        id: 'review-website',
-        name: 'Review a Website',
-        primaryFor: 'site-reviewer',
         bar: 'steps',
         trigger: 'run',
       },
@@ -127,6 +96,9 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     expect(REMOVED_WORKFLOW_IDS).toEqual([
       'answer-business-question',
       'orchestrated-answer',
+      'recreate-dashboard',
+      'map-dashboard-data',
+      'review-website',
     ]);
     for (const id of REMOVED_WORKFLOW_IDS) {
       expect(CODE_WORKFLOWS.some((workflow) => workflow.id === id)).toBe(false);
@@ -135,6 +107,9 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     expect(REMOVED_WORKFLOW_NAMES).toEqual({
       'answer-business-question': 'Answer a Business Question',
       'orchestrated-answer': 'Answer a Business Question (orchestrated)',
+      'recreate-dashboard': 'Dashboard Image to Artifact',
+      'map-dashboard-data': 'Map a Dashboard to Data',
+      'review-website': 'Review a Website',
     });
   });
 
@@ -142,21 +117,17 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     expect(CODE_WORKFLOWS.map(({ id, category }) => [id, category])).toEqual([
       ['orchestrated-answer-michael', 'data-analytics'],
       ['data-readiness-assessment', 'data-engineering'],
-      ['recreate-dashboard', 'dashboards'],
-      ['map-dashboard-data', 'dashboards'],
-      ['review-website', 'software-development'],
       ['consumption-gap-analysis', 'data-engineering'],
     ]);
   });
 
-  // Reference images (workflows R35; agents.md 2.15; api.md 116; plan D5).
   it('explains every labelled connector of every workflow in a note (workflows R42)', () => {
     const labelled = CODE_WORKFLOWS.flatMap((workflow) =>
       workflow.edges
         .filter((edge) => edge.label)
         .map((edge) => ({ workflow: workflow.id, ...edge })),
     );
-    expect(labelled.length).toBeGreaterThan(0);
+    // No workflow labels a connector today; the rule holds for the next.
     expect(
       labelled
         .filter((edge) => !edge.note?.trim())
@@ -168,52 +139,20 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     }
   });
 
-  describe('reference images', () => {
+  describe('the inputs', () => {
     const byId = (id: string) =>
       CODE_WORKFLOWS.find((workflow) => workflow.id === id)!;
-    const WITH_IMAGES = ['data-readiness-assessment', 'map-dashboard-data'];
 
-    it('gives Assess Data Readiness and Map a Dashboard to Data an optional images field right after the question', () => {
-      for (const id of WITH_IMAGES) {
-        const names = byId(id).input.map((field) => field.name);
-        expect([id, names[names.indexOf('question') + 1]]).toEqual([
-          id,
-          'images',
-        ]);
-        expect(byId(id).input.find((field) => field.name === 'images')).toEqual(
-          IMAGES_FIELD,
-        );
-      }
-      // Avery + Michael takes no reference images.
+    it('takes no image in any workflow', () => {
       expect(
-        byId('orchestrated-answer-michael').input.map((field) => field.name),
-      ).toEqual(['question', 'datasets']);
-      // Dashboard Image to Artifact keeps its one image and no Read images.
-      expect(
-        byId('recreate-dashboard').input.map((field) => field.name),
-      ).toEqual(['image', 'question']);
-      expect(
-        byId('recreate-dashboard').steps.map((step) => step.id),
-      ).not.toContain('read-images');
-    });
-
-    it('runs Read images on Zoe, the Image Reader, in both: first, or after Score readiness in Assess Data Readiness', () => {
-      for (const id of WITH_IMAGES) {
-        const ids = byId(id).steps.map((step) => step.id);
-        expect([id, ids.indexOf('read-images')]).toEqual([
-          id,
-          id === 'data-readiness-assessment'
-            ? ids.indexOf('score-readiness') + 1
-            : 0,
-        ]);
-        expect([id, stepAgentKey(byId(id), 'read-images')]).toEqual([
-          id,
-          'image-reader',
-        ]);
-      }
-      expect(workflowsUsingAgent('image-reader')).toEqual(
-        WITH_IMAGES.map((id) => ({ id, name: byId(id).name })),
-      );
+        CODE_WORKFLOWS.flatMap((workflow) =>
+          workflow.input
+            .filter(
+              (field) => field.type === 'image' || field.type === 'images',
+            )
+            .map((field) => `${workflow.id}.${field.name}`),
+        ),
+      ).toEqual([]);
     });
 
     it('says which steps read each field as api.md 116 lists them', () => {
@@ -228,17 +167,9 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         question: ['orchestrate'],
         datasets: ['orchestrate'],
       });
-      // Resolve dataset starts Zoe's reading of the images (agents.md 5.13).
       expect(usedBy('data-readiness-assessment')).toEqual({
         dataset: ['resolve-dataset'],
         question: ['resolve-dataset'],
-        images: ['resolve-dataset'],
-      });
-      expect(usedBy('map-dashboard-data')).toEqual({
-        artifact: ['load-dashboard'],
-        datasets: ['load-dashboard'],
-        question: ['read-images', 'load-dashboard'],
-        images: ['read-images'],
       });
     });
   });
@@ -250,7 +181,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         (workflow) => workflow.id === 'consumption-gap-analysis',
       )!;
 
-    it('takes the datasets, the questions, reference dashboards and an optional saved dashboard', () => {
+    it('takes the datasets, the questions and an optional saved dashboard', () => {
       expect(gap().input).toEqual([
         {
           name: 'datasets',
@@ -270,11 +201,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
           maxLength: 4000,
         },
         {
-          ...IMAGES_FIELD,
-          label: 'Reference dashboards',
-          help: 'Screenshots of the dashboards the model must support.',
-        },
-        {
           name: 'artifact',
           label: 'Saved dashboard',
           type: 'artifact',
@@ -282,17 +208,17 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
           artifactKinds: ['dashboard'],
         },
       ]);
-      // Grace reads the dashboards itself: no Read images step.
-      expect(gap().steps.map((step) => step.id)).not.toContain('read-images');
+      expect(gap().steps.map((step) => step.id)).not.toContain(
+        'read-dashboards',
+      );
     });
 
-    it('runs Grace, the Requirements Analyst, the Layer Mapper and the Gap Advisor', () => {
+    it('runs the Requirements Analyst, the Layer Mapper and the Gap Advisor', () => {
       expect(
         gap()
           .steps.filter((step) => step.kind === 'agent')
           .map((step) => [step.id, stepAgentKey(gap(), step.id)]),
       ).toEqual([
-        ['read-dashboards', 'dashboard-reader'],
         ['derive-requirements', 'requirements-analyst'],
         ['map-requirements', 'layer-mapper'],
         ['recommend-fixes', 'gap-advisor'],
@@ -315,7 +241,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         // (agents.md 5.20).
         datasets: ['resolve-layers'],
         question: ['resolve-layers'],
-        images: ['resolve-layers'],
         artifact: ['resolve-layers'],
       });
     });
@@ -338,6 +263,19 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         expect(
           sessionWorkflowId({ workflowId: id, agentKey: 'insights-analyst' }),
         ).toBe(id);
+      },
+    );
+
+    it.each([
+      ['recreate-dashboard', 'dashboard-reader'],
+      ['map-dashboard-data', 'data-mapper'],
+      ['review-website', 'site-reviewer'],
+    ])(
+      'keeps %s on a past chat of its removed agent %s; without it, the chat is the Assistant',
+      (id, agentKey) => {
+        expect(parseWorkflowId(id)).toBeUndefined();
+        expect(sessionWorkflowId({ workflowId: id, agentKey })).toBe(id);
+        expect(sessionWorkflowId({ agentKey })).toBe('agent:assistant');
       },
     );
   });

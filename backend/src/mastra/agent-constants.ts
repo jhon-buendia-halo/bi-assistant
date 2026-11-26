@@ -43,17 +43,6 @@ export const OFFICIAL_AGENT_KEYS: readonly string[] = [
 export const ANALYSIS_PLANNER_AGENT_KEY = 'analysis-planner';
 export const ANSWER_WRITER_AGENT_KEY = 'answer-writer';
 
-/**
- * The agents of Read dashboard, the model step of `recreate-dashboard`
- * (agents.md 5.17), and of Map data, the model step of `map-dashboard-data`
- * (5.18). System agents: the workflows call them.
- */
-export const DASHBOARD_READER_AGENT_KEY = 'dashboard-reader';
-/** Its name: the Read dashboard step's agent. */
-export const DASHBOARD_READER_AGENT_NAME = 'Dashboard Reader';
-export const DATA_MAPPER_AGENT_KEY = 'data-mapper';
-/** Its name: the Map data step's agent. */
-export const DATA_MAPPER_AGENT_NAME = 'Data Mapper';
 /** The agent that explains a stored query step by step (agents.md 2.12). */
 export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
 /**
@@ -61,19 +50,6 @@ export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
  * a stored query's result (agents.md 2.17).
  */
 export const RESULT_EXPLORER_AGENT_KEY = 'result-explorer';
-/**
- * The agent of Read images, the optional first step of Answer a Business
- * Question, Assess Data Readiness and Map a Dashboard to Data (agents.md
- * 2.15; workflows R35): it describes the run's reference images as text.
- * A System agent: the workflows call it.
- */
-export const IMAGE_READER_AGENT_KEY = 'image-reader';
-/** Its name: the Read images step's agent. */
-export const IMAGE_READER_AGENT_NAME = 'Image Reader';
-/** The agent of Review a Website (agents.md 2.16, 5.19). */
-export const SITE_REVIEWER_AGENT_KEY = 'site-reviewer';
-/** Its name. */
-export const SITE_REVIEWER_AGENT_NAME = 'Site Reviewer';
 
 /**
  * The agents of the three model steps of `consumption-gap-analysis`
@@ -113,12 +89,8 @@ export const VISUALIZATION_AGENT_KEY = 'visualization';
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
   ANALYSIS_PLANNER_AGENT_KEY,
   ANSWER_WRITER_AGENT_KEY,
-  DASHBOARD_READER_AGENT_KEY,
-  DATA_MAPPER_AGENT_KEY,
-  IMAGE_READER_AGENT_KEY,
   QUERY_EXPLAINER_AGENT_KEY,
   RESULT_EXPLORER_AGENT_KEY,
-  SITE_REVIEWER_AGENT_KEY,
   REQUIREMENTS_ANALYST_AGENT_KEY,
   LAYER_MAPPER_AGENT_KEY,
   GAP_ADVISOR_AGENT_KEY,

@@ -408,7 +408,7 @@ describe("answer-business-question's input rules", () => {
   });
 });
 
-describe('an image field (agents.md 5.17)', () => {
+describe('an image field (api.md 151)', () => {
   const workflow = {
     input: [
       {
@@ -494,7 +494,7 @@ describe('an image field (agents.md 5.17)', () => {
   });
 });
 
-describe('one of an image or an artifact (agents.md 5.17)', () => {
+describe('one of an image or an artifact (api.md 151)', () => {
   const workflow = {
     input: [
       {

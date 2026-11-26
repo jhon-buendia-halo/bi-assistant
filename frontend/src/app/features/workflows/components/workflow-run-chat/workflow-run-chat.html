@@ -29,35 +29,6 @@
           <span>Run again</span>
         </button>
       }
-      @if (!hasArtifactCard() && savedArtifactId(); as artifactId) {
-        <!-- Dashboard Image to Artifact saved the dashboard it read (ui.md 4.8i);
-             with an artifact card the card carries this (visuals R42) -->
-        <span
-          data-testid="workflow-run-artifact-saved"
-          class="flex items-center gap-1.5 text-[12px] text-fg-muted"
-          [class.ml-auto]="!designer.canRunAgain()"
-        >
-          <lucide-angular [img]="CircleCheck" [size]="13" />
-          <span>Saved to Artifacts</span>
-          <button
-            type="button"
-            data-testid="workflow-run-artifact-open"
-            (click)="openSavedArtifact(artifactId)"
-            class="btn btn-ghost px-2 py-0.5 text-[12px]"
-          >
-            Open
-          </button>
-          <button
-            type="button"
-            data-testid="workflow-run-artifact-map"
-            title="Map this dashboard to your datasets"
-            (click)="mapSavedArtifact(artifactId)"
-            class="btn btn-ghost px-2 py-0.5 text-[12px]"
-          >
-            Map to data
-          </button>
-        </span>
-      }
       @if (averyOpen()) {
         <ng-container [ngTemplateOutlet]="exportMenu" />
         <button
@@ -78,10 +49,7 @@
         (click)="newQuestion()"
         class="btn btn-ghost px-2.5 py-1"
         [class.ml-auto]="
-          (!designer.canRunAgain() ||
-            averyArchived() ||
-            isConversationVariant()) &&
-          savedArtifactId() === null
+          !designer.canRunAgain() || averyArchived() || isConversationVariant()
         "
       >
         <lucide-angular [img]="SquarePen" [size]="13" />
@@ -366,42 +334,6 @@
             <ng-container [ngTemplateOutlet]="process" />
           }
 
-          @if (liveCodeProgress(); as progress) {
-            <!-- A running code step's own progress (Review a Website's pages) -->
-            <div
-              class="flex flex-col gap-1.5"
-              data-testid="workflow-run-progress"
-              role="status"
-              aria-live="polite"
-            >
-              <div class="flex min-w-0 items-center gap-2">
-                <lucide-angular
-                  [img]="Loader2"
-                  [size]="14"
-                  class="shrink-0 animate-spin text-fg-muted"
-                />
-                <span class="text-[13px] font-medium text-fg">{{
-                  progress.title
-                }}</span>
-              </div>
-              <p
-                class="m-0 min-w-0 truncate rounded bg-surface-muted px-2 py-1 text-[12px] text-fg"
-                data-testid="workflow-run-progress-latest"
-              >
-                {{ progress.latest }}
-              </p>
-              @if (progress.recent.length) {
-                <ul class="m-0 flex list-none flex-col gap-0.5 p-0 pl-2">
-                  @for (line of progress.recent; track $index) {
-                    <li class="min-w-0 truncate text-[12px] text-fg-muted">
-                      {{ line }}
-                    </li>
-                  }
-                </ul>
-              }
-            </div>
-          }
-
           @if (liveAgentStep()) {
             <!-- The running agent step, live: the answer forming. Its thought and
              steps show under its agent in the team; an agent step with no
@@ -468,10 +400,7 @@
                   <app-run-artifact-card
                     [run]="stored"
                     [visual]="visual"
-                    [savedArtifactId]="savedArtifactId()"
                     (open)="viewVisual($event)"
-                    (mapToData)="mapSavedArtifact($event)"
-                    (openArtifact)="openSavedArtifact($event)"
                   />
                 }
               </ng-template>

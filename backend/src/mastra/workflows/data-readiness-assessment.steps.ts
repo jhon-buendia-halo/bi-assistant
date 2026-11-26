@@ -22,10 +22,6 @@ import {
   type WorkflowEdge,
   type WorkflowStepExit,
 } from './workflow-contract';
-import {
-  READ_IMAGES_STEP_ID,
-  READ_IMAGES_STEP_TITLE,
-} from './read-images.steps';
 
 /** The workflow's registry key and id. */
 export const DATA_READINESS_ASSESSMENT_WORKFLOW_ID =
@@ -56,9 +52,7 @@ const SOURCE_EXITS: readonly WorkflowStepExit[] = [
 /**
  * The steps, in catalogue order: the order they run in. Their field names
  * and JSON Schemas come from ./data-readiness-assessment.schemas.ts; how
- * they connect is `DATA_READINESS_ASSESSMENT_EDGES`. Zoe reads the images
- * from Resolve dataset on, while the dataset is profiled and scored; Read
- * images waits for her notes before anything is stored. The rows behind
+ * they connect is `DATA_READINESS_ASSESSMENT_EDGES`. The rows behind
  * findings are looked up from Save report on, while the agent explains
  * the report (agents.md 5.13).
  */
@@ -69,7 +63,7 @@ export const DATA_READINESS_ASSESSMENT_STEPS: readonly ContractStepEntry[] = [
       title: 'Resolve dataset',
       kind: 'code',
       summary:
-        "Finds the dataset's PostgreSQL or Databricks datasource and its tables, the assessment's scope. With reference images, then starts Zoe's reading of them. No LLM.",
+        "Finds the dataset's PostgreSQL or Databricks datasource and its tables, the assessment's scope. No LLM.",
       exits: [
         {
           label: 'the dataset is not PostgreSQL or Databricks',
@@ -100,21 +94,6 @@ export const DATA_READINESS_ASSESSMENT_STEPS: readonly ContractStepEntry[] = [
       exits: [],
     },
     SCHEMAS['score-readiness'],
-  ),
-  contractStepEntry(
-    {
-      id: READ_IMAGES_STEP_ID,
-      title: READ_IMAGES_STEP_TITLE,
-      kind: 'agent',
-      summary:
-        'Optional: waits for the notes Zoe, the Image Reader, has been writing on the reference images since Resolve dataset (one model call). Explain report gets them as text, never the images.',
-      exits: [
-        { label: 'the model returns an error', outcome: 'fails' },
-        { label: 'you stop it', outcome: 'stops' },
-      ],
-      modelOnly: true,
-    },
-    SCHEMAS['read-images'],
   ),
   contractStepEntry(
     {
@@ -170,22 +149,7 @@ export const DATA_READINESS_ASSESSMENT_EDGES: readonly WorkflowEdge[] = [
   { from: 'start', to: 'resolve-dataset', kind: 'next' },
   { from: 'resolve-dataset', to: 'profile-source', kind: 'next' },
   { from: 'profile-source', to: 'score-readiness', kind: 'next' },
-  // Read images dominates no step: Save report defaults its notes.
-  {
-    from: 'score-readiness',
-    to: 'save-report',
-    kind: 'next',
-    label: 'No images',
-    note: 'The run has no reference images, so the report is stored straight away.',
-  },
-  {
-    from: 'score-readiness',
-    to: READ_IMAGES_STEP_ID,
-    kind: 'branch',
-    label: 'Reference images',
-    note: "The run has images: Zoe's notes, read meanwhile, are awaited first.",
-  },
-  { from: READ_IMAGES_STEP_ID, to: 'save-report', kind: 'next' },
+  { from: 'score-readiness', to: 'save-report', kind: 'next' },
   { from: 'save-report', to: 'explain-report', kind: 'next' },
   { from: 'explain-report', to: 'finding-rows', kind: 'next' },
   { from: 'finding-rows', to: 'wrap-up', kind: 'next' },
@@ -223,23 +187,6 @@ export interface DataReadinessAssessmentRuntime {
   profile(): Promise<ProfileOutcome>;
   /** Score readiness: the deterministic engine over the profile. */
   score(): ScoreOutcome;
-  /**
-   * Resolve dataset, once the dataset is resolved and the run has images:
-   * start Zoe's one model call over them (agents.md 2.15), while the
-   * dataset is profiled and scored. `question` is the run's own.
-   */
-  startImageNotes(input: { question: string; images: string[] }): void;
-  /** The condition of Read images: whether Zoe's notes were started. */
-  readsImages(): boolean;
-  /**
-   * Read images: the notes started at Resolve dataset; rethrows a model
-   * error, so the run fails before Save report stores anything.
-   */
-  imageNotes(): Promise<{
-    imageNotes: string;
-    imageCount: number;
-    stopped: boolean;
-  }>;
   /** Save report: stores it and shows its readiness card. */
   save(): Promise<{ reportId: string }>;
   /**
@@ -260,11 +207,6 @@ export interface DataReadinessAssessmentRuntime {
     question: string;
     dataset: string;
     reportId: string;
-    /**
-     * Read images' notes (agents.md 2.15): the turn adds them after the
-     * report block only when not `''`; absent or `''` without images.
-     */
-    imageNotes?: string;
   }): Promise<{ answer: string; stopped: boolean }>;
 }
 

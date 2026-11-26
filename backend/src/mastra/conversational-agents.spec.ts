@@ -44,7 +44,9 @@ describe('conversational bindings (plan Elena 1.2)', () => {
   });
 
   it('has no binding for any other id, nor for none', () => {
-    expect(conversationalBindingOf('review-website')).toBeUndefined();
+    expect(
+      conversationalBindingOf('data-readiness-assessment'),
+    ).toBeUndefined();
     expect(conversationalBindingOf('agent:insights-analyst')).toBeUndefined();
     expect(conversationalBindingOf(undefined)).toBeUndefined();
     expect(conversationalBindingOf('')).toBeUndefined();

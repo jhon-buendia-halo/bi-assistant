@@ -6,15 +6,15 @@
  * step catalogue (./consumption-gap-analysis.steps.ts) derives each step's
  * field names and JSON Schema from it. Zod only, no framework import.
  *
- * The flow: Resolve layers → Load layer catalogs → Read dashboards → Derive
- * requirements → Infer lineage → Confirm requirements (waits) → Map
- * requirements → Trace gaps → Probe evidence → Recommend fixes → Render
- * report. A step passes on what the steps after it read, since the engine
- * hands a step only its previous step's output: Resolve layers and Load
- * layer catalogs pass the run's input on to Read dashboards.
+ * The flow: Resolve layers → Load layer catalogs → Derive requirements →
+ * Infer lineage → Confirm requirements (waits) → Map requirements → Trace
+ * gaps → Probe evidence → Recommend fixes → Render report. A step passes on
+ * what the steps after it read, since the engine hands a step only its
+ * previous step's output: Resolve layers and Load layer catalogs pass the
+ * run's input on to Derive requirements.
  */
 import { z } from 'zod';
-import { dashboardBlueprintSchema } from './recreate-dashboard.schemas';
+import { dashboardBlueprintSchema } from './dashboard-blueprint.schemas';
 
 /** A medallion layer, as a dataset's schema notes name it (datasets R41). */
 export const layerSchema = z.enum(['landing', 'normalized', 'consumption']);
@@ -40,10 +40,6 @@ export const gapRunInputSchema = z.object({
     .string()
     .default('')
     .describe("A saved dashboard's id; '' when none was picked."),
-  images: z
-    .array(z.string())
-    .optional()
-    .describe('Reference dashboard images: their stored paths.'),
 });
 
 // ---------------------------------------------------------------------------
@@ -92,32 +88,14 @@ export const catalogsLoadedSchema = layersResolvedSchema.extend({
 });
 
 // ---------------------------------------------------------------------------
-// Read dashboards
+// Derive requirements
 
-/** One reference dashboard, read from an image or loaded from an artifact. */
+/** The run's saved dashboard, loaded from Artifacts. */
 export const referenceDashboardSchema = z.object({
-  id: z
-    .string()
-    .describe("'D1', 'D2', … in image order, the saved dashboard last."),
-  source: z.enum(['image', 'artifact']),
-  name: z.string().describe("The dashboard's title, or the artifact's name."),
+  id: z.string().describe("'D1': the saved dashboard."),
+  name: z.string().describe("The artifact's name."),
   blueprint: dashboardBlueprintSchema,
 });
-
-/** What Read dashboards hands on. */
-export const dashboardsReadSchema = z.object({
-  questions: z
-    .array(z.string())
-    .describe('The business questions, parsed from the input lines.'),
-  datasets: z.array(z.string()),
-  layers: catalogsLoadedSchema.shape.layers,
-  tables: catalogsLoadedSchema.shape.tables,
-  dashboards: z.array(referenceDashboardSchema),
-  stopped: z.boolean(),
-});
-
-// ---------------------------------------------------------------------------
-// Derive requirements
 
 /** One thing a requirement reads. */
 export const requirementFieldSchema = z.object({
@@ -154,12 +132,21 @@ export const requirementSchema = z.object({
     ),
 });
 
-export const requirementsDerivedSchema = dashboardsReadSchema
-  .omit({ stopped: true })
-  .extend({
-    requirements: z.array(requirementSchema),
-    stopped: z.boolean(),
-  });
+/**
+ * What Derive requirements hands on: the parsed questions, the saved
+ * dashboard (none when the run picked none) and the requirements.
+ */
+export const requirementsDerivedSchema = z.object({
+  questions: z
+    .array(z.string())
+    .describe('The business questions, parsed from the input lines.'),
+  datasets: z.array(z.string()),
+  layers: catalogsLoadedSchema.shape.layers,
+  tables: catalogsLoadedSchema.shape.tables,
+  dashboards: z.array(referenceDashboardSchema),
+  requirements: z.array(requirementSchema),
+  stopped: z.boolean(),
+});
 
 // ---------------------------------------------------------------------------
 // Infer lineage
@@ -389,12 +376,8 @@ export const CONSUMPTION_GAP_STEP_SCHEMAS = {
     input: layersResolvedSchema,
     output: catalogsLoadedSchema,
   },
-  'read-dashboards': {
-    input: catalogsLoadedSchema,
-    output: dashboardsReadSchema,
-  },
   'derive-requirements': {
-    input: dashboardsReadSchema,
+    input: catalogsLoadedSchema,
     output: requirementsDerivedSchema,
   },
   'infer-lineage': {

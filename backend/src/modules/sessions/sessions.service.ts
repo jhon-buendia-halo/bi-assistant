@@ -47,7 +47,6 @@ import { OntologyService } from '../ontology/ontology.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { ArtifactsService } from '../artifacts/artifacts.service';
-import { SiteReviewService } from '../site-review/site-review.service';
 import {
   CONVERSATION_EXPORTER,
   type ConversationExporter,
@@ -175,18 +174,11 @@ export interface RunHostSpec {
    */
   contextQueries?: ExplorableQuery[];
   /**
-   * Dashboard Image to Artifact's input image (agents.md 5.17): written to the
-   * host's workspace at `path` before the turn.
-   */
-  image?: { path: string; data: Buffer };
-  /**
-   * Every reference image file of the run's input (R35): each written to the
-   * host's workspace at `path` before the turn.
+   * Every image file of the run's input (R35): each written to the host's
+   * workspace at `path` before the turn.
    */
   inputFiles?: { path: string; data: Buffer }[];
-  /** The workspace paths of the run's reference images, for the turn engine. */
-  inputImages?: string[];
-  /** Dashboard Image to Artifact's saved dashboard: the artifact's id. */
+  /** Consumption Gap Analysis's saved dashboard: the artifact's id. */
   artifact?: string;
   /**
    * A message to Avery in a conversation that holds a dashboard (agents.md
@@ -198,8 +190,6 @@ export interface RunHostSpec {
    * reads (agents.md 3.18).
    */
   conversationId?: string;
-  /** The run's whole checked input (Review a Website, agents.md 5.19). */
-  inputValues?: Record<string, string | number | boolean | string[]>;
   /**
    * A follow-up run (agents.md 5.14): the earlier run's host id, whose
    * memory threads the host starts from as copies of its own.
@@ -241,10 +231,9 @@ export class SessionsService implements OnModuleInit {
     @Optional()
     @Inject(SYNTHETIC_DATA_SERVICE)
     private readonly syntheticData?: SyntheticDataBridgeDeps['synthetic'],
-    // The saved dashboards a Dashboard Image to Artifact run takes (agents.md 5.17).
+    // The saved dashboards a run takes and Clara's dashboards (agents.md
+    // 5.20, 5.22).
     @Optional() private readonly artifacts?: ArtifactsService,
-    // Review a Website's browser work (agents.md 5.19).
-    @Optional() private readonly siteReview?: SiteReviewService,
     // Avery's conversation export (agents.md 3.18), a global module's.
     @Optional()
     @Inject(CONVERSATION_EXPORTER)
@@ -295,29 +284,10 @@ export class SessionsService implements OnModuleInit {
       crossCheckAnswer: (session, question, data, signal) =>
         this.crossCheckAnswer(session, question, data, signal),
       readinessBridge: () => this.readinessBridge,
-      readImage: (sessionId, path) => readWorkspaceImage(sessionId, path),
       artifact: async (artifactId) => {
         if (!this.artifacts) throw new Error('Artifacts are not available');
         const { name, blueprint } = await this.artifacts.get(artifactId);
         return { name, blueprint };
-      },
-      saveArtifact: async (sessionId, blueprint, image) => {
-        if (!this.artifacts) throw new Error('Artifacts are not available');
-        const session = await this.get(sessionId);
-        const saved = await this.artifacts.create({
-          blueprint,
-          ...(image ? { image } : {}),
-          // A run host is `run-<run id>`: the artifact names its run.
-          ...(sessionId.startsWith(RUN_HOST_ID_PREFIX)
-            ? {
-                source: {
-                  runId: sessionId.slice(RUN_HOST_ID_PREFIX.length),
-                  workflowId: session.workflowId ?? '',
-                },
-              }
-            : {}),
-        });
-        return { id: saved.id, name: saved.name };
       },
       dashboardVersion: (artifactId) => {
         if (!this.artifacts) throw new Error('Artifacts are not available');
@@ -345,14 +315,6 @@ export class SessionsService implements OnModuleInit {
           ? this.artifacts.addDashboardVersion(artifactId, input)
           : this.artifacts.createDashboard(input);
       },
-      siteReview: (io) => {
-        if (!this.siteReview) {
-          throw new Error('Review a Website is not available');
-        }
-        return this.siteReview.forRun(io);
-      },
-      writeFile: (sessionId, path, data) =>
-        writeWorkspaceFile(sessionId, path, data),
       saveMock: async (sessionId, bundle, instruction) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.createFromBundle(
@@ -650,8 +612,6 @@ export class SessionsService implements OnModuleInit {
       ...(spec.contextQueries?.length
         ? { contextQueries: spec.contextQueries }
         : {}),
-      ...(spec.image ? { inputImage: spec.image.path } : {}),
-      ...(spec.inputImages?.length ? { inputImages: spec.inputImages } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
       ...(spec.contextDashboard
         ? { contextDashboard: spec.contextDashboard }
@@ -664,16 +624,13 @@ export class SessionsService implements OnModuleInit {
             },
           }
         : {}),
-      ...(spec.inputValues ? { inputValues: { ...spec.inputValues } } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,
     };
-    // `image` and `inputFiles` may name the same file: it is written once.
-    const files = new Map<string, Buffer>();
-    if (spec.image) files.set(spec.image.path, spec.image.data);
-    for (const file of spec.inputFiles ?? []) files.set(file.path, file.data);
-    for (const [path, data] of files) await writeWorkspaceFile(id, path, data);
+    for (const { path, data } of spec.inputFiles ?? []) {
+      await writeWorkspaceFile(id, path, data);
+    }
     if (spec.continuesThreadsOf) {
       try {
         const copied = await this.mastra.copyMemoryResource(
@@ -831,7 +788,7 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * A run's input image, from its host's workspace (agents.md 5.17): what a
+   * A run's input image, from its host's workspace (api.md 151): what a
    * follow-up run reads to run on the same image.
    */
   async runHostImage(
@@ -843,9 +800,7 @@ export class SessionsService implements OnModuleInit {
 
   /**
    * Write a file into a run host's workspace: a queued run's input images,
-   * as 119 accepts it (read back when it starts, `runHostImage`), and the
-   * reference images sent with a change on Build visual's approval gate
-   * (workflows R44, api.md 138), which Zoe then reads from there.
+   * as 119 accepts it (read back when it starts, `runHostImage`).
    */
   async writeRunHostFile(
     hostId: string,

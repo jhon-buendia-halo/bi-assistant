@@ -7,7 +7,7 @@ import {
   submitDashboardInputSchema,
   type DashboardDraft,
 } from './bi-dashboard.schemas';
-import { dashboardBlueprintSchema } from './recreate-dashboard.schemas';
+import { dashboardBlueprintSchema } from './dashboard-blueprint.schemas';
 
 /** Goals by team and tournament: one row per team, tournament and stage. */
 function draft(): DashboardDraft {

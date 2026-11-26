@@ -207,7 +207,6 @@ export async function runSoloTurn<T>(
       attempt,
       planBlock: planBlock(repair),
       ...(input.answered ? { answered: input.answered } : {}),
-      imageNotes: '',
     });
   const check = (attempt: AnalyseAttempt) =>
     validateAttempt({

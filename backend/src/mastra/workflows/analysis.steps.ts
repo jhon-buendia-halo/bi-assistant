@@ -39,9 +39,8 @@ import {
 export const ANALYSE_RETRY_MAX_STEPS = 8;
 
 /**
- * A question workflow's input (Avery + Michael's): the question, the
- * session's dataset names and, only when the run has any, its reference
- * images' stored paths.
+ * A question workflow's input (Avery + Michael's): the question and the
+ * session's dataset names.
  */
 export type QuestionInput = z.output<typeof questionInputSchema>;
 
@@ -107,8 +106,6 @@ export interface AnalyseRuntime {
     attempt: number;
     planBlock: string;
     answered?: AnsweredClarification;
-    /** Read images' notes (agents.md 2.15); absent or `''` without images. */
-    imageNotes?: string;
   }): Promise<AnalyseAttempt>;
 }
 

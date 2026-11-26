@@ -30,7 +30,6 @@ import {
   type InputImageFile,
   type WorkflowInputError,
 } from '../../mastra/workflows/workflow-input';
-import { REVIEW_WEBSITE_WORKFLOW_ID } from '../../mastra/workflows/review-website.steps';
 import { isConversationalWorkflow } from '../../mastra/conversational-agents';
 
 /** The most turns of a conversation Avery reads (workflows R45). */
@@ -259,11 +258,6 @@ export interface PreparedRun {
   /** The agent turn the input asks for. */
   turn: AgentRunTurn;
   /**
-   * The input's image (agents.md 5.17), taken out of `values`: the run's
-   * host stores it in its workspace at `path`, the field's value.
-   */
-  image?: { path: string; data: Buffer };
-  /**
    * Every image file the input carried, in field then list order (the
    * `image` field's and each `images` entry's): the host writes them all.
    */
@@ -444,9 +438,9 @@ export class WorkflowRunsService
   }
 
   /**
-   * M18 (data-model 6): the stored runs of the removed workflows (Answer a
-   * Business Question and its orchestrated version, `REMOVED_WORKFLOW_IDS`)
-   * are deleted at startup, whatever their status: each node chat's memory
+   * M18 (data-model 6): the stored runs of the removed workflows
+   * (`REMOVED_WORKFLOW_IDS`) are deleted at startup, whatever their status:
+   * each node chat's memory
    * thread, the node chats, the run's workspace and memory thread, then the
    * run itself, last, so a start that stops mid-way finds it again next
    * time. Idempotent: a second start finds none. Its past chats, verified
@@ -547,14 +541,11 @@ export class WorkflowRunsService
     }
     // An image never stays in the input: the run stores it as a file.
     const stored = withStoredImages(workflow, checked.input);
-    // Recreate dashboard's single image is its `image` field's file.
-    const image = stored.images.find((file) => file.field === 'image');
     return {
       workflow,
       values: stored.input,
       turn,
       images: stored.images,
-      ...(image ? { image: { path: image.path, data: image.data } } : {}),
       ...(context ? { context } : {}),
     };
   }
@@ -961,21 +952,15 @@ export class WorkflowRunsService
         name: workflow.name,
         ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
         ...(prepared.turn.datasets ? { datasets: prepared.turn.datasets } : {}),
-        ...(prepared.image ? { image: prepared.image } : {}),
         ...(prepared.images.length
           ? {
               inputFiles: prepared.images.map(({ path, data }) => ({
                 path,
                 data,
               })),
-              inputImages: prepared.images.map((file) => file.path),
             }
           : {}),
         ...(prepared.turn.artifact ? { artifact: prepared.turn.artifact } : {}),
-        // Review a Website's steps read the whole form (agents.md 5.19).
-        ...(workflow.id === REVIEW_WEBSITE_WORKFLOW_ID
-          ? { inputValues: prepared.values }
-          : {}),
         // Avery's run reads its conversation for an export (agents.md 3.18).
         ...(base.conversationId ? { conversationId: base.conversationId } : {}),
         ...(prepared.context
@@ -1903,7 +1888,7 @@ export class WorkflowRunsService
   }
 
   /**
-   * An input with a stored run's images put back (agents.md 5.17): a stored
+   * An input with a stored run's images put back (api.md 151): a stored
    * run holds the path of its image, not the image, so a follow-up on the
    * same input sends that path, and a queued run prepared again as it
    * starts (`fromRunId` its own id) holds its own paths. Where an `image`

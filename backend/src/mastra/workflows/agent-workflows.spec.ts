@@ -54,22 +54,6 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     });
   });
 
-  // agents.md 2.15, 5.13; plan D5, D6.
-  it("gives data-readiness's Read images to Zoe, in one model call without tools", () => {
-    // After Score readiness in Assess Data Readiness, whose Zoe starts at
-    // Resolve dataset.
-    const step = agentWorkflow('data-readiness')!.steps.find(
-      (candidate) => candidate.id === 'read-images',
-    );
-    expect(step?.agent).toEqual({
-      key: 'image-reader',
-      name: 'Zoe',
-      role: 'Image Analyst',
-      tools: [],
-      maxSteps: 1,
-    });
-  });
-
   it('is Assess Data Readiness for data-readiness: its one agent step is Explain report (agents.md 5.13)', () => {
     const workflow = agentWorkflow('data-readiness')!;
     expect(workflow.id).toBe('data-readiness-assessment');
@@ -77,10 +61,7 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
       workflow.steps.flatMap((step) =>
         step.agent ? [[step.id, step.agent.key, step.agent.maxSteps]] : [],
       ),
-    ).toEqual([
-      ['read-images', 'image-reader', 1],
-      ['explain-report', 'data-readiness', 10],
-    ]);
+    ).toEqual([['explain-report', 'data-readiness', 10]]);
   });
 
   it.each(['assistant', 'rfp', 'constructor', 'nope'])(

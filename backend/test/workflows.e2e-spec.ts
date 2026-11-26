@@ -47,6 +47,9 @@ interface Answer {
 const NOT_WORKFLOWS = [
   'answer-business-question',
   'orchestrated-answer',
+  'recreate-dashboard',
+  'map-dashboard-data',
+  'review-website',
   'agent:assistant',
   'agent:data-readiness',
   'seq-text-demo',
@@ -138,14 +141,11 @@ describe('The workflow catalogue (API)', () => {
     ]);
   });
 
-  it('lists the six code workflows, Answer a Business Question (Avery + Michael) and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
+  it('lists the three code workflows, Answer a Business Question (Avery + Michael) and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
     const listed = await workflows();
     expect(listed.map((w) => w.id)).toEqual([
       'orchestrated-answer-michael',
       'data-readiness-assessment',
-      'recreate-dashboard',
-      'map-dashboard-data',
-      'review-website',
       'consumption-gap-analysis',
     ]);
     expect([listed[0], listed[1]]).toEqual([
@@ -205,9 +205,8 @@ describe('The workflow catalogue (API)', () => {
             name: 'Sarah',
             role: 'Data Quality Analyst',
           },
-          { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
         ],
-        stepCount: 8,
+        stepCount: 7,
         bar: 'steps',
         trigger: 'run',
         input: [
@@ -227,17 +226,8 @@ describe('The workflow catalogue (API)', () => {
             placeholder: 'Assess the readiness of this dataset',
             default: 'Assess the readiness of this dataset',
             maxLength: 4000,
-            // Resolve dataset runs first and starts Read images (agents.md
-            // 5.13), so it is the step that takes the run's input.
-            usedBy: ['resolve-dataset'],
-          },
-          {
-            name: 'images',
-            label: 'Reference images',
-            type: 'images',
-            required: false,
-            max: 4,
-            help: 'Paste, drop or attach up to 4 PNG, JPEG or WebP images, 5 MB each.',
+            // Resolve dataset runs first (agents.md 5.13), so it is the
+            // step that takes the run's input.
             usedBy: ['resolve-dataset'],
           },
         ],
@@ -346,9 +336,6 @@ describe('The workflow catalogue (API)', () => {
       expect((await workflows()).map((w) => w.id)).toEqual([
         'orchestrated-answer-michael',
         'data-readiness-assessment',
-        'recreate-dashboard',
-        'map-dashboard-data',
-        'review-website',
         'consumption-gap-analysis',
       ]);
       await notFound(`agent:${liveId}`);

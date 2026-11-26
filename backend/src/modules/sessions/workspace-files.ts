@@ -54,7 +54,8 @@ export function textContentType(path: string): string | undefined {
 
 /**
  * Write a file into the session workspace (agents.md 3.14: the
- * synthetic-data script, as text; 5.17: a run's input image, as bytes),
+ * synthetic-data script, as text; api.md 151: a run's input image, as
+ * bytes),
  * creating its folders; an existing file of the same name is overwritten.
  * The path must be a safe relative path.
  */
@@ -81,7 +82,7 @@ const IMAGE_CONTENT_TYPES: Record<string, string> = {
 };
 
 /**
- * An image of the session workspace (agents.md 5.17: a run's input image):
+ * An image of the session workspace (api.md 151: a run's input image):
  * a safe relative path with no symlink on the way and a `.png`, `.jpg` or
  * `.webp` extension. `missing` when there is no such file.
  */

@@ -35,7 +35,7 @@ function workflow(id: string, name: string): WorkflowSummary {
 
 const CATALOGUE = [
   workflow('orchestrated-answer-michael', 'Answer a Business Question (Avery + Michael)'),
-  workflow('review-website', 'Review a Website'),
+  workflow('crawl-site', 'Crawl a Site'),
 ];
 
 function run(n: number): WorkflowRunSummary {
@@ -208,8 +208,8 @@ describe('Welcome, the home page (app-shell R51; ui.md 4.1)', () => {
     expect(byTestId('welcome-workflow-orchestrated-answer-michael')).toBeNull();
     const nav = TestBed.inject(WorkflowsNavState);
     spyOn(nav, 'openWorkflow');
-    byTestId<HTMLButtonElement>('welcome-workflow-review-website')!.click();
-    expect(nav.openWorkflow).toHaveBeenCalledOnceWith('review-website');
+    byTestId<HTMLButtonElement>('welcome-workflow-crawl-site')!.click();
+    expect(nav.openWorkflow).toHaveBeenCalledOnceWith('crawl-site');
   });
 
   it('says so when there are no runs yet, and still links Runs, Workflows and Agents', () => {

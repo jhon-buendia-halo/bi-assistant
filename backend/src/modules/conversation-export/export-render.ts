@@ -1,17 +1,13 @@
 /**
  * The conversation export's drawing (ADR-0056): the machine's own Edge or
- * Chrome (`launchSiteBrowser`, ADR-0049) draws each dashboard version and
+ * Chrome (`launchExportBrowser`, ADR-0049) draws each dashboard version and
  * cuts it into one PNG per widget row, and prints the HTML report as the
  * PDF; pptxgenjs writes the PowerPoint from the slides of
  * ./export-document.ts. The browser is a seam (`ExportBrowserLauncher`) so
  * the service is tested without one.
  */
 import PptxGenJS from 'pptxgenjs';
-import type { Browser } from 'playwright-core';
-import {
-  NO_BROWSER_MESSAGE,
-  launchSiteBrowser,
-} from '../site-review/site-browser';
+import { chromium, type Browser } from 'playwright-core';
 import { NO_EXPORT_BROWSER_MESSAGE } from './conversation-export.contract';
 import type {
   DashboardRowCapture,
@@ -170,16 +166,29 @@ function sessionOn(browser: Browser): ExportBrowserSession {
   };
 }
 
-/** The machine's browser, headless; the export's own message when none is installed. */
+/** The channels tried in order when no executable is named. */
+const BROWSER_CHANNELS = ['msedge', 'chrome'] as const;
+
+/**
+ * The machine's browser, headless (ADR-0049): Microsoft Edge, else Google
+ * Chrome, through playwright-core, which ships no browser.
+ * `EXPORT_BROWSER_PATH` names an executable instead (tests and CI point it
+ * at Playwright's Chromium). The export's own message when none is
+ * installed.
+ */
 export const launchExportBrowser: ExportBrowserLauncher = async () => {
-  try {
-    return sessionOn(await launchSiteBrowser({ headless: true }));
-  } catch (error) {
-    if (error instanceof Error && error.message === NO_BROWSER_MESSAGE) {
-      throw new Error(NO_EXPORT_BROWSER_MESSAGE);
-    }
-    throw error;
+  const executablePath = process.env.EXPORT_BROWSER_PATH?.trim();
+  if (executablePath) {
+    return sessionOn(await chromium.launch({ executablePath, headless: true }));
   }
+  for (const channel of BROWSER_CHANNELS) {
+    try {
+      return sessionOn(await chromium.launch({ channel, headless: true }));
+    } catch {
+      // Not installed here: try the next one.
+    }
+  }
+  throw new Error(NO_EXPORT_BROWSER_MESSAGE);
 };
 
 /** The pages of a PDF: its `/Type /Page` objects. */

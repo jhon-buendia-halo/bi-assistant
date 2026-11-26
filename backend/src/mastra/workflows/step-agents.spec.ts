@@ -97,9 +97,8 @@ describe('writeAnswerWithModel (plan 1.25.6)', () => {
   });
 });
 
-// Read images' notes (agents.md 2.15, 5.11): what the model receives.
-describe("the model calls with Read images' notes", () => {
-  const NOTES = '## Reference images\nA bar chart of race starts.';
+// What the model receives.
+describe('the requests of Plan and Write answer', () => {
   const INPUT = {
     question: PLAN.question,
     plan: PLAN,
@@ -112,23 +111,20 @@ describe("the model calls with Read images' notes", () => {
     generate.mockReset();
   });
 
-  it("sends Write answer's request unchanged without notes, and with them after the plan", async () => {
+  it("sends Write answer's request", async () => {
     stream.mockResolvedValue(reply('Lewis leads.', 'Lewis leads.'));
-    await writeAnswerWithModel({ ...INPUT, imageNotes: '' }, {});
-    await writeAnswerWithModel({ ...INPUT, imageNotes: NOTES }, {});
-    const [plain, noted] = stream.mock.calls.map((call) => call[0] as string);
-    expect(plain).toBe(writeAnswerRequest(INPUT));
-    expect(noted).toContain(`${JSON.stringify(PLAN)}\n\n${NOTES}\n\n`);
+    await writeAnswerWithModel(INPUT, {});
+    expect(stream.mock.calls[0][0]).toBe(writeAnswerRequest(INPUT));
   });
 
-  it("sends Plan's request unchanged without notes, and with them after the catalog", async () => {
+  it("sends Plan's request: the question, then the catalog", async () => {
     generate.mockResolvedValue({ object: PLAN, text: JSON.stringify(PLAN) });
-    const base = { messages: 'Q', question: 'Q', catalogBlock: 'CAT' };
-    await planWithModel({ ...base, imageNotes: '' }, {});
-    await planWithModel({ ...base, imageNotes: NOTES }, {});
+    await planWithModel(
+      { messages: 'Q', question: 'Q', catalogBlock: 'CAT' },
+      {},
+    );
     expect(generate.mock.calls.map((call) => call[0])).toEqual([
       'Question: Q\n\nCAT',
-      `Question: Q\n\nCAT\n\n${NOTES}`,
     ]);
   });
 });

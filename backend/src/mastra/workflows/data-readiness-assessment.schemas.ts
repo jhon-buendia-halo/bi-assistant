@@ -7,11 +7,10 @@
  * step's field names and JSON Schema from it. Zod only, no framework
  * import, so Jest and the catalogue can load it without Mastra.
  *
- * The flow: Resolve dataset → Profile source → Score readiness → Read
- * images (only with images) → Save report → Explain report → Rows behind
- * findings → Wrap up. Resolve dataset starts Zoe's reading of the images,
- * which Read images awaits; Save report starts the rows behind findings,
- * which Rows behind findings takes (agents.md 5.13). The deterministic
+ * The flow: Resolve dataset → Profile source → Score readiness → Save
+ * report → Explain report → Rows behind findings → Wrap up. Save report
+ * starts the rows behind findings, which Rows behind findings takes
+ * (agents.md 5.13). The deterministic
  * engine owns every number (data-readiness R4): the code steps profile,
  * score and store; the Data Readiness Agent only explains the stored
  * report. A step passes on what the steps after it read, since the engine
@@ -19,22 +18,16 @@
  * report stay with the run's runtime, never in a step's output.
  */
 import { z } from 'zod';
-import { readImagesOutputSchema } from './read-images.schemas';
 
 /**
- * The workflow's input and Resolve dataset's: the run's question, its one
- * dataset and the reference images' stored paths, whose reading Resolve
- * dataset starts (agents.md 5.13).
+ * The workflow's input and Resolve dataset's: the run's question and its
+ * one dataset (agents.md 5.13).
  */
 export const assessmentInputSchema = z.object({
   question: z
     .string()
     .describe("The user's question; by default, assess the dataset."),
   dataset: z.string().describe('The dataset to assess.'),
-  images: z
-    .array(z.string())
-    .optional()
-    .describe('Reference images: their stored paths.'),
 });
 
 /** The run's own input (the workflow's input schema). */
@@ -81,40 +74,9 @@ export const scoredSourceSchema = assessmentTargetSchema.extend({
     .describe('The ten dimension scores.'),
 });
 
-/**
- * What Read images hands on in this workflow (agents.md 2.15, 5.13): Zoe's
- * notes, read since Resolve dataset, and whether the run was stopped while
- * the step waited for them. It reads nothing of the step before it.
- */
-export const readinessImagesInputSchema = z.object({});
-export const readinessImagesOutputSchema = readImagesOutputSchema.extend({
-  stopped: z.boolean().describe('Whether the run was stopped.'),
-});
-
-/**
- * What Save report reads: the scores, with Read images' notes and stop
- * when the run has images (Read images is a branch, so both default).
- */
-export const scoredWithNotesSchema = scoredSourceSchema.extend({
-  imageNotes: z
-    .string()
-    .default('')
-    .describe("Read images' notes; '' when the run has no images."),
-  stopped: z
-    .boolean()
-    .default(false)
-    .describe('Whether the run was stopped at Read images.'),
-});
-
 /** What Save report stored. */
 export const savedReportSchema = scoredSourceSchema.extend({
-  imageNotes: z
-    .string()
-    .describe("Read images' notes; '' when the run has no images."),
-  reportId: z.string().describe("The stored report's id; '' when stopped."),
-  stopped: z
-    .boolean()
-    .describe('Whether the run was stopped at Read images (nothing stored).'),
+  reportId: z.string().describe("The stored report's id."),
 });
 
 /** What Explain report hands on. */
@@ -173,11 +135,7 @@ export const DATA_READINESS_ASSESSMENT_STEP_SCHEMAS = {
     input: profiledSourceSchema,
     output: scoredSourceSchema,
   },
-  'read-images': {
-    input: readinessImagesInputSchema,
-    output: readinessImagesOutputSchema,
-  },
-  'save-report': { input: scoredWithNotesSchema, output: savedReportSchema },
+  'save-report': { input: scoredSourceSchema, output: savedReportSchema },
   'explain-report': {
     input: savedReportSchema,
     output: explainedReportSchema,

@@ -18,10 +18,6 @@ jest.mock('../agents/layer-mapper.agent', () => ({
 jest.mock('../agents/gap-advisor.agent', () => ({
   gapAdvisorAgent: { generate: (...args: unknown[]) => advisor(...args) },
 }));
-jest.mock('../agents/dashboard-reader.agent', () => ({
-  dashboardReaderAgent: {},
-}));
-jest.mock('../agents/data-mapper.agent', () => ({ dataMapperAgent: {} }));
 jest.mock('../agents/analysis-planner.agent', () => ({
   analysisPlannerAgent: {},
 }));
@@ -157,7 +153,6 @@ describe('deriveRequirementsWithModel (agents.md 2.18)', () => {
         dashboards: [
           {
             id: 'D1',
-            source: 'image',
             name: 'Tournament overview',
             blueprint: {
               widgets: [{ title: 'Goals by team' }],

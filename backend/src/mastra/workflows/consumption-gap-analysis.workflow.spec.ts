@@ -37,12 +37,8 @@ import { consumptionGapAnalysisWorkflow } from './consumption-gap-analysis.workf
 import * as gaps from './consumption-gap.gaps';
 import * as lineage from './consumption-gap.lineage';
 import * as report from './consumption-gap.report';
-import { SAMPLE_BLUEPRINT_REPLY } from './recreate-dashboard.sample';
-import {
-  blueprintOf,
-  type DashboardBlueprint,
-  type MockBundle,
-} from './recreate-dashboard.steps';
+import { SAMPLE_BLUEPRINT } from './dashboard-blueprint.sample';
+import type { MockBundle } from './live-dashboard';
 
 interface StubStream {
   fullStream: AsyncIterable<{
@@ -77,7 +73,7 @@ interface StubWorkflow {
 
 const workflow = consumptionGapAnalysisWorkflow as unknown as StubWorkflow;
 
-const BLUEPRINT = blueprintOf(SAMPLE_BLUEPRINT_REPLY) as DashboardBlueprint;
+const BLUEPRINT = SAMPLE_BLUEPRINT;
 
 const LAYERS: LayerSchemaNote[] = [
   {
@@ -328,10 +324,6 @@ function runtime(
     fetchLayers,
     recorded,
     calls,
-    readDashboard: jest.fn(({ image }: { image: string }) => {
-      calls.push(`readDashboard:${image}`);
-      return Promise.resolve({ blueprint: BLUEPRINT, stopped: false });
-    }),
     loadDashboard: jest.fn(() =>
       Promise.resolve({ name: 'Sales board', blueprint: BLUEPRINT }),
     ),
@@ -454,7 +446,6 @@ describe('consumption-gap-analysis workflow (agents.md 5.20)', () => {
     ).toEqual([
       'resolve-layers:success',
       'load-layer-catalogs:success',
-      'read-dashboards:success',
       'derive-requirements:success',
       'infer-lineage:success',
     ]);
@@ -569,44 +560,25 @@ describe('consumption-gap-analysis workflow (agents.md 5.20)', () => {
     });
   });
 
-  it('reads each reference image with Grace, then loads the saved dashboard', async () => {
+  it('loads the saved dashboard at Derive requirements and hands it to the Requirements Analyst', async () => {
     const given = runtime();
-    await start(given, {
-      images: ['inputs/images/1.png', 'inputs/images/2.png'],
-      artifact: 'a-1',
-    });
-    expect(given.readDashboard.mock.calls).toEqual([
-      [
-        {
-          image: 'inputs/images/1.png',
-          signal: expect.any(AbortSignal) as unknown,
-        },
-      ],
-      [
-        {
-          image: 'inputs/images/2.png',
-          signal: expect.any(AbortSignal) as unknown,
-        },
-      ],
-    ]);
+    await start(given, { artifact: ' a-1 ' });
     expect(given.loadDashboard).toHaveBeenCalledWith({ artifact: 'a-1' });
     const dashboards = (
       given.deriveRequirements.mock.calls[0] as [
-        { dashboards: { id: string; source: string; name: string }[] },
+        { dashboards: { id: string; name: string }[] },
       ]
-    )[0].dashboards.map(({ id, source, name }) => ({ id, source, name }));
-    expect(dashboards).toEqual([
-      { id: 'D1', source: 'image', name: BLUEPRINT.title },
-      { id: 'D2', source: 'image', name: BLUEPRINT.title },
-      { id: 'D3', source: 'artifact', name: 'Sales board' },
-    ]);
+    )[0].dashboards.map(({ id, name }) => ({ id, name }));
+    expect(dashboards).toEqual([{ id: 'D1', name: 'Sales board' }]);
   });
 
   it('loads no saved dashboard when the artifact is empty', async () => {
     const given = runtime();
     await start(given, { artifact: '' });
-    expect(given.readDashboard).not.toHaveBeenCalled();
     expect(given.loadDashboard).not.toHaveBeenCalled();
+    expect(given.deriveRequirements).toHaveBeenCalledWith(
+      expect.objectContaining({ dashboards: [] }),
+    );
   });
 
   it('ends at Derive requirements when the run is stopped there', async () => {
@@ -645,8 +617,6 @@ describe('consumption-gap-analysis workflow (agents.md 5.20)', () => {
 
   // Independent work at the same time, on a linear graph (agents.md 5.20).
   describe('concurrent work', () => {
-    const IMAGES = ['inputs/images/1.png', 'inputs/images/2.png'];
-
     /** Wait (a bounded number of turns) until `ready` holds; throws if never. */
     async function until(ready: () => boolean) {
       for (let turn = 0; turn < 200 && !ready(); turn++) {
@@ -655,108 +625,20 @@ describe('consumption-gap-analysis workflow (agents.md 5.20)', () => {
       if (!ready()) throw new Error('The run never got there');
     }
 
-    it('refuses a dataset with no Consumption schema before any dashboard is read', async () => {
+    it('refuses a dataset with no Consumption schema before the saved dashboard is loaded', async () => {
       jest.mocked(gaps.resolveLayers).mockImplementation(() => {
         throw new Error(
           'No schema of the datasets World Cup is tagged Consumption.',
         );
       });
       const given = runtime();
-      const { result } = await start(given, {
-        images: IMAGES,
-        artifact: 'a-1',
-      });
+      const { result } = await start(given, { artifact: 'a-1' });
       expect(result.status).toBe('failed');
       expect(String((result.error as Error).message)).toContain(
         'is tagged Consumption',
       );
-      expect(given.readDashboard).not.toHaveBeenCalled();
       expect(given.loadDashboard).not.toHaveBeenCalled();
       expect(given.startLineage).not.toHaveBeenCalled();
-    });
-
-    it('starts both image reads before either ends, and numbers the dashboards in image order when they finish out of order', async () => {
-      const pending = new Map<string, (title: string) => void>();
-      const ended: string[] = [];
-      const readDashboard = jest.fn(
-        ({ image }: { image: string }) =>
-          new Promise<{ blueprint: DashboardBlueprint; stopped: boolean }>(
-            (done) =>
-              pending.set(image, (title) => {
-                ended.push(image);
-                done({ blueprint: { ...BLUEPRINT, title }, stopped: false });
-              }),
-          ),
-      );
-      const given = runtime({ readDashboard });
-      const started = start(given, { images: IMAGES, artifact: 'a-1' });
-      await until(() => pending.size >= 2);
-      // Both reads started, none ended.
-      expect(readDashboard).toHaveBeenCalledTimes(2);
-      expect(ended).toEqual([]);
-      pending.get(IMAGES[1])!('Second');
-      await new Promise((r) => setImmediate(r));
-      pending.get(IMAGES[0])!('First');
-      await started;
-      expect(ended).toEqual([IMAGES[1], IMAGES[0]]);
-      const dashboards = (
-        given.deriveRequirements.mock.calls[0] as [
-          { dashboards: { id: string; source: string; name: string }[] },
-        ]
-      )[0].dashboards.map(({ id, source, name }) => ({ id, source, name }));
-      expect(dashboards).toEqual([
-        { id: 'D1', source: 'image', name: 'First' },
-        { id: 'D2', source: 'image', name: 'Second' },
-        { id: 'D3', source: 'artifact', name: 'Sales board' },
-      ]);
-    });
-
-    it("aborts the other reads' signal at the first failure and fails with that failure", async () => {
-      const signals: AbortSignal[] = [];
-      const readDashboard = jest.fn(
-        ({ image, signal }: { image: string; signal: AbortSignal }) => {
-          signals.push(signal);
-          if (image === IMAGES[0]) {
-            return Promise.reject(new Error('The image shows no dashboard'));
-          }
-          return new Promise((_done, fail) =>
-            signal.addEventListener('abort', () =>
-              fail(new Error('This operation was aborted')),
-            ),
-          );
-        },
-      );
-      const given = runtime({ readDashboard });
-      const { result } = await start(given, { images: IMAGES });
-      expect(result.status).toBe('failed');
-      expect(String((result.error as Error).message)).toContain(
-        'The image shows no dashboard',
-      );
-      expect(signals).toHaveLength(2);
-      expect(signals.every((signal) => signal.aborted)).toBe(true);
-      expect(given.deriveRequirements).not.toHaveBeenCalled();
-    });
-
-    it('bails at Read dashboards with the dashboards already read when the run is stopped', async () => {
-      const readDashboard = jest.fn(({ image }: { image: string }) =>
-        Promise.resolve({
-          blueprint: BLUEPRINT,
-          stopped: image === IMAGES[1],
-        }),
-      );
-      const given = runtime({ readDashboard });
-      const { result, events } = await start(given, {
-        images: IMAGES,
-        artifact: 'a-1',
-      });
-      expect(result.status).toBe('success');
-      expect(events).toContain('read-dashboards:bailed');
-      expect(result.result).toMatchObject({
-        stopped: true,
-        dashboards: [{ id: 'D1', source: 'image', name: BLUEPRINT.title }],
-      });
-      expect(given.loadDashboard).not.toHaveBeenCalled();
-      expect(given.deriveRequirements).not.toHaveBeenCalled();
     });
 
     it('takes at Infer lineage the lineage started at Load layer catalogs, its records in their order', async () => {
@@ -776,8 +658,8 @@ describe('consumption-gap-analysis workflow (agents.md 5.20)', () => {
           },
         },
       );
-      const started = start(given, { images: IMAGES });
-      // The lineage checks run while the dashboards are read and derived.
+      const started = start(given);
+      // The lineage checks run while the requirements are derived.
       await until(() => given.deriveRequirements.mock.calls.length > 0);
       expect(given.recorded).toEqual([]);
       finish();
@@ -785,8 +667,6 @@ describe('consumption-gap-analysis workflow (agents.md 5.20)', () => {
       expect(given.calls).toEqual([
         'datasetLayers',
         'startLineage',
-        `readDashboard:${IMAGES[0]}`,
-        `readDashboard:${IMAGES[1]}`,
         'deriveRequirements',
         'takeLineage',
       ]);

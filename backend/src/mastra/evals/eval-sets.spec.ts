@@ -123,7 +123,7 @@ describe('the target a run uses', () => {
     });
   });
 
-  it.each(['analysis-planner', 'answer-writer', 'image-reader'])(
+  it.each(['analysis-planner', 'answer-writer'])(
     'builds the isolated-call target of %s',
     (agentKey) => {
       const target = evalTargetFor(agentKey);

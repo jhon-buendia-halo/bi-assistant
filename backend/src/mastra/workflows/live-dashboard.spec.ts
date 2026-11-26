@@ -10,8 +10,8 @@ import {
   DASHBOARD_MOCK_CSS,
   DASHBOARD_MOCK_ROOT_ID,
   DASHBOARD_MOCK_RUNTIME,
-} from './recreate-dashboard.runtime';
-import type { DashboardBlueprint } from './recreate-dashboard.steps';
+} from './dashboard-blueprint.runtime';
+import type { DashboardBlueprint } from './dashboard-blueprint.schemas';
 
 /** A World Cup dashboard as a live version holds it. */
 const BLUEPRINT: DashboardBlueprint = {

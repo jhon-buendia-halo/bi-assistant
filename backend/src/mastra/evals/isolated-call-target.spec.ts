@@ -1,9 +1,6 @@
 // The isolated-call eval target (agents.md 8.1): one model function per
 // case, over the case's frozen `input`. No model is called: the call is a
 // stand-in.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
 import type { AssistantEvalCase, AssistantEvalSet } from './assistant.evals';
@@ -18,7 +15,6 @@ import {
   isolatedCallTarget,
   isolatedCase,
 } from './isolated-call-target';
-import { EVAL_IMAGES_DIR, loadEvalImages } from './eval-images';
 
 interface PlanInput {
   question: string;
@@ -204,38 +200,5 @@ describe('workflow step outputs (recordStepOutput)', () => {
       steps,
     );
     expect(steps).toEqual({ plan: 1, 'save-report': 2 });
-  });
-});
-
-describe('eval image fixtures (loadEvalImages)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'eval-images-'));
-  afterAll(() => rmSync(dir, { recursive: true, force: true }));
-
-  it('reads each named file with its media type, in order', async () => {
-    writeFileSync(join(dir, 'a.png'), Buffer.from([1, 2]));
-    writeFileSync(join(dir, 'b.JPG'), Buffer.from([3]));
-    const images = await loadEvalImages(['a.png', 'b.JPG'], dir);
-    expect(images.map((image) => image.mediaType)).toEqual([
-      'image/png',
-      'image/jpeg',
-    ]);
-    expect([...images[0].data]).toEqual([1, 2]);
-  });
-
-  it('refuses a file of another kind or outside the folder', async () => {
-    await expect(loadEvalImages(['notes.txt'], dir)).rejects.toThrow(
-      'not a PNG, JPEG or WebP image',
-    );
-    await expect(loadEvalImages(['../secret.png'], dir)).rejects.toThrow(
-      'a file name in the eval images folder',
-    );
-  });
-
-  it('finds the shipped example image in the source folder', async () => {
-    expect(EVAL_IMAGES_DIR).toMatch(/__fixtures__[\\/]images$/);
-    const [image] = await loadEvalImages(['example-bar-chart.png']);
-    expect(image.mediaType).toBe('image/png');
-    // The PNG signature.
-    expect([...image.data.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   });
 });

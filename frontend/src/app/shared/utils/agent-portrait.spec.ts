@@ -9,13 +9,13 @@ import {
 
 describe('agent portraits (ui.md 4.4)', () => {
   it('draws a built-in agent with its chosen look, no beard, no gesture', () => {
-    const grace = portraitOptions('dashboard-reader');
-    expect(grace['seed']).toBe('dashboard-reader');
-    expect(grace['hair']).toEqual(['variant02']);
-    expect(grace['glasses']).toEqual(['variant03']);
-    expect(grace['glassesProbability']).toBe(100);
-    expect(grace['beardProbability']).toBe(0);
-    expect(grace['gestureProbability']).toBe(0);
+    const david = portraitOptions('sql-fixer');
+    expect(david['seed']).toBe('sql-fixer');
+    expect(david['hair']).toEqual(['variant06']);
+    expect(david['glasses']).toEqual(['variant08']);
+    expect(david['glassesProbability']).toBe(100);
+    expect(david['beardProbability']).toBe(0);
+    expect(david['gestureProbability']).toBe(0);
     // Emily wears no glasses.
     expect(portraitOptions('assistant')['glassesProbability']).toBe(0);
   });

@@ -10,19 +10,15 @@ import { queryExplainerAgent } from './agents/query-explainer.agent';
 import { resultExplorerAgent } from './agents/result-explorer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
 import { insightsLeadAgent } from './agents/insights-lead.agent';
-import { dashboardReaderAgent } from './agents/dashboard-reader.agent';
-import { dataMapperAgent } from './agents/data-mapper.agent';
 import { gapAdvisorAgent } from './agents/gap-advisor.agent';
 import { layerMapperAgent } from './agents/layer-mapper.agent';
 import { requirementsAnalystAgent } from './agents/requirements-analyst.agent';
-import { imageReaderAgent } from './agents/image-reader.agent';
 import { dataReadinessAgent } from './agents/data-readiness.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
-import { siteReviewerAgent } from './agents/site-reviewer.agent';
 import { EVAL_RUN_CONTEXT_KEY } from './evals/eval-trace-marker';
 import { EvalRunMarker } from './evals/eval-run-scope';
 import { developerTraceExporters } from './developer-exporters';
@@ -34,9 +30,6 @@ import { orchestratedMichaelWorkflow } from './workflows/orchestrated-answer-mic
 import { insightsLeadConversationWorkflow } from './workflows/conversation-turn.workflow';
 import { consumptionGapAnalysisWorkflow } from './workflows/consumption-gap-analysis.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
-import { mapDashboardDataWorkflow } from './workflows/map-dashboard-data.workflow';
-import { recreateDashboardWorkflow } from './workflows/recreate-dashboard.workflow';
-import { reviewWebsiteWorkflow } from './workflows/review-website.workflow';
 
 // Validate every bundled skill before anything is served: a broken skill
 // stops the backend here (agents.md 7.3).
@@ -65,22 +58,14 @@ export const mastra = new Mastra({
     'bi-analyst': biAnalystAgent,
     // Elena, the Insights Lead, alone in her own conversation (plan Elena 2).
     'insights-lead': insightsLeadAgent,
-    // The agents of Dashboard Image to Artifact's two model steps (agents.md 5.17).
-    'dashboard-reader': dashboardReaderAgent,
-    'data-mapper': dataMapperAgent,
     // The agents of Consumption Gap Analysis's model steps (agents.md 5.20).
     'requirements-analyst': requirementsAnalystAgent,
     'layer-mapper': layerMapperAgent,
     'gap-advisor': gapAdvisorAgent,
-    // The agent of Read images, the optional first step of three workflows
-    // (agents.md 2.15; workflows R35).
-    'image-reader': imageReaderAgent,
     // The query inspector's explainer (agents.md 2.12).
     'query-explainer': queryExplainerAgent,
     // The query inspector's filter in words (agents.md 2.17).
     'result-explorer': resultExplorerAgent,
-    // Review a Website's agent (agents.md 2.16, 5.19).
-    'site-reviewer': siteReviewerAgent,
   },
   // The turn workflows (agents.md 1.2, 5.1): each catalogue workflow under
   // its own id (5.12; api.md 118, 119), and `agent-turn`, the engine of a
@@ -92,9 +77,6 @@ export const mastra = new Mastra({
     'orchestrated-answer-michael': orchestratedMichaelWorkflow,
     'insights-lead-conversation': insightsLeadConversationWorkflow,
     'data-readiness-assessment': dataReadinessAssessmentWorkflow,
-    'recreate-dashboard': recreateDashboardWorkflow,
-    'map-dashboard-data': mapDashboardDataWorkflow,
-    'review-website': reviewWebsiteWorkflow,
     'consumption-gap-analysis': consumptionGapAnalysisWorkflow,
   },
   storage: mastraStorage,

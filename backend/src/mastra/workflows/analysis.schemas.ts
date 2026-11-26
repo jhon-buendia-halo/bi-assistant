@@ -7,29 +7,14 @@
  */
 import { z } from 'zod';
 
-/** A turn's question and datasets (the eval target's input, agents.md 8). */
-export const turnInputSchema = z.object({
+/**
+ * A question workflow's input: the turn's question and datasets. `images`
+ * is no longer sent by any run; it stays so Avery + Michael's contract
+ * (and its hash, which stored runs carry) is unchanged.
+ */
+export const questionInputSchema = z.object({
   question: z.string().describe("The user's question."),
   datasets: z.array(z.string()).describe("The run's dataset names."),
-});
-
-/**
- * Read images' notes (agents.md 2.15, 5.11; workflows R35), as every step
- * after Receive question carries them in its data, so they survive a
- * Clarify wait and a resume; `''` when the run has no images.
- */
-const imageNotesSchema = z
-  .string()
-  .describe(
-    "Read images' notes on the run's reference images; '' when it has none.",
-  );
-
-/**
- * The workflow's input: the turn's, and the reference images' stored paths,
- * which only Read images reads (kept out of Receive question's input, so
- * `usedBy(images)` names Read images alone).
- */
-export const questionInputSchema = turnInputSchema.extend({
   images: z
     .array(z.string())
     .optional()
@@ -220,7 +205,6 @@ export const analyseOutcomeSchema = z.object({
     .describe(
       'On a retry: the model error it ended on; the earlier attempt is kept.',
     ),
-  imageNotes: imageNotesSchema,
 });
 
 /** The answer the Write answer step's model writes (AnswerOutput). */

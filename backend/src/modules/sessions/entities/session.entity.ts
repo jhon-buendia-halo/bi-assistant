@@ -376,20 +376,8 @@ export interface SessionDoc {
    */
   continuesThreads?: boolean;
   /**
-   * A run host of Dashboard Image to Artifact (agents.md 5.17): the path of the
-   * run's input image in the host's workspace. In memory only, like the
-   * host.
-   */
-  inputImage?: string;
-  /**
-   * A run host whose input has reference images (workflows R35; agents.md
-   * 2.15): their paths in the host's workspace (`inputs/images/<n>.<ext>`),
-   * in order; Read images loads them. In memory only, like the host.
-   */
-  inputImages?: string[];
-  /**
-   * A run host of Dashboard Image to Artifact on a saved dashboard (agents.md
-   * 5.17): the artifact's id. In memory only, like the host.
+   * A run host of Consumption Gap Analysis on a saved dashboard (agents.md
+   * 5.20): the artifact's id. In memory only, like the host.
    */
   inputArtifact?: string;
   /**
@@ -404,12 +392,6 @@ export interface SessionDoc {
    * like the host.
    */
   contextConversation?: { conversationId: string; runId: string };
-  /**
-   * A run host's whole checked input, field by field, for a workflow whose
-   * steps read more than the question (Review a Website, agents.md 5.19).
-   * In memory only, like the host.
-   */
-  inputValues?: Record<string, string | number | boolean | string[]>;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   /** What the agent showed in the right panel, oldest first (data-model 3.4.4). */

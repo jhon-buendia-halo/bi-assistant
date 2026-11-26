@@ -20,10 +20,9 @@ import { artifactKind } from '../run-artifact-card/run-artifact-card';
 /**
  * The workflows whose visual is drawn by code from the run's own data, not
  * from a query: Tailor, Refresh and revert have nothing to act on, so the
- * panel is read-only (agents.md 5.19, 5.20).
+ * panel is read-only (agents.md 5.20).
  */
 const CODE_BUILT_VISUAL_WORKFLOWS: readonly string[] = [
-  'review-website',
   'consumption-gap-analysis',
 ];
 

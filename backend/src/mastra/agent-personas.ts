@@ -141,20 +141,6 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       'Ask for a dashboard and I build it on your real data: filters, KPIs and charts that recompute as you click, ready to download.',
   },
-  'dashboard-reader': {
-    name: 'Grace',
-    role: 'Dashboard Analyst',
-    domain: 'storytelling',
-    intro:
-      "Show me a picture of any dashboard and I'll describe its layout, filters, charts and the data behind them, ready to rebuild.",
-  },
-  'data-mapper': {
-    name: 'Daniel',
-    role: 'Data Mapping Analyst',
-    domain: 'data-foundations',
-    intro:
-      "I match the columns a dashboard needs to the columns in your datasets, and tell you what's missing.",
-  },
   'requirements-analyst': {
     name: 'Rosa',
     role: 'Requirements Analyst',
@@ -175,20 +161,6 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     domain: 'data-foundations',
     intro:
       "I propose the model changes that close your Consumption layer's gaps, starting in the lowest layer that has the data.",
-  },
-  'image-reader': {
-    name: 'Zoe',
-    role: 'Image Analyst',
-    domain: 'storytelling',
-    intro:
-      "Attach a chart, a table or a screenshot to your question and I'll describe what it shows, so the team can work with it.",
-  },
-  'site-reviewer': {
-    name: 'Iris',
-    role: 'Website Reviewer',
-    domain: 'quality',
-    intro:
-      'I walk through your website on every screen size and show you what is broken, with the element, what I measured and a picture of it.',
   },
   'query-explainer': {
     name: 'Hannah',

@@ -42,7 +42,7 @@ import { conversationalBindingOf } from '../../mastra/conversational-agents';
 
 /** One workflow of the catalogue, as `GET /workflows` lists it (api.md 116). */
 export interface WorkflowSummary {
-  /** The catalogue id (`orchestrated-answer-michael`, `review-website`, …). */
+  /** The catalogue id (`orchestrated-answer-michael`, `consumption-gap-analysis`, …). */
   id: string;
   name: string;
   description: string;
