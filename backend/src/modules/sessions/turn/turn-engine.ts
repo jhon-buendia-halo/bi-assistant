@@ -118,7 +118,6 @@ import {
 import type { QueryFacts } from '../query-evidence/query-evidence.types';
 import type {
   ChatMessage,
-  CrossCheck,
   SessionDoc,
   SessionView,
   ToolDataRecord,
@@ -174,16 +173,6 @@ export interface TurnEngineDeps {
   /** The workflow view of a stored session, for the `workflow` event. */
   workflowOf(session: SessionDoc): Promise<WorkflowView | undefined>;
   effectiveWorkflowFor(session: SessionDoc): WorkflowPhase[];
-  /**
-   * Careful mode's cross-check of the answer's SQL (agents.md 5.4); `signal`
-   * is the turn's stop, for the verifier call and its statement.
-   */
-  crossCheckAnswer(
-    session: SessionDoc,
-    question: string,
-    data: ToolDataRecord[],
-    signal?: AbortSignal,
-  ): Promise<CrossCheck | undefined>;
   /**
    * A dashboard artifact's current version with its rows (agents.md 5.22,
    * the follow-up carry): what Clara changes. Throws when it is unknown.
@@ -259,7 +248,6 @@ export class TurnEngine {
     firstEmit: (event: StreamEvent) => void,
     firstAbortSignal: AbortSignal | undefined,
     activeVisualId: string | undefined,
-    careful: boolean,
     firstOnStepEvent?: (event: RunStepEvent) => void,
     suspendable = false,
   ): Promise<TurnSuspension | undefined> {
@@ -1205,17 +1193,6 @@ export class TurnEngine {
         });
       } else if (text.trim() || visualEvent || dashboard || exported) {
         const interpretation = interpretationLine(data, entities);
-        // Careful mode only, and only when there is a result set to corroborate.
-        // The assistant's only: another agent runs no SQL to cross-check.
-        const crossChecked =
-          careful && isAssistant && !turn.signal.aborted
-            ? await this.deps.crossCheckAnswer(
-                session,
-                trimmed,
-                data,
-                turn.signal,
-              )
-            : undefined;
         messages.push({
           role: 'assistant',
           content:
@@ -1239,7 +1216,6 @@ export class TurnEngine {
           ...(dashboard ? { dashboard } : {}),
           ...(exported ? { export: exported } : {}),
           ...(checks ? { checks } : {}),
-          ...(crossChecked ? { crossCheck: crossChecked } : {}),
         });
       }
       const updated = await this.deps.updateDoc(id, { messages });

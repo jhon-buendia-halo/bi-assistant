@@ -279,7 +279,6 @@ async function runCase(
         testCase.question,
         () => {},
         turn.signal,
-        false,
         () => {},
       );
     } finally {

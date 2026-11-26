@@ -7,11 +7,6 @@ jest.mock('../../../mastra/agents/sql-fixer.agent', () => {
   const { z } = require('zod') as typeof import('zod');
   return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
 });
-jest.mock('../../../mastra/agents/sql-verifier.agent', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { z } = require('zod') as typeof import('zod');
-  return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
-});
 jest.mock('../../../mastra/model-resolver', () => ({
   resolveAgentModelConfig: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
 }));
@@ -22,7 +17,6 @@ function checks(runReadOnlySql: jest.Mock) {
   return new SqlChecks({
     mastra: {} as never,
     datasourcesService: { runReadOnlySql } as never,
-    llmService: {} as never,
     verifiedQueries: {} as never,
     datasets: { bound: jest.fn().mockResolvedValue([]) } as never,
     logger: { warn: jest.fn() } as never,

@@ -73,11 +73,6 @@ jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   const { z } = require('zod') as typeof import('zod');
   return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
 });
-jest.mock('../../mastra/agents/sql-verifier.agent', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { z } = require('zod') as typeof import('zod');
-  return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
-});
 jest.mock('./repositories/sessions.repository', () => ({
   SessionsRepository: class {},
 }));
@@ -539,7 +534,6 @@ async function chatTurn(
   ctx: Ctx,
   sessionId: string,
   content: string,
-  careful = false,
 ): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
   await streamStored(
@@ -549,7 +543,6 @@ async function chatTurn(
     (e) => events.push(e),
     undefined,
     undefined,
-    careful,
   );
   return events;
 }
@@ -590,7 +583,7 @@ async function agentHostTurn(
   ctx: Ctx,
   agentKey: string,
   question: string,
-  options: { datasets?: string[]; careful?: boolean } = {},
+  options: { datasets?: string[] } = {},
 ) {
   const events: StreamEvent[] = [];
   const host = await ctx.sessions.createRunHost({
@@ -604,7 +597,6 @@ async function agentHostTurn(
     question,
     (e) => events.push(e),
     undefined,
-    options.careful ?? false,
     () => undefined,
   );
   const view = await ctx.sessions.finishRunHost(host.id);
@@ -857,7 +849,6 @@ describe('the run host (agents.md 5.14)', () => {
       'And then?',
       () => undefined,
       undefined,
-      false,
       () => undefined,
     );
     await ctx.sessions.finishRunHost(host.id);
@@ -914,7 +905,6 @@ describe('the run host (agents.md 5.14)', () => {
       'Which team was the most dominant?',
       () => undefined,
       signal,
-      false,
       () => undefined,
     );
     return { host, suspension };
@@ -971,29 +961,6 @@ describe('the run host (agents.md 5.14)', () => {
       onStepEvent: () => undefined,
     });
     expect(allAborted(ctx)).toBe(true);
-  });
-
-  it("careful: true on an agent host's turn runs the cross-check, as a careful chat turn does", async () => {
-    const ctx = build();
-    const crossCheck = jest
-      .spyOn(
-        ctx.sessions as unknown as { crossCheckAnswer: () => Promise<unknown> },
-        'crossCheckAnswer',
-      )
-      .mockResolvedValue({ status: 'agree', note: 'same' });
-    const { view } = await agentHostTurn(ctx, 'assistant', 'Who won?', {
-      datasets: ['World Cup'],
-      careful: true,
-    });
-    expect(crossCheck).toHaveBeenCalledTimes(1);
-    expect(view.messages.at(-1)?.crossCheck).toEqual({
-      status: 'agree',
-      note: 'same',
-    });
-    crossCheck.mockClear();
-    // An Avery + Michael run takes no careful field: its input has none.
-    await runOf(ctx, { ...AVERY_INPUT, careful: true });
-    expect(crossCheck).not.toHaveBeenCalled();
   });
 
   it('an Avery + Michael run emits a running and an ended event for its one step, and moves no prompt bar', async () => {

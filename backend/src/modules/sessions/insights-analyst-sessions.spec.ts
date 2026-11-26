@@ -59,11 +59,6 @@ jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   const { z } = require('zod') as typeof import('zod');
   return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
 });
-jest.mock('../../mastra/agents/sql-verifier.agent', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { z } = require('zod') as typeof import('zod');
-  return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
-});
 jest.mock('./repositories/sessions.repository', () => ({
   SessionsRepository: class {},
 }));
@@ -241,7 +236,6 @@ function build(chunks?: unknown[], partial: Partial<SessionDoc> = {}) {
 async function turn(
   ctx: ReturnType<typeof build>,
   content: string,
-  careful = false,
   abortSignal?: AbortSignal,
   events: StreamEvent[] = [],
 ): Promise<StreamEvent[]> {
@@ -252,7 +246,6 @@ async function turn(
     (event) => events.push(event),
     abortSignal,
     undefined,
-    careful,
   );
   return events;
 }
@@ -417,12 +410,12 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
     });
   });
 
-  it('runs no grounding pass on a turn without tools, and no careful cross-check', async () => {
+  it('runs no grounding pass on a turn without tools', async () => {
     const ctx = build([
       { type: 'text-delta', payload: { text: 'Brazil won in 2002.' } },
     ]);
-    await turn(ctx, 'Who won in 2002?', true);
-    // The grounding guard and the cross-check would call generate again.
+    await turn(ctx, 'Who won in 2002?');
+    // The grounding guard would call generate again.
     expect(ctx.michael.generate).not.toHaveBeenCalled();
     expect(ctx.assistant.generate).not.toHaveBeenCalled();
     const answer = ctx.session.messages.at(-1);
@@ -430,7 +423,6 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       role: 'assistant',
       content: 'Brazil won in 2002.',
     });
-    expect(answer).not.toHaveProperty('crossCheck');
   });
 
   it('keeps a run_readonly_sql call as a data record and shows its step', async () => {
@@ -481,7 +473,7 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
           text: Promise.resolve(''),
         }),
       );
-      const events = await turn(ctx, 'How many?', false, controller.signal);
+      const events = await turn(ctx, 'How many?', controller.signal);
       expect(events.some((event) => event.type === 'done')).toBe(false);
     });
 

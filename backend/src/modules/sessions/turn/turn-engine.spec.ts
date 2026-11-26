@@ -77,11 +77,6 @@ jest.mock('../../../mastra/agents/sql-fixer.agent', () => {
   const { z } = require('zod') as typeof import('zod');
   return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
 });
-jest.mock('../../../mastra/agents/sql-verifier.agent', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { z } = require('zod') as typeof import('zod');
-  return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
-});
 jest.mock('../repositories/sessions.repository', () => ({
   SessionsRepository: class {},
 }));

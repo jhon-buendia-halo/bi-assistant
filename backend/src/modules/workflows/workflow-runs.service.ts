@@ -628,7 +628,7 @@ export class WorkflowRunsService
         edges: INSIGHTS_LEAD_EDGES.map((edge) => ({ ...edge })),
       },
       values: { question },
-      turn: { question, careful: false },
+      turn: { question },
       images: [],
       draft: { agentId },
     };
@@ -1037,7 +1037,6 @@ export class WorkflowRunsService
         prepared.turn.question,
         io.emit,
         io.abortSignal,
-        prepared.turn.careful,
         io.onStepEvent,
       );
     });

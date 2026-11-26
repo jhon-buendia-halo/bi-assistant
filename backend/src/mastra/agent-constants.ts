@@ -69,6 +69,5 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   CHIEF_OF_STAFF_AGENT_KEY,
   BI_ANALYST_AGENT_KEY,
   'sql-fixer',
-  'sql-verifier',
   'assistant-eval-judge',
 ];

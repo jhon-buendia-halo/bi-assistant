@@ -177,7 +177,6 @@ function build(
         question: string,
         emit: (event: unknown) => void,
         _signal: AbortSignal | undefined,
-        _careful: boolean,
         onStep: (event: unknown) => void,
       ) => {
         hostMessages.push({ role: 'user', content: question, at: 't' });
@@ -631,14 +630,12 @@ describe('WorkflowRunsService: an Answer a Business Question (Avery + Michael) r
       // A first message starts Avery's conversation (workflows R45).
       conversationId: run.id,
     });
-    // Careful is no field of the input: the turn runs without it.
     // The turn runs on its own signal: the no-progress watchdog's.
     expect(ctx.sessions.streamRunTurn).toHaveBeenCalledWith(
       `run-${run.id}`,
       'Who won in 2002?',
       expect.any(Function),
       expect.any(AbortSignal),
-      false,
       expect.any(Function),
     );
     // The host is discarded once, after the turn.
@@ -2522,7 +2519,6 @@ describe('WorkflowRunsService: a draft run (api.md R12; agents-evals R60)', () =
       'Who won?',
       expect.any(Function),
       expect.any(AbortSignal),
-      false,
       expect.any(Function),
     );
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledWith(`run-${run.id}`);
@@ -2675,7 +2671,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
     const released = new Promise<void>((resolve) => (release = resolve));
     const original = ctx.sessions.streamRunTurn.getMockImplementation()!;
     ctx.sessions.streamRunTurn.mockImplementationOnce(
-      async (hostId, question, emit, signal, careful, onStep) => {
+      async (hostId, question, emit, signal, onStep) => {
         emit({ type: 'text', content: 'Bra' });
         if (!signal?.aborted) {
           await Promise.race([
@@ -2686,7 +2682,7 @@ describe('WorkflowRunsService: runs detached from their request (api.md 119, 138
           ]);
         }
         if (signal?.aborted) return;
-        await original(hostId, question, emit, signal, careful, onStep);
+        await original(hostId, question, emit, signal, onStep);
       },
     );
     return release;
@@ -3223,7 +3219,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
     const nextGate = new Promise<void>((resolve) => (next = resolve));
     const endGate = new Promise<void>((resolve) => (end = resolve));
     ctx.sessions.streamRunTurn.mockImplementationOnce(
-      async (_hostId, _question, emit, _signal, _careful, onStep) => {
+      async (_hostId, _question, emit, _signal, onStep) => {
         for (const step of STAGED_BEFORE) onStep(step);
         emit(TOOL_FRAME);
         await nextGate;
@@ -3336,7 +3332,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
   it('after a restart a run whose checkpoint stored its step suspended, before the run was stored suspended, is queued again with no step left', async () => {
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
-      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+      async (_hostId, _question, _emit, _signal, onStep) => {
         onStep(stepStart('orchestrate', { question: 'Who won in 2002?' }));
         onStep({
           type: 'workflow-step-suspended',
@@ -3366,7 +3362,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
   it('a run that throws while suspending is stored failed with its suspended step failed, not left suspended', async () => {
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
-      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+      async (_hostId, _question, _emit, _signal, onStep) => {
         onStep(stepStart('orchestrate', { question: 'Who won in 2002?' }));
         onStep({
           type: 'workflow-step-suspended',
@@ -3408,7 +3404,7 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
   it('a run that throws while ending is stored failed with no step left running', async () => {
     ctx = build();
     ctx.sessions.streamRunTurn.mockImplementationOnce(
-      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+      async (_hostId, _question, _emit, _signal, onStep) => {
         onStep(stepStart('orchestrate', { question: 'Who won in 2002?' }));
         await settled();
       },
@@ -3461,7 +3457,7 @@ describe('WorkflowRunsService: the line for a slot (api.md 119 queued, 138, 150)
     const releases = new Map<string, () => void>();
     const original = ctx.sessions.streamRunTurn.getMockImplementation()!;
     ctx.sessions.streamRunTurn.mockImplementation(
-      async (hostId, question, emit, signal, careful, onStep) => {
+      async (hostId, question, emit, signal, onStep) => {
         const id = hostId.slice('run-'.length);
         started.push(id);
         await Promise.race([
@@ -3471,7 +3467,7 @@ describe('WorkflowRunsService: the line for a slot (api.md 119 queued, 138, 150)
           ),
         ]);
         if (signal?.aborted) return;
-        await original(hostId, question, emit, signal, careful, onStep);
+        await original(hostId, question, emit, signal, onStep);
       },
     );
     return { started, release: (id: string) => releases.get(id)!() };
@@ -3643,7 +3639,7 @@ describe('WorkflowRunsService: the line for a slot (api.md 119 queued, 138, 150)
   it('after a restart a run cut off mid-way is queued again and, once the app is up, starts from scratch under the same id and succeeds with attempts 2', async () => {
     buildCapped(8);
     ctx.sessions.streamRunTurn.mockImplementationOnce(
-      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+      async (_hostId, _question, _emit, _signal, onStep) => {
         onStep(stepStart('orchestrate', { question: 'Who won in 2002?' }));
         await new Promise<void>(() => undefined);
       },
@@ -3801,7 +3797,7 @@ function hangingRuns() {
       signal: undefined as AbortSignal | undefined,
     };
     ctx().sessions.streamRunTurn.mockImplementationOnce(
-      async (_hostId, question, emit, signal, _careful, onStep) => {
+      async (_hostId, question, emit, signal, onStep) => {
         handle.emit = emit;
         handle.signal = signal;
         onStep(stepStart('orchestrate', { question: 'Who won in 2002?' }));

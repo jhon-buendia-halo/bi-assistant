@@ -92,13 +92,6 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       "Send me a query that failed and I'll read the database error, fix the SQL and try again.",
   },
-  'sql-verifier': {
-    name: 'Rachel',
-    role: 'SQL Reviewer',
-    domain: 'sql',
-    intro:
-      "I'm the second opinion: I work out the SQL for a question on my own, so we can check the answer holds up.",
-  },
   'assistant-eval-judge': {
     name: 'Laura',
     role: 'QA Evaluator',

@@ -10,7 +10,6 @@ import { insightsAnalystAgent } from './agents/insights-analyst.agent';
 import { insightsLeadAgent } from './agents/insights-lead.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
-import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
 import { EVAL_RUN_CONTEXT_KEY } from './evals/eval-trace-marker';
 import { EvalRunMarker } from './evals/eval-run-scope';
@@ -35,7 +34,6 @@ export const mastra = new Mastra({
     'insights-analyst': insightsAnalystAgent,
     visualization: visualizationAgent,
     'sql-fixer': sqlFixerAgent,
-    'sql-verifier': sqlVerifierAgent,
     'assistant-eval-judge': evalJudgeAgent,
     // Avery, the orchestrator of Answer a Business Question (Avery + Michael).
     'chief-of-staff': chiefOfStaffAgent,

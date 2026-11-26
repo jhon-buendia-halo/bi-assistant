@@ -29,7 +29,6 @@ import {
 } from './bi-analyst-catalog';
 import { evalJudgeAgent } from './eval-judge.agent';
 import { sqlFixerAgent } from './sql-fixer.agent';
-import { sqlVerifierAgent } from './sql-verifier.agent';
 import { visualizationAgent } from './visualization.agent';
 
 /**
@@ -39,7 +38,6 @@ import { visualizationAgent } from './visualization.agent';
 const AGENTS = {
   visualization: visualizationAgent,
   'sql-fixer': sqlFixerAgent,
-  'sql-verifier': sqlVerifierAgent,
   'assistant-eval-judge': evalJudgeAgent,
 } as const;
 

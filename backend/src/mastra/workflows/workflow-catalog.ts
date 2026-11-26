@@ -243,8 +243,6 @@ export interface AgentRunTurn {
   question: string;
   /** `datasets`; absent otherwise. */
   datasets?: string[];
-  /** Careful mode (the Assistant and user agents). */
-  careful: boolean;
 }
 
 /** The agent turn a run's checked input asks for (plan 4.2). */
@@ -257,7 +255,6 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
   return {
     question: text(values['question']),
     ...(datasets ? { datasets } : {}),
-    careful: values['careful'] === true,
   };
 }
 

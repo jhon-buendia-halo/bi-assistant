@@ -361,7 +361,6 @@ async function ask(
         question,
         () => {},
         turn.signal,
-        false,
         () => {},
       );
     } finally {

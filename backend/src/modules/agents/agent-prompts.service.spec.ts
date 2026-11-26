@@ -40,7 +40,6 @@ const REGISTRY = {
   assistant: { name: 'Questions to Insights Assistant' },
   visualization: { name: 'Interactive Visual Designer' },
   'sql-fixer': { name: 'SQL Fixer' },
-  'sql-verifier': { name: 'SQL Verifier' },
   'assistant-eval-judge': { name: 'Assistant Eval Judge' },
 };
 
@@ -162,9 +161,9 @@ describe('AgentPromptsService (ADR-0026)', () => {
   it('loads the stored overrides into the bridge on init', async () => {
     const { service, store } = build();
     await store.update(
-      { key: 'sql-verifier' },
+      { key: 'sql-fixer' },
       {
-        key: 'sql-verifier',
+        key: 'sql-fixer',
         prompt: 'Stored.',
         baseHash: 'h',
         updatedBy: 'x',
@@ -172,7 +171,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       { upsert: true },
     );
     await service.onModuleInit();
-    expect(agentPromptOverrideFor('sql-verifier')?.prompt).toBe('Stored.');
+    expect(agentPromptOverrideFor('sql-fixer')?.prompt).toBe('Stored.');
   });
 
   describe('refusals, first that applies', () => {

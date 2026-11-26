@@ -58,11 +58,6 @@ jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   const { z } = require('zod') as typeof import('zod');
   return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
 });
-jest.mock('../../mastra/agents/sql-verifier.agent', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { z } = require('zod') as typeof import('zod');
-  return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
-});
 jest.mock('./repositories/sessions.repository', () => ({
   SessionsRepository: class {},
 }));
@@ -208,7 +203,6 @@ function build(options: BuildOptions = {}) {
 async function turn(
   ctx: ReturnType<typeof build>,
   content: string,
-  careful = false,
 ): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
   await streamStored(
@@ -218,7 +212,6 @@ async function turn(
     (event) => events.push(event),
     undefined,
     undefined,
-    careful,
   );
   return events;
 }
@@ -246,13 +239,12 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
   });
 
   describe('a turn of an agent other than the assistant', () => {
-    it('skips the grounding pass and careful mode, but keeps tool-only synthesis', async () => {
+    it('skips the grounding pass, but keeps tool-only synthesis', async () => {
       const ctx = build();
-      await turn(ctx, 'Hello', true);
-      // A tool-free answer would trigger the assistant's grounding pass, and
-      // careful mode its cross-check: neither runs for this agent.
+      await turn(ctx, 'Hello');
+      // A tool-free answer would trigger the assistant's grounding pass:
+      // it does not run for this agent.
       expect(ctx.analyst.generate).not.toHaveBeenCalled();
-      expect(ctx.session.messages.at(-1)).not.toHaveProperty('crossCheck');
 
       const silent = build({
         chunks: [

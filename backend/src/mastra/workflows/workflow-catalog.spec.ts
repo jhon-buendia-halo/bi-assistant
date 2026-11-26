@@ -214,7 +214,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
   });
 
   describe('agentRunTurn (plan 4.2, 5.1)', () => {
-    it('reads the question, the datasets, careful and nothing else', () => {
+    it('reads the question and the datasets, nothing else (careful mode is gone)', () => {
       expect(
         agentRunTurn({
           question: '  Who won?  ',
@@ -224,7 +224,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ).toEqual({
         question: 'Who won?',
         datasets: ['World Cup Core'],
-        careful: true,
       });
     });
 
@@ -236,14 +235,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         }),
       ).toEqual({
         question: 'Assess the readiness of this dataset',
-        careful: false,
       });
     });
 
     it("ignores the removed RFP Builder's message and RFP id", () => {
       expect(
         agentRunTurn({ message: 'Start Acme 2027', rfpId: 'r-1' }),
-      ).toEqual({ question: '', careful: false });
+      ).toEqual({ question: '' });
     });
   });
 

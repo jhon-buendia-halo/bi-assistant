@@ -55,11 +55,6 @@ jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   const { z } = require('zod') as typeof import('zod');
   return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
 });
-jest.mock('../../mastra/agents/sql-verifier.agent', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { z } = require('zod') as typeof import('zod');
-  return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
-});
 jest.mock('./repositories/sessions.repository', () => ({
   SessionsRepository: class {},
 }));
@@ -147,13 +142,6 @@ describe('SessionsService streaming', () => {
       };
       /** The session is an agent editor's preview (agents-evals R60). */
       preview?: boolean;
-      /** Careful mode: what the verifier replies and what its SQL returns. */
-      crossCheck?: {
-        sql?: string;
-        verifierFails?: boolean;
-        rows?: Record<string, unknown>[];
-        runFails?: boolean;
-      };
     } = {},
   ) {
     const session: SessionDoc = {
@@ -227,20 +215,8 @@ describe('SessionsService streaming', () => {
         used: options.knowledgeUsed ?? [],
       }),
     };
-    const check = options.crossCheck ?? {};
-    const verifier = {
-      generate: check.verifierFails
-        ? jest.fn().mockRejectedValue(new Error('verifier unavailable'))
-        : jest.fn().mockResolvedValue({
-            object: { sql: check.sql ?? 'SELECT count(*) FROM other.table' },
-          }),
-    };
     const datasources = {
-      runReadOnlySql: check.runFails
-        ? jest.fn().mockRejectedValue(new Error('table not found'))
-        : jest
-            .fn()
-            .mockResolvedValue({ columns: ['n'], rows: check.rows ?? [] }),
+      runReadOnlySql: jest.fn().mockResolvedValue({ columns: ['n'], rows: [] }),
     };
     const llm = {
       getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
@@ -248,11 +224,7 @@ describe('SessionsService streaming', () => {
     const service = new SessionsService(
       repository as never,
       {
-        getAgent: jest
-          .fn()
-          .mockImplementation((id: string) =>
-            id === 'sql-verifier' ? verifier : agent,
-          ),
+        getAgent: jest.fn().mockReturnValue(agent),
         streamWorkflow: streamTurnWorkflow,
         ensureSessionWorkspace: jest
           .fn()
@@ -296,7 +268,6 @@ describe('SessionsService streaming', () => {
       verifiedQueries,
       metrics,
       knowledge,
-      verifier,
       datasources,
       repository,
       llm,
@@ -1214,149 +1185,6 @@ describe('SessionsService streaming', () => {
       // Set before agent.stream() is called, so it exists throughout the run
       // even for a turn that never calls a data-gathering tool.
       expect(call?.[1]).toEqual([]);
-    });
-  });
-
-  describe('careful mode cross-check', () => {
-    const PRIMARY = 'SELECT count(*) AS n FROM main.football.matches';
-
-    /** One careful turn whose answer ran `PRIMARY` and returned one row. */
-    function carefulTurn(
-      crossCheck: {
-        sql?: string;
-        verifierFails?: boolean;
-        rows?: Record<string, unknown>[];
-        runFails?: boolean;
-      },
-      primary: { rows?: Record<string, unknown>[]; truncated?: boolean } = {},
-    ) {
-      return buildStreaming(
-        answerStream([
-          {
-            sql: PRIMARY,
-            rows: primary.rows ?? [{ n: 64 }],
-            truncated: primary.truncated,
-          },
-        ]),
-        { crossCheck, tables: ['main.football.matches'] },
-      );
-    }
-
-    const run = (service: SessionsService, careful: boolean) =>
-      streamStored(
-        service,
-        'session-1',
-        'How many matches were played?',
-        () => {},
-        undefined,
-        undefined,
-        careful,
-      );
-
-    it('does not cross-check a turn that was not flagged careful', async () => {
-      const { service, session, verifier, datasources } = carefulTurn({});
-
-      await run(service, false);
-
-      expect(verifier.generate).not.toHaveBeenCalled();
-      expect(datasources.runReadOnlySql).not.toHaveBeenCalled();
-      expect(session.messages.at(-1)?.crossCheck).toBeUndefined();
-    });
-
-    it('agrees when the independent query returns the same results', async () => {
-      const { service, session, verifier, datasources } = carefulTurn({
-        sql: 'SELECT COUNT(1) AS total FROM main.football.matches',
-        // Same fact, different column name and cell typing.
-        rows: [{ total: '64' }],
-      });
-
-      await run(service, true);
-
-      // The statement and the verifier call get the turn's stop.
-      const signal = expect.any(AbortSignal) as AbortSignal;
-      expect(datasources.runReadOnlySql).toHaveBeenCalledWith(
-        'ds-1',
-        'SELECT COUNT(1) AS total FROM main.football.matches',
-        200,
-        undefined,
-        { signal },
-      );
-      expect((verifier.generate.mock.calls as unknown[][])[0][1]).toMatchObject(
-        { abortSignal: signal },
-      );
-      expect(session.messages.at(-1)?.crossCheck).toEqual({
-        status: 'agree',
-        note: 'independent re-derivation returned the same results',
-      });
-      // Independence: the verifier sees the question and the schema with its
-      // sample values, never the statement the analysis agent ran.
-      const prompt = (
-        verifier.generate.mock.calls as unknown[][]
-      )[0][0] as string;
-      expect(prompt).toContain('How many matches were played?');
-      expect(prompt).toContain(
-        'main.football.matches(winner string [e.g. Argentina, France])',
-      );
-      expect(prompt).toContain('Dialect: databricks');
-      expect(prompt).not.toContain(PRIMARY);
-    });
-
-    it('disagrees when the independent query returns something else', async () => {
-      const { service, session } = carefulTurn({ rows: [{ total: 63 }] });
-
-      await run(service, true);
-
-      const crossCheck = session.messages.at(-1)?.crossCheck;
-      expect(crossCheck?.status).toBe('disagree');
-      expect(crossCheck?.note).toContain('results differ — treat with care');
-    });
-
-    it('reports an error when the verifier cannot produce a query', async () => {
-      const { service, session, datasources } = carefulTurn({
-        verifierFails: true,
-      });
-
-      await run(service, true);
-
-      expect(datasources.runReadOnlySql).not.toHaveBeenCalled();
-      const crossCheck = session.messages.at(-1)?.crossCheck;
-      expect(crossCheck?.status).toBe('error');
-      expect(crossCheck?.note).toContain('verifier unavailable');
-    });
-
-    it('reports an error when the independent query fails to run', async () => {
-      const { service, session } = carefulTurn({ runFails: true });
-
-      await run(service, true);
-
-      const crossCheck = session.messages.at(-1)?.crossCheck;
-      expect(crossCheck?.status).toBe('error');
-      expect(crossCheck?.note).toContain('table not found');
-    });
-
-    it('refuses to compare against a truncated result set', async () => {
-      const { service, session, verifier } = carefulTurn(
-        {},
-        { truncated: true },
-      );
-
-      await run(service, true);
-
-      expect(verifier.generate).not.toHaveBeenCalled();
-      const crossCheck = session.messages.at(-1)?.crossCheck;
-      expect(crossCheck?.status).toBe('error');
-      expect(crossCheck?.note).toContain('row cap');
-    });
-
-    it('skips the cross-check when the turn ran no SQL', async () => {
-      const { service, session, verifier } = buildStreaming(answerStream([]), {
-        crossCheck: {},
-      });
-
-      await run(service, true);
-
-      expect(verifier.generate).not.toHaveBeenCalled();
-      expect(session.messages.at(-1)?.crossCheck).toBeUndefined();
     });
   });
 

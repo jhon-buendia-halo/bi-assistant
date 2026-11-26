@@ -62,7 +62,6 @@ import {
 } from './workspace-files';
 import {
   ChatMessage,
-  CrossCheck,
   FilePanelItem,
   InteractiveVisualization,
   MessageFeedback,
@@ -72,7 +71,6 @@ import {
   SessionView,
   SessionVisualization,
   SessionWorkflowRef,
-  ToolDataRecord,
   VisualEvent,
   WorkflowPhase,
   WorkflowView,
@@ -230,7 +228,6 @@ export class SessionsService implements OnModuleInit {
     this.sqlChecks = new SqlChecks({
       mastra,
       datasourcesService,
-      llmService,
       verifiedQueries,
       datasets: this.turnDatasets,
       logger: this.logger,
@@ -259,8 +256,6 @@ export class SessionsService implements OnModuleInit {
       toView: (session) => this.toView(session),
       workflowOf: (session) => this.workflowOf(session),
       effectiveWorkflowFor: (session) => this.effectiveWorkflowFor(session),
-      crossCheckAnswer: (session, question, data, signal) =>
-        this.crossCheckAnswer(session, question, data, signal),
       dashboardVersion: (artifactId) => {
         if (!this.artifacts) throw new Error('Artifacts are not available');
         return this.artifacts.dashboardVersion(artifactId);
@@ -294,7 +289,7 @@ export class SessionsService implements OnModuleInit {
   private readonly turnDatasets: SessionDatasets;
   /** The query inspector's page path, which `explore_result` pages through. */
   private readonly queryEvidence: QueryEvidenceService;
-  /** SQL repair, careful mode's cross-check and the Verified badge. */
+  /** SQL repair and the Verified badge. */
   private readonly sqlChecks: SqlChecks;
   /** What reaches the model on a turn. */
   private readonly turnOptions: TurnOptions;
@@ -390,19 +385,6 @@ export class SessionsService implements OnModuleInit {
         }
       }),
     );
-  }
-
-  /**
-   * Careful mode's cross-check (agents.md 5.4), the seam the turn engine
-   * reaches it through; `signal` is the turn's stop.
-   */
-  private crossCheckAnswer(
-    session: SessionDoc,
-    question: string,
-    data: ToolDataRecord[],
-    signal?: AbortSignal,
-  ): Promise<CrossCheck | undefined> {
-    return this.sqlChecks.crossCheckAnswer(session, question, data, signal);
   }
 
   list(): Promise<SessionDoc[]> {
@@ -630,7 +612,6 @@ export class SessionsService implements OnModuleInit {
     question: string,
     emit: (event: StreamEvent) => void,
     abortSignal: AbortSignal | undefined,
-    careful: boolean,
     onStepEvent: (event: RunStepEvent) => void,
   ): Promise<TurnSuspension | undefined> {
     const host = this.memoryHosts.get(hostId);
@@ -643,7 +624,6 @@ export class SessionsService implements OnModuleInit {
       emit,
       abortSignal,
       undefined,
-      careful,
       onStepEvent,
       true,
     );

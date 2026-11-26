@@ -9,7 +9,6 @@ import {
   INSIGHTS_ANALYST_PROMPT,
   EVAL_JUDGE_PROMPT,
   SQL_FIXER_PROMPT,
-  SQL_VERIFIER_PROMPT,
   VISUALIZATION_PROMPT,
 } from './agents/system-prompts';
 
@@ -24,7 +23,6 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'insights-analyst': INSIGHTS_ANALYST_PROMPT,
   visualization: VISUALIZATION_PROMPT,
   'sql-fixer': SQL_FIXER_PROMPT,
-  'sql-verifier': SQL_VERIFIER_PROMPT,
   'assistant-eval-judge': EVAL_JUDGE_PROMPT,
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
   'result-explorer': RESULT_EXPLORER_INSTRUCTIONS,
