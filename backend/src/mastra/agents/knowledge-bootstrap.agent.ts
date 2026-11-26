@@ -1,7 +1,5 @@
-import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
-import { resolveAgentModel } from '../model-resolver';
-import { agentInstructions } from '../agent-prompt-overrides';
+import { defineBuiltinAgent } from '../agent-factory';
 import {
   MAX_BOOTSTRAP_DRAFTS,
   KNOWLEDGE_BOOTSTRAP_PROMPT,
@@ -137,14 +135,12 @@ export const knowledgeBootstrapOutputSchema = z.object({
  * configured model the assistant runs on (see ../model-resolver). The id
  * stays `knowledge-bootstrap`: in-app prompt overrides are keyed by it.
  */
-export const knowledgeBootstrapAgent = new Agent({
-  id: 'knowledge-bootstrap',
+export const knowledgeBootstrapAgent = defineBuiltinAgent({
+  key: 'knowledge-bootstrap',
   name: 'Ontology Bootstrap',
   description:
     "Drafts a dataset's ontology — concepts, relations, constraints and instructions — from its schema, sample rows, column references and governed metrics.",
-  // The shipped prompt, or the in-app override (ADR-0026).
-  instructions: () =>
-    agentInstructions('knowledge-bootstrap', KNOWLEDGE_BOOTSTRAP_PROMPT),
-  // Same configured model as the analysis agent; see ../model-resolver.
-  model: async () => resolveAgentModel(),
+  classes: ['single-step'],
+  instructions: KNOWLEDGE_BOOTSTRAP_PROMPT,
+  model: 'saved',
 });

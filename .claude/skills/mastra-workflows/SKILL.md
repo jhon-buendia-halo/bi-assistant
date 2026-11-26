@@ -108,7 +108,7 @@ This split exists because Jest cannot load Mastra's ESM: catalogue data lives in
 
 **Agents and tools**
 
-- A new agent follows [`agent-change`](../agent-change/SKILL.md) and the backend code rules in [`workflow-implement`](../workflow-implement/SKILL.md) (file, registration, agents.md entry, `resolveAgentModel()`). Its instructions go through `agentInstructions(<key>, <shipped text>)` as in [analysis-planner.agent.ts](../../../backend/src/mastra/agents/analysis-planner.agent.ts).
+- A new agent follows [`agent-change`](../agent-change/SKILL.md) and the backend code rules in [`workflow-implement`](../workflow-implement/SKILL.md) (file, registration, agents.md entry), built with `defineBuiltinAgent` as in [analysis-planner.agent.ts](../../../backend/src/mastra/agents/analysis-planner.agent.ts): its shipped prompt as a string (its in-app override then applies) and a model policy.
 - An agent's catalogue data (key, name, tool names, step limit) lives in a framework-free module, as `insights-analyst-catalog.ts` does.
 - When the workflow's answer runs queries, it reaches the user through the shared query inspector layer: [`agent-change`](../agent-change/SKILL.md), step 3.
 - The existing workflows call their agents through the runtime or a function in `<name>.agents.ts`, inside `execute`. `createStep(agent)`, `.agent()` and `.tool()` exist in 1.66.0 but nothing here uses them, and the stub does not run them: choosing one is part of an approach, with its cost.

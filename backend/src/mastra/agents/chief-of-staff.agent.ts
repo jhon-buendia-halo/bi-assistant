@@ -1,8 +1,6 @@
-import { Agent } from '@mastra/core/agent';
 import { agentInstructions } from '../agent-prompt-overrides';
 import { CHIEF_OF_STAFF_AGENT_KEY } from '../agent-constants';
-import { resolveAgentModel } from '../model-resolver';
-import { stepModelFrom } from '../step-model';
+import { defineBuiltinAgent } from '../agent-factory';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { orchestratorTools } from '../tools/orchestrator.tools';
 import { catalogFrameworkSkills } from '../skill-sources';
@@ -70,19 +68,18 @@ export function chiefOfStaffSkills(requestContext?: {
  * on the call's requestContext (Opus 5.5 at high effort when the saved
  * model is a Claude model), else the saved model.
  */
-export const chiefOfStaffAgent = new Agent({
-  id: CHIEF_OF_STAFF_AGENT_KEY,
+export const chiefOfStaffAgent = defineBuiltinAgent({
+  key: CHIEF_OF_STAFF_AGENT_KEY,
   // The technical name traces and Monitoring show; the hub shows the persona.
   name: 'Chief of Staff',
   description:
     "Orchestrates Answer a Business Question (Avery + Michael): briefs Michael on the user's question, checks his answer and hands back one answer.",
-  instructions: ({ requestContext }) =>
-    chiefOfStaffInstructions(requestContext),
+  classes: ['person', 'orchestrator'],
+  instructions: chiefOfStaffInstructions,
   // Her router and playbooks, loaded on demand through Mastra's skill tools
   // (agents.md 7.4, ADR-0025); the export's rules with the gate open.
   skills: ({ requestContext }) => chiefOfStaffSkills(requestContext),
-  model: async ({ requestContext }) =>
-    resolveAgentModel(stepModelFrom(requestContext)?.model),
+  model: 'step-model',
   tools: ({ requestContext }) => ({
     ...orchestratorTools(requestContext),
     ask_clarification: askClarificationTool,

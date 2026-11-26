@@ -7,7 +7,8 @@
 // For every agent in the registry (backend/src/mastra/index.ts) it loads the
 // agent from backend/dist and prints its classes, tools, skills, memory,
 // model policy, prompt size and a hash of what the model receives, then the
-// tool matrix and the class check (agent-inventory-lib.mjs, AGENT_CLASSES).
+// tool matrix and the class check (each agent's `classes`, declared in its
+// defineBuiltinAgent spec and read from the build).
 //
 // - Build first: `npx nest build` in backend/ (the dist is what it reads).
 // - --root reads another checkout (the base worktree) with this script:
@@ -20,7 +21,6 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  AGENT_CLASSES,
   agentHash,
   checkClasses,
   compareInventories,
@@ -136,6 +136,16 @@ async function matrixHashes(backend, load, RequestContext, found) {
   return new Map([...outputs].map(([key, list]) => [key, matrixHash(list)]));
 }
 
+/**
+ * Each built agent's declared classes, by key, from the build's factory
+ * (loaded after the agents, which register themselves). An older checkout
+ * without the factory declares none.
+ */
+function declaredClasses(backend, load) {
+  const factory = path.join(backend, 'dist', 'mastra', 'agent-factory.js');
+  return fs.existsSync(factory) ? load(factory).builtinAgentClasses() : {};
+}
+
 async function inventory(root) {
   const backend = path.join(root, 'backend');
   const load = createRequire(path.join(backend, 'package.json'));
@@ -143,6 +153,7 @@ async function inventory(root) {
   const entries = registryEntries(fs.readFileSync(path.join(backend, 'src', 'mastra', 'index.ts'), 'utf8'));
   const agents = compiledAgents(backend, load);
   const records = [];
+  const declared = declaredClasses(backend, load);
   const found = entries.map(({ key, ident }) => {
     const hit = agents.get(ident);
     if (!hit) throw new Error(`Registry entry ${key} (${ident}) is not exported by any dist/mastra/agents/*.agent.js`);
@@ -153,7 +164,7 @@ async function inventory(root) {
     const record = {
       key,
       id: agent.id,
-      classes: AGENT_CLASSES[key] ?? [],
+      classes: declared[key] ?? [],
       instructions,
       tools,
       skills,
@@ -163,17 +174,20 @@ async function inventory(root) {
     records.push({ ...record, hash: agentHash(record) });
   }
   const matrix = await matrixHashes(backend, load, RequestContext, found);
-  return records.map((record) => ({ ...record, matrixHash: matrix.get(record.key) }));
+  return {
+    records: records.map((record) => ({ ...record, matrixHash: matrix.get(record.key) })),
+    declared,
+  };
 }
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const records = await inventory(options.root);
+  const { records, declared } = await inventory(options.root);
   if (options.json) {
     process.stdout.write(`${JSON.stringify(records, null, 2)}\n`);
     return 0;
   }
-  const check = checkClasses(records);
+  const check = checkClasses(records, declared);
   const report = [formatInventory(records, check)];
   if (options.compare) {
     const base = JSON.parse(fs.readFileSync(options.compare, 'utf8'));

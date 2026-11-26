@@ -1,12 +1,11 @@
-import { Agent } from '@mastra/core/agent';
-import { Memory } from '@mastra/memory';
-import { modelOverrideFrom, resolveAgentModel } from '../model-resolver';
+import { defineBuiltinAgent } from '../agent-factory';
+import { sessionMemory } from '../session-memory';
 import { datasetTools } from '../tools/dataset.tools';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { visualTools } from '../tools/visual.tools';
 import { showInPanelTool } from '../tools/panel.tool';
 import { updateWorkflowTool } from '../tools/workflow.tool';
-import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
+import { sessionWorkspaceOf } from '../session-workspaces';
 import { assistantSkills } from '../assistant-skills';
 import {
   OPTIONAL_AGENT_TOOLS,
@@ -95,38 +94,27 @@ export function assistantVariant(
 
 // The harness's main agent. Its tools are scoped per call to the session's
 // datasets via requestContext (see ../tools/dataset.tools).
-export const assistantAgent = new Agent({
-  id: 'assistant',
+export const assistantAgent = defineBuiltinAgent({
+  key: 'assistant',
   name: 'Questions to Insights Assistant',
   description:
     "Answers business questions over a session's datasets — plans the analysis, writes and runs the SQL, and explains the result.",
+  classes: ['person', 'data'],
   // The prompt and tools follow the call's tool selection (`agent-tools`,
   // ADR-0022); a call without one gets every tool and the full prompt.
-  instructions: ({ requestContext }) =>
+  instructions: (requestContext) =>
     assistantVariant(toolSelectionFrom(requestContext)).instructions,
   // The on-demand skills of the call, given to the model through Mastra's
   // skill tool (ADR-0025): built-in (with overrides), user and project skills
   // and the agent's own copies.
   skills: ({ requestContext }) => assistantSkills(requestContext),
-  // Dynamic model resolved at call time from the persisted LLM settings
-  // (provider / model / runtime API key); see ../model-resolver. A session
-  // bound to a user agent may override the model name for this agent only.
-  model: async ({ requestContext }) =>
-    resolveAgentModel(modelOverrideFrom(requestContext)),
-  memory: new Memory({
-    options: {
-      // Keep enough recent session context for follow-up analysis without
-      // requiring the caller to resend the full conversation every turn.
-      lastMessages: 40,
-      semanticRecall: false,
-      generateTitle: false,
-    },
-  }),
-  workspace: ({ requestContext, mastra }) => {
-    const workspaceId = requestContext.get(SESSION_WORKSPACE_CONTEXT_KEY);
-    if (typeof workspaceId !== 'string' || !mastra) return undefined;
-    return mastra.listWorkspaces()[workspaceId]?.workspace;
-  },
+  // A session bound to a user agent may override the model name for this
+  // agent only.
+  model: 'user-override',
+  // Keeps enough recent session context for follow-up analysis without
+  // requiring the caller to resend the full conversation every turn.
+  memory: sessionMemory(),
+  workspace: sessionWorkspaceOf,
   tools: ({ requestContext }) =>
     assistantVariant(toolSelectionFrom(requestContext)).tools,
 });

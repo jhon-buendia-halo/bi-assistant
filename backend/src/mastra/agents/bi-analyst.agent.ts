@@ -1,7 +1,4 @@
-import { Agent } from '@mastra/core/agent';
-import { agentInstructions } from '../agent-prompt-overrides';
-import { resolveAgentModel } from '../model-resolver';
-import { stepModelFrom } from '../step-model';
+import { defineBuiltinAgent } from '../agent-factory';
 import {
   describeEntityTool,
   listEntitiesTool,
@@ -39,14 +36,14 @@ export const biAnalystTools = {
  * (ADR-0026). Her model is the workflow's step model on the call's
  * requestContext, else the saved model.
  */
-export const biAnalystAgent = new Agent({
-  id: BI_ANALYST_AGENT_KEY,
+export const biAnalystAgent = defineBuiltinAgent({
+  key: BI_ANALYST_AGENT_KEY,
   // The technical name traces and Monitoring show; the hub shows the persona.
   name: BI_ANALYST_NAME,
   description: BI_ANALYST_DESCRIPTION,
-  instructions: () =>
-    agentInstructions(BI_ANALYST_AGENT_KEY, BI_ANALYST_INSTRUCTIONS),
-  model: async ({ requestContext }) =>
-    resolveAgentModel(stepModelFrom(requestContext)?.model),
+  // She answers to Avery, not to a person.
+  classes: ['data'],
+  instructions: BI_ANALYST_INSTRUCTIONS,
+  model: 'step-model',
   tools: biAnalystTools,
 });

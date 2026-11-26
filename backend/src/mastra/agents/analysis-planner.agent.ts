@@ -1,8 +1,5 @@
-import { Agent } from '@mastra/core/agent';
-import { agentInstructions } from '../agent-prompt-overrides';
 import { ANALYSIS_PLANNER_AGENT_KEY } from '../agent-constants';
-import { resolveAgentModel } from '../model-resolver';
-import { stepModelFrom } from '../step-model';
+import { defineBuiltinAgent } from '../agent-factory';
 import { PLAN_INSTRUCTIONS } from '../workflows/analysis.prompts';
 
 /**
@@ -13,15 +10,13 @@ import { PLAN_INSTRUCTIONS } from '../workflows/analysis.prompts';
  * her through `planWithModel`; her job description is the shipped Plan
  * instructions or their in-app override (ADR-0026).
  */
-export const analysisPlannerAgent = new Agent({
-  id: 'analysis-planner',
-  // The technical name traces and Monitoring show; the hub shows the persona.
+export const analysisPlannerAgent = defineBuiltinAgent({
+  key: ANALYSIS_PLANNER_AGENT_KEY,
   name: 'Analysis Planner',
   description:
     'Plans the analysis of one question: measures, entities, scope, assumptions, and whether to clarify first. No tools.',
-  instructions: () =>
-    agentInstructions(ANALYSIS_PLANNER_AGENT_KEY, PLAN_INSTRUCTIONS),
+  classes: ['single-step'],
+  instructions: PLAN_INSTRUCTIONS,
   // A workflow may run its step agents on its own model (agents.md 1.3).
-  model: async ({ requestContext }) =>
-    resolveAgentModel(stepModelFrom(requestContext)?.model),
+  model: 'step-model',
 });

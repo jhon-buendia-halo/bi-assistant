@@ -1,13 +1,10 @@
-import { Agent } from '@mastra/core/agent';
 import type { ResultView } from '../../modules/datasources/connectors/paged-sql.types';
 import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from '../workflows/workflow-run';
 import { guardedCall } from '../workflows/model-call';
 import type { RequestContext } from '@mastra/core/request-context';
-import { agentInstructions } from '../agent-prompt-overrides';
 import { RESULT_EXPLORER_AGENT_KEY } from '../agent-constants';
-import { resolveAgentModel } from '../model-resolver';
-import { stepModelFrom } from '../step-model';
+import { defineBuiltinAgent } from '../agent-factory';
 import {
   explorerRequest,
   RESULT_EXPLORER_INSTRUCTIONS,
@@ -25,17 +22,15 @@ import {
  * through `interpretResultWithModel`; his job description is the shipped
  * instructions or their in-app override (ADR-0026).
  */
-export const resultExplorerAgent = new Agent({
-  id: 'result-explorer',
-  // The technical name traces and Monitoring show; the hub shows the persona.
+export const resultExplorerAgent = defineBuiltinAgent({
+  key: RESULT_EXPLORER_AGENT_KEY,
   name: 'Result Explorer',
   description:
     "Turns a user's words into filters, a sort and a page over a query's result columns. No tools, no SQL.",
-  instructions: () =>
-    agentInstructions(RESULT_EXPLORER_AGENT_KEY, RESULT_EXPLORER_INSTRUCTIONS),
+  classes: ['single-step'],
+  instructions: RESULT_EXPLORER_INSTRUCTIONS,
   // A workflow may run its step agents on its own model (agents.md 1.3).
-  model: async ({ requestContext }) =>
-    resolveAgentModel(stepModelFrom(requestContext)?.model),
+  model: 'step-model',
 });
 
 /** What the explorer reads: the words, the candidates and the current view. */
