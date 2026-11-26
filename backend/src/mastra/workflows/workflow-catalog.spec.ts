@@ -19,7 +19,6 @@ import {
   REMOVED_WORKFLOW_NAMES,
   sessionWorkflowId,
   stepAgentKey,
-  wrappedAgentMaxSteps,
   workflowsUsingAgent,
   WRAPPED_AGENT_KEYS,
 } from './workflow-catalog';
@@ -667,17 +666,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       first.agent!.tools.push('b');
       expect(tools).toEqual(['a']);
       expect(AGENT_TURN_STEPS[0].input).toEqual(['question', 'datasets']);
-    });
-
-    it.each([
-      ['assistant', 15],
-      ['data-readiness', 10],
-    ])("%s's step allows %d tool steps", (key, steps) => {
-      expect(wrappedAgentMaxSteps(key)).toBe(steps);
-    });
-
-    it("a user agent's step allows the assistant's 15", () => {
-      expect(wrappedAgentMaxSteps('some-user-agent-id')).toBe(15);
     });
   });
 

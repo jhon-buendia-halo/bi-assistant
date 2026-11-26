@@ -1,5 +1,4 @@
 import type { KnowledgeUse } from '../../ontology/entities/ontology-item.entity';
-import type { Maturity } from '../../data-readiness/engine/types';
 import type { QueryEvidence } from '../query-evidence/query-evidence.types';
 import type { ExplorableQuery } from '../query-evidence/explorable-queries';
 import type { DashboardRef } from '../../artifacts/entities/artifact.entity';
@@ -40,13 +39,6 @@ export interface ToolDataRecord {
    * anyone reads the SQL.
    */
   warnings?: string[];
-  /**
-   * When set, the only columns whose values are figures a reader looks up
-   * (agent-answers R69): the rows behind a readiness finding (roadmap
-   * 1.28.11) carry their count in `matching_rows` or `occurrences`, and
-   * their other cells are raw data that must not link a figure by chance.
-   */
-  figureColumns?: string[];
 }
 
 /** One step of the assistant's plain-language route from question to answer. */
@@ -148,21 +140,6 @@ export interface ChatMessage {
    * report's executive summary; the full markdown lives in the workspace.
    */
   report?: AnalysisReport;
-  /**
-   * The last report this turn's `assess_data_readiness` or
-   * `get_readiness_report` returned (data-model 3.4.1); drives the readiness
-   * card. Data Readiness Agent sessions only.
-   */
-  readinessReport?: ReadinessReportRef;
-}
-
-/** A readiness report an answer carries (data-model 3.4.1). */
-export interface ReadinessReportRef {
-  reportId: string;
-  datasourceName: string;
-  overallScore: number;
-  maturity: Maturity;
-  generatedAt: string;
 }
 
 export interface AnalysisReport {
@@ -227,8 +204,7 @@ export interface InteractiveVisualization extends SessionVisualization {
   version: number;
 }
 
-export type PanelItemKind =
-  'file' | 'document' | 'table' | 'visual' | 'readiness';
+export type PanelItemKind = 'file' | 'document' | 'table' | 'visual';
 
 interface PanelItemBase {
   id: string;
@@ -269,18 +245,11 @@ export interface VisualPanelItem extends PanelItemBase {
   visualId: string;
 }
 
-/** A stored readiness report; id `readiness:<reportId>`, upserted. */
-export interface ReadinessPanelItem extends PanelItemBase {
-  kind: 'readiness';
-  reportId: string;
-}
-
 export type PanelItem =
   | FilePanelItem
   | DocumentPanelItem
   | TablePanelItem
-  | VisualPanelItem
-  | ReadinessPanelItem;
+  | VisualPanelItem;
 
 /** Where the agent is in its `## Workflow` section (1-based phase numbers). */
 export interface WorkflowState {
@@ -340,7 +309,7 @@ export interface SessionDoc {
   agentName?: string;
   /**
    * The registry key of the built-in agent the session is bound to
-   * (`insights-analyst`, `data-readiness`; ADR-0028). Every turn runs that agent; never set with
+   * (`insights-analyst`; ADR-0028). Every turn runs that agent; never set with
    * `agentId`.
    */
   agentKey?: string;

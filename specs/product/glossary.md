@@ -6,9 +6,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships eight built-in agents (the assistant, *Insights Analyst*, the *Data Readiness Agent*, the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships seven built-in agents (the assistant, *Insights Analyst*, the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
 
-**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant, the *Data Readiness Agent* and *Insights Analyst*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
+**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant and *Insights Analyst*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Angle.** One sub-question of a *deep analysis* (removed 2026-11-12).
 
@@ -47,10 +47,6 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Custom endpoint.** The *LLM provider* `custom`: a model server the user chooses, such as a self-hosted model (Ollama, LM Studio, vLLM), a gateway (LiteLLM) or a relay, that speaks the OpenAI or Anthropic API. It is set by an *API style*, a base URL, an optional API key and a model, which the user can pick from the server's own model list. See [../capabilities/llm-settings/spec.md](../capabilities/llm-settings/spec.md).
 
 **Data directory.** The folder holding all app data: application database, agent memory, observability data, per-session *workspaces* and the *app secret* file. Desktop and web mode use different data directories on purpose.
-
-**Data readiness.** How fit the data behind a *dataset* is for analysis, measured by the *Data Readiness Agent* on the DMBOK data-quality *readiness dimensions*. It is expressed as a score per dimension, an overall score from 0 to 100 and a *maturity band*. A deterministic engine computes every number from aggregate statistics of the data, never a model. See [../capabilities/data-readiness/spec.md](../capabilities/data-readiness/spec.md).
-
-**Data Readiness Agent.** The built-in Official agent (`data-readiness`) that runs *data readiness* assessments of a session's PostgreSQL or Databricks datasets and explains the stored reports. It can run read-only SQL to show the records behind a finding, but never computes or changes a score. See [../system/agents.md](../system/agents.md) 2.10.
 
 **Developer observability.** An opt-in developer setting, off by default. When it is on, the backend exports agent traces to Arize Phoenix and backend traces, metrics and logs to an OpenTelemetry (OTLP) endpoint, in addition to the local observability store. It takes effect when the backend restarts. See [../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md).
 
@@ -126,15 +122,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **LLM provider.** The service the agents call. `openai`, `anthropic`, `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name) `custom` (a *custom endpoint*, which needs an *API style* and a base URL, and whose API key is optional) or `copilot` (*GitHub Copilot*, which needs no key or base URL and uses the machine's GitHub login). One global setting: provider, model, API key (stored encrypted, shown masked), *reasoning effort* and, for `lenai` and `custom`, the base URL (and for `custom` the API style).
 
-**Maturity band.** The DMBOK maturity level of an overall *data readiness* score: Optimised (95 and above), Managed (85 and above), Defined (70 and above), Repeatable (50 and above) or Initial.
-
 **Message.** One entry in a session's transcript, from the `user` or the `assistant`, with a timestamp that doubles as its identity (`at`). Assistant messages may carry data records, entities, a clarification, a visual event, feedback, a cross-check, a reasoning trail, knowledge used or a report.
 
 **Metric.** A governed, named SQL aggregation expression over one entity (for example `denial_rate`), with a label, description and dimensions. The assistant reuses its expression verbatim instead of re-deriving it. Metrics are the app's lightweight semantic layer. A metric can be promoted from a *verified query*; the draft is a *metric candidate*.
 
 **Mined item.** An *ontology item* with source `mined`: drafted by the *ontology bootstrap*, saved disabled until a human accepts it.
 
-**Official agent.** One of the app's own agents shown in the agent hub with the owner `Official` (the hub groups agents by domain, not by owner): the *assistant*, *Insights Analyst* and the *Data Readiness Agent*.
+**Official agent.** One of the app's own agents shown in the agent hub with the owner `Official` (the hub groups agents by domain, not by owner): the *assistant* and *Insights Analyst*.
 
 **One-step workflow.** Retired (2026-11-12). It was the *workflow* the app made for every agent (id `agent:<agent key or id>`), one step that ran the agent. Agents are no longer workflows: the workflows are the six of the catalogue. Stored runs and sessions of one-step workflows stay readable as legacy runs and plain past chats. See [../system/architecture.md](../system/architecture.md) ADR-0040 (partly superseded) and ADR-0042.
 
@@ -157,10 +151,6 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Plan design.** One benefit plan a client offers on a *line of coverage*: its carrier, funding type (for example fully insured or self-funded), plan type and state, with the financials of its coverage (premiums, rates by tier, enrolment, contributions and fees).
 
 **Preview chat.** Retired in 1.23.27 (the agent editor's Try it is a draft run, a run on a temporary run host, agents.md 5.14).
-
-**Readiness dimension.** One of the ten DMBOK data-quality dimensions a readiness report lists. Eight are assessed: completeness, validity, consistency, uniqueness, integrity, accessibility, timeliness and reasonability. Two are listed but not assessed, because they need reference data: accuracy and currency.
-
-**Readiness finding.** One problem a *data readiness* check found: its *readiness dimension*, the table and column, a severity (info, low, medium or high), what was measured, a description and a recommendation. Findings lower their dimension's score by weight: low 0.1, medium 0.4, high 1.0 per check run.
 
 **Reasoning effort.** How hard a model reasons before answering: one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, of which each model accepts its own subset (its *effort levels*; default `high` when offered). A global setting chosen in Settings → LLM, passed to models that support it, mapped to the nearest level a model accepts, and dropped for models that reject it.
 
@@ -187,7 +177,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Sample values.** Up to 5 distinct real values per column, captured when a dataset is saved, so the assistant can match the user's wording to stored values.
 
-**Sampled profile.** An approximate profile of a *dataset*'s tables read from up to 1,000 sampled rows per table: types, null rates, distinct counts, ranges, categorical values and text patterns, plus how each column would be synthesized. It is kept in memory for 60 minutes and never stored, it is separate from *data readiness* (whose statistics are exact), and a sampled number never feeds a readiness score. See [../capabilities/synthetic-data/spec.md](../capabilities/synthetic-data/spec.md).
+**Sampled profile.** An approximate profile of a *dataset*'s tables read from up to 1,000 sampled rows per table: types, null rates, distinct counts, ranges, categorical values and text patterns, plus how each column would be synthesized. It is kept in memory for 60 minutes and never stored and a sampled number is approximate. See [../capabilities/synthetic-data/spec.md](../capabilities/synthetic-data/spec.md).
 
 **Synthetic data script.** A `.sql` file (or, as CSV in a zip or an Excel workbook, the same rows) of generated data that copies a *dataset*'s tables: each column's distribution, null rate and format, with keys consistent, and no real identifier, name or free-text value. It is generated by a seeded, deterministic generator from a *sampled profile*, written in the datasource's dialect, downloaded by the user and never run by the app. See [../capabilities/synthetic-data/spec.md](../capabilities/synthetic-data/spec.md).
 

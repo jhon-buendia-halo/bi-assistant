@@ -11,9 +11,6 @@
  */
 import {
   CHIEF_OF_STAFF_AGENT_KEY,
-  ASSISTANT_MAX_STEPS,
-  DATA_READINESS_AGENT_KEY,
-  DATA_READINESS_MAX_STEPS,
   GAP_ADVISOR_AGENT_KEY,
   LAYER_MAPPER_AGENT_KEY,
   REQUIREMENTS_ANALYST_AGENT_KEY,
@@ -45,14 +42,6 @@ import {
   CONSUMPTION_GAP_WORKFLOW_NAME,
   GAP_MAX_QUESTIONS,
 } from './consumption-gap-analysis.steps';
-import {
-  DATA_READINESS_ASSESSMENT_DESCRIPTION,
-  DATA_READINESS_ASSESSMENT_EDGES,
-  DATA_READINESS_ASSESSMENT_STEPS,
-  DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
-  DATA_READINESS_ASSESSMENT_WORKFLOW_NAME,
-  READINESS_DEFAULT_QUESTION,
-} from './data-readiness-assessment.steps';
 import type { AgentWorkflow } from './agent-workflows';
 import {
   assertWorkflowContracts,
@@ -207,36 +196,6 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       bar: 'steps',
     },
     {
-      id: DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
-      name: DATA_READINESS_ASSESSMENT_WORKFLOW_NAME,
-      category: 'data-engineering',
-      description: DATA_READINESS_ASSESSMENT_DESCRIPTION,
-      // Its Explain report step runs the Data Readiness Agent.
-      primaryFor: DATA_READINESS_AGENT_KEY,
-      trigger: 'run',
-      input: [
-        {
-          name: 'dataset',
-          label: 'Dataset',
-          type: 'dataset',
-          required: true,
-          datasourceKinds: ['postgres', 'databricks'],
-        },
-        {
-          name: 'question',
-          label: 'Question',
-          type: 'textarea',
-          required: false,
-          placeholder: READINESS_DEFAULT_QUESTION,
-          default: READINESS_DEFAULT_QUESTION,
-          maxLength: QUESTION_MAX_LENGTH,
-        },
-      ],
-      steps: DATA_READINESS_ASSESSMENT_STEPS,
-      edges: DATA_READINESS_ASSESSMENT_EDGES,
-      bar: 'steps',
-    },
-    {
       id: CONSUMPTION_GAP_WORKFLOW_ID,
       name: CONSUMPTION_GAP_WORKFLOW_NAME,
       category: 'data-engineering',
@@ -321,6 +280,7 @@ export const REMOVED_WORKFLOW_IDS: readonly string[] = [
   'recreate-dashboard',
   'map-dashboard-data',
   'review-website',
+  'data-readiness-assessment',
 ];
 
 /** The name a removed workflow had, by id, for a past chat's chip. */
@@ -330,6 +290,7 @@ export const REMOVED_WORKFLOW_NAMES: Readonly<Record<string, string>> = {
   'recreate-dashboard': 'Dashboard Image to Artifact',
   'map-dashboard-data': 'Map a Dashboard to Data',
   'review-website': 'Review a Website',
+  'data-readiness-assessment': 'Assess Data Readiness',
 };
 
 /** Whether an id names a removed code workflow (`REMOVED_WORKFLOW_IDS`). */
@@ -341,7 +302,7 @@ export function isRemovedWorkflowId(id: string | undefined): boolean {
 export interface AgentRunTurn {
   /** The user message: `question`, trimmed. */
   question: string;
-  /** `datasets`, or the readiness run's one `dataset`; absent otherwise. */
+  /** `datasets`; absent otherwise. */
   datasets?: string[];
   /** Careful mode (the Assistant and user agents). */
   careful: boolean;
@@ -355,9 +316,7 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     typeof value === 'string' ? value.trim() : '';
   const datasets = Array.isArray(values['datasets'])
     ? values['datasets']
-    : text(values['dataset'])
-      ? [text(values['dataset'])]
-      : undefined;
+    : undefined;
   return {
     question: text(values['question']),
     ...(datasets ? { datasets } : {}),
@@ -371,10 +330,7 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
  * session of theirs, and the eval runner's direct host (agents.md 5.14).
  * They have no catalogue workflow since 1.23.35.
  */
-export const WRAPPED_AGENT_KEYS: readonly string[] = [
-  'assistant',
-  'data-readiness',
-];
+export const WRAPPED_AGENT_KEYS: readonly string[] = ['assistant'];
 
 /** The prefix of an agent-turn binding's id. */
 export const AGENT_WORKFLOW_PREFIX = 'agent:';
@@ -491,9 +447,8 @@ export function sessionWorkflowId(session: SessionWorkflowFields): string {
     return session.workflowId;
   }
   if (session.agentKey) {
-    // A wrapped agent's own turn first: the Data Readiness Agent also runs
-    // a code workflow's step, but its sessions and the eval runner's host
-    // stay on its agent turn (a run host names its workflow itself).
+    // A wrapped agent's own turn first: its sessions and the eval runner's
+    // host stay on its agent turn (a run host names its workflow itself).
     if (WRAPPED_AGENT_KEYS.includes(session.agentKey)) {
       return agentWorkflowId(session.agentKey);
     }
@@ -509,15 +464,6 @@ export function sessionWorkflowId(session: SessionWorkflowFields): string {
   }
   if (session.agentId) return agentWorkflowId(session.agentId);
   return ASSISTANT_WORKFLOW_ID;
-}
-
-/**
- * The tool-loop budget of an agent-turn binding's agent: 10 for the Data
- * Readiness Agent, 15 for the assistant and user agents.
- */
-export function wrappedAgentMaxSteps(agentKeyOrId: string): number {
-  if (agentKeyOrId === 'data-readiness') return DATA_READINESS_MAX_STEPS;
-  return ASSISTANT_MAX_STEPS;
 }
 
 /** The tool that ends a turn with a clarifying question (agents.md 3.6). */

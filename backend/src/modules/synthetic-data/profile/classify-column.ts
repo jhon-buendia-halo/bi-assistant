@@ -1,10 +1,11 @@
 // Column classification (plan 2.2). Pure: the first rule that matches wins.
 
 import type {
+  ColumnKind,
   FormatRule,
   SemanticType,
-} from '../../data-readiness/engine/types';
-import type { ColumnKind, SynthesisStrategy } from '../types';
+  SynthesisStrategy,
+} from '../types';
 
 export interface ClassifyInput {
   name: string;

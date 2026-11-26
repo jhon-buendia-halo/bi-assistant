@@ -3,13 +3,9 @@
 // patterns come out. The only data values in the result are the `topValues` of
 // categorical columns (values seen at least 3 times, never key columns).
 
-import {
-  classifyDatabricksType,
-  classifyType,
-} from '../../data-readiness/adapters/classify';
-import { detectFormatRule } from '../../data-readiness/adapters/format-rules';
-import { inferJoinCandidates } from '../../data-readiness/engine/infer-joins';
-import type { FormatRule } from '../../data-readiness/engine/types';
+import { classifyDatabricksType, classifyType } from './classify-type';
+import { detectFormatRule } from './format-rules';
+import { inferJoinCandidates } from './infer-joins';
 import type {
   FkEdge,
   KeyConstraint,
@@ -17,6 +13,7 @@ import type {
 } from '../../datasources/connectors/profiling';
 import { PROFILE_TTL_MS } from '../limits';
 import type {
+  FormatRule,
   SampleMethod,
   SampledColumn,
   SampledProfile,

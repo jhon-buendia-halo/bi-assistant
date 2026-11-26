@@ -38,13 +38,7 @@ export type NodeChatStreamEvent =
   | { type: 'error'; content: string };
 
 /** The agent-turn events a node chat stream passes on (api.md 3.1). */
-const TURN_EVENTS = new Set([
-  'reasoning',
-  'text',
-  'tool',
-  'tool-result',
-  'tool-progress',
-]);
+const TURN_EVENTS = new Set(['reasoning', 'text', 'tool', 'tool-result']);
 
 /** A node chat turn whose request passed every check (api.md 137). */
 export interface PreparedNodeChat {
@@ -135,8 +129,8 @@ export class WorkflowNodeChatsService {
 
   /**
    * Run a prepared node chat turn and report it on `emit` (api.md 137): the
-   * agent turn's `reasoning`, `text`, `tool`, `tool-result` and
-   * `tool-progress` events, then `done { message }` with the assistant
+   * agent turn's `reasoning`, `text`, `tool` and `tool-result` events,
+   * then `done { message }` with the assistant
    * message as stored, or `error { content }` when the turn failed. The user
    * message is stored first; the assistant message (its text, tool calls,
    * and `stopped` or `error`) when the turn ends. A stopped turn

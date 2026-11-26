@@ -17,9 +17,6 @@ import {
   INSIGHTS_ANALYST_TOOL_NAMES,
 } from '../agents/insights-analyst-catalog';
 import {
-  DATA_READINESS_AGENT_KEY,
-  DATA_READINESS_AGENT_NAME,
-  DATA_READINESS_MAX_STEPS,
   GAP_ADVISOR_AGENT_KEY,
   GAP_ADVISOR_AGENT_NAME,
   LAYER_MAPPER_AGENT_KEY,
@@ -104,25 +101,6 @@ const STEP_AGENTS: Record<
     name: INSIGHTS_ANALYST_NAME,
     tools: INSIGHTS_ANALYST_TOOL_NAMES,
     maxSteps: INSIGHTS_ANALYST_MAX_STEPS,
-  },
-  // Assess Data Readiness's Explain report step (agents.md 5.13): the
-  // agent's tools as agents.md 2.10 lists them; `assess_data_readiness`
-  // refuses there, the run has assessed already.
-  [DATA_READINESS_AGENT_KEY]: {
-    name: DATA_READINESS_AGENT_NAME,
-    tools: [
-      'assess_data_readiness',
-      'get_readiness_report',
-      'list_readiness_reports',
-      'profile_data_sample',
-      'generate_synthetic_data',
-      'describe_entity',
-      'run_readonly_sql',
-      'explore_result',
-      'show_in_panel',
-      'ask_clarification',
-    ],
-    maxSteps: DATA_READINESS_MAX_STEPS,
   },
   // Consumption Gap Analysis (agents.md 5.20): the agent steps are one model
   // call each without tools.

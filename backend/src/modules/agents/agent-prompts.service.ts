@@ -10,7 +10,6 @@ import {
   AGENT_SKILLS,
   builtInOnDemandSkillNames,
 } from '../../mastra/app-skills';
-import { readinessTools } from '../../mastra/tools/readiness.tools';
 import {
   INSIGHTS_ANALYST_AGENT_KEY,
   INSIGHTS_ANALYST_IDENTITY_START,
@@ -37,23 +36,6 @@ export const PROMPT_MAX_CHARS = 20000;
 const ASSISTANT_IDENTITY_START = 'You are the Questions to Insights assistant';
 
 const ASSISTANT_KEY = 'assistant';
-
-/** Where the Data Readiness Agent's prompt must start (agents.md 2.10, D1). */
-const DATA_READINESS_IDENTITY_START = 'You are the Data Readiness Agent';
-
-const DATA_READINESS_KEY = 'data-readiness';
-
-/**
- * What the Data Readiness Agent's prompt may link (agents.md 2.10): its own
- * tools (the three readiness tools, `describe_entity`, `run_readonly_sql`,
- * `show_in_panel`, `ask_clarification`) and its own skills. Links are mentions; it keeps every tool.
- */
-function dataReadinessLinkTargets(): { tools: string[]; skills: string[] } {
-  return {
-    tools: Object.keys(readinessTools),
-    skills: [...(AGENT_SKILLS[DATA_READINESS_KEY] ?? [])],
-  };
-}
 
 /** Any `[[…]]` link. */
 const ANY_LINK = /\[\[.*?\]\]/;
@@ -145,9 +127,7 @@ export class AgentPromptsService implements OnModuleInit {
       builtInChanged:
         !!override && override.baseHash !== agentPromptHash(shipped),
       linksAllowed:
-        key === ASSISTANT_KEY ||
-        key === INSIGHTS_ANALYST_AGENT_KEY ||
-        key === DATA_READINESS_KEY,
+        key === ASSISTANT_KEY || key === INSIGHTS_ANALYST_AGENT_KEY,
       updatedAt: override?.updatedAt ?? null,
     };
   }
@@ -174,21 +154,6 @@ function validatePrompt(key: string, value: unknown): string {
       );
     }
     const unknown = links.tools.find((name) => !isLibraryTool(name));
-    if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
-  } else if (key === DATA_READINESS_KEY) {
-    if (!prompt.startsWith(DATA_READINESS_IDENTITY_START)) {
-      throw new BadRequestException(
-        `The Data Readiness Agent's prompt must start with "${DATA_READINESS_IDENTITY_START}"`,
-      );
-    }
-    const links = parseLinks(prompt);
-    const allowed = dataReadinessLinkTargets();
-    if (links.skills.some((name) => !allowed.skills.includes(name))) {
-      throw new BadRequestException(
-        "Only the Data Readiness Agent's own skills can be linked here: this prompt is shared by every user",
-      );
-    }
-    const unknown = links.tools.find((name) => !allowed.tools.includes(name));
     if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
   } else if (key === INSIGHTS_ANALYST_AGENT_KEY) {
     if (!prompt.startsWith(INSIGHTS_ANALYST_IDENTITY_START)) {

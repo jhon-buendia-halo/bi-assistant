@@ -250,7 +250,6 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
             'text',
             'tool',
             'tool-result',
-            'tool-progress',
             'done',
           ].includes(type),
       ),

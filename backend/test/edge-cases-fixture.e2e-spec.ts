@@ -23,7 +23,7 @@ jest.mock('../src/modules/datasets/datasets.service', () => ({
 }));
 
 import { Client } from 'pg';
-import { POSTGRES_FORMAT_PATTERNS } from '../src/modules/data-readiness/adapters/format-rules';
+import { POSTGRES_FORMAT_PATTERNS } from '../src/modules/synthetic-data/profile/format-rules';
 import { findFixture } from '../src/modules/testing-data/fixtures/registry';
 import {
   SEED_TIMEOUT_MS,

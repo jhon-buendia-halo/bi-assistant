@@ -65,8 +65,8 @@ export class SqlChecks {
   constructor(private readonly deps: SqlChecksDeps) {}
 
   /**
-   * A statement the app built itself (the rows behind a readiness finding,
-   * roadmap 1.28.11), on the guarded read-only path with no repair: it
+   * A statement the app built itself, not the model, on the guarded
+   * read-only path with no repair: it
    * never calls a model, and its failure is the caller's to record.
    * `truncated` as `runSqlWithRepair` sets it; `totalRows` stays on the
    * result for the caller's query facts.

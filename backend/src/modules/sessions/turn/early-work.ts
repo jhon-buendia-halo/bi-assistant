@@ -1,8 +1,7 @@
 /**
  * Work one step of a turn's workflow starts and a later step takes
  * (agents.md 5.13, 5.20): the graph stays linear, one catalogue step runs at
- * a time, and independent work runs meanwhile. Assess Data Readiness starts
- * the rows behind findings at Save report; Consumption Gap Analysis starts
+ * a time, and independent work runs meanwhile. Consumption Gap Analysis starts
  * the lineage checks at Load layer catalogs.
  *
  * - `start` gives each job its own signal, aborted with the turn's, and
