@@ -17,7 +17,7 @@ Part of the [`workflow-strict`](../workflow-strict/SKILL.md) workflow (the wave 
 
 ## Evals — only when the user asks
 
-Evals are not part of any check, gate or hand-over: no step runs them on its own. When a change touches what an agent receives (its prompt, skills, tools, context blocks or model routing), name the eval sets the inventory's `--compare` lists in the reply and offer to run them. When the user asks, run the agent's eval set (`npm run evals` with `EVAL_SET` or `EVAL_CASES` (`evals:assistant` until 2026-11-26; Elena runs the former assistant sets), see [delivery.md](../../../specs/system/delivery.md) 2) on the **base commit and on the branch**, same model, same data:
+Evals are not part of any check, gate or hand-over: no step runs them on its own. When a change touches what an agent receives (its prompt, skills, tools, context blocks or model routing), name the agent in the reply and offer to run its evals (and the inventory comparison, `agent-change`). When the user asks, run the agent's eval set (`npm run evals` with `EVAL_SET` or `EVAL_CASES` (`evals:assistant` until 2026-11-26; Elena runs the former assistant sets), see [delivery.md](../../../specs/system/delivery.md) 2) on the **base commit and on the branch**, same model, same data:
 
 - **Run in parallel.** Three runs per build at once, each on its own copy of the data dir and its own `EVAL_RESULTS_FILE`, not one after another. Before starting, print the copy's saved provider and model, agree the model with the user and check its key and credit (about 3 × cases × 2 turns); use `EVAL_LLM_*` for any other target.
 - **Pass bar on the branch:**

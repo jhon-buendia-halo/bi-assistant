@@ -22,7 +22,7 @@ specs/      the complete specification of the app
 - **Every agent that answers from data shows its evidence the same way** (the *query inspector* pattern), built once in the shared layer, never in one agent's prompt or screen. Rules: [agent-answers](specs/capabilities/agent-answers/spec.md), *Query inspector*. Skill: `agent-change`.
 - **All planning lives in this repository** ([roadmap.md](roadmap.md), [specs/epics/](specs/README.md)); don't ask for or create Jira issues.
 - **Read and output.** Never read a file over 500 lines whole: `grep -n` or use [specs/INDEX.md](specs/INDEX.md), then read the range. Run builds and tests quietly, to a log file, and read back only the summary or the failure block.
-- **Evals run only when the user asks.** They are not part of any check, gate or hand-over. When a change reaches an agent's input, name its eval sets (`agent-inventory.mjs --compare`) and offer to run them. Skill: `verify`, *Evals*.
+- **Evals and agent checks run only when the user asks.** The evals and the agent inventory (`agent-inventory.mjs`, its `--compare` and class check) are not part of any check, gate or hand-over. When a change reaches an agent's input, name the agent and offer to run them. Skills: `verify`, *Evals*; `agent-change`.
 - **Versioning is automatic:** Conventional Commit subjects drive the bump. Never edit `version` by hand; installers and the npm package are built manually. See [delivery.md](specs/system/delivery.md).
 - **Starting any subagent** → the first line of its brief is `Read .claude/worker.md before anything else.`; the rest is the goal, the task and the brand. [worker.md](.claude/worker.md) holds the rules every subagent follows.
 

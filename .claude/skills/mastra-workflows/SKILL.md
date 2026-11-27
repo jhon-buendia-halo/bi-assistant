@@ -127,7 +127,7 @@ This split exists because Jest cannot load Mastra's ESM: catalogue data lives in
 
 **Evals**
 
-- A workflow change that alters what an agent receives (its prompt, tools, context blocks, the messages a step builds) reaches that agent's evals: name the set with [`agent-change`](../agent-change/SKILL.md), steps 1 and 6, and run it only when the user asks. The `insights-analyst` eval target runs Michael as Avery's `answer_from_data` (`backend/src/mastra/evals/insights-analyst-target.ts`), so a change to the analysis steps or his request reaches those evals even when no prompt changed.
+- A workflow change that alters what an agent receives (its prompt, tools, context blocks, the messages a step builds) reaches that agent's evals: name the agent ([`agent-change`](../agent-change/SKILL.md), steps 1 and 6) and run its evals and the inventory comparison only when the user asks. The `insights-analyst` eval target runs Michael as Avery's `answer_from_data` (`backend/src/mastra/evals/insights-analyst-target.ts`), so a change to the analysis steps or his request reaches those evals even when no prompt changed.
 
 ## 5. Checks
 

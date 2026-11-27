@@ -12,7 +12,7 @@ One of the two workflows in [CLAUDE.md](../../../CLAUDE.md); the other is [`work
 1. **Understand the goal** — restate the request in your own words and judge its size (S, M or L). Skill: `workflow-start`.
 2. **Clarify** — ask only what changes what you'd build, in one batch with your recommended answers; state assumptions instead of asking when the request is clear. Skill: `workflow-start`.
 3. **Implement changes** — production code, built against the goal agreed in step 2 (and the Acceptance criteria and Gherkin when an optional step wrote them). Skill: `workflow-implement`.
-4. **Run checks and fix until green** — `node scripts/qa.mjs --free` (build, full unit suites, lint, `check-specs`, the Playwright specs the change touches). Evals are not part of this step: when an agent's input changed, name the eval sets the inventory's `--compare` lists and run them only when the user asks. Skill: `verify`.
+4. **Run checks and fix until green** — `node scripts/qa.mjs --free` (build, full unit suites, lint, `check-specs`, the Playwright specs the change touches). Evals and the agent inventory are not part of this step: when an agent's input changed, name the agent and run them only when the user asks. Skill: `verify`.
 
 Then commit and hand over. Sizes only scale how much you ask and plan; they add no steps here.
 
