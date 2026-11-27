@@ -11,10 +11,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import {
-  INSIGHTS_LEAD_MAX_STEPS,
-  INSIGHTS_LEAD_TOOL_NAMES,
-} from '../../mastra/agents/insights-lead-catalog';
+import { INSIGHTS_LEAD_MAX_STEPS } from '../../mastra/agents/insights-lead-catalog';
 import {
   INSIGHTS_LEAD_EDGES,
   INSIGHTS_LEAD_STEPS,
@@ -573,11 +570,13 @@ export class WorkflowRunsService
       summary: step.summary,
       input: [...step.input],
       output: [...step.output],
+      // Its tools are the draft's selection on Elena, read at the call; a
+      // draft's step lists none, as before.
       agent: {
         key: agentId,
         name: target.name,
         role: target.role,
-        tools: [...INSIGHTS_LEAD_TOOL_NAMES],
+        tools: [],
         maxSteps: INSIGHTS_LEAD_MAX_STEPS,
       },
       exits: step.exits.map((exit) => ({ ...exit })),

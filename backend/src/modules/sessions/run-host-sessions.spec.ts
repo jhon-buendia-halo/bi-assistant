@@ -536,7 +536,6 @@ async function chatTurn(
     content,
     (e) => events.push(e),
     undefined,
-    undefined,
   );
   return events;
 }

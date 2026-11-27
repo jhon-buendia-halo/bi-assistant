@@ -239,7 +239,6 @@ async function turn(
     content,
     (event) => events.push(event),
     abortSignal,
-    undefined,
   );
   return events;
 }

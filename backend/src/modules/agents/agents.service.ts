@@ -644,15 +644,12 @@ function toolLinks(
   const selected = new Set<string>(
     effectiveOptionalTools(config.tools, skills),
   );
-  // Linking one tool of a pair (create_visual / update_visual) links both.
-  const sameGroup = (a: string, b: string) =>
-    a === b || (!!optionalToolOf(a) && optionalToolOf(a) === optionalToolOf(b));
   return [...LIBRARY_TOOLS]
     .sort((a, b) => a.localeCompare(b))
     .map((name) => {
-      const instructions = fromInstructions.some((t) => sameGroup(t, name));
+      const instructions = fromInstructions.includes(name);
       const via = fromSkills
-        .filter((skill) => skill.tools.some((t) => sameGroup(t, name)))
+        .filter((skill) => skill.tools.includes(name))
         .map((skill) => skill.name)
         .sort((a, b) => a.localeCompare(b));
       const optional = optionalToolOf(name);
@@ -664,17 +661,7 @@ function toolLinks(
       return {
         name,
         status,
-        linkedVia: {
-          instructions: ALWAYS_ON_TOOLS.includes(name)
-            ? fromInstructions.includes(name)
-            : instructions,
-          skills: ALWAYS_ON_TOOLS.includes(name)
-            ? fromSkills
-                .filter((skill) => skill.tools.includes(name))
-                .map((skill) => skill.name)
-                .sort((a, b) => a.localeCompare(b))
-            : via,
-        },
+        linkedVia: { instructions, skills: via },
       };
     });
 }

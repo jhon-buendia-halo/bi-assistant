@@ -250,6 +250,9 @@ describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040
         message,
       });
       expect(ctx.mastra.streamWorkflow).not.toHaveBeenCalled();
+      // Refused before anything is written: no orphan question.
+      expect(ctx.session.messages).toEqual([]);
+      expect(ctx.repository.update).not.toHaveBeenCalled();
     },
   );
 

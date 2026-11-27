@@ -85,12 +85,11 @@ export function insightsLeadTools(requestContext?: ContextLike) {
  * filtered by the same gates as her tools (`dashboard-building` with the
  * dashboard gate open, `conversation-export` with the export gate open; all
  * of them with no run), then a user agent's in-app skills on the call
- * (ADR-0059), each replacing a catalogue skill of the same name.
+ * (ADR-0059), each replacing a catalogue skill of the same name, under the
+ * same gates.
  */
 export function insightsLeadSkills(requestContext?: ContextLike) {
   const gates = gatesOf(requestContext);
-  const own = agentSkillsFrom(requestContext) ?? [];
-  const ownNames = new Set(own.map((skill) => skill.name));
   const gated = (name: string) =>
     !gates ||
     (name === DASHBOARD_BUILDING_SKILL
@@ -98,10 +97,13 @@ export function insightsLeadSkills(requestContext?: ContextLike) {
       : name === CONVERSATION_EXPORT_SKILL
         ? gates.export
         : true);
+  // The gates hold for a skill of the same name too: a closed gate offers
+  // no dashboard or export rules, whoever wrote them.
   return frameworkSkills(
-    skillSourcesFor(INSIGHTS_LEAD_AGENT_KEY, own).filter(
-      (skill) => ownNames.has(skill.name) || gated(skill.name),
-    ),
+    skillSourcesFor(
+      INSIGHTS_LEAD_AGENT_KEY,
+      agentSkillsFrom(requestContext) ?? [],
+    ).filter((skill) => gated(skill.name)),
   );
 }
 

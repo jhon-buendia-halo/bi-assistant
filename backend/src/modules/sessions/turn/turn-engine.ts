@@ -222,6 +222,12 @@ function conversationOfTurn(
   return workflow.binding;
 }
 
+/**
+ * The agent a stored session bound to none ran: the removed assistant
+ * (ADR-0059). A turn on such a session answers 404 under this key.
+ */
+const REMOVED_ASSISTANT_KEY = 'assistant';
+
 export class TurnEngine {
   constructor(private readonly deps: TurnEngineDeps) {}
 
@@ -247,18 +253,19 @@ export class TurnEngine {
     let abortSignal = firstAbortSignal;
     let onStepEvent = firstOnStepEvent;
     const id = session.id;
+    // The built-in agent the session is bound to (agents.md 5.1, ADR-0028).
+    // A key no longer registered (a stored session of a removed agent, or
+    // one bound to none, once the removed assistant's) answers 404 before
+    // anything is written (ADR-0059).
+    const agentKey = session.agentKey ?? REMOVED_ASSISTANT_KEY;
+    if (!this.deps.mastra.listAgents()[agentKey]) {
+      throw new NotFoundException(`Agent "${agentKey}" not found`);
+    }
     appendUserMessage(session, trimmed);
     // Persist the prompt before model startup. A user can stop while the
     // provider is still connecting, and that turn should survive a reload.
     await this.deps.updateDoc(id, { messages: session.messages });
 
-    // The built-in agent the session is bound to (agents.md 5.1, ADR-0028).
-    // A key no longer registered (a stored session of a removed agent, or
-    // one bound to none, once the assistant's) answers 404 (ADR-0059).
-    const agentKey = session.agentKey ?? 'assistant';
-    if (!this.deps.mastra.listAgents()[agentKey]) {
-      throw new NotFoundException(`Agent "${agentKey}" not found`);
-    }
     const agent = this.deps.mastra.getAgent(agentKey);
     const input = await this.deps.options.agentInput(agent, session);
     // Own controller so a clarification can end the model turn without the

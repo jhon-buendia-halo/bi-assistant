@@ -48,6 +48,7 @@ import type {
   ToolDataRecord,
 } from '../src/modules/sessions/entities/session.entity';
 import { WORLD_CUP_CONNECTION, worldCupReachable } from '../test/world-cup';
+import { inEvalRun } from '../src/mastra/evals/eval-run-scope';
 
 /** Real model calls take tens of seconds; a tight timeout only buys false alarms. */
 const TURN_TIMEOUT_MS = Number(process.env.CHECK_TIMEOUT_MS ?? 180_000);
@@ -346,9 +347,11 @@ async function ask(
   const { SessionsService } =
     require('../src/modules/sessions/sessions.service') as typeof import('../src/modules/sessions/sessions.service');
   const sessions = app.get(SessionsService);
+  // Elena's conversation (the assistant is gone, ADR-0059), as an eval: on
+  // the saved model, never her Opus routing.
+  const evalRunId = `eval-${randomUUID()}`;
   const session = await sessions.createRunHost({
-    runId: `eval-${randomUUID()}`,
-    // Elena's conversation: the assistant is gone (ADR-0059).
+    runId: evalRunId,
     workflowId: 'agent:insights-lead',
     name: 'check-answers',
     datasets: [DATASET_NAME],
@@ -356,13 +359,16 @@ async function ask(
   try {
     const turn = new AbortController();
     const timer = setTimeout(() => turn.abort(), TURN_TIMEOUT_MS);
+    let suspension: Awaited<ReturnType<typeof sessions.streamRunTurn>>;
     try {
-      await sessions.streamRunTurn(
-        session.id,
-        question,
-        () => {},
-        turn.signal,
-        () => {},
+      suspension = await inEvalRun(evalRunId, () =>
+        sessions.streamRunTurn(
+          session.id,
+          question,
+          () => {},
+          turn.signal,
+          () => {},
+        ),
       );
     } finally {
       clearTimeout(timer);
@@ -371,6 +377,11 @@ async function ask(
       throw new Error(
         `the turn exceeded ${Math.round(TURN_TIMEOUT_MS / 1000)}s`,
       );
+    }
+    // She asked the user instead of answering: drop the waiting turn.
+    if (suspension) {
+      await suspension.discard();
+      throw new Error(`asked a clarifying question: ${suspension.question}`);
     }
     const answered = await sessions.finishRunHost(session.id);
     const message = lastAssistantMessage(answered.messages);

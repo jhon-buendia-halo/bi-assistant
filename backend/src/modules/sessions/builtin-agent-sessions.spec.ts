@@ -198,7 +198,6 @@ async function turn(
     content,
     (event) => events.push(event),
     undefined,
-    undefined,
   );
   return events;
 }

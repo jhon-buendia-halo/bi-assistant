@@ -376,6 +376,23 @@ describe("Elena runs a user agent's definition (ADR-0059)", () => {
     );
   });
 
+  it('keeps a gate closed for an in-app skill named like a gated one', async () => {
+    const names = (
+      await (
+        insightsLeadAgent as unknown as {
+          resolveSkills(args: {
+            requestContext: RequestContext;
+          }): Promise<InlineSkill[]>;
+        }
+      ).resolveSkills({
+        requestContext: userAgentCall({
+          skills: [inApp('dashboard-building')],
+        }),
+      })
+    ).map((skill) => skill.name);
+    expect(names).not.toContain('dashboard-building');
+  });
+
   it('keeps her catalogue skills as they are when the call carries no in-app skills', async () => {
     expect(await skillNames(CLOSED)).toEqual(
       await skillNames(userAgentCall({ skills: [] })),

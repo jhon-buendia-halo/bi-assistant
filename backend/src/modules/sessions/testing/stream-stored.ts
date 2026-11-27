@@ -14,7 +14,6 @@ export async function streamStored(
   content: string,
   emit: (event: StreamEvent) => void = () => {},
   abortSignal?: AbortSignal,
-  activeVisualId?: string,
 ): Promise<void> {
   const trimmed = (content ?? '').trim();
   if (!trimmed) throw new BadRequestException('message is required');
@@ -27,10 +26,9 @@ export async function streamStored(
           question: string,
           emit: (event: StreamEvent) => void,
           abortSignal?: AbortSignal,
-          activeVisualId?: string,
         ): Promise<void>;
       };
     }
   ).turns;
-  await engine.streamTurn(session, trimmed, emit, abortSignal, activeVisualId);
+  await engine.streamTurn(session, trimmed, emit, abortSignal);
 }
