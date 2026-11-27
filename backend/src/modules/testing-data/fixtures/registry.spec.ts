@@ -7,6 +7,7 @@ import {
   findFixture,
   ownedSchemas,
   requiredEntities,
+  withColumnDescriptions,
 } from './registry';
 
 function seedSql(seedFile: string): string {
@@ -330,5 +331,94 @@ describe('sample fixture catalogue', () => {
         expect(sql).toContain(`CREATE TABLE retail_ops.${table} (`);
       }
     });
+  });
+
+  describe('readiness-lab', () => {
+    const fixture = findFixture('readiness-lab')!;
+    const sql = seedSql(fixture.seedFile as string);
+    const statements = splitSqlStatements(sql).map((statement) =>
+      statement.replace(/^(?:\s*--[^\n]*\n)+/, '').trim(),
+    );
+
+    it('owns schema readiness_lab in its own database, after Retail Ops', () => {
+      expect(fixture).toMatchObject({
+        name: 'Readiness Lab',
+        schema: 'readiness_lab',
+        seedFile: '008_readiness_lab.sql',
+        datasourceName: 'Readiness Lab PostgreSQL',
+        datasetName: 'Readiness Lab',
+      });
+      expect(fixture.defaults.database).toBe('readiness_lab');
+      expect(fixture.requiredTables).toHaveLength(7);
+      const ids = SAMPLE_FIXTURES.map((sample) => sample.id);
+      expect(ids.indexOf('readiness-lab')).toBe(ids.indexOf('retail-ops') + 1);
+    });
+
+    it('qualifies every statement and splits cleanly', () => {
+      expect(sql).not.toMatch(/\$[A-Za-z_]*\$/);
+      expect(sql).not.toMatch(/\\'/);
+      const odd = statements.filter(
+        (statement) => !/^(?:DROP|CREATE)\s/i.test(statement),
+      );
+      expect(odd).toEqual([]);
+      const unqualified = statements.filter((statement) => {
+        const match = /^CREATE (?:TABLE|VIEW)\s+("?[\w]+"?)(\.)?/i.exec(
+          statement,
+        );
+        return match !== null && (match[1] !== 'readiness_lab' || !match[2]);
+      });
+      expect(unqualified).toEqual([]);
+    });
+
+    it('describes every column of every required table', () => {
+      const described = fixture.columnDescriptions ?? {};
+      expect(Object.keys(described).sort()).toEqual(
+        [...fixture.requiredTables].sort(),
+      );
+      for (const table of fixture.requiredTables) {
+        const create = statements.find((statement) =>
+          new RegExp(`^CREATE (?:TABLE|VIEW) readiness_lab\\.${table} AS`).test(
+            statement,
+          ),
+        )!;
+        const columns = [...create.matchAll(/ AS (\w+)\s*(?:,|\n\s*FROM)/g)]
+          .map((match) => match[1])
+          .filter((name) => name !== 't');
+        expect(Object.keys(described[table]).sort()).toEqual(columns.sort());
+      }
+    });
+  });
+});
+
+describe('withColumnDescriptions', () => {
+  const lab = findFixture('readiness-lab')!;
+
+  it('describes the columns of the entities the sample lists, by schema.table', () => {
+    const [orders, other] = withColumnDescriptions(lab, [
+      {
+        key: 'my_db.readiness_lab.orders',
+        columns: [
+          { name: 'ID', type: 'integer' },
+          { name: 'extra', type: 'text', description: 'kept' },
+        ],
+      },
+      { key: 'my_db.other.orders', columns: [{ name: 'id', type: 'integer' }] },
+    ]);
+    expect(orders.columns).toEqual([
+      {
+        name: 'ID',
+        type: 'integer',
+        description: 'Order number, one row per order',
+      },
+      { name: 'extra', type: 'text', description: 'kept' },
+    ]);
+    expect(other.columns).toEqual([{ name: 'id', type: 'integer' }]);
+  });
+
+  it('returns the entities as they are for a sample without descriptions', () => {
+    const entities = [{ key: 'world_cup.world_cup.teams', columns: [] }];
+    expect(withColumnDescriptions(findFixture('world-cup')!, entities)).toBe(
+      entities,
+    );
   });
 });

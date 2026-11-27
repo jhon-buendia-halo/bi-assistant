@@ -51,6 +51,17 @@ describe('buildAgentQualityCatalogue', () => {
     expect(catalogue.map((a) => a.key)).not.toContain('data-readiness');
   });
 
+  it('lists Dana with her set, so agent quality shows her eval runs', () => {
+    const dana = catalogue.find((a) => a.key === 'data-readiness-assessor')!;
+    expect(dana).toMatchObject({
+      agentId: 'data-readiness-assessor',
+      name: 'Dana',
+      role: 'Data Readiness Assessor',
+    });
+    expect(dana.sets.map((s) => s.id)).toEqual(['data-readiness-assessor']);
+    expect(dana.sets[0].caseIds).toContain('dra-null-customer-id');
+  });
+
   it('has a persona and at least one set with cases for every agent', () => {
     expect(catalogue.length).toBeGreaterThan(3);
     for (const agent of catalogue) {

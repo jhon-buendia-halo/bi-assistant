@@ -20,6 +20,7 @@ import {
   ownedSchemas,
   qualifiedTable,
   requiredEntityKeys,
+  withColumnDescriptions,
   type SampleFixture,
 } from './fixtures/registry';
 
@@ -317,7 +318,8 @@ export class TestingDataService {
     await this.datasets.save({
       name: fixture.datasetName,
       tables: entities.map((entity) => entity.key),
-      entities,
+      // A sample that declares column descriptions saves them with its entities.
+      entities: withColumnDescriptions(fixture, entities),
       datasourceId: datasource.id,
       // Only a multi-schema sample carries notes; otherwise leave them as they are.
       ...(fixture.layerSchemas
