@@ -275,7 +275,7 @@ export function formatInventory(records, check) {
   return out.join('\n');
 }
 
-/** The comparison report, ending with the agents whose evals must run. */
+/** The comparison report, ending with the agents whose eval sets the change reaches. */
 export function formatComparison(diff) {
   const out = ['## Compared with the base', ''];
   for (const key of diff.added) out.push(`- added ${key}`);
@@ -285,7 +285,7 @@ export function formatComparison(diff) {
   out.push(
     '',
     evals.length
-      ? `Evals to run (base against branch): ${evals.join(', ')}`
+      ? `Eval sets reached, run only when the user asks (base against branch): ${evals.join(', ')}`
       : 'Every hash is equal: no agent receives anything new, the evals need not run.',
   );
   return out.join('\n');

@@ -66,7 +66,7 @@ Trade-offs:
 - Latency and LLM calls: <model calls per run, sequential or parallel>
 - Testability: <what the stub already runs; what would have to be added to it>
 - UI and graph: <catalogue steps and edges that change; workflow page, Run panel, stored runs>
-- Evals: <which agent's input changes, so which eval set must run; or none>
+- Evals: <which agent's input changes, so which eval set it reaches (run only when the user asks); or none>
 Size: <S / M / L>
 
 ## Approach B — <name>
@@ -127,7 +127,7 @@ This split exists because Jest cannot load Mastra's ESM: catalogue data lives in
 
 **Evals**
 
-- A workflow change that alters what an agent receives (its prompt, tools, context blocks, the messages a step builds) needs that agent's evals: decide and run them with [`agent-change`](../agent-change/SKILL.md), steps 1 and 5. The `insights-analyst` eval target runs Michael as Avery's `answer_from_data` (`backend/src/mastra/evals/insights-analyst-target.ts`), so a change to the analysis steps or his request reaches those evals even when no prompt changed.
+- A workflow change that alters what an agent receives (its prompt, tools, context blocks, the messages a step builds) reaches that agent's evals: name the set with [`agent-change`](../agent-change/SKILL.md), steps 1 and 6, and run it only when the user asks. The `insights-analyst` eval target runs Michael as Avery's `answer_from_data` (`backend/src/mastra/evals/insights-analyst-target.ts`), so a change to the analysis steps or his request reaches those evals even when no prompt changed.
 
 ## 5. Checks
 
