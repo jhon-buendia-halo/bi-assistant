@@ -14,7 +14,7 @@
 // - --root reads another checkout (the base worktree) with this script:
 //     node scripts/agent-inventory.mjs --root <base> --json > .context/agents-base.json
 //     node scripts/agent-inventory.mjs --compare .context/agents-base.json
-//   The comparison names the agents whose evals must run, and the matrix
+//   The comparison names the agents whose eval sets the change reaches, and the matrix
 //   scenarios each one differs under (a base recorded by an older script has
 //   no per-scenario hashes: record it again with --root).
 // - Exits 1 for an unclassified or stale class entry; --strict also for a gap.

@@ -23,6 +23,9 @@ export const OFFICIAL_AGENT_KEYS: readonly string[] = [
   // Elena, the Insights Lead: talked to directly in her own conversation
   // (plan Elena 2), not through a chat.
   'insights-lead',
+  // Dana, the Data Readiness Assessor: talked to directly in her own
+  // conversation (plan data-readiness-assessor 2).
+  'data-readiness-assessor',
 ];
 
 /**

@@ -16,6 +16,10 @@ import {
   INSIGHTS_LEAD_AGENT_KEY,
   INSIGHTS_LEAD_TOOL_NAMES,
 } from '../../mastra/agents/insights-lead-catalog';
+import {
+  DATA_READINESS_ASSESSOR_AGENT_KEY,
+  DATA_READINESS_ASSESSOR_TOOL_NAMES,
+} from '../../mastra/agents/data-readiness-assessor-catalog';
 import { MastraService } from '../../mastra/mastra.service';
 import { builtinAgentPersona } from '../../mastra/agent-personas';
 import {
@@ -123,7 +127,9 @@ export class AgentPromptsService implements OnModuleInit {
       builtInChanged:
         !!override && override.baseHash !== agentPromptHash(shipped),
       linksAllowed:
-        key === INSIGHTS_ANALYST_AGENT_KEY || key === INSIGHTS_LEAD_AGENT_KEY,
+        key === INSIGHTS_ANALYST_AGENT_KEY ||
+        key === INSIGHTS_LEAD_AGENT_KEY ||
+        key === DATA_READINESS_ASSESSOR_AGENT_KEY,
       updatedAt: override?.updatedAt ?? null,
     };
   }
@@ -167,6 +173,19 @@ function validatePrompt(key: string, value: unknown): string {
     const unknown = links.tools.find(
       (name) =>
         !INSIGHTS_LEAD_TOOL_NAMES.includes(name) && !isLibraryTool(name),
+    );
+    if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
+  } else if (key === DATA_READINESS_ASSESSOR_AGENT_KEY) {
+    // Her own skills and tools only (plan data-readiness-assessor 2).
+    const links = parseLinks(prompt);
+    const skills = AGENT_SKILLS[DATA_READINESS_ASSESSOR_AGENT_KEY] ?? [];
+    if (links.skills.some((name) => !skills.includes(name))) {
+      throw new BadRequestException(
+        "Only Dana's own skills can be linked here: this prompt is shared by every user",
+      );
+    }
+    const unknown = links.tools.find(
+      (name) => !DATA_READINESS_ASSESSOR_TOOL_NAMES.includes(name),
     );
     if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
   } else if (ANY_LINK.test(prompt)) {

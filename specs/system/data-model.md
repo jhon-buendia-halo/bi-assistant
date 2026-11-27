@@ -121,6 +121,7 @@ Summary:
 | `workflow_run_node_chats` | The chats with a stored run's agent steps (node chats), one per run and step | `id`; `(runId, stepId)` unique | n/a (read by run and step) | [workflows](../capabilities/workflows/spec.md) |
 | `artifacts` | Reusable context saved from workflow runs: today, dashboards (a version of Avery's conversation, or one saved before 2026-11-26 by Dashboard Image to Artifact) | `id` | `createdAt` desc | [workflows](../capabilities/workflows/spec.md) R33 |
 | `conversation_exports` | The PDF and PowerPoint exports of conversations with Avery, one per export, never edited (3.20) | `id` | n/a (read by id) | [workflows](../capabilities/workflows/spec.md) R45 |
+| `readiness_assessments` | Dana's data-readiness assessments, one per `assess_readiness` call: the baseline of the next one (3.21) | `id`; `useCaseKey` groups the assessments of one use case and datasets | `assessedAt` desc (per `useCaseKey`) | [data-readiness](../capabilities/data-readiness/spec.md) |
 
 Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `agents`, `skills` and `workflow_runs` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints** between collections, and no cascading deletes but one (a run's node chats go with it, 3.17); references are by value (`name`, `id`) and may dangle (section 3.13).
 
@@ -648,7 +649,7 @@ The app is single-user (ADR-0030): one built-in super admin, id `local`, is alwa
 
 ### 3.15 `readiness_reports` (removed 2026-11-26)
 
-*Removed 2026-11-26.* The collection of stored data-readiness assessments went with the Data Readiness Agent, Assess Data Readiness and the `data-readiness` module ([workflows](../capabilities/workflows/spec.md) R50): the table is dropped at start-up with the other removed collections (M17, `dropRemovedCollections`) and nothing reads it afterwards. The section number is kept so the numbering stays stable.
+*Removed 2026-11-26.* The collection of stored data-readiness assessments went with the Data Readiness Agent, Assess Data Readiness and the `data-readiness` module ([workflows](../capabilities/workflows/spec.md) R50): the table is dropped at start-up with the other removed collections (M17, `dropRemovedCollections`) and nothing reads it afterwards. The section number is kept so the numbering stays stable. `readiness_reports` **stays dropped**: Dana's assessments are a new collection, `readiness_assessments` (3.21), with a different shape, and nothing reads or migrates the old table.
 
 ### 3.16 `workflow_runs` — workflow runs
 
@@ -759,6 +760,34 @@ One document per export of a conversation with Avery (since 2026-11-23; [agents.
 No `ownerId` (3.14). Nothing lists, renames or deletes exports yet: the documents and their files stay.
 
 > Implementation note: `modules/conversation-export/conversation-exports.repository.ts` (`ConversationExportsRepository`, token `CONVERSATION_EXPORTS_STORE`); `ConversationExportService` writes the files.
+
+### 3.21 `readiness_assessments` — data-readiness assessments
+
+One document per call of Dana's `assess_readiness` tool (since 2026-11-26; [agents.md](agents.md) 2.24 and 3.19, [data-readiness](../capabilities/data-readiness/spec.md) R10, ADR-0060). Written once, by the tool, after it has computed the assessment; never updated. The document is `{ id, useCaseKey, assessedAt, assessment }` (`ReadinessAssessmentDoc`, `readiness-assessments.repository.ts`): `id` and `useCaseKey` are the assessment's, `assessedAt` is its `createdAt`, and `assessment` holds the whole `ReadinessAssessment` (`backend/src/modules/readiness-assessor/readiness.types.ts`), so the store's own `createdAt`, the write time, never replaces the assessment's. The baseline is the document with the same `useCaseKey` and the latest `assessedAt`. The fields of `assessment`:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | The assessment's id. |
+| `createdAt` | ISO | yes | When it was made (copied to the document's `assessedAt`). |
+| `rubricVersion` | string | yes | The rubric version applied (`1.0`; data-readiness rubric). |
+| `useCaseKey` | string | yes | The normalised use case plus the sorted dataset names; the same use case on the same datasets has the same key. The baseline is the latest document with the same key. |
+| `sessionId` | string | no | The session that held the conversation. |
+| `datasets` | string[] | yes | The dataset names the assessment covered. |
+| `scope` | `ReadinessScope` | yes | The scoping card: use case, `useType`, `risk`, critical entities and fields, grain keys, required freshness, tolerated duplicate rate, `personalDataNeeded`, `legalBasis`, `owners`, `assumptions`. |
+| `verdict` | `'ready' \| 'ready-with-conditions' \| 'not-ready'` | yes | Decided by gates and minimums. |
+| `weightedScore` | number \| null | yes | 0 to 4; `null` when a dimension weighing 20% or more is N/E. `weightedScoreNote` (string, optional) says how N/E weights were redistributed or why there is none. |
+| `conditions` | string[] | yes | The verifiable conditions of a `ready-with-conditions` verdict. |
+| `gates` | `GateResult[]` | yes | `{ gate: 'G1'..'G6', status: 'pass' \| 'fail' \| 'not-evaluated', reason, evidenceIds }`. |
+| `dimensions` | `DimensionResult[]` | yes | `{ dimension: 'D1'..'D6', applicable, level: 0..4 \| 'N/E', weight (0..1 \| null), reason, evidenceIds }`. |
+| `findings` | `ReadinessFinding[]` | yes | `{ id: 'F-001'…, dimension, gate?, severity: 'blocking' \| 'high' \| 'medium' \| 'low', entity?, column?, measured, threshold?, description, evidenceIds }`. |
+| `evidence` | `ReadinessEvidence[]` | yes | `{ id: 'EV-001'…, dimension, description, source: 'sql' \| 'sample' \| 'metadata', sql?, datasourceId?, entity?, coverage: 'whole-table' \| 'sample' \| 'metadata', sampleSize?, result }`. `result` holds aggregates only: **no individual personal value is ever stored** (data-readiness R8). |
+| `notEvaluated` | `{ item, reason }[]` | yes | What was not evaluated and why; always declared. |
+| `escalations` | string[] | yes | Why a human must look at it. |
+| `previous` | `ReadinessBaselineDelta` | no | The comparison with the previous assessment: its id, date, rubric version and verdict, the level of each dimension and the status of each gate before and after. Absent on the first assessment of a use case. |
+
+No `ownerId` (3.14). Nothing lists, edits or deletes assessments yet: the documents stay. The collection is created at start-up with the others; `readiness_reports` (3.15) stays dropped.
+
+> Implementation note: `modules/readiness-assessor/readiness-assessments.repository.ts` (`ReadinessAssessmentsRepository`, token `READINESS_ASSESSMENTS_STORE`; save, and latest by `useCaseKey`), `ReadinessAssessorModule`; the tool reaches it through the bridge `mastra/readiness-tool-services.ts` (agents.md 3.19).
 
 ## 4. Files on disk
 

@@ -11,6 +11,11 @@ import {
   INSIGHTS_LEAD_TOOL_NAMES,
 } from '../agents/insights-lead-catalog';
 import {
+  DATA_READINESS_ASSESSOR_AGENT_KEY,
+  DATA_READINESS_ASSESSOR_MAX_STEPS,
+  DATA_READINESS_ASSESSOR_TOOL_NAMES,
+} from '../agents/data-readiness-assessor-catalog';
+import {
   INSIGHTS_ANALYST_AGENT_KEY,
   INSIGHTS_ANALYST_MAX_STEPS,
   INSIGHTS_ANALYST_NAME,
@@ -88,6 +93,12 @@ const STEP_AGENTS: Record<
     name: 'Elena',
     tools: INSIGHTS_LEAD_TOOL_NAMES,
     maxSteps: INSIGHTS_LEAD_MAX_STEPS,
+  },
+  // Dana's Answer step (plan data-readiness-assessor 2): her own tools, alone.
+  [DATA_READINESS_ASSESSOR_AGENT_KEY]: {
+    name: 'Dana',
+    tools: DATA_READINESS_ASSESSOR_TOOL_NAMES,
+    maxSteps: DATA_READINESS_ASSESSOR_MAX_STEPS,
   },
   [INSIGHTS_ANALYST_AGENT_KEY]: {
     name: INSIGHTS_ANALYST_NAME,

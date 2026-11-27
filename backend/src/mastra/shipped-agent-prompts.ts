@@ -4,6 +4,7 @@ import { RESULT_EXPLORER_INSTRUCTIONS } from './agents/result-explorer.prompts';
 import { ORCHESTRATOR_MICHAEL_INSTRUCTIONS } from './workflows/orchestrated-answer-michael.prompts';
 import { BI_ANALYST_INSTRUCTIONS } from './workflows/bi-analyst.prompts';
 import { INSIGHTS_LEAD_INSTRUCTIONS } from './workflows/insights-lead.prompts';
+import { DATA_READINESS_ASSESSOR_INSTRUCTIONS } from './agents/data-readiness-assessor.prompts';
 import {
   INSIGHTS_ANALYST_PROMPT,
   EVAL_JUDGE_PROMPT,
@@ -25,6 +26,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'chief-of-staff': ORCHESTRATOR_MICHAEL_INSTRUCTIONS,
   'bi-analyst': BI_ANALYST_INSTRUCTIONS,
   'insights-lead': INSIGHTS_LEAD_INSTRUCTIONS,
+  'data-readiness-assessor': DATA_READINESS_ASSESSOR_INSTRUCTIONS,
 };
 
 /** The shipped editable prompt of a built-in agent; undefined for any other key. */

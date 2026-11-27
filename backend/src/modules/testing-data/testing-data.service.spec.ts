@@ -554,6 +554,7 @@ describe('a register-only fixture (no bundled SQL)', () => {
       'edge-cases',
       'world-cup-medallion',
       'retail-ops',
+      'readiness-lab',
       'world-cup-excel',
       'world-cup-rest',
       'register-only',
@@ -840,5 +841,41 @@ describe('a multi-schema fixture (World Cup Medallion)', () => {
     ).toEqual(['DROP SCHEMA IF EXISTS "world_cup" CASCADE']);
     const [saved] = datasets.save.mock.calls[0] as [object];
     expect(saved).not.toHaveProperty('schemas');
+  });
+});
+
+describe('a fixture with column descriptions (Readiness Lab)', () => {
+  const LAB = findFixture('readiness-lab') as SampleFixture;
+
+  it('saves its column descriptions with the entities, and leaves undescribed columns as they are', async () => {
+    const catalogs = inventory(LAB.requiredTables, 'readiness_lab', LAB.schema);
+    const { service, datasets } = build({ catalogs });
+
+    const result = await service.load('readiness-lab', {
+      ...DEFAULT_INPUT,
+      database: 'readiness_lab',
+    });
+
+    expect(result.ok).toBe(true);
+    const [saved] = datasets.save.mock.calls[0] as [
+      {
+        entities: {
+          key: string;
+          columns: { name: string; description?: string }[];
+        }[];
+      },
+    ];
+    const orders = saved.entities.find(
+      (entity) => entity.key === 'readiness_lab.readiness_lab.orders',
+    )!;
+    expect(orders.columns).toEqual([
+      {
+        name: 'id',
+        type: 'integer',
+        nullable: false,
+        description: 'Order number, one row per order',
+      },
+      { name: 'label', type: 'text', nullable: true },
+    ]);
   });
 });

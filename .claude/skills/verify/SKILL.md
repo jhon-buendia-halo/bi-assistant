@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Use for the wave check (qa.mjs --wave, the demo and hand-over), the plain-session fast run (qa.mjs --fast) and at workflow step 9 (qa.mjs --gate: builds, unit tests, lint, check-specs, the impacted E2E specs and, when an agent's input changed, its evals against the base; fix until green), and to drive a running instance in Chromium with Playwright (selectors and gotchas; the instance itself comes from local-instance).
+description: Use for the wave check (qa.mjs --wave, the demo and hand-over), the plain-session fast run (qa.mjs --fast) and at workflow step 9 (qa.mjs --gate: builds, unit tests, lint, check-specs, the impacted E2E specs; fix until green), to run an agent's evals when the user asks, and to drive a running instance in Chromium with Playwright (selectors and gotchas; the instance itself comes from local-instance).
 ---
 
 # Wave check, step 9, and the running app
@@ -15,9 +15,9 @@ Part of the [`workflow-strict`](../workflow-strict/SKILL.md) workflow (the wave 
 
    **Plain-session fast run:** with no builder agent, and for an S change, `node scripts/qa.mjs <roadmap-id> --fast` runs the same checks for one story and records its demo (`demo.webm` for a UI story, `demo.txt` otherwise; `--no-demo` for an S change). Publish the demo artifact (`node scripts/demo-page.mjs <roadmap-id>`, then the Artifact tool, see `workflow-gate`) and hand over the running app with the link.
 
-## Evals — when the change touches what an agent receives
+## Evals — only when the user asks
 
-Its prompt, skills, tools, context blocks or model routing. Run the agent's eval set (`npm run evals` with `EVAL_SET` or `EVAL_CASES` (`evals:assistant` until 2026-11-26; Elena runs the former assistant sets), see [delivery.md](../../../specs/system/delivery.md) 2) on the **base commit and on the branch**, same model, same data:
+Evals are not part of any check, gate or hand-over: no step runs them on its own. When a change touches what an agent receives (its prompt, skills, tools, context blocks or model routing), name the agent in the reply and offer to run its evals (and the inventory comparison, `agent-change`). When the user asks, run the agent's eval set (`npm run evals` with `EVAL_SET` or `EVAL_CASES` (`evals:assistant` until 2026-11-26; Elena runs the former assistant sets), see [delivery.md](../../../specs/system/delivery.md) 2) on the **base commit and on the branch**, same model, same data:
 
 - **Run in parallel.** Three runs per build at once, each on its own copy of the data dir and its own `EVAL_RESULTS_FILE`, not one after another. Before starting, print the copy's saved provider and model, agree the model with the user and check its key and credit (about 3 × cases × 2 turns); use `EVAL_LLM_*` for any other target.
 - **Pass bar on the branch:**

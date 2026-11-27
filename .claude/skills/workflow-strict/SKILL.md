@@ -19,7 +19,7 @@ Every change follows these eleven steps, **scaled to its size** (below). They ru
 6. **E2E impact analysis** — draft the list with `qa.mjs --draft-impact`, then decide per Gherkin scenario: add, update, delete or re-run. Skill: `workflow-gate`.
 7. **Write the E2E** — apply the step-6 decisions to the Playwright and API-level E2E specs, each asserting what the change introduced. Skill: `workflow-gate`.
 8. **Implement changes** — production code, built against the Acceptance criteria and the step-5 Gherkin. Skill: `workflow-implement`.
-9. **Run checks and fix until green** — `qa.mjs --gate` (builds, unit tests, lint, `check-specs`, the impacted E2E specs) and, when an agent's input changed, its evals. Skill: `verify`.
+9. **Run checks and fix until green** — `qa.mjs --gate` (builds, unit tests, lint, `check-specs`, the impacted E2E specs). Evals and the agent inventory are not part of this step: when an agent's input changed, name the agent and run them only when the user asks. Skill: `verify`.
 10. **Record what shipped** — after step 9 is green: the story's evidence and roadmap `✅ Done`; once per epic, the changelog entry and the PR. Skill: `workflow-gate`.
 11. **Retrospective** — once per epic, a dated entry in [retrospective.md](../../../retrospective.md), then update [lessons.md](../../../lessons.md). Skill: `workflow-gate`.
 

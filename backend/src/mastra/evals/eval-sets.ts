@@ -33,12 +33,17 @@ import {
   AVERY_WORKFLOW_EVAL_TARGET,
   averyWorkflowEvalTarget,
 } from './avery-workflow-target';
+import { DATA_READINESS_ASSESSOR_EVAL_SET } from './data-readiness-assessor.evals';
+import {
+  DATA_READINESS_ASSESSOR_EVAL_TARGET,
+  dataReadinessAssessorEvalTarget,
+} from './data-readiness-assessor-target';
 
 /**
  * Every eval set, of every agent that has evals (agents.md 8.1): Insights
- * Analyst's, the Query Explainer's, the Result Explorer's, Clara's, Avery's
- * and Elena's (her own and the four data sets ported from the assistant). A
- * set runs on the agent its `agentKey` names.
+ * Analyst's, the Query Explainer's, the Result Explorer's, Clara's, Avery's,
+ * Elena's (her own and the four data sets ported from the assistant) and
+ * Dana's. A set runs on the agent its `agentKey` names.
  */
 export const EVAL_SETS: AssistantEvalSet[] = [
   ...INSIGHTS_LEAD_DATA_EVAL_SETS,
@@ -51,6 +56,7 @@ export const EVAL_SETS: AssistantEvalSet[] = [
   BI_ANALYST_EVAL_SET,
   AVERY_EVAL_SET,
   INSIGHTS_LEAD_EVAL_SET,
+  DATA_READINESS_ASSESSOR_EVAL_SET,
 ];
 
 /** The registry key a set runs on. */
@@ -82,6 +88,8 @@ const EVAL_TARGET_FACTORIES: Record<
   [BI_ANALYST_EVAL_AGENT_KEY]: (sets) => biAnalystEvalTarget(sets),
   [AVERY_WORKFLOW_EVAL_TARGET]: (sets) => averyWorkflowEvalTarget(sets),
   [INSIGHTS_LEAD_EVAL_TARGET]: (sets) => insightsLeadEvalTarget(sets),
+  [DATA_READINESS_ASSESSOR_EVAL_TARGET]: (sets) =>
+    dataReadinessAssessorEvalTarget(sets),
 };
 
 /** The target id a set runs on: its `target`, else its agent's key. */

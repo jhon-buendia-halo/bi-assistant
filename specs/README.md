@@ -47,7 +47,7 @@ specs/
 | [workflows](capabilities/workflows/spec.md) | The workflow catalogue (one workflow, Answer a Business Question (Avery + Michael)), the Workflows pages, runs and legacy runs | Workflows (`workflows.spec.ts`) |
 | [agent-panel](capabilities/agent-panel/spec.md) | `show_in_panel`: what an agent shows in the right panel (file, document, table, visual), the workflow bar and its Details, its history and download | Agent panel (E2E: none yet) |
 | [synthetic-data](capabilities/synthetic-data/spec.md) | Sampled profile of a dataset's tables (native sampling, up to 1,000 rows per table, approximate) in the dataset editor's Profile & synthesize tab; synthetic data scripts follow in later stories | Synthetic data (`synthetic-data.spec.ts`) |
-| [data-readiness](capabilities/data-readiness/spec.md) | Removed 2026-11-26: the Data Readiness Agent, the Assess Data Readiness workflow, the readiness engine, saved reports and the scorecard (kept as a pointer) | none |
+| [data-readiness](capabilities/data-readiness/spec.md) | Dana, the Data Readiness Assessor: scopes a use case, measures six dimensions in code, applies gates and returns a verdict with evidence and a baseline; replaced the Data Readiness Agent removed 2026-11-26 | none yet |
 
 A Gherkin Feature that spans capabilities lives in the capability that owns its main outcome; the others link to it.
 

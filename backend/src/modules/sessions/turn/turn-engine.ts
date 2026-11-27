@@ -33,7 +33,10 @@ import {
 import { currentEvalRunId } from '../../../mastra/evals/eval-run-scope';
 import type { ExportAuthor } from '../../conversation-export/export-document';
 import { runSoloTurn, type SoloTurnState } from './solo-turn';
-import type { ConversationalBinding } from '../../../mastra/conversational-agents';
+import {
+  deliversOf,
+  type ConversationalBinding,
+} from '../../../mastra/conversational-agents';
 import {
   currentDashboardBlock,
   orchestratorState,
@@ -96,6 +99,7 @@ import { chatTurnError } from '../llm-error-message';
 import { sourceEntities } from '../visualization-document';
 import { stepEventOf, workflowRunState } from '../workflow-run-state';
 import {
+  carriedQueryRecords,
   statedRationale,
   synthesizeToolOnlyTurn,
   toolDataRecord,
@@ -347,6 +351,7 @@ export class TurnEngine {
       options.requestContext.get(AGENT_OVERRIDES_CONTEXT_KEY);
     const soloModel =
       conversation?.kind === 'solo' &&
+      conversation.opus === true &&
       session.run &&
       opus &&
       !agentOverrides?.model
@@ -409,6 +414,19 @@ export class TurnEngine {
           rationale: record.rationale,
         }),
       });
+    };
+    // A query the agent did not call itself (a tool's own SQL, a host's
+    // run): shown as a run_readonly_sql call, then captured as its result.
+    const emitQuery = (record: ToolDataRecord, callId?: string) => {
+      emit({
+        type: 'tool',
+        content: JSON.stringify({
+          name: 'run_readonly_sql',
+          ...(record.rationale ? { rationale: record.rationale } : {}),
+          ...(record.input ? { input: record.input } : {}),
+        }),
+      });
+      captureRecord(record, callId);
     };
     // The host's run of Clara's data query (agents.md 5.22): recorded once
     // her submit_dashboard has its result, so the activity pairs (the gap
@@ -531,6 +549,11 @@ export class TurnEngine {
                   ...(error ? { error } : {}),
                 }),
               });
+            }
+            // The SQL a tool ran itself (Dana's assess_readiness): each
+            // statement follows its result as a query of the turn.
+            for (const carried of carriedQueryRecords(payload.result)) {
+              emitQuery(carried);
             }
             // Clara's submit ran her data query: it follows the result.
             if (toolName === SUBMIT_DASHBOARD_TOOL) flushHeldQueries();
@@ -816,14 +839,22 @@ export class TurnEngine {
               team: conversation.kind === 'team',
             };
             if (conversation.kind === 'solo') {
-              // Elena alone (plan Elena 2.4): her gates, her attempt through
-              // the analysis consumer, one repair round, her dashboard.
-              const currentDashboard = await this.currentDashboardOf(session);
-              const exporting = await this.exportOf(session, trimmed, author);
+              // A solo agent (Elena, plan Elena 2.4; Dana): its gates, its
+              // attempt through the analysis consumer, one repair round, its
+              // dashboard. A gate opens only for a deliverable the binding
+              // names: Dana has none, so neither opens for her.
+              const dashboards = deliversOf(conversation, 'dashboard');
+              const currentDashboard = dashboards
+                ? await this.currentDashboardOf(session)
+                : undefined;
+              const exporting = deliversOf(conversation, 'export')
+                ? await this.exportOf(session, trimmed, author)
+                : undefined;
               // Try it saves no dashboard: its gate stays closed (ADR-0059).
-              const save = session.preview
-                ? undefined
-                : this.deps.saveDashboard;
+              const save =
+                session.preview || !dashboards
+                  ? undefined
+                  : this.deps.saveDashboard;
               if (save && !soloSubmitter) {
                 soloSubmitter = this.dashboardSubmitter(
                   session,

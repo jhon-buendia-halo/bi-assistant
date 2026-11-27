@@ -191,6 +191,62 @@ function tabularRecord(
 }
 
 /**
+ * Where a tool whose own work ran SQL (Dana's `assess_readiness`) puts those
+ * statements on its result, hidden from the model by its `toModelOutput`:
+ * `{ sql, columns?, rows?, rationale?, truncated? }[]`, aggregates only.
+ * The datasource of each is written beside it as query facts
+ * (`queryFactsKey('run_readonly_sql', sql)`), like the data tools do.
+ */
+export const QUERY_RECORDS_RESULT_KEY = 'queryRecords';
+
+/**
+ * The SQL a tool ran itself (`QUERY_RECORDS_RESULT_KEY`), as one
+ * `run_readonly_sql` record per statement, in order: the query inspector,
+ * `explore_result` and the answer's checks treat each like a query the
+ * agent ran (agent-change step 4). The carrying tool itself makes no
+ * record. Malformed entries are skipped.
+ */
+export function carriedQueryRecords(result: unknown): ToolDataRecord[] {
+  const carried =
+    result && typeof result === 'object'
+      ? (result as Record<string, unknown>)[QUERY_RECORDS_RESULT_KEY]
+      : undefined;
+  if (!Array.isArray(carried)) return [];
+  const records: ToolDataRecord[] = [];
+  for (const entry of carried as unknown[]) {
+    if (!entry || typeof entry !== 'object') continue;
+    const value = entry as {
+      sql?: unknown;
+      columns?: unknown;
+      rows?: unknown;
+      rationale?: unknown;
+      truncated?: unknown;
+    };
+    const sql = typeof value.sql === 'string' ? value.sql.trim() : '';
+    if (!sql) continue;
+    const rows = Array.isArray(value.rows)
+      ? (value.rows as Record<string, unknown>[])
+      : [];
+    const columns = Array.isArray(value.columns)
+      ? value.columns.map((c) => String(c))
+      : Object.keys(rows[0] ?? {});
+    const rationale = statedRationale(value.rationale);
+    records.push({
+      tool: 'run_readonly_sql',
+      input: sql,
+      columns,
+      rows: rows.slice(0, STORED_ROWS_CAP),
+      rowCount: rows.length,
+      ...(value.truncated === true || rows.length > STORED_ROWS_CAP
+        ? { truncated: true }
+        : {}),
+      ...(rationale ? { rationale } : {}),
+    });
+  }
+  return records;
+}
+
+/**
  * A model can spend every allowed step on tools and finish without a
  * user-facing answer. Give it one tool-disabled pass to turn the data it
  * already collected into prose; never let a completed turn disappear.

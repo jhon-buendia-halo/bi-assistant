@@ -64,6 +64,13 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       'Ask me a business question about your data. I query it, check every figure, build a dashboard when you want one and show how I got each answer.',
   },
+  'data-readiness-assessor': {
+    name: 'Dana',
+    role: 'Data Readiness Assessor',
+    domain: 'data-foundations',
+    intro:
+      'Tell me what you want to use your data for. I measure whether it is ready for that use, show the evidence behind every score and tell you what to fix first.',
+  },
   'chief-of-staff': {
     name: 'Avery',
     role: 'Chief of Staff',
