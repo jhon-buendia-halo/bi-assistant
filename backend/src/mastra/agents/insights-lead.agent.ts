@@ -23,18 +23,17 @@ import {
   INSIGHTS_LEAD_NO_CLARIFICATION_RULE,
 } from '../workflows/insights-lead.prompts';
 import {
+  DASHBOARD_BUILDING_SKILL,
   INSIGHTS_LEAD_AGENT_KEY,
   INSIGHTS_LEAD_DESCRIPTION,
   INSIGHTS_LEAD_NAME,
 } from './insights-lead-catalog';
 
 export {
+  DASHBOARD_BUILDING_SKILL,
   INSIGHTS_LEAD_AGENT_KEY,
   INSIGHTS_LEAD_MAX_STEPS,
 } from './insights-lead-catalog';
-
-/** Her skill for a dashboard, offered with the dashboard gate open. */
-export const DASHBOARD_BUILDING_SKILL = 'dashboard-building';
 
 /** A call's RequestContext, as her resolvers read it. */
 interface ContextLike {

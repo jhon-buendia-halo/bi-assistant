@@ -533,7 +533,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
 
 #### 34a. `GET /agents/:key/skills`
-- Response `200`: `AgentSkillsView`. A user agent runs on Elena, so it answers with her skills, followed by its own in-app skills, sorted by name among themselves (level `in-app`, loading `on-demand`): the `liveSkills` copies when it has a Live version, else the current skills its draft names. Their `files` are `SKILL.md` (rendered as in [agents.md](agents.md) 7.3) and the reference files, and 34b reads them. The built-in skills ship with the app (there are no user or project skills; ADR-0021); how they load and are checked is in [agents.md](agents.md) 7.3. The response shows what the backend loaded when it started.
+- Response `200`: `AgentSkillsView`. A user agent runs on Elena, so it answers with her skills except `dashboard-building` and `conversation-export` (its dashboard and export gates are always closed, ADR-0059; 34b answers `404 "Agent \"<key>\" has no skill \"<name>\""` for them), followed by its own in-app skills, sorted by name among themselves (level `in-app`, loading `on-demand`): the `liveSkills` copies when it has a Live version, else the current skills its draft names. Their `files` are `SKILL.md` (rendered as in [agents.md](agents.md) 7.3) and the reference files, and 34b reads them. The built-in skills ship with the app (there are no user or project skills; ADR-0021); how they load and are checked is in [agents.md](agents.md) 7.3. The response shows what the backend loaded when it started.
   ```ts
   type SkillLevel = 'built-in' | 'in-app';
   AgentSkillsView = {

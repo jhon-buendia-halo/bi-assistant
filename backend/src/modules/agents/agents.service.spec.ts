@@ -499,7 +499,13 @@ describe('AgentsService (built-in and user agents)', () => {
       });
       expect(Object.keys(elena)).toEqual(['skills']);
       const created = await ctx.service.create({ name: 'Analyst' });
-      expect(names(await ctx.service.skills(created.id))).toEqual(names(elena));
+      // Elena's skills, without those of the gates a user agent never opens.
+      expect(names(await ctx.service.skills(created.id))).toEqual(
+        names(elena).filter(
+          (name) =>
+            name !== 'dashboard-building' && name !== 'conversation-export',
+        ),
+      );
       expect((await ctx.service.skills('sql-fixer')).skills).toEqual([]);
       await expect(ctx.service.skills('nope')).rejects.toThrow(
         'Agent "nope" not found',
@@ -548,6 +554,33 @@ describe('AgentsService (built-in and user agents)', () => {
       body,
       files: [{ path: 'references/q.md', content: 'Q1 is July.' }],
     });
+
+    it(
+      "leaves out Elena's dashboard and export skills, which a user agent never gets",
+      asDemoUser(async () => {
+        const created = await ctx.service.create({
+          name: 'Analyst',
+          datasets: ['World Cup Core'],
+          instructions: 'Answer from the data.',
+        });
+        const names = (await ctx.service.skills(created.id)).skills.map(
+          (s) => s.name,
+        );
+        expect(names).not.toContain('dashboard-building');
+        expect(names).not.toContain('conversation-export');
+        await expect(
+          ctx.service.skillFile(created.id, 'dashboard-building', 'SKILL.md'),
+        ).rejects.toThrow(
+          `Agent "${created.id}" has no skill "dashboard-building"`,
+        );
+        const elena = (await ctx.service.skills('insights-lead')).skills.map(
+          (s) => s.name,
+        );
+        expect(elena).toEqual(
+          expect.arrayContaining(['dashboard-building', 'conversation-export']),
+        );
+      }),
+    );
 
     it(
       "follows Elena's skills with the draft's current ones, then the Live copies after a publish",

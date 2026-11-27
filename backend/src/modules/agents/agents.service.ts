@@ -50,7 +50,11 @@ import type {
 } from '../user-agents/entities/user-agent.entity';
 
 import { OFFICIAL_AGENT_KEYS } from '../../mastra/agent-constants';
-import { INSIGHTS_LEAD_AGENT_KEY } from '../../mastra/agents/insights-lead-catalog';
+import {
+  DASHBOARD_BUILDING_SKILL,
+  INSIGHTS_LEAD_AGENT_KEY,
+} from '../../mastra/agents/insights-lead-catalog';
+import { CONVERSATION_EXPORT_SKILL } from '../../mastra/workflows/export-request';
 import { CONVERSATION_GATES_CONTEXT_KEY } from '../../mastra/workflows/conversation-turn.steps';
 import { CONVERSATIONAL_BINDINGS } from '../../mastra/conversational-agents';
 import {
@@ -78,6 +82,15 @@ function conversationOf(key: string): { workflowId: string } | undefined {
 
 /** The built-in agent every user agent runs on: Elena (ADR-0059). */
 const USER_AGENT_HOST_KEY = INSIGHTS_LEAD_AGENT_KEY;
+
+/**
+ * Elena's skills a user agent never gets: its dashboard and export gates
+ * are always closed (ADR-0059), so their skills are never offered.
+ */
+const USER_AGENT_CLOSED_SKILLS: ReadonlySet<string> = new Set([
+  DASHBOARD_BUILDING_SKILL,
+  CONVERSATION_EXPORT_SKILL,
+]);
 
 export interface AgentSummary {
   /** Registry key the agent is registered under in the Mastra instance. */
@@ -342,12 +355,15 @@ export class AgentsService {
   async skills(key: string): Promise<AgentSkillsView> {
     const view = agentSkillsView(await this.skillsAgent(key));
     if (this.isBuiltin(key)) return view;
-    // A user agent's own skills follow Elena's (api.md 34a).
+    // A user agent's own skills follow Elena's (api.md 34a), without the
+    // skills of her closed gates.
     const own = await this.inAppSkills(key);
     return {
       ...view,
       skills: [
-        ...view.skills,
+        ...view.skills.filter(
+          (skill) => !USER_AGENT_CLOSED_SKILLS.has(skill.name),
+        ),
         ...own.map((skill) => ({
           name: skill.name,
           description: skill.description,
@@ -389,6 +405,9 @@ export class AgentsService {
     const own = this.isBuiltin(key)
       ? undefined
       : (await this.inAppSkills(key)).find((skill) => skill.name === name);
+    if (!own && !this.isBuiltin(key) && USER_AGENT_CLOSED_SKILLS.has(name)) {
+      throw new NotFoundException(`Agent "${key}" has no skill "${name}"`);
+    }
     if (own) {
       const file = inAppFiles(own).find((entry) => entry.path === path);
       if (!file) {
