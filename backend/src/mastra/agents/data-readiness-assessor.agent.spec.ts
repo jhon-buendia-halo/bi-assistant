@@ -128,9 +128,9 @@ describe('Dana, the Data Readiness Assessor (plan data-readiness-assessor 2)', (
   it('serves her prompt with the tools before the working rules and the repair rule last', () => {
     const served = agent.getInstructions();
     expect(served).toBe(dataReadinessAssessorInstructions());
-    expect(served.startsWith('You are Dana, the Data Readiness Assessor.')).toBe(
-      true,
-    );
+    expect(
+      served.startsWith('You are Dana, the Data Readiness Assessor.'),
+    ).toBe(true);
     const tools = served.indexOf('## Tools');
     expect(tools).toBeGreaterThan(0);
     expect(tools).toBeLessThan(served.indexOf('## Working rules'));

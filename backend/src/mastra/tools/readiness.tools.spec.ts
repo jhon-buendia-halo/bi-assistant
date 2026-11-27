@@ -34,7 +34,8 @@ const execute = assessReadinessTool.execute as unknown as Execute;
 const engine = assessReadiness as jest.MockedFunction<typeof assessReadiness>;
 
 const COUNT = 'SELECT COUNT(*) AS rows FROM shop.public.orders';
-const NULLS = 'SELECT COUNT(*) - COUNT(customer_id) AS nulls FROM shop.public.orders';
+const NULLS =
+  'SELECT COUNT(*) - COUNT(customer_id) AS nulls FROM shop.public.orders';
 
 const SCOPE: ReadinessScope = {
   useCase: 'A weekly sales dashboard',
@@ -42,7 +43,11 @@ const SCOPE: ReadinessScope = {
   risk: 'medium',
   entities: ['shop.public.orders'],
   criticalFields: [
-    { entity: 'shop.public.orders', column: 'customer_id', indispensable: true },
+    {
+      entity: 'shop.public.orders',
+      column: 'customer_id',
+      indispensable: true,
+    },
   ],
   requiredFreshnessHours: 24,
   personalDataNeeded: false,
@@ -135,8 +140,11 @@ function assessmentFor(scope: ReadinessScope): ReadinessAssessment {
 
 /** The engine stub: drives the port as the real engine would, then returns. */
 function engineThatMeasures() {
-  const seen: { scope?: ReadinessScope; options?: unknown; port?: ReadinessPort } =
-    {};
+  const seen: {
+    scope?: ReadinessScope;
+    options?: unknown;
+    port?: ReadinessPort;
+  } = {};
   engine.mockImplementation(async (scope, port, options) => {
     Object.assign(seen, { scope, options, port });
     await port.datasets(['shop', 'not-mine']);
@@ -201,9 +209,12 @@ function turnContext(datasets: string[] = ['shop']) {
 }
 
 const call = (requestContext: RequestContext, scope: unknown = SCOPE) =>
-  execute({ scope, rationale: 'I check the orders for the dashboard.' }, {
-    requestContext,
-  });
+  execute(
+    { scope, rationale: 'I check the orders for the dashboard.' },
+    {
+      requestContext,
+    },
+  );
 
 beforeEach(() => engine.mockReset());
 
@@ -224,6 +235,7 @@ describe('assess_readiness (plan data-readiness-assessor 2, 3)', () => {
     engineThatMeasures();
     const { requestContext } = turnContext();
     await call(requestContext);
+    /* eslint-disable @typescript-eslint/unbound-method -- jest doubles */
     expect(data.getDatasets).toHaveBeenLastCalledWith(['shop']);
     expect(data.runReadOnlySql).toHaveBeenCalledWith(
       'ds-1',
@@ -237,10 +249,13 @@ describe('assess_readiness (plan data-readiness-assessor 2, 3)', () => {
       'shop.public.orders',
       200,
     );
-    expect(store.previous).toHaveBeenCalledWith('a weekly sales dashboard|shop');
+    expect(store.previous).toHaveBeenCalledWith(
+      'a weekly sales dashboard|shop',
+    );
     expect(store.save).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'ra-1' }),
     );
+    /* eslint-enable @typescript-eslint/unbound-method */
   });
 
   it('returns the compact projection the report quotes, with no rows and no sampled value', async () => {
@@ -344,7 +359,8 @@ describe('assess_readiness (plan data-readiness-assessor 2, 3)', () => {
     });
     const { requestContext } = turnContext();
     expect(await call(requestContext)).toEqual({
-      error: 'Datasource "ds-other" is not used by this conversation\'s datasets',
+      error:
+        'Datasource "ds-other" is not used by this conversation\'s datasets',
     });
   });
 
@@ -378,7 +394,9 @@ describe('assess_readiness (plan data-readiness-assessor 2, 3)', () => {
   it("answers the engine's failure as an error instead of throwing", async () => {
     services();
     readinessStore();
-    engine.mockRejectedValue(new Error('assessReadiness is not implemented yet'));
+    engine.mockRejectedValue(
+      new Error('assessReadiness is not implemented yet'),
+    );
     const { requestContext } = turnContext();
     expect(await call(requestContext)).toEqual({
       error: 'assessReadiness is not implemented yet',
@@ -417,7 +435,12 @@ describe('the scoping card (skill readiness-scoping)', () => {
       {
         ...SCOPE,
         criticalFields: [
-          { entity: 'shop.public.orders', column: 'id', indispensable: true, maxNullRate: 5 },
+          {
+            entity: 'shop.public.orders',
+            column: 'id',
+            indispensable: true,
+            maxNullRate: 5,
+          },
         ],
       },
     ],

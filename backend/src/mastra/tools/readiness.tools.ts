@@ -81,7 +81,9 @@ export const readinessScopeSchema = z.object({
     ),
   criticalFields: z.array(criticalFieldSchema),
   grainKeys: z
-    .array(z.object({ entity: z.string(), columns: z.array(z.string()).min(1) }))
+    .array(
+      z.object({ entity: z.string(), columns: z.array(z.string()).min(1) }),
+    )
     .optional()
     .describe("Each entity's grain key, for the duplicates check"),
   requiredFreshnessHours: z

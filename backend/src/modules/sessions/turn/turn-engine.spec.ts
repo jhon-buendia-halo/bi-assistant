@@ -546,7 +546,7 @@ describe("a tool's own SQL as the turn's queries (agent-change step 4)", () => {
       .filter((event) => event.type === 'tool' || event.type === 'tool-result')
       .map((event) => {
         const body = JSON.parse(event.content) as Record<string, unknown>;
-        return `${event.type}:${String(body.name ?? body.tool)}:${String(body.input ?? '')}`;
+        return `${event.type}:${String(body.name ?? body.tool)}:${typeof body.input === 'string' ? body.input : ''}`;
       });
     expect(shown).toEqual([
       'tool:assess_readiness:I assess the matches for a dashboard.',
@@ -557,12 +557,10 @@ describe("a tool's own SQL as the turn's queries (agent-change step 4)", () => {
       `tool-result:run_readonly_sql:${NULLS}`,
     ]);
     const answer = ctx.session.messages.at(-1);
-    expect(answer?.data?.map((record) => [record.tool, record.input])).toEqual(
-      [
-        ['run_readonly_sql', COUNT],
-        ['run_readonly_sql', NULLS],
-      ],
-    );
+    expect(answer?.data?.map((record) => [record.tool, record.input])).toEqual([
+      ['run_readonly_sql', COUNT],
+      ['run_readonly_sql', NULLS],
+    ]);
     expect(answer?.data?.[0]).toMatchObject({
       rows: [{ rows: 64 }],
       rationale: 'EV-001: how many matches there are.',

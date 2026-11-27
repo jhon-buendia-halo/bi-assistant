@@ -38,9 +38,24 @@ const SHOP: DatasetSnapshot = {
     {
       key: ORDERS,
       columns: [
-        { name: 'id', type: 'integer', nullable: false, description: 'Order number' },
-        { name: 'customer_id', type: 'integer', nullable: true, description: 'Customer who ordered' },
-        { name: 'order_date', type: 'date', nullable: false, description: 'Day of the order' },
+        {
+          name: 'id',
+          type: 'integer',
+          nullable: false,
+          description: 'Order number',
+        },
+        {
+          name: 'customer_id',
+          type: 'integer',
+          nullable: true,
+          description: 'Customer who ordered',
+        },
+        {
+          name: 'order_date',
+          type: 'date',
+          nullable: false,
+          description: 'Day of the order',
+        },
       ],
     },
   ],
@@ -111,9 +126,9 @@ describe('assess_readiness on the real engine', () => {
     for (const record of records) {
       expect(port.statements).toContain(record.input);
       expect(record.rationale).toMatch(/^EV-\d{3}: /);
-      expect(facts.get(queryFactsKey('run_readonly_sql', record.input))).toMatchObject(
-        { datasourceId: 'ds-1' },
-      );
+      expect(
+        facts.get(queryFactsKey('run_readonly_sql', record.input)),
+      ).toMatchObject({ datasourceId: 'ds-1' });
     }
     const sqlEvidence = saved[0].evidence.filter((e) => e.source === 'sql');
     expect(sqlEvidence.length).toBeGreaterThan(0);
