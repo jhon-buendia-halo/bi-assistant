@@ -111,12 +111,16 @@ describe('Agent definitions (API)', () => {
       starterQuestions: ['Which plan grew fastest?'],
       missingDatasets: ['World Cup Core'],
     });
-    // The six built-ins are still listed alongside it.
-    expect(await findAgent('assistant')).toMatchObject({
+    // The built-ins are still listed alongside it; Emily, Ryan and Rachel
+    // are gone (ADR-0059).
+    expect(await findAgent('insights-lead')).toMatchObject({
       kind: 'official',
       status: 'builtin',
       owner: 'Official',
     });
+    for (const key of ['assistant', 'visualization', 'sql-verifier']) {
+      expect(await findAgent(key)).toBeUndefined();
+    }
     expect(await findAgent('sql-fixer')).toMatchObject({
       kind: 'system',
       owner: 'System',
@@ -226,21 +230,21 @@ describe('Agent definitions (API)', () => {
       message: 'Pinned',
       agent: { key: agentId, pinned: true },
     });
-    const pinAssistant = await http()
-      .put('/agents/assistant/pin')
+    const pinElena = await http()
+      .put('/agents/insights-lead/pin')
       .send({ pinned: true })
       .expect(200);
-    expect(pinAssistant.body).toMatchObject({
+    expect(pinElena.body).toMatchObject({
       ok: true,
       message: 'Pinned',
-      agent: { key: 'assistant', pinned: true },
+      agent: { key: 'insights-lead', pinned: true },
     });
 
     // The backend restarts on the same data directory.
     await stop(backend);
     backend = await boot();
 
-    expect(await findAgent('assistant')).toMatchObject({ pinned: true });
+    expect(await findAgent('insights-lead')).toMatchObject({ pinned: true });
     expect(await findAgent(agentId)).toMatchObject({
       pinned: true,
       status: 'live',
@@ -249,7 +253,7 @@ describe('Agent definitions (API)', () => {
     expect(await findAgent('sql-fixer')).toMatchObject({ pinned: false });
 
     const unpin = await http()
-      .put('/agents/assistant/pin')
+      .put('/agents/insights-lead/pin')
       .send({ pinned: false })
       .expect(200);
     expect(unpin.body).toMatchObject({
@@ -259,48 +263,51 @@ describe('Agent definitions (API)', () => {
     });
   });
 
-  it("A user agent's detail reports the assistant's tools with its draft and Live version", async () => {
-    const assistant = await detailOf('assistant');
+  it("A user agent's detail reports Elena's tools under its selection, with its draft and Live version (ADR-0059)", async () => {
+    const elena = await detailOf('insights-lead');
     const detail = await detailOf(agentId);
-    // R49: memory and model are the assistant's; the tools and prompt are the
-    // ones the agent's tool selection gives it (ADR-0024). This agent's
-    // instructions link no tool, so it gets only the always-on tools and none
-    // of the optional groups (sample_rows, ask_clarification, visuals).
+    // R49: a user agent runs on Elena, who has no memory; the tools and
+    // prompt are the ones the agent's tool selection gives her (ADR-0024),
+    // her dashboard and export gates closed. This agent's instructions link
+    // no tool, so it gets only the always-on tools and neither optional one.
     expect(detail).toMatchObject({
       key: agentId,
       kind: 'user',
       owner: 'You',
-      memory: assistant.memory,
+      memory: null,
     });
     const alwaysOn = [
       'describe_entity',
       'explore_result',
       'list_entities',
       'run_readonly_sql',
-      'show_in_panel',
-      'update_workflow',
     ];
     expect([...detail.tools].sort()).toEqual(alwaysOn);
-    expect(assistant.tools).toEqual(expect.arrayContaining(alwaysOn));
-    for (const optional of [
+    expect(elena.tools).toEqual(expect.arrayContaining(alwaysOn));
+    for (const tool of [
       'sample_rows',
       'ask_clarification',
-      'create_visual',
-      'update_visual',
+      'submit_dashboard',
+      'export_conversation',
     ]) {
-      expect(assistant.tools).toContain(optional);
-      expect(detail.tools).not.toContain(optional);
+      expect(elena.tools).toContain(tool);
+      expect(detail.tools).not.toContain(tool);
     }
     expect(
       (detail.toolDetails as { name: string }[]).map((tool) => tool.name),
     ).toEqual(expect.arrayContaining(alwaysOn));
     expect(detail.toolDetails).toHaveLength(alwaysOn.length);
-    expect(detail.instructions).not.toBe(assistant.instructions);
+    expect(detail.instructions).not.toBe(elena.instructions);
+    expect(detail.instructions).toMatch(/^You are Elena, the Insights Lead/);
     expect(detail.draft.name).toBe('Health plan analyst');
     expect(detail.live.name).toBe('Health plan analyst');
 
     const missing = await http().get('/agents/unknown-agent').expect(404);
     expect(answer(missing).message).toBe('Agent "unknown-agent" not found');
+    for (const key of ['assistant', 'visualization', 'sql-verifier']) {
+      const gone = await http().get(`/agents/${key}`).expect(404);
+      expect(answer(gone).message).toBe(`Agent "${key}" not found`);
+    }
   });
 
   it('Unknown ids are reported as not found', async () => {
@@ -637,11 +644,8 @@ describe('Agent definitions (API): links, skills and LLM settings', () => {
     const detail = res.body as LinkedAgentView;
     const link = (name: string) =>
       detail.toolLinks.find((entry) => entry.name === name);
-    expect(link('create_visual')).toEqual({
-      name: 'create_visual',
-      status: 'linked',
-      linkedVia: { instructions: false, skills: ['chart-style'] },
-    });
+    // A retired tool's link is accepted but never listed (ADR-0059).
+    expect(link('create_visual')).toBeUndefined();
     expect(link('sample_rows')).toEqual({
       name: 'sample_rows',
       status: 'linked',
@@ -649,10 +653,8 @@ describe('Agent definitions (API): links, skills and LLM settings', () => {
     });
     expect(link('run_readonly_sql')).toMatchObject({ status: 'always-on' });
     expect(link('ask_clarification')).toMatchObject({ status: 'not-linked' });
-    // The tools a linked skill links come with it (R84).
-    expect(detail.tools).toEqual(
-      expect.arrayContaining(['create_visual', 'sample_rows']),
-    );
+    expect(detail.tools).toContain('sample_rows');
+    expect(detail.tools).not.toContain('create_visual');
     expect(detail.tools).not.toContain('ask_clarification');
 
     expect(detail.llm).toMatchObject({
@@ -666,7 +668,7 @@ describe('Agent definitions (API): links, skills and LLM settings', () => {
       secret,
     );
     expect(
-      (await http().get('/agents/assistant').expect(200)).text,
+      (await http().get('/agents/insights-lead').expect(200)).text,
     ).not.toContain(secret);
   });
 
