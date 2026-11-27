@@ -256,6 +256,65 @@ test('Try it stores nothing: the run leaves no workspace, and Reset clears the r
   expect(await storedRuns(page)).toEqual([]);
 });
 
+test("Try it waits for the agent's question and continues with my answer", async ({
+  page,
+  appDataDir,
+}) => {
+  // Elena asks the user once; after the answer she answers. A resumed turn
+  // ends with the user's answer, not a tool result, so the stub remembers
+  // that it asked (as the Avery resume test in workflows.spec.ts does).
+  let asked = false;
+  stub.reply = (request) => {
+    if (
+      asked ||
+      !request.stream ||
+      request.messages.at(-1)?.role === 'tool'
+    ) {
+      return { text: STUB_ANSWER };
+    }
+    asked = true;
+    return {
+      toolCall: {
+        name:
+          request.tools.find((tool) => tool.endsWith('ask_clarification')) ??
+          'ask_clarification',
+        arguments: {
+          question: 'Which World Cup do you mean?',
+          options: '2018\n2022',
+        },
+      },
+    };
+  };
+  const id = await createUserAgent(page, {
+    name: HISTORIAN,
+    instructions: 'Ask when a question is open: [[tool:ask_clarification]].',
+    datasets: [WORLD_CUP_DATASET],
+  });
+  await openEditor(page, id, HISTORIAN);
+  await page.getByTestId('agent-try-it').click();
+  await tryInPanel(page, 'Who won the World Cup?');
+
+  // The draft waits: the question as a card, no answer, nothing stored.
+  const waiting = detailsPanel(page).getByTestId('agent-tryit-waiting');
+  await expect(waiting).toContainText('Which World Cup do you mean?');
+  await expect(waiting.getByTestId('workflow-run-input-option-1')).toHaveText(
+    '2022',
+  );
+  await expect(detailsPanel(page).getByText(STUB_ANSWER)).toHaveCount(0);
+  expect(await storedRuns(page)).toEqual([]);
+  expect(await listedSessions(page)).toEqual([]);
+
+  // My answer continues the same draft.
+  await waiting.getByTestId('workflow-run-input-option-1').click();
+  await expectAnswers(detailsPanel(page), 1);
+  await expect(waiting).toHaveCount(0);
+
+  // The run ended: its host and workspace are gone, and nothing was stored.
+  await expect.poll(() => draftRunWorkspaces(appDataDir)).toEqual([]);
+  expect(await storedRuns(page)).toEqual([]);
+  expect(await listedSessions(page)).toEqual([]);
+});
+
 test('Try it needs a dataset, and names must be unique', async ({ page }) => {
   const id = await createUserAgent(page, {
     name: 'Health plan analyst',
@@ -357,11 +416,7 @@ test('the editor has no detectable accessibility violations in either theme', as
 const FISCAL = 'fiscal-calendar';
 const FISCAL_DESCRIPTION = 'Use when a question names a fiscal year.';
 const CHART_STYLE = 'chart-style';
-const OPTIONAL_TOOLS_OFF = [
-  'ask_clarification',
-  'create_visual',
-  'update_visual',
-];
+const OPTIONAL_TOOLS_OFF = ['ask_clarification'];
 
 /** The agent editor's Job description field: the Tiptap link editor. */
 const instructionsEditor = (page: Page) =>
@@ -476,9 +531,6 @@ test('only linked tools are offered to the model', async ({ page }) => {
   expect(request.tools).toContain('sample_rows');
   for (const tool of OPTIONAL_TOOLS_OFF)
     expect(request.tools).not.toContain(tool);
-  expect(systemTexts(request).join('\n')).toContain(
-    "You can't ask the user a question back in this session.",
-  );
 
   await button(page, 'Back').click();
   await expect(
@@ -488,7 +540,7 @@ test('only linked tools are offered to the model', async ({ page }) => {
   await expect(page.getByTestId('tool-status-sample_rows')).toHaveText(
     'Linked',
   );
-  await expect(page.getByTestId('tool-status-create_visual')).toHaveText(
+  await expect(page.getByTestId('tool-status-ask_clarification')).toHaveText(
     'Not linked',
   );
   await evidence(page, '1.14.2', 'agent-tools-tab-linked.png');
@@ -547,7 +599,7 @@ test("a linked skill's tools come with it", async ({ page }) => {
   await createSkill(page, {
     name: CHART_STYLE,
     description: 'Use when drawing a chart.',
-    body: 'Draw every chart with [[tool:create_visual]].',
+    body: 'Look at real values with [[tool:sample_rows]] before charting.',
   });
   await openNewAgent(page);
   await nameField(page).fill('Chart helper');
@@ -562,16 +614,15 @@ test("a linked skill's tools come with it", async ({ page }) => {
   await tryInPanel(page, 'Chart the goals per year.');
   await expectAnswers(detailsPanel(page), 1);
   const request = firstRequest('Chart the goals per year.');
-  expect(request.tools).toContain('create_visual');
-  expect(request.tools).toContain('update_visual');
-  expect(request.tools).not.toContain('sample_rows');
+  expect(request.tools).toContain('sample_rows');
+  expect(request.tools).not.toContain('ask_clarification');
 
   await button(page, 'Back').click();
   await page.getByTestId('agent-tab-tools').click();
-  await expect(page.getByTestId('tool-status-create_visual')).toHaveText(
+  await expect(page.getByTestId('tool-status-sample_rows')).toHaveText(
     'Linked',
   );
-  await expect(page.getByTestId('tool-link-create_visual')).toContainText(
+  await expect(page.getByTestId('tool-link-sample_rows')).toContainText(
     `Linked by ${CHART_STYLE}`,
   );
   await evidence(page, '1.14.7', 'agent-tools-linked-by-skill.png');
@@ -629,12 +680,11 @@ test('an agent saved before links gets a links line', async ({
   await openEditor(page, id, 'Old timer');
   const lastLine = instructionsEditor(page).locator('p').last();
   await expect(lastLine).toHaveText(
-    /^Tools and skills:\s*sample_rows\s*ask_clarification\s*create_visual$/,
+    /^Tools and skills:\s*sample_rows\s*ask_clarification$/,
   );
   await expect(lastLine.locator('[data-link]')).toHaveText([
     'sample_rows',
     'ask_clarification',
-    'create_visual',
   ]);
   await expect(page.getByTestId('agent-legacy-notice')).toHaveText(
     'Links were added for what this agent persona had. Save to keep them.',
@@ -655,7 +705,7 @@ test('the LLM Config tab shows whether the key is set and never the key', async 
     },
   });
   expect(response.ok()).toBe(true);
-  await openAgentPage(page, 'assistant', 'Emily');
+  await openAgentPage(page, 'insights-lead', 'Elena');
   await page.getByTestId('agent-tab-model').click();
   await expect(page.getByTestId('llm-API key')).toContainText('Set');
   await expect(page.getByTestId('llm-API key')).not.toContainText('Not set');
@@ -686,7 +736,7 @@ test('editing the Job Description in place saves a draft with the link', async (
   await page.getByTestId('agent-tab-prompt').click();
   const core = page.getByTestId('agent-core-prompt');
   await expect(core.locator('summary')).toHaveText(
-    'Assistant core prompt (fixed)',
+    "Elena's core prompt (fixed)",
   );
   await expect(core).not.toHaveAttribute('open', /.*/);
   // The job description reads as a CV first: its words under Profile.
@@ -861,7 +911,7 @@ test('Try it needs a dataset', async ({ page }) => {
 test('an Official agent has no Try it tab and opens on Job Description', async ({
   page,
 }) => {
-  await openAgentPage(page, 'assistant', 'Emily');
+  await openAgentPage(page, 'insights-lead', 'Elena');
   await expect(page.getByTestId('agent-tab-prompt')).toBeVisible();
   await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
   await expect(page.getByTestId('agent-panel-chat')).toHaveCount(0);
@@ -879,7 +929,7 @@ test('the Skills tab shows what is linked and creates a skill inline', async ({
   await createSkill(page, {
     name: CHART_STYLE,
     description: 'Use when drawing a chart.',
-    body: 'Draw every chart with [[tool:create_visual]].',
+    body: 'Look at real values with [[tool:sample_rows]] before charting.',
   });
   const id = await createUserAgent(page, {
     name: 'Finance helper',
@@ -898,7 +948,7 @@ test('the Skills tab shows what is linked and creates a skill inline', async ({
   ).toHaveText('Not linked');
   await expect(
     page.getByTestId(`agent-skill-row-${CHART_STYLE}`),
-  ).toContainText('create_visual');
+  ).toContainText('sample_rows');
   await expect(
     page.getByText('Built-in · included in every agent persona'),
   ).toBeVisible();

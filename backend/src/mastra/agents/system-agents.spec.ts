@@ -28,20 +28,14 @@ import {
   BI_ANALYST_TOOL_NAMES,
 } from './bi-analyst-catalog';
 import { evalJudgeAgent } from './eval-judge.agent';
-import { knowledgeBootstrapAgent } from './knowledge-bootstrap.agent';
 import { sqlFixerAgent } from './sql-fixer.agent';
-import { sqlVerifierAgent } from './sql-verifier.agent';
-import { visualizationAgent } from './visualization.agent';
 
 /**
  * Each fixture is the agent's instructions as they were before ADR-0026
  * (the static array joined with `\n`), so no override means no change.
  */
 const AGENTS = {
-  visualization: visualizationAgent,
   'sql-fixer': sqlFixerAgent,
-  'sql-verifier': sqlVerifierAgent,
-  'knowledge-bootstrap': knowledgeBootstrapAgent,
   'assistant-eval-judge': evalJudgeAgent,
 } as const;
 

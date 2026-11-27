@@ -20,7 +20,6 @@ import {
   sessionWorkflowId,
   stepAgentKey,
   workflowsUsingAgent,
-  WRAPPED_AGENT_KEYS,
 } from './workflow-catalog';
 import { inputFieldsWithUsage } from './workflow-input';
 
@@ -193,7 +192,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
   });
 
   describe('the input of a draft run (Try it, api.md R12)', () => {
-    it("takes a question and careful; its datasets are the draft's", () => {
+    it("takes the question alone; its datasets are the draft's", () => {
       expect(draftRunInput()).toEqual([
         {
           name: 'question',
@@ -201,13 +200,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
           type: 'textarea',
           required: true,
           placeholder: 'Ask a question about your data',
-        },
-        {
-          name: 'careful',
-          label: 'Careful: cross-check the result with an independent query',
-          type: 'boolean',
-          required: false,
-          default: false,
         },
       ]);
     });
@@ -221,7 +213,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
   });
 
   describe('agentRunTurn (plan 4.2, 5.1)', () => {
-    it('reads the question, the datasets, careful and nothing else', () => {
+    it('reads the question and the datasets, nothing else (careful mode is gone)', () => {
       expect(
         agentRunTurn({
           question: '  Who won?  ',
@@ -231,7 +223,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ).toEqual({
         question: 'Who won?',
         datasets: ['World Cup Core'],
-        careful: true,
       });
     });
 
@@ -243,28 +234,32 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         }),
       ).toEqual({
         question: 'Assess the readiness of this dataset',
-        careful: false,
       });
     });
 
     it("ignores the removed RFP Builder's message and RFP id", () => {
       expect(
         agentRunTurn({ message: 'Start Acme 2027', rfpId: 'r-1' }),
-      ).toEqual({ question: '', careful: false });
+      ).toEqual({ question: '' });
     });
   });
 
-  it("names the assistant's agent-turn binding as an old session's chip reads it", () => {
+  it("names the removed assistant's retired binding as an old session's chip reads it (ADR-0059)", () => {
     expect(ASSISTANT_WORKFLOW_ID).toBe('agent:assistant');
     expect(ASSISTANT_WORKFLOW_NAME).toBe('Assistant');
-    expect(WRAPPED_AGENT_KEYS).toEqual(['assistant']);
+    expect(sessionWorkflowId({ workflowId: 'agent:assistant' })).toBe(
+      'agent:assistant',
+    );
   });
 
   describe('drift (plan 4.2)', () => {
     it('reads the registered agents from mastra/index.ts', () => {
       const keys = registeredAgentKeys();
-      expect(keys).toContain('assistant');
       expect(keys).toContain('insights-analyst');
+      // Emily, Ryan and Rachel were removed (ADR-0059).
+      for (const key of ['assistant', 'visualization', 'sql-verifier']) {
+        expect(keys).not.toContain(key);
+      }
       // The RFP Builder was removed.
       expect(keys).not.toContain('rfp');
     });
@@ -275,7 +270,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       );
     });
 
-    it("wraps every registered Official agent, runs it as a code workflow's primaryFor, or talks to it in its own conversation", () => {
+    it("runs every registered Official agent as a code workflow's primaryFor, or talks to it in its own conversation", () => {
       const primary = [
         ...CODE_WORKFLOWS.map((source) => source.primaryFor),
         // Elena, asked in her own conversation (plan Elena 1.2).
@@ -290,17 +285,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       for (const key of registered) {
         expect({
           key,
-          covered: WRAPPED_AGENT_KEYS.includes(key) || primary.includes(key),
+          covered: primary.includes(key),
         }).toEqual({ key, covered: true });
-      }
-    });
-
-    it('wraps no code workflow’s primaryFor agent, and no System agent', () => {
-      for (const source of CODE_WORKFLOWS) {
-        expect(WRAPPED_AGENT_KEYS).not.toContain(source.primaryFor);
-      }
-      for (const key of SYSTEM_AGENT_KEYS) {
-        expect(WRAPPED_AGENT_KEYS).not.toContain(key);
       }
     });
   });
@@ -318,11 +304,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       });
     });
 
-    it('parses agent:assistant as a wrapped built-in agent', () => {
-      expect(parseWorkflowId('agent:assistant')).toEqual({
-        kind: 'builtin-agent',
-        agentKey: 'assistant',
-      });
+    it('parses the retired agent:assistant as nothing: no workflow, no user agent (ADR-0059)', () => {
+      expect(parseWorkflowId('agent:assistant')).toBeUndefined();
     });
 
     it("parses Elena's agent:insights-lead as a conversational binding, before the user-agent fallback", () => {
@@ -368,7 +351,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
 
     it.each([
       ['a System key', 'agent:sql-fixer'],
-      ['another System key', 'agent:visualization'],
+      ['another System key', 'agent:query-explainer'],
       ["a code workflow's primaryFor key", 'agent:insights-analyst'],
       ['an unknown id', 'nope'],
       ['an unprefixed agent key', 'assistant'],
@@ -468,9 +451,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'data-readiness',
       'sql-fixer',
       'u-1',
-      // Olivia, Jessica and Ryan stay in the library, in no workflow.
-      'analysis-planner',
-      'answer-writer',
+      // Ryan was removed (ADR-0059).
       'visualization',
     ])('%s is used in none: agents are a library', (key) => {
       expect(workflowsUsingAgent(key)).toEqual([]);

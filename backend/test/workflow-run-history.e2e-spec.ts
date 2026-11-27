@@ -817,7 +817,7 @@ describe('Runs of the removed question-answering workflows (API)', () => {
         }),
       );
       insertThread(`run-${run.id}`, `run-${run.id}`);
-      insertThread(`run-${run.id}:analysis-planner`, `run-${run.id}`);
+      insertThread(`run-${run.id}:insights-analyst`, `run-${run.id}`);
       insertThread(
         `run-${run.id}-node-${run.step}`,
         `run-${run.id}-node-${run.step}`,
@@ -840,7 +840,7 @@ describe('Runs of the removed question-answering workflows (API)', () => {
       threads: [
         `run-${KEPT.id}`,
         `run-${KEPT.id}-node-${KEPT.step}`,
-        `run-${KEPT.id}:analysis-planner`,
+        `run-${KEPT.id}:insights-analyst`,
       ].sort(),
       chats: [KEPT.id],
       workspaces: [KEPT.id],

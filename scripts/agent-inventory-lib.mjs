@@ -38,6 +38,8 @@ export function registryEntries(indexSource) {
 
 /** How an agent's source picks its model. */
 export function modelPolicy(source) {
+  const policy = /\bmodel:\s*'([\w-]+)'/.exec(source);
+  if (policy) return policy[1];
   if (source.includes('modelOverrideFrom(')) return 'user-override';
   if (source.includes('resolveVisualizationModel(')) return 'designer';
   if (source.includes('stepModelFrom(')) return 'step-model';
@@ -67,20 +69,37 @@ export function agentHash({ instructions, tools, skills }) {
  * empty one: what a call can carry that changes an agent's instructions,
  * tools, skills or model (agents.md 4.2). `overrides` also installs a prompt
  * override for every agent. Keys are the app's requestContext keys.
+ * `userAgent` tags what only a user agent's run carries (its tool
+ * selection, model override and in-app skills): a change made for user
+ * agents shows under the tagged scenarios only.
  */
+const MATRIX_SKILL = { name: 'matrix-skill', description: 'x', body: 'y', files: [] };
 export const MATRIX_SCENARIOS = [
-  { name: 'tools:none', context: { 'agent-tools': [] } },
-  { name: 'tools:sample_rows', context: { 'agent-tools': ['sample_rows'] } },
-  { name: 'tools:visuals+clarify', context: { 'agent-tools': ['visuals', 'ask_clarification'] } },
+  { name: 'tools:none', userAgent: true, context: { 'agent-tools': [] } },
+  { name: 'tools:sample_rows', userAgent: true, context: { 'agent-tools': ['sample_rows'] } },
+  { name: 'tools:legacy-visuals+clarify', userAgent: true, context: { 'agent-tools': ['visuals', 'ask_clarification'] } },
   { name: 'gates:closed', context: { 'conversation-gates': { dashboard: false, export: false } } },
   { name: 'gates:dashboard', context: { 'conversation-gates': { dashboard: true, export: false } } },
   { name: 'gates:export', context: { 'conversation-gates': { dashboard: false, export: true } } },
   { name: 'team:closed', context: { 'orchestrator-tools-runtime': { buildsDashboard: false, exportsConversation: false } } },
   { name: 'team:open', context: { 'orchestrator-tools-runtime': { buildsDashboard: true, exportsConversation: true } } },
   { name: 'step-model', context: { 'step-model': { model: 'claude-opus-5-5' } } },
-  { name: 'user-override', context: { 'agent-overrides': { model: 'override-model' } } },
+  { name: 'user-override', userAgent: true, context: { 'agent-overrides': { model: 'override-model' } } },
   { name: 'overrides', context: {}, overrides: true },
+  { name: 'user-agent:skills', userAgent: true, context: { 'agent-skills': [MATRIX_SKILL] } },
+  {
+    name: 'user-agent:override+step-model',
+    userAgent: true,
+    context: { 'agent-overrides': { model: 'override-model' }, 'step-model': { model: 'claude-opus-5-5' } },
+  },
+  {
+    name: 'user-agent:no-clarify+gates:closed',
+    userAgent: true,
+    context: { 'agent-tools': ['sample_rows'], 'conversation-gates': { dashboard: false, export: false } },
+  },
 ];
+
+const USER_AGENT_SCENARIOS = new Set(MATRIX_SCENARIOS.filter((scenario) => scenario.userAgent).map((scenario) => scenario.name));
 
 /** The prompt override the `overrides` scenario installs for an agent. */
 export function matrixOverridePrompt(key) {
@@ -90,6 +109,28 @@ export function matrixOverridePrompt(key) {
 /** A short, stable hash of an agent's outputs across the matrix scenarios. */
 export function matrixHash(outputs) {
   return createHash('sha256').update(JSON.stringify(outputs)).digest('hex').slice(0, 12);
+}
+
+/** One hash per scenario of an agent's outputs (`{ scenario, read, model }`), by name. */
+export function scenarioHashes(outputs) {
+  return Object.fromEntries(outputs.map(({ scenario, read, model }) => [scenario, matrixHash({ read, model })]));
+}
+
+/**
+ * The scenarios both records hashed whose hashes differ, in the branch's
+ * order; undefined when either has no scenario hashes (an older base).
+ */
+function differingScenarios(old, record) {
+  if (!old?.scenarioHashes || !record.scenarioHashes) return undefined;
+  return Object.keys(record.scenarioHashes).filter(
+    (name) => name in old.scenarioHashes && old.scenarioHashes[name] !== record.scenarioHashes[name],
+  );
+}
+
+/** `under N scenarios: a, b`, noting when every one is a user-agent scenario. */
+function scenarioLine(names) {
+  const only = names.every((name) => USER_AGENT_SCENARIOS.has(name)) ? ' (only user-agent scenarios)' : '';
+  return `under ${names.length} scenario${names.length === 1 ? '' : 's'}: ${names.join(', ')}${only}`;
 }
 
 /** What one agent misses for its classes, as sentences. */
@@ -127,20 +168,33 @@ export function checkClasses(records, classes) {
   };
 }
 
-/** What differs between a base inventory and this one. */
+/**
+ * What differs between a base inventory and this one. With scenario hashes
+ * on both sides, the scenarios both hashed decide a matrix change and are
+ * named; otherwise the matrix hash does.
+ */
 export function compareInventories(base, branch) {
   const before = new Map(base.map((record) => [record.key, record]));
   const after = new Map(branch.map((record) => [record.key, record]));
   const changed = [];
   for (const [key, record] of after) {
     const old = before.get(key);
-    const matrixChanged = Boolean(old?.matrixHash && record.matrixHash && old.matrixHash !== record.matrixHash);
-    if (!old || (old.hash === record.hash && !matrixChanged)) continue;
-    const what = [];
+    if (!old) continue;
+    const scenarios = differingScenarios(old, record);
+    const matrixChanged = scenarios
+      ? scenarios.length > 0
+      : Boolean(old.matrixHash && record.matrixHash && old.matrixHash !== record.matrixHash);
+    if (old.hash === record.hash && !matrixChanged) continue;
+    const named = scenarios?.length ? { scenarios } : {};
     if (old.hash === record.hash) {
-      changed.push({ key, what: ['what it receives under a request context (matrix)'] });
+      changed.push({
+        key,
+        what: [scenarios ? scenarioLine(scenarios) : 'what it receives under a request context (matrix)'],
+        ...named,
+      });
       continue;
     }
+    const what = [];
     if (old.instructions !== record.instructions) {
       what.push(`instructions ${old.instructions.length} → ${record.instructions.length} chars`);
     }
@@ -154,7 +208,9 @@ export function compareInventories(base, branch) {
       what.push('a tool description or schema');
     }
     if (JSON.stringify(old.skills) !== JSON.stringify(record.skills)) what.push('skills');
-    changed.push({ key, what: what.length ? what : ['content'] });
+    if (!what.length) what.push('content');
+    if (scenarios?.length) what.push(scenarioLine(scenarios));
+    changed.push({ key, what, ...named });
   }
   return {
     added: [...after.keys()].filter((key) => !before.has(key)),

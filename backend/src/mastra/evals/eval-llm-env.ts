@@ -12,7 +12,7 @@ import {
 import type { AgentModelResolver } from '../model-resolver';
 
 // The eval CLI's model target from env (agents.md 8.5, BA-300). Plain data
-// only: run-assistant-evals installs the resolver, so this file stays
+// only: run-evals installs the resolver, so this file stays
 // loadable in jest without the Mastra / AI SDK modules.
 
 /** A custom endpoint read from EVAL_LLM_* (the key never leaves this shape). */

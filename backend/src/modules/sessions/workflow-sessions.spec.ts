@@ -23,12 +23,6 @@ jest.mock('../../mastra/tool-services', () => ({
 jest.mock('../../mastra/tools/dataset.tools', () => ({
   DATASETS_CONTEXT_KEY: 'datasets',
 }));
-jest.mock('../../mastra/tools/visual.tools', () => ({
-  ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual-id',
-  SESSION_ID_CONTEXT_KEY: 'session-id',
-  TURN_QUESTION_CONTEXT_KEY: 'turn-question',
-  TURN_RECORDS_CONTEXT_KEY: 'turn-data-records',
-}));
 jest.mock('../../mastra/session-workspaces', () => ({
   SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace-id',
 }));
@@ -50,11 +44,6 @@ jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { z } = require('zod') as typeof import('zod');
   return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
-});
-jest.mock('../../mastra/agents/sql-verifier.agent', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { z } = require('zod') as typeof import('zod');
-  return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
 });
 jest.mock('./repositories/sessions.repository', () => ({
   SessionsRepository: class {},

@@ -106,10 +106,6 @@ beforeEach(() => {
     getDatasets: jest.fn(),
     sampleRows: jest.fn(),
     runReadOnlySql: jest.fn(),
-    createVisual: jest.fn(),
-    updateVisual: jest.fn(),
-    showPanelItem: jest.fn(),
-    updateWorkflow: jest.fn(),
     pageQuery,
     interpretResult,
   };

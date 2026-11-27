@@ -4,9 +4,9 @@ Each dataset carries an **ontology**: the business meaning of its data, written 
 
 ## Concepts
 
-Defined in [../../product/glossary.md](../../product/glossary.md): ontology, ontology item, concept, relation, constraint, instruction, shared item, ontology bootstrap, knowledge used, kind, source (user or mined), pending suggestion, dataset, datasource, entity, metric, session, assistant.
+Defined in [../../product/glossary.md](../../product/glossary.md): ontology, ontology item, concept, relation, constraint, instruction, shared item, ontology bootstrap (removed 2026-11-26), knowledge used, kind, source (user or mined), pending suggestion, dataset, datasource, entity, metric, session, assistant.
 
-Capability-local vocabulary is limited to the UI words "Pending suggestions" (the review queue of mined, still-disabled items), "All datasets" (the badge on a shared item) and "Ontology in context" (the per-answer provenance disclosure).
+Capability-local vocabulary is limited to the UI words "Pending suggestions" (the review queue of mined, still-disabled items already stored), "All datasets" (the badge on a shared item) and "Ontology in context" (the per-answer provenance disclosure).
 
 ## Rules
 
@@ -21,8 +21,8 @@ Shape and validation
 - R8. The system SHALL require a non-empty name after trimming whitespace: `name is required` on create, `name must not be empty` on update. A concept and an instruction SHALL also require a description: `description is required` on create, `description must not be empty` on update. A constraint SHALL require a predicate: `predicate is required` on create, `predicate must not be empty` on update.
 - R9. The system SHALL reject a relation with `from is required` (no from), `type must be one of: is-a, part-of, has-many, related-to, measured-by` (a missing or unknown type), `to is required` (no to, for every type except `measured-by`) and `metricId is required for measured-by` (a `measured-by` relation without a metric).
 - R10. The system SHALL check references when an item is created or updated, within the item's own dataset: a `from`, a `to` or a constraint's `conceptId` that is not a concept of the same dataset or a shared concept SHALL be rejected with `Concept "<id>" is not in this ontology`; a `metricId` that names no metric SHALL be rejected with `Metric "<id>" not found`; a mapping whose entity is not in the dataset SHALL be rejected with `Entity "<entity>" is not in dataset "<name>"`. A **shared** item accepts any entity, since it belongs to no dataset.
-- R11. An item created through the API or UI SHALL have source `user`; an item created by bootstrap SHALL have source `mined`. The source SHALL NOT change afterwards (an accepted or edited mined item stays `mined`).
-- R12. An item created without an explicit enabled flag SHALL be enabled. A mined item SHALL always be created disabled.
+- R11. An item created through the API or UI SHALL have source `user`; `mined` stays a valid stored source (items drafted by the ontology bootstrap, removed on 2026-11-26, stay as they were); nothing creates a new one. The source SHALL NOT change afterwards (an accepted or edited mined item stays `mined`).
+- R12. An item created without an explicit enabled flag SHALL be enabled. A mined item was always created disabled.
 
 Shared items and scope
 - R13. An item SHALL belong either to one dataset, identified by the dataset's name, or to none: a **shared** item applies to every dataset. The user SHALL be able to create a shared item by ticking "Share with all datasets" when creating an item; the choice is made at create time. The system SHALL NOT use a datasource-only scope for anything; such snippets are migrated as disabled shared items (R36).
@@ -50,14 +50,9 @@ Reaching the assistant
 - R27. The same block SHALL also be used for eval runs, so those see the same ontology as a chat turn.
 - R28. The system SHALL record, on each assistant answer, the list of items that were actually included in the block (id, kind, name as `title`, body exactly as shown, and dataset when the item belongs to one). It SHALL be recorded when the block is built, not inferred afterwards, and SHALL contain only items that fit the budget. The stored name of this record stays `knowledge` and its kinds are `term` (a concept), `default_filter` (a constraint), `instruction` and `relation`; the body is the description of a concept or instruction, the predicate of a constraint, and `<from> <type> <to>` of a relation.
 
-Bootstrap (drafting from data)
-- R29. The user SHALL be able to ask the system to generate suggestions for the dataset whose Ontology tab is open. The dataset SHALL exist (`Dataset "<name>" not found`; a missing name is `dataset is required`).
-- R30. Bootstrap SHALL give the Ontology Bootstrap agent a schema snapshot (limited to 6,000 characters, up to 5 sample values per column), sample rows (up to 5 rows per entity, limited to 4,000 characters in total), the dataset's column references, declared and inferred (limited to 2,000 characters), the governed metrics on the dataset's entities as name, label and entity (limited to 2,000 characters) and the names of the concepts the dataset already has (limited to 1,500 characters). Sampling is best-effort: an entity whose sample fails or does not fit is skipped. A dataset with no stored datasource binding SHALL use the default datasource.
-- R31. The agent SHALL be asked for up to 15 drafts in one structured step with no tools (the output format sets no length limit, so a longer reply never fails validation), each a concept (name, description, synonyms, mappings), a relation (from concept name, type, to concept name or metric name), a constraint (name, predicate, description, entities) or an instruction (name, description, entities). The system SHALL skip a malformed draft rather than failing the run, and SHALL keep at most 15 items after the post-processing of R32 has dropped duplicates and unresolved relations.
-- R32. The system SHALL post-process the drafts: concepts are inserted first; a relation's concept names are resolved case-insensitively against this run's concepts and the dataset's existing concepts, and its metric name against the governed metrics; a relation that does not resolve, or that relates a concept to itself, is dropped; a mapping to an entity outside the dataset is dropped (and the entities of a constraint or instruction are limited to the dataset's); a draft whose name (case-insensitive) already exists for the same kind in the dataset, or appears earlier in the run, is dropped; a relation that already exists with the same from, type and target is dropped. Every persisted draft SHALL belong to the bootstrapped dataset, have source `mined` and be disabled, with trimmed fields.
-- R33. Any failure (LLM error, malformed output, no usable drafts) SHALL surface as `Ontology bootstrap failed: <reason>` (for no usable drafts, `Ontology bootstrap failed: the bootstrap agent returned no usable drafts`) and SHALL persist nothing.
-- R34. A bootstrap run SHALL report progress by stage: opening the dataset, reading schema (with table count), sampling rows (n of total tables), drafting, saving (with draft count). It SHALL end with exactly one terminal event, either the created items or an error message.
-- R35. Mined items SHALL never be sent to the assistant until a human enables them (Accept, or the Enabled toggle).
+Bootstrap (drafting from data; removed 2026-11-26)
+- R29 to R34. (Removed 2026-11-26.) The user removed the "draft with AI" action: the Ontology Bootstrap agent (Kevin, `knowledge-bootstrap`), its two endpoints and its progress stream are gone, and no code mines new items. The numbers are kept so the references stay stable.
+- R35. Mined items (those already stored) SHALL never be sent to the assistant until a human enables them (Accept, or the Enabled toggle).
 
 Migration
 - R36. On the first start after the upgrade the system SHALL copy every knowledge snippet into the ontology, once (migration M15, [data-model.md](../../system/data-model.md) section 6), then rename the old table to `knowledge_snippets_legacy`, kept for one release and read by nothing. A `term` becomes a concept (title to name, body to description, synonyms kept, each entity to a mapping with that entity and nothing else), a `default_filter` becomes a constraint (title to name, body to predicate, no description, entities kept) and an `instruction` stays an instruction (title to name, body to description, entities kept). A snippet scoped to a dataset becomes an item of that dataset; a snippet with no scope becomes a shared item; a snippet scoped only to a datasource, which was never sent to the assistant, becomes a shared item that is **disabled**. Ids, enabled flags (except in that case), sources and timestamps are kept.
@@ -72,15 +67,13 @@ Graph view
 - R40. (Removed 2026-11-15.) The Context page and its Ontologies overview are gone. A dataset's ontology is edited only in its **Ontology** tab (R1-R39 apply unchanged).
 
 Background task
-- R41. Generating suggestions SHALL run as a background task of kind `ontology-bootstrap`, keyed by the dataset name and titled `Suggesting ontology for "<dataset>"` ([app-shell](../app-shell/spec.md) R58–R63). The stream is read at the root, so leaving the Ontology tab SHALL NOT stop the run; its stages SHALL be the task's steps, and stopping the task SHALL abort the stream request. A re-created Ontology tab SHALL show the live steps and, when the run ends while it is shown, reload the items and switch to Pending suggestions. The outcome toast comes from the service, with **Open** (the dataset in the editor, on its Ontology tab) on success and **Retry** on failure.
+- R41. (Removed 2026-11-26.) The `ontology-bootstrap` background task is gone with the bootstrap.
 
 ## Edge cases and errors
 
-- A dataset with no items: the Ontology tab shows "No ontology yet" with a hint and both "New item" and "Generate suggestions" actions.
-- Filters that match nothing: "No items match these filters."; with Pending suggestions active and none pending: "No pending suggestions right now — generate some or check back later."
+- A dataset with no items: the Ontology tab shows "No ontology yet" with a hint and the "New item" action.
+- Filters that match nothing: "No items match these filters."; with Pending suggestions active and none pending: "No pending suggestions right now."
 - Backend unreachable on load: the tab shows the error text (`Backend unreachable` when no message is available). On toggle, delete or save failures a toast shows the server message or `Backend unreachable`.
-- Bootstrap request fails to start: `Could not generate suggestions (<status>)`; connection failure: `Backend unreachable`; stream closes without a terminal event: `Stream interrupted` or `Stream ended unexpectedly`; empty error: `Could not generate suggestions — try again shortly`.
-- Bootstrap yields zero new drafts: toast `No new suggestions this time` (from the Background tasks service, R41).
 - A relation that points at a concept that is later deleted is deleted with it (R19), so a relation never dangles. A `measured-by` relation whose metric is deleted stays stored but is skipped in the block and the per-answer record (R22), and shown without its metric label in the tab.
 - A shared item with a mapping to an entity that is not in the dataset being viewed is shown as usual; the entity check (R10) is made only against a dataset's own items.
 - An item whose line alone exceeds the remaining budget stops the block, so a very long newest item can hide older ones. (Known limitation of newest-first selection; roadmap 1.3.3 replaces it.)
@@ -88,9 +81,9 @@ Background task
 
 ## Contracts
 
-- Endpoints: list and create under a dataset, partial update and delete by item id, bootstrap (single response) and bootstrap stream (server-sent progress, then done or error). See [../../system/api.md](../../system/api.md) 2.8 and 3.4. The UI uses the stream variant only.
+- Endpoints: list and create under a dataset, partial update and delete by item id, and no bootstrap endpoint since 2026-11-26. See [../../system/api.md](../../system/api.md) 2.8.
 - Collection and document shape (ontology item, per-answer knowledge record), the reference rules and migration M15: see [../../system/data-model.md](../../system/data-model.md) 3.9, 3.13 and 6.
-- Agents: the Ontology Bootstrap agent (prompt requirements, output schema, draft cap, post-processing) and the assistant's curated-knowledge instructions (the `curated-knowledge` skill) and block format: see [../../system/agents.md](../../system/agents.md) 2.5, 4.1 and Appendix B.
+- Agents: the assistant's curated-knowledge instructions (the `curated-knowledge` skill) and block format: see [../../system/agents.md](../../system/agents.md) 4.1 and Appendix B.
 - Decision: [../../system/architecture.md](../../system/architecture.md) ADR-0036.
 - Per-answer provenance is stored on the assistant message and read by [../agent-answers/spec.md](../agent-answers/spec.md).
 - Related: [../datasets/spec.md](../datasets/spec.md) (the editor that hosts the tab, the delete cascade), [../metrics/spec.md](../metrics/spec.md) (the governed metrics a relation can point at; a sibling context block), [../verified-queries/spec.md](../verified-queries/spec.md) (a sibling context block), [../agents-evals/spec.md](../agents-evals/spec.md) (eval runs reuse the block), [../app-shell/spec.md](../app-shell/spec.md) (the shell).
@@ -99,7 +92,7 @@ Background task
 
 Placement: the **Ontology** tab of the dataset editor. Opening a saved dataset from the Datasets list shows the editor with three tabs, **Schema** (the catalog browser as before), **Ontology** and **Profile & synthesize** ([synthetic-data](../synthetic-data/spec.md)); a dataset being created shows no tabs (Schema only) until it is saved and opened again ([datasets](../datasets/spec.md) R48, [../../system/ui.md](../../system/ui.md) 4.3 and 4.8). Before 2026-11-09 (roadmap 1.21.7–1.21.9) this was a Knowledge screen under Context.
 
-- Header: title "Ontology", subtitle "Concepts, relations, constraints and instructions the assistant uses for this dataset. Only enabled items are applied.", and two buttons, "Generate suggestions" and "New item".
+- Header: title "Ontology", subtitle "Concepts, relations, constraints and instructions the assistant uses for this dataset. Only enabled items are applied.", and one button, "New item".
 - Filter row: kind pills "All", "Concepts", "Relations", "Constraints", "Instructions" (each with a tooltip describing the kind), and a toggle "Pending suggestions" with a count badge of mined, still-disabled items. Choosing a kind leaves the pending view.
 - Sections: the list is grouped under the headings Concepts, Relations, Constraints and Instructions (a section with no items under the current filter stays, with "No <section> yet.", e.g. "No relations yet."; a kind filter shows only that kind's section).
 - States: loading ("Loading ontology…"), error, empty ("No ontology yet"), filtered-empty, populated.
@@ -112,12 +105,11 @@ Placement: the **Ontology** tab of the dataset editor. Opening a saved dataset f
   - Constraint: Name, Predicate, When to apply (optional), Concept (optional) and Entities (optional).
   - Instruction: Name, Text and Entities (optional).
   - A "Share with all datasets" checkbox, only when creating. Buttons "Cancel" and "Create item" / "Save changes" (disabled until the required fields of the kind are filled; shows "Saving…"). A server message (for example an unresolved concept) is shown inline. The panel does not edit the enabled flag; new items are enabled.
-- Generate suggestions panel: explanation ("The assistant reviews this dataset and drafts concepts, relations, constraints and instructions as pending suggestions — nothing is applied until you approve it. This can take up to a minute."), "Cancel" and "Generate" (shows "Generating…"; cancel is blocked while running). There is no dataset picker: it runs on the open dataset. A live progress list shows finished stages with a check mark and the current stage with a spinner. The run is a background task (R41): leaving the tab does not stop it, and reopening the tab shows the live steps again. On success the panel closes, a toast (from the Background tasks service, with **Open**) reads "<n> suggestion(s) generated — review in Pending suggestions", and the tab, when shown, switches to the Pending suggestions view.
 - In chat: each assistant answer that carried ontology items shows a collapsed "Ontology in context (<n>)" disclosure listing, per item, its kind label (Concept, Constraint, Instruction or Relation), name, dataset (or "all datasets" for a shared item) and body, plus the note "The dataset ontology the assistant was given before answering. Edit it in the dataset's Ontology tab; disabled items are never included." Clarification cards show it too.
 
 ## Flows
 
-E2E: `frontend/e2e/dataset-ontology.spec.ts` (the upgrade migration is covered API-level in `backend/test/app.e2e-spec.ts`; the two chat scenarios, "An answer lists the ontology it was given" and "Disabled items are never sent", and "Pending suggestions are faded in the graph" are not covered yet).
+E2E: `frontend/e2e/dataset-ontology.spec.ts` (the upgrade migration is covered API-level in `backend/test/app.e2e-spec.ts`; the two chat scenarios, "An answer lists the ontology it was given" and "Disabled items are never sent", and "Pending suggestions are faded in the graph" are not covered yet; the scenarios "Accept a pending suggestion" and "Reject a pending suggestion" lost their E2E on 2026-11-26 with the bootstrap that produced the suggestions, and stay covered by `ontology-panel.spec.ts`).
 
 ```gherkin
 Feature: Dataset ontology
@@ -128,7 +120,7 @@ Feature: Dataset ontology
     Then I see the tabs "Schema" and "Ontology"
     When I click the "Ontology" tab
     Then I see "No ontology yet"
-    And I see the actions "New item" and "Generate suggestions"
+    And I see the action "New item"
 
   Scenario: A new dataset has no tabs
     When I click "New dataset"
@@ -197,14 +189,6 @@ Feature: Dataset ontology
     And "Match" and "Match has-many Goal" are no longer listed
     And "Goal" is still listed
 
-  Scenario: Generate suggestions from the dataset
-    Given a dataset "world_cup" exists and an LLM is configured
-    When I click "Generate suggestions" on its Ontology tab and click "Generate"
-    Then I see a progress list naming each stage, ending with "Saving <n> drafts for review"
-    And a toast says "<n> suggestions generated — review in Pending suggestions"
-    And I am shown the Pending suggestions view
-    And each suggestion is badged "Mined" and is not enabled
-
   Scenario: Accept a pending suggestion
     Given the Pending suggestions view lists a mined suggestion
     When I click "Accept"
@@ -215,12 +199,6 @@ Feature: Dataset ontology
     Given the Pending suggestions view lists a mined suggestion
     When I click "Reject" and confirm
     Then the suggestion is permanently deleted
-
-  Scenario: Generation fails
-    Given the language model is unreachable
-    When I click "Generate" in the Generate suggestions panel
-    Then an error toast appears
-    And no suggestion is added
 
   Scenario: Migrated snippets appear as ontology items after an upgrade
     Given an install had a "term" snippet scoped to "world_cup" and a global "default_filter" snippet
@@ -245,7 +223,7 @@ Feature: Dataset ontology
     And choosing "All" shows the list again
 
   Scenario: Pending suggestions are faded in the graph
-    Given generated suggestions are pending for "World Cup"
+    Given mined suggestions are pending for "World Cup"
     When I choose "Graph"
     Then the pending concepts and relations are drawn faded and dashed
     And turning on "Pending suggestions" shows only the pending items
@@ -264,8 +242,7 @@ Feature: Dataset ontology
 - With an item enabled for a dataset, an answer in a session over that dataset records it in "Ontology in context"; after disabling or deleting it, the next answer does not.
 - With a constraint enabled, the generated SQL applies it and the answer names it.
 - An install with knowledge snippets starts, after the upgrade, with the same items and the same block per session as before (byte-identical lines); the old table remains as `knowledge_snippets_legacy`.
-- Every validation message in R2, R3, R8, R9, R10, R18 and R33 and the cascades in R19 and R20 have a unit test.
-- A bootstrap run on the sample dataset yields at most 15 disabled, mined, dataset-owned drafts, none duplicates an existing name of its kind for that dataset, every relation resolves, and every mapping is to an entity of the dataset.
+- Every validation message in R2, R3, R8, R9, R10 and R18 and the cascades in R19 and R20 have a unit test.
 - Not built (roadmap): retrieval by question relevance and SQL checks against the ontology (1.3.3); mining from past sessions and thumbs-up answers, conflict detection and correction feedback (1.3.4).
 
 ## Open questions
@@ -273,6 +250,5 @@ Feature: Dataset ontology
 - Open question: a `measured-by` relation whose metric is deleted stays stored but is never sent. Should deleting a metric delete its relations, as deleting a concept does?
 - Open question: "Share with all datasets" is chosen at create time only; an existing item cannot be moved between a dataset and shared. Intended?
 - Open question: the "Pending suggestions" view hides the Edit action; a mined suggestion can only be edited after it is accepted. Intended?
-- Open question: the non-streaming bootstrap endpoint exists but nothing in the UI calls it. Keep it as part of the public contract?
 
-<!-- sources: backend/src/modules/ontology/**, backend/src/mastra/agents/knowledge-bootstrap.agent.ts, backend/src/mastra/skills/curated-knowledge/SKILL.md, backend/src/mastra/context-blocks.ts (knowledgeContext), backend/src/modules/sessions/sessions.service.ts (agentContext, knowledgeUsed), backend/src/modules/agents/eval-runs.service.ts, backend/src/infrastructure/database/database.module.ts (M15), frontend/src/app/features/ontology/**, frontend/src/app/features/datasets/components/catalog-browser, frontend/src/app/features/sessions/components/answer-view/answer-view.html (knowledgeApplied) -->
+<!-- sources: backend/src/modules/ontology/**, backend/src/mastra/skills/curated-knowledge/SKILL.md, backend/src/mastra/context-blocks.ts (knowledgeContext), backend/src/modules/sessions/sessions.service.ts (agentContext, knowledgeUsed), backend/src/modules/agents/eval-runs.service.ts, backend/src/infrastructure/database/database.module.ts (M15), frontend/src/app/features/ontology/**, frontend/src/app/features/datasets/components/catalog-browser, frontend/src/app/features/sessions/components/answer-view/answer-view.html (knowledgeApplied) -->

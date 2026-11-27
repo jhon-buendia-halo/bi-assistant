@@ -6,7 +6,7 @@ export { AGENT_QUALITY_CATALOGUE };
 
 /**
  * The built-in agents that have at least one eval set, with persona and sets
- * as plain data (a set's agent is its `agentKey`, else the assistant).
+ * as plain data (a set's agent is its `agentKey`).
  */
 export function buildAgentQualityCatalogue(): QualityAgent[] {
   const agents = new Map<string, QualityAgent>();

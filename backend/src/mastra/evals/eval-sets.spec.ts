@@ -12,7 +12,6 @@ jest.mock('@mastra/evals/checks', () => ({
   ),
 }));
 jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
-jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
 jest.mock('../agents/insights-analyst.agent', () => ({
   insightsAnalystAgent: { id: 'insights-analyst' },
 }));
@@ -78,8 +77,7 @@ describe('every eval set', () => {
 });
 
 describe('the target a run uses', () => {
-  it('is the set target, else the agent key, else the assistant', () => {
-    expect(evalSetTargetId({})).toBe('assistant');
+  it('is the set target, else the agent key', () => {
     expect(evalSetTargetId({ agentKey: 'result-explorer' })).toBe(
       'result-explorer',
     );
@@ -113,18 +111,6 @@ describe('the target a run uses', () => {
     });
   });
 
-  it.each(['analysis-planner', 'answer-writer'])(
-    'builds the isolated-call target of %s',
-    (agentKey) => {
-      const target = evalTargetFor(agentKey);
-      expect(target.agentKey).toBe(agentKey);
-      expect(target.sendsKnowledge).toBe(false);
-      expect(target.orientation({ datasets: [], snapshots: [] } as never)).toBe(
-        '',
-      );
-    },
-  );
-
   it('builds the whole-workflow target from its target id', () => {
     const workflow = evalTargetOf('avery-michael-workflow', 'chief-of-staff');
     expect(workflow.agentKey).toBe('chief-of-staff');
@@ -132,18 +118,19 @@ describe('the target a run uses', () => {
       targetId: 'avery-michael-workflow',
     });
     // It runs the sets on its target id, through a whole-run stand-in (read
-    // lazily, so the agent is not loaded here); a chat target has none.
+    // lazily, so the agent is not loaded here).
     expect(workflow.sets.length).toBeGreaterThan(0);
     expect(workflow.sets).toEqual(setsOfTarget('avery-michael-workflow'));
     expect(workflow.sendsKnowledge).toBe(false);
     expect('runTarget' in workflow).toBe(true);
-    const chat = evalTargetOf('assistant', 'assistant');
-    expect(chat.runTarget).toBeUndefined();
   });
 
-  it('still throws for an agent without evals', () => {
+  it('still throws for an agent without evals, the removed assistant included', () => {
     expect(() => evalTargetFor('no-such-agent')).toThrow(
       'Agent "no-such-agent" has no evals to run',
+    );
+    expect(() => evalTargetFor('assistant')).toThrow(
+      'Agent "assistant" has no evals to run',
     );
   });
 

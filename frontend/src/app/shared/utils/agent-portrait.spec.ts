@@ -16,8 +16,8 @@ describe('agent portraits (ui.md 4.4)', () => {
     expect(david['glassesProbability']).toBe(100);
     expect(david['beardProbability']).toBe(0);
     expect(david['gestureProbability']).toBe(0);
-    // Emily wears no glasses.
-    expect(portraitOptions('assistant')['glassesProbability']).toBe(0);
+    // Michael wears no glasses.
+    expect(portraitOptions('insights-analyst')['glassesProbability']).toBe(0);
   });
 
   it('draws a user agent from its key, without hats or sunglasses', () => {
@@ -44,6 +44,6 @@ describe('agent portraits (ui.md 4.4)', () => {
     const first = await agentPortrait('sql-fixer');
     expect(first).toMatch(/^data:image\/svg\+xml/);
     expect(await agentPortrait('sql-fixer')).toBe(first);
-    expect(await agentPortrait('sql-verifier')).not.toBe(first);
+    expect(await agentPortrait('result-explorer')).not.toBe(first);
   });
 });

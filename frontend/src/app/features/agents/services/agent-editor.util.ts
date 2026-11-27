@@ -112,21 +112,19 @@ export function agentFormChanged(form: AgentForm, saved: AgentForm): boolean {
 /**
  * A legacy draft's instructions with links added for what it had: a draft
  * saved with the BA-216/217 checkboxes holds `tools` and `skills` that its
- * instructions do not link (an absent `tools` meant sample_rows,
- * ask_clarification and the visuals). Null when nothing is missing.
+ * instructions do not link (an absent `tools` meant sample_rows and
+ * ask_clarification; a stored `visuals` is retired and dropped). Null when
+ * nothing is missing.
  */
 export function legacyInstructions(
   config: AgentConfig,
   library: { id: string; name: string }[],
 ): string | null {
   const instructions = config.instructions ?? '';
-  const tools = config.tools ?? ['sample_rows', 'ask_clarification', 'visuals'];
-  const visualsLinked =
-    linkedNames(instructions, 'tool').includes('create_visual') ||
-    linkedNames(instructions, 'tool').includes('update_visual');
-  const toolNames = tools
-    .filter((id) => id !== 'visuals' || !visualsLinked)
-    .map((id) => (id === 'visuals' ? 'create_visual' : id));
+  const tools = config.tools ?? ['sample_rows', 'ask_clarification'];
+  const toolNames = tools.filter(
+    (id) => (id as string) !== 'visuals',
+  );
   const byId = new Map(library.map((skill) => [skill.id, skill.name]));
   const skillNames = [...new Set(config.skills ?? [])]
     .map((id) => byId.get(id))

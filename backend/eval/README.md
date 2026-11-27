@@ -66,9 +66,10 @@ question asks for — no extra bookkeeping columns, no `ORDER BY` dependence.
 
 ## The World Cup set
 
-The separate **Agents → Evals** suite (`npm run evals:assistant`) also uses
-this fixture. Its ten questions and grading rules are fixed to World Cup data;
-selecting an F1 or other datasource does not adapt the questions. Save a dataset
+The separate **Agents → Evals** suite (`npm run evals`, which replaced
+`npm run evals:assistant`) also uses this fixture. Its `world-cup` set (nine
+questions) and grading rules are fixed to World Cup data; selecting an F1 or
+other datasource does not adapt the questions. Save a dataset
 including the `world_cup` tables and views, then select that PostgreSQL datasource
 in the Evals tab. For the CLI, set `EVAL_DATASETS` to the saved dataset name(s).
 Both runners reject an incompatible saved data scope before making model calls.
@@ -85,6 +86,46 @@ stadium/attendance question explicitly compares distinct facts, so multiple
 matches tied at the same venue and attendance do not cause a false failure.
 Other questions retain duplicate-sensitive row comparison. These rules apply to
 the Agents suite; the separate golden-set CLI described below is unchanged.
+
+### The data sets run on Elena
+
+The assistant (Emily) is removed, so her four data sets run on Elena, the
+Insights Lead (`backend/src/mastra/evals/insights-lead-data.evals.ts`, target
+`insights-lead-workflow`): `world-cup`, `world-cup-excel`, `world-cup-rest`
+and `formula-1`, 35 cases with the same ids, questions, `expectedSql` and
+rubrics. Each case is one whole run of her conversation (`agent:insights-lead`),
+read back from the stored run and then deleted:
+
+- The answer and tool checks are the counterparts of Mastra's built-in ones over
+  the stored run (`answerIncludes`, `answerMatches`, `calledTool`, `didNotCall`,
+  `noToolErrors`; `toolOrder` exists too), since a whole run has no agent result
+  for the built-in checks to read.
+- Every case first checks the run's status: `success`, or `suspended` for
+  `f1-ambiguous-dominant-driver`, where her question is the run's wait (its
+  rubric says the judge reads her question and options).
+- Six cases were aligned with Elena's design on 2026-11-26, after the base
+  (Emily) against branch (Elena) runs on Opus 5.5: the four `*schema-discovery`
+  cases no longer forbid `run_readonly_sql` (she may query to describe the data
+  with verified counts), and `ambiguous-best-team` / `rest-ambiguous-best-team`
+  pass when she asks (`suspended`) or answers (`success`) on a reading of
+  "best" she states and contrasts with another, as Avery's ambiguous case does.
+  The spec names them in `ALIGNED_TO_ELENA`.
+- The result-set check compares `expectedSql` with the stored answer's query
+  records (`EvalRunDetails.records`).
+- No eval host is created any more: no throwaway run host, no `session-id` or
+  turn-records key on the case's request context.
+
+`__fixtures__/emily-data-sets.json` records the sets as they were before the
+port; `insights-lead-data.evals.spec.ts` checks the port against it.
+
+Not ported:
+
+| Case or set | Why |
+| --- | --- |
+| `visual-request`, `rest-visual-request`, `f1-visual-request` | They graded `create_visual`; the visual designer (Ryan) is removed, so no agent builds a visual. |
+| `no-visuals-chart-request`, `rest-no-visuals-chart-request` | They graded an agent without the `visuals` tool, a selection that no longer exists. |
+| `no-clarification-best-team`, `rest-no-clarification-best-team` | They need a user agent without `ask_clarification`, which only a draft run (Try it) of a stored user agent gives. Elena's target runs her stored conversation; a draft case would need a user-agent fixture created and deleted per run and a bridge into the draft run service, not a cheap addition. The no-clarification rule is covered by her prompt's unit tests. |
+| The `schema-notes` set (`schema-notes-consumption`) | It staged a Landing copy of the tables in the orientation block the runner sent; a whole run builds its own context, so that seam does not exist on a real run. |
 
 The shipped cases run against the World Cup Postgres fixture in this repo, so
 the whole set is reproducible without touching customer data.

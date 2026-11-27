@@ -5,9 +5,26 @@ jest.mock('../../mastra/evals/eval-sets', () => {
   const sets = [
     {
       id: 'world-cup',
+      agentKey: 'insights-lead',
       name: 'World Cup',
       description: 'd',
-      cases: [{ id: 'champion-2022', question: 'q', intent: 'i', scorers: [] }],
+      cases: [
+        {
+          id: 'champion-2022',
+          question: 'q',
+          intent: 'i',
+          scorers: [
+            { id: 'judge', name: 'Judge', description: 'Graded by Laura.' },
+          ],
+          // Elena's ported cases are scored by custom checks (ADR-0059).
+          customChecks: [
+            {
+              id: 'answer-includes:Argentina',
+              description: 'The answer includes "Argentina" (any case)',
+            },
+          ],
+        },
+      ],
     },
     {
       id: 'explain-sql',
@@ -43,7 +60,7 @@ function fakeAgent(name: string) {
 
 function build(pins: string[] = []) {
   const registry = {
-    assistant: fakeAgent('assistant'),
+    'insights-analyst': fakeAgent('insights-analyst'),
     'sql-fixer': fakeAgent('sql-fixer'),
   };
   const userAgents = {
@@ -70,25 +87,35 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
   it('does not list the removed RFP Builder, even with a pin saved for it', async () => {
     const service = build(['rfp']);
     const agents = await service.list();
-    // Alphabetical by persona name: David, Emily.
+    // Alphabetical by persona name: David, Michael.
     expect(agents.map((agent) => agent.key)).toEqual([
       'sql-fixer',
-      'assistant',
+      'insights-analyst',
     ]);
     expect(await service.get('rfp')).toBeNull();
-    const assistant = agents.find((agent) => agent.key === 'assistant');
-    expect(assistant).toMatchObject({
+    const michael = agents.find((agent) => agent.key === 'insights-analyst');
+    expect(michael).toMatchObject({
       kind: 'official',
       datasets: [],
       missingDatasets: [],
     });
-    expect(assistant).not.toHaveProperty('chatRequirement');
+    expect(michael).not.toHaveProperty('chatRequirement');
   });
 
   it("lists each agent's own eval sets by agentKey (api.md 2.6 #35)", () => {
     const service = build();
-    expect(service.evalSets('assistant').map((set) => set.id)).toEqual([
+    expect(service.evalSets('insights-lead').map((set) => set.id)).toEqual([
       'world-cup',
+    ]);
+    // Every check a case is scored on is listed: its scorers, then its
+    // custom checks (Elena's ported sets have only the second).
+    expect(service.evalSets('insights-lead')[0].cases[0].checks).toEqual([
+      { id: 'judge', name: 'Judge', description: 'Graded by Laura.' },
+      {
+        id: 'answer-includes:Argentina',
+        name: 'answer-includes:Argentina',
+        description: 'The answer includes "Argentina" (any case)',
+      },
     ]);
     expect(service.evalSets('query-explainer').map((set) => set.id)).toEqual([
       'explain-sql',

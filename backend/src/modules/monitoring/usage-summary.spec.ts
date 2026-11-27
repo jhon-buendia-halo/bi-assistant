@@ -157,7 +157,7 @@ describe('summarizeUsage (Costs)', () => {
         call('2026-11-15T09:00:00Z', { sessionId: 'run-r1' }),
         // A step agent's own thread belongs to the same run (agent-threads.ts).
         call('2026-11-15T09:01:00Z', {
-          sessionId: 'run-r1:answer-writer',
+          sessionId: 'run-r1:insights-analyst',
           agentId: 'writer',
           agentName: 'Answer Writer',
         }),
@@ -317,7 +317,7 @@ describe('summarizeUsage (Costs)', () => {
 describe('run ids and statistics', () => {
   it('reads the run of a host or step-agent thread', () => {
     expect(runIdOf('run-abc')).toBe('abc');
-    expect(runIdOf('run-abc:answer-writer')).toBe('abc');
+    expect(runIdOf('run-abc:insights-analyst')).toBe('abc');
     expect(runIdOf('chat-1')).toBeNull();
     expect(runIdOf(null)).toBeNull();
     expect(runIdOf('run-')).toBeNull();

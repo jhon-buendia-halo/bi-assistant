@@ -3,7 +3,8 @@ import {
   AGENT_TOOLS_CONTEXT_KEY,
   isFullSelection,
   normalizeAgentTools,
-  selectionKey,
+  OPTIONAL_AGENT_TOOLS,
+  RETIRED_AGENT_TOOLS,
   toolSelectionFrom,
 } from './agent-tools';
 
@@ -13,14 +14,32 @@ function contextWith(value?: unknown): RequestContext {
   return requestContext;
 }
 
+describe("a user agent's optional tools are Elena's (ADR-0059)", () => {
+  it('are sample_rows and ask_clarification; visuals is retired', () => {
+    expect([...OPTIONAL_AGENT_TOOLS]).toEqual([
+      'sample_rows',
+      'ask_clarification',
+    ]);
+    expect([...RETIRED_AGENT_TOOLS]).toEqual(['visuals']);
+  });
+});
+
 describe('normalizeAgentTools (agents-evals R43, data-model 3.10)', () => {
   it('de-duplicates and puts the tools in canonical order', () => {
     expect(
-      normalizeAgentTools(['visuals', 'sample_rows', 'visuals', 'sample_rows']),
-    ).toEqual(['sample_rows', 'visuals']);
-    expect(
-      normalizeAgentTools(['visuals', 'ask_clarification', 'sample_rows']),
-    ).toEqual(['sample_rows', 'ask_clarification', 'visuals']);
+      normalizeAgentTools([
+        'ask_clarification',
+        'sample_rows',
+        'ask_clarification',
+      ]),
+    ).toEqual(['sample_rows', 'ask_clarification']);
+  });
+
+  it('drops a stored visuals without a message', () => {
+    expect(normalizeAgentTools(['visuals', 'sample_rows', 'visuals'])).toEqual([
+      'sample_rows',
+    ]);
+    expect(normalizeAgentTools(['visuals'])).toEqual([]);
   });
 
   it('keeps an empty list empty', () => {
@@ -38,11 +57,9 @@ describe('normalizeAgentTools (agents-evals R43, data-model 3.10)', () => {
 });
 
 describe('isFullSelection', () => {
-  it('is true for no list or all three tools, false otherwise', () => {
+  it('is true for no list or both tools, false otherwise', () => {
     expect(isFullSelection(undefined)).toBe(true);
-    expect(
-      isFullSelection(['visuals', 'sample_rows', 'ask_clarification']),
-    ).toBe(true);
+    expect(isFullSelection(['ask_clarification', 'sample_rows'])).toBe(true);
     expect(isFullSelection(['sample_rows', 'visuals'])).toBe(false);
     expect(isFullSelection([])).toBe(false);
   });
@@ -55,7 +72,7 @@ describe('toolSelectionFrom (agents.md 4.2)', () => {
     expect(toolSelectionFrom(contextWith('sample_rows'))).toBeUndefined();
   });
 
-  it('reads all three tools as no selection', () => {
+  it('reads both tools as no selection, a stored visuals ignored', () => {
     expect(
       toolSelectionFrom(
         contextWith(['visuals', 'ask_clarification', 'sample_rows']),
@@ -66,16 +83,7 @@ describe('toolSelectionFrom (agents.md 4.2)', () => {
   it('returns a partial selection in canonical order', () => {
     expect(toolSelectionFrom(contextWith(['visuals', 'sample_rows']))).toEqual([
       'sample_rows',
-      'visuals',
     ]);
     expect(toolSelectionFrom(contextWith([]))).toEqual([]);
-  });
-
-  it('keys every selection apart from the full one', () => {
-    expect(selectionKey(undefined)).toBe('full');
-    expect(selectionKey([])).toBe('');
-    expect(selectionKey(['sample_rows', 'visuals'])).toBe(
-      'sample_rows,visuals',
-    );
   });
 });

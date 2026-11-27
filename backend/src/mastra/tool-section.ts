@@ -1,4 +1,29 @@
-import { type PromptTool, toolLines } from './agents/assistant-prompt';
+/** What the Tools section needs from a tool: its description and inputs. */
+export interface PromptTool {
+  description?: string;
+  inputSchema?: unknown;
+}
+
+/** Top-level input names of a Zod object schema, in declaration order. */
+function inputNames(schema: unknown): string[] {
+  const shape = (schema as { shape?: unknown } | undefined)?.shape;
+  return shape && typeof shape === 'object' ? Object.keys(shape) : [];
+}
+
+/** A description's first sentence: up to the first `.` followed by a space. */
+export function firstSentence(description = ''): string {
+  const text = description.replace(/\s+/g, ' ').trim();
+  const match = /^(.+?[.!?])(?:\s|$)/.exec(text);
+  return match ? match[1] : text;
+}
+
+/** `- name(input, …): first sentence`, one line per tool, in the given order. */
+export function toolLines(tools: Record<string, PromptTool>): string[] {
+  return Object.entries(tools).map(
+    ([name, tool]) =>
+      `- ${name}(${inputNames(tool.inputSchema).join(', ')}): ${firstSentence(tool.description)}`,
+  );
+}
 
 /**
  * The generated `## Tools` section of an agent whose editable prompt leaves

@@ -8,14 +8,20 @@ import { join } from 'path';
 import type { EvalCustomCheck } from './assistant.evals';
 import { INSIGHTS_LEAD_TOOL_NAMES } from '../agents/insights-lead-catalog';
 import {
+  answerIncludes,
+  answerMatches,
   asksAtMostOnce,
+  calledTool,
   callsOnlyHerTools,
   clarificationOffersOptions,
+  didNotCall,
   figureText,
   figuresFromQueries,
+  noToolErrors,
   ranAQuery,
   repairAtMostOnce,
   runEndsIn,
+  toolOrder,
 } from './insights-lead-eval-checks';
 import {
   insightsLeadRunView,
@@ -238,5 +244,114 @@ describe('figuresFromQueries', () => {
         }),
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+// The answer and tool checks of the data sets ported from the assistant
+// (`insights-lead-data.evals.ts`): Mastra's built-in checks read an agent's
+// own result, which a whole run has not, so these read the stored run.
+describe('answerIncludes', () => {
+  it('passes on a word of a real stored answer, in any case', async () => {
+    await expect(
+      verdict(answerIncludes('web shop americas'), view()),
+    ).resolves.toBeUndefined();
+  });
+
+  it('fails when the answer lacks it, quoting the word', async () => {
+    await expect(verdict(answerIncludes('Argentina'), view())).resolves.toBe(
+      'the answer does not include "Argentina"',
+    );
+  });
+
+  it('reads her question and options while the run waits', async () => {
+    const waitingFor = {
+      question: 'Which measure?',
+      options: ['Most matches won', 'Goals scored'],
+    };
+    await expect(
+      verdict(answerIncludes('goals scored'), view({ answer: '', waitingFor })),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe('answerMatches', () => {
+  it('passes on a figure of a real stored answer', async () => {
+    await expect(
+      verdict(answerMatches(/88[,.]?065/), view()),
+    ).resolves.toBeUndefined();
+  });
+
+  it('fails when nothing matches, naming the pattern', async () => {
+    await expect(verdict(answerMatches(/4\s*[-–:]\s*2/), view())).resolves.toBe(
+      'the answer does not match /4\\s*[-–:]\\s*2/',
+    );
+  });
+
+  it('has an id per pattern, so a case can hold two', () => {
+    expect(answerMatches(/a/).id).not.toBe(answerMatches(/a/i).id);
+  });
+});
+
+describe('calledTool and didNotCall', () => {
+  it('see the queries of a real stored run', async () => {
+    await expect(
+      verdict(calledTool('run_readonly_sql'), view()),
+    ).resolves.toBeUndefined();
+    await expect(verdict(didNotCall('run_readonly_sql'), view())).resolves.toBe(
+      'she called run_readonly_sql 3 times',
+    );
+  });
+
+  it('fail and pass the other way round on a run without that tool', async () => {
+    await expect(verdict(calledTool('sample_rows'), view())).resolves.toBe(
+      'she never called sample_rows',
+    );
+    await expect(
+      verdict(didNotCall('sample_rows'), view()),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe('noToolErrors', () => {
+  it('passes on a real stored run', async () => {
+    await expect(verdict(noToolErrors(), view())).resolves.toBeUndefined();
+  });
+
+  it('fails on a call that errored, with its error', async () => {
+    const calls = [
+      { tool: 'run_readonly_sql', error: 'column "x" does not exist' },
+      { tool: 'run_readonly_sql', rowCount: 1 },
+    ];
+    await expect(verdict(noToolErrors(), view({ calls }))).resolves.toBe(
+      '1 call failed: run_readonly_sql (column "x" does not exist)',
+    );
+  });
+});
+
+describe('toolOrder', () => {
+  const calls = [
+    { tool: 'list_entities' },
+    { tool: 'describe_entity' },
+    { tool: 'run_readonly_sql', rowCount: 1 },
+  ];
+
+  it('passes when the tools come in that order, others between them', async () => {
+    await expect(
+      verdict(
+        toolOrder(['list_entities', 'run_readonly_sql']),
+        view({ calls }),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('fails when they come in another order', async () => {
+    await expect(
+      verdict(
+        toolOrder(['run_readonly_sql', 'list_entities']),
+        view({ calls }),
+      ),
+    ).resolves.toBe(
+      'her calls (list_entities, describe_entity, run_readonly_sql) do not hold run_readonly_sql then list_entities',
+    );
   });
 });

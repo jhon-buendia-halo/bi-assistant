@@ -11,13 +11,16 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { ASSISTANT_MAX_STEPS } from '../../mastra/agent-constants';
+import { INSIGHTS_LEAD_MAX_STEPS } from '../../mastra/agents/insights-lead-catalog';
+import {
+  INSIGHTS_LEAD_EDGES,
+  INSIGHTS_LEAD_STEPS,
+} from '../../mastra/workflows/conversation-turn.steps';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   agentRunTurn,
   agentWorkflowId,
   draftRunInput,
-  oneStepWorkflowSteps,
   workflowCategory,
   type AgentRunTurn,
   type WorkflowInputValues,
@@ -43,7 +46,6 @@ import type {
   ChatMessage,
   FilePanelItem,
   InteractiveVisualization,
-  SessionVisualization,
   VisualEvent,
 } from '../sessions/entities/session.entity';
 import type {
@@ -77,7 +79,7 @@ import {
 } from '../sessions/sessions.service';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { nodeChatHostRunId } from './node-chat-context';
-import { HeldDraftRuns } from './held-draft-runs';
+import { DRAFT_RUNS_HELD, HeldDraftRuns } from './held-draft-runs';
 import {
   IdleWatchdog,
   LiveRuns,
@@ -107,7 +109,6 @@ import {
   type StepTeller,
   type WorkflowRun,
   type WorkflowRunDoc,
-  type WorkflowRunStep,
   type WorkflowRunSummary,
   type WorkflowRunWaitingFor,
 } from './workflow-run-steps';
@@ -126,7 +127,7 @@ function runStepTeller(
     tellRunStep(workflowId, step, { runInput, steps, runStatus });
 }
 
-/** What a visual action on a run answers (api.md 130-134). */
+/** What a visual action on a run answers (api.md 132, 133). */
 export interface RunVisualResult {
   run: WorkflowRun;
   visualization: InteractiveVisualization;
@@ -146,29 +147,6 @@ function visualEventMessage(event: VisualEvent): ChatMessage {
     at: new Date().toISOString(),
     visual: event,
   };
-}
-
-/**
- * The event of the visual Build visual stored (agents.md 5.11, workflows
- * R41), logged beside the answer as a visual action is, so the answer keeps
- * its query evidence; none when the step did not run or built nothing.
- */
-function builtVisualEvent(
-  steps: readonly WorkflowRunStep[],
-  visualizations: readonly SessionVisualization[],
-): ChatMessage | undefined {
-  const built = steps.find((step) => step.id === 'build-visual')?.output?.[
-    'visual'
-  ] as { visualId?: unknown } | undefined;
-  const metadata = visualizations.find((v) => v.id === built?.visualId);
-  return metadata
-    ? visualEventMessage({
-        visualId: metadata.id,
-        version: 1,
-        title: metadata.title,
-        action: 'created',
-      })
-    : undefined;
 }
 
 /**
@@ -372,6 +350,21 @@ export class WorkflowRunsService
   readonly drafts = new HeldDraftRuns();
 
   /**
+   * The draft runs (Try it) that wait for the user's answer (api.md 129,
+   * 169; ADR-0059), in memory only, never stored: 30 minutes each, at most
+   * `DRAFT_RUNS_HELD` (the oldest expires first).
+   */
+  private readonly waitingDrafts = new SuspendedRuns<HeldRun>((id, held) =>
+    this.expireDraft(id, held),
+  );
+
+  /**
+   * The waiting draft runs that expired, by run id, with their agent: a
+   * resume of one answers 410 rather than 404. At most `DRAFT_RUNS_HELD`.
+   */
+  private readonly expiredDrafts = new Map<string, string>();
+
+  /**
    * The runs started (119) or resumed (138) detached from their request
    * (ADR-0048): their stop signal and the log of their events, which the
    * request and any later client (149) follow; Stop is 150.
@@ -554,8 +547,9 @@ export class WorkflowRunsService
    * Check a draft run request before anything runs (api.md R12): 404 for an
    * unknown agent, 400 `Select at least one dataset to preview` when none of
    * the draft's datasets exists, and `Question is required` for a blank
-   * question. It runs the agent's draft on the agent-turn engine
-   * (`agent:<id>`, never a catalogue workflow), with the draft's name.
+   * question. It runs the agent's draft on Elena's conversation engine
+   * (ADR-0059): her one Answer step, the user agent as its agent, under
+   * `agent:<id>` (never a catalogue workflow), with the draft's name.
    */
   async prepareDraft(agentId: string, body: unknown): Promise<PreparedRun> {
     const target = await this.sessions.draftRunTarget(agentId);
@@ -569,12 +563,24 @@ export class WorkflowRunsService
         : undefined;
     const question = typeof raw === 'string' ? raw.trim() : '';
     if (!question) throw new BadRequestException('Question is required');
-    const steps = oneStepWorkflowSteps({
-      key: agentId,
-      name: target.name,
-      tools: [],
-      maxSteps: ASSISTANT_MAX_STEPS,
-    });
+    const steps = INSIGHTS_LEAD_STEPS.map((step) => ({
+      id: step.id,
+      title: step.title,
+      kind: step.kind,
+      summary: step.summary,
+      input: [...step.input],
+      output: [...step.output],
+      // Its tools are the draft's selection on Elena, read at the call; a
+      // draft's step lists none, as before.
+      agent: {
+        key: agentId,
+        name: target.name,
+        role: target.role,
+        tools: [],
+        maxSteps: INSIGHTS_LEAD_MAX_STEPS,
+      },
+      exits: step.exits.map((exit) => ({ ...exit })),
+    }));
     return {
       workflow: {
         id: agentWorkflowId(agentId),
@@ -585,17 +591,18 @@ export class WorkflowRunsService
         // A draft agent answers a question on data; it is never listed.
         category: workflowCategory('data-analytics'),
         agents: [{ key: agentId, name: target.name, role: target.role }],
-        stepCount: 1,
-        bar: 'agent',
+        stepCount: steps.length,
+        bar: 'steps',
         trigger: 'run',
         input: inputFieldsWithUsage({ input: draftRunInput(), steps }),
         datasets: target.datasets,
         missingDatasets: [],
         starterQuestions: [],
         steps,
+        edges: INSIGHTS_LEAD_EDGES.map((edge) => ({ ...edge })),
       },
       values: { question },
-      turn: { question, careful: false },
+      turn: { question },
       images: [],
       draft: { agentId },
     };
@@ -1004,7 +1011,6 @@ export class WorkflowRunsService
         prepared.turn.question,
         io.emit,
         io.abortSignal,
-        prepared.turn.careful,
         io.onStepEvent,
       );
     });
@@ -1053,6 +1059,52 @@ export class WorkflowRunsService
   }
 
   /**
+   * Check a draft run's resume before any SSE frame (api.md 169, Style B),
+   * in order: 404 `Agent "<id>" not found` and 400 `Select at least one
+   * dataset to preview` (as 129); 404 `Run "<runId>" not found` (unknown,
+   * another agent's, resumed or ended); 410 once its 30 minutes passed;
+   * 400 `Answer is required`; 400 `Step "<stepId>" is not waiting for an
+   * answer`. A draft that passes is taken out, so it resumes once.
+   */
+  async prepareDraftResume(
+    agentId: string,
+    runId: string,
+    body: unknown,
+  ): Promise<PreparedResume> {
+    await this.sessions.draftRunTarget(agentId);
+    const held = this.waitingDrafts.peek(runId);
+    if (held?.prepared.draft?.agentId !== agentId) {
+      if (!held && this.expiredDrafts.get(runId) === agentId) {
+        throw new GoneException(RUN_EXPIRED_ERROR);
+      }
+      throw new NotFoundException(`Run "${runId}" not found`);
+    }
+    if (!this.waitingDrafts.has(runId)) {
+      await this.expireDraft(runId, this.waitingDrafts.remove(runId));
+      throw new GoneException(RUN_EXPIRED_ERROR);
+    }
+    const request =
+      body && typeof body === 'object'
+        ? (body as { stepId?: unknown; answer?: unknown })
+        : {};
+    const answer =
+      typeof request.answer === 'string' ? request.answer.trim() : '';
+    if (!answer) throw new BadRequestException('Answer is required');
+    const stepId = typeof request.stepId === 'string' ? request.stepId : '';
+    if (stepId !== held.suspension?.stepId) {
+      throw new BadRequestException(
+        `Step "${stepId}" is not waiting for an answer`,
+      );
+    }
+    const taken = this.waitingDrafts.take(runId);
+    if (!taken || taken.expired) {
+      await this.expireDraft(runId, taken?.value);
+      throw new GoneException(RUN_EXPIRED_ERROR);
+    }
+    return { held: taken.value, answer };
+  }
+
+  /**
    * Whether the run's workflow no longer has the contract the run started
    * with: its stored hash differs from the catalogue's. A run stored
    * without a hash, or of a workflow the catalogue no longer holds, is
@@ -1084,10 +1136,13 @@ export class WorkflowRunsService
   ): Promise<WorkflowRun> {
     const { held, answer } = prepared;
     const { base, prepared: run } = held;
-    await this.repository.update(base.id, {
-      status: 'running',
-      waitingFor: undefined,
-    });
+    // A draft run (169) is never stored.
+    if (!run.draft) {
+      await this.repository.update(base.id, {
+        status: 'running',
+        waitingFor: undefined,
+      });
+    }
     const live = liveEmit(emit, abortSignal);
     live({ type: 'run', runId: base.id, workflowId: run.workflow.id });
     const suspension = held.suspension;
@@ -1669,30 +1724,6 @@ export class WorkflowRunsService
     );
   }
 
-  /** Create a visual from the run's answer (api.md 130), as a session's (8). */
-  generateVisualization(
-    id: string,
-    sourceMessageAt?: string,
-  ): Promise<RunVisualResult> {
-    return this.visualAction(id, (run) => ({
-      kind: 'create',
-      sourceMessageAt: sourceMessageAt || run.answer?.at,
-    }));
-  }
-
-  /** Tailor a run's visual from an instruction (api.md 131), as 10. */
-  tailorVisualization(
-    id: string,
-    visualizationId: string,
-    instruction: string,
-  ): Promise<RunVisualResult> {
-    return this.visualAction(id, () => ({
-      kind: 'tailor',
-      visualId: visualizationId,
-      instruction,
-    }));
-  }
-
   /** Move a run's visual to an earlier version (api.md 132), as 11. */
   revertVisualization(
     id: string,
@@ -1717,26 +1748,11 @@ export class WorkflowRunsService
     }));
   }
 
-  /** Repair a run's failing visual once (api.md 134), as 13. */
-  repairVisualization(
-    id: string,
-    visualizationId: string,
-    error: string,
-    version: number,
-  ): Promise<RunVisualResult> {
-    return this.visualAction(id, () => ({
-      kind: 'repair',
-      visualId: visualizationId,
-      error,
-      version,
-    }));
-  }
-
   /**
-   * One visual action on a finished agent run (api.md 130-134): the sessions
-   * service does the work on the run-backed host; the new metadata, the
-   * visual's panel item and, for create, tailor and revert, the event card
-   * are stored on the run, so a later read of it shows them.
+   * One visual action on a finished agent run (api.md 132, 133): the
+   * sessions service does the work on the run-backed host; the new
+   * metadata, the visual's panel item and, for a revert, the event card are
+   * stored on the run, so a later read of it shows them.
    */
   private async visualAction(
     id: string,
@@ -2188,10 +2204,10 @@ export class WorkflowRunsService
       error = stalled;
     }
     const hostId = held.hostId;
-    if (suspension && status === 'success' && hostId && !prepared.draft) {
+    if (suspension && status === 'success' && hostId) {
       return this.suspend(held, hostId, suspension);
     }
-    // A suspension the run does not keep (a stop, a draft) is dropped.
+    // A suspension the run does not keep (a stop) is dropped.
     if (suspension) {
       await this.quietly(`discard the waiting turn of run ${base.id}`, () =>
         suspension.discard(),
@@ -2220,7 +2236,6 @@ export class WorkflowRunsService
     }
     const answer = runAnswerOf(view.messages, prepared.context ? 2 : 0);
     const output = status === 'success' ? tracker.lastOutput() : undefined;
-    const built = builtVisualEvent(ended.steps, view.visualizations ?? []);
     return {
       ...base,
       status,
@@ -2235,7 +2250,6 @@ export class WorkflowRunsService
       ...(view.agentName ? { agentName: view.agentName } : {}),
       panelItems: view.panelItems,
       visualizations: view.visualizations ?? [],
-      ...(built ? { events: [...(base.events ?? []), built] } : {}),
       ...(view.workflowState ? { workflowState: view.workflowState } : {}),
       finishedAt,
     };
@@ -2258,7 +2272,9 @@ export class WorkflowRunsService
     // fails the run, and a failed run must not stay among the waiting ones.
     const view = await this.sessions.runHostView(hostId);
     const since = new Date();
-    const expiresAt = this.waiting.add(base.id, held);
+    const expiresAt = prepared.draft
+      ? this.holdDraft(base.id, held)
+      : this.waiting.add(base.id, held);
     const step = prepared.workflow.steps.find(
       (candidate) => candidate.id === suspension.stepId,
     );
@@ -2281,6 +2297,57 @@ export class WorkflowRunsService
       ...(view.agentName ? { agentName: view.agentName } : {}),
       ...(view.workflowState ? { workflowState: view.workflowState } : {}),
     };
+  }
+
+  /**
+   * Hold a waiting draft run (api.md 129): when more than `DRAFT_RUNS_HELD`
+   * wait, the oldest expires. Answers when this one expires (epoch ms).
+   */
+  private holdDraft(id: string, held: HeldRun): number {
+    const expiresAt = this.waitingDrafts.add(id, held);
+    const ids = this.waitingDrafts.ids();
+    for (const oldest of ids.slice(
+      0,
+      Math.max(0, ids.length - DRAFT_RUNS_HELD),
+    )) {
+      const evicted = this.waitingDrafts.remove(oldest);
+      void this.expireDraft(oldest, evicted);
+    }
+    return expiresAt;
+  }
+
+  /**
+   * A waiting draft run that can no longer be resumed (api.md 169: its 30
+   * minutes passed, or newer drafts pushed it out): nothing of it is kept.
+   * Its turn is dropped (the engine's snapshot deleted), its host leaves
+   * memory with its workspace and memory threads, and a later resume
+   * answers 410. Never throws.
+   */
+  private async expireDraft(id: string, held?: HeldRun): Promise<void> {
+    const agentId = held?.prepared.draft?.agentId;
+    if (agentId) {
+      this.expiredDrafts.delete(id);
+      this.expiredDrafts.set(id, agentId);
+      while (this.expiredDrafts.size > DRAFT_RUNS_HELD) {
+        this.expiredDrafts.delete(
+          this.expiredDrafts.keys().next().value as string,
+        );
+      }
+    }
+    this.drafts.drop(id);
+    const suspension = held?.suspension;
+    if (suspension) {
+      await this.quietly(`discard the waiting turn of draft run ${id}`, () =>
+        suspension.discard(),
+      );
+    }
+    const hostId = held?.hostId;
+    if (hostId) {
+      await this.quietly(`end the host of draft run ${id}`, async () => {
+        await this.sessions.finishRunHost(hostId);
+        await this.sessions.deleteRunHostResources(hostId);
+      });
+    }
   }
 
   /**

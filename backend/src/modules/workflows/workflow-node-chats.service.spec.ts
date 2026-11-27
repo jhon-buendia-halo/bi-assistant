@@ -146,7 +146,6 @@ function build(script: Script = {}) {
         question: string,
         emit: (event: { type: string; content?: string }) => void,
         _signal: AbortSignal | undefined,
-        _careful: boolean,
         onStep: (event: unknown) => void,
       ) => {
         hostMessages.push({ role: 'user', content: question, at: 't' });

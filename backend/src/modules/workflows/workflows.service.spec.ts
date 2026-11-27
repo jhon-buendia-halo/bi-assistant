@@ -1,9 +1,6 @@
 // The real Mastra instance pulls in ESM-only packages Jest cannot require;
 // the services only need `listAgents()`, which the test passes in.
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
-jest.mock('../../mastra/evals/assistant.evals', () => ({
-  ASSISTANT_EVAL_SETS: [],
-}));
 jest.mock('../../mastra/evals/eval-sets', () => ({
   evalSetsFor: () => [],
 }));
@@ -121,19 +118,6 @@ function build(
       ['list_entities', 'run_readonly_sql', 'submit_dashboard'],
       '',
       'You are Elena.',
-    ),
-    // Olivia and Jessica, in the library (agents.md 5.11).
-    'analysis-planner': fakeAgent(
-      'Analysis Planner',
-      [],
-      '',
-      'You plan a data analysis.',
-    ),
-    'answer-writer': fakeAgent(
-      'Answer Writer',
-      [],
-      '',
-      'You write the final answer.',
     ),
   };
   const mastra = { listAgents: () => registry } as unknown as MastraService;

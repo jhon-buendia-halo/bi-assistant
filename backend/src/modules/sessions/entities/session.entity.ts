@@ -306,8 +306,9 @@ export interface SessionDoc {
   agentName?: string;
   /**
    * The registry key of the built-in agent the session is bound to
-   * (`insights-analyst`; ADR-0028). Every turn runs that agent; never set with
-   * `agentId`.
+   * (`insights-analyst`; ADR-0028). Every turn runs that agent; set with
+   * `agentId` only on a draft run's host, which Elena (`insights-lead`) runs
+   * over the user agent's draft (ADR-0059).
    */
   agentKey?: string;
   /**

@@ -1,11 +1,9 @@
 jest.mock('@mastra/core/evals', () => ({
   runEvals: jest.fn(() => Promise.resolve({ scores: {} })),
 }));
-// The suite's cases are built at import; their scorers never run here.
 jest.mock('@mastra/evals/checks', () => ({
   checks: new Proxy({}, { get: () => () => ({ id: 'stub-check' }) }),
 }));
-jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
 jest.mock('../agents/eval-judge.agent', () => ({
   evalJudgeAgent: {},
   evalJudgeOutputSchema: {},
@@ -14,31 +12,33 @@ jest.mock('../model-resolver', () => ({
   resolveAgentModel: jest.fn(),
   resolveAgentModelConfig: jest.fn().mockResolvedValue('anthropic/claude-test'),
 }));
+const mockToolServices = {
+  getDatasets: jest.fn(() => Promise.resolve([] as unknown[])),
+  runReadOnlySql: jest.fn(),
+};
 jest.mock('../tool-services', () => ({
-  getDatasetToolServices: () => ({
-    getDatasets: () => Promise.resolve([]),
-  }),
+  getDatasetToolServices: () => mockToolServices,
 }));
 jest.mock('../../modules/sessions/turn-data', () => ({
   synthesizeToolOnlyTurn: jest.fn(),
   toolDataRecord: jest.fn(),
 }));
 
+import type { Agent } from '@mastra/core/agent';
 import { runEvals } from '@mastra/core/evals';
 import { appSkillBody } from '../app-skills';
 import { evalJudgeAgent } from '../agents/eval-judge.agent';
 import { EVAL_RUN_CONTEXT_KEY } from './eval-trace-marker';
 import { currentEvalRunId } from './eval-run-scope';
+import { EVAL_DETAILS_KEY, type EvalRunRecord } from './eval-details';
+import { RESULT_SET_CHECK_ID } from './result-set-check';
 import { synthesizeToolOnlyTurn } from '../../modules/sessions/turn-data';
 import {
-  ASSISTANT_EVAL_SETS,
-  cleanupEvalHost,
-  createEvalHost,
   judgePrompt,
   runAssistantEvalCase,
+  type AssistantEvalCase,
+  type EvalTarget,
 } from './assistant.evals';
-import type { SessionsService } from '../../modules/sessions/sessions.service';
-import type { AssistantEvalCase } from './assistant.evals';
 
 const BLOCK =
   'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):\n- [instruction] Coverage: only 2018 and 2022.';
@@ -50,6 +50,16 @@ const evalCase: AssistantEvalCase = {
   scorers: [],
 };
 
+/** An agent's own target: its orientation, and the knowledge block. */
+const target: EvalTarget = {
+  agentKey: 'stub-agent',
+  agent: { id: 'stub-agent' } as unknown as Agent,
+  sets: [],
+  orientation: ({ datasets }) =>
+    `Datasets for this session: ${datasets.join(', ')}.`,
+  sendsKnowledge: true,
+};
+
 /** The system messages the eval run sent with the question. */
 function sentContext(): { role: string; content: string }[] {
   const [config] = (runEvals as jest.Mock).mock.calls.at(-1) as [
@@ -58,8 +68,39 @@ function sentContext(): { role: string; content: string }[] {
   return config.targetOptions.context;
 }
 
+/** The requestContext the eval run sent with the question. */
+function sentRequestContext(): {
+  get(key: string): unknown;
+  keys(): IterableIterator<string>;
+} {
+  const [config] = (runEvals as jest.Mock).mock.calls.at(-1) as [
+    {
+      data: {
+        requestContext: {
+          get(key: string): unknown;
+          keys(): IterableIterator<string>;
+        };
+      }[];
+    },
+  ];
+  return config.data[0].requestContext;
+}
+
+/** The next `runEvals` call hands back this target result. */
+function nextTargetResult(targetResult: unknown): void {
+  (runEvals as jest.Mock).mockImplementationOnce(
+    (config: { onItemComplete(item: { targetResult: unknown }): void }) => {
+      config.onItemComplete({ targetResult });
+      return Promise.resolve({ scores: {} });
+    },
+  );
+}
+
 beforeEach(() => {
   (runEvals as jest.Mock).mockClear();
+  mockToolServices.getDatasets.mockReset();
+  mockToolServices.getDatasets.mockResolvedValue([]);
+  mockToolServices.runReadOnlySql.mockReset();
 });
 
 describe('runAssistantEvalCase context (agents.md 4.1, 8.5)', () => {
@@ -67,7 +108,7 @@ describe('runAssistantEvalCase context (agents.md 4.1, 8.5)', () => {
     const result = await runAssistantEvalCase(
       evalCase,
       ['World Cup Core'],
-      undefined,
+      target,
       BLOCK,
     );
 
@@ -86,89 +127,101 @@ describe('runAssistantEvalCase context (agents.md 4.1, 8.5)', () => {
 
   it('sends neither the block nor the skill when no knowledge applies', async () => {
     for (const block of [undefined, '']) {
-      await runAssistantEvalCase(
-        evalCase,
-        ['World Cup Core'],
-        undefined,
-        block,
-      );
+      await runAssistantEvalCase(evalCase, ['World Cup Core'], target, block);
 
       const contents = sentContext().map((message) => message.content);
       expect(contents).toHaveLength(1);
       expect(contents.join('\n')).not.toContain('Curated knowledge:');
     }
   });
+
+  it('scopes the case to its datasets and question, with no host or visual keys (the eval host is gone)', async () => {
+    await runAssistantEvalCase(evalCase, ['World Cup Core'], target);
+
+    const context = sentRequestContext();
+    expect([...context.keys()].sort()).toEqual([
+      'datasets',
+      'eval-case',
+      'turn-question',
+    ]);
+    expect(context.get('datasets')).toEqual(['World Cup Core']);
+    expect(context.get('turn-question')).toBe('Who won in 2022?');
+  });
 });
 
-/** The requestContext the eval run sent with the question. */
-function sentRequestContext(): { get(key: string): unknown } {
-  const [config] = (runEvals as jest.Mock).mock.calls.at(-1) as [
-    { data: { requestContext: { get(key: string): unknown } }[] },
-  ];
-  return config.data[0].requestContext;
-}
+describe("the result-set check over a whole run's records (agents.md 8.1)", () => {
+  const sqlCase: AssistantEvalCase = {
+    ...evalCase,
+    expectedSql: 'SELECT champion FROM world_cup.tournaments',
+  };
+  const answerRecord: EvalRunRecord = {
+    tool: 'run_readonly_sql',
+    input: "SELECT name AS champion FROM teams WHERE id = 'ARG'",
+    rows: [{ champion: 'Argentina' }],
+    rowCount: 1,
+  };
 
-describe('tool selection in the eval cases (agents.md 8.1, ADR-0022)', () => {
-  const setCases = (id: string) =>
-    ASSISTANT_EVAL_SETS.find((set) => set.id === id)?.cases ?? [];
-
-  it('has 12 World Cup cases, two of them with a tool selection', () => {
-    const cases = setCases('world-cup');
-    expect(cases).toHaveLength(12);
-    expect(
-      cases
-        .filter((evalCase) => evalCase.agentTools)
-        .map(({ id, question, agentTools }) => ({ id, question, agentTools })),
-    ).toEqual([
-      {
-        id: 'no-clarification-best-team',
-        question: 'Which team performed best?',
-        agentTools: ['sample_rows', 'visuals'],
-      },
-      {
-        id: 'no-visuals-chart-request',
-        question: 'Show me a chart of goals scored per World Cup tournament.',
-        agentTools: ['sample_rows', 'ask_clarification'],
-      },
+  beforeEach(() => {
+    mockToolServices.getDatasets.mockResolvedValue([
+      { name: 'World Cup Core', datasourceId: 'wc', tables: [] },
     ]);
-    expect(
-      cases
-        .filter((evalCase) => evalCase.agentTools)
-        .every((evalCase) => evalCase.judgeRubric),
-    ).toBe(true);
+    mockToolServices.runReadOnlySql.mockResolvedValue({
+      rows: [{ champion: 'Argentina' }],
+      truncated: false,
+    });
   });
 
-  it('derives the same 12 for the REST set, selections included', () => {
-    const rest = setCases('world-cup-rest');
-    expect(rest).toHaveLength(12);
-    expect(
-      rest.find((evalCase) => evalCase.id === 'rest-no-visuals-chart-request')
-        ?.agentTools,
-    ).toEqual(['sample_rows', 'ask_clarification']);
-  });
+  async function resultSetCheck(records?: EvalRunRecord[]) {
+    nextTargetResult({
+      text: 'Argentina won.',
+      ...(records ? { [EVAL_DETAILS_KEY]: { records } } : {}),
+    });
+    const result = await runAssistantEvalCase(
+      sqlCase,
+      ['World Cup Core'],
+      target,
+    );
+    return result.checkResults.find(
+      (check) => check.id === RESULT_SET_CHECK_ID,
+    );
+  }
 
-  it('runs a case with its selection on the context and the matching Block 1', async () => {
-    await runAssistantEvalCase(
-      { ...evalCase, agentTools: ['ask_clarification', 'visuals'] },
+  it("passes when a stored record holds the reference rows (the run's records feed it)", async () => {
+    await expect(
+      resultSetCheck([
+        { tool: 'list_entities', rows: [{ entity: 'teams' }] },
+        answerRecord,
+      ]),
+    ).resolves.toMatchObject({ passed: true, score: 1 });
+    expect(mockToolServices.runReadOnlySql).toHaveBeenCalledWith(
+      'wc',
+      sqlCase.expectedSql,
+      500,
       ['World Cup Core'],
     );
-
-    expect(sentRequestContext().get('agent-tools')).toEqual([
-      'ask_clarification',
-      'visuals',
-    ]);
-    expect(sentContext()[0].content).toContain(
-      'Use describe_entity / run_readonly_sql to inspect and query them.',
-    );
   });
 
-  it('runs a case without a selection with every tool', async () => {
-    await runAssistantEvalCase(evalCase, ['World Cup Core']);
+  it('fails when no stored record holds them', async () => {
+    const check = await resultSetCheck([
+      { ...answerRecord, rows: [{ champion: 'France' }] },
+    ]);
+    expect(check).toMatchObject({ passed: false });
+    expect(check?.reason).toContain('none of 1 successful SQL result(s)');
+  });
 
-    expect(sentRequestContext().get('agent-tools')).toBeUndefined();
-    expect(sentContext()[0].content).toContain(
-      'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
-    );
+  it('fails on a stored record whose rows storage clipped', async () => {
+    const check = await resultSetCheck([
+      { ...answerRecord, rows: [], rowCount: 400, truncated: true },
+    ]);
+    expect(check?.reason).toContain('captured rows are missing or truncated');
+  });
+
+  it('says so when the run kept no query', async () => {
+    const check = await resultSetCheck();
+    expect(check).toMatchObject({
+      passed: false,
+      reason: 'the agent ran no successful run_readonly_sql to compare',
+    });
   });
 });
 
@@ -177,8 +230,7 @@ describe('eval trace marker (ADR-0054)', () => {
     await runAssistantEvalCase(
       evalCase,
       ['World Cup Core'],
-      undefined,
-      undefined,
+      target,
       undefined,
       'job-1',
     );
@@ -187,7 +239,7 @@ describe('eval trace marker (ADR-0054)', () => {
   });
 
   it('sets no marker without a run id', async () => {
-    await runAssistantEvalCase(evalCase, ['World Cup Core']);
+    await runAssistantEvalCase(evalCase, ['World Cup Core'], target);
 
     expect(sentRequestContext().get(EVAL_RUN_CONTEXT_KEY)).toBeUndefined();
   });
@@ -201,8 +253,7 @@ describe('eval trace marker (ADR-0054)', () => {
     await runAssistantEvalCase(
       { ...evalCase, judgeRubric: 'Answers the question.' },
       ['World Cup Core'],
-      undefined,
-      undefined,
+      target,
       undefined,
       'job-2',
     );
@@ -231,8 +282,7 @@ describe('eval trace marker (ADR-0054)', () => {
     await runAssistantEvalCase(
       { ...evalCase, judgeRubric: 'Answers the question.' },
       ['World Cup Core'],
-      undefined,
-      undefined,
+      target,
       undefined,
       'job-3',
     );
@@ -243,22 +293,15 @@ describe('eval trace marker (ADR-0054)', () => {
 
   it("runs the tool-only answer's synthesis inside the run's scope", async () => {
     let scope: string | undefined;
-    (runEvals as jest.Mock).mockImplementationOnce(
-      (config: { onItemComplete(item: { targetResult: unknown }): void }) => {
-        config.onItemComplete({
-          targetResult: {
-            text: '',
-            steps: [
-              {
-                toolCalls: [{ payload: { toolName: 'sample_rows', args: {} } }],
-                toolResults: [],
-              },
-            ],
-          },
-        });
-        return Promise.resolve({ scores: {} });
-      },
-    );
+    nextTargetResult({
+      text: '',
+      steps: [
+        {
+          toolCalls: [{ payload: { toolName: 'sample_rows', args: {} } }],
+          toolResults: [],
+        },
+      ],
+    });
     jest.mocked(synthesizeToolOnlyTurn).mockImplementationOnce(() => {
       scope = currentEvalRunId();
       return Promise.resolve('synthesized');
@@ -267,8 +310,7 @@ describe('eval trace marker (ADR-0054)', () => {
     const result = await runAssistantEvalCase(
       evalCase,
       ['World Cup Core'],
-      undefined,
-      undefined,
+      target,
       undefined,
       'job-4',
     );
@@ -284,49 +326,9 @@ describe('eval trace marker (ADR-0054)', () => {
       return Promise.resolve({ scores: {} });
     });
 
-    await runAssistantEvalCase(evalCase, ['World Cup Core']);
+    await runAssistantEvalCase(evalCase, ['World Cup Core'], target);
 
     expect(scope).toBeUndefined();
-  });
-});
-
-describe('createEvalHost (agents.md 8.3)', () => {
-  function fakeSessions() {
-    return {
-      createRunHost: jest.fn().mockResolvedValue({ id: 'run-eval-1' }),
-      deleteRunHostResources: jest.fn().mockResolvedValue(undefined),
-    };
-  }
-
-  it("puts the assistant's host over the run's datasets, seeded with a placeholder answer", async () => {
-    const sessions = fakeSessions();
-    const host = await createEvalHost(sessions as unknown as SessionsService, [
-      'World Cup',
-    ]);
-    expect(host).toEqual({ id: 'run-eval-1' });
-    expect(sessions.createRunHost).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agentKey: 'assistant',
-        datasets: ['World Cup'] as unknown,
-        context: {
-          question: expect.any(String) as unknown,
-          answer: expect.any(String) as unknown,
-        },
-      }),
-    );
-    // A direct agent host: no catalogue workflow behind it (1.23.35).
-    const [spec] = sessions.createRunHost.mock.calls[0] as [
-      Record<string, unknown>,
-    ];
-    expect(spec).not.toHaveProperty('workflowId');
-  });
-
-  it('cleans up by host id', async () => {
-    const sessions = fakeSessions();
-    await cleanupEvalHost(sessions as unknown as SessionsService, {
-      id: 'run-eval-1',
-    });
-    expect(sessions.deleteRunHostResources).toHaveBeenCalledWith('run-eval-1');
   });
 });
 

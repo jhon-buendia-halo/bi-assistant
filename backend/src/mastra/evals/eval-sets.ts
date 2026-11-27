@@ -1,9 +1,4 @@
-import {
-  ASSISTANT_EVAL_SETS,
-  ASSISTANT_EVAL_TARGET,
-  type AssistantEvalSet,
-  type EvalTarget,
-} from './assistant.evals';
+import type { AssistantEvalSet, EvalTarget } from './assistant.evals';
 import {
   INSIGHTS_ANALYST_EVAL_AGENT_KEY,
   INSIGHTS_ANALYST_EVAL_SET,
@@ -21,22 +16,15 @@ import {
   queryExplainerEvalTarget,
 } from './query-explainer.evals';
 import {
-  ANALYSIS_PLANNER_EVAL_TARGET,
-  ANSWER_WRITER_EVAL_TARGET,
-  analysisPlannerEvalTarget,
-  answerWriterEvalTarget,
-} from './isolated-call-targets';
-import {
   BI_ANALYST_EVAL_AGENT_KEY,
   BI_ANALYST_EVAL_SET,
 } from './bi-analyst.evals';
 import { biAnalystEvalTarget } from './bi-analyst-eval-target';
-import { ANALYSIS_PLANNER_EVAL_SET } from './analysis-planner.evals';
-import { ANSWER_WRITER_EVAL_SET } from './answer-writer.evals';
 import { INSIGHTS_ANALYST_EDGE_EVAL_SET } from './insights-analyst-edge.evals';
 import { INSIGHTS_ANALYST_RETAIL_EVAL_SET } from './insights-analyst-retail.evals';
 import { AVERY_EVAL_SET } from './avery-workflow.evals';
 import { INSIGHTS_LEAD_EVAL_SET } from './insights-lead.evals';
+import { INSIGHTS_LEAD_DATA_EVAL_SETS } from './insights-lead-data.evals';
 import {
   INSIGHTS_LEAD_EVAL_TARGET,
   insightsLeadEvalTarget,
@@ -47,15 +35,13 @@ import {
 } from './avery-workflow-target';
 
 /**
- * Every eval set, of every agent that has evals (agents.md 8.1): the
- * assistant's, Insights Analyst's, the Query
- * Explainer's, the Result Explorer's, Clara's, Avery's and Elena's. A set runs on the agent its
- * `agentKey` names, the `assistant` when it names none.
+ * Every eval set, of every agent that has evals (agents.md 8.1): Insights
+ * Analyst's, the Query Explainer's, the Result Explorer's, Clara's, Avery's
+ * and Elena's (her own and the four data sets ported from the assistant). A
+ * set runs on the agent its `agentKey` names.
  */
 export const EVAL_SETS: AssistantEvalSet[] = [
-  ...ASSISTANT_EVAL_SETS,
-  ANALYSIS_PLANNER_EVAL_SET,
-  ANSWER_WRITER_EVAL_SET,
+  ...INSIGHTS_LEAD_DATA_EVAL_SETS,
   INSIGHTS_ANALYST_EDGE_EVAL_SET,
   INSIGHTS_ANALYST_RETAIL_EVAL_SET,
   INSIGHTS_ANALYST_EVAL_SET,
@@ -69,7 +55,7 @@ export const EVAL_SETS: AssistantEvalSet[] = [
 
 /** The registry key a set runs on. */
 export function evalSetAgentKey(set: Pick<AssistantEvalSet, 'agentKey'>) {
-  return set.agentKey ?? 'assistant';
+  return set.agentKey;
 }
 
 /** The sets of one agent; empty for an agent without evals. */
@@ -93,8 +79,6 @@ const EVAL_TARGET_FACTORIES: Record<
   string,
   (sets: AssistantEvalSet[]) => EvalTarget
 > = {
-  [ANALYSIS_PLANNER_EVAL_TARGET]: (sets) => analysisPlannerEvalTarget(sets),
-  [ANSWER_WRITER_EVAL_TARGET]: (sets) => answerWriterEvalTarget(sets),
   [BI_ANALYST_EVAL_AGENT_KEY]: (sets) => biAnalystEvalTarget(sets),
   [AVERY_WORKFLOW_EVAL_TARGET]: (sets) => averyWorkflowEvalTarget(sets),
   [INSIGHTS_LEAD_EVAL_TARGET]: (sets) => insightsLeadEvalTarget(sets),
@@ -166,7 +150,6 @@ export function evalTargetFor(
 export function evalTargetOf(targetId: string, agentKey: string): EvalTarget {
   const factory = EVAL_TARGET_FACTORIES[targetId];
   if (factory) return factory(setsOfTarget(targetId));
-  if (agentKey === 'assistant') return ASSISTANT_EVAL_TARGET;
   if (agentKey === INSIGHTS_ANALYST_EVAL_AGENT_KEY)
     return insightsAnalystEvalTarget();
   if (agentKey === QUERY_EXPLAINER_EVAL_AGENT_KEY)

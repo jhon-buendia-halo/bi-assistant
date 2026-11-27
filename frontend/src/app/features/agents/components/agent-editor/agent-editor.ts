@@ -52,7 +52,7 @@ export class AgentEditor implements OnInit, OnDestroy {
   readonly efforts = REASONING_EFFORT_CHOICES;
   readonly domains = AGENT_DOMAINS;
   readonly instructionsHint =
-    "Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply. Type / to link a skill or a tool.";
+    "Added to Elena's context in every turn. Elena's own rules and the read-only guard still apply. Type / to link a skill or a tool.";
   readonly linksHint =
     'Linked skills and tools decide what the agent persona gets. Every agent persona also gets the built-in skills and can always list, describe and query its datasets.';
   readonly legacyNotice =

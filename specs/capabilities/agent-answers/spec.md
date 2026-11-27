@@ -1,12 +1,12 @@
 # Agent answers
 
-An agent answers a business question over one or more datasets. It plans the analysis, writes and runs read-only SQL against the datasets' datasources, and streams back its reasoning, each tool call and a final Markdown answer. Since 1.23.22 the turn is always one run of a workflow, on a temporary run host ([workflows](../workflows/spec.md), [agents.md](../../system/agents.md) 5.14); no chat is started or continued, and the stored sessions of earlier versions open read-only ([past-chats](../past-chats/spec.md)). Every answer shows how it was produced: the queries it ran and why, the rows each returned, the entities it touched, the curated knowledge it was given, and reliability signals (automatic SQL repair, result-quality warnings, a verified-query badge and an optional independent cross-check). Users can trust a number because they can see where it came from. They can stop a run and answer the assistant's clarifying questions.
+An agent answers a business question over one or more datasets. It plans the analysis, writes and runs read-only SQL against the datasets' datasources, and streams back its reasoning, each tool call and a final Markdown answer. Since 1.23.22 the turn is always one run of a workflow, on a temporary run host ([workflows](../workflows/spec.md), [agents.md](../../system/agents.md) 5.14); no chat is started or continued, and the stored sessions of earlier versions open read-only ([past-chats](../past-chats/spec.md)). Every answer shows how it was produced: the queries it ran and why, the rows each returned, the entities it touched, the curated knowledge it was given, and reliability signals (automatic SQL repair, result-quality warnings and a verified-query badge). Users can trust a number because they can see where it came from. They can stop a run and answer the agent's clarifying questions. The agent a user agent runs on is Elena (ADR-0059; Emily, Ryan and Rachel were removed on 2026-11-26).
 
 This spec is what stayed of the former sessions-chat capability when it was split into agent-answers and past-chats (1.23.27). Rule numbers are kept, so older references read; rules about the chat composer and the chat session are retired here or moved to [past-chats](../past-chats/spec.md) (R1–R7, R49, R57, R59, R60, R62, R63, R65, R66).
 
 ## Concepts
 
-All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Entity** (fully-qualified `catalog.schema.table`), **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Careful mode**, **Cross-check**, **Verified query**, **Ontology item**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (removed 2026-11-12; only old reports remain in stored transcripts).
+All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Entity** (fully-qualified `catalog.schema.table`), **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Verified query**, **Ontology item**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (removed 2026-11-12; only old reports remain in stored transcripts).
 
 ## Rules
 
@@ -20,8 +20,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - the model's reasoning text;
   - each tool call, with its stated rationale when it has one;
   - each tool result summary (input, row count or error);
-  - the answer text as it forms;
-  - a visual-updated notice when a visual is created or tailored.
+  - the answer text as it forms.
 
   The turn ends with exactly one terminal event: `done`, carrying the persisted session, or `error`, carrying a message.
 - R13. While a turn runs, the Run page SHALL show a "Thinking" block with:
@@ -33,15 +32,15 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 - R14. Retired (1.23.27). The chat replaced its transcript with the persisted one on `done`; a run's page shows the run's stored answer.
 - R15. Retired (1.23.27). The one-turn-per-session rule and the "Stop response" control went with the chat composer; a run is stopped from its page.
 - R16. Stopping a run SHALL abort the turn on the server. The server persists partial answer text when it was stopped mid-answer.
-- R17. The assistant SHALL use at most 15 model steps per turn.
-- R18. If a turn ends with no answer text and no visual, the system SHALL run one extra tool-free pass that writes an answer from the data already collected. If that also yields nothing, the answer is the fixed text "I completed the data analysis but could not produce a final response. Please retry your question."
-- R19. If a turn produced a non-empty answer without calling any tool, the system SHALL run one corrective pass, tools allowed, at most once per turn. That pass tells the model to re-answer data claims from executed queries, or to say the data does not cover the question. Its answer replaces the original. Any queries it runs join the answer's data records. The pass does not write to the session's memory thread.
-- R20. A turn that only created or tailored a visual and wrote no text SHALL be persisted with the text `Created interactive visual "<title>" (v<N>).` or `Updated interactive visual "<title>" (v<N>).`.
+- R17. An agent SHALL use at most its own step limit of model steps per turn ([agents.md](../../system/agents.md) section 2; Elena's is 24).
+- R18. If a turn ends with no answer text, the system SHALL run one extra tool-free pass that writes an answer from the data already collected. If that also yields nothing, the answer is the fixed text "I completed the data analysis but could not produce a final response. Please retry your question."
+- R19. Retired (2026-11-26, ADR-0059). The grounding pass (a corrective pass after a zero-tool answer) went with the `assistant`. Elena's checks and her repair round cover a figure no query of the turn produced ([agents.md](../../system/agents.md) 2.23).
+- R20. Retired (2026-11-26, ADR-0059). A visual-only turn (and the tools that made it) went with the visual designer.
 - R21. Retired (1.23.27). A same-session refresh that must not disturb an in-flight chat turn went with the live chat.
 
 ### Grounding and tools
 
-- R22. The assistant SHALL only query entities from the session's datasets. It works only through these tools:
+- R22. An agent SHALL only query entities from the session's datasets. It works only through these tools:
   - list entities;
   - describe an entity (columns, types, captured sample values);
   - sample rows (default 10, max 100);
@@ -49,15 +48,14 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
   Tools that need a datasource SHALL ask the model to name one when several datasources are in scope, and refuse when none is bound.
 
-  Every agent also has `show_in_panel`, which shows a file, a document, a query result, a visual or its workflow in the right panel ([agent-panel](../agent-panel/spec.md) R1).
+  No agent has `show_in_panel` any more (2026-11-26, ADR-0059): the right panel only shows what a stored session or run already holds ([agent-panel](../agent-panel/spec.md) R1).
 - R23. Every row-sampling or SQL tool call SHALL carry a rationale: one or two plain business sentences saying why the step is taken. It is stored flattened and clipped to 400 characters.
-- R24. Each turn's context SHALL give the assistant:
+- R24. Each turn's context SHALL give the agent:
   - the session's dataset and entity orientation;
-  - the session's visuals (id, title, current version) and which one is open;
   - the curated metric definitions for those entities;
   - the enabled ontology items for the session's datasets (its datasets' own items and shared ones);
   - up to 3 verified question → SQL pairs most similar to the question (by word overlap, within a 3,000-character budget);
-  - for a session bound to an agent, the agent's Live instructions, last (R54).
+  - for a run on behalf of a user agent (Try it), the agent's instructions, last (R54).
 
 ### SQL repair (execution-guided)
 
@@ -137,7 +135,7 @@ The query inspector (M1-25) shows, for each figure of an answer, which query pro
 - R80. Each column header of the `Result` tab SHALL be a button that sorts by that column on the server: a click cycles ascending, descending and none (`aria-sort` on the header), one column at a time, and the view returns to its first page.
 - R81. The `Result` tab SHALL let the reader add column filters (`Add filter`: a column, an operator named in words (is, is not, greater than, at least, less than, at most, between, is one of, is not one of, contains, does not contain, starts with, is empty, is not empty) and a value; two for between, a comma-separated list for the list operators, none for the empty operators). Each filter shows as a chip with a remove button, `Clear filters` removes them all, a view with no match says `No rows match these filters.`, and a failed request says `Could not load this page: <message>` with `Retry`. Every change returns to the first page.
 - R82. In a query that can be paged, the `Result` tab SHALL offer `Filter in words` (a text box and `Apply`; Enter applies). The words go to the `result-explorer` agent with the view being shown (api.md 153 and 155); the filters, sort and page it returns replace the current ones and the page is requested, and the tab says `Understood as: <what the agent understood>`, plus what it ignored when it left a part out. A request that is not a filter on this result, or that the agent cannot turn into one, says `Could not turn that into a filter: <reason>` and leaves the view as it was. Apply is disabled while the agent answers. A sample offers none of this.
-- R83. When the evidence of a query holds a `view` (an `explore_result` record of the assistant), the inspector SHALL open its `Result` tab on that view at once and say `Page 2 of 41 · Country is Brazil · sorted by Goals, high to low`.
+- R83. When the evidence of a query holds a `view` (an `explore_result` record of an agent), the inspector SHALL open its `Result` tab on that view at once and say `Page 2 of 41 · Country is Brazil · sorted by Goals, high to low`.
 - R84. An answer that paged, filtered or sorted an earlier query with `explore_result` (a chat turn, a node chat, Try it or a user agent; [agents.md](../../system/agents.md) 3.15) SHALL link that query through the shared query-inspector layer like any other: its record is the source query (re-run and CSV act on it), its rows are the page, its coverage is `partial` when more rows matched than the page holds, and the inspector opens on the page's view (R83).
 - R85. After each table of the answer text whose figures a query holds, the answer view SHALL add one source line (`data-testid="table-source"`, a button): `Source 3 · <purpose> · <N> rows`, which emits `inspectQuery` with that record's index like a chip. When the figures of one table come from several queries the line reads `Sources 1, 3`, each number a button of its own. A table with no matched figure gets no line.
 - R78. The explanation, the step counts and the evidence are written to the run's answer under one lock per run, so two writes cannot overwrite each other (this includes the rating of an answer).
@@ -152,28 +150,16 @@ The query inspector (M1-25) shows, for each figure of an answer, which query pro
 
   The rating is persisted on the answer. A workflow run's answer is rated the same way on the Run tab ([../workflows/spec.md](../workflows/spec.md) R22). The library itself is specified in [verified-queries](../verified-queries/spec.md).
 
-### Careful mode (cross-check)
+### Careful mode (removed 2026-11-26)
 
-- R37. Careful mode is asked for per run (the `careful` option of a run's turn). It applies to that run only and is never stored.
-- R38. In careful mode, before `done`, the system SHALL check the turn's last successful SQL result:
-  1. The SQL-verifier agent derives an independent query from the question alone. It sees the question, the schema with up to 3 sample values per column and similar verified pairs, never the original SQL.
-  2. The system runs that query with a 200-row limit.
-  3. It compares both result sets as multisets, tolerating different column widths.
-
-  The verdict is stored on the answer.
-- R39. The cross-check chip SHALL read "Cross-checked" (agree), "Cross-check differs" (disagree) or "Cross-check failed" (error). Its tooltip is the note, clipped to 220 characters:
-  - agree: "independent re-derivation returned the same results", or "…returned the same figures, over different columns";
-  - disagree: "results differ — treat with care — <reason>";
-  - error: one of:
-    - "the answer's result set hit the row cap — a partial result cannot be compared"
-    - "no datasource is bound to this session, so the query could not be re-run"
-    - "the independent check did not produce a usable query"
-    - "the check could not complete — <detail>"
-- R40. A failing cross-check SHALL NOT lose the answer. A turn with no successful SQL SHALL get no cross-check.
+- R37. Retired (2026-11-26, ADR-0059). Careful mode (the `careful` option of a run's turn and of Try it) is gone; the option is not accepted.
+- R38. Retired (2026-11-26, ADR-0059). The independent cross-check, the SQL-verifier agent (Rachel) and its schema snapshot are gone.
+- R39. Retired (2026-11-26, ADR-0059). The cross-check chip and its tooltips are gone. A stored answer's `crossCheck` stays as stored data and is shown nowhere (data-model 3.4).
+- R40. Retired (2026-11-26, ADR-0059). No pass can lose or change an answer after it is written, apart from Elena's repair round before it ([agents.md](../../system/agents.md) 2.23).
 
 ### Clarification
 
-- R41. The assistant SHALL ask at most one clarifying question per user question, with 2–4 options. It asks only when interpretations diverge materially, or when real data values are ambiguous. In that case the options quote the actual values.
+- R41. An agent SHALL ask at most one clarifying question per user question, with 2–4 options. It asks only when interpretations diverge materially, or when real data values are ambiguous. In that case the options quote the actual values.
 - R42. A clarification SHALL end the turn immediately: the model stops. A clarification the model sends malformed SHALL NOT be shown: the model is told and asks again, so a card always has its options. The question is persisted as an assistant message carrying the options and any data records, entities, reasoning and knowledge gathered before it, and `done` is sent.
 - R43. Only the latest clarification card SHALL be actionable. Its controls:
   - Each option is numbered, and picking it sends the option label as the next user message.
@@ -189,7 +175,7 @@ The query inspector (M1-25) shows, for each figure of an answer, which query pro
 
 - R46. Each session SHALL have its own persistent agent memory thread. Each turn replays the last 40 messages. There is no semantic recall and no auto-generated title.
 - R47. When a session has a transcript but no memory thread (created before memory existed), the system SHALL seed the thread from the full persisted transcript on the next turn.
-- R48. Background work (grounding pass, SQL repair, cross-check, visual design) SHALL NOT write into the session's memory thread.
+- R48. Background work (SQL repair) SHALL NOT write into the session's memory thread.
 
 ### Retired chat rules
 
@@ -202,17 +188,18 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 
 - R52. Retired (1.24.12). **Start chat** (on a workflow, never on an agent) created a session from the workflow or its agent. No card, page or button starts a chat now: a workflow runs through its **Run** ([workflows](../workflows/spec.md) R5, R12) and `POST /sessions` with a `workflowId` is refused with `Workflow "<id>" runs on an input` ([api.md](../../system/api.md) 3). `POST /sessions` was removed in 1.23.27 ([api.md](../../system/api.md) 3): no route creates a session, and a run of an agent workflow refuses a missing or unpublished agent with the texts of [workflows](../workflows/spec.md) R12.
 - R53. A session started from an agent SHALL keep the datasets it was created with ([past-chats](../past-chats/spec.md) R5). Republishing the agent with other datasets SHALL NOT change them.
-- R54. Every assistant call made for a session bound to a user agent that still exists (chat turns and the grounding pass) SHALL apply the agent's **current Live version**:
-  - its instructions, when not empty, as a system context block labelled as user-supplied, after every other context block (R24; the block is in [agents.md](../../system/agents.md) section 4.1, and only the grounding pass's own nudge follows it);
+- R54. A user agent runs only as its draft preview, Try it, on **Elena** (ADR-0059, [agents.md](../../system/agents.md) 2.23: `agentKey: 'insights-lead'`, the user agent's id as `agentId`, `agent:<id>` as the run's workflow). Every call Elena makes for a Try it draft SHALL apply the agent's **draft** (agents-evals R60, R61):
+  - its instructions, when not empty, as a system context block labelled as user-supplied, after every other context block and before only her repair message (R24; the block is in [agents.md](../../system/agents.md) section 4.1);
   - its model override and reasoning-effort override, when set (R56);
-  - its tool selection: only the tools it selects are offered, and the prompt's tool list and working rules match them ([agents.md](../../system/agents.md) 2.1);
-  - its skills: the copies taken when it was published, given to the model through the framework's skill catalog and skill tool, from those copies ([agents.md](../../system/agents.md) 7.3).
+  - its tool selection: of her tools only `sample_rows` and `ask_clarification` are optional, and only those it selects are offered, with the prompt's tool list and rules matching them (a stored `visuals` is ignored; [agents.md](../../system/agents.md) 2.23);
+  - its skills: its in-app skills, given to the model through the framework's skill catalog and skill tool after Elena's own ([agents.md](../../system/agents.md) 7.3).
 
-  Publishing a new version SHALL change the next turn of every session bound to the agent. A draft SHALL never apply to a session. The only exception is the agent editor's draft run, an in-memory run host that runs the draft (agents-evals R60, R61).
-- R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, dataset scoping (R22), SQL repair (R25-R28), the grounding pass (R19) and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.
-- R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model for the assistant's calls only. The SQL fixer, SQL verifier, visual designer, ontology bootstrap and eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same assistant calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45).
+  The dashboard and export gates SHALL stay closed in Try it. A draft SHALL never apply to a stored session: no stored session is bound to a user agent that runs.
+- R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, dataset scoping (R22), SQL repair (R25-R28), Elena's checks and repair round and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.
+- R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model and Elena's Opus routing for her calls only; an override of the effort alone keeps the Opus routing with that effort. The SQL fixer and the eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45). Without an override, Try it runs on Elena's routing: Opus 5.5 at effort `high` when the saved model is served as Claude, else the saved model.
 - R58. Retired (1.23.27). The welcome block of a session bound to an agent went with the chat composer.
-- R61. A session bound to a built-in agent (today Insights Analyst, R52) SHALL run that agent on every turn, not the assistant: its own prompt, tools, skill and per-turn context ([agents.md](../../system/agents.md) 4.1, 5.1). The assistant-only passes (the grounding pass R19, careful mode and the result-quality warnings) SHALL NOT apply to it. R54-R56 and R59 do not apply; R57 and R58 do, with the built-in agent's name, description and starter questions. The Data Readiness Agent was a built-in agent too until its removal on 2026-11-26 ([workflows](../workflows/spec.md) R50). A session stored with the removed agent `rfp` (2026-11-12) is a plain session now: it runs the assistant if it is ever continued and its stored RFP fields are ignored. **Insights Analyst** (`insights-analyst`, BA-320) is bound the same way but runs on the user's own datasets: a session of an earlier version stored `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"` (rewritten to `insights-analyst` and `Insights Analyst` by [data-model](../../system/data-model.md) M16), every turn runs Insights Analyst with its own tools (the four data tools and `ask_clarification`), its on-demand skills, its shipped prompt and the assistant's curated context blocks ([agents.md](../../system/agents.md) 2.11, 4.1), and a v2 turn runs like the other bound agents' turns: no grounding pass and no careful mode. A clarifying question ends a v2 turn with its card, as an assistant turn's does, and the user's pick continues it. A streamed v2 turn was a workflow defined in code (ADR-0034, [agents.md](../../system/agents.md) 5.11), removed on 2026-11-23: its past chats keep their transcripts, and Michael now analyses inside Avery's turn ([agents.md](../../system/agents.md) 5.23). The chat header and the session chip name the agent as for the other built-in agents (R57). A session bound to a built-in agent runs that agent's workflow (R65): a past chat of the removed Answer a Business Question names `answer-business-question` ([workflows](../workflows/spec.md) R48), and one of the removed RFP Builder (`rfp`) or the removed Data Readiness Agent (`data-readiness`) reads as a plain Assistant session, chip `Assistant` ([workflows](../workflows/spec.md) R4, R50; [past-chats](../past-chats/spec.md) R57). Every streamed turn of any session, plain, bound or started from a user agent, is one run of its workflow ([agents.md](../../system/agents.md) 5.1): a one-step workflow's single step runs the turn above, with the same answer, events, workflow bar and stored message, and nothing else changes. The non-streamed turn was removed in 1.23.27.
+- R59. A user agent that waits SHALL wait inside Try it: when Elena asks the user, the draft run is held in server memory (30 minutes, at most 20 drafts) and continues with the user's answer, never stored (api.md 129, 169; agents-evals R61).
+- R61. A session bound to a built-in agent (today Insights Analyst, R52) SHALL run that agent on every turn: its own prompt, tools, skill and per-turn context ([agents.md](../../system/agents.md) 4.1, 5.1). Elena is bound the same way (agents.md 2.23). R54-R56 and R59 do not apply to it (they are Try it's rules); R57 and R58 do, with the built-in agent's name, description and starter questions. The Data Readiness Agent was a built-in agent too until its removal on 2026-11-26 ([workflows](../workflows/spec.md) R50). A session stored with the removed agent `rfp` (2026-11-12) is a plain session now: no new turn runs on it and its stored RFP fields are ignored. **Insights Analyst** (`insights-analyst`, BA-320) is bound the same way but runs on the user's own datasets: a session of an earlier version stored `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"` (rewritten to `insights-analyst` and `Insights Analyst` by [data-model](../../system/data-model.md) M16), every turn runs Insights Analyst with its own tools (the four data tools and `ask_clarification`), its on-demand skills, its shipped prompt and the curated context blocks ([agents.md](../../system/agents.md) 2.11, 4.1), and a v2 turn runs like the other bound agents' turns. A clarifying question ends a v2 turn with its card, as every agent's turn does, and the user's pick continues it. A streamed v2 turn was a workflow defined in code (ADR-0034, [agents.md](../../system/agents.md) 5.11), removed on 2026-11-23: its past chats keep their transcripts, and Michael now analyses inside Avery's turn ([agents.md](../../system/agents.md) 5.23). The chat header and the session chip name the agent as for the other built-in agents (R57). A session bound to a built-in agent runs that agent's workflow (R65): a past chat of the removed Answer a Business Question names `answer-business-question` ([workflows](../workflows/spec.md) R48), and one of the removed RFP Builder (`rfp`) or the removed Data Readiness Agent (`data-readiness`) reads as a plain Assistant session, chip `Assistant` ([workflows](../workflows/spec.md) R4, R50; [past-chats](../past-chats/spec.md) R57). Every streamed turn of any session, plain, bound or started from a user agent, is one run of its workflow ([agents.md](../../system/agents.md) 5.1): a one-step workflow's single step runs the turn above, with the same answer, events, workflow bar and stored message, and nothing else changes. The non-streamed turn was removed in 1.23.27.
 - R64. Retired (1.24.12). The new-session screen, with its **Workflow** field and **Create**, is removed together with its route and the **Start New Conversation** buttons.
 
 ## Edge cases and errors
@@ -234,8 +221,8 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 - Endpoints, all in [api.md](../../system/api.md):
   - a past chat's read routes: [past-chats](../past-chats/spec.md);
   - runs: `POST /workflows/:id/runs/stream` (api.md 119) streams the answer with the event types `run`, `step`, `reasoning`, `text`, `tool`, `tool-result`, `visual-updated`, `done`, `error` (api.md 3.1), and the stored run's rating and visual routes (api.md 128-134). The chat routes (create a session, the streamed and non-streamed message, message feedback, the session visual actions) were removed in 1.23.27.
-- Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, cross-check, clarification, visual event), the `verified_queries` collection, the agent memory store, and the per-session workspace directory and its legacy migrations.
-- Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`, `create_visual`, `update_visual`, and memory), `sql-fixer`, `sql-verifier`. Model resolution is in [llm-settings](../llm-settings/spec.md).
+- Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, clarification; a stored cross-check and visual event are read only), the `verified_queries` collection, the agent memory store, and the per-session workspace directory and its legacy migrations.
+- Agents in [agents.md](../../system/agents.md): `insights-lead` (Elena, 2.23: also the engine of every user agent's Try it; tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `explore_result`, `ask_clarification`), `insights-analyst` (Michael, 2.11, with memory) and `sql-fixer`. Model resolution is in [llm-settings](../llm-settings/spec.md).
 - Agent-bound runs: the session's derived `agent` field in [api.md](../../system/api.md) 2.1 (what a past chat shows); the session's `agentId` and `agentName` in [data-model.md](../../system/data-model.md) section 3.4; the agent instructions block, the `agent-overrides` requestContext key and the model override in [agents.md](../../system/agents.md) sections 1.3, 4.1 and 4.2.
 - Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents and the Agent Hub), [workflows](../workflows/spec.md) (the Workflows pages and their **Run**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [dataset-ontology](../dataset-ontology/spec.md), [metrics](../metrics/spec.md), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
 
@@ -375,7 +362,7 @@ Feature: Chat answers and reliability signals
 
 E2E: `frontend/e2e/agent-sessions.spec.ts`
 
-The Background's datasets and agents are seeded through the backend API. "The model" is a local OpenAI-compatible stub saved as the LenAI provider. It records every request it receives and streams a fixed answer, so the scenarios can check what the assistant sent to the model. The API-level refusals of R52 are also covered by the backend e2e `backend/test/agent-sessions.e2e-spec.ts`.
+The Background's datasets and agents are seeded through the backend API. "The model" is a local OpenAI-compatible stub saved as the LenAI provider. It records every request it receives and streams a fixed answer, so the scenarios can check what the agent sent to the model. The API-level refusals of R52 are also covered by the backend e2e `backend/test/agent-sessions.e2e-spec.ts`.
 
 ```gherkin
 Feature: Sessions started from an agent
@@ -401,7 +388,7 @@ Feature: Sessions started from an agent
 
   Scenario: an Answer a Business Question run runs Michael on every question
     When I run "Answer a Business Question (Avery + Michael)" on "World Cup Core" with "How many matches are there?"
-    Then Avery briefed Michael, and Michael received the prompt starting "You are Questions to Insights" and not the assistant's
+    Then Avery briefed Michael, and Michael received the prompt starting "You are Questions to Insights"
     And he was offered only "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification", "explore_result" and the skill tools "skill", "skill_search" and "skill_read"
     When I run it again with "And in 2014?"
     Then Michael again received his prompt and only his own tools
@@ -427,7 +414,7 @@ Feature: Filter a query's result in words (outside a `gherkin` fence: `check-spe
 
 E2E: `frontend/e2e/assistant-skills.spec.ts`
 
-What an Answer a Business Question (Avery + Michael) run is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. The plain assistant gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([dataset-ontology](../dataset-ontology/spec.md) R15-R19).
+What an Answer a Business Question (Avery + Michael) run is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.11 and 2.23, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. An agent without a user agent gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([dataset-ontology](../dataset-ontology/spec.md) R15-R19).
 
 ```gherkin
 Feature: Skills the assistant is given
@@ -447,11 +434,10 @@ Feature: Skills the assistant is given
 
 ## Acceptance
 
-- Every scenario above passes. The scenario that generated an interactive visual from a chat answer is retired with the chat composer; a run's visual returns with plans 1.24.5 and 1.25.4.
+- Every scenario above passes. The scenario that generated an interactive visual from a chat answer is retired with the chat composer, and generating a visual with the visual designer (2026-11-26).
 - Against a real datasource:
   - a data question produces at least one executed query;
-  - no answer states a figure absent from its "Data used" rows;
-  - an answer with no tool calls has been through the grounding pass.
+  - no answer states a figure absent from its "Data used" rows.
 - A run's stored answer lists its full transcript and its visuals still open after an app restart; the stored sessions that remain are specified in [past-chats](../past-chats/spec.md).
 
-<!-- sources: backend/src/modules/sessions/sessions.controller.ts, sessions.service.ts, turn-data.ts, result-guards.ts, result-compare.ts, entities/session.entity.ts, repositories/sessions.repository.ts; backend/src/mastra/agents/assistant.agent.ts, sql-fixer.agent.ts, sql-verifier.agent.ts, tools/dataset.tools.ts, tools/clarification.tool.ts, tools/visual.tools.ts, agent-constants.ts, mastra.service.ts; backend/src/modules/verified-queries/verified-queries.service.ts; backend/src/infrastructure/database/sqlite-doc-store.ts; frontend/src/app/app.ts, app.html; frontend/src/app/features/sessions/components/session-chat/*, answer-view/*, services/sessions-api.service.ts, models/session.model.ts; frontend/e2e/chat-and-visuals.spec.ts, e2e/helpers/app-actions.ts -->
+<!-- sources: backend/src/modules/sessions/sessions.controller.ts, sessions.service.ts, turn-data.ts, result-guards.ts, result-compare.ts, entities/session.entity.ts, repositories/sessions.repository.ts; backend/src/mastra/agents/insights-lead.agent.ts, sql-fixer.agent.ts, tools/dataset.tools.ts, tools/clarification.tool.ts, agent-constants.ts, mastra.service.ts; backend/src/modules/verified-queries/verified-queries.service.ts; backend/src/infrastructure/database/sqlite-doc-store.ts; frontend/src/app/app.ts, app.html; frontend/src/app/features/sessions/components/session-chat/*, answer-view/*, services/sessions-api.service.ts, models/session.model.ts; frontend/e2e/chat-and-visuals.spec.ts, e2e/helpers/app-actions.ts -->

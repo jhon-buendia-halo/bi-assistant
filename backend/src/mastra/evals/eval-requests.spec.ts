@@ -1,11 +1,10 @@
 /**
- * What an eval case sends the agent, one case per agent kind that has evals
- * (plan 1.25.5, 1.23.26b): the input, the context blocks, the step budget and
- * the requestContext entries, recorded against a mocked `runEvals` and held
- * in a snapshot. Moving evals from a throwaway chat session onto a run host
- * changed none of it; the host id is the only entry left out, as it names
- * the throwaway host and is never read by the model. Insights Analyst
- * has no eval set, so its requests are covered by the run e2e instead.
+ * What an eval case sends the agent (plan 1.25.5, 1.23.26b): the input, the
+ * context blocks, the step budget and the requestContext entries, recorded
+ * against a mocked `runEvals` and held in a snapshot. Elena's first case is
+ * a ported data set's (`insights-lead-data.evals.ts`): a whole run of her
+ * conversation, which builds its own context, so the runner sends none of
+ * its own and no host or visual key (the eval host is gone).
  */
 jest.mock('@mastra/core/evals', () => ({
   runEvals: jest.fn(() => Promise.resolve({ scores: {} })),
@@ -13,8 +12,8 @@ jest.mock('@mastra/core/evals', () => ({
 jest.mock('@mastra/evals/checks', () => ({
   checks: new Proxy({}, { get: () => () => ({ id: 'stub-check' }) }),
 }));
-jest.mock('../agents/assistant.agent', () => ({
-  assistantAgent: { id: 'assistant' },
+jest.mock('../agents/insights-lead.agent', () => ({
+  insightsLeadAgent: { id: 'insights-lead' },
 }));
 jest.mock('../agents/insights-analyst.agent', () => ({
   insightsAnalystAgent: { id: 'insights-analyst' },
@@ -48,26 +47,18 @@ interface SentConfig {
 const recordings: Record<string, unknown> = {};
 
 describe('the requests an eval case sends each agent', () => {
-  for (const agentKey of ['assistant']) {
+  for (const agentKey of ['insights-lead']) {
     it(`${agentKey}: the first case`, async () => {
       const target = evalTargetFor(agentKey);
       const evalCase = evalSetsFor(agentKey)[0].cases[0];
       (runEvals as jest.Mock).mockClear();
-      await runAssistantEvalCase(
-        evalCase,
-        ['World Cup Core'],
-        'host-1',
-        undefined,
-        target,
-      );
+      await runAssistantEvalCase(evalCase, ['World Cup Core'], target);
       const [config] = (runEvals as jest.Mock).mock.calls.at(-1) as [
         SentConfig,
       ];
-      const entries = Object.fromEntries(
-        [...config.data[0].requestContext.entries()].filter(
-          ([key]) => key !== 'session-id',
-        ),
-      );
+      const entries = Object.fromEntries([
+        ...config.data[0].requestContext.entries(),
+      ]);
       const sent = {
         agent: config.target.id,
         input: config.data[0].input,

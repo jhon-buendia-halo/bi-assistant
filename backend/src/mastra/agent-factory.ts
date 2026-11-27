@@ -3,8 +3,7 @@ import { resolveLinks } from './agent-links';
 import { agentInstructions } from './agent-prompt-overrides';
 import { modelOverrideFrom, resolveAgentModel } from './model-resolver';
 import { stepModelFrom } from './step-model';
-import { type PromptTool } from './agents/assistant-prompt';
-import { withToolSection } from './tool-section';
+import { type PromptTool, withToolSection } from './tool-section';
 
 /**
  * The one way a built-in agent is built (agents.md 1.1). A spec says what
@@ -30,18 +29,21 @@ export type AgentClass = 'person' | 'data' | 'orchestrator' | 'single-step';
 /**
  * How an agent's model is picked on each call (agents.md 1.3): the saved
  * model; the step model on the call's context, else the saved one (a
- * workflow's or Elena's routing); or a user agent's model override, else the
- * saved one (only the assistant).
+ * workflow's routing); or a user agent's model override, else the step
+ * model, else the saved one (Elena, who runs user agents, ADR-0059).
  */
 const MODEL_POLICIES = {
   saved: async () => resolveAgentModel(),
   'step-model': async ({ requestContext }: { requestContext?: ContextLike }) =>
     resolveAgentModel(stepModelFrom(requestContext)?.model),
-  'user-override': async ({
+  'override-or-step-model': async ({
     requestContext,
   }: {
     requestContext?: ContextLike;
-  }) => resolveAgentModel(modelOverrideFrom(requestContext)),
+  }) =>
+    resolveAgentModel(
+      modelOverrideFrom(requestContext) ?? stepModelFrom(requestContext)?.model,
+    ),
 } as const;
 
 export type ModelPolicy = keyof typeof MODEL_POLICIES;

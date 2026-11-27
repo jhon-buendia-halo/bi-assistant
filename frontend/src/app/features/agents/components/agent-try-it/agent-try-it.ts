@@ -16,8 +16,15 @@ import {
 } from 'lucide-angular';
 import { AnswerView } from '../../../sessions/components/answer-view/answer-view';
 import { ChatMessage } from '../../../sessions/models/session.model';
-import { WorkflowRun } from '../../../workflows/models/workflow.model';
-import { WorkflowRunsApiService } from '../../../workflows/services/workflow-runs-api.service';
+import { WorkflowRunInputRequired } from '../../../workflows/components/workflow-run-input-required/workflow-run-input-required';
+import {
+  WorkflowRun,
+  WorkflowWaitingFor,
+} from '../../../workflows/models/workflow.model';
+import {
+  RunStreamHandlers,
+  WorkflowRunsApiService,
+} from '../../../workflows/services/workflow-runs-api.service';
 import { TryItInspector } from '../../services/try-it-inspector';
 
 /** What the backend refuses a draft run with when no dataset exists (api.md R12). */
@@ -28,18 +35,28 @@ type TryState =
   | { kind: 'idle' }
   | { kind: 'running'; reasoning: string }
   | { kind: 'done'; run: WorkflowRun }
+  | {
+      kind: 'waiting';
+      run: WorkflowRun;
+      waiting: WorkflowWaitingFor;
+      /** The server refused the answer; the draft still waits. */
+      error: string | null;
+    }
   | { kind: 'stopped' }
   | { kind: 'error'; message: string };
 
 /**
  * Try it (agents-evals R60, R61; ui.md 4.5.1, 4.5.8): runs a user agent's
  * saved draft once on a question, the way a workflow runs, and shows the
- * answer. Nothing is stored: Reset, and leaving, drop the result, and the
- * backend discards the run's host and workspace when the run ends.
+ * answer. When the agent asks the user, the run waits (a card with the
+ * question, ui.md 4.5.x) and the answer continues the same draft (api.md 169);
+ * a draft that expired offers a rerun with the answer added to the question.
+ * Nothing is stored: Reset, and leaving, drop the result, and the backend
+ * discards the run's host and workspace when the run ends.
  */
 @Component({
   selector: 'app-agent-try-it',
-  imports: [AnswerView, LucideAngularModule],
+  imports: [AnswerView, LucideAngularModule, WorkflowRunInputRequired],
   templateUrl: './agent-try-it.html',
   host: { class: 'flex min-h-0 flex-col', 'data-testid': 'agent-tryit' },
 })
@@ -81,6 +98,14 @@ export class AgentTryIt implements OnDestroy {
     if (state.kind !== 'done') return null;
     return (this.inspector.run() ?? state.run).answer ?? null;
   });
+  protected readonly waiting = computed((): WorkflowWaitingFor | null => {
+    const state = this.state();
+    return state.kind === 'waiting' ? state.waiting : null;
+  });
+  protected readonly waitingError = computed((): string | null => {
+    const state = this.state();
+    return state.kind === 'waiting' ? state.error : null;
+  });
   protected readonly reasoning = computed(() => {
     const state = this.state();
     return state.kind === 'running' ? state.reasoning : '';
@@ -89,13 +114,17 @@ export class AgentTryIt implements OnDestroy {
     const state = this.state();
     if (state.kind === 'error') return state.message;
     if (state.kind === 'done' && !state.run.answer) {
-      return state.run.error ?? 'The agent persona gave no answer.';
+      return state.run.error ?? 'The agent gave no answer.';
     }
     return null;
   });
 
   private abort: AbortController | null = null;
   private generation = 0;
+  /** The draft run's id, from the stream's `run` event. */
+  private draftRunId: string | null = null;
+  /** The question of the stream's `input-required` event, until `done` carries it too. */
+  private asked: WorkflowWaitingFor | null = null;
 
   ngOnDestroy(): void {
     this.cancel();
@@ -119,6 +148,8 @@ export class AgentTryIt implements OnDestroy {
     const generation = ++this.generation;
     const current = () => generation === this.generation;
     this.inspector.begin(this.question().trim());
+    this.draftRunId = null;
+    this.asked = null;
     this.state.set({ kind: 'running', reasoning: '' });
     const before = this.beforeRun();
     if (before && !(await before())) {
@@ -131,43 +162,117 @@ export class AgentTryIt implements OnDestroy {
       this.state.set({ kind: 'idle' });
       return;
     }
-    const abort = new AbortController();
-    this.abort = abort;
+    const abort = this.newAbort();
     await this.runs.streamDraftRun(
       id,
       this.question().trim(),
+      this.handlers(current),
+      abort.signal,
+    );
+    if (abort === this.abort) this.abort = null;
+  }
+
+  /** Answer the question the draft waits on (api.md 169): the same draft continues. */
+  async resume(answer: string): Promise<void> {
+    const state = this.state();
+    const id = this.agentId();
+    const text = answer.trim();
+    if (state.kind !== 'waiting' || state.waiting.expired || !text) return;
+    if (id === null) return;
+    const generation = ++this.generation;
+    const current = () => generation === this.generation;
+    this.abort?.abort();
+    this.state.set({ kind: 'running', reasoning: '' });
+    const abort = this.newAbort();
+    let refused: number | null = null;
+    const base = this.handlers(current);
+    await this.runs.resumeDraftRun(
+      id,
+      this.draftRunId ?? state.run.id,
+      state.waiting.stepId,
+      text,
       {
-        onReasoning: (delta) => {
-          const state = this.state();
-          if (current() && state.kind === 'running') {
-            this.state.set({
-              kind: 'running',
-              reasoning: `${state.reasoning}${delta}`.slice(-400),
-            });
-          }
-        },
-        // The stream's first event, `run`, carries the draft run's id.
-        onRun: ({ runId }) => {
-          if (current()) this.inspector.setRunId(runId);
-        },
-        onDone: (run) => {
-          if (!current()) return;
-          this.inspector.finish(run);
-          this.state.set({ kind: 'done', run });
+        ...base,
+        onRefused: (status) => {
+          refused = status;
         },
         onError: (message) => {
           if (!current()) return;
-          if (message === NO_DATASET_TRY_MESSAGE) {
-            this.refused.set(message);
-            this.state.set({ kind: 'idle' });
+          if (refused === null) {
+            base.onError?.(message);
+          } else if (refused === 410) {
+            // The 30 minutes passed or the app restarted: rerun with the answer.
+            this.state.set({
+              ...state,
+              waiting: { ...state.waiting, expired: true },
+              error: null,
+            });
           } else {
-            this.state.set({ kind: 'error', message });
+            this.state.set({ ...state, error: message });
           }
         },
       },
       abort.signal,
     );
     if (abort === this.abort) this.abort = null;
+  }
+
+  /** An expired draft: run again with the answer added to the question. */
+  rerunWithAnswer(answer: string): void {
+    const text = answer.trim();
+    if (!text || this.running()) return;
+    this.question.set(`${this.question().trim()}\n${text}`);
+    void this.run();
+  }
+
+  private newAbort(): AbortController {
+    const abort = new AbortController();
+    this.abort = abort;
+    return abort;
+  }
+
+  private handlers(current: () => boolean): RunStreamHandlers {
+    return {
+      onReasoning: (delta) => {
+        const state = this.state();
+        if (current() && state.kind === 'running') {
+          this.state.set({
+            kind: 'running',
+            reasoning: `${state.reasoning}${delta}`.slice(-400),
+          });
+        }
+      },
+      // The stream's first event, `run`, carries the draft run's id.
+      onRun: ({ runId }) => {
+        if (!current()) return;
+        this.draftRunId = runId;
+        this.inspector.setRunId(runId);
+      },
+      onInputRequired: (event) => {
+        if (current()) this.asked = event;
+      },
+      onDone: (run) => {
+        if (!current()) return;
+        const waiting =
+          run.status === 'suspended' ? (run.waitingFor ?? this.asked) : null;
+        this.asked = null;
+        if (waiting) {
+          this.state.set({ kind: 'waiting', run, waiting, error: null });
+          return;
+        }
+        this.inspector.finish(run);
+        this.state.set({ kind: 'done', run });
+      },
+      onError: (message) => {
+        if (!current()) return;
+        if (message === NO_DATASET_TRY_MESSAGE) {
+          this.refused.set(message);
+          this.state.set({ kind: 'idle' });
+        } else {
+          this.state.set({ kind: 'error', message });
+        }
+      },
+    };
   }
 
   /** Stop the run: the backend ends it and keeps nothing. */

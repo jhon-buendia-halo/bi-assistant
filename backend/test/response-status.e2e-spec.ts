@@ -26,19 +26,6 @@ describe('POST routes the spec answers with 200 (api.md 1.4)', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-  /** The `data:` frames of a stream (api.md 3.1). */
-  const frames = async (res: Response) =>
-    (await res.text())
-      .split('\n\n')
-      .filter((frame) => frame.startsWith('data: '))
-      .map(
-        (frame) =>
-          JSON.parse(frame.slice(6)) as {
-            type: string;
-            content?: string;
-            message?: string;
-          },
-      );
 
   beforeAll(async () => {
     backend = await boot(dataDir);
@@ -73,23 +60,6 @@ describe('POST routes the spec answers with 200 (api.md 1.4)', () => {
     expect(res.status).toBe(404);
   });
 
-  it('the ontology bootstrap stream answers 200 and reports a failure in the stream (3.4)', async () => {
-    const res = await post(
-      '/datasets/no-such-dataset/ontology/bootstrap/stream',
-      {},
-    );
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toMatch(/^text\/event-stream/);
-    // Here the error text is in `message`, not `content` (api.md 3.4). The
-    // dataset stage is reported before the lookup fails.
-    const events = (await frames(res)) as { type: string }[];
-    expect(events.at(-1)).toEqual({
-      type: 'error',
-      message: 'Dataset "no-such-dataset" not found',
-    });
-    expect(events.slice(0, -1).every((e) => e.type === 'progress')).toBe(true);
-  });
-
   it('the developer endpoint test answers 200 with a Style A body (55)', async () => {
     const res = await post('/developer-settings/test-endpoint', {
       endpoint: 'http://127.0.0.1:1',
@@ -98,6 +68,83 @@ describe('POST routes the spec answers with 200 (api.md 1.4)', () => {
     const body = (await res.json()) as { ok: boolean; message: string };
     expect(body.ok).toBe(false);
     expect(body.message).toMatch(/^Unreachable/);
+  });
+
+  it("the visual designer's run routes removed with ADR-0059 answer 404 (130, 131, 134)", async () => {
+    for (const path of [
+      '/workflow-runs/r1/visualizations',
+      '/workflow-runs/r1/visualizations/v1/tailor',
+      '/workflow-runs/r1/visualizations/v1/repair',
+    ]) {
+      const res = await post(path, { instruction: 'x', error: 'x' });
+      const body = (await res.json()) as { message: string };
+      expect({ path, status: res.status, message: body.message }).toEqual({
+        path,
+        status: 404,
+        message: `Cannot POST ${path}`,
+      });
+    }
+  });
+
+  it("refuses a draft run's resume before the stream (169, Style B): 404 agent, 400 no dataset, 404 run", async () => {
+    const json = async (res: Response) =>
+      ({ status: res.status, ...((await res.json()) as object) }) as {
+        status: number;
+        message?: string;
+      };
+    const resume = (agentId: string, runId: string) =>
+      post(`/agents/${agentId}/draft-runs/${runId}/resume/stream`, {
+        stepId: 'answer',
+        answer: 'Matches won',
+      });
+    expect(await json(await resume('nope', 'r1'))).toMatchObject({
+      status: 404,
+      message: 'Agent "nope" not found',
+    });
+    const agentOf = async (name: string, datasets: string[]) => {
+      const created = (await (
+        await post('/agents', { name, datasets })
+      ).json()) as { agent?: { id: string }; message?: string };
+      if (!created.agent) throw new Error(created.message);
+      return created.agent.id;
+    };
+    const noData = await agentOf('No data agent', ['Gone']);
+    expect(await json(await resume(noData, 'r1'))).toMatchObject({
+      status: 400,
+      message: 'Select at least one dataset to preview',
+    });
+    // A dataset on a datasource nobody can reach: the refusals need no data.
+    const { datasource } = (await (
+      await post('/datasources', {
+        kind: 'postgres',
+        name: 'Closed port',
+        config: {
+          host: '127.0.0.1',
+          port: 1,
+          database: 'none',
+          user: 'none',
+          password: 'none',
+          ssl: false,
+        },
+      })
+    ).json()) as { datasource: { id: string } };
+    await post('/datasets', {
+      name: 'Resume Core',
+      tables: ['world_cup.world_cup.matches'],
+      entities: [
+        {
+          key: 'world_cup.world_cup.matches',
+          columns: [{ name: 'match_number', type: 'integer', nullable: false }],
+        },
+      ],
+      datasourceId: datasource.id,
+      datasourceKind: 'postgres',
+    });
+    const withData = await agentOf('Resume agent', ['Resume Core']);
+    expect(await json(await resume(withData, 'r-unknown'))).toMatchObject({
+      status: 404,
+      message: 'Run "r-unknown" not found',
+    });
   });
 
   it('the testing-data load answers 200 with a Style A body (56)', async () => {

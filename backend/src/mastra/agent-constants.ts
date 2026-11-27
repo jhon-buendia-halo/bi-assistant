@@ -19,7 +19,6 @@ export const ASSISTANT_MAX_STEPS = 15;
  * workflow catalogue and its drift tests can read them without Mastra.
  */
 export const OFFICIAL_AGENT_KEYS: readonly string[] = [
-  'assistant',
   'insights-analyst',
   // Elena, the Insights Lead: talked to directly in her own conversation
   // (plan Elena 2), not through a chat.
@@ -27,11 +26,12 @@ export const OFFICIAL_AGENT_KEYS: readonly string[] = [
 ];
 
 /**
- * Olivia and Jessica, the planner and the writer (agents.md 5.11): System
- * agents of the library, each called in one model call without tools.
+ * The agent whose memory handle `MastraService` reads and deletes threads
+ * through: every agent shares the app's one memory store, so any agent with
+ * a memory reaches every thread. Insights Analyst has `sessionMemory()`
+ * (its spec fails if it loses it).
  */
-export const ANALYSIS_PLANNER_AGENT_KEY = 'analysis-planner';
-export const ANSWER_WRITER_AGENT_KEY = 'answer-writer';
+export const MEMORY_HANDLE_AGENT_KEY = 'insights-analyst';
 
 /** The agent that explains a stored query step by step (agents.md 2.12). */
 export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
@@ -57,20 +57,12 @@ export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
  */
 export const BI_ANALYST_AGENT_KEY = 'bi-analyst';
 
-/** Ryan, the visual designer: Generate interactive visuals and Build visual (agents.md 5.11). */
-export const VISUALIZATION_AGENT_KEY = 'visualization';
-
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
-  ANALYSIS_PLANNER_AGENT_KEY,
-  ANSWER_WRITER_AGENT_KEY,
   QUERY_EXPLAINER_AGENT_KEY,
   RESULT_EXPLORER_AGENT_KEY,
-  VISUALIZATION_AGENT_KEY,
   CHIEF_OF_STAFF_AGENT_KEY,
   BI_ANALYST_AGENT_KEY,
   'sql-fixer',
-  'sql-verifier',
   'assistant-eval-judge',
-  'knowledge-bootstrap',
 ];

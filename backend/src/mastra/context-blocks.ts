@@ -1,7 +1,6 @@
 // Pure, DI-free system-context builders shared by `SessionsService` (a real
 // chat turn), the assistant eval harness (no session, but the same
-// datasets), and `OntologyBootstrapService` (drafting from a dataset's schema).
-// No Nest DI here, same pattern as `tool-services.ts`.
+// datasets). No Nest DI here, same pattern as `tool-services.ts`.
 import type { DatasetColumnSnapshot, DatasetSnapshot } from './tool-services';
 import { type OptionalAgentTool, selects } from './agent-tools';
 
@@ -24,10 +23,6 @@ export function knowledgeContext(block: string | undefined): SystemBlock[] {
 
 /** Join hints shown up front to the assistant — enough for a wide dataset. */
 const JOIN_HINT_CHARS = 1_500;
-/** Default character budget for `schemaSnapshotBlock` when unspecified. */
-const DEFAULT_SCHEMA_BLOCK_CHARS = 6_000;
-/** Default sample values shown per column when unspecified. */
-const DEFAULT_SCHEMA_BLOCK_SAMPLE_VALUES = 3;
 
 /**
  * ` -> teams.id` for a key column, so a schema line states where it joins.
@@ -159,39 +154,4 @@ export function schemaNotesBlock(datasets: DatasetSnapshot[]): string {
         ]
       : []),
   ].join('\n');
-}
-
-/**
- * `entity(column type [e.g. a, b], …)` lines with real sample values —
- * richer than a bare schema listing because sample values let a model match
- * filter literals (or a knowledge-mining pass match enum-like values) to
- * real data. Shared by the SQL verifier (`SqlChecks.verifierContext`)
- * and the knowledge-bootstrap agent (`OntologyBootstrapService.bootstrap`) so
- * neither duplicates this formatting.
- */
-export function schemaSnapshotBlock(
-  datasets: DatasetSnapshot[],
-  options: { budgetChars?: number; sampleValues?: number } = {},
-): string {
-  const budgetChars = options.budgetChars ?? DEFAULT_SCHEMA_BLOCK_CHARS;
-  const sampleValues =
-    options.sampleValues ?? DEFAULT_SCHEMA_BLOCK_SAMPLE_VALUES;
-  const lines: string[] = [];
-  let budget = budgetChars;
-  for (const dataset of datasets) {
-    for (const key of dataset.tables) {
-      const columns =
-        dataset.entities?.find((e) => e.key === key)?.columns ?? [];
-      const described = columns.map((column) => {
-        const samples = (column.sampleValues ?? []).slice(0, sampleValues);
-        const shown = samples.length ? ` [e.g. ${samples.join(', ')}]` : '';
-        return `${column.name} ${column.type}${shown}${referenceSuffix(column)}`;
-      });
-      const line = `${key}(${described.join(', ')})`;
-      if (line.length > budget) return lines.join('\n');
-      budget -= line.length;
-      lines.push(line);
-    }
-  }
-  return lines.join('\n');
 }

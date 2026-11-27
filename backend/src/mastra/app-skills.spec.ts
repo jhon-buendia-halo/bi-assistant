@@ -246,24 +246,25 @@ describe('validateAgentSkills', () => {
 describe('the bundled skills', () => {
   it('resolve and validate, with every declared skill present', () => {
     const skills = loadAppSkills(skillsRoot());
-    expect(skills.has('interactive-visuals')).toBe(true);
+    expect(skills.has('avery-playbooks')).toBe(true);
+    // The designer's skill went with it (ADR-0059).
+    expect(skills.has('interactive-visuals')).toBe(false);
+    expect(HARNESS_SKILLS).toEqual({});
     expect(() => validateAgentSkills(skills, AGENT_SKILLS)).not.toThrow();
     expect(() => validateAgentSkills(skills, HARNESS_SKILLS)).not.toThrow();
   });
 
   it('serve a skill document and its folder path', () => {
-    expect(appSkillDocument('interactive-visuals')).toMatch(
-      /^---\nname: interactive-visuals\ndescription: Use when /,
+    expect(appSkillDocument('avery-playbooks')).toMatch(
+      /^---\nname: avery-playbooks\ndescription: Use when /,
     );
-    // curated-knowledge is the only on-demand skill (ADR-0020).
-    expect(AGENT_SKILLS.assistant).toEqual(['curated-knowledge']);
-    expect(catalogSkills('assistant').map((skill) => skill.name)).toEqual([
-      'curated-knowledge',
-    ]);
+    // The removed assistant has no catalogue any more (ADR-0059).
+    expect(AGENT_SKILLS).not.toHaveProperty('assistant');
+    expect(catalogSkills('assistant')).toEqual([]);
     expect(catalogSkills('sql-fixer')).toEqual([]);
   });
 
-  it('serve the curated-knowledge rules as an on-demand skill of the assistant', () => {
+  it("serve the curated-knowledge rules as an on-demand skill of Michael's and Elena's", () => {
     const skill = loadAppSkills(skillsRoot()).get('curated-knowledge');
     expect(skill?.description).toMatch(/^Use when the turn carries a curated/);
     const body = appSkillBody('curated-knowledge');
@@ -276,8 +277,9 @@ describe('the bundled skills', () => {
     expect(body.replace(/\s+/g, ' ')).toContain(
       '- [relation] lines state how concepts connect (is-a, part-of, has-many, related-to, or measured-by a governed metric); use them to choose joins and the governed metric, never as rows of data.',
     );
-    // On demand: the assistant's catalog lists it, and no code sends it.
-    expect(AGENT_SKILLS.assistant).toContain('curated-knowledge');
+    // On demand: their catalogues list it, and no code sends it.
+    expect(AGENT_SKILLS['insights-analyst']).toContain('curated-knowledge');
+    expect(AGENT_SKILLS['insights-lead']).toContain('curated-knowledge');
     for (const names of Object.values(HARNESS_SKILLS)) {
       expect(names).not.toContain('curated-knowledge');
     }
@@ -345,36 +347,30 @@ describe('the bundled skills', () => {
   });
 
   it('serve a skill body without its front matter', () => {
-    const document = appSkillDocument('interactive-visuals');
-    const body = appSkillBody('interactive-visuals');
+    const document = appSkillDocument('avery-playbooks');
+    const body = appSkillBody('avery-playbooks');
 
-    expect(body.startsWith('# Interactive Visuals\n')).toBe(true);
-    expect(body).not.toContain('name: interactive-visuals');
+    expect(body.startsWith("# Avery's playbooks\n")).toBe(true);
+    expect(body).not.toContain('name: avery-playbooks');
     // Trimmed at both ends (appSkillBody), so compare against the trimmed file.
     expect(document.trimEnd().endsWith(body)).toBe(true);
     expect(document.trimEnd().slice(0, -body.length)).toMatch(
-      /^---\nname: interactive-visuals\ndescription: Use when [^\n]*\n---\n+$/,
+      /^---\nname: avery-playbooks\ndescription: Use when [^\n]*\n---\n+$/,
     );
   });
 
-  it('serve the interactive-visuals references the router names', () => {
-    const body = appSkillBody('interactive-visuals');
-    for (const reference of [
-      'reference/spec-mode.md',
-      'reference/freeform.md',
-    ]) {
+  it("serve avery-playbooks' references the router names", () => {
+    const body = appSkillBody('avery-playbooks');
+    for (const reference of ['reference/ranking.md', 'reference/export.md']) {
       expect(body).toContain(reference);
     }
-    expect(
-      appSkillFile('interactive-visuals', 'reference/spec-mode.md'),
-    ).toMatch(/^## The spec\n/);
-    expect(
-      appSkillFile('interactive-visuals', 'reference/freeform.md'),
-    ).toMatch(/^## Fallback: freeform HTML\/CSS\/JavaScript\n/);
+    expect(appSkillFile('avery-playbooks', 'reference/ranking.md')).toMatch(
+      /^# Ranking\n/,
+    );
   });
 
   it('refuse a file path outside the skill folder', () => {
-    expect(() => appSkillFile('interactive-visuals', '../../index.ts')).toThrow(
+    expect(() => appSkillFile('avery-playbooks', '../../index.ts')).toThrow(
       'Invalid skill file path "../../index.ts"',
     );
   });
@@ -403,10 +399,10 @@ describe('skill folders', () => {
 
   it('takes agents and loading mode from the two tables only', () => {
     const skills = loadAppSkills(skillsRoot());
-    // Shared by the assistant, Insights Analyst and Elena (agents.md 7.4).
+    // Shared by Insights Analyst and Elena (agents.md 7.4).
     expect(skills.get('curated-knowledge')).toMatchObject({
       loading: 'on-demand',
-      agents: ['assistant', 'insights-analyst', 'insights-lead'],
+      agents: ['insights-analyst', 'insights-lead'],
     });
     for (const name of ['sql-analysis', 'result-validation']) {
       expect(skills.get(name)).toMatchObject({
@@ -418,11 +414,7 @@ describe('skill folders', () => {
       loading: 'on-demand',
       agents: ['chief-of-staff', 'insights-lead'],
     });
-    expect(skills.get('interactive-visuals')).toMatchObject({
-      loading: 'harness',
-      agents: ['visualization'],
-    });
-    expect(Object.keys(skills.get('interactive-visuals')!).sort()).toEqual([
+    expect(Object.keys(skills.get('avery-playbooks')!).sort()).toEqual([
       'agents',
       'description',
       'dir',
@@ -454,13 +446,9 @@ describe('skill folders', () => {
           'conversation-export',
           'curated-knowledge',
           'dashboard-building',
-          'interactive-visuals',
           'result-validation',
           'sql-analysis',
         ]);
-        expect(
-          fresh.catalogSkills('assistant').map((skill) => skill.name),
-        ).toEqual(['curated-knowledge']);
         expect(
           fresh.catalogSkills('insights-analyst').map((skill) => skill.name),
         ).toEqual(['curated-knowledge', 'result-validation', 'sql-analysis']);
@@ -528,22 +516,25 @@ describe('skill files', () => {
 });
 
 describe('agent skills view (bundled)', () => {
-  it('shows the designer its interactive-visuals skill with every file', () => {
-    const view = agentSkillsView('visualization');
+  it('shows Avery her avery-playbooks skill with every file', () => {
+    const view = agentSkillsView('chief-of-staff');
 
-    expect(view).toEqual({
-      skills: [
-        {
-          name: 'interactive-visuals',
-          description: expect.stringMatching(/^Use when /) as string,
-          level: 'built-in',
-          loading: 'harness',
-          files: [
-            expect.objectContaining({ path: 'SKILL.md' }),
-            expect.objectContaining({ path: 'reference/freeform.md' }),
-            expect.objectContaining({ path: 'reference/spec-mode.md' }),
-          ],
-        },
+    expect(
+      view.skills.find((skill) => skill.name === 'avery-playbooks'),
+    ).toEqual({
+      name: 'avery-playbooks',
+      description: expect.stringMatching(/^Use when /) as string,
+      level: 'built-in',
+      loading: 'on-demand',
+      files: [
+        expect.objectContaining({ path: 'SKILL.md' }),
+        expect.objectContaining({ path: 'reference/ambiguous.md' }),
+        expect.objectContaining({ path: 'reference/dashboard.md' }),
+        expect.objectContaining({ path: 'reference/export.md' }),
+        expect.objectContaining({ path: 'reference/failed-check.md' }),
+        expect.objectContaining({ path: 'reference/no-answer.md' }),
+        expect.objectContaining({ path: 'reference/period-change.md' }),
+        expect.objectContaining({ path: 'reference/ranking.md' }),
       ],
     });
     expect(agentSkillsView('sql-fixer').skills).toEqual([]);
@@ -552,15 +543,15 @@ describe('agent skills view (bundled)', () => {
   it('serves a skill file only to an agent that has the skill', () => {
     expect(
       agentSkillFile(
-        'visualization',
-        'interactive-visuals',
-        'reference/spec-mode.md',
+        'chief-of-staff',
+        'avery-playbooks',
+        'reference/ranking.md',
       ),
     ).toMatchObject({
-      content: expect.stringMatching(/^## The spec\n/) as string,
+      content: expect.stringMatching(/^# Ranking\n/) as string,
     });
     expect(
-      agentSkillFile('assistant', 'interactive-visuals', 'SKILL.md'),
+      agentSkillFile('insights-lead', 'avery-playbooks', 'SKILL.md'),
     ).toEqual({ error: 'no-skill' });
   });
 });

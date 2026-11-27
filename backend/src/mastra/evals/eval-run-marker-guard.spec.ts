@@ -3,7 +3,6 @@ jest.mock('@mastra/evals/checks', () => ({
   checks: new Proxy({}, { get: () => () => ({ id: 'stub-check' }) }),
 }));
 jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
-jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
 jest.mock('../agents/insights-analyst.agent', () => ({
   insightsAnalystAgent: { id: 'insights-analyst' },
 }));
@@ -99,7 +98,7 @@ describe('every eval target is marked (ADR-0054)', () => {
   const targets = everyTarget();
 
   it('enumerates the targets of every set', () => {
-    expect(targets.length).toBeGreaterThanOrEqual(9);
+    expect(targets.length).toBeGreaterThanOrEqual(6);
   });
 
   for (const { targetId, agentKey } of targets) {
@@ -126,9 +125,8 @@ describe('every eval target is marked (ADR-0054)', () => {
       const result = await runAssistantEvalCase(
         evalCase,
         ['Guard'],
-        undefined,
-        undefined,
         target,
+        undefined,
         'job-guard',
       );
 

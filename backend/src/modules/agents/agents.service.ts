@@ -50,6 +50,12 @@ import type {
 } from '../user-agents/entities/user-agent.entity';
 
 import { OFFICIAL_AGENT_KEYS } from '../../mastra/agent-constants';
+import {
+  DASHBOARD_BUILDING_SKILL,
+  INSIGHTS_LEAD_AGENT_KEY,
+} from '../../mastra/agents/insights-lead-catalog';
+import { CONVERSATION_EXPORT_SKILL } from '../../mastra/workflows/export-request';
+import { CONVERSATION_GATES_CONTEXT_KEY } from '../../mastra/workflows/conversation-turn.steps';
 import { CONVERSATIONAL_BINDINGS } from '../../mastra/conversational-agents';
 import {
   DEFAULT_AGENT_DOMAIN,
@@ -74,8 +80,17 @@ function conversationOf(key: string): { workflowId: string } | undefined {
   return binding ? { workflowId: binding.workflowId } : undefined;
 }
 
-/** The registry key of the official agent; every other built-in is `system`. */
-const OFFICIAL_AGENT_KEY = 'assistant';
+/** The built-in agent every user agent runs on: Elena (ADR-0059). */
+const USER_AGENT_HOST_KEY = INSIGHTS_LEAD_AGENT_KEY;
+
+/**
+ * Elena's skills a user agent never gets: its dashboard and export gates
+ * are always closed (ADR-0059), so their skills are never offered.
+ */
+const USER_AGENT_CLOSED_SKILLS: ReadonlySet<string> = new Set([
+  DASHBOARD_BUILDING_SKILL,
+  CONVERSATION_EXPORT_SKILL,
+]);
 
 export interface AgentSummary {
   /** Registry key the agent is registered under in the Mastra instance. */
@@ -95,8 +110,8 @@ export interface AgentSummary {
   domain: AgentDomain;
   description: string;
   /** Tool names the agent can call, sorted alphabetically. A user agent
-   * runs on the assistant, so it lists the assistant's tools its effective
-   * configuration selects (ADR-0022). */
+   * runs on Elena, so it lists her tools its effective configuration
+   * selects (ADR-0022, ADR-0059). */
   tools: string[];
   kind: AgentKind;
   status: AgentStatus;
@@ -237,7 +252,7 @@ export class AgentsService {
       docs.map(async (doc) =>
         summarizeUserAgent(
           doc,
-          await this.assistantToolNames(doc),
+          await this.hostToolNames(doc),
           datasetNames,
           skillsById,
         ),
@@ -269,15 +284,15 @@ export class AgentsService {
     const doc = await this.userAgents.get(key);
     if (!doc) return null;
 
-    // The assistant as this agent's tool selection gives it (R49).
+    // Elena as this agent's tool selection gives her (R49, ADR-0059).
     const skills = await this.callSkills(doc);
-    const assistant = await this.builtinDetail(
-      OFFICIAL_AGENT_KEY,
+    const host = await this.builtinDetail(
+      USER_AGENT_HOST_KEY,
       toolSelectionContext(doc, skills),
     );
     const summary = summarizeUserAgent(
       doc,
-      await this.assistantToolNames(doc),
+      await this.hostToolNames(doc),
       await this.userAgents.datasetNames(),
       await this.userAgents.skillsById(),
     );
@@ -285,10 +300,10 @@ export class AgentsService {
       ...summary,
       draft: doc.draft,
       ...(doc.live ? { live: doc.live } : {}),
-      instructions: assistant?.instructions ?? '',
-      toolDetails: assistant?.toolDetails ?? [],
-      memory: assistant?.memory ?? null,
-      model: assistant?.model ?? null,
+      instructions: host?.instructions ?? '',
+      toolDetails: host?.toolDetails ?? [],
+      memory: host?.memory ?? null,
+      model: host?.model ?? null,
       toolLinks: toolLinks(doc, skills),
       llm: await this.llmDetail(effectiveConfig(doc)),
     };
@@ -298,7 +313,7 @@ export class AgentsService {
    * The settings an agent's turns run on (api.md 34): the saved provider,
    * model and key state, with the agent's model and effort overrides; the
    * effort is moved onto the model's own levels as a call does. The
-   * assistant sets no output cap, so `maxOutputTokens` is null.
+   * conversation's agent sets no output cap, so `maxOutputTokens` is null.
    */
   private async llmDetail(config?: AgentConfig): Promise<AgentLlmDetail> {
     const view = await safe(() => this.llm?.getView());
@@ -335,17 +350,20 @@ export class AgentsService {
 
   /**
    * The skills an agent gets, resolved at startup (agents.md 7.3, api.md
-   * 34a). A user agent runs on the assistant, so it shows the assistant's.
+   * 34a). A user agent runs on Elena, so it shows hers (ADR-0059).
    */
   async skills(key: string): Promise<AgentSkillsView> {
     const view = agentSkillsView(await this.skillsAgent(key));
     if (this.isBuiltin(key)) return view;
-    // A user agent's own skills follow the assistant's (api.md 34a).
+    // A user agent's own skills follow Elena's (api.md 34a), without the
+    // skills of her closed gates.
     const own = await this.inAppSkills(key);
     return {
       ...view,
       skills: [
-        ...view.skills,
+        ...view.skills.filter(
+          (skill) => !USER_AGENT_CLOSED_SKILLS.has(skill.name),
+        ),
         ...own.map((skill) => ({
           name: skill.name,
           description: skill.description,
@@ -387,6 +405,9 @@ export class AgentsService {
     const own = this.isBuiltin(key)
       ? undefined
       : (await this.inAppSkills(key)).find((skill) => skill.name === name);
+    if (!own && !this.isBuiltin(key) && USER_AGENT_CLOSED_SKILLS.has(name)) {
+      throw new NotFoundException(`Agent "${key}" has no skill "${name}"`);
+    }
     if (own) {
       const file = inAppFiles(own).find((entry) => entry.path === path);
       if (!file) {
@@ -412,7 +433,7 @@ export class AgentsService {
   /** The registry key whose skills `key` shows; 404 when it names no agent. */
   private async skillsAgent(key: string): Promise<string> {
     if (this.isBuiltin(key)) return key;
-    if (await this.userAgents.get(key)) return OFFICIAL_AGENT_KEY;
+    if (await this.userAgents.get(key)) return USER_AGENT_HOST_KEY;
     throw new NotFoundException(`Agent "${key}" not found`);
   }
 
@@ -454,29 +475,29 @@ export class AgentsService {
 
   private async userSummary(doc: UserAgentDoc): Promise<AgentSummary> {
     const [tools, datasetNames, skillsById] = await Promise.all([
-      this.assistantToolNames(doc),
+      this.hostToolNames(doc),
       this.userAgents.datasetNames(),
       this.userAgents.skillsById(),
     ]);
     return summarizeUserAgent(doc, tools, datasetNames, skillsById);
   }
 
-  /** The assistant's tools that a user agent's effective config selects. */
-  private async assistantToolNames(doc: UserAgentDoc): Promise<string[]> {
-    const assistant = this.mastra.listAgents()[OFFICIAL_AGENT_KEY];
-    if (!assistant) return [];
+  /** Elena's tools that a user agent's effective config selects. */
+  private async hostToolNames(doc: UserAgentDoc): Promise<string[]> {
+    const host = this.mastra.listAgents()[USER_AGENT_HOST_KEY];
+    if (!host) return [];
     const requestContext = toolSelectionContext(
       doc,
       await this.callSkills(doc),
     );
     return Object.keys(
-      (await safe(() => assistant.listTools({ requestContext }))) ?? {},
+      (await safe(() => host.listTools({ requestContext }))) ?? {},
     ).sort();
   }
 
   /**
    * A built-in agent's detail; `requestContext` (a user agent's tool
-   * selection) shapes the assistant's prompt and tools.
+   * selection) shapes Elena's prompt and tools.
    */
   private async builtinDetail(
     key: string,
@@ -511,7 +532,7 @@ export class AgentsService {
 
   /** The eval question sets defined for an agent; empty when it has none. */
   evalSets(key: string): AgentEvalSet[] {
-    // A set's agent is its `agentKey`, the assistant by default (agents.md 8.1).
+    // A set's agent is its `agentKey` (agents.md 8.1).
     return evalSetsFor(key).map((set) => ({
       id: set.id,
       name: set.name,
@@ -520,11 +541,20 @@ export class AgentsService {
         id: evalCase.id,
         question: evalCase.question,
         intent: evalCase.intent,
-        checks: evalCase.scorers.map((scorer) => ({
-          id: String(scorer.id ?? ''),
-          name: String(scorer.name ?? ''),
-          description: String(scorer.description ?? ''),
-        })),
+        // Every check it is scored on: its scorers, then its custom checks
+        // (Elena's ported sets have only these, ADR-0059).
+        checks: [
+          ...evalCase.scorers.map((scorer) => ({
+            id: String(scorer.id ?? ''),
+            name: String(scorer.name ?? ''),
+            description: String(scorer.description ?? ''),
+          })),
+          ...(evalCase.customChecks ?? []).map((check) => ({
+            id: check.id,
+            name: check.id,
+            description: check.description,
+          })),
+        ],
       })),
     }));
   }
@@ -561,7 +591,7 @@ export class AgentsService {
 /** A user agent as a catalogue entry; `key` is its id (R48). */
 function summarizeUserAgent(
   doc: UserAgentDoc,
-  assistantTools: string[],
+  hostTools: string[],
   datasetNames: Set<string>,
   skillsById?: ReadonlyMap<string, SkillDoc>,
 ): AgentSummary {
@@ -574,7 +604,7 @@ function summarizeUserAgent(
     intro: '',
     domain: config.domain ?? DEFAULT_AGENT_DOMAIN,
     description: config.description,
-    tools: [...assistantTools],
+    tools: [...hostTools],
     kind: 'user',
     status: doc.live ? 'live' : 'draft',
     pinned: Boolean(doc.pinned),
@@ -600,14 +630,19 @@ type AgentLike = ReturnType<MastraService['listAgents']>[string];
 
 /**
  * A requestContext carrying a user agent's tool selection from its effective
- * configuration (Live, else draft), the way its sessions' turns get it
- * (agents.md 4.2). It carries none when the agent keeps every tool.
+ * configuration (Live, else draft), the way its Try it gets it (agents.md
+ * 2.23, 4.2): none when the agent keeps every tool, and Elena's dashboard
+ * and export gates closed, as they always are for a user agent.
  */
 function toolSelectionContext(
   doc: UserAgentDoc,
   skills: readonly AgentSkill[],
 ): RequestContext {
   const requestContext = new RequestContext();
+  requestContext.set(CONVERSATION_GATES_CONTEXT_KEY, {
+    dashboard: false,
+    export: false,
+  });
   const direct = effectiveConfig(doc).tools;
   if (direct) {
     const tools = effectiveOptionalTools(direct, skills);
@@ -637,15 +672,12 @@ function toolLinks(
   const selected = new Set<string>(
     effectiveOptionalTools(config.tools, skills),
   );
-  // Linking one tool of a pair (create_visual / update_visual) links both.
-  const sameGroup = (a: string, b: string) =>
-    a === b || (!!optionalToolOf(a) && optionalToolOf(a) === optionalToolOf(b));
   return [...LIBRARY_TOOLS]
     .sort((a, b) => a.localeCompare(b))
     .map((name) => {
-      const instructions = fromInstructions.some((t) => sameGroup(t, name));
+      const instructions = fromInstructions.includes(name);
       const via = fromSkills
-        .filter((skill) => skill.tools.some((t) => sameGroup(t, name)))
+        .filter((skill) => skill.tools.includes(name))
         .map((skill) => skill.name)
         .sort((a, b) => a.localeCompare(b));
       const optional = optionalToolOf(name);
@@ -657,17 +689,7 @@ function toolLinks(
       return {
         name,
         status,
-        linkedVia: {
-          instructions: ALWAYS_ON_TOOLS.includes(name)
-            ? fromInstructions.includes(name)
-            : instructions,
-          skills: ALWAYS_ON_TOOLS.includes(name)
-            ? fromSkills
-                .filter((skill) => skill.tools.includes(name))
-                .map((skill) => skill.name)
-                .sort((a, b) => a.localeCompare(b))
-            : via,
-        },
+        linkedVia: { instructions, skills: via },
       };
     });
 }

@@ -45,10 +45,6 @@ function services(
       truncated: true,
       totalRows: 1870,
     }),
-    createVisual: jest.fn(),
-    updateVisual: jest.fn(),
-    showPanelItem: jest.fn(),
-    updateWorkflow: jest.fn(),
     ...overrides,
   };
 }

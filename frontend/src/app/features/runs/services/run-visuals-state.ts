@@ -24,8 +24,6 @@ export class RunVisualsState {
   private readonly api = inject(WorkflowRunsApiService);
   private readonly toast = inject(ToastService);
 
-  /** The run a visual is being generated for. */
-  readonly generating = signal<string | null>(null);
   /** The visual open under the answer, with the run it belongs to. */
   readonly shown = signal<{
     runId: string;
@@ -35,23 +33,6 @@ export class RunVisualsState {
   readonly error = signal<string | null>(null);
   /** The id of the visual whose bundle is downloading. */
   readonly downloading = signal<string | null>(null);
-
-  /** "Generate interactive visuals" on the run's answer (api.md 130). */
-  generate(run: WorkflowRun, apply: ApplyRun): void {
-    if (this.generating() !== null) return;
-    this.generating.set(run.id);
-    this.error.set(null);
-    this.api.generateVisualization(run.id, run.answer?.at).subscribe({
-      next: (result) => {
-        this.generating.set(null);
-        this.adopt(run.id, result, apply);
-      },
-      error: (err) => {
-        this.generating.set(null);
-        this.toast.error(err?.error?.message ?? 'Backend unreachable');
-      },
-    });
-  }
 
   /** The card's View: open that visual at the card's version (api.md 123). */
   view(run: WorkflowRun, event: VisualEvent): void {
@@ -77,7 +58,7 @@ export class RunVisualsState {
       });
   }
 
-  /** The panel tailored, refreshed or repaired the open visual. */
+  /** The panel refreshed the open visual. */
   adopt(runId: string, result: RunVisualResult, apply: ApplyRun): void {
     if (!result.ok || !result.visualization) return;
     this.error.set(null);

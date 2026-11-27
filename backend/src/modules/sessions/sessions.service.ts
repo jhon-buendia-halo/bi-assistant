@@ -8,19 +8,10 @@ import {
   Optional,
 } from '@nestjs/common';
 import { parseWorkflow } from '../../mastra/workflow-section';
-import { agentPromptOverrideFor } from '../../mastra/agent-prompt-overrides';
-import { assistantShippedPrompt } from '../../mastra/agents/assistant-prompt';
 import { MastraService } from '../../mastra/mastra.service';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import type { AgentConfig } from '../user-agents/entities/user-agent.entity';
 import { setDatasetToolServices } from '../../mastra/tool-services';
-import type {
-  PanelToolInput,
-  PanelToolResult,
-  DatasetToolTurnRecord,
-  WorkflowToolInput,
-  WorkflowToolResult,
-} from '../../mastra/tool-services';
 import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
@@ -37,21 +28,20 @@ import {
   type ConversationExporter,
 } from '../conversation-export/conversation-export.contract';
 import {
-  buildPanelItem,
   tableCsv,
   titleSlug,
   upsertPanelItem,
   visualItemId,
   withVisualItems,
 } from './panel-items';
-import { applyWorkflowUpdate, workflowViewOf } from './workflow-update';
+import { workflowViewOf } from './workflow-update';
 import {
+  ASSISTANT_WORKFLOW_ID,
   ASSISTANT_WORKFLOW_NAME,
   REMOVED_WORKFLOW_NAMES,
   isRemovedWorkflowId,
   parseWorkflowId,
   sessionWorkflowId,
-  WRAPPED_AGENT_KEYS,
 } from '../../mastra/workflows/workflow-catalog';
 import { renderPdf } from '../../common/markdown-pdf';
 import {
@@ -62,7 +52,6 @@ import {
 } from './workspace-files';
 import {
   ChatMessage,
-  CrossCheck,
   FilePanelItem,
   InteractiveVisualization,
   MessageFeedback,
@@ -72,7 +61,6 @@ import {
   SessionView,
   SessionVisualization,
   SessionWorkflowRef,
-  ToolDataRecord,
   VisualEvent,
   WorkflowPhase,
   WorkflowView,
@@ -83,12 +71,13 @@ import { SessionDatasets } from './turn/session-datasets';
 import { SqlChecks } from './turn/sql-checks';
 import { TurnEngine } from './turn/turn-engine';
 import { TurnOptions } from './turn/turn-options';
+import { INSIGHTS_LEAD_AGENT_KEY } from '../../mastra/agents/insights-lead-catalog';
 import type {
   RunStepEvent,
   StreamEvent,
   TurnSuspension,
 } from './turn/stream-events';
-import { ASSISTANT_AGENT_KEY, lastSuccessfulSql } from './turn/turn-records';
+import { lastSuccessfulSql } from './turn/turn-records';
 import { workflowSourceOf } from './turn/turn-workflow';
 
 export type {
@@ -111,11 +100,8 @@ export const RUN_HOST_ID_PREFIX = 'run-';
  */
 /** A visual action on a run-backed host (api.md 130-134). */
 export type RunVisualAction =
-  | { kind: 'create'; sourceMessageAt?: string }
-  | { kind: 'tailor'; visualId: string; instruction: string }
   | { kind: 'revert'; visualId: string; version: number }
-  | { kind: 'refresh'; visualId: string }
-  | { kind: 'repair'; visualId: string; error: string; version: number };
+  | { kind: 'refresh'; visualId: string };
 
 /** What `runVisualAction` answers: the caller stores it on the run. */
 export interface RunVisualOutcome {
@@ -133,12 +119,6 @@ export interface RunHostSpec {
    * host (`agentKey`) and a draft run (`draftAgentId`).
    */
   workflowId?: string;
-  /**
-   * An agent host (the eval runner): the built-in agent (`assistant`)
-   * whose turn the host runs on the agent-turn engine, with no catalogue
-   * workflow behind it.
-   */
-  agentKey?: string;
   /** The workflow's or the agent's name: the host's name. */
   name: string;
   /** The input's datasets. */
@@ -229,21 +209,17 @@ export class SessionsService implements OnModuleInit {
     this.sqlChecks = new SqlChecks({
       mastra,
       datasourcesService,
-      llmService,
       verifiedQueries,
       datasets: this.turnDatasets,
       logger: this.logger,
     });
     this.turnOptions = new TurnOptions({
-      mastra,
       llmService,
-      visuals,
       verifiedQueries,
       metrics,
       knowledge,
       userAgents,
       datasets: this.turnDatasets,
-      logger: this.logger,
       existingDatasets: (names) => this.existingDatasets(names),
       updateDoc: (id, patch) => this.updateDoc(id, patch),
     });
@@ -258,8 +234,6 @@ export class SessionsService implements OnModuleInit {
       toView: (session) => this.toView(session),
       workflowOf: (session) => this.workflowOf(session),
       effectiveWorkflowFor: (session) => this.effectiveWorkflowFor(session),
-      crossCheckAnswer: (session, question, data, signal) =>
-        this.crossCheckAnswer(session, question, data, signal),
       dashboardVersion: (artifactId) => {
         if (!this.artifacts) throw new Error('Artifacts are not available');
         return this.artifacts.dashboardVersion(artifactId);
@@ -293,7 +267,7 @@ export class SessionsService implements OnModuleInit {
   private readonly turnDatasets: SessionDatasets;
   /** The query inspector's page path, which `explore_result` pages through. */
   private readonly queryEvidence: QueryEvidenceService;
-  /** SQL repair, careful mode's cross-check and the Verified badge. */
+  /** SQL repair and the Verified badge. */
   private readonly sqlChecks: SqlChecks;
   /** What reaches the model on a turn. */
   private readonly turnOptions: TurnOptions;
@@ -338,37 +312,6 @@ export class SessionsService implements OnModuleInit {
               abortSignal: options.abortSignal,
             })
           : this.mastra.interpretResult(input),
-      createVisual: async (
-        sessionId,
-        sourceMessageAt,
-        instruction,
-        turnRecords,
-      ) => {
-        const session = await this.get(sessionId);
-        const { metadata } = await this.visuals.create(
-          session,
-          sourceMessageAt,
-          instruction,
-          turnRecords,
-        );
-        await this.saveVisualMetadata(session, metadata);
-        return this.toolResult(metadata);
-      },
-      updateVisual: async (sessionId, visualId, instruction, turnRecords) => {
-        const session = await this.get(sessionId);
-        const { metadata } = await this.visuals.update(
-          session,
-          visualId,
-          instruction,
-          turnRecords,
-        );
-        await this.saveVisualMetadata(session, metadata);
-        return this.toolResult(metadata);
-      },
-      showPanelItem: (sessionId, input, turnRecords) =>
-        this.showPanelItem(sessionId, input, turnRecords),
-      updateWorkflow: (sessionId, input) =>
-        this.updateWorkflow(sessionId, input),
     });
 
     // A preview or a run host left when the app stopped has no session left
@@ -389,19 +332,6 @@ export class SessionsService implements OnModuleInit {
         }
       }),
     );
-  }
-
-  /**
-   * Careful mode's cross-check (agents.md 5.4), the seam the turn engine
-   * reaches it through; `signal` is the turn's stop.
-   */
-  private crossCheckAnswer(
-    session: SessionDoc,
-    question: string,
-    data: ToolDataRecord[],
-    signal?: AbortSignal,
-  ): Promise<CrossCheck | undefined> {
-    return this.sqlChecks.crossCheckAnswer(session, question, data, signal);
   }
 
   list(): Promise<SessionDoc[]> {
@@ -459,9 +389,8 @@ export class SessionsService implements OnModuleInit {
   /**
    * A run host (ADR-0041; agents.md 5.14): the in-memory session one run
    * executes its agent turn on, shaped as `POST /sessions` would shape a
-   * session of it: bound to the catalogue workflow's agent (`workflowId`)
-   * or, for the eval runner, to a built-in agent directly (`agentKey`: the
-   * assistant over the given datasets), with, as its transcript, the earlier
+   * session of it: bound to the catalogue workflow's agent (`workflowId`),
+   * with, as its transcript, the earlier
    * run's question and answer (plan 5.4). 404 for a workflow the catalogue
    * does not hold (an `agent:` id, `seq-text-demo`, `deep-analysis`) or an
    * agent that has no agent-turn binding. Its workspace is
@@ -469,41 +398,33 @@ export class SessionsService implements OnModuleInit {
    */
   async createRunHost(spec: RunHostSpec): Promise<SessionDoc> {
     if (spec.draftAgentId) return this.createDraftRunHost(spec);
-    let binding: Pick<SessionDoc, 'agentKey' | 'agentId' | 'agentName'> = {};
-    let codeWorkflowId: string | undefined;
     const datasets = spec.datasets ?? [];
-    if (spec.agentKey !== undefined) {
-      const key = spec.agentKey;
-      const agent = WRAPPED_AGENT_KEYS.includes(key)
-        ? this.mastra.listAgents()[key]
-        : undefined;
-      // The assistant's own turn: a plain host, bound to no agent.
-      if (!agent) throw new NotFoundException(`Agent "${key}" not found`);
-    } else {
-      const parsed = spec.workflowId
-        ? parseWorkflowId(spec.workflowId)
-        : undefined;
-      // A code workflow runs for its `primaryFor` agent; a built-in agent's
-      // conversation (plan Elena 1.3) on its binding's host agent.
-      const primary =
-        parsed?.kind === 'code'
-          ? parsed.source.primaryFor
-          : parsed?.kind === 'conversation'
-            ? parsed.binding.hostAgentKey
-            : undefined;
-      const agent = primary ? this.mastra.listAgents()[primary] : undefined;
-      if (!primary || !agent) {
-        throw new NotFoundException(`Workflow "${spec.workflowId}" not found`);
-      }
-      binding = { agentKey: primary, agentName: agent.name ?? primary };
-      // The run's own workflow: an agent can run more than one.
-      codeWorkflowId =
-        parsed?.kind === 'code'
-          ? parsed.source.id
-          : parsed?.kind === 'conversation'
-            ? parsed.binding.workflowId
-            : undefined;
+    const parsed = spec.workflowId
+      ? parseWorkflowId(spec.workflowId)
+      : undefined;
+    // A code workflow runs for its `primaryFor` agent; a built-in agent's
+    // conversation (plan Elena 1.3) on its binding's host agent.
+    const primary =
+      parsed?.kind === 'code'
+        ? parsed.source.primaryFor
+        : parsed?.kind === 'conversation'
+          ? parsed.binding.hostAgentKey
+          : undefined;
+    const agent = primary ? this.mastra.listAgents()[primary] : undefined;
+    if (!primary || !agent) {
+      throw new NotFoundException(`Workflow "${spec.workflowId}" not found`);
     }
+    const binding: Pick<SessionDoc, 'agentKey' | 'agentName'> = {
+      agentKey: primary,
+      agentName: agent.name ?? primary,
+    };
+    // The run's own workflow: an agent can run more than one.
+    const codeWorkflowId =
+      parsed?.kind === 'code'
+        ? parsed.source.id
+        : parsed?.kind === 'conversation'
+          ? parsed.binding.workflowId
+          : undefined;
     const id = `${RUN_HOST_ID_PREFIX}${spec.runId}`;
     const name = spec.name.slice(0, 64);
     const workspace = await this.mastra.ensureSessionWorkspace(id, name);
@@ -582,9 +503,10 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * The run host of a draft run: a preview-shaped session (it runs the
-   * draft's instructions, model, tools and skills) that is also a run host,
-   * so the turn path and its clean-up are a run's. Never stored or listed.
+   * The run host of a draft run: a preview-shaped session over the draft
+   * that is also a run host, so the turn path and its clean-up are a run's.
+   * Elena runs it (ADR-0059): her prompt and checks, with the draft's
+   * instructions, model, tools and skills. Never stored or listed.
    */
   private async createDraftRunHost(spec: RunHostSpec): Promise<SessionDoc> {
     const agentId = spec.draftAgentId as string;
@@ -598,6 +520,7 @@ export class SessionsService implements OnModuleInit {
       name,
       workspaceId: workspace.id,
       datasets: target.datasets,
+      agentKey: INSIGHTS_LEAD_AGENT_KEY,
       agentId,
       agentName: target.name,
       workflowId: sessionWorkflowId({ agentId }),
@@ -627,7 +550,6 @@ export class SessionsService implements OnModuleInit {
     question: string,
     emit: (event: StreamEvent) => void,
     abortSignal: AbortSignal | undefined,
-    careful: boolean,
     onStepEvent: (event: RunStepEvent) => void,
   ): Promise<TurnSuspension | undefined> {
     const host = this.memoryHosts.get(hostId);
@@ -639,8 +561,6 @@ export class SessionsService implements OnModuleInit {
       trimmed,
       emit,
       abortSignal,
-      undefined,
-      careful,
       onStepEvent,
       true,
     );
@@ -801,7 +721,8 @@ export class SessionsService implements OnModuleInit {
    */
   async toView(stored: SessionDoc): Promise<SessionView> {
     const session = this.readable(stored);
-    if (session.agentKey) {
+    // A user agent first: a draft run's host is Elena's too (ADR-0059).
+    if (session.agentKey && !session.agentId) {
       return this.viewOf(session, this.builtinAgentRef(session));
     }
     if (!session.agentId) return this.viewOf(session);
@@ -818,7 +739,7 @@ export class SessionsService implements OnModuleInit {
       : new Map<string, AgentConfig | undefined>();
     return sessions.map((stored) => {
       const session = this.readable(stored);
-      if (session.agentKey) {
+      if (session.agentKey && !session.agentId) {
         return this.viewOf(session, this.builtinAgentRef(session));
       }
       if (!session.agentId) return this.viewOf(session);
@@ -913,14 +834,14 @@ export class SessionsService implements OnModuleInit {
         this.mastra.listAgents()[key]?.name ?? session.agentName ?? key;
       return { id, name, kind: 'agent', deleted: false };
     }
-    if (parsed?.kind === 'builtin-agent') {
-      const name =
-        parsed.agentKey === ASSISTANT_AGENT_KEY
-          ? ASSISTANT_WORKFLOW_NAME
-          : (this.mastra.listAgents()[parsed.agentKey]?.name ??
-            session.agentName ??
-            parsed.agentKey);
-      return { id, name, kind: 'agent', deleted: false };
+    // The removed assistant's retired id (ADR-0059): its chip still reads.
+    if (id === ASSISTANT_WORKFLOW_ID) {
+      return {
+        id,
+        name: ASSISTANT_WORKFLOW_NAME,
+        kind: 'agent',
+        deleted: false,
+      };
     }
     return config
       ? { id, name: config.name, kind: 'agent', deleted: false }
@@ -929,9 +850,9 @@ export class SessionsService implements OnModuleInit {
 
   /**
    * The phases of the `## Workflow` section of the prompt the session runs
-   * (ADR-0029): none for a built-in agent bound by key, a user
-   * agent's Live instructions when they have the section, else the
-   * assistant's prompt. `config` is the running agent version, when any.
+   * (ADR-0029): none for a built-in agent bound by key, else a user
+   * agent's Live instructions when they have the section. `config` is the
+   * running agent version, when any.
    */
   effectiveWorkflowFor(
     session: SessionDoc,
@@ -940,13 +861,7 @@ export class SessionsService implements OnModuleInit {
     // A built-in agent's steps are its workflow's run events, never a
     // prompt's: Michael's (Avery + Michael, or a past chat of a removed
     // workflow) included.
-    if (session.agentKey) return [];
-    const own = config ? parseWorkflow(config.instructions) : [];
-    if (own.length) return own;
-    return parseWorkflow(
-      agentPromptOverrideFor(ASSISTANT_AGENT_KEY)?.prompt ??
-        assistantShippedPrompt(),
-    );
+    return session.agentKey ? [] : parseWorkflow(config?.instructions ?? '');
   }
 
   /** The agent version a session's turns run (its Live version; a preview's draft). */
@@ -981,49 +896,6 @@ export class SessionsService implements OnModuleInit {
   }
 
   // --------------------------------------------------------- panel items
-
-  /**
-   * The `show_in_panel` bridge (agents.md 3.11): validate the call, store the
-   * item on the session and return the summary the model sees. Throws the
-   * message the tool answers with.
-   */
-  private async showPanelItem(
-    sessionId: string,
-    input: PanelToolInput,
-    turnRecords?: DatasetToolTurnRecord[],
-  ): Promise<PanelToolResult> {
-    const session = await this.get(sessionId);
-    const { item, summary } = await buildPanelItem(input, {
-      session,
-      turnRecords,
-    });
-    await this.updateDoc(session.id, {
-      panelItems: upsertPanelItem(session.panelItems ?? [], item),
-    });
-    return summary;
-  }
-
-  /**
-   * The `update_workflow` bridge (agents.md 3.11): validate the call against
-   * the session's steps, save the state and return the summary the model sees.
-   * Throws the message the tool answers with.
-   */
-  private async updateWorkflow(
-    sessionId: string,
-    input: WorkflowToolInput,
-  ): Promise<WorkflowToolResult> {
-    const session = await this.get(sessionId);
-    const promptSteps = this.effectiveWorkflowFor(
-      session,
-      await this.runningConfig(session),
-    ).length;
-    const { state, result } = applyWorkflowUpdate(input, {
-      promptSteps,
-      state: session.workflowState,
-    });
-    await this.updateDoc(session.id, { workflowState: state });
-    return result;
-  }
 
   /** The workflow view of a stored session, for the `workflow` event. */
   private async workflowOf(
@@ -1228,44 +1100,6 @@ export class SessionsService implements OnModuleInit {
     event?: VisualEvent;
   }> {
     switch (action.kind) {
-      case 'create': {
-        const { metadata } = await this.visuals.create(
-          host,
-          action.sourceMessageAt || undefined,
-        );
-        return {
-          metadata,
-          version: 1,
-          event: {
-            visualId: metadata.id,
-            version: 1,
-            title: metadata.title,
-            action: 'created',
-          },
-        };
-      }
-      case 'tailor': {
-        const instruction = (action.instruction ?? '').trim();
-        if (!instruction) {
-          throw new BadRequestException('instruction is required');
-        }
-        const { metadata } = await this.visuals.update(
-          host,
-          action.visualId,
-          instruction,
-        );
-        const version = this.visuals.currentVersion(metadata);
-        return {
-          metadata,
-          version,
-          event: {
-            visualId: metadata.id,
-            version,
-            title: metadata.title,
-            action: 'updated',
-          },
-        };
-      }
       case 'revert': {
         const metadata = await this.visuals.revert(
           host,
@@ -1290,72 +1124,7 @@ export class SessionsService implements OnModuleInit {
         );
         return { metadata, version: this.visuals.currentVersion(metadata) };
       }
-      case 'repair': {
-        const meta = this.visuals.find(host, action.visualId);
-        const current = this.visuals.currentVersion(meta);
-        if (action.version !== current) {
-          throw new BadRequestException(
-            `Only the current version can be repaired (requested v${action.version}, current v${current})`,
-          );
-        }
-        const { metadata } = await this.visuals.repair(
-          host,
-          action.visualId,
-          action.error,
-        );
-        return { metadata, version: this.visuals.currentVersion(metadata) };
-      }
     }
-  }
-
-  /** Upsert visual metadata on the session, optionally logging a chat event. */
-  private async saveVisualMetadata(
-    session: SessionDoc,
-    metadata: SessionVisualization,
-    event?: VisualEvent,
-  ): Promise<SessionDoc> {
-    const fresh = await this.get(session.id);
-    const others = (fresh.visualizations ?? []).filter(
-      (v) => v.id !== metadata.id,
-    );
-    const patch: Partial<SessionDoc> = {
-      visualizations: [...others, metadata],
-      // The visual joins the panel history, newest shown (ADR-0029).
-      panelItems: upsertPanelItem(fresh.panelItems ?? [], {
-        id: visualItemId(metadata.id),
-        kind: 'visual',
-        title: metadata.title,
-        shownAt: new Date().toISOString(),
-        visualId: metadata.id,
-      }),
-    };
-    if (event) {
-      const verb =
-        event.action === 'created'
-          ? 'Created'
-          : event.action === 'updated'
-            ? 'Updated'
-            : 'Reverted';
-      patch.messages = [
-        ...fresh.messages,
-        {
-          role: 'assistant',
-          content: `${verb} interactive visual "${event.title}" (v${event.version}).`,
-          at: new Date().toISOString(),
-          visual: event,
-        },
-      ];
-    }
-    return (await this.updateDoc(session.id, patch)) ?? fresh;
-  }
-
-  private toolResult(metadata: SessionVisualization) {
-    return {
-      visualId: metadata.id,
-      version: this.visuals.currentVersion(metadata),
-      title: metadata.title,
-      description: metadata.description,
-    };
   }
 
   /**

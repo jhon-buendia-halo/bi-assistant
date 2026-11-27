@@ -8,6 +8,9 @@
 /** Her registry key (agents.md 1.2). */
 export const INSIGHTS_LEAD_AGENT_KEY = 'insights-lead';
 
+/** Her skill for a dashboard, offered with the dashboard gate open. */
+export const DASHBOARD_BUILDING_SKILL = 'dashboard-building';
+
 /** Her display name (job title). */
 export const INSIGHTS_LEAD_NAME = 'Insights Lead';
 

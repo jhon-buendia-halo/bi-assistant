@@ -14,7 +14,9 @@
 // - --root reads another checkout (the base worktree) with this script:
 //     node scripts/agent-inventory.mjs --root <base> --json > .context/agents-base.json
 //     node scripts/agent-inventory.mjs --compare .context/agents-base.json
-//   The comparison names the agents whose evals must run.
+//   The comparison names the agents whose evals must run, and the matrix
+//   scenarios each one differs under (a base recorded by an older script has
+//   no per-scenario hashes: record it again with --root).
 // - Exits 1 for an unclassified or stale class entry; --strict also for a gap.
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -31,6 +33,7 @@ import {
   MATRIX_SCENARIOS,
   modelPolicy,
   registryEntries,
+  scenarioHashes,
 } from './agent-inventory-lib.mjs';
 
 const USAGE = 'Usage: node scripts/agent-inventory.mjs [--root <checkout>] [--json] [--compare <base.json>] [--strict]';
@@ -104,7 +107,9 @@ async function readModel(agent, requestContext) {
 }
 
 /**
- * Each agent's outputs across MATRIX_SCENARIOS, hashed. The compiled build's
+ * Each agent's outputs across MATRIX_SCENARIOS, hashed: `{ matrixHash,
+ * scenarioHashes }`, the second one hash per scenario so a comparison can
+ * name the scenarios that differ. The compiled build's
  * own bridges are used: an echoing model resolver (the model it is asked for
  * comes back as plain data) and, for `overrides`, a prompt override per agent.
  */
@@ -133,7 +138,9 @@ async function matrixHashes(backend, load, RequestContext, found) {
     }
   }
   setAgentPromptOverrides([]);
-  return new Map([...outputs].map(([key, list]) => [key, matrixHash(list)]));
+  return new Map(
+    [...outputs].map(([key, list]) => [key, { matrixHash: matrixHash(list), scenarioHashes: scenarioHashes(list) }]),
+  );
 }
 
 /**
@@ -175,7 +182,7 @@ async function inventory(root) {
   }
   const matrix = await matrixHashes(backend, load, RequestContext, found);
   return {
-    records: records.map((record) => ({ ...record, matrixHash: matrix.get(record.key) })),
+    records: records.map((record) => ({ ...record, ...matrix.get(record.key) })),
     declared,
   };
 }

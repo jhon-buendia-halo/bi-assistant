@@ -13,24 +13,35 @@ import {
 /** Same expression as the frontend's `prompt-links`. */
 const LINK_SOURCE = String.raw`\[\[(skill|tool):([A-Za-z0-9_-]+)\]\]`;
 
-/** The assistant tools a link may name (Mastra's skill tools are not in it). */
+/**
+ * The tools a link may name and the Tools tab lists: Elena's, who runs every
+ * user agent (ADR-0059; Mastra's skill tools are not in it).
+ */
 export const LIBRARY_TOOLS = [
   'ask_clarification',
-  'create_visual',
   'describe_entity',
+  'explore_result',
   'list_entities',
   'run_readonly_sql',
   'sample_rows',
-  'show_in_panel',
-  'update_visual',
-  'update_workflow',
 ] as const;
 
 /** Given to every agent; linking them changes nothing. */
 export const ALWAYS_ON_TOOLS: readonly string[] = [
   'describe_entity',
+  'explore_result',
   'list_entities',
   'run_readonly_sql',
+];
+
+/**
+ * Tools of the removed assistant (ADR-0059): a link to one is still
+ * accepted, so saved text stays valid, and resolved to a plain mention,
+ * but never listed and never offered.
+ */
+export const RETIRED_LINK_TOOLS: readonly string[] = [
+  'create_visual',
+  'update_visual',
   'show_in_panel',
   'update_workflow',
 ];
@@ -59,8 +70,12 @@ export function resolveLinks(text: string): string {
   );
 }
 
+/** Whether a link may name `name`: a library tool or a retired one. */
 export function isLibraryTool(name: string): boolean {
-  return (LIBRARY_TOOLS as readonly string[]).includes(name);
+  return (
+    (LIBRARY_TOOLS as readonly string[]).includes(name) ||
+    RETIRED_LINK_TOOLS.includes(name)
+  );
 }
 
 /** The optional tool id a library tool belongs to; undefined for an always-on tool. */

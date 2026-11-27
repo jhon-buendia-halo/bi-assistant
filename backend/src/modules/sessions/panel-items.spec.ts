@@ -1,28 +1,12 @@
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-
-const workspaces = mkdtempSync(join(tmpdir(), 'panel-items-'));
-jest.mock('../../mastra/session-workspaces', () => ({
-  sessionWorkspacePath: (sessionId: string) =>
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    (require('path') as typeof import('path')).join(
-      workspaces,
-      `session-${sessionId}`,
-    ),
-}));
-
 import type { PanelItem, SessionDoc } from './entities/session.entity';
 import {
   MAX_PANEL_ITEMS,
-  buildPanelItem,
   latestPanelItem,
   tableCsv,
   titleSlug,
   upsertPanelItem,
   withVisualItems,
 } from './panel-items';
-import { writeWorkspaceFile } from './workspace-files';
 
 const session: SessionDoc = {
   id: 's1',
@@ -40,7 +24,6 @@ const session: SessionDoc = {
     },
   ],
 };
-const base = { session };
 
 const doc = (id: string, shownAt: string): PanelItem => ({
   id,
@@ -143,127 +126,5 @@ describe('tableCsv', () => {
       ),
     ).toBe('a,b\r\n"x,y",\r\n"say ""hi""","{""n"":1}"');
     expect(titleSlug('Top 5 — Scorers!')).toBe('top-5-scorers');
-  });
-});
-
-describe('buildPanelItem', () => {
-  it('builds a document with its default title and limit', async () => {
-    const { item, summary } = await buildPanelItem(
-      { kind: 'document', markdown: '# Hi' },
-      base,
-    );
-    expect(item).toMatchObject({ kind: 'document', title: 'Document' });
-    expect(summary).toMatchObject({ shown: true, kind: 'document' });
-    await expect(
-      buildPanelItem({ kind: 'document', markdown: 'x'.repeat(50_001) }, base),
-    ).rejects.toThrow('The document is at most 50,000 characters');
-    await expect(buildPanelItem({ kind: 'document' }, base)).rejects.toThrow(
-      'markdown is required for kind "document"',
-    );
-  });
-
-  it('picks a table from the turn: the latest by default, a numbered one on request', async () => {
-    const records = [
-      {
-        tool: 'run_readonly_sql',
-        input: 'q1',
-        columns: ['a'],
-        rows: [{ a: 1 }],
-      },
-      { tool: 'run_readonly_sql', input: 'bad', error: 'boom' },
-      {
-        tool: 'run_readonly_sql',
-        input: 'q2',
-        columns: ['b'],
-        rows: [{ b: 2 }],
-        rowCount: 500,
-      },
-    ];
-    const latest = await buildPanelItem(
-      { kind: 'table' },
-      { ...base, turnRecords: records },
-    );
-    expect(latest.item).toMatchObject({
-      input: 'q2',
-      rowCount: 500,
-      truncated: true,
-      title: 'run_readonly_sql result',
-    });
-    const first = await buildPanelItem(
-      { kind: 'table', record: 1, title: ' Mine ' },
-      { ...base, turnRecords: records },
-    );
-    expect(first.item).toMatchObject({ input: 'q1', title: 'Mine' });
-    expect(first.item).not.toHaveProperty('truncated');
-  });
-
-  it('re-stamps a visual under its fixed id', async () => {
-    const { item } = await buildPanelItem(
-      { kind: 'visual', visualId: 'v1' },
-      base,
-    );
-    expect(item).toMatchObject({ id: 'visual:v1', title: 'Chart' });
-  });
-
-  describe('a written workspace file (agents.md 3.14)', () => {
-    it('shows a synthetic script written into the workspace, overwriting the same name', async () => {
-      const path = 'synthetic-data/world-cup-synthetic-postgresql-seed1.sql';
-      await writeWorkspaceFile('s1', path, '-- old\n');
-      await writeWorkspaceFile('s1', path, '-- Synthetic data\n');
-      const { item } = await buildPanelItem(
-        { kind: 'file', path, title: 'Synthetic data — World Cup (seed 1)' },
-        base,
-      );
-      expect(item).toMatchObject({
-        kind: 'file',
-        title: 'Synthetic data — World Cup (seed 1)',
-        path,
-        bytes: 18,
-      });
-      await expect(
-        writeWorkspaceFile('s1', '../escape.sql', 'x'),
-      ).rejects.toThrow('Invalid file path "../escape.sql"');
-    });
-  });
-
-  describe('files', () => {
-    const folder = join(workspaces, 'session-s1');
-    beforeAll(() => {
-      mkdirSync(join(folder, 'notes', 'x'), { recursive: true });
-      writeFileSync(join(folder, 'notes', 'x', 'summary.md'), '# Notes');
-      writeFileSync(join(folder, 'pic.png'), 'png');
-      writeFileSync(join(folder, 'big.txt'), 'a'.repeat(256 * 1024 + 1));
-      writeFileSync(join(workspaces, 'secret.md'), 'secret');
-      symlinkSync(join(workspaces, 'secret.md'), join(folder, 'link.md'));
-    });
-    const show = (path?: string) =>
-      buildPanelItem({ kind: 'file', path }, base);
-
-    it('shows a text file of the workspace', async () => {
-      const { item, summary } = await show('notes/x/summary.md');
-      expect(item).toMatchObject({
-        kind: 'file',
-        title: 'summary.md',
-        path: 'notes/x/summary.md',
-        bytes: 7,
-      });
-      expect(summary.bytes).toBe(7);
-    });
-
-    it('refuses with the contract messages', async () => {
-      await expect(show()).rejects.toThrow('path is required for kind "file"');
-      for (const bad of ['../secret.md', '/etc/passwd', 'a//b.md', 'link.md']) {
-        await expect(show(bad)).rejects.toThrow(`Invalid file path "${bad}"`);
-      }
-      await expect(show('nope.md')).rejects.toThrow(
-        'File "nope.md" not found in the session workspace',
-      );
-      await expect(show('pic.png')).rejects.toThrow(
-        'File "pic.png" is not a text file: show .md, .txt, .csv, .json, .sql, .yaml, .yml or .log files',
-      );
-      await expect(show('big.txt')).rejects.toThrow(
-        'File "big.txt" is larger than 256 KB',
-      );
-    });
   });
 });

@@ -1,9 +1,6 @@
 // The real Mastra instance pulls in ESM-only packages Jest cannot require;
 // the service only needs `listAgents()`, which the test passes in.
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
-jest.mock('../../mastra/evals/assistant.evals', () => ({
-  ASSISTANT_EVAL_SETS: [],
-}));
 jest.mock('../../mastra/evals/eval-sets', () => ({
   evalSetsFor: () => [],
 }));
@@ -22,14 +19,22 @@ import { AgentsService } from './agents.service';
 
 type Context = { requestContext?: { get(key: string): unknown } };
 
-/** The tool selection a call carries, as the real assistant reads it. */
+/** The tool selection a call carries, as Elena reads it. */
 const selectionOf = (args?: Context) =>
   args?.requestContext?.get('agent-tools') as string[] | undefined;
 
+/** The dashboard gate a call carries, as Elena reads it. */
+const dashboardGateOf = (args?: Context) =>
+  (
+    args?.requestContext?.get('conversation-gates') as
+      { dashboard: boolean } | undefined
+  )?.dashboard;
+
 /**
  * A registry entry with just the accessors `AgentsService` reads. Like the
- * real assistant, it drops `create_visual` and says so in its prompt when
- * the call's tool selection leaves out `visuals` (ADR-0022).
+ * real Elena, who runs every user agent (ADR-0059), it drops `sample_rows`
+ * when the call's tool selection leaves it out, says so in its prompt, and
+ * drops `submit_dashboard` with the dashboard gate closed.
  */
 function fakeAgent(name: string, tools: string[], instructions = '') {
   return {
@@ -41,9 +46,10 @@ function fakeAgent(name: string, tools: string[], instructions = '') {
         tools
           .filter(
             (tool) =>
-              tool !== 'create_visual' ||
-              !selectionOf(args) ||
-              selectionOf(args)!.includes('visuals'),
+              (tool !== 'sample_rows' ||
+                !selectionOf(args) ||
+                selectionOf(args)!.includes('sample_rows')) &&
+              (tool !== 'submit_dashboard' || dashboardGateOf(args) !== false),
           )
           .map((tool) => [tool, { description: tool }]),
       ),
@@ -77,10 +83,10 @@ function build(extra: Record<string, unknown> = {}) {
   );
   const registry = {
     'sql-fixer': fakeAgent('sql-fixer', ['b']),
-    assistant: fakeAgent(
-      'assistant',
-      ['run_readonly_sql', 'create_visual'],
-      'You are the assistant.',
+    'insights-lead': fakeAgent(
+      'insights-lead',
+      ['run_readonly_sql', 'sample_rows', 'submit_dashboard'],
+      'You are Elena.',
     ),
     'assistant-eval-judge': fakeAgent('assistant-eval-judge', []),
     ...extra,
@@ -109,15 +115,15 @@ describe('AgentsService (built-in and user agents)', () => {
       const agents = await ctx.service.list();
       expect(agents.map((agent) => agent.key)).toEqual([
         'sql-fixer',
-        'assistant',
+        'insights-lead',
         'assistant-eval-judge',
       ]);
       // Built-ins show their persona: a human name and a job title,
-      // sorted by that name (David, Emily, Laura).
+      // sorted by that name (David, Elena, Laura).
       expect(agents[1]).toMatchObject({
-        key: 'assistant',
-        name: 'Emily',
-        role: 'Data Analyst',
+        key: 'insights-lead',
+        name: 'Elena',
+        role: 'Insights Lead',
         domain: 'analysis',
         kind: 'official',
         owner: 'Official',
@@ -126,7 +132,7 @@ describe('AgentsService (built-in and user agents)', () => {
         hasUnpublishedChanges: false,
         missingDatasets: [],
         datasets: [],
-        starterQuestions: [], // No workflow step calls the assistant (api.md 33).
+        starterQuestions: [], // No catalogue workflow step calls her (api.md 33).
         usedInWorkflows: [],
       });
       // And its first-person intro (agents.md 1.1).
@@ -149,18 +155,20 @@ describe('AgentsService (built-in and user agents)', () => {
   it(
     'ignores a pin saved for a removed showcase agent (1.23.8)',
     asDemoUser(async () => {
-      await ctx.service.setPinned('assistant', true);
+      await ctx.service.setPinned('insights-lead', true);
       // A pin left behind by an earlier version, for an agent no longer registered.
       await ctx.userAgents.setBuiltinPin('strategy', true);
+      await ctx.userAgents.setBuiltinPin('assistant', true);
       const agents = await ctx.service.list();
       expect(agents.map((agent) => agent.key)).toEqual([
         'sql-fixer',
-        'assistant',
+        'insights-lead',
         'assistant-eval-judge',
       ]);
-      expect(agents.find((agent) => agent.key === 'assistant')?.pinned).toBe(
-        true,
-      );
+      expect(
+        agents.find((agent) => agent.key === 'insights-lead')?.pinned,
+      ).toBe(true);
+      expect(await ctx.service.get('assistant')).toBeNull();
       expect(await ctx.service.get('strategy')).toBeNull();
     }),
   );
@@ -290,7 +298,7 @@ describe('AgentsService (built-in and user agents)', () => {
       const agents = await ctx.service.list();
       expect(agents.map((agent) => agent.name)).toEqual([
         'David',
-        'Emily',
+        'Elena',
         'Health plan analyst',
         'Laura',
       ]);
@@ -346,13 +354,13 @@ describe('AgentsService (built-in and user agents)', () => {
   it(
     'resolves a registry key first, then a user-agent id',
     asDemoUser(async () => {
-      const assistant = await ctx.service.get('assistant');
-      expect(assistant).toMatchObject({
-        key: 'assistant',
+      const elena = await ctx.service.get('insights-lead');
+      expect(elena).toMatchObject({
+        key: 'insights-lead',
         kind: 'official',
-        instructions: 'You are the assistant.',
+        instructions: 'You are Elena.',
       });
-      expect(assistant).not.toHaveProperty('draft');
+      expect(elena).not.toHaveProperty('draft');
 
       const created = await ctx.service.create({
         name: 'Analyst',
@@ -365,7 +373,8 @@ describe('AgentsService (built-in and user agents)', () => {
         key: created.id,
         kind: 'user',
         status: 'live',
-        instructions: 'You are the assistant. [tools: ]',
+        // Elena's prompt and tools under its selection (ADR-0059).
+        instructions: 'You are Elena. [tools: ]',
         draft: { instructions: 'Focus on plans' },
         live: { instructions: 'Focus on plans' },
         model: null,
@@ -390,18 +399,20 @@ describe('AgentsService (built-in and user agents)', () => {
       let summary = (await ctx.service.list()).find(
         (agent) => agent.key === created.id,
       );
-      expect(summary?.tools).toEqual(['run_readonly_sql']);
-      expect(created.tools).toEqual(['run_readonly_sql']);
+      // Elena's tools under the selection, her dashboard gate closed.
+      expect(summary?.tools).toEqual(['run_readonly_sql', 'sample_rows']);
+      expect(created.tools).toEqual(['run_readonly_sql', 'sample_rows']);
       let detail = await ctx.service.get(created.id);
-      expect(detail?.tools).toEqual(['run_readonly_sql']);
+      expect(detail?.tools).toEqual(['run_readonly_sql', 'sample_rows']);
       expect(detail?.toolDetails.map((tool) => tool.name)).toEqual([
         'run_readonly_sql',
+        'sample_rows',
       ]);
-      expect(detail?.instructions).toBe(
-        'You are the assistant. [tools: sample_rows]',
-      );
+      expect(detail?.instructions).toBe('You are Elena. [tools: sample_rows]');
+      expect(detail?.memory).toBeNull();
 
-      // Live with every tool, while the draft goes back to one tool: Live wins.
+      // Live with every tool (a retired tool's link is accepted), while the
+      // draft goes back to one tool: Live wins.
       await ctx.service.saveDraft(created.id, {
         name: 'KPI lookup',
         datasets: ['World Cup Core'],
@@ -416,15 +427,16 @@ describe('AgentsService (built-in and user agents)', () => {
       summary = (await ctx.service.list()).find(
         (agent) => agent.key === created.id,
       );
-      expect(summary?.tools).toEqual(['create_visual', 'run_readonly_sql']);
+      expect(summary?.tools).toEqual(['run_readonly_sql', 'sample_rows']);
       detail = await ctx.service.get(created.id);
-      expect(detail?.instructions).toBe('You are the assistant.');
+      expect(detail?.instructions).toBe('You are Elena.');
       expect(detail?.draft?.tools).toEqual([]);
 
-      // The built-in assistant is unchanged.
-      expect((await ctx.service.get('assistant'))?.tools).toEqual([
-        'create_visual',
+      // Elena herself is unchanged: every tool, the dashboard one too.
+      expect((await ctx.service.get('insights-lead'))?.tools).toEqual([
         'run_readonly_sql',
+        'sample_rows',
+        'submit_dashboard',
       ]);
     }),
   );
@@ -445,15 +457,15 @@ describe('AgentsService (built-in and user agents)', () => {
     'pins built-in and user agents',
     asDemoUser(async () => {
       const created = await ctx.service.create({ name: 'Analyst' });
-      expect((await ctx.service.setPinned('assistant', true)).pinned).toBe(
+      expect((await ctx.service.setPinned('insights-lead', true)).pinned).toBe(
         true,
       );
       expect((await ctx.service.setPinned(created.id, true)).pinned).toBe(true);
       const pinned = (await ctx.service.list())
         .filter((agent) => agent.pinned)
         .map((agent) => agent.key);
-      expect(pinned.sort()).toEqual(['assistant', created.id].sort());
-      expect((await ctx.service.setPinned('assistant', false)).pinned).toBe(
+      expect(pinned.sort()).toEqual(['insights-lead', created.id].sort());
+      expect((await ctx.service.setPinned('insights-lead', false)).pinned).toBe(
         false,
       );
       await expect(ctx.service.setPinned('nope', true)).rejects.toThrow(
@@ -463,35 +475,36 @@ describe('AgentsService (built-in and user agents)', () => {
   );
 
   it(
-    "shows a built-in agent's skills, and the assistant's for a user agent",
+    "shows a built-in agent's skills, and Elena's for a user agent",
     asDemoUser(async () => {
       const names = (view: { skills: { name: string }[] }) =>
         view.skills.map((skill) => skill.name);
-      const assistant = await ctx.service.skills('assistant');
-      // Deep analysis and its harness skill were removed in 1.23.35.
-      expect(names(assistant)).toEqual(['curated-knowledge']);
-      expect(assistant.skills[0]).toEqual({
+      const elena = await ctx.service.skills('insights-lead');
+      expect(names(elena)).toEqual([
+        'answer-playbooks',
+        'conversation-export',
+        'curated-knowledge',
+        'dashboard-building',
+        'result-validation',
+        'sql-analysis',
+      ]);
+      expect(
+        elena.skills.find((skill) => skill.name === 'curated-knowledge'),
+      ).toEqual({
         name: 'curated-knowledge',
         description: expect.stringMatching(/^Use when /) as string,
         loading: 'on-demand',
         level: 'built-in',
         files: [expect.objectContaining({ path: 'SKILL.md' })],
       });
-      expect(Object.keys(assistant)).toEqual(['skills']);
-      // The one agent with a harness skill since deep analysis went.
-      ctx.db.close();
-      ctx = build({ visualization: fakeAgent('visualization', []) });
-      const visualization = await ctx.service.skills('visualization');
-      expect(visualization.skills).toEqual([
-        expect.objectContaining({
-          name: 'interactive-visuals',
-          loading: 'harness',
-        }),
-      ]);
-
+      expect(Object.keys(elena)).toEqual(['skills']);
       const created = await ctx.service.create({ name: 'Analyst' });
+      // Elena's skills, without those of the gates a user agent never opens.
       expect(names(await ctx.service.skills(created.id))).toEqual(
-        names(assistant),
+        names(elena).filter(
+          (name) =>
+            name !== 'dashboard-building' && name !== 'conversation-export',
+        ),
       );
       expect((await ctx.service.skills('sql-fixer')).skills).toEqual([]);
       await expect(ctx.service.skills('nope')).rejects.toThrow(
@@ -503,38 +516,34 @@ describe('AgentsService (built-in and user agents)', () => {
   it(
     "serves a skill file and refuses what is not one of the agent's files",
     asDemoUser(async () => {
-      ctx.db.close();
-      ctx = build({ visualization: fakeAgent('visualization', []) });
       const file = await ctx.service.skillFile(
-        'visualization',
-        'interactive-visuals',
-        'reference/freeform.md',
+        'insights-lead',
+        'answer-playbooks',
+        'reference/ambiguous.md',
       );
-      expect(file.path).toBe('reference/freeform.md');
+      expect(file.path).toBe('reference/ambiguous.md');
       expect(file.content?.length).toBeGreaterThan(0);
 
       await expect(
-        ctx.service.skillFile('sql-fixer', 'interactive-visuals', 'SKILL.md'),
-      ).rejects.toThrow('Agent "sql-fixer" has no skill "interactive-visuals"');
+        ctx.service.skillFile('sql-fixer', 'answer-playbooks', 'SKILL.md'),
+      ).rejects.toThrow('Agent "sql-fixer" has no skill "answer-playbooks"');
       await expect(
-        ctx.service.skillFile('assistant', 'deep-analysis', 'SKILL.md'),
-      ).rejects.toThrow('Agent "assistant" has no skill "deep-analysis"');
+        ctx.service.skillFile('insights-lead', 'deep-analysis', 'SKILL.md'),
+      ).rejects.toThrow('Agent "insights-lead" has no skill "deep-analysis"');
       await expect(
         ctx.service.skillFile(
-          'visualization',
-          'interactive-visuals',
+          'insights-lead',
+          'answer-playbooks',
           '../../app-skills.ts',
         ),
       ).rejects.toThrow('Invalid skill file path "../../app-skills.ts"');
       await expect(
         ctx.service.skillFile(
-          'visualization',
-          'interactive-visuals',
+          'insights-lead',
+          'answer-playbooks',
           'phases/9.md',
         ),
-      ).rejects.toThrow(
-        'Skill "interactive-visuals" has no file "phases/9.md"',
-      );
+      ).rejects.toThrow('Skill "answer-playbooks" has no file "phases/9.md"');
     }),
   );
   describe("a user agent's in-app skills (ADR-0022; api.md 34a, 34b)", () => {
@@ -547,7 +556,34 @@ describe('AgentsService (built-in and user agents)', () => {
     });
 
     it(
-      "follows the assistant's skills with the draft's current ones, then the Live copies after a publish",
+      "leaves out Elena's dashboard and export skills, which a user agent never gets",
+      asDemoUser(async () => {
+        const created = await ctx.service.create({
+          name: 'Analyst',
+          datasets: ['World Cup Core'],
+          instructions: 'Answer from the data.',
+        });
+        const names = (await ctx.service.skills(created.id)).skills.map(
+          (s) => s.name,
+        );
+        expect(names).not.toContain('dashboard-building');
+        expect(names).not.toContain('conversation-export');
+        await expect(
+          ctx.service.skillFile(created.id, 'dashboard-building', 'SKILL.md'),
+        ).rejects.toThrow(
+          `Agent "${created.id}" has no skill "dashboard-building"`,
+        );
+        const elena = (await ctx.service.skills('insights-lead')).skills.map(
+          (s) => s.name,
+        );
+        expect(elena).toEqual(
+          expect.arrayContaining(['dashboard-building', 'conversation-export']),
+        );
+      }),
+    );
+
+    it(
+      "follows Elena's skills with the draft's current ones, then the Live copies after a publish",
       asDemoUser(async () => {
         await ctx.skills.insert(skill('s2', 'zeta', 'Z body.'));
         await ctx.skills.insert(skill('s1', 'alpha', 'A body.'));
@@ -599,8 +635,8 @@ describe('AgentsService (built-in and user agents)', () => {
         ).rejects.toThrow('Skill "alpha" has no file "references/nope.md"');
         // Another agent's skill is not this agent's.
         await expect(
-          ctx.service.skillFile('assistant', 'alpha', 'SKILL.md'),
-        ).rejects.toThrow('Agent "assistant" has no skill "alpha"');
+          ctx.service.skillFile('insights-lead', 'alpha', 'SKILL.md'),
+        ).rejects.toThrow('Agent "insights-lead" has no skill "alpha"');
       }),
     );
 
@@ -621,7 +657,7 @@ describe('AgentsService (built-in and user agents)', () => {
         );
         expect(listed?.hasUnpublishedChanges).toBe(true);
         expect(
-          (await ctx.service.skills('assistant')).skills.some(
+          (await ctx.service.skills('insights-lead')).skills.some(
             (s) => s.level === 'in-app',
           ),
         ).toBe(false);
@@ -654,30 +690,22 @@ describe('AgentsService (built-in and user agents)', () => {
             'Use [[skill:alpha]], [[skill:beta]] and [[tool:update_visual]] and [[tool:run_readonly_sql]].',
         });
         const detail = await ctx.service.get(created.id);
+        // Elena's library (ADR-0059): a retired tool's link is accepted
+        // but never listed.
         expect(detail?.toolLinks?.map((entry) => entry.name)).toEqual([
           'ask_clarification',
-          'create_visual',
           'describe_entity',
+          'explore_result',
           'list_entities',
           'run_readonly_sql',
           'sample_rows',
-          'show_in_panel',
-          'update_visual',
-          'update_workflow',
         ]);
         expect(link(detail, 'sample_rows')).toEqual({
           name: 'sample_rows',
           status: 'linked',
           linkedVia: { instructions: false, skills: ['alpha', 'beta'] },
         });
-        // The pair: linking one gives both.
-        expect(link(detail, 'update_visual')).toMatchObject({
-          status: 'linked',
-          linkedVia: { instructions: true, skills: [] },
-        });
-        expect(link(detail, 'create_visual')).toMatchObject({
-          status: 'linked',
-        });
+        expect(link(detail, 'explore_result')?.status).toBe('always-on');
         expect(link(detail, 'ask_clarification')).toEqual({
           name: 'ask_clarification',
           status: 'not-linked',
@@ -691,10 +719,12 @@ describe('AgentsService (built-in and user agents)', () => {
         expect(link(detail, 'list_entities')?.status).toBe('always-on');
         // sample_rows comes only through the skills, yet the agent has it.
         expect(detail?.instructions).toBe(
-          'You are the assistant. [tools: sample_rows,visuals]',
+          'You are Elena. [tools: sample_rows]',
         );
         // A built-in agent has no links.
-        expect((await ctx.service.get('assistant'))?.toolLinks).toBeUndefined();
+        expect(
+          (await ctx.service.get('insights-lead'))?.toolLinks,
+        ).toBeUndefined();
       }),
     );
 
@@ -734,7 +764,7 @@ describe('AgentsService (built-in and user agents)', () => {
           configured: true,
         }),
       };
-      const registry = { assistant: fakeAgent('assistant', []) };
+      const registry = { 'insights-lead': fakeAgent('insights-lead', []) };
       const service = new AgentsService(
         { listAgents: () => registry } as unknown as MastraService,
         new UserAgentsService(
@@ -748,7 +778,7 @@ describe('AgentsService (built-in and user agents)', () => {
         llm as never,
       );
       {
-        expect((await service.get('assistant'))?.llm).toEqual({
+        expect((await service.get('insights-lead'))?.llm).toEqual({
           provider: 'openai',
           providerName: 'OpenAI',
           model: 'gpt-5',
@@ -776,7 +806,7 @@ describe('AgentsService (built-in and user agents)', () => {
           reasoningEffort: 'high',
           configured: false,
         });
-        expect((await service.get('assistant'))?.llm).toEqual({
+        expect((await service.get('insights-lead'))?.llm).toEqual({
           provider: null,
           providerName: null,
           model: null,
@@ -803,7 +833,9 @@ describe('AgentsService (built-in and user agents)', () => {
       };
       const service = new AgentsService(
         {
-          listAgents: () => ({ assistant: fakeAgent('assistant', []) }),
+          listAgents: () => ({
+            'insights-lead': fakeAgent('insights-lead', []),
+          }),
         } as unknown as MastraService,
         new UserAgentsService(
           new UserAgentsRepository(new SqliteDocStore(db, 'agents')),
@@ -815,7 +847,7 @@ describe('AgentsService (built-in and user agents)', () => {
         ),
         llm as never,
       );
-      expect((await service.get('assistant'))?.llm).toMatchObject({
+      expect((await service.get('insights-lead'))?.llm).toMatchObject({
         provider: 'copilot',
         providerName: 'GitHub Copilot',
         model: 'auto',
@@ -839,7 +871,9 @@ describe('AgentsService (built-in and user agents)', () => {
       };
       const service = new AgentsService(
         {
-          listAgents: () => ({ assistant: fakeAgent('assistant', []) }),
+          listAgents: () => ({
+            'insights-lead': fakeAgent('insights-lead', []),
+          }),
         } as unknown as MastraService,
         new UserAgentsService(
           new UserAgentsRepository(new SqliteDocStore(db, 'agents')),
@@ -851,7 +885,7 @@ describe('AgentsService (built-in and user agents)', () => {
         ),
         llm as never,
       );
-      expect((await service.get('assistant'))?.llm).toEqual({
+      expect((await service.get('insights-lead'))?.llm).toEqual({
         provider: 'custom',
         providerName: 'Custom endpoint',
         model: 'qwen3-coder',

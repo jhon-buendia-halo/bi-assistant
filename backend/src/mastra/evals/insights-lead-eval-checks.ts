@@ -1,9 +1,10 @@
 import type { EvalCustomCheck, EvalCustomCheckInput } from './assistant.evals';
 import { derivedFigures, matchesRounded } from './derived-figures';
 import { figuresIn } from './avery-workflow-eval-checks';
-import type {
-  InsightsLeadRunCall,
-  InsightsLeadRunView,
+import {
+  insightsLeadScoredAnswer,
+  type InsightsLeadRunCall,
+  type InsightsLeadRunView,
 } from './insights-lead-target';
 
 /**
@@ -132,6 +133,109 @@ export function clarificationOffersOptions(): EvalCustomCheck {
       return count >= 2 && count <= 4
         ? undefined
         : `her question offers ${count} options`;
+    },
+  };
+}
+
+/*
+ * The answer and tool checks of the data sets ported from the assistant
+ * (`insights-lead-data.evals.ts`): the counterparts of Mastra's built-in
+ * `checks.includes`, `matches`, `calledTool`, `didNotCall`, `noToolErrors`
+ * and `toolOrder`, which read an agent's own result. These read the stored
+ * run instead; the answer is the scored one (her answer, or her question
+ * and its options while the run waits). Each id carries its argument, so a
+ * case can hold two of a kind.
+ */
+
+/** The answer holds `text`, in any case (as `checks.includes`). */
+export function answerIncludes(text: string): EvalCustomCheck {
+  return {
+    id: `answer-includes:${text}`,
+    description: `The answer includes "${text}" (any case)`,
+    run: (input) =>
+      insightsLeadScoredAnswer(leadRunViewOf(input))
+        .toLowerCase()
+        .includes(text.toLowerCase())
+        ? undefined
+        : `the answer does not include "${text}"`,
+  };
+}
+
+/** The answer matches `pattern` (as `checks.matches`). */
+export function answerMatches(pattern: RegExp): EvalCustomCheck {
+  return {
+    id: `answer-matches:${String(pattern)}`,
+    description: `The answer matches ${String(pattern)}`,
+    run: (input) =>
+      new RegExp(pattern.source, pattern.flags.replace(/[gy]/g, '')).test(
+        insightsLeadScoredAnswer(leadRunViewOf(input)),
+      )
+        ? undefined
+        : `the answer does not match ${String(pattern)}`,
+  };
+}
+
+/** How many of her calls used `tool`. */
+function callsOf(view: InsightsLeadRunView, tool: string): number {
+  return view.calls.filter((call) => call.tool === tool).length;
+}
+
+/** She called `tool` at least once (as `checks.calledTool`). */
+export function calledTool(tool: string): EvalCustomCheck {
+  return {
+    id: `called-tool:${tool}`,
+    description: `Elena called ${tool}`,
+    run: (input) =>
+      callsOf(leadRunViewOf(input), tool)
+        ? undefined
+        : `she never called ${tool}`,
+  };
+}
+
+/** She never called `tool` (as `checks.didNotCall`). */
+export function didNotCall(tool: string): EvalCustomCheck {
+  return {
+    id: `did-not-call:${tool}`,
+    description: `Elena did not call ${tool}`,
+    run: (input) => {
+      const count = callsOf(leadRunViewOf(input), tool);
+      return count
+        ? `she called ${tool} ${count} time${count === 1 ? '' : 's'}`
+        : undefined;
+    },
+  };
+}
+
+/** None of her calls failed (as `checks.noToolErrors`). */
+export function noToolErrors(): EvalCustomCheck {
+  return {
+    id: 'no-tool-errors',
+    description: 'None of her tool calls failed',
+    run: (input) => {
+      const failed = leadRunViewOf(input).calls.filter((call) => call.error);
+      return failed.length
+        ? `${failed.length} call${failed.length === 1 ? '' : 's'} failed: ` +
+            failed.map((call) => `${call.tool} (${call.error})`).join(', ')
+        : undefined;
+    },
+  };
+}
+
+/**
+ * Her calls hold `tools` in that order, other calls between them allowed
+ * (as `checks.toolOrder`).
+ */
+export function toolOrder(tools: readonly string[]): EvalCustomCheck {
+  return {
+    id: `tool-order:${tools.join('>')}`,
+    description: `Elena calls ${tools.join(', then ')}`,
+    run: (input) => {
+      const called = leadRunViewOf(input).calls.map((call) => call.tool);
+      let next = 0;
+      for (const tool of called) if (tool === tools[next]) next++;
+      return next >= tools.length
+        ? undefined
+        : `her calls (${called.join(', ') || 'none'}) do not hold ${tools.join(' then ')}`;
     },
   };
 }

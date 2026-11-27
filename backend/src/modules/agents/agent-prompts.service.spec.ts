@@ -1,9 +1,8 @@
 // The real Mastra instance and the services around the controller pull in
 // ESM-only packages Jest cannot require; these tests only need the shapes.
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
-jest.mock('../../mastra/evals/assistant.evals', () => ({
-  ASSISTANT_EVAL_SETS: [],
-}));
+// The eval runner pulls in ESM-only packages: an empty stand-in.
+jest.mock('../../mastra/evals/assistant.evals', () => ({}));
 jest.mock('../../mastra/evals/eval-sets', () => ({ evalSetsFor: () => [] }));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 jest.mock('../datasources/datasources.service', () => ({
@@ -35,13 +34,8 @@ import { AgentsController } from './agents.controller';
 import type { AgentPromptOverrideDoc } from './entities/agent-prompt-override.entity';
 import { AgentPromptOverridesRepository } from './repositories/agent-prompt-overrides.repository';
 
-const IDENTITY = 'You are the Questions to Insights assistant';
 const REGISTRY = {
-  assistant: { name: 'Questions to Insights Assistant' },
-  visualization: { name: 'Interactive Visual Designer' },
   'sql-fixer': { name: 'SQL Fixer' },
-  'sql-verifier': { name: 'SQL Verifier' },
-  'knowledge-bootstrap': { name: 'Knowledge Bootstrap' },
   'assistant-eval-judge': { name: 'Assistant Eval Judge' },
 };
 
@@ -73,7 +67,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
         shipped: shippedAgentPrompt(key),
         modified: false,
         builtInChanged: false,
-        linksAllowed: key === 'assistant',
+        linksAllowed: false,
         updatedAt: null,
       });
     }
@@ -98,6 +92,14 @@ describe('AgentPromptsService (ADR-0026)', () => {
   });
 
   it.each([
+    // Emily and Rachel went with ADR-0059.
+    [
+      'the removed assistant',
+      'assistant',
+      'You are the Questions to Insights assistant. Old text.',
+    ],
+    ['the removed SQL verifier', 'sql-verifier', 'Old verifier text.'],
+    ['the removed visual designer', 'visualization', 'Old designer text.'],
     ['the removed RFP Builder', 'rfp', 'You are the RFP Builder. Old text.'],
     [
       'the removed Data Readiness Agent',
@@ -151,21 +153,21 @@ describe('AgentPromptsService (ADR-0026)', () => {
 
   it('resets, also when there was no override', async () => {
     const { service } = build();
-    await service.save('visualization', { prompt: 'Edited.' });
-    expect(await service.reset('visualization')).toBe('Ryan');
-    expect(agentPromptOverrideFor('visualization')).toBeUndefined();
-    expect(await service.view('visualization')).toMatchObject({
+    await service.save('sql-fixer', { prompt: 'Edited.' });
+    expect(await service.reset('sql-fixer')).toBe('David');
+    expect(agentPromptOverrideFor('sql-fixer')).toBeUndefined();
+    expect(await service.view('sql-fixer')).toMatchObject({
       modified: false,
     });
-    await expect(service.reset('visualization')).resolves.toBe('Ryan');
+    await expect(service.reset('sql-fixer')).resolves.toBe('David');
   });
 
   it('loads the stored overrides into the bridge on init', async () => {
     const { service, store } = build();
     await store.update(
-      { key: 'sql-verifier' },
+      { key: 'sql-fixer' },
       {
-        key: 'sql-verifier',
+        key: 'sql-fixer',
         prompt: 'Stored.',
         baseHash: 'h',
         updatedBy: 'x',
@@ -173,7 +175,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       { upsert: true },
     );
     await service.onModuleInit();
-    expect(agentPromptOverrideFor('sql-verifier')?.prompt).toBe('Stored.');
+    expect(agentPromptOverrideFor('sql-fixer')?.prompt).toBe('Stored.');
   });
 
   describe('refusals, first that applies', () => {
@@ -206,10 +208,13 @@ describe('AgentPromptsService (ADR-0026)', () => {
       expect(await refusal('insights-analyst', 'Be brief.')).toBe(
         `The Insights Analyst prompt must start with "${identity}"`,
       );
-      // The assistant's identity is not v2's.
-      expect(await refusal('insights-analyst', `${IDENTITY}.`)).toBe(
-        `The Insights Analyst prompt must start with "${identity}"`,
-      );
+      // Another identity is not v2's.
+      expect(
+        await refusal(
+          'insights-analyst',
+          'You are the Questions to Insights assistant.',
+        ),
+      ).toBe(`The Insights Analyst prompt must start with "${identity}"`);
       const skillRefusal =
         "Only Insights Analyst's own skills can be linked here: this prompt is shared by every user";
       for (const skill of ['x', 'avery-playbooks', 'dashboard-building']) {
@@ -263,23 +268,40 @@ describe('AgentPromptsService (ADR-0026)', () => {
       ).resolves.toBe('Michael');
     });
 
-    it("refuses another agent's skill in the assistant prompt", async () => {
-      expect(
-        await refusal('assistant', `${IDENTITY}. [[skill:avery-playbooks]]`),
-      ).toBe(
-        'Only built-in skills can be linked here: this prompt is shared by every user',
-      );
+    it("Elena's prompt with its shipped tool links saves, and Reset restores it", async () => {
+      const { service } = build();
+      expect(await service.view('insights-lead')).toMatchObject({
+        shipped: shippedAgentPrompt('insights-lead'),
+        linksAllowed: true,
+      });
+      const shipped = shippedAgentPrompt('insights-lead');
+      const edited = `${shipped}\n- Also see [[tool:create_visual]] (retired).`;
+      await expect(
+        service.save('insights-lead', { prompt: edited }),
+      ).resolves.toBe('Elena');
+      expect(agentPromptOverrideFor('insights-lead')?.prompt).toBe(edited);
+      await expect(service.reset('insights-lead')).resolves.toBe('Elena');
+      expect(agentPromptOverrideFor('insights-lead')).toBeUndefined();
+      expect(await service.view('insights-lead')).toMatchObject({
+        editable: shipped,
+        modified: false,
+      });
     });
 
-    it("refuses the removed RFP Builder's tools and skill in the assistant prompt", async () => {
-      expect(
-        await refusal('assistant', `${IDENTITY}. [[skill:rfp-timeline]]`),
-      ).toBe(
-        'Only built-in skills can be linked here: this prompt is shared by every user',
+    it("refuses a tool or skill in Elena's prompt that is not hers", async () => {
+      const { service } = build();
+      await expect(
+        service.save('insights-lead', {
+          prompt: 'You are Elena. Load [[skill:avery-playbooks]].',
+        }),
+      ).rejects.toThrow(
+        "Only Elena's own skills can be linked here: this prompt is shared by every user",
       );
-      expect(
-        await refusal('assistant', `${IDENTITY}. [[tool:list_clients]]`),
-      ).toBe('Unknown tool "list_clients"');
+      await expect(
+        service.save('insights-lead', {
+          prompt: 'You are Elena. Call [[tool:answer_from_data]].',
+        }),
+      ).rejects.toThrow('Unknown tool "answer_from_data"');
     });
 
     it('an empty prompt, then one over 20,000 characters', async () => {
@@ -294,51 +316,12 @@ describe('AgentPromptsService (ADR-0026)', () => {
       ).resolves.toBe('David');
     });
 
-    it("the assistant's identity, then skill links, then unknown tools", async () => {
-      expect(await refusal('assistant', 'Be brief.')).toBe(
-        `The assistant's prompt must start with "${IDENTITY}"`,
-      );
-      expect(
-        await refusal('assistant', `${IDENTITY}. [[skill:x]] [[tool:nope]]`),
-      ).toBe(
-        'Only built-in skills can be linked here: this prompt is shared by every user',
-      );
-      expect(
-        await refusal(
-          'assistant',
-          `${IDENTITY}. [[skill:curated-knowledge]] [[tool:nope]]`,
-        ),
-      ).toBe('Unknown tool "nope"');
-      expect(await refusal('assistant', `${IDENTITY}. [[tool:nope]]`)).toBe(
-        'Unknown tool "nope"',
-      );
-    });
-
-    it('accepts a built-in on-demand skill link in the assistant prompt', async () => {
-      const { service } = build();
-      await expect(
-        service.save('assistant', {
-          prompt: `${IDENTITY}. See [[skill:curated-knowledge]] and [[tool:sample_rows]].`,
-        }),
-      ).resolves.toBe('Emily');
-    });
-
     it('any link in a System agent prompt', async () => {
       expect(await refusal('sql-fixer', 'See [[tool:run_readonly_sql]].')).toBe(
         "This agent's prompt can't contain links",
       );
-      expect(await refusal('visualization', 'a [[x]] b')).toBe(
+      expect(await refusal('assistant-eval-judge', 'a [[x]] b')).toBe(
         "This agent's prompt can't contain links",
-      );
-    });
-
-    it('accepts library tool links in the assistant prompt', async () => {
-      const { service } = build();
-      await service.save('assistant', {
-        prompt: `${IDENTITY}.\n\nPrefer [[tool:sample_rows]].`,
-      });
-      expect(agentPromptOverrideFor('assistant')?.prompt).toContain(
-        '[[tool:sample_rows]]',
       );
     });
   });

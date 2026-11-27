@@ -16,7 +16,11 @@ import {
   type AveryEvalRuns,
   type StoredRunToolCall,
 } from './avery-workflow-target';
-import { EVAL_DETAILS_KEY, type EvalRunDetails } from './eval-details';
+import {
+  EVAL_DETAILS_KEY,
+  type EvalRunDetails,
+  type EvalRunRecord,
+} from './eval-details';
 import { answerResult } from './query-explainer-eval-answer';
 
 /**
@@ -34,6 +38,8 @@ import { answerResult } from './query-explainer-eval-answer';
  *   user, her question with its options, one per line (`- <option>`).
  * - the tool calls: every call of the step, in order.
  * - `evalDetails.output`: the run as the checks read it (`InsightsLeadRunView`).
+ * - `evalDetails.records`: the stored answer's tool records, which the
+ *   result-set check compares with a case's `expectedSql`.
  *
  * Framework-free, so Jest loads it; her agent loads on first use.
  */
@@ -63,7 +69,7 @@ export interface StoredInsightsLeadRun {
   waitingFor?: { question: string; options: string[] };
   answer?: {
     content: string;
-    data?: { tool: string; input?: string; rows?: Record<string, unknown>[] }[];
+    data?: EvalRunRecord[];
     checks?: StoredAnswerCheck[];
   };
 }
@@ -173,10 +179,22 @@ export function insightsLeadRawToolCalls(
   }));
 }
 
+/**
+ * The run's tool records as the stored answer keeps them, for the
+ * result-set check (`EvalRunDetails.records`).
+ */
+export function insightsLeadRecords(
+  run: StoredInsightsLeadRun,
+): EvalRunRecord[] {
+  return run.answer?.data ?? [];
+}
+
 /** The view as an agent result: the shape `runAssistantEvalCase` reads. */
 export function insightsLeadTargetResult(
   input: unknown,
   view: InsightsLeadRunView,
+  /** The run's records (`insightsLeadRecords`). */
+  records: EvalRunRecord[] = [],
 ) {
   const raw = insightsLeadRawToolCalls(view);
   const ids = raw.map((_call, index) => `insights-lead-run-call-${index + 1}`);
@@ -200,7 +218,7 @@ export function insightsLeadTargetResult(
         })),
       },
     ],
-    [EVAL_DETAILS_KEY]: { output: view } satisfies EvalRunDetails,
+    [EVAL_DETAILS_KEY]: { output: view, records } satisfies EvalRunDetails,
   };
 }
 
@@ -234,7 +252,11 @@ export function insightsLeadTurnAgent(
       datasets,
     });
     try {
-      return insightsLeadTargetResult(input, insightsLeadRunView(run));
+      return insightsLeadTargetResult(
+        input,
+        insightsLeadRunView(run),
+        insightsLeadRecords(run),
+      );
     } finally {
       await runs.remove(run.id).catch(() => undefined);
     }

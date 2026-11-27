@@ -811,3 +811,62 @@ describe('WorkflowRunsApiService, archive and unarchive (api.md 120, 159, 160)',
     unarchive.flush({ ok: true, conversationId: 'run 1', unarchived: 2 });
   });
 });
+
+describe('WorkflowRunsApiService, resume a draft (api.md 169)', () => {
+  let service: WorkflowRunsApiService;
+  let fetchSpy: jasmine.Spy;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(WorkflowRunsApiService);
+    fetchSpy = spyOn(window, 'fetch');
+  });
+
+  it("posts the step and answer to the agent's draft run and reports the events of a run", async () => {
+    fetchSpy.and.resolveTo(
+      sseResponse(
+        { type: 'run', runId: 'draft-1', workflowId: 'agent:a 1' },
+        { type: 'done', run: { ...RUN, status: 'success' } },
+      ),
+    );
+    const seen: string[] = [];
+    await service.resumeDraftRun('a 1', 'draft-1', 'answer', '2022', {
+      onRun: (r) => seen.push(`run:${r.runId}:${r.workflowId}`),
+      onDone: (r) => seen.push(`done:${r.status}`),
+    });
+    const [url, init] = fetchSpy.calls.mostRecent().args as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toMatch(
+      /\/agents\/a%201\/draft-runs\/draft-1\/resume\/stream$/,
+    );
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      stepId: 'answer',
+      answer: '2022',
+    });
+    expect(seen).toEqual(['run:draft-1:agent:a 1', 'done:success']);
+  });
+
+  it('reports a 410 with its status, then the message', async () => {
+    const message =
+      'This run can no longer continue — run it again with your answer';
+    fetchSpy.and.resolveTo(
+      new Response(JSON.stringify({ statusCode: 410, message }), {
+        status: 410,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const onError = jasmine.createSpy('onError');
+    const onRefused = jasmine.createSpy('onRefused');
+    await service.resumeDraftRun('a1', 'draft-1', 'answer', 'x', {
+      onError,
+      onRefused,
+    });
+    expect(onRefused).toHaveBeenCalledOnceWith(410);
+    expect(onError).toHaveBeenCalledOnceWith(message);
+  });
+});

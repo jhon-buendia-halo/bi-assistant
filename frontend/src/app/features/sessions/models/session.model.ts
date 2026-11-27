@@ -99,11 +99,6 @@ export interface ChatMessage {
   verified?: boolean;
   /** Deterministic one-line provenance summary, built server-side. */
   interpretation?: string;
-  /**
-   * Careful mode only: an independent query re-derived from the question was
-   * run and its results compared with this answer's.
-   */
-  crossCheck?: CrossCheck;
   /** How the assistant worked its way from the question to this answer. */
   reasoning?: ReasoningStep[];
   /** The query inspector's facts about each data-gathering call of `data`, in `data` order. */
@@ -126,12 +121,6 @@ export interface ChatMessage {
 }
 
 export type MessageFeedback = 'up' | 'down';
-
-export interface CrossCheck {
-  status: 'agree' | 'disagree' | 'error';
-  /** Short human-readable line shown as the chip's tooltip. */
-  note?: string;
-}
 
 export interface VisualEvent {
   visualId: string;

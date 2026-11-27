@@ -116,7 +116,7 @@ export function skillLinked(instructions: string, name: string): boolean {
  * "included in every agent" (agents-evals R75). An Official agent's own
  * skills are not.
  */
-const EVERY_AGENT_SKILL_OWNERS = new Set(['assistant', 'visualization']);
+const EVERY_AGENT_SKILL_OWNERS = new Set(['insights-lead']);
 
 /** The built-in skills every agent gets (R75), out of `GET /skills/built-in`. */
 export function includedInEveryAgent<T extends { agents: string[] }>(

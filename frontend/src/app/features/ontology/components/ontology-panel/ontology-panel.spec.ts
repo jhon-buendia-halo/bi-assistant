@@ -1,16 +1,11 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Subject, of } from 'rxjs';
+import { of } from 'rxjs';
 import { MetricsApiService } from '../../../datasets/services/metrics-api.service';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
 import { OntologyItem } from '../../models/ontology.model';
-import {
-  OntologyApiService,
-  OntologyBootstrapProgress,
-  OntologyBootstrapRun,
-} from '../../services/ontology-api.service';
-import { BackgroundTasksService } from '../../../../core/background-tasks/background-tasks.service';
+import { OntologyApiService } from '../../services/ontology-api.service';
 import { OntologyPanel } from './ontology-panel';
 
 const DATASET: Dataset = {
@@ -99,24 +94,7 @@ describe('OntologyPanel', () => {
     list: jasmine.Spy;
     update: jasmine.Spy;
     remove: jasmine.Spy;
-    bootstrap: jasmine.Spy;
   };
-  let run: Subject<OntologyBootstrapRun>;
-  let steps: OntologyBootstrapProgress[];
-  /** Drives the fake stream: emit a stage, or finish the run. */
-  function emit(progress: OntologyBootstrapProgress): void {
-    const last = steps[steps.length - 1];
-    steps =
-      last?.key === progress.key
-        ? [...steps.slice(0, -1), progress]
-        : [...steps, progress];
-    run.next({ steps });
-  }
-  function finish(): void {
-    run.next({ steps, created: [] });
-    run.complete();
-  }
-
   beforeEach(async () => {
     api = {
       list: jasmine.createSpy('list').and.callFake(() => of(ITEMS)),
@@ -126,11 +104,6 @@ describe('OntologyPanel', () => {
           of({ ...ITEMS.find((i) => i.id === id)!, ...patch }),
         ),
       remove: jasmine.createSpy('remove').and.returnValue(of(null)),
-      bootstrap: jasmine.createSpy('bootstrap').and.callFake(() => {
-        run = new Subject<OntologyBootstrapRun>();
-        steps = [];
-        return run.asObservable();
-      }),
     };
     const metrics = {
       list: () =>
@@ -403,92 +376,6 @@ describe('OntologyPanel', () => {
           el().querySelectorAll('[data-testid^="ontology-graph-edge-"]'),
         ).map((e) => e.getAttribute('data-testid')),
       ).toEqual(['ontology-graph-edge-r3']);
-    });
-  });
-
-  describe('generate progress', () => {
-    beforeEach(() => {
-      component.openGenerate();
-      component.generateSuggestions();
-      fixture.detectChanges();
-    });
-
-    function progressText(): string {
-      return q('generate-progress')?.textContent ?? '';
-    }
-
-    it('runs for this dataset and shows a starting line first', () => {
-      expect(api.bootstrap.calls.mostRecent().args[0]).toBe('market insight');
-      expect(progressText()).toContain('Starting');
-    });
-
-    it('renders the stage in flight and keeps the finished ones above it', () => {
-      emit({ key: 'dataset', message: 'Opening dataset “market insight”' });
-      emit({ key: 'schema', message: 'Reading schema — 3 tables' });
-      fixture.detectChanges();
-
-      expect(component.finishedSteps().map((s) => s.key)).toEqual(['dataset']);
-      expect(component.currentStep()?.key).toBe('schema');
-      expect(progressText()).toContain('Opening dataset');
-      expect(progressText()).toContain('Reading schema — 3 tables');
-    });
-
-    it('rewrites a counting stage in place instead of stacking lines', () => {
-      emit({ key: 'sample', message: 'Sampling rows — 1 of 3 tables' });
-      emit({ key: 'sample', message: 'Sampling rows — 2 of 3 tables' });
-      fixture.detectChanges();
-
-      expect(component.generateSteps().length).toBe(1);
-      expect(progressText()).toContain('Sampling rows — 2 of 3 tables');
-      expect(progressText()).not.toContain('1 of 3');
-    });
-
-    it('clears the panel and opens Pending suggestions when the run finishes', () => {
-      emit({ key: 'draft', message: 'Drafting' });
-      finish();
-      fixture.detectChanges();
-
-      expect(component.generating()).toBe(false);
-      expect(component.generateSteps()).toEqual([]);
-      expect(component.pendingOnly()).toBe(true);
-      expect(progressText()).toBe('');
-    });
-
-    it('keeps the run and its steps when the panel is destroyed and re-created', () => {
-      emit({ key: 'schema', message: 'Reading schema — 3 tables' });
-      fixture.destroy();
-
-      fixture = TestBed.createComponent(OntologyPanel);
-      fixture.componentRef.setInput('dataset', DATASET);
-      component = fixture.componentInstance;
-      fixture.detectChanges();
-
-      expect(component.generating()).toBe(true);
-      expect(component.generateOpen()).toBe(true);
-      expect(progressText()).toContain('Reading schema — 3 tables');
-    });
-
-    it('unsubscribing aborts the stream through the task Stop', () => {
-      const tasks = TestBed.inject(BackgroundTasksService);
-      expect(tasks.active('ontology-bootstrap', 'market insight')).toBeTruthy();
-      tasks.cancel(tasks.active('ontology-bootstrap', 'market insight')!.id);
-      fixture.detectChanges();
-      expect(component.generating()).toBe(false);
-      expect(run.observed).toBe(false);
-    });
-
-    it('applies the result when the run ended while the panel was gone', () => {
-      fixture.destroy();
-      finish();
-
-      fixture = TestBed.createComponent(OntologyPanel);
-      fixture.componentRef.setInput('dataset', DATASET);
-      component = fixture.componentInstance;
-      fixture.detectChanges();
-
-      expect(component.generating()).toBe(false);
-      expect(component.generateOpen()).toBe(false);
-      expect(api.list.calls.count()).toBe(2);
     });
   });
 });

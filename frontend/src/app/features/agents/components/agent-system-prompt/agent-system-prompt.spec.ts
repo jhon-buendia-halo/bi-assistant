@@ -87,7 +87,7 @@ describe('AgentSystemPrompt', () => {
       el().querySelector('[data-link="skill:planner"]')?.className,
     ).toContain('chip-info');
     expect(el().querySelector('details summary')?.textContent).toContain(
-      'Assistant core prompt (fixed)',
+      "Elena's core prompt (fixed)",
     );
   });
 

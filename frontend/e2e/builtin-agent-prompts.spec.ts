@@ -21,7 +21,8 @@ import {
  */
 
 /** The built-in agents' persona names, which the hub and their page show. */
-const ASSISTANT = 'Emily';
+const ELENA_KEY = 'insights-lead';
+const ELENA = 'Elena';
 const V2_KEY = 'insights-analyst';
 const V2 = 'Michael';
 const QUESTION = 'Who won in 2022?';
@@ -138,55 +139,45 @@ async function seedChat(page: Page): Promise<void> {
   await saveLenaiSettings(page, stub.baseUrl);
 }
 
-test("I edit the assistant's prompt, and Reset restores it", async ({
+test("Elena's prompt with its shipped tool links saves, and Reset restores it", async ({
   page,
 }) => {
-  await openAgent(page, 'assistant', ASSISTANT);
+  await openAgent(page, ELENA_KEY, ELENA);
   await openPromptTab(page);
   await expect(
     page.getByText('Built-in', { exact: true }).first(),
   ).toBeVisible();
   await expect(modifiedChip(page)).toHaveCount(0);
+  expect((await promptView(page, ELENA_KEY)).modified).toBe(false);
 
+  // Her prompt carries tool links (user agents run on her, ADR-0059), so it
+  // opens in the link editor, and an edit saves with its links in place.
   await startEditing(page);
-  await expect(page.getByTestId('agent-prompt-banner')).toHaveText(BANNER);
   await expect(
-    page
-      .getByTestId('agent-prompt-editing')
-      .getByTestId('agent-prompt-tools-note'),
-  ).toHaveText(
-    `The ## Tools list is generated from the tools ${ASSISTANT} gets and is inserted before ## Working rules.`,
-  );
+    page.getByText('+ Link skill or tool', { exact: true }),
+  ).toBeVisible();
   await appendToEditor(page, DONE_LINE, true);
   await saveButton(page).click();
   await expect(
-    page.getByText(`Job description of "${ASSISTANT}" saved`),
+    page.getByText(`Job description of "${ELENA}" saved`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
-  await page
-    .getByRole('button', { name: 'All agent personas' })
-    .scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: path.join(EVIDENCE, 'assistant-system-prompt-modified.png'),
-  });
+  const saved = await promptView(page, ELENA_KEY);
+  expect(saved.modified).toBe(true);
+  expect(saved.editable).toContain('[[tool:');
+  expect(saved.editable.endsWith(`\n${DONE_LINE}`)).toBe(true);
 
-  // The assistant can no longer be run: the saved override is read back.
-  expect(
-    (await promptView(page, 'assistant')).editable.endsWith(`\n${DONE_LINE}`),
-  ).toBe(true);
-
-  await openAgent(page, 'assistant', ASSISTANT);
-  await openPromptTab(page);
+  // Reset restores the shipped prompt.
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByTestId('agent-prompt-reset').click();
   await expect(
-    page.getByText(`Job description of "${ASSISTANT}" reset`),
+    page.getByText(`Job description of "${ELENA}" reset`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toHaveCount(0);
-  expect((await promptView(page, 'assistant')).modified).toBe(false);
+  expect((await promptView(page, ELENA_KEY)).modified).toBe(false);
 });
 
-test("I edit Insights Analyst's prompt, its runs read it, and Reset restores it", async ({
+test("I edit Michael's prompt, and Reset restores it", async ({
   page,
 }) => {
   // Given the World Cup dataset and the stub model.
@@ -261,8 +252,10 @@ test("a System agent's prompt is edited in a text area, with no link menu", asyn
   expect((await promptView(page, 'sql-fixer')).modified).toBe(false);
 });
 
-test("a skill link in the assistant's prompt is refused", async ({ page }) => {
-  await openAgent(page, 'assistant', ASSISTANT);
+test("A skill link in Michael's prompt is refused", async ({
+  page,
+}) => {
+  await openAgent(page, V2_KEY, V2);
   await openPromptTab(page);
   await startEditing(page);
 
@@ -270,17 +263,17 @@ test("a skill link in the assistant's prompt is refused", async ({ page }) => {
   await saveButton(page).click();
   await expect(
     page.getByText(
-      'Only built-in skills can be linked here: this prompt is shared by every user',
+      "Only Insights Analyst's own skills can be linked here: this prompt is shared by every user",
     ),
   ).toBeVisible();
   await expect(modifiedChip(page)).toHaveCount(0);
-  expect((await promptView(page, 'assistant')).modified).toBe(false);
+  expect((await promptView(page, V2_KEY)).modified).toBe(false);
 });
 
-test('the shipped assistant prompt shows its tools and skill as chips', async ({
+test("the shipped Michael prompt shows its tools and skill as chips", async ({
   page,
 }) => {
-  await openAgent(page, 'assistant', ASSISTANT);
+  await openAgent(page, V2_KEY, V2);
   await openPromptTab(page);
 
   const view = page.getByTestId('agent-prompt-view');
@@ -296,7 +289,7 @@ test('the shipped assistant prompt shows its tools and skill as chips', async ({
   await expect(skill).toHaveText('curated-knowledge');
   await expect(skill).toHaveClass(/chip-info/);
   await expect(page.getByTestId('agent-prompt-tools-note')).toHaveText(
-    `## Tools — generated from the tools ${ASSISTANT} gets`,
+    `## Tools — generated from the tools ${V2} gets`,
   );
   await expect(view).not.toContainText('[[');
   // The end of the prompt, with its chips and the generated-Tools note.
@@ -306,17 +299,17 @@ test('the shipped assistant prompt shows its tools and skill as chips', async ({
   });
 });
 
-test("a built-in skill link in the assistant's prompt is accepted", async ({
+test("A built-in skill link in Michael's prompt is accepted", async ({
   page,
 }) => {
-  await openAgent(page, 'assistant', ASSISTANT);
+  await openAgent(page, V2_KEY, V2);
   await openPromptTab(page);
   await startEditing(page);
 
   await appendToEditor(page, ' [[skill:curated-knowledge]]');
   await saveButton(page).click();
   await expect(
-    page.getByText(`Job description of "${ASSISTANT}" saved`),
+    page.getByText(`Job description of "${V2}" saved`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
 });

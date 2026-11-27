@@ -8,13 +8,9 @@ import {
   Patch,
   Post,
   Query,
-  Res,
 } from '@nestjs/common';
-import type { Response } from 'express';
-import { startSseHeartbeat } from '../../common/sse-heartbeat';
 import { OntologyService } from './ontology.service';
 import type { OntologyQuery } from './ontology.service';
-import { OntologyBootstrapService } from './ontology-bootstrap.service';
 import { ONTOLOGY_KINDS } from './entities/ontology-item.entity';
 import type {
   OntologyItem,
@@ -41,15 +37,12 @@ const INPUT_KEYS: (keyof OntologyItemInput)[] = [
 ];
 
 /**
- * A dataset's ontology (ADR-0036): listed, created and bootstrapped under
+ * A dataset's ontology (ADR-0036): listed, created under
  * the dataset, changed and deleted by item id.
  */
 @Controller()
 export class OntologyController {
-  constructor(
-    private readonly ontology: OntologyService,
-    private readonly bootstrapper: OntologyBootstrapService,
-  ) {}
+  constructor(private readonly ontology: OntologyService) {}
 
   @Get('datasets/:name/ontology')
   async list(
@@ -84,53 +77,6 @@ export class OntologyController {
   @HttpCode(204)
   async remove(@Param('id') id: string): Promise<void> {
     await this.ontology.delete(id);
-  }
-
-  @Post('datasets/:name/ontology/bootstrap')
-  async bootstrap(
-    @Param('name') name: string,
-  ): Promise<{ created: OntologyItem[] }> {
-    return { created: await this.bootstrapper.bootstrap(name) };
-  }
-
-  /**
-   * Same run as `POST …/bootstrap`, streamed: a `progress` event per stage
-   * (opening the dataset, reading schema, sampling rows, drafting, saving)
-   * so the UI can say what is happening during the minute it takes, then a
-   * terminal `done` with the created items, or `error` with the reason.
-   */
-  @Post('datasets/:name/ontology/bootstrap/stream')
-  @HttpCode(200)
-  async bootstrapStream(
-    @Param('name') name: string,
-    @Res() res: Response,
-  ): Promise<void> {
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
-    const send = (data: unknown) =>
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-    let closed = false;
-    const onClose = () => {
-      closed = true;
-    };
-    res.once('close', onClose);
-    const stopHeartbeat = startSseHeartbeat(res);
-    try {
-      const created = await this.bootstrapper.bootstrap(name, (progress) => {
-        if (!closed) send({ type: 'progress', ...progress });
-      });
-      if (!closed) send({ type: 'done', created });
-    } catch (err) {
-      if (!closed) {
-        const message = err instanceof Error ? err.message : String(err);
-        send({ type: 'error', message });
-      }
-    }
-    stopHeartbeat();
-    res.off('close', onClose);
-    if (!res.writableEnded) res.end();
   }
 }
 

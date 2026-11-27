@@ -44,12 +44,6 @@ jest.mock('../../mastra/tool-services', () => ({
 jest.mock('../../mastra/tools/dataset.tools', () => ({
   DATASETS_CONTEXT_KEY: 'datasets',
 }));
-jest.mock('../../mastra/tools/visual.tools', () => ({
-  ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual-id',
-  SESSION_ID_CONTEXT_KEY: 'session-id',
-  TURN_QUESTION_CONTEXT_KEY: 'turn-question',
-  TURN_RECORDS_CONTEXT_KEY: 'turn-data-records',
-}));
 jest.mock('../../mastra/session-workspaces', () => ({
   SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace-id',
   listSessionWorkspaceIds: jest.fn(() => []),
@@ -72,11 +66,6 @@ jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { z } = require('zod') as typeof import('zod');
   return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
-});
-jest.mock('../../mastra/agents/sql-verifier.agent', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { z } = require('zod') as typeof import('zod');
-  return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
 });
 jest.mock('./repositories/sessions.repository', () => ({
   SessionsRepository: class {},
@@ -539,7 +528,6 @@ async function chatTurn(
   ctx: Ctx,
   sessionId: string,
   content: string,
-  careful = false,
 ): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
   await streamStored(
@@ -548,8 +536,6 @@ async function chatTurn(
     content,
     (e) => events.push(e),
     undefined,
-    undefined,
-    careful,
   );
   return events;
 }
@@ -580,35 +566,6 @@ async function resumeOf(
   const prepared = await ctx.runs.prepareResume(runId, body);
   const run = await ctx.runs.resume(prepared, (e) => events.push(e));
   return { events, run };
-}
-
-/**
- * One turn on a built-in agent's direct host, as the eval runner makes it
- * (`createEvalHost`): the host, the turn, then the host's view.
- */
-async function agentHostTurn(
-  ctx: Ctx,
-  agentKey: string,
-  question: string,
-  options: { datasets?: string[]; careful?: boolean } = {},
-) {
-  const events: StreamEvent[] = [];
-  const host = await ctx.sessions.createRunHost({
-    runId: `eval-${agentKey}`,
-    agentKey,
-    name: `${agentKey} eval`,
-    ...(options.datasets ? { datasets: options.datasets } : {}),
-  });
-  await ctx.sessions.streamRunTurn(
-    host.id,
-    question,
-    (e) => events.push(e),
-    undefined,
-    options.careful ?? false,
-    () => undefined,
-  );
-  const view = await ctx.sessions.finishRunHost(host.id);
-  return { host, events, view };
 }
 
 const HOST_ONLY_KEYS = ['session-id', 'session-workspace-id'];
@@ -687,37 +644,10 @@ describe('a run sends the same model request as a chat turn (plan 1.24.2; agents
     );
     expect(run.answer?.content).toBe('Brazil won.');
   });
-
-  // The eval runner's direct host (1.23.35): the assistant has no
-  // catalogue workflow, and still runs its turn.
-  it("the assistant's agent host: the same request as its chat turn, and the same answer", async () => {
-    const ctx = build();
-    const session = ctx.chat('assistant');
-    await chatTurn(ctx, session.id, 'Who won?');
-    const { host, view } = await agentHostTurn(ctx, 'assistant', 'Who won?', {
-      datasets: ['World Cup'],
-    });
-
-    const [chatCall, hostCall] = ctx.calls['assistant'];
-    expect(ctx.calls['assistant']).toHaveLength(2);
-    expect(request(hostCall)).toEqual(request(chatCall));
-    expect(hostCall.options.requestContext.values.get('session-id')).toBe(
-      host.id,
-    );
-    // Bound as its chat is, on the agent-turn engine, over the same data.
-    expect(host).toMatchObject({
-      datasets: ['World Cup'],
-      workflowId: 'agent:assistant',
-      run: true,
-    });
-    expect(withoutTime(view.messages.at(-1))).toEqual(
-      withoutTime(session.messages.at(-1)),
-    );
-  });
 });
 
 describe('the run host (agents.md 5.14)', () => {
-  it('refuses a workflow the catalogue does not hold, and an agent with no agent-turn binding', async () => {
+  it('refuses a workflow the catalogue does not hold', async () => {
     const ctx = build();
     for (const workflowId of [
       'agent:assistant',
@@ -729,19 +659,6 @@ describe('the run host (agents.md 5.14)', () => {
       await expect(
         ctx.sessions.createRunHost({ runId: 'r', workflowId, name: 'x' }),
       ).rejects.toThrow(`Workflow "${workflowId}" not found`);
-    }
-    // The assistant is the only built-in agent with a direct host; the
-    // removed Data Readiness Agent (`data-readiness`) has none either.
-    for (const agentKey of [
-      'sql-fixer',
-      'insights-analyst',
-      'data-readiness',
-      'rfp',
-      'agent-1',
-    ]) {
-      await expect(
-        ctx.sessions.createRunHost({ runId: 'r', agentKey, name: 'x' }),
-      ).rejects.toThrow(`Agent "${agentKey}" not found`);
     }
     expect(ctx.mastra.ensureSessionWorkspace).not.toHaveBeenCalled();
   });
@@ -791,12 +708,12 @@ describe('the run host (agents.md 5.14)', () => {
     write.mockReset();
   });
 
-  it("deletes an eval host's workspace with it (agents.md 8.3)", async () => {
+  it("deletes a host's workspace with it (agents.md 8.3)", async () => {
     const ctx = build();
     const host = await ctx.sessions.createRunHost({
       runId: 'eval-1',
-      agentKey: 'assistant',
-      name: 'assistant eval',
+      workflowId: ORCHESTRATED_WORKFLOW.id,
+      name: 'eval',
       datasets: ['World Cup'],
     });
     expect((await ctx.sessions.get(host.id)).datasets).toEqual(['World Cup']);
@@ -857,7 +774,6 @@ describe('the run host (agents.md 5.14)', () => {
       'And then?',
       () => undefined,
       undefined,
-      false,
       () => undefined,
     );
     await ctx.sessions.finishRunHost(host.id);
@@ -914,7 +830,6 @@ describe('the run host (agents.md 5.14)', () => {
       'Which team was the most dominant?',
       () => undefined,
       signal,
-      false,
       () => undefined,
     );
     return { host, suspension };
@@ -971,29 +886,6 @@ describe('the run host (agents.md 5.14)', () => {
       onStepEvent: () => undefined,
     });
     expect(allAborted(ctx)).toBe(true);
-  });
-
-  it("careful: true on an agent host's turn runs the cross-check, as a careful chat turn does", async () => {
-    const ctx = build();
-    const crossCheck = jest
-      .spyOn(
-        ctx.sessions as unknown as { crossCheckAnswer: () => Promise<unknown> },
-        'crossCheckAnswer',
-      )
-      .mockResolvedValue({ status: 'agree', note: 'same' });
-    const { view } = await agentHostTurn(ctx, 'assistant', 'Who won?', {
-      datasets: ['World Cup'],
-      careful: true,
-    });
-    expect(crossCheck).toHaveBeenCalledTimes(1);
-    expect(view.messages.at(-1)?.crossCheck).toEqual({
-      status: 'agree',
-      note: 'same',
-    });
-    crossCheck.mockClear();
-    // An Avery + Michael run takes no careful field: its input has none.
-    await runOf(ctx, { ...AVERY_INPUT, careful: true });
-    expect(crossCheck).not.toHaveBeenCalled();
   });
 
   it('an Avery + Michael run emits a running and an ended event for its one step, and moves no prompt bar', async () => {
@@ -2161,5 +2053,362 @@ describe("Elena's conversation on the run host (plan Elena 1.3, 2.4)", () => {
       { role: 'assistant', content: 'Brazil won.' },
       { role: 'user', content: 'And in 2002?' },
     ]);
+  });
+});
+
+/** A user agent's saved draft, as Try it runs it (agents-evals R60). */
+const DRAFT_CONFIG = {
+  name: 'Sales helper',
+  role: 'Analyst',
+  description: 'Answers sales questions.',
+  instructions: 'Answer in euros.',
+  datasets: ['World Cup'],
+  starterQuestions: [],
+};
+
+/** `agent-1` answers with its draft (`patch` over `DRAFT_CONFIG`). */
+function withDraft(ctx: Ctx, patch: Record<string, unknown> = {}) {
+  ctx.userAgents.get.mockImplementation((id: string) =>
+    Promise.resolve(
+      id === 'agent-1'
+        ? { id, draft: { ...DRAFT_CONFIG, ...patch }, owner: 'demo' }
+        : null,
+    ),
+  );
+}
+
+/** One Try it run of `agent-1`'s draft (api.md 129). */
+async function draftRunOf(
+  ctx: Ctx,
+  question = 'Who won?',
+  signal?: AbortSignal,
+): Promise<{ events: RunStreamEvent[]; run: WorkflowRun }> {
+  const events: RunStreamEvent[] = [];
+  const prepared = await ctx.runs.prepareDraft('agent-1', {
+    input: { question },
+  });
+  const run = await ctx.runs.stream(prepared, (e) => events.push(e), signal);
+  return { events, run };
+}
+
+describe("Try it on Elena's conversation engine (api.md 129; ADR-0059)", () => {
+  it("runs the draft as Elena's one Answer step, with the draft's instructions in her context, and stores nothing", async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    withDraft(ctx);
+    const { events, run } = await draftRunOf(ctx);
+    expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
+      INSIGHTS_LEAD_ENGINE_ID,
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(events[0]).toEqual({
+      type: 'run',
+      runId: run.id,
+      workflowId: 'agent:agent-1',
+    });
+    expect(run.status).toBe('success');
+    expect(run.steps.map(stepLine)).toEqual(['answer:success']);
+    expect(run.answer?.content).toBe('Brazil won.');
+    expect(run).toMatchObject({
+      workflowId: 'agent:agent-1',
+      agentKey: 'insights-lead',
+      agentId: 'agent-1',
+      agentName: 'Sales helper',
+    });
+    // Elena alone, her budget, the draft's instructions as Block 5.
+    expect(ctx.calls['insights-lead']).toHaveLength(1);
+    expect(ctx.calls['assistant']).toHaveLength(0);
+    const call = ctx.calls['insights-lead'][0].options;
+    expect(call.maxSteps).toBe(24);
+    expect(call.memory).toBeUndefined();
+    const blocks = call.context.map((block) => block.content);
+    const own = blocks.findIndex((content) =>
+      content.includes('<agent-instructions>\nAnswer in euros.'),
+    );
+    expect(own).toBeGreaterThan(0);
+    expect(blocks[0]).toMatch(/^Datasets for this session: World Cup\./);
+    // Never stored, and its host and workspace go with it.
+    expect(await ctx.runsRepository.list()).toEqual([]);
+    expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledWith(
+      `run-${run.id}`,
+    );
+  });
+
+  it('keeps the dashboard and export gates closed: nothing is saved, even when asked for a dashboard', async () => {
+    const artifacts = dashboardArtifacts();
+    const ctx = build({
+      artifacts,
+      streams: { 'insights-lead': elenaAnswers() },
+    });
+    withDraft(ctx);
+    const { run } = await draftRunOf(ctx, 'Create a dashboard of goals');
+    expect(run.status).toBe('success');
+    const call = ctx.calls['insights-lead'][0].options;
+    expect(
+      call.requestContext.values.get(CONVERSATION_GATES_CONTEXT_KEY),
+    ).toEqual({ dashboard: false, export: false });
+    expect(call.requestContext.values.has(DASHBOARD_TOOLS_RUNTIME_KEY)).toBe(
+      false,
+    );
+    expect(artifacts.createDashboard).not.toHaveBeenCalled();
+    expect(run.answer?.dashboard).toBeUndefined();
+  });
+
+  it("routes the draft as Elena's runs: Opus 5.5 high on a Claude provider, an effort override keeping Opus, a model override replacing it", async () => {
+    const config = jest.mocked(resolveAgentModelConfig);
+    config.mockResolvedValue('anthropic/claude-sonnet-4-6');
+    const stepModelOf = async (patch: Record<string, unknown>) => {
+      const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+      withDraft(ctx, patch);
+      await draftRunOf(ctx);
+      const call = ctx.calls['insights-lead'][0].options;
+      return call.requestContext.values.get(STEP_MODEL_CONTEXT_KEY);
+    };
+    try {
+      expect(await stepModelOf({})).toEqual({
+        model: 'claude-opus-5-5',
+        reasoningEffort: 'high',
+      });
+      expect(await stepModelOf({ reasoningEffort: 'low' })).toEqual({
+        model: 'claude-opus-5-5',
+        reasoningEffort: 'low',
+      });
+      expect(await stepModelOf({ model: 'claude-own' })).toBeUndefined();
+    } finally {
+      config.mockResolvedValue('openai/gpt-4.1-mini');
+    }
+  });
+});
+
+/** Elena's next stream asks the user (as Avery asks); the ones after answer. */
+function elenaAsksOnce(ctx: Ctx): void {
+  ctx.registry['insights-lead'].stream.mockImplementationOnce(
+    (input: unknown, opts: StreamCall['options']) => {
+      ctx.calls['insights-lead'].push({ input, options: opts });
+      return Promise.resolve({
+        fullStream: streamOf(AVERY_ASKS),
+        text: Promise.resolve(''),
+      });
+    },
+  );
+}
+
+/** Resume a waiting draft run of `agentId` (api.md 169). */
+async function draftResumeOf(
+  ctx: Ctx,
+  runId: string,
+  body: Record<string, unknown>,
+  agentId = 'agent-1',
+  signal?: AbortSignal,
+): Promise<{ events: RunStreamEvent[]; run: WorkflowRun }> {
+  const events: RunStreamEvent[] = [];
+  const prepared = await ctx.runs.prepareDraftResume(agentId, runId, body);
+  const run = await ctx.runs.resume(prepared, (e) => events.push(e), signal);
+  return { events, run };
+}
+
+const MEASURE = { stepId: 'answer', answer: 'Matches won' };
+
+describe('a draft run that waits for the user (api.md 129, 169; ADR-0059)', () => {
+  it('suspends at Answer and resumes the same run with the answer, never stored, its host and snapshot gone at the end', async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    withDraft(ctx);
+    elenaAsksOnce(ctx);
+    const { events, run } = await draftRunOf(ctx, 'Which team was best?');
+    const tail = events.slice(-3);
+    expect(tail[0]).toMatchObject({
+      type: 'step',
+      id: 'answer',
+      status: 'suspended',
+    });
+    expect(tail[1]).toEqual({
+      type: 'input-required',
+      runId: run.id,
+      stepId: 'answer',
+      title: 'Answer',
+      question: 'Dominant by what measure?',
+      options: ['Matches won', 'Goals scored'],
+      expiresAt: expect.any(String) as unknown,
+    });
+    expect(tail[2]).toMatchObject({ type: 'done', run: { id: run.id } });
+    expect(run).toMatchObject({
+      status: 'suspended',
+      agentKey: 'insights-lead',
+      agentId: 'agent-1',
+      waitingFor: { stepId: 'answer', title: 'Answer' },
+    });
+    expect(
+      Date.parse(run.waitingFor!.expiresAt) - Date.parse(run.waitingFor!.since),
+    ).toBeGreaterThanOrEqual(30 * 60 * 1000 - 1000);
+    // Held in memory only: nothing stored, the host kept for the resume.
+    expect(await ctx.runsRepository.list()).toEqual([]);
+    expect(ctx.mastra.deleteSessionResources).not.toHaveBeenCalled();
+
+    const resumed = await draftResumeOf(ctx, run.id, {
+      stepId: 'answer',
+      answer: '  Matches won ',
+    });
+    expect(resumed.events[0]).toEqual({
+      type: 'run',
+      runId: run.id,
+      workflowId: 'agent:agent-1',
+    });
+    expect(resumed.run.id).toBe(run.id);
+    expect(resumed.run.status).toBe('success');
+    expect(resumed.run.answer?.content).toBe('Brazil won.');
+    expect(resumed.run.waitingFor).toBeUndefined();
+    expect(ctx.calls['insights-lead']).toHaveLength(2);
+    expect(ctx.calls['insights-lead'][1].input).toEqual([
+      { role: 'user', content: 'Which team was best?' },
+      {
+        role: 'assistant',
+        content: 'Dominant by what measure?\n- Matches won\n- Goals scored',
+      },
+      { role: 'user', content: 'Matches won' },
+    ]);
+    expect(await ctx.runsRepository.list()).toEqual([]);
+    expect(ctx.discards.count).toBe(1);
+    expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledWith(
+      `run-${run.id}`,
+    );
+    // Resumed once.
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', run.id, MEASURE),
+    ).rejects.toMatchObject({
+      status: 404,
+      message: `Run "${run.id}" not found`,
+    });
+  });
+
+  it('refuses before any frame: 404 agent, 404 run (unknown, another agent), 400 blank answer, 400 step, 400 no dataset; and still resumes', async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    withDraft(ctx);
+    elenaAsksOnce(ctx);
+    const { run } = await draftRunOf(ctx);
+    await expect(
+      ctx.runs.prepareDraftResume('nope', run.id, MEASURE),
+    ).rejects.toMatchObject({ status: 404, message: 'Agent "nope" not found' });
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', 'r-unknown', MEASURE),
+    ).rejects.toMatchObject({
+      status: 404,
+      message: 'Run "r-unknown" not found',
+    });
+    ctx.userAgents.get.mockImplementation((id: string) =>
+      Promise.resolve(
+        id === 'agent-1' || id === 'agent-2'
+          ? { id, draft: DRAFT_CONFIG, owner: 'demo' }
+          : null,
+      ),
+    );
+    await expect(
+      ctx.runs.prepareDraftResume('agent-2', run.id, MEASURE),
+    ).rejects.toMatchObject({
+      status: 404,
+      message: `Run "${run.id}" not found`,
+    });
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', run.id, {
+        stepId: 'answer',
+        answer: ' ',
+      }),
+    ).rejects.toMatchObject({ status: 400, message: 'Answer is required' });
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', run.id, {
+        stepId: 'orchestrate',
+        answer: 'a',
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: 'Step "orchestrate" is not waiting for an answer',
+    });
+    withDraft(ctx, { datasets: ['Gone'] });
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', run.id, MEASURE),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: 'Select at least one dataset to preview',
+    });
+    // The refusals took nothing: the run still waits.
+    withDraft(ctx);
+    const { run: resumed } = await draftResumeOf(ctx, run.id, MEASURE);
+    expect(resumed.status).toBe('success');
+  });
+
+  it('answers 410 once its 30 minutes passed: its host, workspace and snapshot are gone', async () => {
+    jest.useFakeTimers({
+      doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
+    });
+    try {
+      const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+      withDraft(ctx);
+      elenaAsksOnce(ctx);
+      const { run } = await draftRunOf(ctx);
+      jest.advanceTimersByTime(30 * 60 * 1000);
+      await jest.runAllTimersAsync();
+      expect(ctx.discards.count).toBe(1);
+      expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledWith(
+        `run-${run.id}`,
+      );
+      await expect(
+        ctx.runs.prepareDraftResume('agent-1', run.id, MEASURE),
+      ).rejects.toMatchObject({
+        status: 410,
+        message:
+          'This run can no longer continue — run it again with your answer',
+      });
+      expect(await ctx.runsRepository.list()).toEqual([]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('holds 20 waiting drafts at most: a 21st expires the oldest', async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    withDraft(ctx);
+    const ids: string[] = [];
+    for (let i = 0; i < 21; i += 1) {
+      elenaAsksOnce(ctx);
+      ids.push((await draftRunOf(ctx)).run.id);
+    }
+    expect(ctx.discards.count).toBe(1);
+    await expect(
+      ctx.runs.prepareDraftResume('agent-1', ids[0], MEASURE),
+    ).rejects.toMatchObject({ status: 410 });
+    const { run } = await draftResumeOf(ctx, ids[1], MEASURE);
+    expect(run.status).toBe('success');
+  });
+
+  it('a Stop during the resume (its connection closed) ends it stopped and deletes its host', async () => {
+    const ctx = build({ streams: { 'insights-lead': elenaAnswers() } });
+    withDraft(ctx);
+    elenaAsksOnce(ctx);
+    const { run } = await draftRunOf(ctx);
+    ctx.registry['insights-lead'].stream.mockImplementationOnce(
+      (input: unknown, opts: StreamCall['options']) => {
+        ctx.calls['insights-lead'].push({ input, options: opts });
+        return Promise.resolve({
+          fullStream: (async function* () {
+            await new Promise<void>((resolve) => {
+              if (opts.abortSignal?.aborted) resolve();
+              opts.abortSignal?.addEventListener('abort', () => resolve());
+            });
+            yield* [];
+            throw new Error('aborted');
+          })(),
+          text: Promise.resolve(''),
+        });
+      },
+    );
+    const stop = new AbortController();
+    const resumed = draftResumeOf(ctx, run.id, MEASURE, 'agent-1', stop.signal);
+    await new Promise((resolve) => setImmediate(resolve));
+    stop.abort();
+    const { run: stopped } = await resumed;
+    expect(stopped.status).toBe('stopped');
+    expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledWith(
+      `run-${run.id}`,
+    );
+    expect(await ctx.runsRepository.list()).toEqual([]);
   });
 });
