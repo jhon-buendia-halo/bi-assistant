@@ -121,7 +121,7 @@ Summary:
 | `workflow_run_node_chats` | The chats with a stored run's agent steps (node chats), one per run and step | `id`; `(runId, stepId)` unique | n/a (read by run and step) | [workflows](../capabilities/workflows/spec.md) |
 | `artifacts` | Reusable context saved from workflow runs: today, dashboards (a version of Avery's conversation, or one saved before 2026-11-26 by Dashboard Image to Artifact) | `id` | `createdAt` desc | [workflows](../capabilities/workflows/spec.md) R33 |
 | `conversation_exports` | The PDF and PowerPoint exports of conversations with Avery, one per export, never edited (3.20) | `id` | n/a (read by id) | [workflows](../capabilities/workflows/spec.md) R45 |
-| `readiness_assessments` | Dana's data-readiness assessments, one per `assess_readiness` call: the baseline of the next one (3.21) | `id`; `useCaseKey` groups the assessments of one use case and datasets | `createdAt` desc (per `useCaseKey`) | [data-readiness](../capabilities/data-readiness/spec.md) |
+| `readiness_assessments` | Dana's data-readiness assessments, one per `assess_readiness` call: the baseline of the next one (3.21) | `id`; `useCaseKey` groups the assessments of one use case and datasets | `assessedAt` desc (per `useCaseKey`) | [data-readiness](../capabilities/data-readiness/spec.md) |
 
 Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `agents`, `skills` and `workflow_runs` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints** between collections, and no cascading deletes but one (a run's node chats go with it, 3.17); references are by value (`name`, `id`) and may dangle (section 3.13).
 
@@ -763,12 +763,12 @@ No `ownerId` (3.14). Nothing lists, renames or deletes exports yet: the document
 
 ### 3.21 `readiness_assessments` — data-readiness assessments
 
-One document per call of Dana's `assess_readiness` tool (since 2026-11-26; [agents.md](agents.md) 2.24 and 3.19, [data-readiness](../capabilities/data-readiness/spec.md) R10, ADR-0060). Written once, by the tool, after it has computed the assessment; never updated. The document is a `ReadinessAssessment` (`backend/src/modules/readiness-assessor/readiness.types.ts`). It is the **baseline** of the next assessment of the same use case and datasets.
+One document per call of Dana's `assess_readiness` tool (since 2026-11-26; [agents.md](agents.md) 2.24 and 3.19, [data-readiness](../capabilities/data-readiness/spec.md) R10, ADR-0060). Written once, by the tool, after it has computed the assessment; never updated. The document is `{ id, useCaseKey, assessedAt, assessment }` (`ReadinessAssessmentDoc`, `readiness-assessments.repository.ts`): `id` and `useCaseKey` are the assessment's, `assessedAt` is its `createdAt`, and `assessment` holds the whole `ReadinessAssessment` (`backend/src/modules/readiness-assessor/readiness.types.ts`), so the store's own `createdAt`, the write time, never replaces the assessment's. The baseline is the document with the same `useCaseKey` and the latest `assessedAt`. The fields of `assessment`:
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `id` | uuid | yes | The assessment's id. |
-| `createdAt` | ISO | yes | When it was made. |
+| `createdAt` | ISO | yes | When it was made (copied to the document's `assessedAt`). |
 | `rubricVersion` | string | yes | The rubric version applied (`1.0`; data-readiness rubric). |
 | `useCaseKey` | string | yes | The normalised use case plus the sorted dataset names; the same use case on the same datasets has the same key. The baseline is the latest document with the same key. |
 | `sessionId` | string | no | The session that held the conversation. |
