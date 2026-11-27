@@ -1331,7 +1331,7 @@ async function* failingStream(error: Error): AsyncGenerator<never> {
   yield await Promise.reject(error);
 }
 
-describe('SessionsService visual tailoring and repair', () => {
+describe('SessionsService visual revert and refresh (the viewer, ADR-0059)', () => {
   const visual = (currentVersion: number) => ({
     id: 'visual-1',
     title: 'Claims by month',
@@ -1375,10 +1375,8 @@ describe('SessionsService visual tailoring and repair', () => {
         .mockImplementation(
           (meta: { currentVersion?: number }) => meta.currentVersion ?? 1,
         ),
-      update: jest
-        .fn()
-        .mockImplementation(() => Promise.resolve({ metadata: visual(2) })),
-      repair: jest
+      revert: jest.fn().mockImplementation(() => Promise.resolve(visual(1))),
+      refreshData: jest
         .fn()
         .mockImplementation(() => Promise.resolve({ metadata: visual(2) })),
       load: jest.fn().mockImplementation((_doc, id: string, version: number) =>
@@ -1406,52 +1404,33 @@ describe('SessionsService visual tailoring and repair', () => {
   }
 
   it('runs a visual action on a run host: event and panel item returned, nothing persisted here', async () => {
-    const { service, session, visuals } = build();
+    const { service, session, visuals } = build(2);
     const host = { ...session, id: 'run-r1', run: true } as SessionDoc;
 
-    const tailored = await service.runVisualAction(host, {
-      kind: 'tailor',
+    const reverted = await service.runVisualAction(host, {
+      kind: 'revert',
       visualId: 'visual-1',
-      instruction: '  Make the bars green  ',
+      version: 1,
     });
-    expect(visuals.update).toHaveBeenCalledWith(
-      host,
-      'visual-1',
-      'Make the bars green',
-    );
-    expect(tailored.version).toBe(2);
-    expect(tailored.event).toEqual({
+    expect(visuals.revert).toHaveBeenCalledWith(host, 'visual-1', 1);
+    expect(reverted.version).toBe(1);
+    expect(reverted.event).toEqual({
       visualId: 'visual-1',
-      version: 2,
+      version: 1,
       title: 'Claims by month',
-      action: 'updated',
+      action: 'reverted',
     });
-    expect(tailored.panelItems).toEqual([
+    expect(reverted.panelItems).toEqual([
       expect.objectContaining({ id: 'visual:visual-1', kind: 'visual' }),
     ]);
 
-    const repaired = await service.runVisualAction(host, {
-      kind: 'repair',
+    const refreshed = await service.runVisualAction(host, {
+      kind: 'refresh',
       visualId: 'visual-1',
-      error: 'blank',
-      version: 1,
     });
-    expect(repaired.event).toBeUndefined();
-    await expect(
-      service.runVisualAction(host, {
-        kind: 'repair',
-        visualId: 'visual-1',
-        error: 'blank',
-        version: 5,
-      }),
-    ).rejects.toThrow(/Only the current version can be repaired/);
-    await expect(
-      service.runVisualAction(host, {
-        kind: 'tailor',
-        visualId: 'visual-1',
-        instruction: ' ',
-      }),
-    ).rejects.toThrow(/instruction is required/);
+    expect(visuals.refreshData).toHaveBeenCalledWith(host, 'visual-1');
+    expect(refreshed.version).toBe(2);
+    expect(refreshed.event).toBeUndefined();
     expect(session.messages).toHaveLength(0);
   });
 });

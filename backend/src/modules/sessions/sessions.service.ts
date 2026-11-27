@@ -100,11 +100,8 @@ export const RUN_HOST_ID_PREFIX = 'run-';
  */
 /** A visual action on a run-backed host (api.md 130-134). */
 export type RunVisualAction =
-  | { kind: 'create'; sourceMessageAt?: string }
-  | { kind: 'tailor'; visualId: string; instruction: string }
   | { kind: 'revert'; visualId: string; version: number }
-  | { kind: 'refresh'; visualId: string }
-  | { kind: 'repair'; visualId: string; error: string; version: number };
+  | { kind: 'refresh'; visualId: string };
 
 /** What `runVisualAction` answers: the caller stores it on the run. */
 export interface RunVisualOutcome {
@@ -1103,44 +1100,6 @@ export class SessionsService implements OnModuleInit {
     event?: VisualEvent;
   }> {
     switch (action.kind) {
-      case 'create': {
-        const { metadata } = await this.visuals.create(
-          host,
-          action.sourceMessageAt || undefined,
-        );
-        return {
-          metadata,
-          version: 1,
-          event: {
-            visualId: metadata.id,
-            version: 1,
-            title: metadata.title,
-            action: 'created',
-          },
-        };
-      }
-      case 'tailor': {
-        const instruction = (action.instruction ?? '').trim();
-        if (!instruction) {
-          throw new BadRequestException('instruction is required');
-        }
-        const { metadata } = await this.visuals.update(
-          host,
-          action.visualId,
-          instruction,
-        );
-        const version = this.visuals.currentVersion(metadata);
-        return {
-          metadata,
-          version,
-          event: {
-            visualId: metadata.id,
-            version,
-            title: metadata.title,
-            action: 'updated',
-          },
-        };
-      }
       case 'revert': {
         const metadata = await this.visuals.revert(
           host,
@@ -1165,72 +1124,7 @@ export class SessionsService implements OnModuleInit {
         );
         return { metadata, version: this.visuals.currentVersion(metadata) };
       }
-      case 'repair': {
-        const meta = this.visuals.find(host, action.visualId);
-        const current = this.visuals.currentVersion(meta);
-        if (action.version !== current) {
-          throw new BadRequestException(
-            `Only the current version can be repaired (requested v${action.version}, current v${current})`,
-          );
-        }
-        const { metadata } = await this.visuals.repair(
-          host,
-          action.visualId,
-          action.error,
-        );
-        return { metadata, version: this.visuals.currentVersion(metadata) };
-      }
     }
-  }
-
-  /** Upsert visual metadata on the session, optionally logging a chat event. */
-  private async saveVisualMetadata(
-    session: SessionDoc,
-    metadata: SessionVisualization,
-    event?: VisualEvent,
-  ): Promise<SessionDoc> {
-    const fresh = await this.get(session.id);
-    const others = (fresh.visualizations ?? []).filter(
-      (v) => v.id !== metadata.id,
-    );
-    const patch: Partial<SessionDoc> = {
-      visualizations: [...others, metadata],
-      // The visual joins the panel history, newest shown (ADR-0029).
-      panelItems: upsertPanelItem(fresh.panelItems ?? [], {
-        id: visualItemId(metadata.id),
-        kind: 'visual',
-        title: metadata.title,
-        shownAt: new Date().toISOString(),
-        visualId: metadata.id,
-      }),
-    };
-    if (event) {
-      const verb =
-        event.action === 'created'
-          ? 'Created'
-          : event.action === 'updated'
-            ? 'Updated'
-            : 'Reverted';
-      patch.messages = [
-        ...fresh.messages,
-        {
-          role: 'assistant',
-          content: `${verb} interactive visual "${event.title}" (v${event.version}).`,
-          at: new Date().toISOString(),
-          visual: event,
-        },
-      ];
-    }
-    return (await this.updateDoc(session.id, patch)) ?? fresh;
-  }
-
-  private toolResult(metadata: SessionVisualization) {
-    return {
-      visualId: metadata.id,
-      version: this.visuals.currentVersion(metadata),
-      title: metadata.title,
-      description: metadata.description,
-    };
   }
 
   /**

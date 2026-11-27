@@ -53,7 +53,7 @@ describe('built-in agent personas (agents.md 1.1)', () => {
         'result-explorer',
       ],
       sql: ['query-explainer', 'sql-fixer'],
-      storytelling: ['bi-analyst', 'visualization'],
+      storytelling: ['bi-analyst'],
       quality: ['assistant-eval-judge'],
     });
   });

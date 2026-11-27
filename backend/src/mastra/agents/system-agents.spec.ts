@@ -29,14 +29,12 @@ import {
 } from './bi-analyst-catalog';
 import { evalJudgeAgent } from './eval-judge.agent';
 import { sqlFixerAgent } from './sql-fixer.agent';
-import { visualizationAgent } from './visualization.agent';
 
 /**
  * Each fixture is the agent's instructions as they were before ADR-0026
  * (the static array joined with `\n`), so no override means no change.
  */
 const AGENTS = {
-  visualization: visualizationAgent,
   'sql-fixer': sqlFixerAgent,
   'assistant-eval-judge': evalJudgeAgent,
 } as const;

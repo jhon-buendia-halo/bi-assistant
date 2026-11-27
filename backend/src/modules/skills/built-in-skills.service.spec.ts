@@ -53,7 +53,6 @@ describe('BuiltInSkillsService', () => {
       'conversation-export',
       'curated-knowledge',
       'dashboard-building',
-      'interactive-visuals',
       'result-validation',
       'sql-analysis',
     ]);
@@ -81,10 +80,8 @@ describe('BuiltInSkillsService', () => {
       builtInChanged: false,
       updatedAt: null,
     });
-    expect(named('interactive-visuals')).toMatchObject({
-      loading: 'harness',
-      agents: ['visualization'],
-    });
+    // The designer's interactive-visuals went with it (ADR-0059).
+    expect(named('interactive-visuals')).toBeUndefined();
   });
 
   it('no longer ships the deep-analysis skill (removed in 1.23.35)', async () => {
@@ -111,9 +108,7 @@ describe('BuiltInSkillsService', () => {
         'ask_clarification',
       ],
     });
-    for (const name of ['curated-knowledge', 'interactive-visuals']) {
-      expect(byName.get(name)).not.toHaveProperty('tools');
-    }
+    expect(byName.get('curated-knowledge')).not.toHaveProperty('tools');
   });
 
   it('answers an unknown built-in skill as not found, or as a refusal', async () => {
@@ -122,7 +117,7 @@ describe('BuiltInSkillsService', () => {
       'Unknown built-in skill "nope"',
     );
     await expect(
-      service.save('nope', edited('interactive-visuals')),
+      service.save('nope', edited('avery-playbooks')),
     ).rejects.toThrow('Unknown built-in skill "nope"');
     await expect(service.reset('nope')).rejects.toThrow(
       'Unknown built-in skill "nope"',
@@ -131,9 +126,9 @@ describe('BuiltInSkillsService', () => {
 
   it('refuses a save with the first failing check, in the documented order', async () => {
     const { service } = build();
-    const ok = edited('interactive-visuals');
+    const ok = edited('avery-playbooks');
     const refusal = (patch: object) =>
-      service.save('interactive-visuals', { ...ok, ...patch }).then(
+      service.save('avery-playbooks', { ...ok, ...patch }).then(
         () => 'saved',
         (err: Error) => err.message,
       );
@@ -212,11 +207,11 @@ describe('BuiltInSkillsService', () => {
         files: [{ path: 'reference/a.md', content: 'x' }],
       }),
     ).rejects.toThrow('reference/a.md is not a file of this skill');
-    const ok = edited('interactive-visuals');
+    const ok = edited('avery-playbooks');
     const plain = ok.files.find((file) => !file.content.includes('{{'));
     expect(plain).toBeDefined();
     await expect(
-      service.save('interactive-visuals', {
+      service.save('avery-playbooks', {
         ...ok,
         files: ok.files.map((file) =>
           file === plain ? { ...file, content: `${file.content} {{x}}` } : file,
@@ -227,9 +222,9 @@ describe('BuiltInSkillsService', () => {
 
   it('leaves everything unchanged when a save is refused', async () => {
     const { service, store } = build();
-    const ok = edited('interactive-visuals');
+    const ok = edited('avery-playbooks');
     await expect(
-      service.save('interactive-visuals', {
+      service.save('avery-playbooks', {
         ...ok,
         files: ok.files.map((file) => ({
           ...file,
@@ -238,51 +233,48 @@ describe('BuiltInSkillsService', () => {
       }),
     ).rejects.toThrow('must use no placeholders');
     expect(await store.find()).toEqual([]);
-    expect(appSkillBody('interactive-visuals')).toBe(
-      shippedBuiltIn('interactive-visuals')!.body,
+    expect(appSkillBody('avery-playbooks')).toBe(
+      shippedBuiltIn('avery-playbooks')!.body,
     );
     expect((await service.list()).every((skill) => !skill.modified)).toBe(true);
   });
 
   it('serves a saved override on the next call, and keeps the built-in layout', async () => {
     const { service, store } = build();
-    const input = edited('interactive-visuals');
-    const before = catalogSkills('visualization').map(
-      (skill) => skill.description,
-    );
+    const input = edited('avery-playbooks');
     const first = input.files[0];
 
-    const saved = await service.save('interactive-visuals', input);
+    const saved = await service.save('avery-playbooks', input);
     expect(saved).toMatchObject({
-      name: 'interactive-visuals',
+      name: 'avery-playbooks',
       modified: true,
       builtInChanged: false,
       description: DESCRIPTION,
       body: input.body,
-      loading: 'harness',
-      agents: ['visualization'],
+      loading: 'on-demand',
+      agents: ['chief-of-staff'],
     });
-    expect(saved.builtIn.body).toBe(
-      shippedBuiltIn('interactive-visuals')!.body,
-    );
-    expect(await store.findOne({ name: 'interactive-visuals' })).toMatchObject({
+    expect(saved.builtIn.body).toBe(shippedBuiltIn('avery-playbooks')!.body);
+    expect(await store.findOne({ name: 'avery-playbooks' })).toMatchObject({
       updatedBy: 'local',
       baseHash: expect.stringMatching(/^[0-9a-f]{64}$/) as string,
     });
 
-    // Harness reads: the body, the document and a file are the override's.
-    expect(appSkillBody('interactive-visuals')).toBe(input.body.trim());
-    expect(appSkillDocument('interactive-visuals')).toContain(
+    // Its reads: the body, the document and a file are the override's.
+    expect(appSkillBody('avery-playbooks')).toBe(input.body.trim());
+    expect(appSkillDocument('avery-playbooks')).toContain(
       `description: ${DESCRIPTION}`,
     );
-    expect(appSkillFile('interactive-visuals', first.path)).toBe(first.content);
+    expect(appSkillFile('avery-playbooks', first.path)).toBe(first.content);
 
-    // Not an on-demand skill: the agent's catalog is untouched.
+    // On demand: the agent's catalogue shows the override.
     expect(
-      catalogSkills('visualization').map((skill) => skill.description),
-    ).toEqual(before);
-    const view = agentSkillsView('visualization').skills.find(
-      (skill) => skill.name === 'interactive-visuals',
+      catalogSkills('chief-of-staff').find(
+        (skill) => skill.name === 'avery-playbooks',
+      )?.description,
+    ).toBe(DESCRIPTION);
+    const view = agentSkillsView('chief-of-staff').skills.find(
+      (skill) => skill.name === 'avery-playbooks',
     );
     expect(view).toMatchObject({
       modified: true,
@@ -292,7 +284,7 @@ describe('BuiltInSkillsService', () => {
     const file = view!.files.find((entry) => entry.path === first.path);
     expect(file!.size).toBe(Buffer.byteLength(first.content));
     expect(
-      agentSkillFile('visualization', 'interactive-visuals', first.path),
+      agentSkillFile('chief-of-staff', 'avery-playbooks', first.path),
     ).toMatchObject({ content: first.content });
     expect(
       agentSkillsView('insights-analyst').skills.find(
@@ -409,7 +401,7 @@ describe('SkillsController built-in routes', () => {
   it('answers Style A: a refusal comes back as ok:false', async () => {
     const { service } = build();
     const controller = new SkillsController({} as never, service);
-    const refused = await controller.saveBuiltIn('interactive-visuals', {});
+    const refused = await controller.saveBuiltIn('avery-playbooks', {});
     expect(refused).toEqual({
       ok: false,
       message: 'The description must start with "Use when"',

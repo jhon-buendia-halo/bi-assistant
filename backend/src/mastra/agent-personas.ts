@@ -71,13 +71,6 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       "I'm your one point of contact for a question: I decide who on the team works on it, brief them, check what they bring back and hand you one answer.",
   },
-  visualization: {
-    name: 'Ryan',
-    role: 'Visualization Designer',
-    domain: 'storytelling',
-    intro:
-      'I pick the chart that tells the story of a result at a glance, and say what to take away from it.',
-  },
   'sql-fixer': {
     name: 'David',
     role: 'SQL Developer',

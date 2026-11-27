@@ -388,40 +388,6 @@ export class WorkflowRunsController {
     );
   }
 
-  /** Generate a visual from the run's answer (api.md 130). */
-  @Post(':id/visualizations')
-  async generateVisualization(
-    @Param('id') id: string,
-    @Body() body: { sourceMessageAt?: string },
-  ): Promise<{ ok: true; message: string } & RunVisualResult> {
-    const result = await this.runs.generateVisualization(
-      id,
-      typeof body?.sourceMessageAt === 'string'
-        ? body.sourceMessageAt
-        : undefined,
-    );
-    return { ok: true, message: 'Interactive visual generated', ...result };
-  }
-
-  /** Tailor a run's visual from an instruction (api.md 131). */
-  @Post(':id/visualizations/:visualizationId/tailor')
-  async tailorVisualization(
-    @Param('id') id: string,
-    @Param('visualizationId') visualizationId: string,
-    @Body() body: { instruction?: string },
-  ): Promise<{ ok: true; message: string } & RunVisualResult> {
-    const result = await this.runs.tailorVisualization(
-      id,
-      visualizationId,
-      typeof body?.instruction === 'string' ? body.instruction : '',
-    );
-    return {
-      ok: true,
-      message: `Updated to version ${result.visualization.version}`,
-      ...result,
-    };
-  }
-
   /** Move a run's visual to an earlier version (api.md 132). */
   @Post(':id/visualizations/:visualizationId/revert')
   async revertVisualization(
@@ -451,26 +417,6 @@ export class WorkflowRunsController {
     return {
       ok: true,
       message: `Refreshed data for version ${result.visualization.version}`,
-      ...result,
-    };
-  }
-
-  /** Repair a run's failing visual once (api.md 134). */
-  @Post(':id/visualizations/:visualizationId/repair')
-  async repairVisualization(
-    @Param('id') id: string,
-    @Param('visualizationId') visualizationId: string,
-    @Body() body: { error?: string; version?: number },
-  ): Promise<{ ok: true; message: string } & RunVisualResult> {
-    const result = await this.runs.repairVisualization(
-      id,
-      visualizationId,
-      typeof body?.error === 'string' ? body.error : '',
-      Number(body?.version),
-    );
-    return {
-      ok: true,
-      message: `Repaired as version ${result.visualization.version}`,
       ...result,
     };
   }

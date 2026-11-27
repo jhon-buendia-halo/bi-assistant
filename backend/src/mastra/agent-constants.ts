@@ -57,14 +57,10 @@ export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
  */
 export const BI_ANALYST_AGENT_KEY = 'bi-analyst';
 
-/** Ryan, the visual designer: Generate interactive visuals and Build visual (agents.md 5.11). */
-export const VISUALIZATION_AGENT_KEY = 'visualization';
-
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
   QUERY_EXPLAINER_AGENT_KEY,
   RESULT_EXPLORER_AGENT_KEY,
-  VISUALIZATION_AGENT_KEY,
   CHIEF_OF_STAFF_AGENT_KEY,
   BI_ANALYST_AGENT_KEY,
   'sql-fixer',

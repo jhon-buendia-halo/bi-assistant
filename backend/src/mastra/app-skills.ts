@@ -50,10 +50,11 @@ export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
-/** Built-in skills code sends to each agent itself (agents.md 7.4). */
-export const HARNESS_SKILLS: Readonly<Record<string, readonly string[]>> = {
-  visualization: ['interactive-visuals'],
-};
+/**
+ * Built-in skills code sends to each agent itself (agents.md 7.4): none
+ * since the visual designer and its `interactive-visuals` went (ADR-0059).
+ */
+export const HARNESS_SKILLS: Readonly<Record<string, readonly string[]>> = {};
 
 /** Files over this size, or holding a NUL byte, are listed but not shown. */
 const MAX_SHOWN_FILE_BYTES = 256 * 1024;

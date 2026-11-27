@@ -256,8 +256,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it('reads the registered agents from mastra/index.ts', () => {
       const keys = registeredAgentKeys();
       expect(keys).toContain('insights-analyst');
-      // Emily and Rachel were removed (ADR-0059).
-      for (const key of ['assistant', 'sql-verifier']) {
+      // Emily, Ryan and Rachel were removed (ADR-0059).
+      for (const key of ['assistant', 'visualization', 'sql-verifier']) {
         expect(keys).not.toContain(key);
       }
       // The RFP Builder was removed.
@@ -351,7 +351,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
 
     it.each([
       ['a System key', 'agent:sql-fixer'],
-      ['another System key', 'agent:visualization'],
+      ['another System key', 'agent:query-explainer'],
       ["a code workflow's primaryFor key", 'agent:insights-analyst'],
       ['an unknown id', 'nope'],
       ['an unprefixed agent key', 'assistant'],
@@ -451,7 +451,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'data-readiness',
       'sql-fixer',
       'u-1',
-      // Ryan stays in the library, in no workflow.
+      // Ryan was removed (ADR-0059).
       'visualization',
     ])('%s is used in none: agents are a library', (key) => {
       expect(workflowsUsingAgent(key)).toEqual([]);

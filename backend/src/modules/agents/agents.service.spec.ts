@@ -498,17 +498,6 @@ describe('AgentsService (built-in and user agents)', () => {
         files: [expect.objectContaining({ path: 'SKILL.md' })],
       });
       expect(Object.keys(elena)).toEqual(['skills']);
-      // The one agent with a harness skill since deep analysis went.
-      ctx.db.close();
-      ctx = build({ visualization: fakeAgent('visualization', []) });
-      const visualization = await ctx.service.skills('visualization');
-      expect(visualization.skills).toEqual([
-        expect.objectContaining({
-          name: 'interactive-visuals',
-          loading: 'harness',
-        }),
-      ]);
-
       const created = await ctx.service.create({ name: 'Analyst' });
       expect(names(await ctx.service.skills(created.id))).toEqual(names(elena));
       expect((await ctx.service.skills('sql-fixer')).skills).toEqual([]);
@@ -521,38 +510,34 @@ describe('AgentsService (built-in and user agents)', () => {
   it(
     "serves a skill file and refuses what is not one of the agent's files",
     asDemoUser(async () => {
-      ctx.db.close();
-      ctx = build({ visualization: fakeAgent('visualization', []) });
       const file = await ctx.service.skillFile(
-        'visualization',
-        'interactive-visuals',
-        'reference/freeform.md',
+        'insights-lead',
+        'answer-playbooks',
+        'reference/ambiguous.md',
       );
-      expect(file.path).toBe('reference/freeform.md');
+      expect(file.path).toBe('reference/ambiguous.md');
       expect(file.content?.length).toBeGreaterThan(0);
 
       await expect(
-        ctx.service.skillFile('sql-fixer', 'interactive-visuals', 'SKILL.md'),
-      ).rejects.toThrow('Agent "sql-fixer" has no skill "interactive-visuals"');
+        ctx.service.skillFile('sql-fixer', 'answer-playbooks', 'SKILL.md'),
+      ).rejects.toThrow('Agent "sql-fixer" has no skill "answer-playbooks"');
       await expect(
         ctx.service.skillFile('insights-lead', 'deep-analysis', 'SKILL.md'),
       ).rejects.toThrow('Agent "insights-lead" has no skill "deep-analysis"');
       await expect(
         ctx.service.skillFile(
-          'visualization',
-          'interactive-visuals',
+          'insights-lead',
+          'answer-playbooks',
           '../../app-skills.ts',
         ),
       ).rejects.toThrow('Invalid skill file path "../../app-skills.ts"');
       await expect(
         ctx.service.skillFile(
-          'visualization',
-          'interactive-visuals',
+          'insights-lead',
+          'answer-playbooks',
           'phases/9.md',
         ),
-      ).rejects.toThrow(
-        'Skill "interactive-visuals" has no file "phases/9.md"',
-      );
+      ).rejects.toThrow('Skill "answer-playbooks" has no file "phases/9.md"');
     }),
   );
   describe("a user agent's in-app skills (ADR-0022; api.md 34a, 34b)", () => {

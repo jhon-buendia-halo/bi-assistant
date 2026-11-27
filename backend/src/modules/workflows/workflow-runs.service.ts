@@ -49,7 +49,6 @@ import type {
   ChatMessage,
   FilePanelItem,
   InteractiveVisualization,
-  SessionVisualization,
   VisualEvent,
 } from '../sessions/entities/session.entity';
 import type {
@@ -113,7 +112,6 @@ import {
   type StepTeller,
   type WorkflowRun,
   type WorkflowRunDoc,
-  type WorkflowRunStep,
   type WorkflowRunSummary,
   type WorkflowRunWaitingFor,
 } from './workflow-run-steps';
@@ -132,7 +130,7 @@ function runStepTeller(
     tellRunStep(workflowId, step, { runInput, steps, runStatus });
 }
 
-/** What a visual action on a run answers (api.md 130-134). */
+/** What a visual action on a run answers (api.md 132, 133). */
 export interface RunVisualResult {
   run: WorkflowRun;
   visualization: InteractiveVisualization;
@@ -152,29 +150,6 @@ function visualEventMessage(event: VisualEvent): ChatMessage {
     at: new Date().toISOString(),
     visual: event,
   };
-}
-
-/**
- * The event of the visual Build visual stored (agents.md 5.11, workflows
- * R41), logged beside the answer as a visual action is, so the answer keeps
- * its query evidence; none when the step did not run or built nothing.
- */
-function builtVisualEvent(
-  steps: readonly WorkflowRunStep[],
-  visualizations: readonly SessionVisualization[],
-): ChatMessage | undefined {
-  const built = steps.find((step) => step.id === 'build-visual')?.output?.[
-    'visual'
-  ] as { visualId?: unknown } | undefined;
-  const metadata = visualizations.find((v) => v.id === built?.visualId);
-  return metadata
-    ? visualEventMessage({
-        visualId: metadata.id,
-        version: 1,
-        title: metadata.title,
-        action: 'created',
-      })
-    : undefined;
 }
 
 /**
@@ -1750,30 +1725,6 @@ export class WorkflowRunsService
     );
   }
 
-  /** Create a visual from the run's answer (api.md 130), as a session's (8). */
-  generateVisualization(
-    id: string,
-    sourceMessageAt?: string,
-  ): Promise<RunVisualResult> {
-    return this.visualAction(id, (run) => ({
-      kind: 'create',
-      sourceMessageAt: sourceMessageAt || run.answer?.at,
-    }));
-  }
-
-  /** Tailor a run's visual from an instruction (api.md 131), as 10. */
-  tailorVisualization(
-    id: string,
-    visualizationId: string,
-    instruction: string,
-  ): Promise<RunVisualResult> {
-    return this.visualAction(id, () => ({
-      kind: 'tailor',
-      visualId: visualizationId,
-      instruction,
-    }));
-  }
-
   /** Move a run's visual to an earlier version (api.md 132), as 11. */
   revertVisualization(
     id: string,
@@ -1798,26 +1749,11 @@ export class WorkflowRunsService
     }));
   }
 
-  /** Repair a run's failing visual once (api.md 134), as 13. */
-  repairVisualization(
-    id: string,
-    visualizationId: string,
-    error: string,
-    version: number,
-  ): Promise<RunVisualResult> {
-    return this.visualAction(id, () => ({
-      kind: 'repair',
-      visualId: visualizationId,
-      error,
-      version,
-    }));
-  }
-
   /**
-   * One visual action on a finished agent run (api.md 130-134): the sessions
-   * service does the work on the run-backed host; the new metadata, the
-   * visual's panel item and, for create, tailor and revert, the event card
-   * are stored on the run, so a later read of it shows them.
+   * One visual action on a finished agent run (api.md 132, 133): the
+   * sessions service does the work on the run-backed host; the new
+   * metadata, the visual's panel item and, for a revert, the event card are
+   * stored on the run, so a later read of it shows them.
    */
   private async visualAction(
     id: string,
@@ -2301,7 +2237,6 @@ export class WorkflowRunsService
     }
     const answer = runAnswerOf(view.messages, prepared.context ? 2 : 0);
     const output = status === 'success' ? tracker.lastOutput() : undefined;
-    const built = builtVisualEvent(ended.steps, view.visualizations ?? []);
     return {
       ...base,
       status,
@@ -2316,7 +2251,6 @@ export class WorkflowRunsService
       ...(view.agentName ? { agentName: view.agentName } : {}),
       panelItems: view.panelItems,
       visualizations: view.visualizations ?? [],
-      ...(built ? { events: [...(base.events ?? []), built] } : {}),
       ...(view.workflowState ? { workflowState: view.workflowState } : {}),
       finishedAt,
     };

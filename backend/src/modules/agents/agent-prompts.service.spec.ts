@@ -35,7 +35,6 @@ import type { AgentPromptOverrideDoc } from './entities/agent-prompt-override.en
 import { AgentPromptOverridesRepository } from './repositories/agent-prompt-overrides.repository';
 
 const REGISTRY = {
-  visualization: { name: 'Interactive Visual Designer' },
   'sql-fixer': { name: 'SQL Fixer' },
   'assistant-eval-judge': { name: 'Assistant Eval Judge' },
 };
@@ -100,6 +99,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       'You are the Questions to Insights assistant. Old text.',
     ],
     ['the removed SQL verifier', 'sql-verifier', 'Old verifier text.'],
+    ['the removed visual designer', 'visualization', 'Old designer text.'],
     ['the removed RFP Builder', 'rfp', 'You are the RFP Builder. Old text.'],
     [
       'the removed Data Readiness Agent',
@@ -153,13 +153,13 @@ describe('AgentPromptsService (ADR-0026)', () => {
 
   it('resets, also when there was no override', async () => {
     const { service } = build();
-    await service.save('visualization', { prompt: 'Edited.' });
-    expect(await service.reset('visualization')).toBe('Ryan');
-    expect(agentPromptOverrideFor('visualization')).toBeUndefined();
-    expect(await service.view('visualization')).toMatchObject({
+    await service.save('sql-fixer', { prompt: 'Edited.' });
+    expect(await service.reset('sql-fixer')).toBe('David');
+    expect(agentPromptOverrideFor('sql-fixer')).toBeUndefined();
+    expect(await service.view('sql-fixer')).toMatchObject({
       modified: false,
     });
-    await expect(service.reset('visualization')).resolves.toBe('Ryan');
+    await expect(service.reset('sql-fixer')).resolves.toBe('David');
   });
 
   it('loads the stored overrides into the bridge on init', async () => {
@@ -320,7 +320,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       expect(await refusal('sql-fixer', 'See [[tool:run_readonly_sql]].')).toBe(
         "This agent's prompt can't contain links",
       );
-      expect(await refusal('visualization', 'a [[x]] b')).toBe(
+      expect(await refusal('assistant-eval-judge', 'a [[x]] b')).toBe(
         "This agent's prompt can't contain links",
       );
     });
