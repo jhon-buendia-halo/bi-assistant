@@ -260,11 +260,19 @@ test("Try it waits for the agent's question and continues with my answer", async
   page,
   appDataDir,
 }) => {
-  // Elena asks the user once; after the answer she answers.
+  // Elena asks the user once; after the answer she answers. A resumed turn
+  // ends with the user's answer, not a tool result, so the stub remembers
+  // that it asked (as the Avery resume test in workflows.spec.ts does).
+  let asked = false;
   stub.reply = (request) => {
-    if (!request.stream || request.messages.at(-1)?.role === 'tool') {
+    if (
+      asked ||
+      !request.stream ||
+      request.messages.at(-1)?.role === 'tool'
+    ) {
       return { text: STUB_ANSWER };
     }
+    asked = true;
     return {
       toolCall: {
         name:
