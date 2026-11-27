@@ -102,8 +102,8 @@ World Cup set (`world-cup`, on Elena's target; the REST set repeats these nine w
 | `top-scorer-2022` | Who scored the most goals in the 2022 World Cup, and how many? | includes "Messi"; contains 4; ran SQL; no tool errors; result-set match |
 | `shootouts` | Which knockout matches went to a penalty shootout, and who advanced? | includes "Croatia"; mentions Argentina; ran SQL; no tool errors; result-set match |
 | `biggest-venue` | Which stadium hosted the best-attended match, and what was the attendance? | includes "Lusail"; matches 88,966 (any separator); ran SQL; no tool errors; result-set match on distinct facts |
-| `schema-discovery` | What data do I have available to analyse? | includes "matches"; did not call `run_readonly_sql`; no tool errors |
-| `ambiguous-best-team` | Which team performed best? | called `ask_clarification`; the run ends `suspended`; no SQL; no tool errors; judge: the answer is itself a clarifying question with 2 to 4 concrete options grounded in the data and states no figures as the answer; one dimension is enough (metric options scoped "across all tournaments" pass without naming a year) |
+| `schema-discovery` | What data do I have available to analyse? | includes "matches"; no tool errors (she may query to describe the data with verified counts; since 2026-11-26) |
+| `ambiguous-best-team` | Which team performed best? | the run ends `suspended` (she asked) or `success` (she answered); no tool errors; judge: either one clarifying question with 2 to 4 concrete options grounded in the data and no figures as the answer, or an answer that states the reading of "best" it took (measure and scope), gives figures for it and names another reading that gives a different answer (since 2026-11-26, as Avery's ambiguous case) |
 | `possession-vs-result` | In the 2022 knockout rounds, did the team with more possession usually win? | ran SQL; mentions possession or %; no tool errors; judge: concludes no, backed by counts consistent with 2 won and 6 lost of 8 |
 | `out-of-scope` | How many goals did Pelé score in the 1970 World Cup? | no tool errors; judge: says it cannot answer for 1970, states the data covers 2018 and/or 2022, invents no figure |
 
@@ -116,7 +116,7 @@ Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 | `f1-most-race-wins` | Which driver has won the most Grands Prix in Formula 1 history, and how many did they win? | includes "Hamilton"; contains 106; ran SQL; no tool errors; result-set match |
 | `f1-most-titles-tie` | Which drivers have won the most Formula 1 drivers' championships, and how many each? | includes "Schumacher"; mentions Hamilton; ran SQL; no tool errors; result-set match |
 | `f1-monaco-2024-podium` | Who finished on the podium at the 2024 Monaco Grand Prix? | includes "Leclerc"; mentions Piastri; ran SQL; no tool errors; result-set match |
-| `f1-schema-discovery` | What Formula 1 data do I have available to analyse? | includes "driver"; no SQL; no tool errors |
+| `f1-schema-discovery` | What Formula 1 data do I have available to analyse? | includes "driver"; no tool errors (she may query; since 2026-11-26) |
 | `f1-ambiguous-dominant-driver` | Which driver was the most dominant? | called `ask_clarification`; the run ends `suspended`; no SQL; no tool errors; judge as for `ambiguous-best-team`, over race wins, championships, poles, points, and a season or era |
 | `f1-pole-to-win-2023` | In the 2023 season, did the driver who started on pole usually go on to win the race? | ran SQL; mentions pole or grid; no tool errors; judge: concludes yes, backed by counts consistent with 14 of 22 |
 | `f1-out-of-scope-motogp` | Who won the 2023 MotoGP world championship? | no tool errors; judge: says it cannot answer, states the data is Formula 1 only (1950 to 2026), names no MotoGP champion |

@@ -100,10 +100,16 @@ read back from the stored run and then deleted:
   the stored run (`answerIncludes`, `answerMatches`, `calledTool`, `didNotCall`,
   `noToolErrors`; `toolOrder` exists too), since a whole run has no agent result
   for the built-in checks to read.
-- Every case first checks the run's status: `success`, or `suspended` for the
-  ambiguous questions (`ambiguous-best-team`, `rest-ambiguous-best-team`,
-  `f1-ambiguous-dominant-driver`), where her question is the run's wait. Their
-  rubrics say the judge reads her question and options.
+- Every case first checks the run's status: `success`, or `suspended` for
+  `f1-ambiguous-dominant-driver`, where her question is the run's wait (its
+  rubric says the judge reads her question and options).
+- Six cases were aligned with Elena's design on 2026-11-26, after the base
+  (Emily) against branch (Elena) runs on Opus 5.5: the four `*schema-discovery`
+  cases no longer forbid `run_readonly_sql` (she may query to describe the data
+  with verified counts), and `ambiguous-best-team` / `rest-ambiguous-best-team`
+  pass when she asks (`suspended`) or answers (`success`) on a reading of
+  "best" she states and contrasts with another, as Avery's ambiguous case does.
+  The spec names them in `ALIGNED_TO_ELENA`.
 - The result-set check compares `expectedSql` with the stored answer's query
   records (`EvalRunDetails.records`).
 - No eval host is created any more: no throwaway run host, no `session-id` or

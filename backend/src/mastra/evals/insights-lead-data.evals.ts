@@ -55,6 +55,12 @@ interface DataCaseSource {
   checks: EvalCustomCheck[];
   /** The question is ambiguous: the run must end waiting for her question. */
   asks?: true;
+  /**
+   * The question is ambiguous, and she may either ask or answer on a reading
+   * she states (her design, as Avery's `mayAsk` cases; agents.md 8.1): the
+   * run ends waiting or done, and the judge reads whichever she gave.
+   */
+  mayAsk?: true;
   expectedSql?: string;
   resultSetOptions?: ResultSetCheckOptions;
   judgeRubric?: string;
@@ -65,21 +71,31 @@ const ASKS =
   `The final answer is Elena's question to the user (after "${INSIGHTS_LEAD_NAME} ` +
   'asks the user:", with its options, one per line). ';
 
+/** Where the judge finds her reply when she may ask or answer. */
+const ASKS_OR_ANSWERS =
+  `The final answer is either Elena's question to the user (after "${INSIGHTS_LEAD_NAME} ` +
+  'asks the user:", with its options, one per line) or her answer. ';
+
 /** A source as Elena's case: the run-status check first, then its own. */
 function dataCase({
   checks,
   asks,
+  mayAsk,
   judgeRubric,
   ...source
 }: DataCaseSource): AssistantEvalCase {
+  const statuses = mayAsk
+    ? ['suspended', 'success']
+    : asks
+      ? ['suspended']
+      : ['success'];
+  const framing = mayAsk ? ASKS_OR_ANSWERS : asks ? ASKS : '';
   return {
     ...source,
     // Every verdict is a custom check or the judge (see above).
     scorers: [],
-    customChecks: [runEndsIn(asks ? ['suspended'] : ['success']), ...checks],
-    ...(judgeRubric
-      ? { judgeRubric: asks ? ASKS + judgeRubric : judgeRubric }
-      : {}),
+    customChecks: [runEndsIn(statuses), ...checks],
+    ...(judgeRubric ? { judgeRubric: framing + judgeRubric } : {}),
   };
 }
 
@@ -172,36 +188,33 @@ const WORLD_CUP_SOURCES: DataCaseSource[] = [
     id: 'schema-discovery',
     question: 'What data do I have available to analyse?',
     intent:
-      'Pure discovery — must inspect the session datasets rather than invent entities or run SQL.',
+      'Pure discovery — the answer describes the session datasets from what they hold; Elena may query them to give verified counts (her design), never invent entities.',
     // The context already lists the entities, so calling list_entities is
-    // not required (agents-evals, BA-209).
-    checks: [answerIncludes('matches'), didNotCall(SQL), noToolErrors()],
+    // not required (agents-evals, BA-209). Unlike the assistant, Elena may
+    // query to describe the data with figures (aligned 2026-11-26).
+    checks: [answerIncludes('matches'), noToolErrors()],
   },
   {
     id: 'ambiguous-best-team',
     question: 'Which team performed best?',
     intent:
-      'Ambiguous on both metric and tournament — the agent must ask instead of guessing.',
-    asks: true,
-    checks: [didNotCall(SQL), noToolErrors()],
-    // The wait confirms she asked; it cannot judge whether the question
-    // itself is well-formed, so that quality dimension goes to the judge.
+      'Ambiguous on both metric and tournament — Elena either asks once or answers on a reading of "best" she states (her design, as Avery\'s ambiguous case).',
+    mayAsk: true,
+    checks: [noToolErrors()],
+    // Whether she asked or answered, the judge reads the quality of either.
     judgeRubric:
       'The question ("Which team performed best?") is ambiguous on both the ' +
-      'performance metric (goals? wins? possession?) and the scope ' +
-      '(which tournament/year). Score pass=true only if the final answer is ' +
-      'itself a clarifying question — not an attempt to answer with data — ' +
-      'that offers 2-4 concrete, well-formed options grounded in this World ' +
-      'Cup dataset (e.g. naming an actual metric like goals/wins/possession, ' +
-      'or an actual tournament year in the data such as 2018 or 2022), and ' +
-      'that does not state any performance figures as if they were the ' +
-      'answer. One clarifying question on either dimension is enough: ' +
-      'options that each name a concrete metric (scoped, for example, ' +
-      '"across all tournaments") pass even when no year is named, and ' +
-      'options that each name a tournament year pass even when no metric is ' +
-      'named. Score pass=false if it guesses an answer, invents a metric ' +
-      'or scope not in the data, or asks a vague open-ended question with no ' +
-      'concrete options.',
+      'performance metric (goals? wins? titles?) and the scope (which ' +
+      'tournament/year). Score pass=true only if either (a) the final answer ' +
+      'is one clarifying question with 2-4 concrete options grounded in this ' +
+      'World Cup dataset (an actual metric such as goals, wins or titles, or ' +
+      'an actual tournament year such as 2018 or 2022) and states no ' +
+      'performance figures as the answer, or (b) the answer states which ' +
+      'reading of "best" it took (the measure and the scope), gives figures ' +
+      'for it from the data, and names at least one other reading that would ' +
+      'give a different answer. Score pass=false if it answers without ' +
+      'saying which measure it took, invents a metric or scope not in the ' +
+      'data, or asks a vague open-ended question with no concrete options.',
   },
   {
     id: 'possession-vs-result',
@@ -428,11 +441,10 @@ const WORLD_CUP_EXCEL_SOURCES: DataCaseSource[] = [
     id: 'excel-schema-discovery',
     question: 'What data do I have available to analyse?',
     intent:
-      'Pure discovery: the answer names the sheets and the CSV rather than running SQL.',
+      'Pure discovery: the answer names the sheets and the CSV; Elena may query them to give verified counts.',
     checks: [
       answerIncludes('matches'),
       answerMatches(/players/i),
-      didNotCall(SQL),
       noToolErrors(),
     ],
   },
@@ -556,9 +568,9 @@ const FORMULA_1_SOURCES: DataCaseSource[] = [
     id: 'f1-schema-discovery',
     question: 'What Formula 1 data do I have available to analyse?',
     intent:
-      'Pure discovery — must inspect the session datasets rather than invent entities or run SQL.',
+      'Pure discovery — the answer describes the session datasets; Elena may query them to give verified counts, never invent entities.',
     // The context already lists the entities (BA-209).
-    checks: [answerIncludes('driver'), didNotCall(SQL), noToolErrors()],
+    checks: [answerIncludes('driver'), noToolErrors()],
   },
   {
     id: 'f1-ambiguous-dominant-driver',

@@ -114,6 +114,22 @@ const DROPPED: Record<string, string> = {
   'schema-notes-consumption': 'its staged orientation is never sent',
 };
 
+/**
+ * The cases whose checks were aligned with Elena's design on 2026-11-26
+ * (the user's call after the base-vs-branch evals): on discovery she may
+ * query to give verified counts, and on an undefined "best" she may ask or
+ * answer on a reading she states. Their checks and rubric differ from the
+ * assistant's on purpose; the tests below pin the new behaviour.
+ */
+const ALIGNED_TO_ELENA: Record<string, string> = {
+  'schema-discovery': 'she may query to describe the data',
+  'rest-schema-discovery': 'she may query to describe the data',
+  'excel-schema-discovery': 'she may query to describe the data',
+  'f1-schema-discovery': 'she may query to describe the data',
+  'ambiguous-best-team': 'she may ask or answer on a stated reading',
+  'rest-ambiguous-best-team': 'she may ask or answer on a stated reading',
+};
+
 const PORTED_SET_IDS = [
   'world-cup',
   'world-cup-excel',
@@ -224,7 +240,7 @@ describe('the ported data sets: what they hold', () => {
       'asks the user:", with its options, one per line). ';
     for (const id of PORTED_SET_IDS) {
       for (const baseCase of base.sets.find((s) => s.id === id)!.cases) {
-        if (DROPPED[baseCase.id]) continue;
+        if (DROPPED[baseCase.id] || ALIGNED_TO_ELENA[baseCase.id]) continue;
         const ported = portedSet(id).cases.find((c) => c.id === baseCase.id)!;
         expect(ported.judgeRubric).toBe(
           baseCase.judgeRubric &&
@@ -237,7 +253,7 @@ describe('the ported data sets: what they hold', () => {
   it("turn each base scorer into its check over the stored run, after the run's status", () => {
     for (const id of PORTED_SET_IDS) {
       for (const baseCase of base.sets.find((s) => s.id === id)!.cases) {
-        if (DROPPED[baseCase.id]) continue;
+        if (DROPPED[baseCase.id] || ALIGNED_TO_ELENA[baseCase.id]) continue;
         const ported = portedSet(id).cases.find((c) => c.id === baseCase.id)!;
         expect(ported.scorers).toEqual([]);
         const checks = ported.customChecks ?? [];
@@ -439,7 +455,6 @@ describe('the ported data sets: they run on her target', () => {
       result.checkResults.map((check) => [check.id, check.passed]),
     ).toEqual([
       ['run-status', true],
-      ['did-not-call:run_readonly_sql', true],
       ['no-tool-errors', true],
       ['llm-judge', true],
     ]);
@@ -479,5 +494,80 @@ describe('the ported data sets: they run on her target', () => {
       ['run-status', 'the run ended success'],
       ['did-not-call:run_readonly_sql', 'she called run_readonly_sql 1 time'],
     ]);
+  });
+
+  it('names every aligned case, each a ported case that differs from the base only in its checks', () => {
+    const ported = INSIGHTS_LEAD_DATA_EVAL_SETS.flatMap((s) => s.cases);
+    for (const id of Object.keys(ALIGNED_TO_ELENA)) {
+      const found = ported.find((c) => c.id === id);
+      expect(found).toBeDefined();
+      expect(found!.customChecks?.map((check) => check.id)).not.toContain(
+        'did-not-call:run_readonly_sql',
+      );
+    }
+  });
+
+  it('passes a discovery question she answers with verified counts from a query', async () => {
+    const { target } = targetAnswering({
+      id: 'run-5',
+      status: 'success',
+      steps: [
+        {
+          id: 'answer',
+          output: {
+            answer:
+              'You have the 2018 and 2022 World Cups: 16 matches, 47 goals.',
+          },
+          toolCalls: [
+            { tool: 'run_readonly_sql', input: 'SELECT 1', rowCount: 3 },
+          ],
+        },
+      ],
+    });
+
+    const result = await runAssistantEvalCase(
+      evalCase('schema-discovery'),
+      datasets,
+      target,
+    );
+
+    expect(result.checkResults.filter((check) => !check.passed)).toEqual([]);
+  });
+
+  it('passes an undefined "best" she answers on a stated reading, the judge told either is fine', async () => {
+    const { target } = targetAnswering({
+      id: 'run-6',
+      status: 'success',
+      steps: [
+        {
+          id: 'answer',
+          output: {
+            answer:
+              'Taking "best" as matches won across 2018 and 2022: France, 5 of 6. By titles, Argentina and France tie.',
+          },
+          toolCalls: [
+            { tool: 'run_readonly_sql', input: 'SELECT 1', rowCount: 4 },
+          ],
+        },
+      ],
+    });
+
+    const result = await runAssistantEvalCase(
+      evalCase('ambiguous-best-team'),
+      datasets,
+      target,
+    );
+
+    expect(
+      result.checkResults.map((check) => [check.id, check.passed]),
+    ).toEqual([
+      ['run-status', true],
+      ['no-tool-errors', true],
+      ['llm-judge', true],
+    ]);
+    const judge = evalJudgeAgent as unknown as { generate: jest.Mock };
+    const [prompt] = judge.generate.mock.calls.at(-1) as [string];
+    expect(prompt).toContain('either Elena');
+    expect(prompt).toContain('names at least one other reading');
   });
 });
