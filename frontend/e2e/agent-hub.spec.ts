@@ -437,7 +437,7 @@ test('deleting an agent asks first', async ({ page }) => {
   await button(page, 'Delete').click();
   await expect.poll(() => asked.length).toBe(1);
   expect(asked[0]).toBe(
-    `Delete "${CLAIMS}"?\n\nIts sessions keep their transcripts and continue with the assistant.`,
+    `Delete "${CLAIMS}"?\n\nIts past chats keep their transcripts.`,
   );
   await expect(
     page.getByRole('heading', { name: CLAIMS, exact: true }),

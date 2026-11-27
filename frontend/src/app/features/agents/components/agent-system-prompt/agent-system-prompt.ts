@@ -90,11 +90,11 @@ export class AgentSystemPrompt implements OnDestroy {
   readonly builtInBanner =
     'Changes apply to every session and agent persona as soon as you save. Run the evals to check them.';
   readonly builtInToolbarHint =
-    'Type / to link a tool or a built-in skill. Links here are mentions; the assistant keeps all its tools.';
+    'Type / to link a tool or a built-in skill. Links here are mentions; the agent keeps all its tools.';
   readonly builtInToolsNote =
-    'The ## Tools list is generated from the tools the assistant gets and is inserted before ## Working rules.';
+    'The ## Tools list is generated from the tools the agent gets and is inserted before ## Working rules.';
   readonly generatedToolsNote =
-    '## Tools — generated from the tools the assistant gets';
+    '## Tools — generated from the tools the agent gets';
   readonly builtInDriftNotice =
     "The app's built-in version changed since this was edited. Review it, then save again or reset.";
   readonly builtInLimit = 20000;

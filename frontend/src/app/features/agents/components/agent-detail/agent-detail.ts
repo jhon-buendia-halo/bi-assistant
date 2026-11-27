@@ -520,7 +520,7 @@ export class AgentDetail implements OnDestroy {
     const agent = this.agent();
     if (!agent || this.deleting()) return;
     const confirmed = window.confirm(
-      `Delete "${agent.name}"?\n\nIts sessions keep their transcripts and continue with the assistant.`,
+      `Delete "${agent.name}"?\n\nIts past chats keep their transcripts.`,
     );
     if (!confirmed) return;
     this.deleting.set(true);

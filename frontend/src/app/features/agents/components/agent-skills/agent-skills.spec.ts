@@ -89,7 +89,7 @@ describe('AgentSkills', () => {
   it("says a user agent uses the assistant's skills", async () => {
     const el = await render(view, true);
     expect(text(el)).toContain(
-      "This agent persona runs on the assistant, so it uses the assistant's skills.",
+      'This agent persona runs on Elena, so it uses her skills, except those for dashboards and exports.',
     );
   });
 
