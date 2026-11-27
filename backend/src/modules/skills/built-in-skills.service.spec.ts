@@ -53,6 +53,17 @@ describe('BuiltInSkillsService', () => {
       'conversation-export',
       'curated-knowledge',
       'dashboard-building',
+      // Dana's (plan data-readiness-assessor 2).
+      'readiness-ai-fitness',
+      'readiness-freshness-reliability',
+      'readiness-gap-remediation',
+      'readiness-governance-privacy',
+      'readiness-quality-profiling',
+      'readiness-reporting',
+      'readiness-scoping',
+      'readiness-scoring',
+      'readiness-semantics-documentation',
+      'readiness-source-inventory',
       'result-validation',
       'sql-analysis',
     ]);

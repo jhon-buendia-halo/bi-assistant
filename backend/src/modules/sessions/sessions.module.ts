@@ -8,6 +8,7 @@ import { MetricsModule } from '../metrics/metrics.module';
 import { OntologyModule } from '../ontology/ontology.module';
 import { UserAgentsModule } from '../user-agents/user-agents.module';
 import { ArtifactsModule } from '../artifacts/artifacts.module';
+import { ReadinessAssessorModule } from '../readiness-assessor/readiness-assessor.module';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { SessionsRepository } from './repositories/sessions.repository';
@@ -28,6 +29,8 @@ import { SessionEvidenceService } from './session-evidence.service';
     OntologyModule,
     UserAgentsModule,
     ArtifactsModule,
+    // Dana's assessments, for assess_readiness's baselines.
+    ReadinessAssessorModule,
   ],
   controllers: [SessionsController],
   providers: [

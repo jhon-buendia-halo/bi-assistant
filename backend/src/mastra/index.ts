@@ -7,6 +7,7 @@ import { queryExplainerAgent } from './agents/query-explainer.agent';
 import { resultExplorerAgent } from './agents/result-explorer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
 import { insightsLeadAgent } from './agents/insights-lead.agent';
+import { dataReadinessAssessorAgent } from './agents/data-readiness-assessor.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { EVAL_RUN_CONTEXT_KEY } from './evals/eval-trace-marker';
@@ -17,7 +18,10 @@ import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { orchestratedMichaelWorkflow } from './workflows/orchestrated-answer-michael.workflow';
-import { insightsLeadConversationWorkflow } from './workflows/conversation-turn.workflow';
+import {
+  dataReadinessAssessorConversationWorkflow,
+  insightsLeadConversationWorkflow,
+} from './workflows/conversation-turn.workflow';
 
 // Validate every bundled skill before anything is served: a broken skill
 // stops the backend here (agents.md 7.3).
@@ -37,6 +41,8 @@ export const mastra = new Mastra({
     'bi-analyst': biAnalystAgent,
     // Elena, the Insights Lead, alone in her own conversation (plan Elena 2).
     'insights-lead': insightsLeadAgent,
+    // Dana, the Data Readiness Assessor, in her own conversation.
+    'data-readiness-assessor': dataReadinessAssessorAgent,
     // The query inspector's explainer (agents.md 2.12).
     'query-explainer': queryExplainerAgent,
     // The query inspector's filter in words (agents.md 2.17).
@@ -51,6 +57,8 @@ export const mastra = new Mastra({
     // Answer a Business Question (Avery + Michael) (5.23).
     'orchestrated-answer-michael': orchestratedMichaelWorkflow,
     'insights-lead-conversation': insightsLeadConversationWorkflow,
+    'data-readiness-assessor-conversation':
+      dataReadinessAssessorConversationWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

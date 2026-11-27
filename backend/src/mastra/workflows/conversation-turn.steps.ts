@@ -91,6 +91,45 @@ export const INSIGHTS_LEAD_EDGES: readonly WorkflowEdge[] = [
 ];
 
 /**
+ * Dana's binding id (plan data-readiness-assessor 2): her own
+ * conversation, outside any workflow.
+ */
+export const DATA_READINESS_ASSESSOR_WORKFLOW_ID =
+  'agent:data-readiness-assessor';
+
+/** The registered Mastra workflow her turns run on. */
+export const DATA_READINESS_ASSESSOR_ENGINE_ID =
+  'data-readiness-assessor-conversation';
+
+/**
+ * Her one step, Answer: a solo step like Elena's, with her schemas (the
+ * solo turn reports its `attempts` too).
+ */
+export const DATA_READINESS_ASSESSOR_STEPS: readonly ContractStepEntry[] = [
+  contractStepEntry(
+    {
+      id: 'answer',
+      title: 'Answer',
+      kind: 'agent',
+      summary:
+        'Dana, the Data Readiness Assessor, scopes the use with you, measures whether your data is ready for it, and reports the verdict with its evidence and what to fix first.',
+      exits: [
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
+        { label: 'if it asks you a question', outcome: 'waits' },
+      ],
+    },
+    INSIGHTS_LEAD_STEP_SCHEMAS,
+  ),
+];
+
+/** The edges (api.md 117): Start → Answer → End. */
+export const DATA_READINESS_ASSESSOR_EDGES: readonly WorkflowEdge[] = [
+  { from: 'start', to: 'answer', kind: 'next' },
+  { from: 'answer', to: 'end', kind: 'next' },
+];
+
+/**
  * The requestContext key of a turn's gates: which of the agent's gated tools
  * (`submit_dashboard`, `export_conversation`) it is offered.
  */

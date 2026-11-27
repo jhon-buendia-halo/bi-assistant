@@ -503,3 +503,69 @@ describe("Avery's second answer_from_data call (agents.md 5.11, 5.23; workflows 
     expect(ctx.agent.stream).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("a tool's own SQL as the turn's queries (agent-change step 4)", () => {
+  const COUNT = 'SELECT COUNT(*) AS rows FROM wc.public.matches';
+  const NULLS =
+    'SELECT COUNT(*) - COUNT(stage) AS nulls FROM wc.public.matches';
+
+  it('records each statement a tool carries as a run_readonly_sql query, after its result', async () => {
+    const ctx = build('assistant', () => [
+      now({
+        type: 'tool-call',
+        payload: {
+          toolCallId: 'r1',
+          toolName: 'assess_readiness',
+          args: { rationale: 'I assess the matches for a dashboard.' },
+        },
+      }),
+      now({
+        type: 'tool-result',
+        payload: {
+          toolCallId: 'r1',
+          toolName: 'assess_readiness',
+          result: {
+            verdict: 'not-ready',
+            queryRecords: [
+              {
+                sql: COUNT,
+                columns: ['rows'],
+                rows: [{ rows: 64 }],
+                rationale: 'EV-001: how many matches there are.',
+              },
+              { sql: NULLS, columns: ['nulls'], rows: [{ nulls: 3 }] },
+            ],
+          },
+        },
+      }),
+      now(text('Not ready.')),
+    ]);
+    const events: StreamEvent[] = [];
+    expect(await startTurn(ctx, events)).toBe('done');
+    const shown = events
+      .filter((event) => event.type === 'tool' || event.type === 'tool-result')
+      .map((event) => {
+        const body = JSON.parse(event.content) as Record<string, unknown>;
+        return `${event.type}:${String(body.name ?? body.tool)}:${String(body.input ?? '')}`;
+      });
+    expect(shown).toEqual([
+      'tool:assess_readiness:I assess the matches for a dashboard.',
+      'tool-result:assess_readiness:',
+      `tool:run_readonly_sql:${COUNT}`,
+      `tool-result:run_readonly_sql:${COUNT}`,
+      `tool:run_readonly_sql:${NULLS}`,
+      `tool-result:run_readonly_sql:${NULLS}`,
+    ]);
+    const answer = ctx.session.messages.at(-1);
+    expect(answer?.data?.map((record) => [record.tool, record.input])).toEqual(
+      [
+        ['run_readonly_sql', COUNT],
+        ['run_readonly_sql', NULLS],
+      ],
+    );
+    expect(answer?.data?.[0]).toMatchObject({
+      rows: [{ rows: 64 }],
+      rationale: 'EV-001: how many matches there are.',
+    });
+  });
+});

@@ -6,6 +6,10 @@ import {
   INSIGHTS_LEAD_AGENT_KEY,
   INSIGHTS_LEAD_MAX_STEPS,
 } from '../../../mastra/agents/insights-lead-catalog';
+import {
+  DATA_READINESS_ASSESSOR_AGENT_KEY,
+  DATA_READINESS_ASSESSOR_MAX_STEPS,
+} from '../../../mastra/agents/data-readiness-assessor-catalog';
 import type { MastraService } from '../../../mastra/mastra.service';
 import {
   AGENT_OVERRIDES_CONTEXT_KEY,
@@ -56,6 +60,22 @@ export interface TurnOptionsDeps {
   existingDatasets(names: string[]): Promise<string[]>;
   /** Persist a patch on the session or in-memory host. */
   updateDoc(id: string, patch: Partial<SessionDoc>): Promise<unknown>;
+}
+
+/**
+ * The agents a solo conversation runs alone, with no memory thread, by
+ * registry key: each one's step budget per turn.
+ */
+const SOLO_AGENT_MAX_STEPS: Readonly<Record<string, number>> = {
+  [INSIGHTS_LEAD_AGENT_KEY]: INSIGHTS_LEAD_MAX_STEPS,
+  [DATA_READINESS_ASSESSOR_AGENT_KEY]: DATA_READINESS_ASSESSOR_MAX_STEPS,
+};
+
+/** A solo agent's step budget; undefined for any other agent. */
+export function soloAgentMaxSteps(agentKey: string): number | undefined {
+  return Object.hasOwn(SOLO_AGENT_MAX_STEPS, agentKey)
+    ? SOLO_AGENT_MAX_STEPS[agentKey]
+    : undefined;
 }
 
 export class TurnOptions {
@@ -114,11 +134,15 @@ export class TurnOptions {
     question?: string,
     abortSignal?: AbortSignal,
   ) {
-    // Elena (plan Elena 2.3): Michael's context, her own budget, and no
-    // memory thread (the run host sends the conversation as a transcript).
-    // On a user agent's host she runs its definition (ADR-0059), read
-    // first: a preview's datasets follow its draft.
-    if (session.agentKey === INSIGHTS_LEAD_AGENT_KEY) {
+    // A solo conversation's agent (Elena, plan Elena 2.3; Dana): Michael's
+    // context, its own budget, and no memory thread (the run host sends the
+    // conversation as a transcript). On a user agent's host Elena runs its
+    // definition (ADR-0059), read first: a preview's datasets follow its
+    // draft.
+    const soloSteps = session.agentKey
+      ? soloAgentMaxSteps(session.agentKey)
+      : undefined;
+    if (soloSteps !== undefined) {
       const agent = session.agentId
         ? await this.agentConfigFor(session)
         : undefined;
@@ -126,7 +150,7 @@ export class TurnOptions {
         session,
         question,
         abortSignal,
-        INSIGHTS_LEAD_MAX_STEPS,
+        soloSteps,
         agent,
       );
       void _memory;

@@ -4,6 +4,7 @@
  */
 export const CONVERSATIONAL_AGENT_WORKFLOWS: readonly string[] = [
   'agent:insights-lead',
+  'agent:data-readiness-assessor',
 ];
 
 /** The localStorage key of the conversations panel's state, one for all agents. */
