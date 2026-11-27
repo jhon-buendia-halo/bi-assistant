@@ -18,6 +18,7 @@ import { DatasourcesService } from '../src/modules/datasources/datasources.servi
 import type { QueryResult } from '../src/modules/datasources/entities/datasource.entity';
 import { LlmService } from '../src/modules/llm/llm.service';
 import { SessionsService } from '../src/modules/sessions/sessions.service';
+import { inEvalRun } from '../src/mastra/evals/eval-run-scope';
 // Result-set equality lives with the app code: careful mode's cross-check and
 // this harness must judge "same answer" exactly the same way.
 import {
@@ -263,24 +264,29 @@ async function runCase(
     ...result,
   });
 
-  // The turn runs on a throwaway agent host, as the eval runner's does.
+  // The turn runs on a throwaway run host of Elena's conversation, as an
+  // eval: on the saved model, never her Opus routing.
+  const evalRunId = `eval-${randomUUID()}`;
   const session = await sessions.createRunHost({
-    runId: `eval-${randomUUID()}`,
-    agentKey: 'assistant',
+    runId: evalRunId,
+    // Elena's conversation: the assistant is gone (ADR-0059).
+    workflowId: 'agent:insights-lead',
     name: `eval ${testCase.name}`.slice(0, 64),
     datasets: [testCase.dataset],
   });
   try {
     const turn = new AbortController();
     const timer = setTimeout(() => turn.abort(), TURN_TIMEOUT_MS);
+    let suspension: Awaited<ReturnType<SessionsService['streamRunTurn']>>;
     try {
-      await sessions.streamRunTurn(
-        session.id,
-        testCase.question,
-        () => {},
-        turn.signal,
-        false,
-        () => {},
+      suspension = await inEvalRun(evalRunId, () =>
+        sessions.streamRunTurn(
+          session.id,
+          testCase.question,
+          () => {},
+          turn.signal,
+          () => {},
+        ),
       );
     } finally {
       clearTimeout(timer);
@@ -290,6 +296,16 @@ async function runCase(
         verdict: 'ERROR',
         reason: 'timeout',
         detail: `the turn exceeded ${Math.round(TURN_TIMEOUT_MS / 1000)}s`,
+      });
+    }
+    // She asked the user instead of answering: no SQL to compare, and the
+    // waiting turn's snapshot is dropped.
+    if (suspension) {
+      await suspension.discard();
+      return done({
+        verdict: 'FAIL',
+        reason: 'clarification',
+        detail: `asked a clarifying question: ${suspension.question}`,
       });
     }
 

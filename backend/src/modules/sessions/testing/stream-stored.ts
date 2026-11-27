@@ -5,7 +5,7 @@ import type { SessionsService, StreamEvent } from '../sessions.service';
  * Test seam (1.23.27): a streamed agent turn over a stored session. Nothing in
  * the app starts a chat any more, but the turn engine still streams the same
  * turn for a run host, so the sessions unit suites keep proving the turn
- * behaviour (guards, workflow moves, cross-check)
+ * behaviour (guards, workflow moves)
  * against a stored session through the engine directly.
  */
 export async function streamStored(
@@ -14,8 +14,6 @@ export async function streamStored(
   content: string,
   emit: (event: StreamEvent) => void = () => {},
   abortSignal?: AbortSignal,
-  activeVisualId?: string,
-  careful = false,
 ): Promise<void> {
   const trimmed = (content ?? '').trim();
   if (!trimmed) throw new BadRequestException('message is required');
@@ -28,18 +26,9 @@ export async function streamStored(
           question: string,
           emit: (event: StreamEvent) => void,
           abortSignal?: AbortSignal,
-          activeVisualId?: string,
-          careful?: boolean,
         ): Promise<void>;
       };
     }
   ).turns;
-  await engine.streamTurn(
-    session,
-    trimmed,
-    emit,
-    abortSignal,
-    activeVisualId,
-    careful,
-  );
+  await engine.streamTurn(session, trimmed, emit, abortSignal);
 }

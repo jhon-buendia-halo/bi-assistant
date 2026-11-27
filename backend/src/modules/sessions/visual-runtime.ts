@@ -56,7 +56,7 @@ export type VisualAggregation =
 export type VisualFormat = 'number' | 'compact' | 'percent' | 'currency';
 
 /**
- * The chart forms the product supports (mirrors `chart-heuristic.ts`).
+ * The chart forms a stored visual can draw.
  * `pivot` is drawn by `visual-runtime-pivot.ts`, `us-map` by
  * `visual-runtime-map.ts`.
  */

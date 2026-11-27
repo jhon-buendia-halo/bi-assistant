@@ -1,0 +1,51 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`TurnOptions: Elena's options on a run host (agents.md 4.1, 4.2) a plain run host (no user agent) gets the context blocks, keys, budget and provider options of the snapshot 1`] = `
+{
+  "context": [
+    {
+      "content": "Datasets for this session: World Cup.
+Entities available (fully-qualified catalog.schema.table):
+- wc.public.matches (dataset: World Cup; datasource: postgres ds-pg)
+- wc.public.teams (dataset: World Cup; datasource: postgres ds-pg)
+Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.",
+      "role": "system",
+    },
+    {
+      "content": "Metrics:
+- goals = SUM(goals)",
+      "role": "system",
+    },
+    {
+      "content": "Curated knowledge:
+- A final is the last match.",
+      "role": "system",
+    },
+    {
+      "content": "Verified queries:
+- Who won? → SELECT 1",
+      "role": "system",
+    },
+  ],
+  "maxSteps": 24,
+  "providerOptions": {
+    "openai": {
+      "reasoningEffort": "medium",
+    },
+  },
+  "requestContext": {
+    "datasets": [
+      "World Cup",
+    ],
+    "knowledge-used": [
+      {
+        "id": "k1",
+        "kind": "glossary",
+        "title": "Final",
+      },
+    ],
+    "session-id": "run-r1",
+    "turn-question": "Who won?",
+  },
+}
+`;

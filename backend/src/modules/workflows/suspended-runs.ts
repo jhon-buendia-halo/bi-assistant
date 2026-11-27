@@ -55,6 +55,11 @@ export class SuspendedRuns<T> {
     return !!held && this.now() < held.expiresAt;
   }
 
+  /** A held run's value, left held (expired or not); undefined when none. */
+  peek(runId: string): T | undefined {
+    return this.held.get(runId)?.value;
+  }
+
   /**
    * Take a run out to resume it (so it is resumed once): undefined when none
    * is held; `expired` when its time ran out (the caller expires it).

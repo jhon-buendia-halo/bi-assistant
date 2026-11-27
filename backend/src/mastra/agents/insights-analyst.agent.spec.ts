@@ -36,6 +36,7 @@ import { join } from 'path';
 import type { InlineSkill } from '@mastra/core/skills';
 import { parseLinks } from '../agent-links';
 import { setAgentPromptOverrides } from '../agent-prompt-overrides';
+import { MEMORY_HANDLE_AGENT_KEY } from '../agent-constants';
 import { AGENT_SKILLS } from '../app-skills';
 import { shippedAgentPrompt } from '../shipped-agent-prompts';
 import { datasetTools } from '../tools/dataset.tools';
@@ -129,6 +130,11 @@ describe('Insights Analyst (agents.md 2.11)', () => {
       expect(tools).not.toContain(name);
     }
     expect(config['workspace']).toBeUndefined();
+  });
+
+  it('is the memory handle MastraService reads every thread through, so it keeps a memory', () => {
+    expect(MEMORY_HANDLE_AGENT_KEY).toBe(INSIGHTS_ANALYST_AGENT_KEY);
+    expect(config['memory']).toBeDefined();
   });
 
   it("keeps the assistant's memory: last 40 messages, no semantic recall, working memory or titles", () => {
@@ -322,9 +328,5 @@ describe("Insights Analyst's skills (agents.md 7.4)", () => {
     ]) {
       expect(checks.instructions).toContain(heading);
     }
-  });
-
-  it("leaves the assistant's skills unchanged: curated-knowledge only", () => {
-    expect(AGENT_SKILLS['assistant']).toEqual(['curated-knowledge']);
   });
 });

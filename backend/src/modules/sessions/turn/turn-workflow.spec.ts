@@ -10,6 +10,7 @@ import {
   clarifyingQuestionText,
   turnWorkflowOf,
 } from './turn-workflow';
+import { conversationalBindingOf } from '../../../mastra/conversational-agents';
 import {
   EARLIER_BLOCK_CAP,
   EARLIER_BLOCK_HEADER,
@@ -36,6 +37,7 @@ describe('turnWorkflowOf (agents.md 5.11, 5.16)', () => {
       engineId: 'orchestrated-answer-michael',
       bar: 'steps',
       stepIds: ['orchestrate'],
+      binding: conversationalBindingOf('orchestrated-answer-michael'),
     });
   });
 
@@ -52,6 +54,32 @@ describe('turnWorkflowOf (agents.md 5.11, 5.16)', () => {
       engineId: 'insights-lead-conversation',
       bar: 'steps',
       stepIds: ['answer'],
+      binding: conversationalBindingOf('agent:insights-lead'),
+    });
+  });
+
+  it("runs a user agent's draft host on Elena's engine, her binding under its own id (ADR-0059)", () => {
+    expect(
+      turnWorkflowOf(
+        session({
+          workflowId: 'agent:agent-1',
+          agentKey: 'insights-lead',
+          agentId: 'agent-1',
+          agentName: 'Sales helper',
+          preview: true,
+          run: true,
+        }),
+      ),
+    ).toEqual({
+      id: 'agent:agent-1',
+      engineId: 'insights-lead-conversation',
+      bar: 'steps',
+      stepIds: ['answer'],
+      binding: {
+        ...conversationalBindingOf('agent:insights-lead'),
+        workflowId: 'agent:agent-1',
+        author: { name: 'Sales helper', role: '' },
+      },
     });
   });
 

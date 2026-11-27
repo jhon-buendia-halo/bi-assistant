@@ -1,5 +1,7 @@
 import { defineBuiltinAgent, servedPromptWithTools } from '../agent-factory';
-import { catalogFrameworkSkills } from '../skill-sources';
+import { frameworkSkills, skillSourcesFor } from '../agent-skill-sources';
+import { agentSkillsFrom } from '../agent-skills';
+import { selects, toolSelectionFrom } from '../agent-tools';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { submitDashboardTool } from '../tools/dashboard.tools';
 import {
@@ -15,7 +17,11 @@ import {
   type ConversationGates,
 } from '../workflows/conversation-turn.steps';
 import { CONVERSATION_EXPORT_SKILL } from '../workflows/export-request';
-import { INSIGHTS_LEAD_INSTRUCTIONS } from '../workflows/insights-lead.prompts';
+import {
+  INSIGHTS_LEAD_ASK_RULE_START,
+  INSIGHTS_LEAD_INSTRUCTIONS,
+  INSIGHTS_LEAD_NO_CLARIFICATION_RULE,
+} from '../workflows/insights-lead.prompts';
 import {
   INSIGHTS_LEAD_AGENT_KEY,
   INSIGHTS_LEAD_DESCRIPTION,
@@ -46,19 +52,25 @@ function gatesOf(requestContext?: ContextLike): ConversationGates | undefined {
 
 /**
  * Her tools for the call, in the order of `INSIGHTS_LEAD_TOOL_NAMES`: the
- * dataset tools, `explore_result` and `ask_clarification` always (Michael's
- * instances), `submit_dashboard` (Clara's) only with the dashboard gate
- * open, `export_conversation` only with the export gate open.
+ * dataset tools and `explore_result` always (Michael's instances),
+ * `sample_rows` and `ask_clarification` unless a user agent's selection
+ * leaves them out (ADR-0059), `submit_dashboard` (Clara's) only with the
+ * dashboard gate open, `export_conversation` only with the export gate open.
  */
 export function insightsLeadTools(requestContext?: ContextLike) {
   const gates = gatesOf(requestContext);
+  const selection = toolSelectionFrom(requestContext);
   return {
     list_entities: listEntitiesTool,
     describe_entity: describeEntityTool,
-    sample_rows: sampleRowsTool,
+    ...(selects(selection, 'sample_rows')
+      ? { sample_rows: sampleRowsTool }
+      : {}),
     run_readonly_sql: runReadOnlySqlTool,
     explore_result: exploreResultTool,
-    ask_clarification: askClarificationTool,
+    ...(selects(selection, 'ask_clarification')
+      ? { ask_clarification: askClarificationTool }
+      : {}),
     ...(!gates || gates.dashboard
       ? { submit_dashboard: submitDashboardTool }
       : {}),
@@ -69,20 +81,29 @@ export function insightsLeadTools(requestContext?: ContextLike) {
 }
 
 /**
- * Her on-demand skills for the call (agents.md 7.4), filtered by the same
- * gates as her tools: `dashboard-building` with the dashboard gate open,
- * `conversation-export` with the export gate open; all of them with no run.
+ * Her on-demand skills for the call (agents.md 7.4): her catalogue,
+ * filtered by the same gates as her tools (`dashboard-building` with the
+ * dashboard gate open, `conversation-export` with the export gate open; all
+ * of them with no run), then a user agent's in-app skills on the call
+ * (ADR-0059), each replacing a catalogue skill of the same name, under the
+ * same gates.
  */
 export function insightsLeadSkills(requestContext?: ContextLike) {
   const gates = gatesOf(requestContext);
-  return catalogFrameworkSkills(INSIGHTS_LEAD_AGENT_KEY).filter(
-    (skill) =>
-      !gates ||
-      (skill.name === DASHBOARD_BUILDING_SKILL
-        ? gates.dashboard
-        : skill.name === CONVERSATION_EXPORT_SKILL
-          ? gates.export
-          : true),
+  const gated = (name: string) =>
+    !gates ||
+    (name === DASHBOARD_BUILDING_SKILL
+      ? gates.dashboard
+      : name === CONVERSATION_EXPORT_SKILL
+        ? gates.export
+        : true);
+  // The gates hold for a skill of the same name too: a closed gate offers
+  // no dashboard or export rules, whoever wrote them.
+  return frameworkSkills(
+    skillSourcesFor(
+      INSIGHTS_LEAD_AGENT_KEY,
+      agentSkillsFrom(requestContext) ?? [],
+    ).filter((skill) => gated(skill.name)),
   );
 }
 
@@ -90,14 +111,26 @@ export function insightsLeadSkills(requestContext?: ContextLike) {
  * Her prompt as served: the shipped text or its in-app override
  * (ADR-0026), links resolved to plain mentions, with the `## Tools` section
  * generated from the call's tools inserted before `## Working rules`, so
- * the cue-fired repair rule stays last.
+ * the cue-fired repair rule stays last. Without `ask_clarification` (a user
+ * agent's selection, ADR-0059) her asking rule becomes the no-clarification
+ * rule, in place.
  */
 export function insightsLeadInstructions(requestContext?: ContextLike): string {
-  return servedPromptWithTools(
+  const tools = insightsLeadTools(requestContext);
+  const served = servedPromptWithTools(
     INSIGHTS_LEAD_AGENT_KEY,
     INSIGHTS_LEAD_INSTRUCTIONS,
-    insightsLeadTools(requestContext),
+    tools,
   );
+  if ('ask_clarification' in tools) return served;
+  return served
+    .split('\n')
+    .map((line) =>
+      line.startsWith(INSIGHTS_LEAD_ASK_RULE_START)
+        ? INSIGHTS_LEAD_NO_CLARIFICATION_RULE
+        : line,
+    )
+    .join('\n');
 }
 
 /**
@@ -105,8 +138,9 @@ export function insightsLeadInstructions(requestContext?: ContextLike): string {
  * questions alone over the conversation's datasets, in a conversation
  * outside any workflow (a run of `agent:insights-lead`). An Official agent
  * with no memory: the run host sends the conversation as a transcript. Her
- * model is the step model on the call's requestContext, else the saved
- * model (agents.md 1.3).
+ * model is a user agent's override, else the step model on the call's
+ * requestContext, else the saved model (agents.md 1.3). She also runs user
+ * agents: their instructions, tools and skills come on the call (ADR-0059).
  */
 export const insightsLeadAgent = defineBuiltinAgent({
   key: INSIGHTS_LEAD_AGENT_KEY,
@@ -117,6 +151,7 @@ export const insightsLeadAgent = defineBuiltinAgent({
   instructions: insightsLeadInstructions,
   // Loaded on demand through Mastra's skill tools (ADR-0025).
   skills: ({ requestContext }) => insightsLeadSkills(requestContext),
-  model: 'step-model',
+  // A user agent's model override wins over her routing (ADR-0059).
+  model: 'override-or-step-model',
   tools: ({ requestContext }) => insightsLeadTools(requestContext),
 });

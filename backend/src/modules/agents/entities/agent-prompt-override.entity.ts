@@ -20,7 +20,7 @@ export interface AgentPromptView {
   modified: boolean;
   /** Modified, and the shipped text's hash differs from `baseHash`. */
   builtInChanged: boolean;
-  /** True for the Official agents (the assistant, Insights Analyst): their prompt may link tools and skills. */
+  /** True for the Official agents (Insights Analyst, Elena): their prompt may link tools and skills. */
   linksAllowed: boolean;
   /** The override's, or null. */
   updatedAt: string | null;

@@ -1,7 +1,6 @@
 import { Mastra } from '@mastra/core';
 import { PinoLogger } from '@mastra/loggers';
 import { MastraStorageExporter, Observability } from '@mastra/observability';
-import { assistantAgent } from './agents/assistant.agent';
 import { chiefOfStaffAgent } from './agents/chief-of-staff.agent';
 import { biAnalystAgent } from './agents/bi-analyst.agent';
 import { queryExplainerAgent } from './agents/query-explainer.agent';
@@ -10,8 +9,6 @@ import { insightsAnalystAgent } from './agents/insights-analyst.agent';
 import { insightsLeadAgent } from './agents/insights-lead.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
-import { sqlVerifierAgent } from './agents/sql-verifier.agent';
-import { visualizationAgent } from './agents/visualization.agent';
 import { EVAL_RUN_CONTEXT_KEY } from './evals/eval-trace-marker';
 import { EvalRunMarker } from './evals/eval-run-scope';
 import { developerTraceExporters } from './developer-exporters';
@@ -31,11 +28,8 @@ appSkills();
 // wraps this instance for DI.
 export const mastra = new Mastra({
   agents: {
-    assistant: assistantAgent,
     'insights-analyst': insightsAnalystAgent,
-    visualization: visualizationAgent,
     'sql-fixer': sqlFixerAgent,
-    'sql-verifier': sqlVerifierAgent,
     'assistant-eval-judge': evalJudgeAgent,
     // Avery, the orchestrator of Answer a Business Question (Avery + Michael).
     'chief-of-staff': chiefOfStaffAgent,

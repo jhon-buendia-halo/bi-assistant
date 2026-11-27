@@ -141,7 +141,7 @@ describe('hasUnpublishedChanges / missingDatasets', () => {
   });
 
   it('compares tool selections, reading an absent list as every tool', () => {
-    const all = ['sample_rows', 'ask_clarification', 'visuals'] as const;
+    const all = ['sample_rows', 'ask_clarification'] as const;
     expect(
       hasUnpublishedChanges({
         draft: { ...draft, tools: [...all] },
@@ -248,16 +248,17 @@ describe('UserAgentsService', () => {
       // Ignored: the links decide.
       tools: ['ask_clarification'],
     });
-    expect(agent.draft.tools).toEqual(['sample_rows', 'visuals']);
+    // A retired tool's link is accepted and selects nothing (ADR-0059).
+    expect(agent.draft.tools).toEqual(['sample_rows']);
     expect(agent.draft.skills).toEqual([]);
     const published = await ctx.service.publish(agent.id);
-    expect(published.live?.tools).toEqual(['sample_rows', 'visuals']);
+    expect(published.live?.tools).toEqual(['sample_rows']);
     const edited = await ctx.service.saveDraft(agent.id, {
       name: 'Analyst',
       datasets: ['World Cup Core'],
     });
     expect(edited.draft.tools).toEqual([]);
-    expect(edited.live?.tools).toEqual(['sample_rows', 'visuals']);
+    expect(edited.live?.tools).toEqual(['sample_rows']);
     await expect(
       ctx.service.saveDraft(agent.id, {
         name: 'Analyst',

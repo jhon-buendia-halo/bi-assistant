@@ -215,7 +215,6 @@ export class WorkflowNodeChatsService {
           live(event);
         },
         abortSignal,
-        false,
         (event) => tracker.apply(event),
       );
     } catch (failure) {

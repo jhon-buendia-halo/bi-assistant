@@ -4,14 +4,14 @@ import { join } from 'path';
 import type { AgentSkill } from './agent-skills';
 import * as appSkillsModule from './app-skills';
 import type { AppSkill } from './app-skills';
-import { assistantSkillSources, assistantSkills } from './assistant-skills';
+import { frameworkSkills, skillSourcesFor } from './agent-skill-sources';
 
-describe('the assistant skills of a call with user folder skills (ADR-0025)', () => {
+describe('the skills of a call with user folder skills (ADR-0025)', () => {
   let dir: string;
   let folderSkill: AppSkill;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'assistant-skills-'));
+    dir = mkdtempSync(join(tmpdir(), 'agent-skill-sources-'));
     mkdirSync(join(dir, 'reference'));
     mkdirSync(join(dir, 'scripts'));
     writeFileSync(
@@ -41,7 +41,7 @@ describe('the assistant skills of a call with user folder skills (ADR-0025)', ()
     expect(appSkillsModule.skillReferences(folderSkill)).toEqual({
       'reference/rules.md': 'Use [[skill:other]].',
     });
-    const [skill] = assistantSkills();
+    const [skill] = frameworkSkills(skillSourcesFor('assistant'));
     expect(skill.name).toBe('sql-style');
     expect(skill.instructions).toBe(
       'Follow references/rules.md and the "run_readonly_sql" tool.',
@@ -60,12 +60,27 @@ describe('the assistant skills of a call with user folder skills (ADR-0025)', ()
       body: 'Agent body.',
       files: [],
     };
-    const sources = assistantSkillSources([own]);
+    const sources = skillSourcesFor('assistant', [own]);
     expect(sources).toHaveLength(1);
     expect(sources[0]).toMatchObject({
       description: 'Use when the agent says so.',
       body: 'Agent body.',
       files: {},
     });
+  });
+
+  it('puts the agent skills after the catalogue skills, in their order', () => {
+    const skill = (name: string): AgentSkill => ({
+      id: name,
+      name,
+      description: `Use for ${name}.`,
+      body: `${name} body.`,
+      files: [],
+    });
+    expect(
+      skillSourcesFor('insights-lead', [skill('zeta'), skill('alpha')]).map(
+        (source) => source.name,
+      ),
+    ).toEqual(['sql-style', 'zeta', 'alpha']);
   });
 });

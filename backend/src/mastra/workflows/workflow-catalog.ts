@@ -104,20 +104,13 @@ const DATASETS_FIELD: WorkflowInputField = {
   type: 'datasets',
   required: true,
 };
-const CAREFUL_FIELD: WorkflowInputField = {
-  name: 'careful',
-  label: 'Careful: cross-check the result with an independent query',
-  type: 'boolean',
-  required: false,
-  default: false,
-};
 
 /**
- * The input of a draft run (Try it, api.md R12): the question, and careful
- * mode; its datasets are the draft's.
+ * The input of a draft run (Try it, api.md R12): the question alone; its
+ * datasets are the draft's.
  */
 export function draftRunInput(): WorkflowInputField[] {
-  return [{ ...QUESTION_FIELD }, { ...CAREFUL_FIELD }];
+  return [{ ...QUESTION_FIELD }];
 }
 
 /** One workflow defined in code. */
@@ -250,8 +243,6 @@ export interface AgentRunTurn {
   question: string;
   /** `datasets`; absent otherwise. */
   datasets?: string[];
-  /** Careful mode (the Assistant and user agents). */
-  careful: boolean;
 }
 
 /** The agent turn a run's checked input asks for (plan 4.2). */
@@ -264,21 +255,17 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
   return {
     question: text(values['question']),
     ...(datasets ? { datasets } : {}),
-    careful: values['careful'] === true,
   };
 }
-
-/**
- * The built-in agents whose turns run on the agent-turn engine: a stored
- * session of theirs, and the eval runner's direct host (agents.md 5.14).
- * They have no catalogue workflow since 1.23.35.
- */
-export const WRAPPED_AGENT_KEYS: readonly string[] = ['assistant'];
 
 /** The prefix of an agent-turn binding's id. */
 export const AGENT_WORKFLOW_PREFIX = 'agent:';
 
-/** The plain assistant's agent-turn binding: what a session with no agent runs. */
+/**
+ * The removed assistant's agent-turn binding (ADR-0059): a retired stored
+ * id, what a stored session with no agent reads as. It names no workflow
+ * and runs nothing.
+ */
 export const ASSISTANT_WORKFLOW_ID = 'agent:assistant';
 /** Its name, so an old session's chip keeps reading `Assistant`. */
 export const ASSISTANT_WORKFLOW_NAME = 'Assistant';
@@ -329,19 +316,17 @@ export function agentWorkflowId(agentKeyOrId: string): string {
 
 export type ParsedWorkflowId =
   | { kind: 'code'; source: CodeWorkflowSource }
-  | { kind: 'builtin-agent'; agentKey: string }
   | { kind: 'conversation'; binding: ConversationalBinding }
   | { kind: 'user-agent'; agentId: string };
 
 /**
  * What a session's workflow id names: a code workflow, a built-in agent's
  * conversation outside any workflow (`agent:insights-lead`, plan Elena
- * 1.3; Avery's conversational workflow stays a code workflow), or the
- * agent-turn binding of a wrapped built-in agent or a user agent. Undefined for an
- * unknown id (a removed workflow such as `seq-text-demo` or
- * `deep-analysis`), a System agent's key and the `primaryFor` agent of a
- * code workflow (it runs that workflow). Any other `agent:` id names a user
- * agent. Only `GET /workflows` says what the catalogue holds.
+ * 1.3; Avery's conversational workflow stays a code workflow), or a user
+ * agent's binding. Undefined for an unknown id (a removed workflow such as
+ * `seq-text-demo` or `deep-analysis`), the retired `agent:assistant`, a
+ * System agent's key and the `primaryFor` agent of a code workflow (it runs
+ * that workflow). Any other `agent:` id names a user agent. Only `GET /workflows` says what the catalogue holds.
  */
 export function parseWorkflowId(id: string): ParsedWorkflowId | undefined {
   const source = CODE_WORKFLOWS.find((workflow) => workflow.id === id);
@@ -351,9 +336,8 @@ export function parseWorkflowId(id: string): ParsedWorkflowId | undefined {
   }
   const key = id.slice(AGENT_WORKFLOW_PREFIX.length);
   if (!key) return undefined;
-  if (WRAPPED_AGENT_KEYS.includes(key)) {
-    return { kind: 'builtin-agent', agentKey: key };
-  }
+  // The removed assistant's binding is a retired stored id (ADR-0059).
+  if (id === ASSISTANT_WORKFLOW_ID) return undefined;
   const binding = conversationalBindingOf(id);
   if (binding) return { kind: 'conversation', binding };
   if (
@@ -377,24 +361,20 @@ export interface SessionWorkflowFields {
  * still resolves or names a removed workflow (a past chat keeps it), else
  * the one its agent fields derive: `answer-business-question`, removed, for
  * Michael's past chats (they ran it before a session stored its workflow),
- * the code workflow whose `primaryFor` is its `agentKey`, `agent:<agentKey>`
- * for a wrapped built-in agent, `agent:<agentId>` for a user agent (deleted
- * or not), and `agent:assistant` otherwise.
+ * the code workflow whose `primaryFor` is its `agentKey`, `agent:<agentId>`
+ * for a user agent (deleted or not), and the retired `agent:assistant`
+ * otherwise (ADR-0059).
  */
 export function sessionWorkflowId(session: SessionWorkflowFields): string {
   if (
     session.workflowId &&
     (parseWorkflowId(session.workflowId) ||
-      isRemovedWorkflowId(session.workflowId))
+      isRemovedWorkflowId(session.workflowId) ||
+      session.workflowId === ASSISTANT_WORKFLOW_ID)
   ) {
     return session.workflowId;
   }
   if (session.agentKey) {
-    // A wrapped agent's own turn first: its sessions and the eval runner's
-    // host stay on its agent turn (a run host names its workflow itself).
-    if (WRAPPED_AGENT_KEYS.includes(session.agentKey)) {
-      return agentWorkflowId(session.agentKey);
-    }
     // Michael's past chats ran Answer a Business Question: they keep it.
     if (session.agentKey === INSIGHTS_ANALYST_AGENT_KEY) {
       return REMOVED_WORKFLOW_IDS[0];

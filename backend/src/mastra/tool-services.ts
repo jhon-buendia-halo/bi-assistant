@@ -91,74 +91,6 @@ export interface SqlCallOptions {
   maxRows?: number;
 }
 
-export interface VisualToolResult {
-  visualId: string;
-  version: number;
-  title: string;
-  description: string;
-}
-
-/**
- * Mirrors `ToolDataRecord` (backend/src/modules/sessions/entities) without
- * importing it — same pattern as `DatasetSnapshot`/`SqlRunResult`: this file
- * has no Nest DI and must stay decoupled from feature-module types.
- */
-export interface DatasetToolTurnRecord {
-  tool: string;
-  input?: string;
-  columns?: string[];
-  rows?: Record<string, unknown>[];
-  rowCount?: number;
-  truncated?: boolean;
-  error?: string;
-  rationale?: string;
-}
-
-/**
- * The input of `show_in_panel` (agents.md 3.11): a flat object, validated per
- * kind by the bridge.
- */
-export interface PanelToolInput {
-  kind: 'file' | 'document' | 'table' | 'visual';
-  title?: string;
-  path?: string;
-  markdown?: string;
-  record?: number;
-  visualId?: string;
-}
-
-/** What `show_in_panel` tells the model: the item is stored, not echoed. */
-export interface PanelToolResult {
-  shown: true;
-  id: string;
-  kind: PanelToolInput['kind'];
-  title: string;
-  /** `file` only. */
-  bytes?: number;
-  /** `table` only. */
-  rowCount?: number;
-}
-
-/** The input of `update_workflow` (agents.md 3.11): flat, validated by the bridge. */
-export interface WorkflowToolInput {
-  steps?: string;
-  current?: number;
-  done?: string;
-  skipped?: string;
-  waiting?: boolean;
-  note?: string;
-  todo?: string;
-}
-
-/** What `update_workflow` tells the model. */
-export interface WorkflowToolResult {
-  updated: true;
-  steps: number;
-  current: number;
-  done: number[];
-  skipped: number[];
-}
-
 /** The query `explore_result` pages (agents.md 3.15): its SQL, columns and kinds. */
 export interface ExploredQuerySource {
   sql: string;
@@ -169,48 +101,6 @@ export interface ExploredQuerySource {
 }
 
 export interface DatasetToolServices {
-  /**
-   * Create a visual for an answer in the session (latest answer if omitted).
-   * `turnRecords`, when present, are the SQL/rows the current chat turn has
-   * captured so far — appended to the visual's data alongside the source
-   * answer's own records.
-   */
-  createVisual(
-    sessionId: string,
-    sourceMessageAt: string | undefined,
-    instruction: string | undefined,
-    turnRecords?: DatasetToolTurnRecord[],
-  ): Promise<VisualToolResult>;
-  /**
-   * Produce a new version of an existing visual from a tailoring request.
-   * `turnRecords` are merged onto the visual's stored data the same way as
-   * `createVisual`.
-   */
-  updateVisual(
-    sessionId: string,
-    visualId: string,
-    instruction: string,
-    turnRecords?: DatasetToolTurnRecord[],
-  ): Promise<VisualToolResult>;
-  /**
-   * Show something in the session's right panel: validate it, store it as a
-   * panel item and return the summary. Throws the error message the model
-   * should see. `turnRecords` are the current turn's captured query results
-   * (the only source of `table` items).
-   */
-  showPanelItem(
-    sessionId: string,
-    input: PanelToolInput,
-    turnRecords?: DatasetToolTurnRecord[],
-  ): Promise<PanelToolResult>;
-  /**
-   * Create or update the session's workflow status bar. Throws the error
-   * message the model should see.
-   */
-  updateWorkflow(
-    sessionId: string,
-    input: WorkflowToolInput,
-  ): Promise<WorkflowToolResult>;
   getDatasets(names: string[]): Promise<DatasetSnapshot[]>;
   /** `options.signal` is the tool call's abort signal (the turn's stop). */
   sampleRows(

@@ -1,6 +1,5 @@
-// Pure helpers of the turn engine (agents.md 5.1): the tool names and agent
-// keys a turn branches on, and what a turn derives from its captured records
-// and its requestContext. No Nest, no Mastra runtime.
+// Pure helpers of the turn engine (agents.md 5.1): what a turn derives from
+// its captured records and its requestContext. No Nest, no Mastra runtime.
 import { resolveLinks } from '../../../mastra/agent-links';
 import type { KnowledgeUse } from '../../ontology/entities/ontology-item.entity';
 import type { AgentConfig } from '../../user-agents/entities/user-agent.entity';
@@ -10,13 +9,6 @@ import type {
   ToolDataRecord,
 } from '../entities/session.entity';
 
-export const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
-/** The built-in panel tool (agents.md 3.11); its result becomes a `panel-item` event. */
-export const SHOW_IN_PANEL_TOOL = 'show_in_panel';
-/** The workflow status bar's tool (agents.md 3.11); its result becomes a `workflow` event. */
-export const UPDATE_WORKFLOW_TOOL = 'update_workflow';
-/** The agent a session without `agentKey` runs (agents.md 5.1). */
-export const ASSISTANT_AGENT_KEY = 'assistant';
 /**
  * requestContext key carrying the curated-knowledge snippets this turn's
  * system block was built from, so the persist step can record them on the

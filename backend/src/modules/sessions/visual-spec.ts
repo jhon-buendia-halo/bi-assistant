@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { usStateCode } from './visual-runtime-map';
 
 /**
  * Visual spec v1 — the small JSON document the designer agent emits instead of
@@ -43,28 +42,12 @@ export const SPEC_CHART_FORMS = [
   'us-map',
 ] as const;
 
-/** Forms that plot a category/measure pair and therefore need `x` and `y`. */
-const XY_FORMS: ReadonlySet<string> = new Set([
-  'bar',
-  'line',
-  'scatter',
-  'heatmap',
-  'donut',
-  'pivot',
-  'us-map',
-]);
-
 /** KPI tiles a spec may carry. */
 export const SPEC_MAX_KPIS = 6;
 /** Panels a dashboard spec may carry. */
 export const SPEC_MAX_PANELS = 8;
 /** A panel's width in the 12-column grid: narrowest, widest, and when omitted. */
 export const SPEC_PANEL_SPAN = { min: 3, max: 12, default: 6 } as const;
-/** Aggregations that pick one row, so a KPI can name it (`category`). */
-const ROW_AGGREGATIONS: ReadonlySet<string> = new Set(['max', 'min', 'value']);
-/** Share of a `us-map`'s sampled x values that must name a state. */
-const US_MAP_MIN_MATCH = 0.6;
-
 const columnName = z
   .string()
   .min(1)
@@ -288,9 +271,6 @@ export interface SpecDataRecord {
   rows?: Record<string, unknown>[];
 }
 
-/** Rows sampled when deciding whether a column is numeric. */
-const SAMPLE_ROWS = 50;
-
 /** A record's columns: the declared list, else the keys of its first row. */
 export function columnsOf(record: SpecDataRecord): string[] {
   if (record.columns?.length) return record.columns;
@@ -311,35 +291,6 @@ export function selectRecord(
   });
 }
 
-function isBlank(value: unknown): boolean {
-  return (
-    value === null ||
-    value === undefined ||
-    (typeof value === 'string' && value.trim() === '')
-  );
-}
-
-/**
- * `Number(...)` with the coercions the runtime itself applies, so validation
- * and rendering agree on what counts as a measure: SQL drivers hand numbers
- * back as strings (`"4"`, `"1,204"`, `"12%"`), while `true` is not a measure
- * even though `Number(true)` is 1.
- */
-function toNumberLike(value: unknown): number {
-  if (typeof value === 'boolean') return NaN;
-  if (typeof value === 'string') return Number(value.replace(/[$,\s%]/g, ''));
-  return Number(value);
-}
-
-/** Numeric-ish: every non-blank sampled value survives the coercion above. */
-function isNumericColumn(record: SpecDataRecord, column: string): boolean {
-  return (record.rows ?? [])
-    .slice(0, SAMPLE_ROWS)
-    .map((row) => row[column])
-    .filter((value) => !isBlank(value))
-    .every((value) => Number.isFinite(toNumberLike(value)));
-}
-
 /**
  * Every chart a spec draws, with the name its problems are reported under:
  * `chart` for a single visual, `panels[i] ("<title>")` for a dashboard's.
@@ -355,162 +306,4 @@ export function specCharts(
     }));
   }
   return spec.chart ? [{ where: 'chart', chart: spec.chart }] : [];
-}
-
-/** Whether enough of a column's sampled values name a US state for a map. */
-function namesUsStates(record: SpecDataRecord, column: string): boolean {
-  const values = (record.rows ?? [])
-    .slice(0, SAMPLE_ROWS)
-    .map((row) => row[column])
-    .filter((value) => !isBlank(value));
-  if (!values.length) return false;
-  const named = values.filter((value) => usStateCode(value) !== null).length;
-  return named / values.length >= US_MAP_MIN_MATCH;
-}
-
-/**
- * Check a spec against the exact rows the visual will render from, and report
- * every problem in plain language. An empty array means the spec is renderable;
- * anything else is fed straight back to the designer as a retry instruction.
- */
-export function validateSpecAgainstData(
-  spec: VisualSpec,
-  records: SpecDataRecord[],
-): string[] {
-  const problems: string[] = [];
-  const available =
-    (records ?? [])
-      .map((record, index) => `#${index + 1} [${columnsOf(record).join(', ')}]`)
-      .join('; ') || '(no result sets)';
-
-  const resolve = (
-    select: string[],
-    where: string,
-  ): SpecDataRecord | undefined => {
-    const record = selectRecord(records, select);
-    if (!record) {
-      problems.push(
-        `${where}: select [${select.join(', ')}] matches no result set — available column sets: ${available}`,
-      );
-    }
-    return record;
-  };
-
-  const requireColumn = (
-    record: SpecDataRecord,
-    column: string,
-    where: string,
-  ): boolean => {
-    const columns = columnsOf(record);
-    if (columns.includes(column)) return true;
-    problems.push(
-      `${where}: column "${column}" is not in the selected result set [${columns.join(', ')}]`,
-    );
-    return false;
-  };
-
-  const requireNumeric = (
-    record: SpecDataRecord,
-    column: string,
-    where: string,
-  ): void => {
-    if (isNumericColumn(record, column)) return;
-    problems.push(
-      `${where}: column "${column}" is not numeric in the sampled rows`,
-    );
-  };
-
-  if (spec.chart && spec.panels?.length) {
-    problems.push(
-      'spec: give either chart (a single visual) or panels (a dashboard), not both',
-    );
-  }
-  const charts = specCharts(spec);
-  if (!charts.length) {
-    problems.push(
-      'spec: needs a chart (a single visual) or at least one panel (a dashboard)',
-    );
-  }
-
-  for (const { where, chart } of charts) {
-    const measures =
-      chart.y === undefined ? [] : Array.isArray(chart.y) ? chart.y : [chart.y];
-    if (XY_FORMS.has(chart.form)) {
-      if (!chart.x)
-        problems.push(`${where}: form "${chart.form}" needs an x column`);
-      if (!measures.length) {
-        problems.push(`${where}: form "${chart.form}" needs a y column`);
-      }
-    }
-    if (chart.form === 'heatmap' && !chart.series) {
-      problems.push(
-        `${where}: a heatmap needs a series column for its second axis`,
-      );
-    }
-    if (chart.form === 'pivot' && chart.series && measures.length > 1) {
-      problems.push(
-        `${where}: a pivot with a series column takes one y measure; drop series to show several measures as the columns`,
-      );
-    }
-    // The schema already resolves a `sort.by` column name that matches `x` or
-    // a plotted measure to "x"/"y" (see the `chartSpecSchema` transform);
-    // whatever is left here named neither the x column nor a y measure, so it
-    // is reported as a data problem instead of a parse-time rejection.
-    if (chart.sort && chart.sort.by !== 'x' && chart.sort.by !== 'y') {
-      problems.push(
-        `${where}.sort.by: "${chart.sort.by}" is not "x", "y", the x column, or a plotted y column`,
-      );
-    }
-
-    const chartRecord = resolve(chart.select, where);
-    if (!chartRecord) continue;
-    if (chart.x && requireColumn(chartRecord, chart.x, `${where}.x`)) {
-      // Only a scatter puts x on a value scale; every other form treats it as
-      // a category or a time label.
-      if (chart.form === 'scatter') {
-        requireNumeric(chartRecord, chart.x, `${where}.x`);
-      }
-      if (chart.form === 'us-map' && !namesUsStates(chartRecord, chart.x)) {
-        problems.push(
-          `${where}.x: form "us-map" needs a column of US state codes or names, and "${chart.x}" is not one; use a bar instead`,
-        );
-      }
-    }
-    for (const measure of measures) {
-      if (requireColumn(chartRecord, measure, `${where}.y`)) {
-        requireNumeric(chartRecord, measure, `${where}.y`);
-      }
-    }
-    if (chart.series) {
-      requireColumn(chartRecord, chart.series, `${where}.series`);
-    }
-  }
-
-  (spec.kpis ?? []).forEach((kpi, index) => {
-    const where = `kpis[${index}] ("${kpi.label}")`;
-    const record = resolve(kpi.select, where);
-    if (!record) return;
-    if (requireColumn(record, kpi.column, where) && kpi.agg !== 'count') {
-      requireNumeric(record, kpi.column, where);
-    }
-    if (kpi.category) {
-      if (!ROW_AGGREGATIONS.has(kpi.agg)) {
-        problems.push(
-          `${where}: category only goes with agg "max", "min" or "value", not "${kpi.agg}"`,
-        );
-      }
-      requireColumn(record, kpi.category, `${where}.category`);
-    }
-  });
-
-  if (spec.table) {
-    const record = resolve(spec.table.select, 'table');
-    if (record) {
-      for (const column of spec.table.columns ?? []) {
-        requireColumn(record, column, 'table.columns');
-      }
-    }
-  }
-
-  return problems;
 }

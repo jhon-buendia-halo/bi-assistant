@@ -12,13 +12,9 @@ function stubServices(
   overrides: Partial<DatasetToolServices> = {},
 ): DatasetToolServices {
   return {
-    createVisual: jest.fn(),
-    updateVisual: jest.fn(),
     getDatasets: jest.fn(),
     sampleRows: jest.fn(),
     runReadOnlySql: jest.fn(),
-    showPanelItem: jest.fn(),
-    updateWorkflow: jest.fn(),
     ...overrides,
   };
 }

@@ -1,7 +1,8 @@
 /**
- * A user agent's tool selection (ADR-0022, agents.md 2.1 and 4.2): which of
- * the assistant's optional tools a call offers. `list_entities`,
- * `describe_entity` and `run_readonly_sql` are always given and never listed.
+ * A user agent's tool selection (ADR-0022, agents.md 2.23 and 4.2): which of
+ * Elena's optional tools a call offers (ADR-0059). `list_entities`,
+ * `describe_entity`, `run_readonly_sql` and `explore_result` are always
+ * given and never listed.
  */
 
 /** requestContext key carrying the selection of a call (agents.md 4.2). */
@@ -11,17 +12,21 @@ export const AGENT_TOOLS_CONTEXT_KEY = 'agent-tools';
 export const OPTIONAL_AGENT_TOOLS = [
   'sample_rows',
   'ask_clarification',
-  'visuals',
 ] as const;
 
 export type OptionalAgentTool = (typeof OPTIONAL_AGENT_TOOLS)[number];
 
-/** The assistant tools each optional tool id stands for. */
+/**
+ * Optional tools of the removed assistant (ADR-0059): a stored selection
+ * may still name one; it is dropped without a message.
+ */
+export const RETIRED_AGENT_TOOLS: readonly string[] = ['visuals'];
+
+/** The tools each optional tool id stands for. */
 export const OPTIONAL_TOOL_NAMES: Record<OptionalAgentTool, readonly string[]> =
   {
     sample_rows: ['sample_rows'],
     ask_clarification: ['ask_clarification'],
-    visuals: ['create_visual', 'update_visual'],
   };
 
 function isOptionalAgentTool(value: unknown): value is OptionalAgentTool {
@@ -30,13 +35,17 @@ function isOptionalAgentTool(value: unknown): value is OptionalAgentTool {
 
 /**
  * De-duplicate a `tools` list and put it in canonical order (data-model
- * 3.10). Throws `Unknown tool "<name>"` for the first entry that is not one
- * of the three optional tools (agents-evals R43).
+ * 3.10). A retired tool (`visuals`) is dropped silently; throws `Unknown
+ * tool "<name>"` for the first other entry that is not an optional tool
+ * (agents-evals R43).
  */
 export function normalizeAgentTools(
   values: readonly string[],
 ): OptionalAgentTool[] {
-  const unknown = values.find((value) => !isOptionalAgentTool(value));
+  const unknown = values.find(
+    (value) =>
+      !isOptionalAgentTool(value) && !RETIRED_AGENT_TOOLS.includes(value),
+  );
   if (unknown !== undefined) throw new Error(`Unknown tool "${unknown}"`);
   return OPTIONAL_AGENT_TOOLS.filter((tool) => values.includes(tool));
 }
@@ -48,7 +57,7 @@ export function isFullSelection(tools: readonly string[] | undefined): boolean {
 
 /**
  * The tool selection a call runs with, in canonical order, or undefined for
- * every tool: no selection on the context, or all three selected.
+ * every tool: no selection on the context, or both selected.
  */
 export function toolSelectionFrom(requestContext?: {
   get(key: string): unknown;
@@ -65,11 +74,4 @@ export function selects(
   tool: OptionalAgentTool,
 ): boolean {
   return !selection || selection.includes(tool);
-}
-
-/** A stable cache key for a selection: `full`, or the ids joined. */
-export function selectionKey(
-  selection: readonly OptionalAgentTool[] | undefined,
-): string {
-  return selection ? selection.join(',') : 'full';
 }

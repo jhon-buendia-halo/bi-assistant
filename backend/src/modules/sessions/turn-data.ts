@@ -191,51 +191,6 @@ function tabularRecord(
 }
 
 /**
- * Records captured from a non-streamed turn. The stream path reads tool
- * chunks one by one as they arrive; `generate` hands them back in a batch,
- * wrapped or flat depending on the provider, so both shapes are accepted.
- */
-export function toolRecords(result: unknown): ToolDataRecord[] {
-  const entries = (result as { toolResults?: unknown })?.toolResults;
-  if (!Array.isArray(entries)) return [];
-  const records: ToolDataRecord[] = [];
-  for (const entry of entries) {
-    const payload = ((entry as { payload?: unknown })?.payload ?? entry) as {
-      toolName?: string;
-      name?: string;
-      args?: Record<string, unknown>;
-      result?: unknown;
-    };
-    const record = toolDataRecord(
-      payload.toolName ?? payload.name ?? 'tool',
-      payload.args ?? {},
-      payload.result,
-    );
-    if (record) records.push(record);
-  }
-  return records;
-}
-
-/**
- * The system nudge for the zero-SQL-turn grounding guard: a turn that ended
- * with a non-empty answer but never called a tool. The prompt-only grounding
- * rule in `assistant.agent.ts` was not enough on its own (evals caught it
- * answering "Who won the 2022 World Cup?" from parametric memory) — this is
- * the runtime backstop, one corrective pass with tools allowed. The model's
- * own ungrounded answer is included so it has something concrete to accept,
- * correct or retract.
- */
-export function groundingNudge(originalAnswer: string): string {
-  return [
-    'Grounding check: you produced an answer without calling any tool.',
-    'If the answer makes factual claims about the data (values, winners, counts, rankings, dates), you MUST re-answer by querying with run_readonly_sql and answer only from the results — or, if the data does not cover the question, say so explicitly and state what the data does cover.',
-    'If the reply is purely conversational (greeting, thanks, question about how to use the app) or is fully supported by query results already shown earlier in this conversation, return the same answer unchanged.',
-    '',
-    `Your answer: ${originalAnswer}`,
-  ].join('\n');
-}
-
-/**
  * A model can spend every allowed step on tools and finish without a
  * user-facing answer. Give it one tool-disabled pass to turn the data it
  * already collected into prose; never let a completed turn disappear.

@@ -50,13 +50,6 @@ export interface AgentPersona {
 
 /** By registry key; every registered built-in agent has one. */
 export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
-  assistant: {
-    name: 'Emily',
-    role: 'Data Analyst',
-    domain: 'analysis',
-    intro:
-      "Ask me a business question about your data. I'll plan the analysis, run the queries and show you how I got the answer.",
-  },
   'insights-analyst': {
     name: 'Michael',
     role: 'Insights Analyst',
@@ -78,26 +71,12 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       "I'm your one point of contact for a question: I decide who on the team works on it, brief them, check what they bring back and hand you one answer.",
   },
-  visualization: {
-    name: 'Ryan',
-    role: 'Visualization Designer',
-    domain: 'storytelling',
-    intro:
-      'I pick the chart that tells the story of a result at a glance, and say what to take away from it.',
-  },
   'sql-fixer': {
     name: 'David',
     role: 'SQL Developer',
     domain: 'sql',
     intro:
       "Send me a query that failed and I'll read the database error, fix the SQL and try again.",
-  },
-  'sql-verifier': {
-    name: 'Rachel',
-    role: 'SQL Reviewer',
-    domain: 'sql',
-    intro:
-      "I'm the second opinion: I work out the SQL for a question on my own, so we can check the answer holds up.",
   },
   'assistant-eval-judge': {
     name: 'Laura',

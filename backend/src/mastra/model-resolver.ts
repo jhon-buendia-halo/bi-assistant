@@ -102,8 +102,8 @@ export async function resolveAgentModel(
 
 /**
  * requestContext key carrying a user agent's model and reasoning-effort
- * overrides for the assistant's calls in a session bound to that agent
- * (agents.md 4.2). Only the assistant's model function reads it.
+ * overrides for Elena's calls on that agent's host (agents.md 4.2,
+ * ADR-0059). Only her model policy (`override-or-step-model`) reads it.
  */
 export const AGENT_OVERRIDES_CONTEXT_KEY = 'agent-overrides';
 
