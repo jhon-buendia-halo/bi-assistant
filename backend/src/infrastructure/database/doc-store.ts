@@ -84,6 +84,8 @@ export const WORKFLOW_RUN_NODE_CHATS_STORE =
 export const ARTIFACTS_STORE = 'DOC_STORE_artifacts';
 /** The conversation exports, PDF and PowerPoint (data-model 3.20). */
 export const CONVERSATION_EXPORTS_STORE = 'DOC_STORE_conversation_exports';
+/** Dana's readiness assessments, each the baseline of the next (data-model). */
+export const READINESS_ASSESSMENTS_STORE = 'DOC_STORE_readiness_assessments';
 
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {
   return typeof v === 'object' && v !== null && '$exists' in v;
