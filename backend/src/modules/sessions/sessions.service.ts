@@ -12,6 +12,8 @@ import { MastraService } from '../../mastra/mastra.service';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import type { AgentConfig } from '../user-agents/entities/user-agent.entity';
 import { setDatasetToolServices } from '../../mastra/tool-services';
+import { setReadinessToolServices } from '../../mastra/readiness-tool-services';
+import { ReadinessAssessmentsRepository } from '../readiness-assessor/readiness-assessments.repository';
 import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
@@ -195,6 +197,9 @@ export class SessionsService implements OnModuleInit {
     @Optional()
     @Inject(CONVERSATION_EXPORTER)
     private readonly conversationExporter?: ConversationExporter,
+    // Dana's stored assessments, the baselines of assess_readiness.
+    @Optional()
+    private readonly readinessAssessments?: ReadinessAssessmentsRepository,
   ) {
     // The turn engine (agents.md 5.1) lives in `./turn/`, built on this
     // service's own dependencies and its session reads and writes.
@@ -313,6 +318,15 @@ export class SessionsService implements OnModuleInit {
             })
           : this.mastra.interpretResult(input),
     });
+    // Dana's assess_readiness reads and saves its baselines through its
+    // own bridge (plan data-readiness-assessor 2).
+    const assessments = this.readinessAssessments;
+    if (assessments) {
+      setReadinessToolServices({
+        previous: (useCaseKey) => assessments.latest(useCaseKey),
+        save: (assessment) => assessments.save(assessment),
+      });
+    }
 
     // A preview or a run host left when the app stopped has no session left
     // to own its memory and workspace (agents-evals R61; agents.md 5.14).

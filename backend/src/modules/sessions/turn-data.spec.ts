@@ -1,4 +1,4 @@
-import { toolDataRecord } from './turn-data';
+import { carriedQueryRecords, toolDataRecord } from './turn-data';
 
 describe('toolDataRecord: an explore_result result (agents.md 3.15)', () => {
   const SOURCE = 'SELECT country, goals FROM wc.public.scorers';
@@ -78,5 +78,75 @@ describe('toolDataRecord: an explore_result result (agents.md 3.15)', () => {
       error: 'Unknown column "nope"',
       rationale: 'x',
     });
+  });
+});
+
+describe('carriedQueryRecords: the SQL a tool ran itself (agent-change step 4)', () => {
+  const SQL = 'SELECT COUNT(*) AS rows FROM shop.public.orders';
+
+  it('makes one run_readonly_sql record per carried query, so the inspector shows each', () => {
+    const records = carriedQueryRecords({
+      verdict: 'not-ready',
+      queryRecords: [
+        {
+          sql: SQL,
+          columns: ['rows'],
+          rows: [{ rows: 1200 }],
+          rationale: '  How many   orders there are. ',
+        },
+        {
+          sql: 'SELECT COUNT(*) - COUNT(email) AS nulls FROM shop.public.customers',
+          rows: [{ nulls: 3 }],
+        },
+      ],
+    });
+    expect(records).toEqual([
+      {
+        tool: 'run_readonly_sql',
+        input: SQL,
+        columns: ['rows'],
+        rows: [{ rows: 1200 }],
+        rowCount: 1,
+        rationale: 'How many orders there are.',
+      },
+      {
+        tool: 'run_readonly_sql',
+        input:
+          'SELECT COUNT(*) - COUNT(email) AS nulls FROM shop.public.customers',
+        columns: ['nulls'],
+        rows: [{ nulls: 3 }],
+        rowCount: 1,
+      },
+    ]);
+  });
+
+  it('carries the truncation a query reports', () => {
+    const [record] = carriedQueryRecords({
+      queryRecords: [
+        { sql: SQL, columns: ['rows'], rows: [{ rows: 1 }], truncated: true },
+      ],
+    });
+    expect(record.truncated).toBe(true);
+  });
+
+  it('carries nothing for a result without queries, an error or a malformed entry', () => {
+    expect(carriedQueryRecords({ columns: [], rows: [] })).toEqual([]);
+    expect(carriedQueryRecords({ error: 'boom' })).toEqual([]);
+    expect(carriedQueryRecords(undefined)).toEqual([]);
+    expect(
+      carriedQueryRecords({
+        queryRecords: [{ sql: '  ' }, { rows: [] }, 'SELECT 1', null],
+      }),
+    ).toEqual([]);
+  });
+
+  it('never makes a record of the carrying tool itself', () => {
+    expect(
+      toolDataRecord(
+        'assess_readiness',
+        { rationale: 'x' },
+        { verdict: 'ready', queryRecords: [{ sql: SQL, rows: [] }] },
+      ),
+    ).toBeNull();
   });
 });

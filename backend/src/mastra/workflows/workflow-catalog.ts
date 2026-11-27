@@ -15,7 +15,11 @@ import {
 } from '../agent-constants';
 import { INSIGHTS_ANALYST_AGENT_KEY } from '../agents/insights-analyst-catalog';
 import { INSIGHTS_LEAD_AGENT_KEY } from '../agents/insights-lead-catalog';
+import { DATA_READINESS_ASSESSOR_AGENT_KEY } from '../agents/data-readiness-assessor-catalog';
 import {
+  DATA_READINESS_ASSESSOR_EDGES,
+  DATA_READINESS_ASSESSOR_STEPS,
+  DATA_READINESS_ASSESSOR_WORKFLOW_ID,
   INSIGHTS_LEAD_EDGES,
   INSIGHTS_LEAD_STEPS,
   INSIGHTS_LEAD_WORKFLOW_ID,
@@ -178,6 +182,9 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
 /** The name of Elena's conversation as a run shows it (api.md 117, 120). */
 export const INSIGHTS_LEAD_WORKFLOW_NAME = 'Conversation with Elena';
 
+/** The name of Dana's conversation as a run shows it (api.md 117, 120). */
+export const DATA_READINESS_ASSESSOR_WORKFLOW_NAME = 'Conversation with Dana';
+
 /**
  * The built-in agents' conversations outside any workflow (plan Elena 1.1),
  * as `GET /workflows/:id` (117) and the run routes (118, 119) resolve them:
@@ -200,6 +207,22 @@ export const CONVERSATION_WORKFLOWS: readonly CodeWorkflowSource[] =
       ],
       steps: INSIGHTS_LEAD_STEPS,
       edges: INSIGHTS_LEAD_EDGES,
+      bar: 'steps',
+    },
+    {
+      id: DATA_READINESS_ASSESSOR_WORKFLOW_ID,
+      name: DATA_READINESS_ASSESSOR_WORKFLOW_NAME,
+      category: 'data-engineering',
+      description:
+        'A conversation with Dana, the Data Readiness Assessor: she scopes the use you have in mind, measures whether your data is ready for it, and reports the verdict with its evidence and a remediation plan.',
+      primaryFor: DATA_READINESS_ASSESSOR_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
+        DATASETS_FIELD,
+      ],
+      steps: DATA_READINESS_ASSESSOR_STEPS,
+      edges: DATA_READINESS_ASSESSOR_EDGES,
       bar: 'steps',
     },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));

@@ -23,7 +23,11 @@ jest.mock('../../../mastra/model-resolver', () => ({
 }));
 
 import type { SessionDoc } from '../entities/session.entity';
-import { TurnOptions, type TurnOptionsDeps } from './turn-options';
+import {
+  soloAgentMaxSteps,
+  TurnOptions,
+  type TurnOptionsDeps,
+} from './turn-options';
 
 /** The data dependencies of a turn, answering as one World Cup dataset. */
 function deps(overrides: Partial<TurnOptionsDeps> = {}): TurnOptionsDeps {
@@ -107,6 +111,42 @@ describe("TurnOptions: Elena's options on a run host (agents.md 4.1, 4.2)", () =
     );
 
     expect(plain(options)).toMatchSnapshot();
+  });
+});
+
+describe("TurnOptions: a solo conversation's agent (plan data-readiness-assessor 2)", () => {
+  it('knows the budget of each solo agent and of no other', () => {
+    expect(soloAgentMaxSteps('insights-lead')).toBe(24);
+    expect(soloAgentMaxSteps('data-readiness-assessor')).toBe(20);
+    expect(soloAgentMaxSteps('insights-analyst')).toBeUndefined();
+    expect(soloAgentMaxSteps('toString')).toBeUndefined();
+  });
+
+  it("gives Dana Michael's context, her own budget and no memory thread", async () => {
+    const options = await new TurnOptions(deps()).agentOptions(
+      elenaHost({
+        agentKey: 'data-readiness-assessor',
+        workflowId: 'agent:data-readiness-assessor',
+      }),
+      'Is it ready for a dashboard?',
+    );
+    expect(options.maxSteps).toBe(20);
+    expect(options).not.toHaveProperty('memory');
+    expect(plain(options).requestContext).toMatchObject({
+      datasets: ['World Cup'],
+      'session-id': 'run-r1',
+    });
+  });
+
+  it('keeps the memory thread for any other agent', async () => {
+    const options = await new TurnOptions(deps()).agentOptions(
+      elenaHost({ agentKey: 'insights-analyst', workflowId: undefined }),
+      'Who won?',
+    );
+    expect(options).toHaveProperty('memory', {
+      thread: 'run-r1',
+      resource: 'run-r1',
+    });
   });
 });
 

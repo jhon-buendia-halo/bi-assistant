@@ -48,6 +48,21 @@ export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
     'dashboard-building',
     'conversation-export',
   ],
+  // Dana's skills (plan data-readiness-assessor 2): one per step of her
+  // flow, scoping first and reporting last; the measurement itself is
+  // assess_readiness's, so the dimension skills read its results.
+  'data-readiness-assessor': [
+    'readiness-scoping',
+    'readiness-source-inventory',
+    'readiness-quality-profiling',
+    'readiness-freshness-reliability',
+    'readiness-semantics-documentation',
+    'readiness-governance-privacy',
+    'readiness-ai-fitness',
+    'readiness-scoring',
+    'readiness-gap-remediation',
+    'readiness-reporting',
+  ],
 };
 
 /**

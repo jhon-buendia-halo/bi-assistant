@@ -9,6 +9,8 @@ import { clarifyingQuestionOf } from './analysis.steps';
 import {
   CONVERSATION_STEP_SCHEMAS,
   CONVERSATION_TURN_RUNTIME_KEY,
+  DATA_READINESS_ASSESSOR_ENGINE_ID,
+  DATA_READINESS_ASSESSOR_STEPS,
   INSIGHTS_LEAD_ENGINE_ID,
   INSIGHTS_LEAD_STEP_SCHEMAS,
   INSIGHTS_LEAD_STEPS,
@@ -131,3 +133,18 @@ export const insightsLeadConversationWorkflow = conversationTurnWorkflow({
   description:
     'A conversation with Elena, the Insights Lead: she answers from the data on her own, outside any workflow.',
 });
+
+const [DANA_ANSWER] = DATA_READINESS_ASSESSOR_STEPS;
+
+/**
+ * Dana's conversation (plan data-readiness-assessor 2): her one Answer
+ * step, alone, with a solo step's schemas.
+ */
+export const dataReadinessAssessorConversationWorkflow =
+  conversationTurnWorkflow({
+    id: DATA_READINESS_ASSESSOR_ENGINE_ID,
+    step: DANA_ANSWER,
+    schemas: INSIGHTS_LEAD_STEP_SCHEMAS,
+    description:
+      'A conversation with Dana, the Data Readiness Assessor: she assesses whether your data is ready for one use, outside any workflow.',
+  });

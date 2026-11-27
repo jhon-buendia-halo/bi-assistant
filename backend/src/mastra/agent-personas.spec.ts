@@ -46,6 +46,7 @@ describe('built-in agent personas (agents.md 1.1)', () => {
     }
     for (const list of Object.values(byDomain)) list.sort();
     expect(byDomain).toEqual({
+      'data-foundations': ['data-readiness-assessor'],
       analysis: [
         'chief-of-staff',
         'insights-analyst',
@@ -68,6 +69,18 @@ describe('built-in agent personas (agents.md 1.1)', () => {
       domain: 'analysis',
     });
     expect(persona?.intro.length).toBeLessThanOrEqual(160);
+  });
+
+  it('gives Dana, the Data Readiness Assessor, her persona; she is Official (plan data-readiness-assessor 2)', () => {
+    expect(OFFICIAL_AGENT_KEYS).toContain('data-readiness-assessor');
+    expect(SYSTEM_AGENT_KEYS).not.toContain('data-readiness-assessor');
+    expect(builtinAgentPersona('data-readiness-assessor')).toEqual({
+      name: 'Dana',
+      role: 'Data Readiness Assessor',
+      domain: 'data-foundations',
+      intro:
+        'Tell me what you want to use your data for. I measure whether it is ready for that use, show the evidence behind every score and tell you what to fix first.',
+    });
   });
 
   it('knows the domain ids, General last', () => {
