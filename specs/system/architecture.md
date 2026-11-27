@@ -1512,6 +1512,32 @@ flowchart LR
   - **Stack-neutral:** a rebuild needs one answering agent whose engine can suspend, a preview host that is never stored, a held-run table with a time limit and a cap, and a way to read, but not run, the ids of removed agents.
 - **Alternatives considered:** A and C above.
 
+#### ADR-0060 — A second solo conversational agent: Dana, with readiness computed in code
+- **Status:** Accepted. Extends ADR-0058 (a conversation with a built-in agent outside any workflow) and ADR-0059 (the shared conversation engine); replaces the removed Data Readiness Agent.
+- **Date:** 2026-11-26 (approach C chosen with the user the same day). Plan: [docs/plans/data-readiness-assessor.md](../../docs/plans/data-readiness-assessor.md); the user's specification: [docs/plans/data-readiness-assessor-source.md](../../docs/plans/data-readiness-assessor-source.md).
+- **Context:**
+  - The user removed the Data Readiness Agent (Sarah, `data-readiness`), its workflow and its report collection the same day (workflows R50), and then supplied a new specification: a Data Readiness Assessor with a rubric (six dimensions, levels 0-4 and N/E, six blocking gates, weights by use type, a verdict decided by gates and minimums), ten skills, a baseline between assessments and the guardrails "evidence or it does not count" and "never show a personal value".
+  - The specification assumes tools the app does not have (a data catalog, test and pipeline history, access policies, ticketing, document stores). The app has the dataset tools (`list_entities`, `describe_entity`, `run_readonly_sql`, `sample_rows`), the query inspector and a conversation that can wait for the user (ADR-0058).
+  - A verdict is a decision users will quote and compare over time. A model that adds up levels, weighs dimensions and applies gates can be wrong, and can be wrong differently on each run, which breaks the comparison against a baseline.
+- **Options:**
+  - **A: a prompt-and-skills agent.** Dana is an agent with the specification's prompt and skills, and the model measures with the dataset tools, assigns levels, applies the gates and writes the verdict. Smallest diff and closest to the source text. Rejected: the verdict and the levels depend on the model's arithmetic and judgement, differ between runs of the same data, and cannot be tested as unit tests; an assessment could not be a stable baseline.
+  - **B: a fixed workflow.** A code-defined workflow (as the removed Assess Data Readiness) runs the whole assessment with no conversation: the user picks datasets and gets a report. Deterministic, but the use case, its risk and its critical fields come from a dialogue, a workflow needs them as inputs up front, and the user could not ask a follow-up or drill down. Rejected: it is the shape that was just removed, and it loses the scoping.
+  - **C: a conversation with one tool that computes the assessment (chosen).** Dana is a solo conversational agent on the shared conversation engine (ADR-0058); one tool, `assess_readiness`, takes the scoping card and computes the measurements, levels, gates, verdict, weighted score and baseline comparison in code, from the dataset tool services; the model scopes with the requester and narrates what the tool returned.
+- **Decision:**
+  - **Approach C.** A third conversational binding (`agent:data-readiness-assessor`, engine `data-readiness-assessor-conversation`, `kind: 'solo'`; agents.md 5.14), a second instance of the shared `conversationTurnWorkflow`: the page, the conversations panel, suspend and resume, archive and export are Elena's code path, unchanged.
+  - **Readiness is computed in code.** `modules/readiness-assessor/` holds the rubric (version 1.0, [data-readiness](../capabilities/data-readiness/spec.md)), the measurements, the levels, the gates, the verdict and the baseline comparison as pure functions over a port (`ReadinessPort`), so they are unit-tested without a model or a database. The model never computes, adjusts or rounds a verdict (data-readiness R3).
+  - **Evidence or N/E.** Every level and gate cites evidence; what the app cannot measure is declared and capped at what was measured, never guessed (data-readiness R5 and R7). Measurements are portable aggregate SQL plus checks in code over a sample, so no dialect-specific query is needed and no personal value leaves the engine (data-readiness R8).
+  - **New names, nothing revived.** A new agent key, a new collection (`readiness_assessments`, data-model 3.21), a new tool and new field names; `readiness_reports` stays dropped.
+  - **Scope of the agent.** The classes `person` and `data`, the shared dataset tools, `explore_result`, `ask_clarification` and `assess_readiness`, ten skills, `step-model` with no Opus routing, no memory, 20 steps (agents.md 2.24).
+- **Consequences:**
+  - **Reproducible verdicts.** The same data and the same scoping card give the same assessment, so the baseline comparison is meaningful; the model only changes how it is told.
+  - **A narrower reach than the source specification.** Owner metadata, test results, pipeline history, classification, access policies, retention and lineage are always `N/E` today (data-readiness R7), so level 4 is out of reach until the app can measure an automatic control. The tool lists them in every assessment rather than hide the gap. A richer connector later changes the port, not the rubric.
+  - **The tool's cost is bounded.** The sample size follows the risk (200, 1,000, 5,000 rows, capped by the connector) and every statement is a read-only aggregate.
+  - **Rubric changes are versioned.** A change to the rubric is a new `rubricVersion`; the comparison with an older baseline says so.
+  - **Evals.** Her set runs her whole over the Testing Data fixtures with seeded defects; the checks read the stored assessment, so a regression in the engine fails a unit test before it fails an eval.
+  - **Stack-neutral:** a rebuild needs a conversational agent that can wait for the user, a tool the host runs deterministically and whose output the model must quote, a document store for the baseline and a read-only aggregate query path.
+- **Alternatives considered:** A and B above.
+
 ## Level 4 — Code
 
 ```mermaid
