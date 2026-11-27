@@ -139,7 +139,7 @@ async function seedChat(page: Page): Promise<void> {
   await saveLenaiSettings(page, stub.baseUrl);
 }
 
-test("Elena's prompt is built-in and opens in a text area, with no link menu", async ({
+test("Elena's prompt with its shipped tool links saves, and Reset restores it", async ({
   page,
 }) => {
   await openAgent(page, ELENA_KEY, ELENA);
@@ -150,11 +150,31 @@ test("Elena's prompt is built-in and opens in a text area, with no link menu", a
   await expect(modifiedChip(page)).toHaveCount(0);
   expect((await promptView(page, ELENA_KEY)).modified).toBe(false);
 
-  // Elena's prompt takes no links (user agents run on her): a text area.
+  // Her prompt carries tool links (user agents run on her, ADR-0059), so it
+  // opens in the link editor, and an edit saves with its links in place.
   await startEditing(page);
-  await expect(page.getByTestId('agent-prompt-textarea')).toBeVisible();
-  await expect(page.getByText('+ Link tool')).toHaveCount(0);
-  await expect(page.getByText('+ Link skill')).toHaveCount(0);
+  await expect(
+    page.getByText('+ Link skill or tool', { exact: true }),
+  ).toBeVisible();
+  await appendToEditor(page, DONE_LINE, true);
+  await saveButton(page).click();
+  await expect(
+    page.getByText(`Job description of "${ELENA}" saved`),
+  ).toBeVisible();
+  await expect(modifiedChip(page)).toBeVisible();
+  const saved = await promptView(page, ELENA_KEY);
+  expect(saved.modified).toBe(true);
+  expect(saved.editable).toContain('[[tool:');
+  expect(saved.editable.endsWith(`\n${DONE_LINE}`)).toBe(true);
+
+  // Reset restores the shipped prompt.
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.getByTestId('agent-prompt-reset').click();
+  await expect(
+    page.getByText(`Job description of "${ELENA}" reset`),
+  ).toBeVisible();
+  await expect(modifiedChip(page)).toHaveCount(0);
+  expect((await promptView(page, ELENA_KEY)).modified).toBe(false);
 });
 
 test("I edit Michael's prompt, and Reset restores it", async ({
