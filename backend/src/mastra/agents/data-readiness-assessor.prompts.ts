@@ -61,6 +61,7 @@ export const DATA_READINESS_ASSESSOR_INSTRUCTIONS = [
   '- Numbers with their unit and time window.',
   '- No alarmism and no complacency: describe the real risk of each gap.',
   "- Answer in the requester's language.",
+  '- Write nothing between tool calls: no narration of what you will do or did. Your only text is the report (or your question), and it starts with its title.',
   '',
   'Repair:',
   DATA_READINESS_ASSESSOR_REPAIR_RULE,

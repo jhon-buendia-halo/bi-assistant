@@ -23,6 +23,7 @@ import {
   assessReadinessTool,
   READINESS_SQL_ROW_LIMIT,
   readinessScopeSchema,
+  withFullEntityNames,
 } from './readiness.tools';
 import { SESSION_ID_CONTEXT_KEY } from './turn-context';
 
@@ -453,5 +454,47 @@ describe('the scoping card (skill readiness-scoping)', () => {
     ],
   ])('rejects %s', (_label, scope) => {
     expect(readinessScopeSchema.safeParse(scope).success).toBe(false);
+  });
+});
+
+describe('withFullEntityNames', () => {
+  const datasets = [
+    {
+      name: 'shop',
+      tables: [
+        'shop.public.orders',
+        'shop.public.customers',
+        'shop.archive.customers',
+      ],
+    },
+  ];
+
+  it('gives a short name the one table it ends with, everywhere the scope names an entity', () => {
+    const scope = withFullEntityNames(
+      {
+        ...SCOPE,
+        entities: ['orders'],
+        criticalFields: [
+          { entity: 'public.orders', column: 'id', indispensable: true },
+        ],
+        grainKeys: [{ entity: 'orders', columns: ['id'] }],
+      },
+      datasets,
+    );
+    expect(scope.entities).toEqual(['shop.public.orders']);
+    expect(scope.criticalFields[0].entity).toBe('shop.public.orders');
+    expect(scope.grainKeys?.[0].entity).toBe('shop.public.orders');
+  });
+
+  it('keeps a full name, and a name that matches no table or several, as given', () => {
+    const scope = withFullEntityNames(
+      { ...SCOPE, entities: ['shop.public.orders', 'customers', 'salaries'] },
+      datasets,
+    );
+    expect(scope.entities).toEqual([
+      'shop.public.orders',
+      'customers',
+      'salaries',
+    ]);
   });
 });

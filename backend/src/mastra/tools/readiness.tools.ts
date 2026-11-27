@@ -137,6 +137,39 @@ function sessionDatasetNames(requestContext: ContextLike): string[] {
 }
 
 /** The first entity of the scope that is not one of the datasets', or undefined. */
+/**
+ * The scope with each entity a short name gives (`matches`, `public.orders`)
+ * replaced by the one dataset table it ends with; a name that matches no
+ * table or several stays as given, for `unknownEntity` to report.
+ */
+export function withFullEntityNames(
+  scope: ReadinessScope,
+  datasets: readonly DatasetSnapshot[],
+): ReadinessScope {
+  const tables = datasets.flatMap((dataset) => dataset.tables);
+  const full = (entity: string): string => {
+    if (tables.includes(entity)) return entity;
+    const matches = tables.filter((table) => table.endsWith(`.${entity}`));
+    return matches.length === 1 ? matches[0] : entity;
+  };
+  return {
+    ...scope,
+    entities: scope.entities.map(full),
+    criticalFields: scope.criticalFields.map((field) => ({
+      ...field,
+      entity: full(field.entity),
+    })),
+    ...(scope.grainKeys
+      ? {
+          grainKeys: scope.grainKeys.map((key) => ({
+            ...key,
+            entity: full(key.entity),
+          })),
+        }
+      : {}),
+  };
+}
+
 function unknownEntity(
   scope: ReadinessScope,
   datasets: readonly DatasetSnapshot[],
@@ -328,7 +361,7 @@ export const assessReadinessTool = createTool({
     type: 'json' as const,
     value: readinessModelOutput(output),
   }),
-  execute: async ({ scope, rationale: _rationale }, context) => {
+  execute: async ({ scope: given, rationale: _rationale }, context) => {
     void _rationale;
     const { requestContext, abortSignal } = context;
     const datasets = sessionDatasetNames(requestContext);
@@ -337,6 +370,7 @@ export const assessReadinessTool = createTool({
     }
     try {
       const snapshots = await getDatasetToolServices().getDatasets(datasets);
+      const scope = withFullEntityNames(given, snapshots);
       const unknown = unknownEntity(scope, snapshots);
       if (unknown !== undefined) {
         const known = snapshots.flatMap((dataset) => dataset.tables);
