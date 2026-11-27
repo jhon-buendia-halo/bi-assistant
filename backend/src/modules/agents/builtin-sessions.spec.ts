@@ -5,9 +5,26 @@ jest.mock('../../mastra/evals/eval-sets', () => {
   const sets = [
     {
       id: 'world-cup',
+      agentKey: 'insights-lead',
       name: 'World Cup',
       description: 'd',
-      cases: [{ id: 'champion-2022', question: 'q', intent: 'i', scorers: [] }],
+      cases: [
+        {
+          id: 'champion-2022',
+          question: 'q',
+          intent: 'i',
+          scorers: [
+            { id: 'judge', name: 'Judge', description: 'Graded by Laura.' },
+          ],
+          // Elena's ported cases are scored by custom checks (ADR-0059).
+          customChecks: [
+            {
+              id: 'answer-includes:Argentina',
+              description: 'The answer includes "Argentina" (any case)',
+            },
+          ],
+        },
+      ],
     },
     {
       id: 'explain-sql',
@@ -87,8 +104,18 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
 
   it("lists each agent's own eval sets by agentKey (api.md 2.6 #35)", () => {
     const service = build();
-    expect(service.evalSets('assistant').map((set) => set.id)).toEqual([
+    expect(service.evalSets('insights-lead').map((set) => set.id)).toEqual([
       'world-cup',
+    ]);
+    // Every check a case is scored on is listed: its scorers, then its
+    // custom checks (Elena's ported sets have only the second).
+    expect(service.evalSets('insights-lead')[0].cases[0].checks).toEqual([
+      { id: 'judge', name: 'Judge', description: 'Graded by Laura.' },
+      {
+        id: 'answer-includes:Argentina',
+        name: 'answer-includes:Argentina',
+        description: 'The answer includes "Argentina" (any case)',
+      },
     ]);
     expect(service.evalSets('query-explainer').map((set) => set.id)).toEqual([
       'explain-sql',

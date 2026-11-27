@@ -522,11 +522,20 @@ export class AgentsService {
         id: evalCase.id,
         question: evalCase.question,
         intent: evalCase.intent,
-        checks: evalCase.scorers.map((scorer) => ({
-          id: String(scorer.id ?? ''),
-          name: String(scorer.name ?? ''),
-          description: String(scorer.description ?? ''),
-        })),
+        // Every check it is scored on: its scorers, then its custom checks
+        // (Elena's ported sets have only these, ADR-0059).
+        checks: [
+          ...evalCase.scorers.map((scorer) => ({
+            id: String(scorer.id ?? ''),
+            name: String(scorer.name ?? ''),
+            description: String(scorer.description ?? ''),
+          })),
+          ...(evalCase.customChecks ?? []).map((check) => ({
+            id: check.id,
+            name: check.id,
+            description: check.description,
+          })),
+        ],
       })),
     }));
   }
